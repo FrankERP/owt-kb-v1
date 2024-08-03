@@ -24,7 +24,7 @@ export const post = {
 			type: "slug",
 			validation: (Rule: Rule) => Rule.required().error("Required"),
 			options: {
-				source: (doc) => `${doc.title}-${doc.author}`,
+				source: (doc:any) => `${doc.title}-${doc.author}`,
 				maxLength: 96,
 			},
 		},
@@ -113,7 +113,7 @@ export const post = {
 			title: "title",
 			author: "author",
 		},
-		prepare(selection) {
+		prepare(selection:any) {
 			const {title, author} = selection;
 			return {
 				title: `${title} - ${author}`,
