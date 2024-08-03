@@ -14,12 +14,17 @@ export const post = {
 			validation: (Rule: Rule) => Rule.required().error("Required"),
 		},
 		{
+			name: "author",
+			title: "Author",
+			type: "string",
+		},
+		{
 			name: "slug",
 			title: "Slug",
 			type: "slug",
 			validation: (Rule: Rule) => Rule.required().error("Required"),
 			options: {
-				source: "title",
+				source: (doc) => `${doc.title}-${doc.author}`,
 				maxLength: 96,
 			},
 		},
@@ -34,11 +39,6 @@ export const post = {
 			title: "Excerpt",
 			type: "text",
 			validation: (Rule: Rule) => Rule.max(200).error("MAximum 200 characters"),
-		},
-		{
-			name: "author",
-			title: "Author",
-			type: "string",
 		},
 		{
 			name: "body",
@@ -68,31 +68,28 @@ export const post = {
 			]
 		},
 		{
-			name: 'test1tutorials',
-			title: 'Tutorials',
-			type: 'array',
-			of:[
-				{ type: 'url',
-					title: 'EG Tutorial',
-					name: 'egTutorial',
-				},
-				{ type: 'url',
-					title: 'Piano Tutorial',
-					name: 'pianoTutorial',
-				},
-				{ type: 'url',
-					title: 'AG Tutorial',
-					name: 'agTutorial',
-				},
-				{ type: 'url',
-					title: 'Bass Tutorial',
-					name: 'bassTutorial',
-				},
-				{ type: 'url',
-					title: 'Drums Tutorial',
-					name: 'drumsTutorial',
-				},
-			]
+			name: 'lyrics',
+			title: 'Lyrics pdf',
+			type: 'file',
+			options: {
+				accept: '.pdf',
+			},
+		},
+		{
+			name: 'chords',
+			title: 'Chords pdf',
+			type: 'file',
+			options: {
+				accept: '.pdf',
+			},
+		},
+		{
+			name: 'bothPDF',
+			title: 'Cords and Lyrics pdf',
+			type: 'file',
+			options: {
+				accept: '.pdf',
+			},
 		},
 		{
 			name: "tags",
@@ -110,4 +107,18 @@ export const post = {
 			],
 		},
 	],
+
+	preview: {
+		select: {
+			title: "title",
+			author: "author",
+		},
+		prepare(selection) {
+			const {title, author} = selection;
+			return {
+				title: `${title} - ${author}`,
+			};
+		}
+	}
+
 };

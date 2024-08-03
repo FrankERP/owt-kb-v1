@@ -9,6 +9,7 @@ async function getPosts() {
 		*[_type == "post"] {
 			_id,
 			title,
+			author,
 			slug,
 			publishDate,
 			excerpt,

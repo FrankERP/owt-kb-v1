@@ -15,7 +15,7 @@ const PostComponent = ({ post }: Props) => {
 	return (
 		<div className={cardStyle}>
 			<Link href={`/posts/${post?.slug?.current}`}>
-				<h2 className={`${font.className} text-2xl `}>{post?.title}</h2>
+				<h2 className={`${font.className} text-2xl `}>{post?.title} - {post?.author}</h2>
 				<p
 					className={`${date.className} my-2 text-gray-500`}
 				>
