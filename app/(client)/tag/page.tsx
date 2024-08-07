@@ -25,8 +25,7 @@ const page = async () => {
 	console.log(tags, "tags");
 
 	return <div>
-    
-    <Header title= 'Tags'/>
+    <Navbar title='Tags'/>
     {/*@todo REFERENCE: this is what I have to do with the youtube links*/}
     <div>
       {tags?.length >0 && tags?.map((tag) => (

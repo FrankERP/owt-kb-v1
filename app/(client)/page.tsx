@@ -3,6 +3,7 @@ import { client } from "@/sanity/lib/client";
 import Header from "../components/Header";
 import { Post } from "../utils/interface";
 import PostComponent from "../components/PostComponent";
+import Navbar from "../components/Navbar";
 
 async function getPosts() {
 	const query = `
@@ -33,7 +34,7 @@ export default async function Home() {
 
 	return (
 		<div className="font-bold">
-			<Header title="Songs" tags/>
+			<Navbar title="Songs" tags/>
 			<div>
 				{posts?.length > 0 && posts?.map((post) => (
 					<PostComponent key={post?._id} post={post} />

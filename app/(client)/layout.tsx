@@ -25,7 +25,6 @@ export default function RootLayout({
 				className={`${titleFont.className} h-full bg-[#C8D8EB] text-[#003572] dark:bg-[#010b17] dark:text-[#C8D8EB] dark:selection:bg-teal-600 font-bold`}
 			>
 				<Provider>
-					<Navbar />
 					<main className="mx-auto max-w-full px-6">{children}</main>
 				</Provider>
 			</body>

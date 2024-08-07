@@ -9,6 +9,7 @@ import ReactPlayer from "react-player";
 import Image from "next/image";
 import { urlFor, urlForImage } from "@/sanity/lib/image";
 import {notFound} from 'next/navigation'
+import Navbar from "@/app/components/Navbar";
 
 const date = VT323({ weight: "400", subsets: ["latin"] });
 
@@ -23,6 +24,7 @@ async function getPost(slug: string) {
     *[_type == "post" && slug.current == "${slug}"][0] {
       _id,
       title,
+      author,
       slug,
       publishDate,
       excerpt,
@@ -52,7 +54,7 @@ const page = async ({ params }: Params) => {
 
   return (
     <div>
-      <Header title={post?.title} />
+      <Navbar title={post?.title} author={post?.author} />
       <div className="text-center">
         <span className={`${date.className}`}>
           {(() => {

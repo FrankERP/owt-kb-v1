@@ -1,4 +1,5 @@
 import Header from "@/app/components/Header";
+import Navbar from "@/app/components/Navbar";
 import PostComponent from "@/app/components/PostComponent";
 import { Post } from "@/app/utils/interface";
 import { client } from "@/sanity/lib/client";
@@ -9,6 +10,7 @@ async function getPostsByTag(tag: string) {
     *[_type == "post" && references(*[_type == "tag" && slug.current == "${tag}"]._id)] {
 			_id,
 			title,
+			author,
 			slug,
 			publishDate,
 			excerpt,
@@ -34,11 +36,11 @@ interface Params {
 
 const page = async ({ params }: Params) => {
 	const posts: Array<Post> = await getPostsByTag(params.slug);
-	console.log(posts, "posts by tag");
+	console.log(posts[0]?.tags[1]?.name, "posts by tag 2");
 
 	return (
 		<div>
-			<Header title={`#${params?.slug}`} tags />
+			<Navbar title={`#${params.slug}`} tags />
       <div>
         {posts?.length > 0 && posts?.map((post) => (
           <PostComponent key = {post?._id} post = {post}/>
