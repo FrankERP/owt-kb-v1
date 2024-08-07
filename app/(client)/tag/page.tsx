@@ -24,20 +24,25 @@ const page = async () => {
 	const tags: Tag[] = await getAllTags();
 	console.log(tags, "tags");
 
-	return <div>
-    <Navbar title='Tags'/>
-    {/*@todo REFERENCE: this is what I have to do with the youtube links*/}
-    <div>
-      {tags?.length >0 && tags?.map((tag) => (
-        <Link key={tag?._id} href={`/tag/${tag.slug.current}`}> 
-          <div className="p-2 text-md lowercase dark:bg-[#010b17] border-b dark:border-gray-800 hover:text-[#00bfff]">
-            #{tag.name} ({tag?.postCount})
-          </div>
-
-        </Link>
-      ))}
-    </div>
-  </div>;
+	return (
+		<div>
+			<Navbar title="Tags" />
+			{/*@todo REFERENCE: this is what I have to do with the youtube links*/}
+			<div>
+				{tags?.length > 0 &&
+					tags?.map((tag) => (
+						<Link
+							key={tag?._id}
+							href={`/tag/${tag.slug.current}`}
+						>
+							<div className=" text-md lowercase dark:bg-[#010b17] border-b dark:border-gray-800 hover:text-[#00bfff]">
+								#{tag.name} ({tag?.postCount})
+							</div>
+						</Link>
+					))}
+			</div>
+		</div>
+	);
 };
 
 export default page;

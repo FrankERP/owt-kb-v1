@@ -41,7 +41,7 @@ const page = async ({ params }: Params) => {
 	return (
 		<div>
 			<Navbar title={`#${params.slug}`} tags />
-      <div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
         {posts?.length > 0 && posts?.map((post) => (
           <PostComponent key = {post?._id} post = {post}/>
         ))}

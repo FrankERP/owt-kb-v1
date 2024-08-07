@@ -35,7 +35,7 @@ export default async function Home() {
 	return (
 		<div className="font-bold">
 			<Navbar title="Songs" tags/>
-			<div>
+			<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
 				{posts?.length > 0 && posts?.map((post) => (
 					<PostComponent key={post?._id} post={post} />
 				))}
