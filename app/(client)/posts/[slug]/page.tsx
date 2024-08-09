@@ -97,25 +97,23 @@ const Page = async ({ params }: Params) => {
 				</div>
 
 				{/* Sección deslizable para los PDFs */}
-				<div className=" mt-10 mb-4 overflow-x-auto min-h-[35vw] ">
-					<div className="flex space-x-2 md:space-x-4 max-w-full min-h-[30vw] justify-center">
-						{pdfFiles.map((pdf, index) => (
-							<div
-								key={index}
-								className=" w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg"
-							>
-								<h3 className="text-lg md:text-xl font-bold mb-2 md:mb-4">
-									{pdf.title}
-								</h3>
-								<iframe
-									src={pdf.url}
-									width="100%"
-									height="100%" // Ajuste adicional para la altura en móviles
-									className="border-0"
-								></iframe>
-							</div>
-						))}
-					</div>
+				<div className="mt-10 mb-4 mx-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+					{pdfFiles.map((pdf, index) => (
+						<div
+							key={index}
+							className="w-full"
+						>
+							<h3 className="text-lg md:text-xl font-bold mb-2 md:mb-4">
+								{pdf.title}
+							</h3>
+							<iframe
+								src={pdf.url}
+								width="100%"
+								height="500px" // Ajusta la altura según sea necesario
+								className="border-0"
+							></iframe>
+						</div>
+					))}
 				</div>
 			</div>
 		</div>
