@@ -92,12 +92,12 @@ const Page = async ({ params }: Params) => {
         <div className="mt-10 overflow-x-auto">
           <div className="flex space-x-4">
             {pdfFiles.map((pdf, index) => (
-              <div key={index} className="flex-shrink-0 w-full">
+              <div key={index} className="flex-shrink-0 lg:w-[33vw] md:w-[50vw] sm:w-[100vw]">
                 <h3 className="text-xl font-bold mb-4">{pdf.title}</h3>
                 <iframe
                   src={pdf.url}
                   width="100%"
-                  height="400px"
+                  height="600px"
                   className="border-0"
                 ></iframe>
               </div>
