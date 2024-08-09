@@ -1,14 +1,12 @@
-import Header from "@/app/components/Header";
 import { Post } from "@/app/utils/interface";
 import { client } from "@/sanity/lib/client";
 import React from "react";
 import { VT323 } from "next/font/google";
 import Link from "next/link";
 import { PortableText } from "next-sanity";
-import ReactPlayer from "react-player";
 import Image from "next/image";
-import { urlFor, urlForImage } from "@/sanity/lib/image";
-import {notFound} from 'next/navigation'
+import { urlFor } from "@/sanity/lib/image";
+import { notFound } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 
 const date = VT323({ weight: "400", subsets: ["latin"] });
@@ -33,7 +31,10 @@ async function getPost(slug: string) {
         _id,
         slug,
         name,
-      }
+      },
+      "lyricsURL": lyrics.asset->url,
+      "chordsURL": chords.asset->url,
+      "bothURL": bothPDF.asset->url,
   }`;
   const post = await client.fetch(query);
   return post;
@@ -41,16 +42,18 @@ async function getPost(slug: string) {
 
 export const revalidate = 60;
 
-
-
-const page = async ({ params }: Params) => {
-  //console.log(params, 'params');
+const Page = async ({ params }: Params) => {
   const post: Post = await getPost(params?.slug);
-  console.log(post, "post");
 
-  if(!post){
+  if (!post) {
     notFound();
   }
+
+  const pdfFiles = [
+    { url: post?.lyricsURL, title: "Lyrics PDF" },
+    { url: post?.chordsURL, title: "Chords PDF" },
+    { url: post?.bothURL, title: "Chords and Lyrics PDF" }
+  ].filter(pdf => pdf.url);
 
   return (
     <div>
@@ -58,9 +61,7 @@ const page = async ({ params }: Params) => {
       <div className="text-center">
         <span className={`${date.className}`}>
           {(() => {
-            const formattedDate = new Date(
-              post?.publishDate
-            ).toLocaleDateString("es-ES", {
+            const formattedDate = new Date(post?.publishDate).toLocaleDateString("es-ES", {
               weekday: "long",
               year: "numeric",
               month: "long",
@@ -73,10 +74,7 @@ const page = async ({ params }: Params) => {
         </span>
         <div className="mt-5">
           {post?.tags?.map((tag) => (
-            <Link
-              key={tag?._id}
-              href={`/tag/${tag?.slug?.current}`}
-            >
+            <Link key={tag?._id} href={`/tag/${tag?.slug?.current}`}>
               <span className="mr-2 p-1 text-gray-500 rounded-sm lowercase dark:border-gray-900">
                 #{tag?.name}
               </span>
@@ -89,16 +87,33 @@ const page = async ({ params }: Params) => {
             components={myPortableTextComponents}
           />
         </div>
+
+        {/* Sección deslizable para los PDFs */}
+        <div className="mt-10 overflow-x-auto">
+          <div className="flex space-x-4">
+            {pdfFiles.map((pdf, index) => (
+              <div key={index} className="flex-shrink-0 w-full">
+                <h3 className="text-xl font-bold mb-4">{pdf.title}</h3>
+                <iframe
+                  src={pdf.url}
+                  width="100%"
+                  height="400px"
+                  className="border-0"
+                ></iframe>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
-export default page;
+export default Page;
 
 const myPortableTextComponents = {
   types: {
-    image: ({ value }: any) => 
+    image: ({ value }: any) =>
       <Image
         src={urlFor(value).url()}
         alt="Post"
@@ -107,7 +122,6 @@ const myPortableTextComponents = {
       />,
   },
 };
-
 
 const richTextStyles = `
   mt-14

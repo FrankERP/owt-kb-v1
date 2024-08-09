@@ -1,3 +1,5 @@
+import { Url } from "next/dist/shared/lib/router/router";
+
 export interface Post {
 	title: string;
   author: string;
@@ -9,6 +11,9 @@ export interface Post {
   lyrics: File;
   chords: File;
   bothPDF: File;
+  lyricsURL: string;
+  chordsURL: string;
+  bothURL: string;
   tags: Array<Tag>;
   _id: string;
 }
