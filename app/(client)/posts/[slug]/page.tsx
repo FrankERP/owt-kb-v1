@@ -111,8 +111,9 @@ const Page = async ({ params }: Params) => {
 					))}
 				</div>
 				{/* Sección de Audio con Click*/}
-				<div className="flex justify-center min-h-[10vw]">
-					<div className="px-10">
+				<div className="min-h-[10vw] overflow-x-auto max-w-[90vw]">
+					<div className="flex space-x-4 justify-between">
+					<div className="px-10 ml-10">
 						<div className="">
 							{post?.ClickTrack && (
 								<div className="my-4 justify-center">
@@ -173,6 +174,7 @@ const Page = async ({ params }: Params) => {
 							)}
 						</div>
 					</div>
+          </div>
 				</div>
 				<div className={richTextStyles}>
 					<PortableText
