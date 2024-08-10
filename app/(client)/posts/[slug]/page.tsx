@@ -1,7 +1,7 @@
 import { Post } from "@/app/utils/interface";
 import { client } from "@/sanity/lib/client";
 import React from "react";
-import { VT323, Special_Elite, Black_Ops_One, Russo_One, Urbanist, Jura } from "next/font/google";
+import { VT323, Special_Elite, Black_Ops_One, Russo_One, Urbanist, Jura, Advent_Pro } from "next/font/google";
 import Link from "next/link";
 import { PortableText } from "next-sanity";
 import Image from "next/image";
@@ -10,11 +10,14 @@ import { notFound } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 
 const date = VT323({ weight: "400", subsets: ["latin"] });
-const titleFont = Special_Elite({ weight: "400", subsets: ["latin"] });
+const titleFontqd = Special_Elite({ weight: "400", subsets: ["latin"] });
 const titleFont2 = Black_Ops_One({ weight: "400", subsets: ["latin"] });
-const titleFont3 = Russo_One({ weight: "400", subsets: ["latin"] });
+const titleFont = Advent_Pro({ weight: "600", subsets: ["latin"] });
+const subtitleFont = Advent_Pro({ weight: "600", subsets: ["latin"] });
+
 const bodyFont = Urbanist({ weight: "600", subsets: ["latin"] });
 const tagFont = Jura({ weight: "600", subsets: ["latin"] });
+
 
 
 
@@ -110,15 +113,15 @@ const Page = async ({ params }: Params) => {
 				</div>
 
 				{/* Sección deslizable para los PDFs */}
-				<div className="mt-10 mb-4 mx-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+				<div className={` mt-10 mb-4 mx-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4`}>
 					{pdfFiles.map((pdf, index) => (
 						<div
 							key={index}
-							className="w-full"
+							className={` w-full`}
 						>
-							<h3 className="text-lg md:text-xl font-bold mb-2 md:mb-4">
+							<div className={`${subtitleFont.className} text-lg md:text-xl mb-2 md:mb-4`}>
 								{pdf.title}
-							</h3>
+							</div>
 							<iframe
 								src={pdf.url}
 								width="100%"
@@ -131,7 +134,7 @@ const Page = async ({ params }: Params) => {
 				<div className="mt-5">
 					{post.tutorials2 && post.tutorials2.length > 0 && (
 						<div>
-							<h2 className={`${titleFont3.className} uppercase font-extrabold text-2xl sm:text-3xl md:text-4xl lg:text-5xl mb-2`}>Tutorials</h2>
+							<h2 className={`${titleFont.className} uppercase font-extrabold text-2xl sm:text-3xl md:text-4xl lg:text-5xl mb-2`}>Tutorials</h2>
 							<ul>
 								{post.tutorials2.map((tutorial, index) => (
 									<li key={index}>
