@@ -7,7 +7,7 @@ export interface Post {
   publishDate: string;
   excerpt: string;
   body: any;
-  tutorials: Array<object>;
+  tutorials2: Array<any>;
   lyrics: File;
   chords: File;
   bothPDF: File;

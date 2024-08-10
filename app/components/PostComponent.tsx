@@ -1,7 +1,7 @@
 import Link from "next/link";
 import React from "react";
 import { Post } from "../utils/interface";
-import { Lilita_One, Orbitron, VT323, Josefin_Sans } from "next/font/google";
+import { Lilita_One, Orbitron, VT323, Josefin_Sans, Russo_One, Advent_Pro, Urbanist, Jura } from "next/font/google";
 
 interface Props {
 	post: Post;
@@ -9,13 +9,20 @@ interface Props {
 
 const font = Josefin_Sans({ weight: "400", subsets: ["latin"] });
 const date = VT323({ weight: "400", subsets: ["latin"] });
+const titleFont = Advent_Pro({ weight: "600", subsets: ["latin"] });
+const bodyFont = Urbanist({ weight: "800", subsets: ["latin"] });
+const tagFont = Jura({ weight: "600", subsets: ["latin"] });
+
+
+
+
 
 //@note Post card styling
 const PostComponent = ({ post }: Props) => {
 	return (
 		<div className={cardStyle}>
 			<Link href={`/posts/${post?.slug?.current}`}>
-				<h2 className={`${font.className} text-2xl `}>{post?.title} - {post?.author}</h2>
+				<h2 className={`${titleFont.className} text-2xl `}>{post?.title} - {post?.author}</h2>
 				<p
 					className={`${date.className} my-2 text-gray-500`}
 				>
@@ -26,14 +33,14 @@ const PostComponent = ({ post }: Props) => {
 						day: "numeric",
 					})}
 				</p>
-				<p className="mb-4 line-clamp-2 ">{post?.excerpt}</p>
+				<p className={`${bodyFont.className} mb-4 line-clamp-2 `}>{post?.excerpt}</p>
 			</Link>
 
       {/*Tags*/}
 
       <div>
         {post?.tags?.map((tag) => (
-          <span key={tag?._id} className="mr-2 p-1 text-gray-500 rounded-sm lowercase dark:border-gray-900">
+          <span key={tag?._id} className={`${tagFont.className} mr-2 p-1 text-gray-500 rounded-sm lowercase dark:border-gray-900`}>
             #{tag?.name}
           </span>
         ))}
@@ -51,7 +58,7 @@ const cardStyle = `
   border-gray-900
   rounded-md
   shadow-xl
-  text-bold
+  
   shadow-[#00bfff]
   hover:shadow-sm
   hover:bg-[#002249]

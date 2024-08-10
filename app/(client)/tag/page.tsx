@@ -2,6 +2,7 @@ import Header from "@/app/components/Header";
 import Navbar from "@/app/components/Navbar";
 import { Tag } from "@/app/utils/interface";
 import { client } from "@/sanity/lib/client";
+import { Urbanist } from "next/font/google";
 import Link from "next/link";
 import React from "react";
 
@@ -17,6 +18,9 @@ async function getAllTags() {
 	const tags = client.fetch(query);
 	return tags;
 }
+
+const tagFont = Urbanist({ weight: "600", subsets: ["latin"] });
+
 
 export const revalidate = 60;
 
@@ -35,7 +39,7 @@ const page = async () => {
 							key={tag?._id}
 							href={`/tag/${tag.slug.current}`}
 						>
-							<div className=" text-md lowercase dark:bg-[#010b17] border-b dark:border-gray-800 hover:text-[#00bfff]">
+							<div className={`${tagFont.className} text-md lowercase dark:bg-[#010b17] border-b dark:border-gray-800 hover:text-[#00bfff]`}>
 								#{tag.name} ({tag?.postCount})
 							</div>
 						</Link>

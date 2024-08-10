@@ -29,11 +29,6 @@ const nextConfig = {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains; preload' // Fuerza el uso de HTTPS
           },
-          {
-            key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https:; font-src 'self' 'unsafe-inline' data: https:; frame-ancestors 'self'; object-src 'none'; child-src 'self' https: data:;"
-          }
-          ,
         ]
       }
     ]

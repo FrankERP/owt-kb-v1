@@ -1,7 +1,7 @@
 import { Post } from "@/app/utils/interface";
 import { client } from "@/sanity/lib/client";
 import React from "react";
-import { VT323 } from "next/font/google";
+import { VT323, Special_Elite, Black_Ops_One, Russo_One, Urbanist, Jura } from "next/font/google";
 import Link from "next/link";
 import { PortableText } from "next-sanity";
 import Image from "next/image";
@@ -10,6 +10,15 @@ import { notFound } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 
 const date = VT323({ weight: "400", subsets: ["latin"] });
+const titleFont = Special_Elite({ weight: "400", subsets: ["latin"] });
+const titleFont2 = Black_Ops_One({ weight: "400", subsets: ["latin"] });
+const titleFont3 = Russo_One({ weight: "400", subsets: ["latin"] });
+const bodyFont = Urbanist({ weight: "600", subsets: ["latin"] });
+const tagFont = Jura({ weight: "600", subsets: ["latin"] });
+
+
+
+
 
 interface Params {
 	params: {
@@ -31,6 +40,10 @@ async function getPost(slug: string) {
         _id,
         slug,
         name,
+      },
+      tutorials2[]{
+        title,
+        url
       },
       "lyricsURL": lyrics.asset->url,
       "chordsURL": chords.asset->url,
@@ -77,7 +90,7 @@ const Page = async ({ params }: Params) => {
 						);
 					})()}
 				</span>
-				<div className="mt-5">
+				<div className={`${tagFont.className} mt-5`}>
 					{post?.tags?.map((tag) => (
 						<Link
 							key={tag?._id}
@@ -115,6 +128,26 @@ const Page = async ({ params }: Params) => {
 						</div>
 					))}
 				</div>
+				<div className="mt-5">
+					{post.tutorials2 && post.tutorials2.length > 0 && (
+						<div>
+							<h2 className={`${titleFont3.className} uppercase font-extrabold text-2xl sm:text-3xl md:text-4xl lg:text-5xl mb-2`}>Tutorials</h2>
+							<ul>
+								{post.tutorials2.map((tutorial, index) => (
+									<li key={index}>
+										<a
+											href={tutorial?.url}
+											target="_blank"
+											rel="noopener noreferrer"
+										>
+											{tutorial?.title}
+										</a>
+									</li>
+								))}
+							</ul>
+						</div>
+					)}
+				</div>
 			</div>
 		</div>
 	);
@@ -136,6 +169,7 @@ const myPortableTextComponents = {
 };
 
 const richTextStyles = `
+  ${bodyFont.className}
   mt-14
   text-justify
   max-w-2xl
