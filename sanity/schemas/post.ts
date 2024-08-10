@@ -53,6 +53,22 @@ export const post = {
 			],
 		},
 		{
+			name: 'clickTrack',
+			title: 'Rendered Multitrack with Click',
+			type: 'file',
+			options: {
+				accept: '.mp3'
+			}
+		},
+		{
+			name: 'voiceTrack',
+			title: 'Rendered Multitrack with voice',
+			type: 'file',
+			options: {
+				accept: '.mp3'
+			}
+		},
+		{
 			name: 'tutorials2',
 			title: 'Tutorials',
 			type: 'array',

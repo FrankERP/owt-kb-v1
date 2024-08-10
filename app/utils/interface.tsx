@@ -8,12 +8,11 @@ export interface Post {
   excerpt: string;
   body: any;
   tutorials2: Array<any>;
-  lyrics: File;
-  chords: File;
-  bothPDF: File;
   lyricsURL: string;
   chordsURL: string;
   bothURL: string;
+  ClickTrack: string;
+  VoiceTrack: string;
   tags: Array<Tag>;
   _id: string;
 }

@@ -1,7 +1,15 @@
 import { Post } from "@/app/utils/interface";
 import { client } from "@/sanity/lib/client";
 import React from "react";
-import { VT323, Special_Elite, Black_Ops_One, Russo_One, Urbanist, Jura, Advent_Pro } from "next/font/google";
+import {
+	VT323,
+	Special_Elite,
+	Black_Ops_One,
+	Russo_One,
+	Urbanist,
+	Jura,
+	Advent_Pro,
+} from "next/font/google";
 import Link from "next/link";
 import { PortableText } from "next-sanity";
 import Image from "next/image";
@@ -17,11 +25,6 @@ const subtitleFont = Advent_Pro({ weight: "600", subsets: ["latin"] });
 
 const bodyFont = Urbanist({ weight: "600", subsets: ["latin"] });
 const tagFont = Jura({ weight: "600", subsets: ["latin"] });
-
-
-
-
-
 
 interface Params {
 	params: {
@@ -51,6 +54,8 @@ async function getPost(slug: string) {
       "lyricsURL": lyrics.asset->url,
       "chordsURL": chords.asset->url,
       "bothURL": bothPDF.asset->url,
+      "ClickTrack": clickTrack.asset->url,
+      "VoiceTrack": voiceTrack.asset->url,
   }`;
 	const post = await client.fetch(query);
 	return post;
@@ -105,6 +110,70 @@ const Page = async ({ params }: Params) => {
 						</Link>
 					))}
 				</div>
+				{/* Sección de Audio con Click*/}
+				<div className="flex justify-center min-h-[10vw]">
+					<div className="px-10">
+						<div className="">
+							{post?.ClickTrack && (
+								<div className="my-4 justify-center">
+									<h3 className={`${bodyFont.className} text-lg font-bold`}>Escucha el track solo con el Click</h3>
+									<audio controls>
+										<source
+											src={post.ClickTrack}
+											type="audio/mp3"
+										/>
+										Tu navegador no soporta el elemento de audio.
+
+									</audio>
+								</div>
+							)}
+						</div>
+						<div>
+							{/* Botón de Descarga */}
+							{post.ClickTrack && (
+								<div className="my-4 border rounded-xl bg-[#003572] dark:bg-[#C8D8EB] hover:opacity-50">
+									<a
+										href={post.ClickTrack}
+										download
+										className={`${tagFont.className} text-[#C8D8EB] dark:text-[#003572] `}
+									>
+										Descargar audio
+									</a>
+								</div>
+							)}
+						</div>
+					</div>
+					<div className="px-5">
+						<div className="">
+							{post?.ClickTrack && (
+								<div className="my-4 justify-center">
+									<h3 className={`${bodyFont.className} text-lg font-bold`}>Escucha el track con la voz </h3>
+									<audio controls>
+										<source
+											src={post.ClickTrack}
+											type="audio/mp3"
+										/>
+										Tu navegador no soporta el elemento de audio.
+									</audio>
+								</div>
+							)}
+						</div>
+						<div>
+							{/* Botón de Descarga */}
+							{post.ClickTrack && (
+								<div className="my-4 border rounded-xl bg-[#003572] dark:bg-[#C8D8EB] hover:opacity-50">
+									<a
+										href={post.ClickTrack}
+										download
+										className={`${tagFont.className} text-[#C8D8EB] dark:text-[#003572] `}
+									>
+										Descargar audio
+									</a>
+								</div>
+							)}
+						</div>
+					</div>
+				</div>
 				<div className={richTextStyles}>
 					<PortableText
 						value={post?.body}
@@ -113,13 +182,17 @@ const Page = async ({ params }: Params) => {
 				</div>
 
 				{/* Sección deslizable para los PDFs */}
-				<div className={` mt-10 mb-4 mx-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4`}>
+				<div
+					className={` mt-10 mb-4 mx-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4`}
+				>
 					{pdfFiles.map((pdf, index) => (
 						<div
 							key={index}
 							className={` w-full`}
 						>
-							<div className={`${subtitleFont.className} text-lg md:text-xl mb-2 md:mb-4`}>
+							<div
+								className={`${subtitleFont.className} text-lg md:text-xl mb-2 md:mb-4`}
+							>
 								{pdf.title}
 							</div>
 							<iframe
@@ -131,25 +204,36 @@ const Page = async ({ params }: Params) => {
 						</div>
 					))}
 				</div>
-				<div className="mt-5">
-					{post.tutorials2 && post.tutorials2.length > 0 && (
-						<div>
-							<h2 className={`${titleFont.className} uppercase font-extrabold text-2xl sm:text-3xl md:text-4xl lg:text-5xl mb-2`}>Tutorials</h2>
-							<ul>
-								{post.tutorials2.map((tutorial, index) => (
-									<li key={index}>
-										<a
-											href={tutorial?.url}
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											{tutorial?.title}
-										</a>
-									</li>
-								))}
-							</ul>
-						</div>
-					)}
+				{/* Sección de Tutoriales en Youtube*/}
+
+				<h2
+					className={`${titleFont.className} uppercase font-extrabold text-2xl sm:text-3xl md:text-4xl lg:text-5xl mb-2`}
+				>
+					Tutorials
+				</h2>
+				<div className="mt-10 mb-4 overflow-x-auto">
+					<div className="flex space-x-4 justify-between">
+						{post.tutorials2.map((tutorial, index) => (
+							<div
+								key={index}
+								className="flex-shrink-0 w-full max-w-xs"
+							>
+								<h3
+									className={`${subtitleFont.className} text-lg md:text-xl font-bold mb-2`}
+								>
+									{tutorial.title}
+								</h3>
+								<iframe
+									src={tutorial.url}
+									width="100%"
+									height="200px"
+									className="border-0"
+									allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+									allowFullScreen
+								></iframe>
+							</div>
+						))}
+					</div>
 				</div>
 			</div>
 		</div>
