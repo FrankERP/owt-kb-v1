@@ -33,7 +33,7 @@ const PostComponent = ({ post }: Props) => {
 						day: "numeric",
 					})}
 				</p>
-				<p className={`${bodyFont.className} mb-4 line-clamp-2 `}>{post?.excerpt}</p>
+				<p className={`${bodyFont.className} mb-4 line-clamp-2 `}>Time Sig:{post?.timeSig} BPM:{post?.bpm} key:{post.key} </p>
 			</Link>
 
       {/*Tags*/}

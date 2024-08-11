@@ -41,6 +41,9 @@ async function getPost(slug: string) {
       slug,
       publishDate,
       excerpt,
+			timeSig,
+			bpm,
+			key,
       body,
       tags[] -> {
         _id,
@@ -135,7 +138,7 @@ const Page = async ({ params }: Params) => {
 								{post.ClickTrack && (
 									<a
                   href={post.ClickTrack}
-                  download
+                  download={`${post.title}-${post.author}-ClickTrack.mp3`}
                   className={`${tagFont.className} text-[#C8D8EB] dark:text-[#010b17] `}
                 >
 									<div className="my-4  rounded-xl bg-[#003572] dark:bg-[#a0a4a8] hover:opacity-50">
@@ -168,7 +171,7 @@ const Page = async ({ params }: Params) => {
 								{post.VoiceTrack && (
                   <a
                   href={post.VoiceTrack}
-                  download
+                  download={`${post.title}-${post.author}-VoiceTrack.mp3`}
                   className={`${tagFont.className} text-[#C8D8EB] dark:text-[#010b17] `}
                 >
 									<div className="my-4  rounded-xl bg-[#003572] dark:bg-[#a0a4a8] hover:opacity-50">
@@ -221,6 +224,7 @@ const Page = async ({ params }: Params) => {
 									rel="noopener noreferrer"
 									className="absolute inset-0"
 									style={{ zIndex: 10 }}
+									download={`${post.title}-${post.author}-${pdf.title}}.pdf`}
 								>
 									{/* Espacio vacío para capturar clics */}
 								</a>
@@ -250,11 +254,13 @@ const Page = async ({ params }: Params) => {
 									{tutorial.title}
 								</h3>
 								<iframe
-									src={tutorial.url}
+									src={`${tutorial.url}`}
 									width="100%"
 									height="200px"
 									className="border-0"
-									allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+									title="YouTube video player"
+									allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture web-share"
+									referrerPolicy="strict-origin-when-cross-origin" 
 									allowFullScreen
 								></iframe>
 							</div>

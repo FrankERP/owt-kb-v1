@@ -35,6 +35,21 @@ export const post = {
 			initialValue: () => new Date().toISOString(),
 		},
 		{
+			name: 'timeSig',
+			title: 'Time Signature',
+			type: 'string',
+		},
+		{
+			name: 'bpm',
+			title: 'BPM',
+			type: 'number',
+		},
+		{
+			name: 'key',
+			title: 'Key',
+			type: 'string',
+		},
+		{
 			name: "excerpt",
 			title: "Excerpt",
 			type: "text",

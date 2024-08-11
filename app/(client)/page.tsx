@@ -20,6 +20,9 @@ async function getPosts() {
 			slug,
 			publishDate,
 			excerpt,
+			timeSig,
+			bpm,
+			key,
 			tags[] -> {
 				_id,
 				slug,

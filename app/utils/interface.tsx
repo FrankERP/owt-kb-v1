@@ -7,6 +7,9 @@ export interface Post {
 	slug: { current: string };
   publishDate: string;
   excerpt: string;
+  timeSig: string;
+  bpm: string;
+  key: string;
   body: any;
   tutorials2: Array<any>;
   lyricsURL: string;
