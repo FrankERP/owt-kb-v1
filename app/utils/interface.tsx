@@ -1,3 +1,4 @@
+import { featuredSongs } from "@/sanity/schemas/setList";
 import { Url } from "next/dist/shared/lib/router/router";
 
 export interface Post {
@@ -23,4 +24,15 @@ export interface Tag {
   slug: { current: string };
   _id: string;
   postCount?: number;
+}
+
+export interface setList {
+  title: string;
+  _id: string;
+  body: any;
+}
+
+export interface featuredSongs {
+  songs: Array<Post>;
+  week: string;
 }

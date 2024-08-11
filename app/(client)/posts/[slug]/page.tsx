@@ -111,70 +111,76 @@ const Page = async ({ params }: Params) => {
 					))}
 				</div>
 				{/* Sección de Audio con Click*/}
-				<div className="min-h-[10vw] overflow-x-auto max-w-[90vw]">
-					<div className="flex space-x-4 justify-between">
-					<div className="px-10 ml-10">
-						<div className="">
-							{post?.ClickTrack && (
-								<div className="my-4 justify-center">
-									<h3 className={`${bodyFont.className} text-lg font-bold`}>Escucha el track solo con el Click</h3>
-									<audio controls>
-										<source
-											src={post.ClickTrack}
-											type="audio/mp3"
-										/>
-										Tu navegador no soporta el elemento de audio.
-
-									</audio>
-								</div>
-							)}
-						</div>
-						<div>
-							{/* Botón de Descarga */}
-							{post.ClickTrack && (
-								<div className="my-4 border rounded-xl bg-[#003572] dark:bg-[#C8D8EB] hover:opacity-50">
+				<div className="min-h-[10vw] overflow-x-auto w-full scroll-snap-x">
+					<div className="flex space-x-4 justify-start md:justify-center">
+						<div className="scroll-snap-align">
+							<div className="">
+								{post?.ClickTrack && (
+									<div className="my-4 justify-center">
+										<h3 className={`${bodyFont.className} text-lg font-bold`}>
+											Click Track
+										</h3>
+										<audio controls>
+											<source
+												src={post.ClickTrack}
+												type="audio/mp3"
+											/>
+											Tu navegador no soporta el elemento de audio.
+										</audio>
+									</div>
+								)}
+							</div>
+							<div>
+								{/* Botón de Descarga */}
+								{post.ClickTrack && (
 									<a
-										href={post.ClickTrack}
-										download
-										className={`${tagFont.className} text-[#C8D8EB] dark:text-[#003572] `}
-									>
-										Descargar audio
-									</a>
-								</div>
-							)}
+                  href={post.ClickTrack}
+                  download
+                  className={`${tagFont.className} text-[#C8D8EB] dark:text-[#010b17] `}
+                >
+									<div className="my-4  rounded-xl bg-[#003572] dark:bg-[#a0a4a8] hover:opacity-50">
+											Descargar audio
+									
+									</div>
+                  </a>
+								)}
+							</div>
+						</div>
+						<div className="">
+							<div className="">
+								{post?.VoiceTrack && (
+									<div className="my-4 justify-center">
+										<h3 className={`${bodyFont.className} text-lg font-bold`}>
+											Track con voz
+										</h3>
+										<audio controls>
+											<source
+												src={post.VoiceTrack}
+												type="audio/mp3"
+											/>
+											Tu navegador no soporta el elemento de audio.
+										</audio>
+									</div>
+								)}
+							</div>
+							<div>
+								{/* Botón de Descarga */}
+								{post.VoiceTrack && (
+                  <a
+                  href={post.VoiceTrack}
+                  download
+                  className={`${tagFont.className} text-[#C8D8EB] dark:text-[#010b17] `}
+                >
+									<div className="my-4  rounded-xl bg-[#003572] dark:bg-[#a0a4a8] hover:opacity-50">
+										
+											Descargar audio
+									
+									</div>
+                  </a>
+								)}
+							</div>
 						</div>
 					</div>
-					<div className="px-5">
-						<div className="">
-							{post?.ClickTrack && (
-								<div className="my-4 justify-center">
-									<h3 className={`${bodyFont.className} text-lg font-bold`}>Escucha el track con la voz </h3>
-									<audio controls>
-										<source
-											src={post.ClickTrack}
-											type="audio/mp3"
-										/>
-										Tu navegador no soporta el elemento de audio.
-									</audio>
-								</div>
-							)}
-						</div>
-						<div>
-							{/* Botón de Descarga */}
-							{post.ClickTrack && (
-								<div className="my-4 border rounded-xl bg-[#003572] dark:bg-[#C8D8EB] hover:opacity-50">
-									<a
-										href={post.ClickTrack}
-										download
-										className={`${tagFont.className} text-[#C8D8EB] dark:text-[#003572] `}
-									>
-										Descargar audio
-									</a>
-								</div>
-							)}
-						</div>
-					</div>
-          </div>
 				</div>
 				<div className={richTextStyles}>
 					<PortableText
@@ -182,43 +188,61 @@ const Page = async ({ params }: Params) => {
 						components={myPortableTextComponents}
 					/>
 				</div>
+        <h2
+					className={`${titleFont.className} uppercase font-extrabold text-2xl sm:text-3xl md:text-4xl lg:text-5xl mb-2 shadow-bottom shadow-[#00bfff]`}
+				>
+					Acordes y Letras
+				</h2>
 
 				{/* Sección deslizable para los PDFs */}
-				<div
-					className={` mt-10 mb-4 mx-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4`}
-				>
+				<div className="mt-10 mb-4 mx-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
 					{pdfFiles.map((pdf, index) => (
 						<div
 							key={index}
-							className={` w-full`}
+							className="relative w-full"
 						>
 							<div
 								className={`${subtitleFont.className} text-lg md:text-xl mb-2 md:mb-4`}
 							>
 								{pdf.title}
 							</div>
-							<iframe
-								src={pdf.url}
-								width="100%"
-								height="500px" // Ajusta la altura según sea necesario
-								className="border-0"
-							></iframe>
+
+							<div className="relative">
+								<iframe
+									src={pdf.url}
+									width="100%"
+									height="500px" // Ajusta la altura según sea necesario
+									className="border-0"
+								></iframe>
+								<a
+									href={pdf.url}
+									target="_blank"
+									rel="noopener noreferrer"
+									className="absolute inset-0"
+									style={{ zIndex: 10 }}
+								>
+									{/* Espacio vacío para capturar clics */}
+								</a>
+							</div>
 						</div>
 					))}
 				</div>
-				{/* Sección de Tutoriales en Youtube*/}
 
+				{/* Sección de Tutoriales en Youtube*/}
+        <div className="shadow-bottom shadow-[#00bfff]">
 				<h2
 					className={`${titleFont.className} uppercase font-extrabold text-2xl sm:text-3xl md:text-4xl lg:text-5xl mb-2`}
 				>
-					Tutorials
+					Tutoriales
 				</h2>
-				<div className="mt-10 mb-4 overflow-x-auto">
-					<div className="flex space-x-4 justify-between">
+        </div>
+				<div className="mt-10 mb-4 mx-4 overflow-x-auto w-full scroll-snap-x">
+					<div className="flex space-x-4 justify-start md:justify-center">
 						{post.tutorials2.map((tutorial, index) => (
 							<div
 								key={index}
-								className="flex-shrink-0 w-full max-w-xs"
+								className="flex-shrink-0 w-full max-w-xs scroll-snap-align"
 							>
 								<h3
 									className={`${subtitleFont.className} text-lg md:text-xl font-bold mb-2`}

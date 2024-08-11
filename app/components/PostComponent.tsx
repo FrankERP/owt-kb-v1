@@ -60,9 +60,23 @@ const cardStyle = `
   shadow-xl
   
   shadow-[#00bfff]
-  hover:shadow-sm
+  hover:shadow-md
   hover:bg-[#002249]
   hover:text-[#C8D8EB]
   hover:dark:bg-[#00bfff]
   hover:dark:text-[#002249]
 `;
+
+
+// const cardStyle = `
+//   mb-8 
+//   p-4 
+//   border 
+//   border-gray-900
+//   rounded-md
+//   shadow-xl
+  
+//   shadow-[#00bfff]
+//   hover:shadow-5xl
+//   hover:scale-105
+// `;

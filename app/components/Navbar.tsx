@@ -15,7 +15,7 @@ interface Props {
 
 const Navbar = ({title = "", tags = false, author=""}:Props) => {
 	return (
-		<div className="mx-auto max-w-full px-6 mt-5">
+		<div className="mx-auto max-w-full px-6 mt-5 ">
 			<div className="grid grid-cols-4 mt-4 justify-items-center ">
 				<Link className="basis-1/4 justify-self-start self-center" href="/">
 					{/*<div className={`${font.className} text-5xl dark:text-[#C8D8EB]`}>
