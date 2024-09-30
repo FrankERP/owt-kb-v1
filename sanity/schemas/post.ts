@@ -99,6 +99,22 @@ export const post = {
 			]
 		},
 		{
+			name: 'audioTracks',
+			title: 'Audio Tracks',
+			type: 'array',
+			of: [
+				{
+					type: 'object',
+					name: 'audioTrack',
+					fields: [
+						{ name: 'title', type: 'string', title: 'Title' }, // Ej: "Canción sin voz", "Canción con voz principal"
+						{ name: 'tone', type: 'string', title: 'Tone' }, // Ej: "C", "D", "E", etc.
+						{ name: 'audioFile', type: 'file', title: 'Audio File', options: { accept: '.mp3' } },
+					]
+				}
+			]
+		},
+		{
 			name: 'lyrics',
 			title: 'Lyrics pdf',
 			type: 'file',

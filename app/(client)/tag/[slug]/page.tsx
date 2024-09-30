@@ -14,6 +14,9 @@ async function getPostsByTag(tag: string) {
 			slug,
 			publishDate,
 			excerpt,
+			timeSig,
+			bpm,
+			key,
 			tags[] -> {
 				_id,
 				slug,
@@ -36,7 +39,6 @@ interface Params {
 
 const page = async ({ params }: Params) => {
 	const posts: Array<Post> = await getPostsByTag(params.slug);
-	console.log(posts[0]?.tags[1]?.name, "posts by tag 2");
 
 	return (
 		<div>

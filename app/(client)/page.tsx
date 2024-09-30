@@ -50,6 +50,17 @@ async function getWeekendSongs() {
   return weekendSongs;
 }
 
+function getCurrentWeekSunday() {
+	const today = new Date();
+	const currentDay = today.getDay();
+	const sunday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - currentDay + 7);
+	return sunday.toLocaleDateString("es-ES", {
+		weekday: "long",
+		year: "numeric",
+		month: "long",
+		day: "numeric",
+	});
+}
 
 export const revalidate = 60;
 
@@ -63,18 +74,13 @@ export default async function Home() {
 
 	return (
 		<div className="font-bold">
-			<Navbar title="Songs" tags/>
+			<Navbar title="Songs" tags />
 			<div className="container mx-auto p-4">
-				<h2 className={`${titleFont.className} flex justify-center text-2xl font-bold mb-4`} > Canciones {new Date(songs?.week).toLocaleDateString("es-ES", {
-						weekday: "long",
-						year: "numeric",
-						month: "long",
-						day: "numeric",
-					})}</h2>
+				<h2 className={`${titleFont.className} flex justify-center text-2xl font-bold mb-4`} > Canciones del fin: {getCurrentWeekSunday()}</h2>
 			</div>
 			<div className="container text-center mb-5 mx-auto p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 shadow-bottom shadow-[#00bfff]">
-        {songs.songs?.length > 0 &&
-          songs.songs?.map((song) => (
+        {songs?.songs?.length > 0 &&
+          songs?.songs?.map((song) => (
             <Link key={song?._id} href={`/posts/${song.slug.current}`}>
               <div className="bg-white dark:bg-[#010b17] dark:border dark:border- dark:border-[#00bfff] shadow-md rounded-lg p-4 hover:bg-[#00bfff] hover:text-white transition-transform transform hover:scale-105">
                 <h3 className={`${titleFont.className} text-lg capitalize`}>
