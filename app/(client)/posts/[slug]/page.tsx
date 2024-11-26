@@ -74,9 +74,8 @@ const Page = async ({ params }: Params) => {
 	}
 
 	const pdfFiles = [
-		{ url: post?.lyricsURL, title: "Lyrics PDF" },
-		{ url: post?.chordsURL, title: "Chords PDF" },
-		{ url: post?.bothURL, title: "Chords and Lyrics PDF" },
+		{ url: post?.lyricsURL, title: "Letra" },
+		{ url: post?.chordsURL, title: "Acordes" },
 	].filter((pdf) => pdf.url);
 
 	return (
@@ -197,9 +196,8 @@ const Page = async ({ params }: Params) => {
 					Acordes y Letras
 				</h2>
 
-				{/* Sección deslizable para los PDFs */}
-				<div className="mt-10 mb-4 mx-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-
+				{/* Section for "Letra" and "Acordes" PDFs */}
+				<div className="mt-10 mb-4 mx-10 grid grid-cols-1 sm:grid-cols-2 gap-4">
 					{pdfFiles.map((pdf, index) => (
 						<div
 							key={index}
@@ -215,7 +213,7 @@ const Page = async ({ params }: Params) => {
 								<iframe
 									src={pdf.url}
 									width="100%"
-									height="500px" // Ajusta la altura según sea necesario
+									height="500px" // Adjust the height as needed
 									className="border-0"
 								></iframe>
 								<a
@@ -224,9 +222,9 @@ const Page = async ({ params }: Params) => {
 									rel="noopener noreferrer"
 									className="absolute inset-0"
 									style={{ zIndex: 10 }}
-									download={`${post.title}-${post.author}-${pdf.title}}.pdf`}
+									download={`${post.title}-${post.author}-${pdf.title}.pdf`}
 								>
-									{/* Espacio vacío para capturar clics */}
+									{/* Empty space to capture clicks */}
 								</a>
 							</div>
 						</div>
@@ -243,7 +241,7 @@ const Page = async ({ params }: Params) => {
         </div>
 				<div className="mt-10 mb-4 mx-4 overflow-x-auto w-full scroll-snap-x">
 					<div className="flex space-x-4 justify-start md:justify-center">
-						{post.tutorials2.map((tutorial, index) => (
+						{post?.tutorials2?.map((tutorial, index) => (
 							<div
 								key={index}
 								className="flex-shrink-0 w-full max-w-xs scroll-snap-align"
