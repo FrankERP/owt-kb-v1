@@ -50,12 +50,6 @@ export const post = {
 			type: 'string',
 		},
 		{
-			name: "excerpt",
-			title: "Excerpt",
-			type: "text",
-			validation: (Rule: Rule) => Rule.max(200).error("Maximum 200 characters"),
-		},
-		{
 			name: "body",
 			title: "Body",
 			type: "array",
@@ -66,22 +60,6 @@ export const post = {
 					fields: [{ type: "text", name: "alt", title: "Alt" }],
 				},
 			],
-		},
-		{
-			name: 'clickTrack',
-			title: 'Rendered Multitrack with Click',
-			type: 'file',
-			options: {
-				accept: '.mp3'
-			}
-		},
-		{
-			name: 'voiceTrack',
-			title: 'Rendered Multitrack with voice',
-			type: 'file',
-			options: {
-				accept: '.mp3'
-			}
 		},
 		{
 			name: 'tutorials2',
@@ -123,20 +101,20 @@ export const post = {
 			},
 		},
 		{
-			name: 'chords',
-			title: 'Chords pdf',
-			type: 'file',
-			options: {
-				accept: '.pdf',
-			},
-		},
-		{
-			name: 'bothPDF',
-			title: 'Cords and Lyrics pdf',
-			type: 'file',
-			options: {
-				accept: '.pdf',
-			},
+			name: 'chordsPDF',
+			title: 'chords pdf',
+			type: 'array',
+			of: [
+				{
+					type: 'object',
+					name: 'chordsPDF',
+					fields: [
+						{name: 'title', type: 'string', title: 'Title'},
+						{name: 'key', type: 'string', title: 'Key'},
+						{name: 'chordsPDF', type: 'file', title: 'Chords PDF', options: { accept: '.pdf' }},
+					]
+				}
+			]
 		},
 		{
 			name: "tags",
