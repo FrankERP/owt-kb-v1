@@ -23,7 +23,20 @@ export const saturdaySongs = {
   ],
   preview: {
 		select: {
-      title: 'week',
+      week: 'week',
 		},
+    prepare(selection:any) {
+      const {week} = selection;
+      const formattedDate = week ? new Date(week).toLocaleDateString('es-Es', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+      : 'Fecha no asignada';
+      return {
+        title: `${formattedDate}`,
+      }
+    }
 	}
 };

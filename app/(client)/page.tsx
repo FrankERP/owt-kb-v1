@@ -6,9 +6,13 @@ import PostComponent from "../components/PostComponent";
 import Navbar from "../components/Navbar";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Advent_Pro } from "next/font/google";
+import {Advent_Pro } from "next/font/google";
+
+
+
 
 const titleFont = Advent_Pro({ weight: "600", subsets: ["latin"] });
+
 
 
 async function getPosts() {
@@ -42,6 +46,10 @@ async function getWeekendSongs() {
         title,
         slug,
 				_id,
+				author,
+				timeSig,
+				bpm,
+				key
       },
 		week,
     }
@@ -81,13 +89,7 @@ export default async function Home() {
 			<div className="container text-center mb-5 mx-auto p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 shadow-bottom shadow-[#00bfff]">
         {songs?.songs?.length > 0 &&
           songs?.songs?.map((song) => (
-            <Link key={song?._id} href={`/posts/${song.slug.current}`}>
-              <div className="bg-white dark:bg-[#010b17] dark:border dark:border- dark:border-[#00bfff] shadow-md rounded-lg p-4 hover:bg-[#00bfff] hover:text-white transition-transform transform hover:scale-105">
-                <h3 className={`${titleFont.className} text-lg capitalize`}>
-                  {song.title}
-                </h3>
-              </div>
-            </Link>
+            <PostComponent key={song?._id} post={song} />
           ))}
       </div>
 			<div className="container mx-auto p-4">

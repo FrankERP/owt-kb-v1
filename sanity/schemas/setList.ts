@@ -1,6 +1,6 @@
 export const featuredSongs = {
   name: 'featuredSongs',
-  title: 'Weekend Songs',
+  title: 'Sunday Songs',
   type: 'document',
   fields: [
     {
@@ -23,7 +23,20 @@ export const featuredSongs = {
   ],
   preview: {
 		select: {
-      title: 'week',
+      week: 'week',
 		},
+    prepare(selection:any) {
+      const {week} = selection;
+      const formattedDate = week ? new Date(week).toLocaleDateString('es-Es', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+      : 'Fecha no asignada';
+      return {
+        title: `${formattedDate}`,
+      }
+    }
 	}
 };

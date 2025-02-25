@@ -10,7 +10,9 @@ interface Props {
 const font = Josefin_Sans({ weight: "400", subsets: ["latin"] });
 const date = VT323({ weight: "400", subsets: ["latin"] });
 const titleFont = Advent_Pro({ weight: "600", subsets: ["latin"] });
-const bodyFont = Urbanist({ weight: "800", subsets: ["latin"] });
+const bodyFontLight = Urbanist({ weight: "400", subsets: ["latin"] });
+const bodyFontDark = Urbanist({ weight: "800", subsets: ["latin"] });
+
 const tagFont = Jura({ weight: "600", subsets: ["latin"] });
 
 
@@ -26,21 +28,25 @@ const PostComponent = ({ post }: Props) => {
 				<p
 					className={`${date.className} my-2 text-gray-500`}
 				>
-					{new Date(post?.publishDate).toLocaleDateString("es-ES", {
-						weekday: "long",
-						year: "numeric",
-						month: "long",
-						day: "numeric",
-					})}
+					________________
 				</p>
-				<p className={`${bodyFont.className} mb-4 line-clamp-2 `}>Time Sig:{post?.timeSig} BPM:{post?.bpm} key:{post.key} </p>
+				<p className={`mb-4 line-clamp-2`}>
+          <span className={`${bodyFontDark.className} text-gray-500`}>Time Sig: </span>
+          <span className={`${bodyFontLight.className} text-black dark:text-white`}>{post?.timeSig}</span>  
+
+          <span className={`${bodyFontDark.className} text-gray-500`}> -- BPM: </span>
+          <span className={`${bodyFontLight.className} text-black dark:text-white`}>{post?.bpm}</span>
+
+          <span className={`${bodyFontDark.className} text-gray-500`}> -- Original Key: </span>
+          <span className={`${bodyFontLight.className} text-black dark:text-white`}>{post?.key}</span>
+        </p>
 			</Link>
 
       {/*Tags*/}
 
       <div>
         {post?.tags?.map((tag) => (
-          <span key={tag?._id} className={`${tagFont.className} mr-2 p-1 text-gray-500 rounded-sm lowercase dark:border-gray-900`}>
+          <span key={tag?._id} className={`${date.className} text-xl mr-2 p-1 text-gray-500 rounded-sm lowercase dark:border-gray-900`}>
             #{tag?.name}
           </span>
         ))}

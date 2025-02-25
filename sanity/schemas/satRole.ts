@@ -13,15 +13,15 @@ export const saturdayRole = {
     },
     {
       name: 'Lead',
-      title: 'Leader',
+      title: 'Lead',
       type: 'reference',
-      to: [{ type: 'teamMembers' }], // Asumiendo que las personas están en el esquema 'teamMembers'
+      to:[{ type: 'teamMembers' }],
     },
     {
-      name: 'Apoyo',
-      title: 'Apoyo',
+      name: 'Lead__Support',
+      title: 'Lead Support',
       type: 'reference',
-      to: [{ type: 'teamMembers' }], // Asumiendo que las personas están en el esquema 'teamMembers'
+      to:[{ type: 'teamMembers' }],
     },
     {
       name: 'Electric_Guitar',
@@ -82,7 +82,20 @@ export const saturdayRole = {
   ],
   preview: {
 		select: {
-      title: 'week',
+      week: 'week',
 		},
+    prepare(selection:any) {
+      const {week} = selection;
+      const formattedDate = week ? new Date(week).toLocaleDateString('es-Es', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+      : 'Fecha no asignada';
+      return {
+        title: `${formattedDate}`,
+      }
+    }
 	}
 };
