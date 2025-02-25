@@ -9,9 +9,31 @@ export const featuredSongs = {
       type: 'array',
       of: [
         {
-          type: 'reference',
-          to: [{ type: 'post' }], // Asumiendo que las canciones están en el esquema 'post'
-        },
+					type: 'object',
+					name: 'setlist_song',
+					fields: [
+            {
+              name: 'song',
+              title: 'Song',
+              type: 'reference',
+              to: [{ type: 'post' }],
+            },
+						{name: 'play_key', type: 'string', title: 'Key to play'},
+					],
+          preview: {
+            select: {
+              name: 'song.title',
+              author: 'song.author',
+              play_key:'play_key',
+            },
+            prepare(selection:any) {
+              const {name, play_key, author} = selection;
+              return {
+                title: name ? `${name} - ${author} [${play_key}]` : `Sin asignar - ${play_key}`,
+              };
+            }
+          }
+				}
       ],
     },
     {

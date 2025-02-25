@@ -38,7 +38,7 @@ async function getPosts() {
 }
 
 async function getWeekendSongs() {
-  const currentWeek = new Date().toISOString().slice(0, 10); // Obtener la fecha de hoy en formato YYYY-MM-DD
+  const currentWeek = new Date().toISOString().slice(0, 10); //Obtener la fecha de hoy en formato YYYY-MM-DD
 	//console.log(currentWeek, 'currentWeek');
   const query = `
     *[_type == "featuredSongs" && week >= "${currentWeek}"] | order(week desc)[0] {
