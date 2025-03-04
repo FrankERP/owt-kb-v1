@@ -8,12 +8,15 @@ import Header from "./Header";
 const font = Orbitron({ weight: "900", subsets: ["latin"] });
 
 interface Props {
-	title: string;
-	author?: string;
-	tags?: boolean;
+  title: string;
+  tags?: boolean;
+  author?: string;
+  timeSig?: string;
+  bpm?: string;
+  tone?: string;
 }
 
-const Navbar = ({title = "", tags = false, author=""}:Props) => {
+const Navbar = ({title = "", tags = false, author="", timeSig = "", bpm = "", tone= "" }:Props) => {
 	return (
 		<div className="mx-auto max-w-full px-6 mt-5 ">
 			<div className="grid grid-cols-4 mt-4 justify-items-center ">
@@ -24,7 +27,7 @@ const Navbar = ({title = "", tags = false, author=""}:Props) => {
 					<Image src="/LogoOasis.png" alt="Oasis Worship Team" width={200} height= {200} className={`${font.className}`}></Image>
 				</Link>
 				<div className="mx-20 self-center basis-1/2 col-start-2 col-span-2 pt-10 " >
-					<Header title={title} tags={tags} author={author}/>
+					<Header title={title} tags={tags} author={author} timeSig={timeSig} bpm={bpm} key={tone}/>
 				</div>
 				<div className="basis-1/4 justify-self-end col-start-4 self-center pb-10">
 					<ThemeSwitch />

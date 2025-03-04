@@ -22,6 +22,37 @@ export interface Post {
 }
 
 
+export interface TeamMember {
+  _id: string;
+  name: string;
+}
+
+export interface SundayRole {
+  week: string;
+  Lead?: TeamMember[];
+  Electric_Guitar?: TeamMember;
+  Bass?: TeamMember;
+  Drums?: TeamMember[];
+  Keys?: TeamMember[];
+  BGVs?: TeamMember[];
+  Chorus?: TeamMember[];
+}
+
+export interface SetList {
+  songs: SetListSong[];
+  week: string;
+}
+
+export interface SetListSong {
+  song: Post;
+  play_key: string;
+}
+
+export interface SetListAndRoles {
+  setlist: SetList;
+  roles: SundayRole;
+}
+
 export interface Tag {
   name: string;
   slug: { current: string };
@@ -29,13 +60,8 @@ export interface Tag {
   postCount?: number;
 }
 
-export interface setList {
-  title: string;
-  _id: string;
-  body: any;
-}
 
-export interface featuredSongs {
-  songs: Array<Post>;
-  week: string;
-}
+//export interface featuredSongs {
+  //songs: Array<setListSongs>;  // Change from Post[] to setListSongs[]
+  //week: string;
+//}

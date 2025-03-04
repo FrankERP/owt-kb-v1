@@ -22,6 +22,8 @@ const titleFontqd = Special_Elite({ weight: "400", subsets: ["latin"] });
 const titleFont2 = Black_Ops_One({ weight: "400", subsets: ["latin"] });
 const titleFont = Advent_Pro({ weight: "600", subsets: ["latin"] });
 const subtitleFont = Advent_Pro({ weight: "600", subsets: ["latin"] });
+const bodyFontLight = Urbanist({ weight: "400", subsets: ["latin"] });
+const bodyFontDark = Urbanist({ weight: "800", subsets: ["latin"] });
 
 const bodyFont = Urbanist({ weight: "600", subsets: ["latin"] });
 const tagFont = Jura({ weight: "600", subsets: ["latin"] });
@@ -83,6 +85,9 @@ const Page = async ({ params }: Params) => {
 			<Navbar
 				title={post?.title}
 				author={post?.author}
+				timeSig={post?.timeSig}
+				bpm={post?.bpm}
+				tone={post?.key}
 			/>
 			<div className="text-center">
 				<span className={`${date.className}`}>
@@ -100,6 +105,16 @@ const Page = async ({ params }: Params) => {
 						);
 					})()}
 				</span>
+				<p className={`mb-4 line-clamp-2`}>
+          <span className={`${bodyFontDark.className} text-gray-500`}>Time Sig: </span>
+          <span className={`${bodyFontLight.className} text-black dark:text-white`}>{post?.timeSig}</span>  
+
+          <span className={`${bodyFontDark.className} text-gray-500`}> -- BPM: </span>
+          <span className={`${bodyFontLight.className} text-black dark:text-white`}>{post?.bpm}</span>
+
+          <span className={`${bodyFontDark.className} text-gray-500`}> -- Original Key: </span>
+          <span className={`${bodyFontLight.className} text-black dark:text-white`}>{post?.key}</span>
+        </p>
 				<div className={`${tagFont.className} mt-5`}>
 					{post?.tags?.map((tag) => (
 						<Link

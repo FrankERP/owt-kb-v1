@@ -8,7 +8,7 @@ export const saturdayRole = {
     {
       name: 'week',
       title: 'Week',
-      type: 'datetime',
+      type: 'date',
       description: 'Week this selection is valid for',
     },
     {

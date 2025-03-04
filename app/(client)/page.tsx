@@ -1,12 +1,15 @@
 import Image from "next/image";
 import { client } from "@/sanity/lib/client";
 import Header from "../components/Header";
-import { Post, featuredSongs } from "../utils/interface";
+import { Post, SetListAndRoles } from "../utils/interface";
 import PostComponent from "../components/PostComponent";
+import SetlistPost from "../components/SetlistPost";
 import Navbar from "../components/Navbar";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {Advent_Pro } from "next/font/google";
+import { getSetlistAndRoles } from "@/sanity/lib/api";
+import { set } from "sanity";
 
 
 
@@ -38,24 +41,30 @@ async function getPosts() {
 }
 
 async function getWeekendSongs() {
-  const currentWeek = new Date().toISOString().slice(0, 10); //Obtener la fecha de hoy en formato YYYY-MM-DD
-	//console.log(currentWeek, 'currentWeek');
+  const currentWeek = new Date().toISOString().slice(0, 10); // Get today in YYYY-MM-DD format
+  console.log("Current week:", currentWeek); // Debugging
+
   const query = `
-    *[_type == "featuredSongs" && week >= "${currentWeek}"] | order(week desc)[0] {
-      songs[]-> {
-        title,
-        slug,
-				_id,
-				author,
-				timeSig,
-				bpm,
-				key
+    *[_type == "featuredSongs" && week >= "${currentWeek}"] 
+    | order(week desc)[0] {
+      songs[]{
+        song->{
+          _id,
+          title,
+          slug,
+          author,
+          timeSig,
+          bpm,
+          key
+        },
+        play_key
       },
-		week,
+      week
     }
   `;
-  const weekendSongs = await client.fetch(query);
-  return weekendSongs;
+
+  const sundaySongs = await client.fetch(query);
+  return sundaySongs;
 }
 
 function getCurrentWeekSunday() {
@@ -75,7 +84,8 @@ export const revalidate = 60;
 
 export default async function Home() {
 	const posts: Post[] = await getPosts();
-	const songs:featuredSongs = await getWeekendSongs();
+	const setListAndRoles: SetListAndRoles = await getSetlistAndRoles();
+	console.log("Fetched songs:", setListAndRoles); // Debugging
 	//console.log(songs.week, 'week');
 
 	//console.log(posts, 'posts');
@@ -87,11 +97,12 @@ export default async function Home() {
 				<h2 className={`${titleFont.className} flex justify-center text-2xl font-bold mb-4`} > Canciones del fin: {getCurrentWeekSunday()}</h2>
 			</div>
 			<div className="container text-center mb-5 mx-auto p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 shadow-bottom shadow-[#00bfff]">
-        {songs?.songs?.length > 0 &&
-          songs?.songs?.map((song) => (
-            <PostComponent key={song?._id} post={song} />
-          ))}
-      </div>
+			{setListAndRoles?.setlist ? (
+					<SetlistPost key={setListAndRoles.setlist.week} setList={setListAndRoles} />
+				) : (
+					<p>No songs assigned for this week.</p>
+				)}
+			</div>
 			<div className="container mx-auto p-4">
 				<h2 className={`${titleFont.className} uppercase flex justify-center text-2xl font-bold mb-4`} > Todas las canciones</h2>
 			</div>

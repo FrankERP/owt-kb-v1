@@ -39,7 +39,7 @@ export const featuredSongs = {
     {
       name: 'week',
       title: 'Week',
-      type: 'datetime',
+      type: 'date',
       description: 'Week this selection is valid for',
     },
   ],
@@ -49,16 +49,25 @@ export const featuredSongs = {
 		},
     prepare(selection:any) {
       const {week} = selection;
-      const formattedDate = week ? new Date(week).toLocaleDateString('es-Es', {
+
+      if (!week) {
+        return {title: 'Fecha no asignada'}
+      }
+      let date = new Date(week);
+
+      if (date.getDay() === 6) {
+        date.setDate(date.getDate() + 1);
+      }
+
+      const formattedDate = date.toLocaleDateString('es-Es', {
         weekday: 'long',
         year: 'numeric',
         month: 'long',
-        day: 'numeric',
-      })
-      : 'Fecha no asignada';
+        day:'numeric',
+      });
       return {
         title: `${formattedDate}`,
-      }
+      };
     }
 	}
 };
