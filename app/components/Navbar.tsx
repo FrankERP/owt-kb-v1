@@ -24,12 +24,12 @@ const Navbar = ({ title = "", author = "", tags = false }: Props) => {
           />
         </Link>
 
-        <div className="absolute inset-x-0 flex flex-col items-center justify-center pointer-events-none">
-          <p className="font-display text-base uppercase tracking-wide">
+        <div className="absolute inset-x-0 px-16 flex flex-col items-center justify-center pointer-events-none overflow-hidden">
+          <p className="font-display text-xs sm:text-sm md:text-base uppercase tracking-wide truncate w-full text-center">
             {title}
           </p>
           {author && (
-            <p className="font-label text-xs text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+            <p className="font-label text-xs text-gray-500 dark:text-gray-400 uppercase tracking-widest truncate w-full text-center">
               {author}
             </p>
           )}
