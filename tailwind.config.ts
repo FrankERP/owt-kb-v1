@@ -9,11 +9,16 @@ const config: Config = {
 	darkMode: "class",
 	theme: {
 		extend: {
+			fontFamily: {
+				display: ["var(--font-display)", "sans-serif"],
+				body:    ["var(--font-body)",    "sans-serif"],
+				label:   ["var(--font-label)",   "sans-serif"],
+			},
 			scrollSnapType: {
 				x: "x mandatory",
 			},
       boxShadow: {
-        'bottom': '0px 6px 4px -4px rgba(0, 0, 0, 0.1)', // Ajusta los valores según lo necesites
+        bottom: "0px 6px 4px -4px rgba(0, 0, 0, 0.1)",
       },
 			scrollSnapAlign: {
 				start: "start",

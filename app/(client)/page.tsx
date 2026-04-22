@@ -3,12 +3,6 @@ import { Setlist, SundayRole, SaturdayRole } from "../utils/interface";
 import Navbar from "../components/Navbar";
 import SongSearchList from "../components/SongSearchList";
 import Link from "next/link";
-import { Advent_Pro, Jura, Urbanist } from "next/font/google";
-
-const titleFont = Advent_Pro({ weight: "600", subsets: ["latin"] });
-const labelFont = Jura({ weight: "600", subsets: ["latin"] });
-const bodyFont = Urbanist({ weight: "400", subsets: ["latin"] });
-
 // ─── Queries ────────────────────────────────────────────────────────────────
 
 async function getPosts() {
@@ -140,7 +134,7 @@ function DayCard({ day, date, setlist, leads, leadSupport, instruments, fohTeam,
   return (
     <div className="border border-[#003572] dark:border-[#00bfff] rounded-xl overflow-hidden shadow-md shadow-[#00bfff]/20">
       <div className="bg-[#003572] dark:bg-[#001f3f] px-5 py-4 border-b border-[#002249] dark:border-[#00bfff]">
-        <h3 className={`${titleFont.className} text-lg font-bold uppercase text-[#C8D8EB]`}>
+        <h3 className="font-display text-lg font-bold uppercase text-[#C8D8EB]">
           {day}
         </h3>
         {date && (
@@ -158,7 +152,7 @@ function DayCard({ day, date, setlist, leads, leadSupport, instruments, fohTeam,
       <div className="p-5 space-y-5">
         {hasSetlist && (
           <section>
-            <h4 className={`${labelFont.className} text-xs uppercase tracking-widest text-gray-400 mb-3`}>
+            <h4 className="font-label text-xs uppercase tracking-widest text-gray-400 mb-3">
               Setlist
             </h4>
             <ol className="space-y-3">
@@ -170,10 +164,10 @@ function DayCard({ day, date, setlist, leads, leadSupport, instruments, fohTeam,
                       href={`/posts/${song.slug.current}`}
                       className="hover:text-[#00bfff] transition-colors"
                     >
-                      <span className={`${bodyFont.className} text-sm font-semibold`}>{song.title}</span>
+                      <span className="font-body text-sm font-semibold">{song.title}</span>
                       <span className="text-gray-500 text-sm"> — {song.author}</span>
                     </Link>
-                    <div className={`${labelFont.className} text-xs mt-0.5`}>
+                    <div className="font-label text-xs mt-0.5">
                       <span className="text-[#00bfff]">{song.play_key || song.key}</span>
                       {song.play_key && song.key && song.play_key !== song.key && (
                         <span className="text-gray-400 ml-1.5">orig. {song.key}</span>
@@ -188,7 +182,7 @@ function DayCard({ day, date, setlist, leads, leadSupport, instruments, fohTeam,
 
         {hasRole && (
           <section className={hasSetlist ? "border-t border-gray-200 dark:border-gray-800 pt-5" : ""}>
-            <h4 className={`${labelFont.className} text-xs uppercase tracking-widest text-gray-400 mb-3`}>
+            <h4 className="font-label text-xs uppercase tracking-widest text-gray-400 mb-3">
               Equipo
             </h4>
 
@@ -218,14 +212,14 @@ function DayCard({ day, date, setlist, leads, leadSupport, instruments, fohTeam,
             {bgvs && bgvs.length > 0 && (
               <div className="mt-3">
                 <SectionDivider label="BGVs" />
-                <p className={`${bodyFont.className} text-sm`}>{bgvs.map(m => m.member_name).join(", ")}</p>
+                <p className="font-body text-sm">{bgvs.map(m => m.member_name).join(", ")}</p>
               </div>
             )}
 
             {chorus && chorus.length > 0 && (
               <div className="mt-3">
                 <SectionDivider label="Coro" />
-                <p className={`${bodyFont.className} text-sm`}>{chorus.map(m => m.member_name).join(", ")}</p>
+                <p className="font-body text-sm">{chorus.map(m => m.member_name).join(", ")}</p>
               </div>
             )}
           </section>
@@ -238,10 +232,10 @@ function DayCard({ day, date, setlist, leads, leadSupport, instruments, fohTeam,
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between items-baseline gap-4 py-0.5">
-      <span className={`${labelFont.className} text-xs text-gray-500 uppercase tracking-wide shrink-0`}>
+      <span className="font-label text-xs text-gray-500 uppercase tracking-wide shrink-0">
         {label}
       </span>
-      <span className={`${bodyFont.className} text-sm text-right`}>{value}</span>
+      <span className="font-body text-sm text-right">{value}</span>
     </div>
   );
 }
@@ -249,7 +243,7 @@ function Row({ label, value }: { label: string; value: string }) {
 function SectionDivider({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-2 mb-2">
-      <span className={`${labelFont.className} text-xs text-gray-400 uppercase tracking-wide shrink-0`}>
+      <span className="font-label text-xs text-gray-400 uppercase tracking-wide shrink-0">
         {label}
       </span>
       <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
@@ -274,8 +268,8 @@ export default async function Home() {
     <div>
       <Navbar title="Songs" tags />
 
-      <div className="container mx-auto px-4 mb-12">
-        <h2 className={`${titleFont.className} text-center text-2xl font-bold mb-6`}>
+      <div className="mx-auto max-w-7xl px-6 pt-10 mb-12">
+        <h2 className="font-display text-center text-2xl font-bold mb-6">
           Este fin de semana
         </h2>
         <div className={`grid grid-cols-1 gap-6 ${hasSaturday ? "md:grid-cols-2" : "max-w-xl mx-auto"}`}>
@@ -305,8 +299,8 @@ export default async function Home() {
         </div>
       </div>
 
-      <div className="container mx-auto p-4">
-        <h2 className={`${titleFont.className} uppercase flex justify-center text-2xl font-bold mb-4`}>
+      <div className="mx-auto max-w-7xl px-6 pt-10">
+        <h2 className="font-display uppercase flex justify-center text-2xl font-bold mb-4">
           Todas las canciones
         </h2>
       </div>

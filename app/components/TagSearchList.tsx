@@ -3,10 +3,6 @@
 import { useState } from "react";
 import { Tag } from "../utils/interface";
 import Link from "next/link";
-import { Jura, Urbanist } from "next/font/google";
-
-const labelFont = Jura({ weight: "600", subsets: ["latin"] });
-const tagFont = Urbanist({ weight: "600", subsets: ["latin"] });
 
 interface Props {
   tags: Tag[];
@@ -22,32 +18,32 @@ export default function TagSearchList({ tags }: Props) {
     : tags;
 
   return (
-    <div>
-      <div className="flex justify-center px-4 mb-6">
+    <div className="mx-auto max-w-7xl px-6 pt-10">
+      <div className="flex justify-center mb-6">
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Buscar etiquetas..."
-          className={`${labelFont.className} w-full max-w-md px-4 py-2 rounded-lg border border-[#003572] dark:border-[#00bfff] bg-transparent focus:outline-none focus:ring-2 focus:ring-[#00bfff] text-sm`}
+          className="font-label w-full max-w-md px-4 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/30 bg-transparent focus:outline-none focus:ring-2 focus:ring-[#00bfff]/50 text-sm placeholder:text-gray-400"
         />
       </div>
-      <div className="container mx-auto px-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {filtered.length > 0 ? (
           filtered.map((tag) => (
             <Link key={tag._id} href={`/tag/${tag.slug.current}`}>
-              <div className="bg-white dark:bg-[#010b17] dark:border dark:border-[#00bfff] shadow-md rounded-lg p-4 hover:bg-[#00bfff] hover:text-white transition-transform transform hover:scale-105">
-                <h3 className={`${tagFont.className} text-lg capitalize`}>
+              <div className="rounded-xl border border-[#003572]/25 dark:border-[#00bfff]/15 p-4 hover:border-[#003572]/60 dark:hover:border-[#00bfff]/50 hover:shadow-lg hover:shadow-[#00bfff]/10 transition-all duration-200">
+                <h3 className="font-display text-base capitalize mb-1">
                   #{tag.name}
                 </h3>
-                <p className="text-sm text-gray-500">
-                  {tag?.postCount} post{tag?.postCount !== 1 && "s"}
+                <p className="font-label text-xs text-gray-400">
+                  {tag?.postCount} {tag?.postCount === 1 ? "canción" : "canciones"}
                 </p>
               </div>
             </Link>
           ))
         ) : (
-          <p className="col-span-full text-center text-gray-500 py-8">
+          <p className="col-span-full text-center font-label text-sm text-gray-400 py-10">
             No se encontraron etiquetas.
           </p>
         )}

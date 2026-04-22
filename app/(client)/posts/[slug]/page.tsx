@@ -1,25 +1,12 @@
 import { Post } from "@/app/utils/interface";
 import { client } from "@/sanity/lib/client";
 import React from "react";
-import {
-	VT323,
-	Urbanist,
-	Jura,
-	Advent_Pro,
-} from "next/font/google";
 import Link from "next/link";
 import { PortableText } from "next-sanity";
 import Image from "next/image";
 import { urlFor } from "@/sanity/lib/image";
 import { notFound } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
-
-const date = VT323({ weight: "400", subsets: ["latin"] });
-const titleFont = Advent_Pro({ weight: "600", subsets: ["latin"] });
-const subtitleFont = Advent_Pro({ weight: "600", subsets: ["latin"] });
-
-const bodyFont = Urbanist({ weight: "600", subsets: ["latin"] });
-const tagFont = Jura({ weight: "600", subsets: ["latin"] });
 
 interface Params {
 	params: {
@@ -89,7 +76,7 @@ const Page = async ({ params }: Params) => {
 				author={post?.author}
 			/>
 			<div className="text-center">
-				<span className={`${date.className}`}>
+				<span className="font-label">
 					{(() => {
 						const formattedDate = new Date(
 							post?.publishDate
@@ -104,7 +91,7 @@ const Page = async ({ params }: Params) => {
 						);
 					})()}
 				</span>
-				<div className={`${tagFont.className} mt-5`}>
+				<div className="font-label mt-5">
 					{post?.tags?.map((tag) => (
 						<Link
 							key={tag?._id}
@@ -124,7 +111,7 @@ const Page = async ({ params }: Params) => {
 								track.audioFileURL && (
 									<div key={index} className="scroll-snap-align">
 										<div className="my-4 justify-center">
-											<h3 className={`${bodyFont.className} text-lg font-bold`}>
+											<h3 className="font-body text-lg font-bold">
 												{track.title}{track.tone ? ` (${track.tone})` : ""}
 											</h3>
 											<audio controls>
@@ -135,7 +122,7 @@ const Page = async ({ params }: Params) => {
 										<a
 											href={track.audioFileURL}
 											download={`${post.title}-${post.author}-${track.title}.mp3`}
-											className={`${tagFont.className} text-[#C8D8EB] dark:text-[#010b17]`}
+											className="font-label text-[#C8D8EB] dark:text-[#010b17]"
 										>
 											<div className="my-4 rounded-xl bg-[#003572] dark:bg-[#a0a4a8] hover:opacity-50">
 												Descargar audio
@@ -154,7 +141,7 @@ const Page = async ({ params }: Params) => {
 					/>
 				</div>
         <h2
-					className={`${titleFont.className} uppercase font-extrabold text-2xl sm:text-3xl md:text-4xl lg:text-5xl mb-2 shadow-bottom shadow-[#00bfff]`}
+					className="font-display uppercase font-extrabold text-2xl sm:text-3xl md:text-4xl lg:text-5xl mb-2 shadow-bottom shadow-[#00bfff]"
 				>
 					Acordes y Letras
 				</h2>
@@ -166,9 +153,7 @@ const Page = async ({ params }: Params) => {
 							key={index}
 							className="relative w-full"
 						>
-							<div
-								className={`${subtitleFont.className} text-lg md:text-xl mb-2 md:mb-4`}
-							>
+							<div className="font-display text-lg md:text-xl mb-2 md:mb-4">
 								{pdf.title}
 							</div>
 
@@ -176,7 +161,7 @@ const Page = async ({ params }: Params) => {
 								<iframe
 									src={pdf.url}
 									width="100%"
-									height="500px" // Adjust the height as needed
+									height="500px"
 									className="border-0"
 								></iframe>
 								<a
@@ -196,9 +181,7 @@ const Page = async ({ params }: Params) => {
 
 				{/* Sección de Tutoriales en Youtube*/}
         <div className="shadow-bottom shadow-[#00bfff]">
-				<h2
-					className={`${titleFont.className} uppercase font-extrabold text-2xl sm:text-3xl md:text-4xl lg:text-5xl mb-2`}
-				>
+				<h2 className="font-display uppercase font-extrabold text-2xl sm:text-3xl md:text-4xl lg:text-5xl mb-2">
 					Tutoriales
 				</h2>
         </div>
@@ -209,9 +192,7 @@ const Page = async ({ params }: Params) => {
 								key={index}
 								className="flex-shrink-0 w-full max-w-xs scroll-snap-align"
 							>
-								<h3
-									className={`${subtitleFont.className} text-lg md:text-xl font-bold mb-2`}
-								>
+								<h3 className="font-display text-lg md:text-xl font-bold mb-2">
 									{tutorial.title}
 								</h3>
 								<iframe
@@ -221,7 +202,7 @@ const Page = async ({ params }: Params) => {
 									className="border-0"
 									title="YouTube video player"
 									allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture web-share"
-									referrerPolicy="strict-origin-when-cross-origin" 
+									referrerPolicy="strict-origin-when-cross-origin"
 									allowFullScreen
 								></iframe>
 							</div>
@@ -249,7 +230,7 @@ const myPortableTextComponents = {
 };
 
 const richTextStyles = `
-  ${bodyFont.className}
+  font-body
   mt-14
   text-justify
   max-w-2xl

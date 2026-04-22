@@ -1,37 +1,55 @@
 import React from "react";
 import Link from "next/link";
-import ThemeSwitch from "./ThemeSwitch";
-import { Orbitron } from "next/font/google";
 import Image from "next/image";
-import Header from "./Header";
-
-const font = Orbitron({ weight: "900", subsets: ["latin"] });
+import ThemeSwitch from "./ThemeSwitch";
 
 interface Props {
-	title: string;
-	author?: string;
-	tags?: boolean;
+  title: string;
+  author?: string;
+  tags?: boolean;
 }
 
-const Navbar = ({title = "", tags = false, author=""}:Props) => {
-	return (
-		<div className="mx-auto max-w-full px-6 mt-5 ">
-			<div className="grid grid-cols-4 mt-4 justify-items-center ">
-				<Link className="basis-1/4 justify-self-start self-center" href="/">
-					{/*<div className={`${font.className} text-5xl dark:text-[#C8D8EB]`}>
-						Oasis Worship Team
-					</div> */}
-					<Image src="/LogoOasis.png" alt="Oasis Worship Team" width={200} height= {200} className={`${font.className}`}></Image>
-				</Link>
-				<div className="mx-20 self-center basis-1/2 col-start-2 col-span-2 pt-10 " >
-					<Header title={title} tags={tags} author={author}/>
-				</div>
-				<div className="basis-1/4 justify-self-end col-start-4 self-center pb-10">
-					<ThemeSwitch />
-				</div>
-			</div>
-		</div>
-	);
+const Navbar = ({ title = "", author = "", tags = false }: Props) => {
+  return (
+    <nav className="sticky top-0 z-50 border-b border-[#003572]/20 dark:border-[#00bfff]/20 bg-[#C8D8EB]/80 dark:bg-[#010b17]/80 backdrop-blur-sm">
+      <div className="relative mx-auto max-w-7xl px-6 h-14 flex items-center">
+
+        <Link href="/" className="shrink-0">
+          <Image
+            src="/LogoOasis.png"
+            alt="Oasis Worship Team"
+            width={40}
+            height={40}
+            className="h-10 w-auto"
+          />
+        </Link>
+
+        <div className="absolute inset-x-0 flex flex-col items-center justify-center pointer-events-none">
+          <p className="font-display text-base uppercase tracking-wide">
+            {title}
+          </p>
+          {author && (
+            <p className="font-label text-xs text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+              {author}
+            </p>
+          )}
+        </div>
+
+        <div className="ml-auto shrink-0 flex items-center gap-4">
+          {tags && (
+            <Link
+              href="/tag"
+              className="font-label text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 hover:text-[#00bfff] dark:hover:text-[#00bfff] transition-colors"
+            >
+              #tags
+            </Link>
+          )}
+          <ThemeSwitch />
+        </div>
+
+      </div>
+    </nav>
+  );
 };
 
 export default Navbar;
