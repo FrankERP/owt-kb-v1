@@ -1,55 +1,47 @@
-import Header from "@/app/components/Header";
 import Navbar from "@/app/components/Navbar";
-import PostComponent from "@/app/components/PostComponent";
+import SongSearchList from "@/app/components/SongSearchList";
 import { Post } from "@/app/utils/interface";
 import { client } from "@/sanity/lib/client";
-import React from "react";
 
 async function getPostsByTag(tag: string) {
-	const query = `
+  const query = `
     *[_type == "post" && references(*[_type == "tag" && slug.current == "${tag}"]._id)] {
-			_id,
-			title,
-			author,
-			slug,
-			publishDate,
-			excerpt,
-			timeSig,
-			bpm,
-			key,
-			tags[] -> {
-				_id,
-				slug,
-				name,
-			}
-	}
+      _id,
+      title,
+      author,
+      slug,
+      publishDate,
+      excerpt,
+      timeSig,
+      bpm,
+      key,
+      tags[] -> {
+        _id,
+        slug,
+        name,
+      }
+    }
   `;
-
-	const posts = await client.fetch(query);
-	return posts;
+  return await client.fetch(query);
 }
 
 export const revalidate = 60;
 
 interface Params {
-	params: {
-		slug: string;
-	};
+  params: {
+    slug: string;
+  };
 }
 
 const page = async ({ params }: Params) => {
-	const posts: Array<Post> = await getPostsByTag(params.slug);
+  const posts: Array<Post> = await getPostsByTag(params.slug);
 
-	return (
-		<div>
-			<Navbar title={`#${params.slug}`} tags />
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
-        {posts?.length > 0 && posts?.map((post) => (
-          <PostComponent key = {post?._id} post = {post}/>
-        ))}
-      </div>
-		</div>
-	);
+  return (
+    <div>
+      <Navbar title={`#${params.slug}`} tags />
+      <SongSearchList posts={posts} />
+    </div>
+  );
 };
 
 export default page;

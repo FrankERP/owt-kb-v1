@@ -1,10 +1,7 @@
-import { featuredSongs } from "@/sanity/schemas/setList";
-import { Url } from "next/dist/shared/lib/router/router";
-
 export interface Post {
-	title: string;
+  title: string;
   author: string;
-	slug: { current: string };
+  slug: { current: string };
   publishDate: string;
   excerpt: string;
   timeSig: string;
@@ -13,14 +10,11 @@ export interface Post {
   body: any;
   tutorials2: Array<any>;
   lyricsURL: string;
-  chordsURL: string;
-  bothURL: string;
-  ClickTrack: string;
-  VoiceTrack: string;
+  audioTracks: Array<{ title: string; tone: string; audioFileURL: string }>;
+  chordsPDF: Array<{ title: string; key: string; chordsURL: string }>;
   tags: Array<Tag>;
   _id: string;
 }
-
 
 export interface Tag {
   name: string;
@@ -35,7 +29,47 @@ export interface setList {
   body: any;
 }
 
-export interface featuredSongs {
-  songs: Array<Post>;
+export interface SetlistSong {
+  _id: string;
+  title: string;
+  author: string;
+  slug: { current: string };
+  timeSig: string;
+  bpm: string | number;
+  key: string;
+  play_key: string;
+}
+
+export interface Setlist {
+  songs: Array<SetlistSong>;
   week: string;
+}
+
+export interface featuredSongs {
+  songs: Array<SetlistSong>;
+  week: string;
+}
+
+export interface TeamMember {
+  member_name: string;
+  alias?: string;
+}
+
+export interface SundayRole {
+  week: string;
+  Lead: Array<TeamMember>;
+  instruments: Array<{ instrument: string; person: string }>;
+  foh_team: Array<{ role: string; person: string }>;
+  BGVs: Array<TeamMember>;
+  Chorus: Array<TeamMember>;
+}
+
+export interface SaturdayRole {
+  week: string;
+  Lead: string;
+  Lead__Support?: string;
+  instruments: Array<{ instrument: string; person: string }>;
+  foh_team: Array<{ role: string; person: string }>;
+  BGVs: Array<TeamMember>;
+  Chorus: Array<TeamMember>;
 }
