@@ -39,7 +39,9 @@ const page = async ({ params }: Params) => {
   return (
     <div>
       <Navbar title={`#${params.slug}`} tags />
-      <SongSearchList posts={posts} />
+      <div className="pt-10">
+        <SongSearchList posts={posts} />
+      </div>
     </div>
   );
 };
