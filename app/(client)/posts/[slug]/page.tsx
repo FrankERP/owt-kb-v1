@@ -3,9 +3,6 @@ import { client } from "@/sanity/lib/client";
 import React from "react";
 import {
 	VT323,
-	Special_Elite,
-	Black_Ops_One,
-	Russo_One,
 	Urbanist,
 	Jura,
 	Advent_Pro,
@@ -18,8 +15,6 @@ import { notFound } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 
 const date = VT323({ weight: "400", subsets: ["latin"] });
-const titleFontqd = Special_Elite({ weight: "400", subsets: ["latin"] });
-const titleFont2 = Black_Ops_One({ weight: "400", subsets: ["latin"] });
 const titleFont = Advent_Pro({ weight: "600", subsets: ["latin"] });
 const subtitleFont = Advent_Pro({ weight: "600", subsets: ["latin"] });
 
@@ -55,10 +50,16 @@ async function getPost(slug: string) {
         url
       },
       "lyricsURL": lyrics.asset->url,
-      "chordsURL": chords.asset->url,
-      "bothURL": bothPDF.asset->url,
-      "ClickTrack": clickTrack.asset->url,
-      "VoiceTrack": voiceTrack.asset->url,
+      audioTracks[] {
+        title,
+        tone,
+        "audioFileURL": audioFile.asset->url,
+      },
+      chordsPDF[] {
+        title,
+        key,
+        "chordsURL": chordsPDF.asset->url,
+      },
   }`;
 	const post = await client.fetch(query);
 	return post;
@@ -74,9 +75,12 @@ const Page = async ({ params }: Params) => {
 	}
 
 	const pdfFiles = [
-		{ url: post?.lyricsURL, title: "Letra" },
-		{ url: post?.chordsURL, title: "Acordes" },
-	].filter((pdf) => pdf.url);
+		...(post?.lyricsURL ? [{ url: post.lyricsURL, title: "Letra" }] : []),
+		...(post?.chordsPDF?.map((c) => ({
+			url: c.chordsURL,
+			title: `Acordes${c.key ? ` - ${c.key}` : ""}`,
+		})) ?? []),
+	];
 
 	return (
 		<div>
@@ -112,78 +116,37 @@ const Page = async ({ params }: Params) => {
 						</Link>
 					))}
 				</div>
-				{/* Sección de Audio con Click*/}
-				<div className="min-h-[10vw] overflow-x-auto w-full scroll-snap-x">
-					<div className="flex space-x-4 justify-start md:justify-center">
-						<div className="scroll-snap-align">
-							<div className="">
-								{post?.ClickTrack && (
-									<div className="my-4 justify-center">
-										<h3 className={`${bodyFont.className} text-lg font-bold`}>
-											Click Track
-										</h3>
-										<audio controls>
-											<source
-												src={post.ClickTrack}
-												type="audio/mp3"
-											/>
-											Tu navegador no soporta el elemento de audio.
-										</audio>
+				{/* Sección de Audio */}
+				{post?.audioTracks?.length > 0 && (
+					<div className="min-h-[10vw] overflow-x-auto w-full scroll-snap-x">
+						<div className="flex space-x-4 justify-start md:justify-center">
+							{post.audioTracks.map((track, index) => (
+								track.audioFileURL && (
+									<div key={index} className="scroll-snap-align">
+										<div className="my-4 justify-center">
+											<h3 className={`${bodyFont.className} text-lg font-bold`}>
+												{track.title}{track.tone ? ` (${track.tone})` : ""}
+											</h3>
+											<audio controls>
+												<source src={track.audioFileURL} type="audio/mp3" />
+												Tu navegador no soporta el elemento de audio.
+											</audio>
+										</div>
+										<a
+											href={track.audioFileURL}
+											download={`${post.title}-${post.author}-${track.title}.mp3`}
+											className={`${tagFont.className} text-[#C8D8EB] dark:text-[#010b17]`}
+										>
+											<div className="my-4 rounded-xl bg-[#003572] dark:bg-[#a0a4a8] hover:opacity-50">
+												Descargar audio
+											</div>
+										</a>
 									</div>
-								)}
-							</div>
-							<div>
-								{/* Botón de Descarga */}
-								{post.ClickTrack && (
-									<a
-                  href={post.ClickTrack}
-                  download={`${post.title}-${post.author}-ClickTrack.mp3`}
-                  className={`${tagFont.className} text-[#C8D8EB] dark:text-[#010b17] `}
-                >
-									<div className="my-4  rounded-xl bg-[#003572] dark:bg-[#a0a4a8] hover:opacity-50">
-											Descargar audio
-									
-									</div>
-                  </a>
-								)}
-							</div>
-						</div>
-						<div className="">
-							<div className="">
-								{post?.VoiceTrack && (
-									<div className="my-4 justify-center">
-										<h3 className={`${bodyFont.className} text-lg font-bold`}>
-											Track con voz
-										</h3>
-										<audio controls>
-											<source
-												src={post.VoiceTrack}
-												type="audio/mp3"
-											/>
-											Tu navegador no soporta el elemento de audio.
-										</audio>
-									</div>
-								)}
-							</div>
-							<div>
-								{/* Botón de Descarga */}
-								{post.VoiceTrack && (
-                  <a
-                  href={post.VoiceTrack}
-                  download={`${post.title}-${post.author}-VoiceTrack.mp3`}
-                  className={`${tagFont.className} text-[#C8D8EB] dark:text-[#010b17] `}
-                >
-									<div className="my-4  rounded-xl bg-[#003572] dark:bg-[#a0a4a8] hover:opacity-50">
-										
-											Descargar audio
-									
-									</div>
-                  </a>
-								)}
-							</div>
+								)
+							))}
 						</div>
 					</div>
-				</div>
+				)}
 				<div className={richTextStyles}>
 					<PortableText
 						value={post?.body}

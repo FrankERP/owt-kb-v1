@@ -1,5 +1,3 @@
-import { title } from "process";
-
 export const sundayRole = {
   name: 'sunday_role',
   title: 'Sunday Role',
@@ -18,41 +16,63 @@ export const sundayRole = {
       of: [
         {
           type: 'reference',
-          to: [{ type: 'teamMembers' }], // Asumiendo que las personas están en el esquema 'teamMembers'
+          to: [{ type: 'teamMembers' }],
         },
       ],
     },
     {
-      name: 'Electric_Guitar',
-      title: 'Electric Guitar',
-      type: 'reference',
-      to: [{ type: 'teamMembers' }], // Asumiendo que las personas están en el esquema 'teamMembers'
-    },
-    {
-      name: 'Bass',
-      title: 'Bass',
-      type: 'reference',
-      to: [{ type: 'teamMembers' }], // Asumiendo que las personas están en el esquema 'teamMembers'
-    },
-    {
-      name: 'Drums',
-      title: 'Batería',
+      name: 'instruments',
+      title: 'Instruments',
       type: 'array',
       of: [
         {
-          type: 'reference',
-          to: [{ type: 'teamMembers' }], // Asumiendo que las personas están en el esquema 'teamMembers'
+          type: 'object',
+          name: 'instrument_slot',
+          fields: [
+            { name: 'instrument', title: 'Instrument', type: 'string' },
+            { name: 'person', title: 'Person', type: 'reference', to: [{ type: 'teamMembers' }] },
+          ],
+          preview: {
+            select: {
+              instrument: 'instrument',
+              person: 'person.member_name',
+            },
+            prepare(selection: any) {
+              const { instrument, person } = selection;
+              return {
+                title: instrument || 'Sin instrumento',
+                subtitle: person || 'Sin asignar',
+              };
+            },
+          },
         },
       ],
     },
     {
-      name: 'Keys',
-      title: 'Piano/Keys',
+      name: 'foh_team',
+      title: 'Front of House Team',
       type: 'array',
       of: [
         {
-          type: 'reference',
-          to: [{ type: 'teamMembers' }], // Asumiendo que las personas están en el esquema 'teamMembers'
+          type: 'object',
+          name: 'foh_slot',
+          fields: [
+            { name: 'role', title: 'Role', type: 'string' },
+            { name: 'person', title: 'Person', type: 'reference', to: [{ type: 'teamMembers' }] },
+          ],
+          preview: {
+            select: {
+              role: 'role',
+              person: 'person.member_name',
+            },
+            prepare(selection: any) {
+              const { role, person } = selection;
+              return {
+                title: role || 'Sin rol',
+                subtitle: person || 'Sin asignar',
+              };
+            },
+          },
         },
       ],
     },
@@ -63,7 +83,7 @@ export const sundayRole = {
       of: [
         {
           type: 'reference',
-          to: [{ type: 'teamMembers' }], // Asumiendo que las personas están en el esquema 'teamMembers'
+          to: [{ type: 'teamMembers' }],
         },
       ],
     },
@@ -74,7 +94,7 @@ export const sundayRole = {
       of: [
         {
           type: 'reference',
-          to: [{ type: 'teamMembers' }], // Asumiendo que las personas están en el esquema 'teamMembers'
+          to: [{ type: 'teamMembers' }],
         },
       ],
     },
