@@ -127,7 +127,7 @@ export default async function Home() {
 
   return (
     <div>
-      <Navbar title="Songs" tags schedule />
+      <Navbar title="OWT" tags schedule />
 
       <div className="mx-auto max-w-7xl px-6 pt-10 mb-12">
         <h2 className="font-display text-center text-2xl md:text-3xl font-bold mb-6">

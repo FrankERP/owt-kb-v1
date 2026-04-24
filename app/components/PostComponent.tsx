@@ -9,7 +9,7 @@ interface Props {
 const PostComponent = ({ post }: Props) => {
   return (
     <Link href={`/posts/${post?.slug?.current}`} className={cardStyle}>
-      <h2 className="font-display text-base leading-snug mb-2">
+      <h2 className="font-display text-base lg:text-xl leading-snug mb-2">
         {post?.title}
         {post?.author && (
           <span className="font-body font-normal text-gray-400 dark:text-gray-500">
@@ -18,7 +18,7 @@ const PostComponent = ({ post }: Props) => {
         )}
       </h2>
 
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-label text-xs text-[#00bfff] mb-3">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-label text-xs lg:text-base text-[#00bfff] mb-3">
         {post?.key    && <span>{post.key}</span>}
         {post?.bpm    && <><span className="text-gray-400">·</span><span>{post.bpm} BPM</span></>}
         {post?.timeSig && <><span className="text-gray-400">·</span><span>{post.timeSig}</span></>}
@@ -29,7 +29,8 @@ const PostComponent = ({ post }: Props) => {
           {post.tags.map((tag) => (
             <span
               key={tag._id}
-              className="font-label text-xs text-gray-400 dark:text-gray-500 lowercase"
+              className="font-label text-xs lg:text-sm text-gray-400 dark:text-gray-500 lowercase"
+
             >
               #{tag.name}
             </span>
@@ -44,7 +45,7 @@ export default PostComponent;
 
 const cardStyle = `
   block
-  p-4
+  p-4 lg:p-6
   rounded-xl
   border border-[#003572]/25 dark:border-[#00bfff]/15
   hover:border-[#003572]/60 dark:hover:border-[#00bfff]/50
