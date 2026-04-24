@@ -93,8 +93,7 @@ async function getSaturdayRole(): Promise<SaturdayRole | null> {
   const query = `
     *[_type == "saturday_role" && week >= "${today}"] | order(week asc)[0] {
       week,
-      "Lead": coalesce(Lead->alias, Lead->member_name),
-      "Lead__Support": coalesce(Lead__Support->alias, Lead__Support->member_name),
+      Lead[]-> { member_name, alias },
       instruments[] {
         instrument,
         "person": coalesce(person->alias, person->member_name),
@@ -139,8 +138,7 @@ export default async function Home() {
               day="Sábado"
               date={satSongs?.week ?? satRole?.week}
               setlist={satSongs}
-              leads={satRole?.Lead ? [satRole.Lead] : []}
-              leadSupport={satRole?.Lead__Support}
+              leads={satRole?.Lead?.map(m => m.alias || m.member_name) ?? []}
               instruments={satRole?.instruments?.map(s => ({ label: s.instrument, person: s.person }))}
               fohTeam={satRole?.foh_team?.map(s => ({ label: s.role, person: s.person }))}
               bgvs={satRole?.BGVs}

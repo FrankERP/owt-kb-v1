@@ -39,8 +39,7 @@ async function getUpcomingRoles() {
     client.fetch<SaturdayRole[]>(`
       *[_type == "saturday_role" && week >= "${today}" && week <= "${limit}"] | order(week asc) {
         _id, week,
-        "Lead": coalesce(Lead->alias, Lead->member_name),
-        "Lead__Support": coalesce(Lead__Support->alias, Lead__Support->member_name),
+        Lead[]-> { member_name, alias },
         instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
         foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
         BGVs[]-> { member_name, alias },
@@ -134,8 +133,7 @@ export default async function SchedulePage() {
                     day="Sábado"
                     date={saturday.week}
                     setlist={satSetlistMap.get(saturday.week.slice(0, 10))}
-                    leads={saturday.Lead ? [saturday.Lead] : []}
-                    leadSupport={saturday.Lead__Support}
+                    leads={saturday.Lead?.map(m => m.alias || m.member_name) ?? []}
                     instruments={saturday.instruments?.map(s => ({ label: s.instrument, person: s.person }))}
                     fohTeam={saturday.foh_team?.map(s => ({ label: s.role, person: s.person }))}
                     bgvs={saturday.BGVs}

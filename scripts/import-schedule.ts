@@ -203,15 +203,11 @@ async function main() {
     // Saturday role
     if (satData && latest.weekends_w_sat.includes(weekNum)) {
       const docId   = `saturday-role-${toDateStr(satDate)}`;
-      const satLeads = satData.get("Sat.Lead") ?? [];
-      const satBGVs  = satData.get("Sat.BGV")  ?? [];
-      const leadRef  = satLeads[0] ? makeRef(satLeads[0], "lead") : null;
-      const bgvs     = satBGVs.map((n, i) => makeRef(n, `b${i}`)).filter(Boolean);
-      const patchSet: Record<string, unknown> = { week: toISO(satDate), BGVs: bgvs };
-      if (leadRef) patchSet["Lead"] = leadRef;
+      const leads = (satData.get("Sat.Lead") ?? []).map((n, i) => makeRef(n, `l${i}`)).filter(Boolean);
+      const bgvs  = (satData.get("Sat.BGV")  ?? []).map((n, i) => makeRef(n, `b${i}`)).filter(Boolean);
 
       mutations.push({ createIfNotExists: { _id: docId, _type: "saturday_role", week: toISO(satDate) } });
-      mutations.push({ patch: { id: docId, set: patchSet } });
+      mutations.push({ patch: { id: docId, set: { week: toISO(satDate), Lead: leads, BGVs: bgvs } } });
     }
   }
 

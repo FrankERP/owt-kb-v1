@@ -6,14 +6,13 @@ export interface DayCardProps {
   date?: string;
   setlist?: Setlist | null;
   leads?: string[];
-  leadSupport?: string;
   instruments?: Array<{ label: string; person: string }>;
   fohTeam?: Array<{ label: string; person: string }>;
   bgvs?: Array<{ member_name: string; alias?: string }>;
   chorus?: Array<{ member_name: string; alias?: string }>;
 }
 
-export function DayCard({ day, date, setlist, leads, leadSupport, instruments, fohTeam, bgvs, chorus }: DayCardProps) {
+export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs, chorus }: DayCardProps) {
   const hasRole = !!(leads?.length || instruments?.length || fohTeam?.length || bgvs?.length || chorus?.length);
   const hasSetlist = !!(setlist?.songs?.length);
 
@@ -77,13 +76,6 @@ export function DayCard({ day, date, setlist, leads, leadSupport, instruments, f
                 <p className="font-body text-sm md:text-base lg:text-lg">{leads.join(", ")}</p>
               </div>
             )}
-            {leadSupport && (
-              <div className="mt-3">
-                <SectionDivider label="Support" />
-                <p className="font-body text-sm md:text-base lg:text-lg">{leadSupport}</p>
-              </div>
-            )}
-
             {instruments && instruments.length > 0 && (
               <div className="mt-3">
                 <SectionDivider label="Instrumentos" />
