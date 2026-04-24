@@ -1,5 +1,5 @@
 import { client } from "@/sanity/lib/client";
-import { SundayRole, SaturdayRole } from "../utils/interface";
+import { SundayRole, SaturdayRole, Setlist } from "../utils/interface";
 import Navbar from "../components/Navbar";
 import SongSearchList from "../components/SongSearchList";
 import { DayCard } from "../components/DayCard";
