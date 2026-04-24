@@ -87,7 +87,7 @@ export default async function SchedulePage() {
 
   return (
     <div>
-      <Navbar title="Calendario" schedule />
+      <Navbar title="Calendario" tags schedule />
 
       <div className="mx-auto max-w-7xl px-6 pt-10 pb-16 space-y-14">
         <h2 className="font-display text-center text-2xl md:text-3xl font-bold">

@@ -22,7 +22,7 @@ const page = async () => {
 
   return (
     <div>
-      <Navbar title="Tags" />
+      <Navbar title="Tags" tags schedule />
       <TagSearchList tags={tags} />
     </div>
   );

@@ -4,6 +4,22 @@ import Navbar from "../components/Navbar";
 import SongSearchList from "../components/SongSearchList";
 import { DayCard } from "../components/DayCard";
 import Link from "next/link";
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function getThisWeekend(): { sat: string; sun: string } {
+  const now = new Date();
+  const dow = now.getUTCDay(); // 0=Sun … 6=Sat
+  const daysUntilSun = dow === 0 ? 0 : 7 - dow;
+  const sun = new Date(now);
+  sun.setUTCDate(now.getUTCDate() + daysUntilSun);
+  const sat = new Date(sun);
+  sat.setUTCDate(sun.getUTCDate() - 1);
+  return {
+    sun: sun.toISOString().slice(0, 10),
+    sat: sat.toISOString().slice(0, 10),
+  };
+}
+
 // ─── Queries ────────────────────────────────────────────────────────────────
 
 async function getPosts() {
@@ -27,86 +43,56 @@ async function getPosts() {
   return await client.fetch(query);
 }
 
-async function getSundaySongs(): Promise<Setlist | null> {
-  const today = new Date().toISOString().slice(0, 10);
-  const query = `
-    *[_type == "featuredSongs" && week >= "${today}"] | order(week asc)[0] {
-      songs[] {
-        play_key,
-        "title": song->title,
-        "slug": song->slug,
-        "_id": song->_id,
-        "author": song->author,
-        "timeSig": song->timeSig,
-        "bpm": song->bpm,
-        "key": song->key,
-      },
-      week,
-    }
-  `;
-  return await client.fetch(query);
+const SETLIST_FIELDS = `
+  songs[] {
+    play_key,
+    "title": song->title,
+    "slug": song->slug,
+    "_id": song->_id,
+    "author": song->author,
+    "timeSig": song->timeSig,
+    "bpm": song->bpm,
+    "key": song->key,
+  },
+  week,
+`;
+
+async function getSundaySongs(date: string): Promise<Setlist | null> {
+  return await client.fetch(`
+    *[_type == "featuredSongs" && week == "${date}"][0] { ${SETLIST_FIELDS} }
+  `);
 }
 
-async function getSaturdaySongs(): Promise<Setlist | null> {
-  const today = new Date().toISOString().slice(0, 10);
-  const query = `
-    *[_type == "saturdarSongs" && week >= "${today}"] | order(week asc)[0] {
-      songs[] {
-        play_key,
-        "title": song->title,
-        "slug": song->slug,
-        "_id": song->_id,
-        "author": song->author,
-        "timeSig": song->timeSig,
-        "bpm": song->bpm,
-        "key": song->key,
-      },
-      week,
-    }
-  `;
-  return await client.fetch(query);
+async function getSaturdaySongs(date: string): Promise<Setlist | null> {
+  return await client.fetch(`
+    *[_type == "saturdarSongs" && week == "${date}"][0] { ${SETLIST_FIELDS} }
+  `);
 }
 
-async function getSundayRole(): Promise<SundayRole | null> {
-  const today = new Date().toISOString().slice(0, 10);
-  const query = `
-    *[_type == "sunday_role" && week >= "${today}"] | order(week asc)[0] {
+async function getSundayRole(date: string): Promise<SundayRole | null> {
+  return await client.fetch(`
+    *[_type == "sunday_role" && week == "${date}"][0] {
       week,
       Lead[]-> { member_name, alias },
-      instruments[] {
-        instrument,
-        "person": coalesce(person->alias, person->member_name),
-      },
-      foh_team[] {
-        role,
-        "person": coalesce(person->alias, person->member_name),
-      },
+      instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
+      foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
       BGVs[]-> { member_name, alias },
       Chorus[]-> { member_name, alias },
     }
-  `;
-  return await client.fetch(query);
+  `);
 }
 
-async function getSaturdayRole(): Promise<SaturdayRole | null> {
-  const today = new Date().toISOString().slice(0, 10);
-  const query = `
-    *[_type == "saturday_role" && week >= "${today}"] | order(week asc)[0] {
+async function getSaturdayRole(date: string): Promise<SaturdayRole | null> {
+  return await client.fetch(`
+    *[_type == "saturday_role" && week == "${date}"][0] {
       week,
       Lead[]-> { member_name, alias },
-      instruments[] {
-        instrument,
-        "person": coalesce(person->alias, person->member_name),
-      },
-      foh_team[] {
-        role,
-        "person": coalesce(person->alias, person->member_name),
-      },
+      instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
+      foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
       BGVs[]-> { member_name, alias },
       Chorus[]-> { member_name, alias },
     }
-  `;
-  return await client.fetch(query);
+  `);
 }
 
 export const revalidate = 60;
@@ -114,12 +100,13 @@ export const revalidate = 60;
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default async function Home() {
+  const { sat, sun } = getThisWeekend();
   const [posts, sunSongs, satSongs, sunRole, satRole] = await Promise.all([
     getPosts(),
-    getSundaySongs(),
-    getSaturdaySongs(),
-    getSundayRole(),
-    getSaturdayRole(),
+    getSundaySongs(sun),
+    getSaturdaySongs(sat),
+    getSundayRole(sun),
+    getSaturdayRole(sat),
   ]);
 
   const hasSaturday = !!(satSongs?.songs?.length || satRole);

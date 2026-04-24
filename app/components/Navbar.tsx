@@ -1,7 +1,6 @@
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import ThemeSwitch from "./ThemeSwitch";
 
 interface Props {
   title: string;
@@ -53,7 +52,6 @@ const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Pro
               #tags
             </Link>
           )}
-          <ThemeSwitch />
         </div>
 
       </div>
