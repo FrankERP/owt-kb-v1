@@ -12,15 +12,37 @@ export interface DayCardProps {
   chorus?: Array<{ member_name: string; alias?: string }>;
 }
 
+const SUNDAY_THEME = {
+  border:       "border-[#003572] dark:border-[#00bfff]",
+  shadow:       "shadow-[#00bfff]/20",
+  headerBg:     "bg-[#003572] dark:bg-[#001f3f]",
+  headerBorder: "border-[#002249] dark:border-[#00bfff]",
+  accent:       "text-[#00bfff]",
+  accentMuted:  "text-[#00bfff]/70",
+  songHover:    "hover:text-[#00bfff]",
+};
+
+const SATURDAY_THEME = {
+  border:       "border-[#78350f] dark:border-[#f59e0b]",
+  shadow:       "shadow-[#f59e0b]/20",
+  headerBg:     "bg-[#78350f] dark:bg-[#1c0800]",
+  headerBorder: "border-[#92400e] dark:border-[#f59e0b]",
+  accent:       "text-[#f59e0b]",
+  accentMuted:  "text-[#f59e0b]/70",
+  songHover:    "hover:text-[#f59e0b]",
+};
+
 export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs, chorus }: DayCardProps) {
   const hasRole = !!(leads?.length || instruments?.length || fohTeam?.length || bgvs?.length || chorus?.length);
   const hasSetlist = !!(setlist?.songs?.length);
 
   if (!hasSetlist && !hasRole) return null;
 
+  const t = day === "Sábado" ? SATURDAY_THEME : SUNDAY_THEME;
+
   return (
-    <div className="border border-[#003572] dark:border-[#00bfff] rounded-xl overflow-hidden shadow-md shadow-[#00bfff]/20">
-      <div className="bg-[#003572] dark:bg-[#001f3f] px-5 py-4 border-b border-[#002249] dark:border-[#00bfff]">
+    <div className={`border ${t.border} rounded-xl overflow-hidden shadow-md ${t.shadow}`}>
+      <div className={`${t.headerBg} px-5 py-4 border-b ${t.headerBorder}`}>
         <h3 className="font-display text-xl md:text-2xl lg:text-3xl font-bold uppercase text-[#C8D8EB]">
           {day}
         </h3>
@@ -47,12 +69,12 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                 <li key={song._id} className="flex items-start gap-2">
                   <span className="text-gray-400 text-sm md:text-base lg:text-lg w-5 shrink-0 mt-0.5">{i + 1}.</span>
                   <div>
-                    <Link href={`/posts/${song.slug.current}`} className="hover:text-[#00bfff] transition-colors">
+                    <Link href={`/posts/${song.slug.current}`} className={`${t.songHover} transition-colors`}>
                       <span className="font-body text-sm md:text-base lg:text-lg font-semibold">{song.title}</span>
                       <span className="text-gray-500 text-sm md:text-base lg:text-lg"> — {song.author}</span>
                     </Link>
                     <div className="font-label text-xs md:text-sm lg:text-base mt-0.5">
-                      <span className="text-[#00bfff]">{song.play_key || song.key}</span>
+                      <span className={t.accent}>{song.play_key || song.key}</span>
                       {song.play_key && song.key && song.play_key !== song.key && (
                         <span className="text-gray-400 ml-1.5">orig. {song.key}</span>
                       )}
@@ -72,34 +94,34 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
 
             {leads && leads.length > 0 && (
               <div>
-                <SectionDivider label={leads.length > 1 ? "Líderes" : "Lead"} />
+                <SectionDivider label={leads.length > 1 ? "Líderes" : "Lead"} accent={t.accentMuted} />
                 <p className="font-body text-sm md:text-base lg:text-lg">{leads.join(", ")}</p>
               </div>
             )}
             {instruments && instruments.length > 0 && (
               <div className="mt-3">
-                <SectionDivider label="Instrumentos" />
+                <SectionDivider label="Instrumentos" accent={t.accentMuted} />
                 {instruments.map((s, i) => <Row key={i} label={s.label} value={s.person} />)}
               </div>
             )}
 
             {fohTeam && fohTeam.length > 0 && (
               <div className="mt-3">
-                <SectionDivider label="Front of House" />
+                <SectionDivider label="Front of House" accent={t.accentMuted} />
                 {fohTeam.map((s, i) => <Row key={i} label={s.label} value={s.person} />)}
               </div>
             )}
 
             {bgvs && bgvs.length > 0 && (
               <div className="mt-3">
-                <SectionDivider label="BGVs" />
+                <SectionDivider label="BGVs" accent={t.accentMuted} />
                 <p className="font-body text-sm md:text-base lg:text-lg">{bgvs.map(m => m.alias || m.member_name).join(", ")}</p>
               </div>
             )}
 
             {chorus && chorus.length > 0 && (
               <div className="mt-3">
-                <SectionDivider label="Coro" />
+                <SectionDivider label="Coro" accent={t.accentMuted} />
                 <p className="font-body text-sm md:text-base lg:text-lg">{chorus.map(m => m.alias || m.member_name).join(", ")}</p>
               </div>
             )}
@@ -121,10 +143,10 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SectionDivider({ label }: { label: string }) {
+function SectionDivider({ label, accent }: { label: string; accent: string }) {
   return (
     <div className="flex items-center gap-2 mb-2">
-      <span className="font-label text-xs md:text-sm lg:text-base text-[#00bfff]/70 uppercase tracking-wide shrink-0">
+      <span className={`font-label text-xs md:text-sm lg:text-base ${accent} uppercase tracking-wide shrink-0`}>
         {label}
       </span>
       <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
