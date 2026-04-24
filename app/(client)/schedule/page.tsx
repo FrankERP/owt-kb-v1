@@ -73,16 +73,14 @@ export default async function SchedulePage() {
   const weekendMap = new Map<string, { saturday?: SaturdayRole; sunday?: SundayRole }>();
 
   saturdays.forEach((sat) => {
-    // Saturday date + 1 day = the pairing Sunday key
-    const satDate = new Date(sat.week);
-    const sunDate = new Date(satDate);
-    sunDate.setUTCDate(sunDate.getUTCDate() + 1);
-    const key = sunDate.toISOString().slice(0, 10);
+    // Add 1 day to Saturday date using Date.UTC to avoid timezone shifts
+    const [y, m, d] = sat.week.slice(0, 10).split("-").map(Number);
+    const key = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
     weekendMap.set(key, { ...weekendMap.get(key), saturday: sat });
   });
 
   sundays.forEach((sun) => {
-    const key = new Date(sun.week).toISOString().slice(0, 10);
+    const key = sun.week.slice(0, 10);
     weekendMap.set(key, { ...weekendMap.get(key), sunday: sun });
   });
 
