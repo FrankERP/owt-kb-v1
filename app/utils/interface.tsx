@@ -66,8 +66,7 @@ export interface SundayRole {
 
 export interface SaturdayRole {
   week: string;
-  Lead: string;
-  Lead__Support?: string;
+  Lead: Array<TeamMember>;
   instruments: Array<{ instrument: string; person: string }>;
   foh_team: Array<{ role: string; person: string }>;
   BGVs: Array<TeamMember>;

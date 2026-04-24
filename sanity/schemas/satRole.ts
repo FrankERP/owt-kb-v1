@@ -11,15 +11,9 @@ export const saturdayRole = {
     },
     {
       name: 'Lead',
-      title: 'Lead',
-      type: 'reference',
-      to: [{ type: 'teamMembers' }],
-    },
-    {
-      name: 'Lead__Support',
-      title: 'Lead Support',
-      type: 'reference',
-      to: [{ type: 'teamMembers' }],
+      title: 'Leaders',
+      type: 'array',
+      of: [{ type: 'reference', to: [{ type: 'teamMembers' }] }],
     },
     {
       name: 'instruments',
