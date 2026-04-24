@@ -110,7 +110,7 @@ const Page = async ({ params }: Params) => {
 
   return (
     <div>
-      <Navbar title={post?.title} author={post?.author} />
+      <Navbar title={post?.title} author={post?.author} tags schedule />
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <div className="bg-[#001f3f] dark:bg-[#00162e] border-b border-[#003572] dark:border-[#00bfff]/15">
