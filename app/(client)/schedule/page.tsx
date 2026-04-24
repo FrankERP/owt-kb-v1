@@ -1,6 +1,6 @@
 import { client } from "@/sanity/lib/client";
 import Navbar from "@/app/components/Navbar";
-import { DayCard } from "@/app/components/DayCard";
+import CalendarView, { ActiveDay } from "@/app/components/CalendarView";
 import { SundayRole, SaturdayRole, Setlist } from "@/app/utils/interface";
 
 export const revalidate = 60;
@@ -23,7 +23,8 @@ const SETLIST_FRAGMENT = `
 
 async function getUpcomingRoles() {
   const today = new Date().toISOString().slice(0, 10);
-  const limit = new Date(Date.now() + 63 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  // ~3 months ahead to cover current month + 2 full months
+  const limit = new Date(Date.now() + 95 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   const [sundays, saturdays, sunSetlists, satSetlists] = await Promise.all([
     client.fetch<SundayRole[]>(`
@@ -62,100 +63,56 @@ async function getUpcomingRoles() {
 export default async function SchedulePage() {
   const { sundays, saturdays, sunSetlists, satSetlists } = await getUpcomingRoles();
 
-  // Build date → setlist lookup maps
   const sunSetlistMap = new Map<string, Setlist>();
-  sunSetlists.forEach(s => sunSetlistMap.set(s.week.slice(0, 10), s));
+  sunSetlists.forEach((s) => sunSetlistMap.set(s.week.slice(0, 10), s));
   const satSetlistMap = new Map<string, Setlist>();
-  satSetlists.forEach(s => satSetlistMap.set(s.week.slice(0, 10), s));
+  satSetlists.forEach((s) => satSetlistMap.set(s.week.slice(0, 10), s));
 
-  // Group by weekend — key is the Sunday date (YYYY-MM-DD)
-  const weekendMap = new Map<string, { saturday?: SaturdayRole; sunday?: SundayRole }>();
-
-  saturdays.forEach((sat) => {
-    // Add 1 day to Saturday date using Date.UTC to avoid timezone shifts
-    const [y, m, d] = sat.week.slice(0, 10).split("-").map(Number);
-    const key = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
-    weekendMap.set(key, { ...weekendMap.get(key), saturday: sat });
-  });
+  const activeDays: Record<string, ActiveDay> = {};
 
   sundays.forEach((sun) => {
-    const key = sun.week.slice(0, 10);
-    weekendMap.set(key, { ...weekendMap.get(key), sunday: sun });
+    const dateStr = sun.week.slice(0, 10);
+    activeDays[dateStr] = {
+      day: "Domingo",
+      date: sun.week,
+      leads: sun.Lead?.map((m) => m.alias || m.member_name) ?? [],
+      setlist: sunSetlistMap.get(dateStr),
+      instruments: sun.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
+      fohTeam: sun.foh_team?.map((s) => ({ label: s.role, person: s.person })),
+      bgvs: sun.BGVs,
+      chorus: sun.Chorus,
+    };
   });
 
-  const weekends = Array.from(weekendMap.entries()).sort(([a], [b]) => a.localeCompare(b));
+  saturdays.forEach((sat) => {
+    const dateStr = sat.week.slice(0, 10);
+    activeDays[dateStr] = {
+      day: "Sábado",
+      date: sat.week,
+      leads: sat.Lead?.map((m) => m.alias || m.member_name) ?? [],
+      setlist: satSetlistMap.get(dateStr),
+      instruments: sat.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
+      fohTeam: sat.foh_team?.map((s) => ({ label: s.role, person: s.person })),
+      bgvs: sat.BGVs,
+      chorus: sat.Chorus,
+    };
+  });
+
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   return (
     <div>
       <Navbar title="Calendario" tags schedule />
-
-      <div className="mx-auto max-w-7xl px-6 pt-10 pb-16 space-y-14">
-        <h2 className="font-display text-center text-2xl md:text-3xl font-bold">
+      <div className="mx-auto max-w-4xl px-6 pt-10 pb-16">
+        <h2 className="font-display text-center text-2xl md:text-3xl font-bold mb-10">
           Próximos fines de semana
         </h2>
-
-        {weekends.length === 0 && (
+        {Object.keys(activeDays).length === 0 && (
           <p className="text-center font-label text-sm text-gray-400 py-20">
-            No hay roles asignados para los próximos dos meses.
+            No hay roles asignados para los próximos tres meses.
           </p>
         )}
-
-        {weekends.map(([sundayKey, { saturday, sunday }]) => {
-          const label = new Date(sundayKey + "T12:00:00").toLocaleDateString("es-ES", {
-            month: "long",
-            day: "numeric",
-          });
-          const monthYear = new Date(sundayKey + "T12:00:00").toLocaleDateString("es-ES", {
-            year: "numeric",
-            month: "long",
-          });
-
-          return (
-            <div key={sundayKey}>
-              {/* Weekend label */}
-              <div className="flex items-center gap-4 mb-6">
-                <div className="flex-1 h-px bg-[#003572]/20 dark:bg-[#00bfff]/10" />
-                <div className="text-center shrink-0">
-                  <p className="font-display text-base md:text-lg font-bold uppercase">
-                    {label}
-                  </p>
-                  <p className="font-label text-[10px] md:text-xs uppercase tracking-widest text-gray-500">
-                    {monthYear}
-                  </p>
-                </div>
-                <div className="flex-1 h-px bg-[#003572]/20 dark:bg-[#00bfff]/10" />
-              </div>
-
-              {/* Role cards */}
-              <div className={`grid grid-cols-1 gap-6 ${saturday ? "md:grid-cols-2" : "max-w-xl mx-auto"}`}>
-                {saturday && (
-                  <DayCard
-                    day="Sábado"
-                    date={saturday.week}
-                    setlist={satSetlistMap.get(saturday.week.slice(0, 10))}
-                    leads={saturday.Lead?.map(m => m.alias || m.member_name) ?? []}
-                    instruments={saturday.instruments?.map(s => ({ label: s.instrument, person: s.person }))}
-                    fohTeam={saturday.foh_team?.map(s => ({ label: s.role, person: s.person }))}
-                    bgvs={saturday.BGVs}
-                    chorus={saturday.Chorus}
-                  />
-                )}
-                {sunday && (
-                  <DayCard
-                    day="Domingo"
-                    date={sunday.week}
-                    setlist={sunSetlistMap.get(sunday.week.slice(0, 10))}
-                    leads={sunday.Lead?.map(m => m.alias || m.member_name) ?? []}
-                    instruments={sunday.instruments?.map(s => ({ label: s.instrument, person: s.person }))}
-                    fohTeam={sunday.foh_team?.map(s => ({ label: s.role, person: s.person }))}
-                    bgvs={sunday.BGVs}
-                    chorus={sunday.Chorus}
-                  />
-                )}
-              </div>
-            </div>
-          );
-        })}
+        <CalendarView activeDays={activeDays} todayStr={todayStr} />
       </div>
     </div>
   );
