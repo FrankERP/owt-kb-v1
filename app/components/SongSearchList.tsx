@@ -28,10 +28,10 @@ export default function SongSearchList({ posts }: Props) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Buscar por título, autor o tonalidad..."
-          className="font-label w-full max-w-md px-4 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/30 bg-transparent focus:outline-none focus:ring-2 focus:ring-[#00bfff]/50 text-sm placeholder:text-gray-400"
+          className="font-label w-full max-w-md px-4 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/30 bg-transparent focus:outline-none focus:ring-2 focus:ring-[#00bfff]/50 text-sm lg:text-base placeholder:text-gray-400"
         />
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-5">
         {filtered.length > 0 ? (
           filtered.map((post) => <PostComponent key={post._id} post={post} />)
         ) : (
