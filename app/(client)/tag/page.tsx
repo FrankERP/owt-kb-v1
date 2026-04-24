@@ -9,7 +9,7 @@ async function getAllTags() {
       name,
       slug,
       _id,
-      "postCount": count(*[_type == "post" && references("tags", ^._id)])
+      "postCount": count(*[_type == "post" && ^._id in tags[]._ref])
     }
   `;
   return await client.fetch(query);
