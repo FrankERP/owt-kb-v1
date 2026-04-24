@@ -93,7 +93,7 @@ function addDays(date: Date, days: number): Date {
 }
 
 function toISO(date: Date): string {
-  return date.toISOString().slice(0, 10) + "T00:00:00Z";
+  return date.toISOString().slice(0, 10);
 }
 
 function toDateStr(date: Date): string {

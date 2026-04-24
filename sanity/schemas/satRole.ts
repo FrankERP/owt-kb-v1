@@ -6,7 +6,7 @@ export const saturdayRole = {
     {
       name: 'week',
       title: 'Week',
-      type: 'datetime',
+      type: 'date',
       description: 'Week this selection is valid for',
     },
     {
@@ -106,7 +106,7 @@ export const saturdayRole = {
 		},
     prepare(selection:any) {
       const {week} = selection;
-      const formattedDate = week ? new Date(week).toLocaleDateString('es-Es', {
+      const formattedDate = week ? new Date(week.slice(0,10) + 'T12:00:00').toLocaleDateString('es-Es', {
         weekday: 'long',
         year: 'numeric',
         month: 'long',
