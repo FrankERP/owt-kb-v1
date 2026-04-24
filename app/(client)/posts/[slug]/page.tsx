@@ -329,7 +329,7 @@ const Page = async ({ params }: Params) => {
                         {entry._type === "featuredSongs" ? "Domingo" : "Sábado"}
                       </p>
                       <p className="font-body text-sm md:text-base font-semibold">
-                        {new Date(entry.week).toLocaleDateString("es-ES", {
+                        {new Date(entry.week.slice(0, 10) + "T12:00:00").toLocaleDateString("es-ES", {
                           year: "numeric",
                           month: "long",
                           day: "numeric",

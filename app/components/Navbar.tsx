@@ -7,9 +7,10 @@ interface Props {
   title: string;
   author?: string;
   tags?: boolean;
+  schedule?: boolean;
 }
 
-const Navbar = ({ title = "", author = "", tags = false }: Props) => {
+const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Props) => {
   return (
     <nav className="sticky top-0 z-50 border-b border-[#003572]/20 dark:border-[#00bfff]/20 bg-[#C8D8EB]/80 dark:bg-[#010b17]/80 backdrop-blur-sm">
       <div className="relative mx-auto max-w-7xl px-6 h-14 flex items-center">
@@ -36,6 +37,14 @@ const Navbar = ({ title = "", author = "", tags = false }: Props) => {
         </div>
 
         <div className="ml-auto shrink-0 flex items-center gap-4">
+          {schedule && (
+            <Link
+              href="/schedule"
+              className="font-label text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 hover:text-[#00bfff] dark:hover:text-[#00bfff] transition-colors"
+            >
+              Calendario
+            </Link>
+          )}
           {tags && (
             <Link
               href="/tag"
