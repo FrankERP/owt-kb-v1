@@ -11,13 +11,23 @@ interface Props {
 export default function SongSearchList({ posts }: Props) {
   const [query, setQuery] = useState("");
 
-  const filtered = query.trim()
-    ? posts.filter(
-        (p) =>
-          p.title?.toLowerCase().includes(query.toLowerCase()) ||
-          p.author?.toLowerCase().includes(query.toLowerCase()) ||
-          p.key?.toLowerCase().includes(query.toLowerCase())
-      )
+  const q = query.trim().toLowerCase();
+
+  const filtered = q
+    ? posts
+        .filter(
+          (p) =>
+            p.title?.toLowerCase().includes(q) ||
+            p.author?.toLowerCase().includes(q)
+        )
+        .sort((a, b) => {
+          const aTitle = a.title?.toLowerCase() ?? "";
+          const bTitle = b.title?.toLowerCase() ?? "";
+          const aStarts = aTitle.startsWith(q);
+          const bStarts = bTitle.startsWith(q);
+          if (aStarts !== bStarts) return aStarts ? -1 : 1;
+          return aTitle.localeCompare(bTitle);
+        })
     : posts;
 
   return (
