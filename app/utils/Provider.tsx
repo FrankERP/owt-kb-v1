@@ -2,13 +2,16 @@
 
 import React from "react"
 import { ThemeProvider } from "next-themes"
+import { SessionProvider } from "next-auth/react"
 
 interface Props {
   children: React.ReactNode;
 }
 
-export const Provider = ({children}: Props) => {
+export const Provider = ({ children }: Props) => {
   return (
-    <ThemeProvider attribute="class">{children}</ThemeProvider>
+    <SessionProvider>
+      <ThemeProvider attribute="class">{children}</ThemeProvider>
+    </SessionProvider>
   );
 };

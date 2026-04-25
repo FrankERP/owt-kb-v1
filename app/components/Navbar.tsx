@@ -1,6 +1,9 @@
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
+import { SignOutButton } from "./SignOutButton";
 
 interface Props {
   title: string;
@@ -9,7 +12,9 @@ interface Props {
   schedule?: boolean;
 }
 
-const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Props) => {
+const Navbar = async ({ title = "", author = "", tags = false, schedule = false }: Props) => {
+  const session = await getServerSession(authOptions);
+
   return (
     <nav className="sticky top-0 z-50 border-b border-[#003572]/20 dark:border-[#00bfff]/20 bg-[#C8D8EB]/80 dark:bg-[#010b17]/80 backdrop-blur-sm">
       <div className="relative mx-auto max-w-7xl px-6 h-14 lg:h-24 flex items-center">
@@ -50,6 +55,48 @@ const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Pro
               className="font-label text-xs lg:text-lg uppercase tracking-widest text-gray-500 dark:text-gray-400 hover:text-[#00bfff] dark:hover:text-[#00bfff] transition-colors"
             >
               #tags
+            </Link>
+          )}
+
+          {/* User session area */}
+          {session?.user ? (
+            <div className="flex items-center gap-3">
+              {session.user.role === "super-admin" && (
+                <Link
+                  href="/admin"
+                  className="font-label text-xs lg:text-sm uppercase tracking-widest text-gray-500 dark:text-gray-400 hover:text-[#00bfff] dark:hover:text-[#00bfff] transition-colors"
+                >
+                  Admin
+                </Link>
+              )}
+              <Link href="/me" className="flex items-center gap-2 group">
+                {session.user.image ? (
+                  <Image
+                    src={session.user.image}
+                    alt={session.user.name ?? ""}
+                    width={30}
+                    height={30}
+                    className="rounded-full lg:w-9 lg:h-9"
+                  />
+                ) : (
+                  <div className="w-[30px] h-[30px] lg:w-9 lg:h-9 rounded-full bg-[#003572] dark:bg-[#00bfff]/20 flex items-center justify-center">
+                    <span className="font-label text-[10px] lg:text-xs text-[#00bfff]">
+                      {session.user.name?.slice(0, 2).toUpperCase() ?? "??"}
+                    </span>
+                  </div>
+                )}
+                <span className="hidden lg:block font-label text-xs uppercase tracking-widest text-gray-400 group-hover:text-[#00bfff] transition-colors">
+                  {session.user.name?.split(" ")[0]}
+                </span>
+              </Link>
+              <SignOutButton />
+            </div>
+          ) : (
+            <Link
+              href="/auth/signin"
+              className="font-label text-xs lg:text-lg uppercase tracking-widest text-gray-500 hover:text-[#00bfff] transition-colors"
+            >
+              Iniciar sesión
             </Link>
           )}
         </div>
