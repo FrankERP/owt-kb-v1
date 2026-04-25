@@ -148,7 +148,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center gap-2 py-0.5">
       <span className="font-label text-xs md:text-sm uppercase tracking-wide px-2 py-0.5 rounded border border-gray-700 bg-gray-800/60 text-gray-400 shrink-0 leading-tight">
-        {label}
+        {label}:
       </span>
       <span className="font-body text-sm md:text-base lg:text-lg">{value}</span>
     </div>
