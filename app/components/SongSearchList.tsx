@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import Fuse from "fuse.js";
 import { Post } from "../utils/interface";
 import PostComponent from "./PostComponent";
 
@@ -8,27 +9,61 @@ interface Props {
   posts: Post[];
 }
 
+const fuseOptions = {
+  keys: [
+    { name: "title", weight: 3 },
+    { name: "author", weight: 1 },
+  ],
+  threshold: 0.35,
+  distance: 200,
+  minMatchCharLength: 2,
+  shouldSort: true,
+  includeScore: true,
+};
+
 export default function SongSearchList({ posts }: Props) {
   const [query, setQuery] = useState("");
 
-  const q = query.trim().toLowerCase();
+  const fuse = useMemo(() => new Fuse(posts, fuseOptions), [posts]);
 
-  const filtered = q
-    ? posts
+  const filtered = useMemo(() => {
+    const q = query.trim();
+    if (!q) return posts;
+
+    const ql = q.toLowerCase();
+
+    if (q.length <= 2) {
+      // Exact substring match, prefix-first
+      return posts
         .filter(
           (p) =>
-            p.title?.toLowerCase().includes(q) ||
-            p.author?.toLowerCase().includes(q)
+            p.title?.toLowerCase().includes(ql) ||
+            p.author?.toLowerCase().includes(ql)
         )
         .sort((a, b) => {
           const aTitle = a.title?.toLowerCase() ?? "";
           const bTitle = b.title?.toLowerCase() ?? "";
-          const aStarts = aTitle.startsWith(q);
-          const bStarts = bTitle.startsWith(q);
+          const aStarts = aTitle.startsWith(ql);
+          const bStarts = bTitle.startsWith(ql);
           if (aStarts !== bStarts) return aStarts ? -1 : 1;
           return aTitle.localeCompare(bTitle);
-        })
-    : posts;
+        });
+    }
+
+    // Fuzzy search for 3+ characters
+    return fuse
+      .search(q)
+      .sort((a, b) => {
+        const aTitle = a.item.title?.toLowerCase() ?? "";
+        const bTitle = b.item.title?.toLowerCase() ?? "";
+        const rank = (title: string) =>
+          title.startsWith(ql) ? 0 : title.includes(ql) ? 1 : 2;
+        const diff = rank(aTitle) - rank(bTitle);
+        if (diff !== 0) return diff;
+        return (a.score ?? 1) - (b.score ?? 1);
+      })
+      .map((r) => r.item);
+  }, [query, fuse, posts]);
 
   return (
     <div className="mx-auto max-w-7xl px-6">
