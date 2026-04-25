@@ -1,7 +1,7 @@
 import { client } from "@/sanity/lib/client";
 import Navbar from "@/app/components/Navbar";
 import CalendarView, { ActiveDay } from "@/app/components/CalendarView";
-import { SundayRole, SaturdayRole, Setlist } from "@/app/utils/interface";
+import { SundayRole, SaturdayRole, Setlist, SpecialRole, SetlistSong } from "@/app/utils/interface";
 
 export const revalidate = 60;
 
@@ -21,10 +21,22 @@ const SETLIST_FRAGMENT = `
   week,
 `;
 
+const TZ = "America/Mexico_City";
+
+function localToday(): string {
+  return new Date().toLocaleDateString("sv", { timeZone: TZ });
+}
+
 async function getUpcomingRoles() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localToday();
   // ~3 months ahead to cover current month + 2 full months
-  const limit = new Date(Date.now() + 95 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const [y, m, d] = today.split("-").map(Number);
+  const limit = new Date(Date.UTC(y, m - 1, d + 95)).toISOString().slice(0, 10);
+  // Monday of this week so specials earlier in the week are included
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=Sun
+  const daysToMon = dow === 0 ? -6 : 1 - dow;
+  const weekStart = new Date(Date.UTC(y, m - 1, d + daysToMon));
+  const weekStartStr = weekStart.toISOString().slice(0, 10);
 
   const [sundays, saturdays, sunSetlists, satSetlists] = await Promise.all([
     client.fetch<SundayRole[]>(`
@@ -55,24 +67,40 @@ async function getUpcomingRoles() {
     `),
   ]);
 
-  return { sundays, saturdays, sunSetlists, satSetlists };
+  const specials = await client.fetch<SpecialRole[]>(`
+    *[_type == "special_role" && date >= "${weekStartStr}" && date <= "${limit}"] | order(date asc) {
+      _id, date, service_name,
+      songs[] { play_key, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "key": song->key },
+      Lead[]-> { member_name, alias },
+      instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
+      foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
+      BGVs[]-> { member_name, alias },
+      Chorus[]-> { member_name, alias },
+    }
+  `);
+
+  return { sundays, saturdays, sunSetlists, satSetlists, specials };
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function SchedulePage() {
-  const { sundays, saturdays, sunSetlists, satSetlists } = await getUpcomingRoles();
+  const { sundays, saturdays, sunSetlists, satSetlists, specials } = await getUpcomingRoles();
 
   const sunSetlistMap = new Map<string, Setlist>();
   sunSetlists.forEach((s) => sunSetlistMap.set(s.week.slice(0, 10), s));
   const satSetlistMap = new Map<string, Setlist>();
   satSetlists.forEach((s) => satSetlistMap.set(s.week.slice(0, 10), s));
 
-  const activeDays: Record<string, ActiveDay> = {};
+  const activeDays: Record<string, ActiveDay[]> = {};
+
+  const push = (dateStr: string, entry: ActiveDay) => {
+    activeDays[dateStr] = [...(activeDays[dateStr] ?? []), entry];
+  };
 
   sundays.forEach((sun) => {
     const dateStr = sun.week.slice(0, 10);
-    activeDays[dateStr] = {
+    push(dateStr, {
       day: "Domingo",
       date: sun.week,
       leads: sun.Lead?.map((m) => m.alias || m.member_name) ?? [],
@@ -81,12 +109,12 @@ export default async function SchedulePage() {
       fohTeam: sun.foh_team?.map((s) => ({ label: s.role, person: s.person })),
       bgvs: sun.BGVs,
       chorus: sun.Chorus,
-    };
+    });
   });
 
   saturdays.forEach((sat) => {
     const dateStr = sat.week.slice(0, 10);
-    activeDays[dateStr] = {
+    push(dateStr, {
       day: "Sábado",
       date: sat.week,
       leads: sat.Lead?.map((m) => m.alias || m.member_name) ?? [],
@@ -95,10 +123,25 @@ export default async function SchedulePage() {
       fohTeam: sat.foh_team?.map((s) => ({ label: s.role, person: s.person })),
       bgvs: sat.BGVs,
       chorus: sat.Chorus,
-    };
+    });
   });
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  specials.forEach((sp) => {
+    const dateStr = sp.date.slice(0, 10);
+    const setlist = sp.songs?.length
+      ? ({ songs: sp.songs as SetlistSong[], week: sp.date } satisfies Setlist)
+      : undefined;
+    push(dateStr, {
+      day: sp.service_name || "Servicio Especial",
+      date: sp.date,
+      leads: sp.Lead?.map((m) => m.alias || m.member_name) ?? [],
+      setlist,
+      instruments: sp.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
+      fohTeam: sp.foh_team?.map((s) => ({ label: s.role, person: s.person })),
+      bgvs: sp.BGVs,
+      chorus: sp.Chorus,
+    });
+  });
 
   return (
     <div>
@@ -112,7 +155,7 @@ export default async function SchedulePage() {
             No hay roles asignados para los próximos tres meses.
           </p>
         )}
-        <CalendarView activeDays={activeDays} todayStr={todayStr} />
+        <CalendarView activeDays={activeDays} />
       </div>
     </div>
   );

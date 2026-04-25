@@ -64,6 +64,18 @@ export interface SundayRole {
   Chorus: Array<TeamMember>;
 }
 
+export interface SpecialRole {
+  _id: string;
+  date: string;
+  service_name: string;
+  songs?: Array<SetlistSong>;
+  Lead?: Array<TeamMember>;
+  instruments?: Array<{ instrument: string; person: string }>;
+  foh_team?: Array<{ role: string; person: string }>;
+  BGVs?: Array<TeamMember>;
+  Chorus?: Array<TeamMember>;
+}
+
 export interface SaturdayRole {
   week: string;
   Lead: Array<TeamMember>;
