@@ -5,7 +5,7 @@ import { DayCard } from "./DayCard";
 import { Setlist } from "../utils/interface";
 
 export type ActiveDay = {
-  day: "Sábado" | "Domingo";
+  day: string; // "Sábado" | "Domingo" | any special service name
   date: string;
   setlist?: Setlist | null;
   leads?: string[];
@@ -16,8 +16,7 @@ export type ActiveDay = {
 };
 
 interface Props {
-  activeDays: Record<string, ActiveDay>;
-  todayStr: string;
+  activeDays: Record<string, ActiveDay[]>;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -39,19 +38,37 @@ function firstDayOffset(year: number, month: number) {
   return (dow + 6) % 7; // Monday-first
 }
 
-function getWeekends(activeDays: Record<string, ActiveDay>) {
-  const map = new Map<string, { satDate?: string; sunDate?: string; sat?: ActiveDay; sun?: ActiveDay }>();
+type WeekGroup = {
+  sunDate?: string;
+  sun?: ActiveDay;
+  sat?: ActiveDay;
+  satDate?: string;
+  specials: Array<{ dateStr: string; data: ActiveDay }>;
+};
 
-  Object.entries(activeDays).forEach(([dateStr, data]) => {
-    if (data.day === "Domingo") {
-      const prev = map.get(dateStr) ?? {};
-      map.set(dateStr, { ...prev, sun: data, sunDate: dateStr });
-    } else {
-      const [y, m, d] = dateStr.split("-").map(Number);
-      const sunKey = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
-      const prev = map.get(sunKey) ?? {};
-      map.set(sunKey, { ...prev, sat: data, satDate: dateStr });
-    }
+function getWeekends(activeDays: Record<string, ActiveDay[]>) {
+  const map = new Map<string, WeekGroup>();
+
+  const getOrCreate = (key: string): WeekGroup =>
+    map.get(key) ?? { specials: [] };
+
+  Object.entries(activeDays).forEach(([dateStr, entries]) => {
+    const [y, m, d] = dateStr.split("-").map(Number);
+    const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=Sun
+    const daysToSun = dow === 0 ? 0 : 7 - dow;
+    const sunKey = new Date(Date.UTC(y, m - 1, d + daysToSun)).toISOString().slice(0, 10);
+
+    entries.forEach((data) => {
+      const prev = getOrCreate(sunKey);
+      if (data.day === "Domingo") {
+        map.set(sunKey, { ...prev, sun: data, sunDate: dateStr });
+      } else if (data.day === "Sábado") {
+        map.set(sunKey, { ...prev, sat: data, satDate: dateStr });
+      } else {
+        prev.specials.push({ dateStr, data });
+        map.set(sunKey, prev);
+      }
+    });
   });
 
   return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
@@ -59,7 +76,8 @@ function getWeekends(activeDays: Record<string, ActiveDay>) {
 
 // ─── Root component ───────────────────────────────────────────────────────────
 
-export default function CalendarView({ activeDays, todayStr }: Props) {
+export default function CalendarView({ activeDays }: Props) {
+  const todayStr = new Date().toLocaleDateString("sv"); // browser local date → YYYY-MM-DD
   const [view, setView] = useState<"calendar" | "list">("calendar");
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -77,7 +95,7 @@ export default function CalendarView({ activeDays, todayStr }: Props) {
     return { year: d.getFullYear(), month: d.getMonth() };
   });
 
-  const selectedData = selected ? activeDays[selected] : null;
+  const selectedEntries = selected ? (activeDays[selected] ?? []) : [];
   const weekends = getWeekends(activeDays);
 
   return (
@@ -133,13 +151,14 @@ export default function CalendarView({ activeDays, todayStr }: Props) {
               No hay roles asignados para los próximos tres meses.
             </p>
           )}
-          {weekends.map(([sundayKey, { sat, satDate, sun, sunDate }]) => {
+          {weekends.map(([sundayKey, { sat, satDate, sun, sunDate, specials }]) => {
             const label = new Date(sundayKey + "T12:00:00").toLocaleDateString("es-ES", {
               month: "long", day: "numeric",
             });
             const monthYear = new Date(sundayKey + "T12:00:00").toLocaleDateString("es-ES", {
               year: "numeric", month: "long",
             });
+            const totalCards = specials.length + (sat ? 1 : 0) + (sun ? 1 : 0);
 
             return (
               <div key={sundayKey}>
@@ -152,7 +171,20 @@ export default function CalendarView({ activeDays, todayStr }: Props) {
                   <div className="flex-1 h-px bg-[#003572]/20 dark:bg-[#00bfff]/10" />
                 </div>
 
-                <div className={`grid grid-cols-1 gap-6 ${sat ? "md:grid-cols-2" : "max-w-xl mx-auto"}`}>
+                <div className={`grid grid-cols-1 gap-6 ${totalCards > 1 ? "md:grid-cols-2" : "max-w-xl mx-auto"}`}>
+                  {specials.map(({ dateStr, data }) => (
+                    <DayCard
+                      key={dateStr + data.day}
+                      day={data.day}
+                      date={dateStr}
+                      setlist={data.setlist}
+                      leads={data.leads}
+                      instruments={data.instruments}
+                      fohTeam={data.fohTeam}
+                      bgvs={data.bgvs}
+                      chorus={data.chorus}
+                    />
+                  ))}
                   {sat && satDate && (
                     <DayCard
                       day="Sábado"
@@ -185,28 +217,31 @@ export default function CalendarView({ activeDays, todayStr }: Props) {
       )}
 
       {/* Modal (calendar view) */}
-      {selectedData && (
+      {selectedEntries.length > 0 && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-overlay-in"
           onClick={dismiss}
         >
           <div
-            className="w-full max-w-md max-h-[88vh] overflow-y-auto rounded-xl scrollbar-hide"
+            className="w-full max-w-md max-h-[88vh] overflow-y-auto rounded-xl scrollbar-hide space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <DayCard
-              day={selectedData.day}
-              date={selectedData.date}
-              setlist={selectedData.setlist}
-              leads={selectedData.leads}
-              instruments={selectedData.instruments}
-              fohTeam={selectedData.fohTeam}
-              bgvs={selectedData.bgvs}
-              chorus={selectedData.chorus}
-            />
+            {selectedEntries.map((d, i) => (
+              <DayCard
+                key={i}
+                day={d.day}
+                date={d.date}
+                setlist={d.setlist}
+                leads={d.leads}
+                instruments={d.instruments}
+                fohTeam={d.fohTeam}
+                bgvs={d.bgvs}
+                chorus={d.chorus}
+              />
+            ))}
             <button
               onClick={dismiss}
-              className="mt-3 w-full font-label text-xs uppercase tracking-widest text-gray-500 hover:text-gray-300 transition-colors py-2"
+              className="w-full font-label text-xs uppercase tracking-widest text-gray-500 hover:text-gray-300 transition-colors py-2"
             >
               Cerrar
             </button>
@@ -224,7 +259,7 @@ function MonthGrid({
 }: {
   year: number;
   month: number;
-  activeDays: Record<string, ActiveDay>;
+  activeDays: Record<string, ActiveDay[]>;
   todayStr: string;
   selected: string | null;
   onSelect: (d: string) => void;
@@ -253,18 +288,30 @@ function MonthGrid({
           if (!day) return <div key={i} className="aspect-square" />;
 
           const dateStr = toDateStr(year, month, day);
-          const active = activeDays[dateStr];
+          const entries = activeDays[dateStr];
+          const hasActive = entries && entries.length > 0;
           const isSelected = selected === dateStr;
           const isToday = dateStr === todayStr;
-          const isSat = active?.day === "Sábado";
+
+          // Determine color priority: special > sat > sun
+          const hasSat = entries?.some(e => e.day === "Sábado");
+          const hasSpecial = entries?.some(e => e.day !== "Sábado" && e.day !== "Domingo");
+          const hasMultiple = entries && entries.length > 1;
+
+          // Pick display color: if mixed, purple takes priority to signal "multiple"
+          const colorKey = hasSpecial ? "special" : hasSat ? "sat" : "sun";
 
           let cls = "aspect-square flex flex-col items-center justify-center rounded-lg text-sm font-label transition-colors relative ";
 
           if (isSelected) {
-            cls += isSat ? "bg-[#f59e0b] text-black font-bold" : "bg-[#00bfff] text-black font-bold";
-          } else if (active) {
-            cls += isSat
+            cls += colorKey === "sat" ? "bg-[#f59e0b] text-black font-bold"
+                 : colorKey === "sun" ? "bg-[#00bfff] text-black font-bold"
+                 : "bg-[#a78bfa] text-black font-bold";
+          } else if (hasActive) {
+            cls += colorKey === "sat"
               ? "bg-[#78350f]/50 border border-[#f59e0b]/50 text-[#f59e0b] cursor-pointer hover:bg-[#78350f]/80 hover:border-[#f59e0b]"
+              : colorKey === "special"
+              ? "bg-[#4c1d95]/50 border border-[#a78bfa]/50 text-[#a78bfa] cursor-pointer hover:bg-[#4c1d95]/80 hover:border-[#a78bfa]"
               : "bg-[#003572]/50 border border-[#00bfff]/50 text-[#00bfff] cursor-pointer hover:bg-[#003572]/80 hover:border-[#00bfff]";
           } else {
             cls += "text-gray-600 dark:text-gray-600 cursor-default";
@@ -273,13 +320,16 @@ function MonthGrid({
           return (
             <button
               key={i}
-              disabled={!active}
-              onClick={() => active && onSelect(dateStr)}
+              disabled={!hasActive}
+              onClick={() => hasActive && onSelect(dateStr)}
               className={cls}
             >
               {day}
               {isToday && (
                 <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-current opacity-60" />
+              )}
+              {hasMultiple && !isSelected && (
+                <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-current opacity-80" />
               )}
             </button>
           );

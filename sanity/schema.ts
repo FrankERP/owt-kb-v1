@@ -7,10 +7,8 @@ import { saturdaySongs } from './schemas/satSongs';
 import { saturdayRole } from './schemas/satRole';
 import { sundayRole } from './schemas/sunRole';
 import { teamMembers } from './schemas/worshipTeam';
-
-
-
+import { specialRole } from './schemas/specialRole';
 
 export const schema: { types: SchemaTypeDefinition[] } = {
-  types: [post, tag, featuredSongs, saturdaySongs,saturdayRole, sundayRole, teamMembers ],
+  types: [post, tag, featuredSongs, saturdaySongs, saturdayRole, sundayRole, teamMembers, specialRole],
 }

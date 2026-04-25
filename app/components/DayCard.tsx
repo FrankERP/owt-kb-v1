@@ -32,13 +32,23 @@ const SATURDAY_THEME = {
   songHover:    "hover:text-[#f59e0b]",
 };
 
+const SPECIAL_THEME = {
+  border:       "border-[#4c1d95] dark:border-[#a78bfa]",
+  shadow:       "shadow-[#a78bfa]/20",
+  headerBg:     "bg-[#4c1d95] dark:bg-[#1e0a3c]",
+  headerBorder: "border-[#5b21b6] dark:border-[#a78bfa]",
+  accent:       "text-[#a78bfa]",
+  accentMuted:  "text-[#a78bfa]/70",
+  songHover:    "hover:text-[#a78bfa]",
+};
+
 export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs, chorus }: DayCardProps) {
   const hasRole = !!(leads?.length || instruments?.length || fohTeam?.length || bgvs?.length || chorus?.length);
   const hasSetlist = !!(setlist?.songs?.length);
 
   if (!hasSetlist && !hasRole) return null;
 
-  const t = day === "Sábado" ? SATURDAY_THEME : SUNDAY_THEME;
+  const t = day === "Sábado" ? SATURDAY_THEME : day === "Domingo" ? SUNDAY_THEME : SPECIAL_THEME;
 
   return (
     <div className={`border ${t.border} rounded-xl overflow-hidden shadow-md ${t.shadow}`}>
@@ -73,10 +83,12 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                       <span className="font-body text-sm md:text-base lg:text-lg font-semibold">{song.title}</span>
                       <span className="text-gray-500 text-sm md:text-base lg:text-lg"> — {song.author}</span>
                     </Link>
-                    <div className="font-label text-xs md:text-sm lg:text-base mt-0.5">
-                      <span className={t.accent}>{song.play_key || song.key}</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`font-label text-xs md:text-sm lg:text-base font-semibold ${t.accent}`}>{song.play_key || song.key}</span>
                       {song.play_key && song.key && song.play_key !== song.key && (
-                        <span className="text-gray-400 ml-1.5">orig. {song.key}</span>
+                        <span className="font-label text-xs md:text-sm px-2 py-0.5 rounded border border-gray-700 bg-gray-800/60 text-gray-400 leading-tight">
+                          orig. {song.key}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -134,11 +146,11 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between items-baseline gap-4 py-0.5">
-      <span className="font-label text-xs md:text-sm lg:text-base text-gray-500 uppercase tracking-wide shrink-0">
+    <div className="flex items-center gap-2 py-0.5">
+      <span className="font-label text-xs md:text-sm uppercase tracking-wide px-2 py-0.5 rounded border border-gray-700 bg-gray-800/60 text-gray-400 shrink-0 leading-tight">
         {label}
       </span>
-      <span className="font-body text-sm md:text-base lg:text-lg text-right">{value}</span>
+      <span className="font-body text-sm md:text-base lg:text-lg">{value}</span>
     </div>
   );
 }
