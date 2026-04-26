@@ -347,7 +347,7 @@ export default function AdminPanel() {
                 <div className="flex items-baseline gap-2 flex-wrap">
                   <p className="font-body text-sm font-semibold truncate">{m.member_name}</p>
                   {m.alias?.trim() && (
-                    <span className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/70 truncate">"{m.alias.trim()}"</span>
+                    <span className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/70 truncate">&ldquo;{m.alias.trim()}&rdquo;</span>
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
