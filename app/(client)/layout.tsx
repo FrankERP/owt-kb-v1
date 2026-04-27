@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Advent_Pro, Urbanist, Jura } from "next/font/google";
 import "./globals.css";
 import { Provider } from "../utils/Provider";
+import BottomNav from "../components/BottomNav";
 
 const displayFont = Advent_Pro({
   weight: "600",
@@ -42,7 +43,8 @@ export default function RootLayout({
         `}
       >
         <Provider>
-          <main className="mx-auto max-w-7xl">{children}</main>
+          <main className="mx-auto max-w-7xl pb-16 lg:pb-0">{children}</main>
+          <BottomNav />
         </Provider>
       </body>
     </html>
