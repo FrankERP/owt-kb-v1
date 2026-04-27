@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
-import { serverClient } from "@/sanity/lib/serverClient";
+import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 
 async function requireSuperAdmin() {
   const session = await getServerSession(authOptions);
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
   const slug = member_name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
-  const doc = await serverClient.create({
+  const doc = await writeClient.create({
     _type: "teamMembers",
     member_name: member_name.trim(),
     email: email.trim().toLowerCase(),

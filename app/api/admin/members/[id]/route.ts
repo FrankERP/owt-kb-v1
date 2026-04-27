@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
-import { serverClient } from "@/sanity/lib/serverClient";
+import { writeClient } from "@/sanity/lib/serverClient";
 
 async function requireSuperAdmin() {
   const session = await getServerSession(authOptions);
@@ -32,7 +32,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
-  const doc = await serverClient.patch(params.id).set(patch).commit();
+  const doc = await writeClient.patch(params.id).set(patch).commit();
   return NextResponse.json(doc);
 }
 
@@ -44,6 +44,6 @@ export async function DELETE(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  await serverClient.delete(params.id);
+  await writeClient.delete(params.id);
   return NextResponse.json({ ok: true });
 }
