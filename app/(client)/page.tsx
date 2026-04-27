@@ -79,8 +79,8 @@ async function getSundayRole(date: string): Promise<SundayRole | null> {
     *[_type == "sunday_role" && week == "${date}"][0] {
       week,
       Lead[]-> { member_name, alias },
-      instruments[] { instrument, "person": coalesce(nullif(person->alias, ""), person->member_name) },
-      foh_team[] { role, "person": coalesce(nullif(person->alias, ""), person->member_name) },
+      instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
+      foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
       BGVs[]-> { member_name, alias },
       Chorus[]-> { member_name, alias },
     }
@@ -92,8 +92,8 @@ async function getSaturdayRole(date: string): Promise<SaturdayRole | null> {
     *[_type == "saturday_role" && week == "${date}"][0] {
       week,
       Lead[]-> { member_name, alias },
-      instruments[] { instrument, "person": coalesce(nullif(person->alias, ""), person->member_name) },
-      foh_team[] { role, "person": coalesce(nullif(person->alias, ""), person->member_name) },
+      instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
+      foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
       BGVs[]-> { member_name, alias },
       Chorus[]-> { member_name, alias },
     }
@@ -106,8 +106,8 @@ async function getSpecialServicesThisWeek(today: string, sun: string): Promise<S
       _id, date, service_name,
       songs[] { play_key, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "key": song->key },
       Lead[]-> { member_name, alias },
-      instruments[] { instrument, "person": coalesce(nullif(person->alias, ""), person->member_name) },
-      foh_team[] { role, "person": coalesce(nullif(person->alias, ""), person->member_name) },
+      instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
+      foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
       BGVs[]-> { member_name, alias },
       Chorus[]-> { member_name, alias },
     }
