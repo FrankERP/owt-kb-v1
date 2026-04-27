@@ -19,7 +19,7 @@ export default function BottomNav() {
 
   const tabs = [
     { href: "/schedule", label: "Calendario", icon: <CalendarIcon /> },
-    { href: "/tag",      label: "Canciones",  icon: <MusicIcon /> },
+    { href: "/tag",      label: "Tags",        icon: <MusicIcon /> },
     { href: "/me",       label: "Yo",         icon: <UserIcon /> },
   ];
 
