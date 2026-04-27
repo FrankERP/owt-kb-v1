@@ -40,7 +40,7 @@ const Navbar = async ({ title = "", author = "", tags = false, schedule = false 
           )}
         </div>
 
-        <div className="ml-auto shrink-0 flex items-center gap-4">
+        <div className="ml-auto shrink-0 hidden lg:flex items-center gap-4">
           {schedule && (
             <Link
               href="/schedule"
