@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import bcrypt from "bcryptjs";
-import { serverClient } from "@/sanity/lib/serverClient";
+import { writeClient } from "@/sanity/lib/serverClient";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
 
   const hash = await bcrypt.hash(password, 12);
 
-  await serverClient
+  await writeClient
     .patch(sanityMemberId)
     .set({ passwordHash: hash })
     .commit();

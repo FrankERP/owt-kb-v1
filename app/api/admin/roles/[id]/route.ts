@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
-import { serverClient } from "@/sanity/lib/serverClient";
+import { writeClient } from "@/sanity/lib/serverClient";
 
 async function requireSuperAdmin() {
   const session = await getServerSession(authOptions);
@@ -56,7 +56,7 @@ export async function PATCH(
 
   const dateField = body._type === "special_role" ? "date" : "week";
 
-  const doc = await serverClient
+  const doc = await writeClient
     .patch(params.id)
     .set({
       [dateField]: body.date,
@@ -80,6 +80,6 @@ export async function DELETE(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  await serverClient.delete(params.id);
+  await writeClient.delete(params.id);
   return NextResponse.json({ ok: true });
 }

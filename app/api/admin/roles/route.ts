@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
-import { serverClient } from "@/sanity/lib/serverClient";
+import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 
 type ServiceType = "sunday_role" | "saturday_role" | "special_role";
 
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
 
   const dateField = body._type === "special_role" ? "date" : "week";
 
-  const doc = await serverClient.create({
+  const doc = await writeClient.create({
     _type: body._type,
     [dateField]: body.date,
     ...(body._type === "special_role" && body.service_name ? { service_name: body.service_name } : {}),
