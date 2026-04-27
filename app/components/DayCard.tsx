@@ -110,17 +110,17 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                 <p className="font-body text-sm md:text-base lg:text-lg">{leads.join(", ")}</p>
               </div>
             )}
-            {instruments && instruments.length > 0 && (
+            {instruments && instruments.filter(s => s.person).length > 0 && (
               <div className="mt-3">
                 <SectionDivider label="Instrumentos" accent={t.accentMuted} />
-                {instruments.map((s, i) => <Row key={i} label={s.label} value={s.person} />)}
+                {instruments.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} />)}
               </div>
             )}
 
-            {fohTeam && fohTeam.length > 0 && (
+            {fohTeam && fohTeam.filter(s => s.person).length > 0 && (
               <div className="mt-3">
                 <SectionDivider label="Front of House" accent={t.accentMuted} />
-                {fohTeam.map((s, i) => <Row key={i} label={s.label} value={s.person} />)}
+                {fohTeam.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} />)}
               </div>
             )}
 

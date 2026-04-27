@@ -32,8 +32,8 @@ export default async function MePage() {
       "sundays": *[_type == "sunday_role" && week >= $today && week <= $limit && ${memberFilter}] | order(week asc) {
         _id, week,
         Lead[]-> { member_name, alias },
-        instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
-        foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
+        instruments[] { instrument, "person": coalesce(nullif(person->alias, ""), person->member_name) },
+        foh_team[] { role, "person": coalesce(nullif(person->alias, ""), person->member_name) },
         BGVs[]-> { member_name, alias },
         Chorus[]-> { member_name, alias },
         "setlist": *[_type == "featuredSongs" && week == ^.week][0] {
@@ -48,8 +48,8 @@ export default async function MePage() {
       "saturdays": *[_type == "saturday_role" && week >= $today && week <= $limit && ${memberFilter}] | order(week asc) {
         _id, week,
         Lead[]-> { member_name, alias },
-        instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
-        foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
+        instruments[] { instrument, "person": coalesce(nullif(person->alias, ""), person->member_name) },
+        foh_team[] { role, "person": coalesce(nullif(person->alias, ""), person->member_name) },
         BGVs[]-> { member_name, alias },
         Chorus[]-> { member_name, alias },
         "setlist": *[_type == "saturdarSongs" && week == ^.week][0] {
@@ -64,8 +64,8 @@ export default async function MePage() {
       "specials": *[_type == "special_role" && date >= $today && date <= $limit && ${memberFilter}] | order(date asc) {
         _id, date, service_name,
         Lead[]-> { member_name, alias },
-        instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
-        foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
+        instruments[] { instrument, "person": coalesce(nullif(person->alias, ""), person->member_name) },
+        foh_team[] { role, "person": coalesce(nullif(person->alias, ""), person->member_name) },
         BGVs[]-> { member_name, alias },
         Chorus[]-> { member_name, alias },
         songs[] {
