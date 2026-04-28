@@ -7,7 +7,7 @@ import MonthGenerator from "./MonthGenerator";
 
 type ServiceType = "sunday_role" | "saturday_role" | "special_role";
 
-interface MemberOption { _id: string; member_name: string; alias?: string; memberType?: string[]; }
+interface MemberOption { _id: string; member_name: string; alias?: string; memberType?: string[]; unavailableDates?: string[]; }
 
 const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;
 
@@ -235,9 +235,42 @@ function ServiceForm({ initial, members, onSubmit, onClose, loading }: {
   const [foh, setFoh] = useState<FohSlot[]>(
     initial?.foh?.map(s => ({ id: uid(), role: s.role, personId: s.person?._id ?? "" })) ?? []
   );
+  const [pendingData, setPendingData] = useState<any>(null);
+  const [unavailableNames, setUnavailableNames] = useState<string[]>([]);
+
+  function buildData() {
+    return { _type: type, date, service_name: serviceName, leads, bgvs, chorus,
+      instruments: instruments.filter(s => s.instrument && s.personId),
+      foh: foh.filter(s => s.role && s.personId) };
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const data = buildData();
+    if (!date) return onSubmit(data);
+    const allIds = [
+      ...leads, ...bgvs, ...chorus,
+      ...instruments.filter(s => s.personId).map(s => s.personId),
+      ...foh.filter(s => s.personId).map(s => s.personId),
+    ];
+    const conflicts = allIds
+      .map(id => members.find(m => m._id === id))
+      .filter((m): m is MemberOption => !!(m?.unavailableDates?.includes(date)))
+      .map(m => m.alias?.trim() || m.member_name);
+    if (conflicts.length > 0) {
+      setUnavailableNames(conflicts);
+      setPendingData(data);
+      return;
+    }
+    onSubmit(data);
+  }
+
+  const fmtServiceDate = date
+    ? new Date(date + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })
+    : "";
 
   return (
-    <form onSubmit={e => { e.preventDefault(); onSubmit({ _type: type, date, service_name: serviceName, leads, bgvs, chorus, instruments: instruments.filter(s => s.instrument && s.personId), foh: foh.filter(s => s.role && s.personId) }); }} className="space-y-5 max-h-[70vh] overflow-y-auto pr-1">
+    <form onSubmit={handleSubmit} className="space-y-5 max-h-[70vh] overflow-y-auto pr-1">
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <label className="font-label text-xs uppercase tracking-widest text-gray-500">Tipo</label>
@@ -269,10 +302,32 @@ function ServiceForm({ initial, members, onSubmit, onClose, loading }: {
         <SlotEditor label="Instrumentos"    fieldLabel="Instrumento" slots={instruments} members={members} onChange={s => setInstruments(s as InstrumentSlot[])} filterType="instrumento" />
         <SlotEditor label="FOH / Técnicos"  fieldLabel="Rol"         slots={foh}         members={members} onChange={s => setFoh(s as FohSlot[])} filterType="foh" />
       </div>
-      <div className="flex gap-3 pt-1 sticky bottom-0 bg-[#C8D8EB] dark:bg-[#0a1929] py-2">
-        <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">Cancelar</button>
-        <button type="submit" disabled={loading}  className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{loading ? "Guardando..." : "Guardar"}</button>
-      </div>
+
+      {/* Availability warning — replaces action buttons when conflicts are found */}
+      {pendingData ? (
+        <div className="rounded-lg border border-orange-500/30 bg-orange-500/8 px-3 py-3 space-y-3 sticky bottom-0 bg-[#C8D8EB] dark:bg-[#0a1929]">
+          <p className="font-label text-[10px] uppercase tracking-widest text-orange-400">No disponibles el {fmtServiceDate}</p>
+          <p className="font-body text-sm text-gray-300">
+            <span className="text-orange-300">{unavailableNames.join(", ")}</span>
+            {unavailableNames.length === 1 ? " ha" : " han"} marcado este día como no disponible.
+          </p>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => { setPendingData(null); setUnavailableNames([]); }}
+              className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
+              Revisar
+            </button>
+            <button type="button" onClick={() => onSubmit(pendingData)} disabled={loading}
+              className="flex-1 py-2 rounded-lg bg-orange-600/70 hover:bg-orange-600 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+              {loading ? "Guardando..." : "Confirmar de todos modos"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-3 pt-1 sticky bottom-0 bg-[#C8D8EB] dark:bg-[#0a1929] py-2">
+          <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">Cancelar</button>
+          <button type="submit" disabled={loading} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{loading ? "Guardando..." : "Guardar"}</button>
+        </div>
+      )}
     </form>
   );
 }
@@ -665,11 +720,48 @@ function ServiceCard({ role, onEdit, onDelete, onSetlist, swapMode, swapSource, 
 
 // ─── Swap confirm modal ───────────────────────────────────────────────────────
 
-function SwapConfirmModal({ confirm, onConfirm, onClose, loading }: {
-  confirm: SwapConfirm; onConfirm: () => void; onClose: () => void; loading: boolean;
+function AvailabilityWarning({ lines }: { lines: string[] }) {
+  if (lines.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-orange-500/30 bg-orange-500/8 px-3 py-2.5 space-y-1">
+      <p className="font-label text-[10px] uppercase tracking-widest text-orange-400">No disponibles</p>
+      {lines.map((l, i) => <p key={i} className="font-body text-xs text-gray-400">{l}</p>)}
+    </div>
+  );
+}
+
+function SwapConfirmModal({ confirm, onConfirm, onClose, loading, members }: {
+  confirm: SwapConfirm; onConfirm: () => void; onClose: () => void; loading: boolean; members: MemberOption[];
 }) {
+  function lookup(id: string | undefined) {
+    return id ? members.find(m => m._id === id) : undefined;
+  }
+  function unavailableOn(ids: (string | undefined)[], date: string): string[] {
+    return ids
+      .map(id => lookup(id))
+      .filter((m): m is MemberOption => !!(m?.unavailableDates?.includes(date)))
+      .map(m => m.alias?.trim() || m.member_name);
+  }
+  function fmtD(iso: string) {
+    return new Date(iso.slice(0,10) + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" });
+  }
+
   if (confirm.kind === "card") {
     const { roleA, roleB } = confirm;
+    const dateA = roleA.date.slice(0,10);
+    const dateB = roleB.date.slice(0,10);
+    const allAIds = [...(roleA.leads ?? []), ...(roleA.bgvs ?? []), ...(roleA.chorus ?? []),
+      ...(roleA.instruments ?? []).filter(s => s.person).map(s => s.person!),
+      ...(roleA.foh ?? []).filter(s => s.person).map(s => s.person!)].map(m => m._id);
+    const allBIds = [...(roleB.leads ?? []), ...(roleB.bgvs ?? []), ...(roleB.chorus ?? []),
+      ...(roleB.instruments ?? []).filter(s => s.person).map(s => s.person!),
+      ...(roleB.foh ?? []).filter(s => s.person).map(s => s.person!)].map(m => m._id);
+    const conflictsAtoB = unavailableOn(allAIds, dateB);
+    const conflictsBtoA = unavailableOn(allBIds, dateA);
+    const warnLines = [
+      ...conflictsAtoB.map(n => `${n} no disponible el ${fmtD(dateB)}`),
+      ...conflictsBtoA.map(n => `${n} no disponible el ${fmtD(dateA)}`),
+    ];
     return (
       <Modal title="Intercambiar Equipos" onClose={onClose} wide>
         <p className="font-body text-sm text-gray-400">
@@ -693,9 +785,10 @@ function SwapConfirmModal({ confirm, onConfirm, onClose, loading }: {
             </div>
           ))}
         </div>
+        <AvailabilityWarning lines={warnLines} />
         <div className="flex gap-3">
           <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">Cancelar</button>
-          <button type="button" onClick={onConfirm} disabled={loading} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{loading ? "Intercambiando..." : "Confirmar intercambio"}</button>
+          <button type="button" onClick={onConfirm} disabled={loading} className={`flex-1 py-2 rounded-lg font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${warnLines.length > 0 ? "bg-orange-600/70 hover:bg-orange-600" : "bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30"}`}>{loading ? "Intercambiando..." : "Confirmar intercambio"}</button>
         </div>
       </Modal>
     );
@@ -706,6 +799,16 @@ function SwapConfirmModal({ confirm, onConfirm, onClose, loading }: {
   const tgtName  = target.kind === "slot" ? (target.member ? dn(target.member) : "—") : dn(target.member);
   const srcLabel = `${SECTION_LABEL[source.section]}${source.kind === "slot" ? ` · ${source.slotLabel}` : ""}`;
   const tgtLabel = `${SECTION_LABEL[target.section]}${target.kind === "slot" ? ` · ${target.slotLabel}` : ""}`;
+
+  // source member moves to targetRole's date; target member moves to sourceRole's date
+  const srcMemberId = source.kind === "member" ? source.member?._id : source.member?._id;
+  const tgtMemberId = target.kind === "member" ? target.member?._id : target.member?._id;
+  const srcDateConflicts = unavailableOn([srcMemberId], targetRole.date.slice(0,10));
+  const tgtDateConflicts = unavailableOn([tgtMemberId], sourceRole.date.slice(0,10));
+  const warnLines = [
+    ...srcDateConflicts.map(n => `${n} no disponible el ${fmtD(targetRole.date)}`),
+    ...tgtDateConflicts.map(n => `${n} no disponible el ${fmtD(sourceRole.date)}`),
+  ];
 
   return (
     <Modal title="Intercambiar Miembros" onClose={onClose}>
@@ -722,9 +825,10 @@ function SwapConfirmModal({ confirm, onConfirm, onClose, loading }: {
           <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">{formatDate(targetRole.date)}</p>
         </div>
       </div>
+      <AvailabilityWarning lines={warnLines} />
       <div className="flex gap-3">
         <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">Cancelar</button>
-        <button type="button" onClick={onConfirm} disabled={loading} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{loading ? "Intercambiando..." : "Confirmar"}</button>
+        <button type="button" onClick={onConfirm} disabled={loading} className={`flex-1 py-2 rounded-lg font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${warnLines.length > 0 ? "bg-orange-600/70 hover:bg-orange-600" : "bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30"}`}>{loading ? "Intercambiando..." : "Confirmar"}</button>
       </div>
     </Modal>
   );
@@ -1008,7 +1112,7 @@ export default function ServicesPanel() {
         </Modal>
       )}
       {swapConfirm && (
-        <SwapConfirmModal confirm={swapConfirm} onConfirm={confirmSwap} onClose={() => { setSwapConfirm(null); setSwapSource(null); }} loading={submitting} />
+        <SwapConfirmModal confirm={swapConfirm} onConfirm={confirmSwap} onClose={() => { setSwapConfirm(null); setSwapSource(null); }} loading={submitting} members={members} />
       )}
       {showGenerator && (
         <Modal title="Generar mes" onClose={() => setShowGenerator(false)} wide>
