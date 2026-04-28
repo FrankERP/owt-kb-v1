@@ -68,7 +68,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
         )}
       </div>
 
-      <div className="p-5 md:p-7 space-y-5">
+      <div className="p-4 md:p-5 space-y-4">
         {hasSetlist && (
           <section>
             <h4 className="font-label text-xs md:text-sm lg:text-base uppercase tracking-widest text-[#C8D8EB]/70 dark:text-[#C8D8EB]/50 mb-3">
@@ -104,42 +104,44 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
               Equipo
             </h4>
 
-            {leads && leads.length > 0 && (
+            {/* Vocals — Lead / BGVs / Chorus as a single 3-column row */}
+            {(leads?.length || bgvs?.length || chorus?.length) ? (
               <div>
-                <SectionDivider label={leads.length > 1 ? "Líderes" : "Lead"} accent={t.accentMuted} />
-                <p className="font-body text-sm md:text-base lg:text-lg">{leads.join(", ")}</p>
+                <SectionDivider label="Líderes" accent={t.accentMuted} />
+                <div className="grid grid-cols-3 gap-x-3">
+                  <VocalCol label="Lead" names={leads ?? []} />
+                  <VocalCol label="BGVs" names={(bgvs ?? []).map(m => m.alias || m.member_name)} />
+                  <VocalCol label="Coro" names={(chorus ?? []).map(m => m.alias || m.member_name)} />
+                </div>
               </div>
-            )}
+            ) : null}
+
             {instruments && instruments.filter(s => s.person).length > 0 && (
-              <div className="mt-3">
+              <div>
                 <SectionDivider label="Instrumentos" accent={t.accentMuted} />
                 {instruments.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} />)}
               </div>
             )}
 
             {fohTeam && fohTeam.filter(s => s.person).length > 0 && (
-              <div className="mt-3">
+              <div>
                 <SectionDivider label="Front of House" accent={t.accentMuted} />
                 {fohTeam.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} />)}
-              </div>
-            )}
-
-            {bgvs && bgvs.length > 0 && (
-              <div className="mt-3">
-                <SectionDivider label="BGVs" accent={t.accentMuted} />
-                <p className="font-body text-sm md:text-base lg:text-lg">{bgvs.map(m => m.alias || m.member_name).join(", ")}</p>
-              </div>
-            )}
-
-            {chorus && chorus.length > 0 && (
-              <div className="mt-3">
-                <SectionDivider label="Coro" accent={t.accentMuted} />
-                <p className="font-body text-sm md:text-base lg:text-lg">{chorus.map(m => m.alias || m.member_name).join(", ")}</p>
               </div>
             )}
           </section>
         )}
       </div>
+    </div>
+  );
+}
+
+function VocalCol({ label, names }: { label: string; names: string[] }) {
+  if (!names.length) return <div />;
+  return (
+    <div>
+      <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-0.5">{label}</p>
+      <p className="font-body text-xs md:text-sm leading-snug">{names.join(", ")}</p>
     </div>
   );
 }
