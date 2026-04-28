@@ -849,6 +849,7 @@ function DraftCardEditor({ draft, members, onChange, onToggleSkip, swapSelected,
 }) {
   const [expanded, setExpanded] = useState(false);
   const isSun = draft._type === "sunday_role";
+  const vozMembers = members.filter(m => m.memberType?.includes("voz"));
   const badgeCls = isSun
     ? "bg-orange-500/15 text-orange-400 border border-orange-500/30"
     : "bg-yellow-500/15 text-yellow-400 border border-yellow-400/30";
@@ -907,9 +908,9 @@ function DraftCardEditor({ draft, members, onChange, onToggleSkip, swapSelected,
 
       {expanded && !draft.skipped && (
         <div className="px-4 pb-4 pt-2 space-y-3 border-t border-[#00bfff]/10">
-          <MemberCheckboxes label="Líderes"   members={members} selected={draft.leads}  onChange={leads  => onChange({ ...draft, leads  })} />
-          <MemberCheckboxes label="BGVs"      members={members} selected={draft.bgvs}   onChange={bgvs   => onChange({ ...draft, bgvs   })} />
-          <MemberCheckboxes label="Coro"      members={members} selected={draft.chorus} onChange={chorus => onChange({ ...draft, chorus })} />
+          <MemberCheckboxes label="Líderes"   members={vozMembers} selected={draft.leads}  onChange={leads  => onChange({ ...draft, leads  })} />
+          <MemberCheckboxes label="BGVs"      members={vozMembers} selected={draft.bgvs}   onChange={bgvs   => onChange({ ...draft, bgvs   })} />
+          <MemberCheckboxes label="Coro"      members={vozMembers} selected={draft.chorus} onChange={chorus => onChange({ ...draft, chorus })} />
           <SlotEditor2 label="Instrumentos"   nameKey="instrument" slots={draft.instruments} members={members} onChange={s => onChange({ ...draft, instruments: s })} />
           <SlotEditor2 label="FOH / Técnicos" nameKey="role"       slots={draft.foh}         members={members} onChange={s => onChange({ ...draft, foh: s })} />
         </div>
