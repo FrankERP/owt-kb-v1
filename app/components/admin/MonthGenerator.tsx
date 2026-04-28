@@ -7,7 +7,7 @@ import type { SolveRequest, SolveResponse } from "@/app/api/admin/solve/route";
 
 type ServiceType = "sunday_role" | "saturday_role";
 
-interface MemberOption { _id: string; member_name: string; alias?: string; memberType?: string[]; }
+interface MemberOption { _id: string; member_name: string; alias?: string; memberType?: string[]; unavailableDates?: string[]; }
 
 const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;
 
@@ -108,7 +108,17 @@ const PAT_LABEL: Record<string, string> = {
   "*.Lead": "*.Lead",  "*.BGV": "*.BGV",       "*.LeadBGV": "*.LeadBGV",
 };
 
-const STORAGE_KEY = "owt_solver_config_v3";
+const STORAGE_KEY   = "owt_solver_config_v3";
+const HISTORY_KEY   = "owt_solver_history_v2";
+const MAX_HISTORY   = 6;
+
+interface SolverHistoryEntry {
+  key: string;   // "YYYY-M"
+  year: number;
+  month: number;
+  total_counts: Record<string, number>;
+  role_counts:  Record<string, Record<string, number>>;
+}
 
 // Pre-loaded defaults — mirrors the production rules in CGPT_owt_roles.py.
 // Used on first open (no localStorage). Subsequent opens load from localStorage.
@@ -921,10 +931,12 @@ function DraftCardEditor({ draft, members, onChange, onToggleSkip, swapSelected,
 
 // ─── Solver config panel ──────────────────────────────────────────────────────
 
-function SolverConfigPanel({ members, config, onChange }: {
+function SolverConfigPanel({ members, config, onChange, history, onRemoveHistory }: {
   members: MemberOption[];
   config: SolverConfig;
   onChange: (c: SolverConfig) => void;
+  history: SolverHistoryEntry[];
+  onRemoveHistory: (key: string) => void;
 }) {
   const [searches, setSearches] = useState<Record<string, string>>({});
 
@@ -980,6 +992,29 @@ function SolverConfigPanel({ members, config, onChange }: {
       </div>
 
       <RuleBuilder config={config} onChange={onChange} members={members.filter(m => m.memberType?.includes("voz"))} />
+
+      {/* Solver history indicator */}
+      {history.length > 0 && (
+        <div>
+          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">
+            Historial ({history.length})
+            <span className="ml-1 text-[#00bfff]/50 normal-case">— últimas {Math.min(history.length, 3)} ejecuciones usadas</span>
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {[...history].reverse().map(h => (
+              <span key={h.key} className="flex items-center gap-1 font-label text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full border border-[#00bfff]/20 bg-[#00bfff]/5 text-[#00bfff]/70">
+                {MONTHS[h.month - 1].slice(0, 3)} {h.year}
+                <button
+                  type="button"
+                  onClick={() => onRemoveHistory(h.key)}
+                  className="text-gray-600 hover:text-red-400 transition-colors leading-none ml-0.5"
+                  title="Eliminar del historial"
+                >×</button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1002,6 +1037,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
   const [solverError, setSolverError] = useState<string | null>(null);
   const [solverConfig, setSolverConfig] = useState<SolverConfig>(DEFAULT_SOLVER_CONFIG);
   const [activeSatDates, setActiveSatDates] = useState<string[]>([]);
+  const [solverHistory, setSolverHistory] = useState<SolverHistoryEntry[]>([]);
 
   useEffect(() => {
     if (!saturdays) { setActiveSatDates([]); return; }
@@ -1017,11 +1053,35 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
         setSolverConfig(parsed);
       }
     } catch {}
+    try {
+      const hist = localStorage.getItem(HISTORY_KEY);
+      if (hist) setSolverHistory(JSON.parse(hist) as SolverHistoryEntry[]);
+    } catch {}
   }, []);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(solverConfig)); } catch {}
   }, [solverConfig]);
+
+  function saveHistoryEntry(year: number, month: number, total_counts: Record<string, number>, role_counts: Record<string, Record<string, number>>) {
+    const key = `${year}-${month}`;
+    setSolverHistory(prev => {
+      const next = [
+        ...prev.filter(h => h.key !== key),
+        { key, year, month, total_counts, role_counts },
+      ].slice(-MAX_HISTORY);
+      try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
+
+  function removeHistoryEntry(key: string) {
+    setSolverHistory(prev => {
+      const next = prev.filter(h => h.key !== key);
+      try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
 
   const inCls  = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
   const selCls = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-[#0a1929] font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
@@ -1100,14 +1160,40 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
       }
     }
 
+    // Auto-generate week-exclusion DSL rules from member unavailableDates
+    const availabilityRules: string[] = [];
+    const allPoolIds = new Set([
+      ...solverConfig.sundayLeads,
+      ...solverConfig.saturdayLeads,
+      ...solverConfig.support,
+    ]);
+    for (const memberId of allPoolIds) {
+      const m = members.find(x => x._id === memberId);
+      if (!m?.unavailableDates?.length) continue;
+      const unavailable = new Set(m.unavailableDates);
+      sundayDates.forEach((sunDate, i) => {
+        const weekNum = i + 1;
+        if (unavailable.has(sunDate)) {
+          availabilityRules.push(`${m.member_name} !in week ${weekNum} Sun.*`);
+        }
+        const prevDay = subtractDay(sunDate);
+        if (unavailable.has(prevDay)) {
+          availabilityRules.push(`${m.member_name} !in week ${weekNum} Sat.*`);
+        }
+      });
+    }
+
     const payload: SolveRequest = {
       weeks,
       weekends_with_saturday: weekendsWithSaturday,
       sunday_leads:   sundayLeadNames,
       saturday_leads: saturdayLeadNames,
       support:        [...supportNames, ...extraSupport],
-      dsl_rules:      allRulesToDs(solverConfig, members),
-      history: [],
+      dsl_rules:      [...allRulesToDs(solverConfig, members), ...availabilityRules],
+      history: solverHistory.slice(-3).map(h => ({
+        total_counts: h.total_counts,
+        role_counts:  h.role_counts,
+      })),
     };
 
     if (!payload.sunday_leads.length) {
@@ -1174,6 +1260,9 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
     }
 
     setDrafts(allDrafts.sort((a, b) => a.date.localeCompare(b.date)));
+    if (result.total_counts && result.role_counts) {
+      saveHistoryEntry(year, month, result.total_counts, result.role_counts);
+    }
     setStep("preview");
   }
 
@@ -1274,7 +1363,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
           <span className="font-body text-sm">🤖 Auto-asignar con Solver</span>
         </label>
         {useSolver && (
-          <SolverConfigPanel members={members} config={solverConfig} onChange={setSolverConfig} />
+          <SolverConfigPanel members={members} config={solverConfig} onChange={setSolverConfig} history={solverHistory} onRemoveHistory={removeHistoryEntry} />
         )}
       </div>
 

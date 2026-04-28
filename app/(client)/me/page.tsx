@@ -6,6 +6,7 @@ import { serverClient } from "@/sanity/lib/serverClient";
 import Navbar from "@/app/components/Navbar";
 import { DayCard } from "@/app/components/DayCard";
 import ProfilePanel from "@/app/components/ProfilePanel";
+import AvailabilityCalendar from "@/app/components/AvailabilityCalendar";
 import { Setlist, SetlistSong } from "@/app/utils/interface";
 
 export const revalidate = 60;
@@ -21,6 +22,7 @@ export default async function MePage() {
   const member = await serverClient.fetch(
     `*[_type == "teamMembers" && _id == $id][0] {
       _id, member_name, alias, email, role, memberType,
+      unavailableDates,
       "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl),
       "hasPassword": defined(passwordHash) && passwordHash != ""
     }`,
@@ -119,6 +121,11 @@ export default async function MePage() {
 
         {/* Profile settings */}
         {member && <ProfilePanel initialMember={member} />}
+
+        {/* Availability */}
+        {member && (
+          <AvailabilityCalendar initialDates={member.unavailableDates ?? []} />
+        )}
 
         {/* Upcoming services */}
         <div>
