@@ -5,6 +5,8 @@ import { Provider } from "../utils/Provider";
 import BottomNav from "../components/BottomNav";
 import ActivityPing from "../components/ActivityPing";
 import ImpersonationBanner from "../components/ImpersonationBanner";
+import AudioPlayer from "../components/AudioPlayer";
+import SongSheet from "../components/SongSheet";
 
 const displayFont = Advent_Pro({
   weight: "600",
@@ -49,6 +51,8 @@ export default function RootLayout({
           <ActivityPing />
           <main className="mx-auto max-w-7xl pb-24 lg:pb-0">{children}</main>
           <BottomNav />
+          <AudioPlayer />
+          <SongSheet />
         </Provider>
       </body>
     </html>

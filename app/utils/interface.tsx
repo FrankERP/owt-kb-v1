@@ -1,4 +1,5 @@
 export interface Post {
+  _createdAt?: string;
   title: string;
   author: string;
   slug: { current: string };

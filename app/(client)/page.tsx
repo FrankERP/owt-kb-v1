@@ -29,8 +29,9 @@ function getThisWeekend(): { sat: string; sun: string } {
 
 async function getPosts() {
   const query = `
-    *[_type == "post"] {
+    *[_type == "post"] | order(title asc) {
       _id,
+      _createdAt,
       title,
       author,
       slug,
