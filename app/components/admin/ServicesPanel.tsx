@@ -521,7 +521,7 @@ export default function ServicesPanel() {
   const [members, setMembers]   = useState<MemberOption[]>([]);
   const [loading, setLoading]   = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [showPast, setShowPast] = useState(false);
+  const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
   const [toast, setToast]       = useState<string | null>(null);
 
   // Edit / delete modal
@@ -627,10 +627,25 @@ export default function ServicesPanel() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const today    = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
+  const today = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
+
+  // All unique YYYY-MM keys that have at least one service, sorted ascending
+  const allMonths = Array.from(new Set(roles.map(r => r.date.slice(0, 7)))).sort();
+
+  const toggleMonth = (ym: string) =>
+    setSelectedMonths(prev => {
+      const next = new Set(prev);
+      next.has(ym) ? next.delete(ym) : next.add(ym);
+      return next;
+    });
+
+  // No filter selected → show upcoming only (default).  Months selected → show exactly those.
+  const visible = selectedMonths.size === 0
+    ? roles.filter(r => r.date >= today)
+    : roles.filter(r => selectedMonths.has(r.date.slice(0, 7)));
+
   const upcoming = roles.filter(r => r.date >= today);
   const past     = roles.filter(r => r.date < today);
-  const visible  = showPast ? roles : upcoming;
 
   return (
     <div className="space-y-5">
@@ -667,6 +682,47 @@ export default function ServicesPanel() {
         </div>
       </div>
 
+      {/* Month filter */}
+      {!loading && allMonths.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-label text-[10px] uppercase tracking-widest text-gray-600 shrink-0">Mes:</span>
+          <button
+            type="button"
+            onClick={() => setSelectedMonths(new Set())}
+            className={`font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
+              selectedMonths.size === 0
+                ? "border-[#00bfff]/60 bg-[#00bfff]/15 text-[#00bfff]"
+                : "border-[#00bfff]/20 text-gray-500 hover:border-[#00bfff]/40 hover:text-gray-300"
+            }`}
+          >
+            Próximos
+          </button>
+          {allMonths.map(ym => {
+            const isPastMonth = ym < today.slice(0, 7);
+            const isSelected  = selectedMonths.has(ym);
+            const label = new Date(ym + "-01T12:00:00").toLocaleDateString("es-MX", {
+              month: "short", year: "2-digit",
+            });
+            return (
+              <button
+                key={ym}
+                type="button"
+                onClick={() => toggleMonth(ym)}
+                className={`font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
+                  isSelected
+                    ? "border-[#00bfff]/60 bg-[#00bfff]/15 text-[#00bfff]"
+                    : isPastMonth
+                    ? "border-[#00bfff]/10 text-gray-600 hover:border-[#00bfff]/30 hover:text-gray-400"
+                    : "border-[#00bfff]/20 text-gray-400 hover:border-[#00bfff]/40 hover:text-gray-200"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Swap mode banner */}
       {swapMode && (
         <div className="rounded-lg border border-[#00bfff]/30 bg-[#00bfff]/5 px-4 py-2.5 flex items-center justify-between">
@@ -692,7 +748,7 @@ export default function ServicesPanel() {
       {/* List */}
       {!loading && (
         <div className="space-y-2">
-          {upcoming.length === 0 && !showPast && (
+          {upcoming.length === 0 && selectedMonths.size === 0 && (
             <p className="font-body text-sm text-gray-500 text-center py-12">No hay servicios próximos.</p>
           )}
           {visible.map(role => (
@@ -710,12 +766,6 @@ export default function ServicesPanel() {
         </div>
       )}
 
-      {/* Show past toggle */}
-      {!loading && past.length > 0 && (
-        <button onClick={() => setShowPast(v => !v)} className="w-full py-2 rounded-lg border border-[#003572]/20 dark:border-[#00bfff]/10 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff]/30 transition-colors">
-          {showPast ? "Ocultar pasados" : `Ver ${past.length} pasado${past.length !== 1 ? "s" : ""}`}
-        </button>
-      )}
 
       {/* Toast */}
       {toast && (
