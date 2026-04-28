@@ -47,11 +47,11 @@ export async function GET() {
     | order(coalesce(week, date) asc) {
       _id, _type, service_name,
       "date": coalesce(week, date),
-      "leads": Lead[]->{_id, member_name},
-      "bgvs": BGVs[]->{_id, member_name},
-      "chorus": Chorus[]->{_id, member_name},
-      "instruments": instruments[]{instrument, "person": person->{_id, member_name}},
-      "foh": foh_team[]{role, "person": person->{_id, member_name}},
+      "leads": Lead[]->{_id, member_name, alias},
+      "bgvs": BGVs[]->{_id, member_name, alias},
+      "chorus": Chorus[]->{_id, member_name, alias},
+      "instruments": instruments[]{instrument, "person": person->{_id, member_name, alias}},
+      "foh": foh_team[]{role, "person": person->{_id, member_name, alias}},
       "songCount": count(songs)
     }
   `);
