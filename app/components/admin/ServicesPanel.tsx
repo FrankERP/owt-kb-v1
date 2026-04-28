@@ -357,15 +357,23 @@ function ServiceCard({ role, onEdit, onDelete, swapMode, swapSource, onCardSwapS
             {role.service_name && <span className="font-body text-sm font-semibold truncate">{role.service_name}</span>}
           </div>
           {!swapMode && (
-            <div className="flex items-center gap-3 flex-wrap">
-              {leads.length > 0 && <p className="font-body text-xs text-gray-500"><span className="text-gray-400">Líder:</span> {leads.map(m => dn(m)).join(", ")}</p>}
+            <div className="space-y-0.5">
+              {leads.length > 0 && (
+                <p className="font-body text-xs text-gray-500">
+                  <span className="text-gray-400">Líder:</span> {leads.map(m => dn(m)).join(", ")}
+                </p>
+              )}
+              {bgvs.length > 0 && (
+                <p className="font-body text-xs text-gray-500">
+                  <span className="text-gray-400">BGV:</span> {bgvs.map(m => dn(m)).join(", ")}
+                </p>
+              )}
               {uniqueCount > 0 && <p className="font-label text-[10px] uppercase tracking-widest text-gray-600">{uniqueCount} persona{uniqueCount > 1 ? "s" : ""}</p>}
             </div>
           )}
           {!swapMode && (
             <div className="flex gap-2 flex-wrap">
               {instrs.length > 0 && <Pill>{instrs.length} instr.</Pill>}
-              {bgvs.length   > 0 && <Pill>{bgvs.length} BGV</Pill>}
               {chorus.length > 0 && <Pill>{chorus.length} coro</Pill>}
               {foh.length    > 0 && <Pill>{foh.length} FOH</Pill>}
               {(role.songCount ?? 0) > 0 && <Pill>{role.songCount} canciones</Pill>}
