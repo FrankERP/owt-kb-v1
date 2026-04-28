@@ -272,7 +272,7 @@ function Modal({ title, onClose, wide, children }: { title: string; onClose: () 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative z-10 w-full ${wide ? "max-w-2xl" : "max-w-lg"} bg-[#C8D8EB] dark:bg-[#0a1929] border border-[#003572]/20 dark:border-[#00bfff]/20 rounded-xl shadow-2xl p-6 space-y-5`}>
+      <div className={`relative z-10 w-full ${wide ? "max-w-2xl" : "max-w-lg"} bg-[#C8D8EB] dark:bg-[#0a1929] border border-[#003572]/20 dark:border-[#00bfff]/20 rounded-xl shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto`}>
         <div className="flex items-center justify-between">
           <h2 className="font-display text-lg uppercase tracking-wide">{title}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-[#00bfff] transition-colors text-xl leading-none">×</button>

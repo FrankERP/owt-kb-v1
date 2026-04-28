@@ -19,14 +19,19 @@ export async function PATCH(
 
   const body = await req.json() as {
     member_name?: string;
+    alias?: string;
     email?: string;
     role?: string;
+    memberType?: string[];
   };
 
-  const patch: Record<string, string> = {};
+  const patch: Record<string, unknown> = {};
   if (body.member_name?.trim()) patch.member_name = body.member_name.trim();
+  // Allow clearing alias by passing empty string
+  if (body.alias !== undefined) patch.alias = body.alias.trim();
   if (body.email?.trim()) patch.email = body.email.trim().toLowerCase();
   if (body.role) patch.role = body.role;
+  if (Array.isArray(body.memberType)) patch.memberType = body.memberType;
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });

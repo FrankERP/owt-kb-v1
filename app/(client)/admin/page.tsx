@@ -6,15 +6,19 @@ import AdminPanel from "@/app/components/admin/AdminPanel";
 
 export const metadata = { title: "Admin — Oasis Worship Team" };
 
+type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
+const ALLOWED: OWTRole[] = ["super-admin", "admin", "content-editor"];
+
 export default async function AdminPage() {
   const session = await getServerSession(authOptions);
-  if (session?.user.role !== "super-admin") redirect("/");
+  const role = session?.user.role as OWTRole | undefined;
+  if (!role || !ALLOWED.includes(role)) redirect("/");
 
   return (
     <>
       <Navbar title="Panel de Admin" />
       <div className="px-6 py-8 max-w-3xl mx-auto">
-        <AdminPanel />
+        <AdminPanel role={role} />
       </div>
     </>
   );

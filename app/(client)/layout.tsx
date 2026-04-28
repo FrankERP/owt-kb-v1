@@ -3,6 +3,7 @@ import { Advent_Pro, Urbanist, Jura } from "next/font/google";
 import "./globals.css";
 import { Provider } from "../utils/Provider";
 import BottomNav from "../components/BottomNav";
+import ActivityPing from "../components/ActivityPing";
 
 const displayFont = Advent_Pro({
   weight: "600",
@@ -43,6 +44,7 @@ export default function RootLayout({
         `}
       >
         <Provider>
+          <ActivityPing />
           <main className="mx-auto max-w-7xl pb-24 lg:pb-0">{children}</main>
           <BottomNav />
         </Provider>

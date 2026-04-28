@@ -77,12 +77,22 @@ function callLocalSolver(config: SolveRequest): Promise<SolveResponse> {
       stdio: ["pipe", "pipe", "pipe"],
     });
 
+    // Hard kill after 120 s so the serverless function doesn't hang
+    const killTimer = setTimeout(() => {
+      child.kill("SIGKILL");
+      resolve({ ok: false, error: "Local solver timed out after 120 s" });
+    }, 120_000);
+
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (c: Buffer) => { stdout += c.toString(); });
     child.stderr.on("data", (c: Buffer) => { stderr += c.toString(); });
-    child.on("error", (err) => resolve({ ok: false, error: `Failed to start solver: ${err.message}` }));
+    child.on("error", (err) => {
+      clearTimeout(killTimer);
+      resolve({ ok: false, error: `Failed to start solver: ${err.message}` });
+    });
     child.on("close", (code) => {
+      clearTimeout(killTimer);
       if (!stdout.trim()) {
         resolve({ ok: false, error: `Solver produced no output. ${stderr.trim() || `Exit code ${code}`}` });
         return;

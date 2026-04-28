@@ -30,7 +30,7 @@ const Navbar = async ({ title = "", author = "", tags = false, schedule = false 
         </Link>
 
         <div className="absolute inset-x-0 px-16 flex flex-col items-center justify-center pointer-events-none overflow-hidden">
-          <p className="font-display text-xs sm:text-sm md:text-lg lg:text-3xl uppercase tracking-wide truncate w-full text-center">
+          <p className="font-display text-lg sm:text-xl md:text-2xl lg:text-3xl uppercase tracking-wide truncate w-full text-center">
             {title}
           </p>
           {author && (
@@ -61,7 +61,7 @@ const Navbar = async ({ title = "", author = "", tags = false, schedule = false 
           {/* User session area */}
           {session?.user ? (
             <div className="flex items-center gap-3">
-              {session.user.role === "super-admin" && (
+              {(session.user.role === "super-admin" || session.user.role === "admin" || session.user.role === "content-editor") && (
                 <Link
                   href="/admin"
                   className="font-label text-xs lg:text-sm uppercase tracking-widest text-gray-500 dark:text-gray-400 hover:text-[#00bfff] dark:hover:text-[#00bfff] transition-colors"
