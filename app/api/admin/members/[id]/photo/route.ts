@@ -28,12 +28,13 @@ async function requireSuperAdmin() {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   if (!await requireSuperAdmin()) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const { id } = await params;
   const formData = await req.formData();
   const file = formData.get("photo") as File | null;
   if (!file) {
@@ -68,7 +69,7 @@ export async function POST(
   });
 
   await writeClient
-    .patch(params.id)
+    .patch(id)
     .set({
       profilePhoto: {
         _type: "image",

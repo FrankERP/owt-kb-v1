@@ -24,12 +24,13 @@ async function requireAdminRole() {
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   if (!await requireContentRole()) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const { id } = await params;
   const body = await req.json() as {
     title?: string;
     author?: string;
@@ -59,18 +60,19 @@ export async function PATCH(
     }));
   }
 
-  const doc = await writeClient.patch(params.id).set(patch).commit();
+  const doc = await writeClient.patch(id).set(patch).commit();
   return NextResponse.json(doc);
 }
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   if (!await requireAdminRole()) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  await writeClient.delete(params.id);
+  const { id } = await params;
+  await writeClient.delete(id);
   return NextResponse.json({ ok: true });
 }
