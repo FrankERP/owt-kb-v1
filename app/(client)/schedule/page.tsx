@@ -5,21 +5,7 @@ import { SundayRole, SaturdayRole, Setlist, SpecialRole, SetlistSong } from "@/a
 
 export const revalidate = 60;
 
-// ─── Queries ─────────────────────────────────────────────────────────────────
-
-const SETLIST_FRAGMENT = `
-  songs[] {
-    play_key,
-    "title": song->title,
-    "slug": song->slug,
-    "_id": song->_id,
-    "author": song->author,
-    "timeSig": song->timeSig,
-    "bpm": song->bpm,
-    "key": song->key,
-  },
-  week,
-`;
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const TZ = "America/Mexico_City";
 
@@ -27,70 +13,57 @@ function localToday(): string {
   return new Date().toLocaleDateString("sv", { timeZone: TZ });
 }
 
-async function getUpcomingRoles() {
+// ─── Query ────────────────────────────────────────────────────────────────────
+
+const SETLIST_FRAGMENT = `songs[]{
+  play_key,
+  "title": song->title, "slug": song->slug, "_id": song->_id,
+  "author": song->author, "timeSig": song->timeSig, "bpm": song->bpm, "key": song->key
+}, week`;
+
+const ROLE_FIELDS = `_id, week,
+  Lead[]->{ member_name, alias },
+  instruments[]{ instrument, "person": coalesce(person->alias, person->member_name) },
+  foh_team[]{ role, "person": coalesce(person->alias, person->member_name) },
+  BGVs[]->{ member_name, alias },
+  Chorus[]->{ member_name, alias }`;
+
+const SCHEDULE_QUERY = `{
+  "sundays":     *[_type == "sunday_role"   && week >= $today && week <= $limit] | order(week asc)  { ${ROLE_FIELDS} },
+  "saturdays":   *[_type == "saturday_role" && week >= $today && week <= $limit] | order(week asc)  { ${ROLE_FIELDS} },
+  "sunSetlists": *[_type == "featuredSongs" && week >= $today && week <= $limit] | order(week asc)  { ${SETLIST_FRAGMENT} },
+  "satSetlists": *[_type == "saturdarSongs" && week >= $today && week <= $limit] | order(week asc)  { ${SETLIST_FRAGMENT} },
+  "specials":    *[_type == "special_role"  && date >= $weekStart && date <= $limit] | order(date asc) {
+    _id, date, service_name,
+    songs[]{ play_key, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "key": song->key },
+    ${ROLE_FIELDS}
+  }
+}`;
+
+async function getScheduleData() {
   const today = localToday();
-  // ~3 months ahead to cover current month + 2 full months
   const [y, m, d] = today.split("-").map(Number);
   const limit = new Date(Date.UTC(y, m - 1, d + 95)).toISOString().slice(0, 10);
-  // Monday of this week so specials earlier in the week are included
-  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=Sun
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
   const daysToMon = dow === 0 ? -6 : 1 - dow;
-  const weekStart = new Date(Date.UTC(y, m - 1, d + daysToMon));
-  const weekStartStr = weekStart.toISOString().slice(0, 10);
+  const weekStart = new Date(Date.UTC(y, m - 1, d + daysToMon)).toISOString().slice(0, 10);
 
-  const [sundays, saturdays, sunSetlists, satSetlists] = await Promise.all([
-    client.fetch<SundayRole[]>(`
-      *[_type == "sunday_role" && week >= "${today}" && week <= "${limit}"] | order(week asc) {
-        _id, week,
-        Lead[]-> { member_name, alias },
-        instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
-        foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
-        BGVs[]-> { member_name, alias },
-        Chorus[]-> { member_name, alias },
-      }
-    `),
-    client.fetch<SaturdayRole[]>(`
-      *[_type == "saturday_role" && week >= "${today}" && week <= "${limit}"] | order(week asc) {
-        _id, week,
-        Lead[]-> { member_name, alias },
-        instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
-        foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
-        BGVs[]-> { member_name, alias },
-        Chorus[]-> { member_name, alias },
-      }
-    `),
-    client.fetch<Setlist[]>(`
-      *[_type == "featuredSongs" && week >= "${today}" && week <= "${limit}"] | order(week asc) { ${SETLIST_FRAGMENT} }
-    `),
-    client.fetch<Setlist[]>(`
-      *[_type == "saturdarSongs" && week >= "${today}" && week <= "${limit}"] | order(week asc) { ${SETLIST_FRAGMENT} }
-    `),
-  ]);
-
-  const specials = await client.fetch<SpecialRole[]>(`
-    *[_type == "special_role" && date >= "${weekStartStr}" && date <= "${limit}"] | order(date asc) {
-      _id, date, service_name,
-      songs[] { play_key, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "key": song->key },
-      Lead[]-> { member_name, alias },
-      instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
-      foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
-      BGVs[]-> { member_name, alias },
-      Chorus[]-> { member_name, alias },
-    }
-  `);
-
-  return { sundays, saturdays, sunSetlists, satSetlists, specials };
+  return client.fetch<{
+    sundays: SundayRole[];
+    saturdays: SaturdayRole[];
+    sunSetlists: Setlist[];
+    satSetlists: Setlist[];
+    specials: SpecialRole[];
+  }>(SCHEDULE_QUERY, { today, limit, weekStart });
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function SchedulePage() {
-  const { sundays, saturdays, sunSetlists, satSetlists, specials } = await getUpcomingRoles();
+  const { sundays, saturdays, sunSetlists, satSetlists, specials } = await getScheduleData();
 
-  const sunSetlistMap = new Map<string, Setlist>();
-  sunSetlists.forEach((s) => sunSetlistMap.set(s.week.slice(0, 10), s));
-  const satSetlistMap = new Map<string, Setlist>();
-  satSetlists.forEach((s) => satSetlistMap.set(s.week.slice(0, 10), s));
+  const sunSetlistMap = new Map(sunSetlists.map((s) => [s.week.slice(0, 10), s]));
+  const satSetlistMap = new Map(satSetlists.map((s) => [s.week.slice(0, 10), s]));
 
   const activeDays: Record<string, ActiveDay[]> = {};
 

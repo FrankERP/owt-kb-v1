@@ -27,7 +27,6 @@ export interface SongSheetData {
 interface PlayerState {
   track: AudioTrack | null;
   isPlaying: boolean;
-  progress: number;
 }
 
 interface PlayerContextValue {
@@ -36,6 +35,7 @@ interface PlayerContextValue {
   togglePlay: () => void;
   closePlayer: () => void;
   seek: (fraction: number) => void;
+  getAudio: () => HTMLAudioElement | null;
   sheet: SongSheetData | null;
   sheetLoading: boolean;
   openSheet: (songId: string) => void;
@@ -52,32 +52,29 @@ export function usePlayer() {
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [player, setPlayer] = useState<PlayerState>({ track: null, isPlaying: false, progress: 0 });
+  const [player, setPlayer] = useState<PlayerState>({ track: null, isPlaying: false });
   const [sheet, setSheet] = useState<SongSheetData | null>(null);
   const [sheetLoading, setSheetLoading] = useState(false);
 
   useEffect(() => {
     const el = new Audio();
     audioRef.current = el;
-    const onTime = () => {
-      if (el.duration) setPlayer(p => ({ ...p, progress: el.currentTime / el.duration }));
-    };
-    const onEnd = () => setPlayer(p => ({ ...p, isPlaying: false, progress: 0 }));
-    el.addEventListener("timeupdate", onTime);
+    const onEnd = () => setPlayer(p => ({ ...p, isPlaying: false }));
     el.addEventListener("ended", onEnd);
     return () => {
-      el.removeEventListener("timeupdate", onTime);
       el.removeEventListener("ended", onEnd);
       el.pause();
     };
   }, []);
+
+  const getAudio = useCallback(() => audioRef.current, []);
 
   const playTrack = useCallback((track: AudioTrack) => {
     const el = audioRef.current;
     if (!el) return;
     el.src = track.url;
     el.play().catch(() => {});
-    setPlayer({ track, isPlaying: true, progress: 0 });
+    setPlayer({ track, isPlaying: true });
   }, []);
 
   const togglePlay = useCallback(() => {
@@ -95,14 +92,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const closePlayer = useCallback(() => {
     const el = audioRef.current;
     if (el) { el.pause(); el.src = ""; }
-    setPlayer({ track: null, isPlaying: false, progress: 0 });
+    setPlayer({ track: null, isPlaying: false });
   }, []);
 
   const seek = useCallback((fraction: number) => {
     const el = audioRef.current;
     if (!el || !el.duration) return;
     el.currentTime = fraction * el.duration;
-    setPlayer(p => ({ ...p, progress: fraction }));
   }, []);
 
   const openSheet = useCallback(async (songId: string) => {
@@ -122,7 +118,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <PlayerContext.Provider value={{ player, playTrack, togglePlay, closePlayer, seek, sheet, sheetLoading, openSheet, closeSheet }}>
+    <PlayerContext.Provider value={{ player, playTrack, togglePlay, closePlayer, seek, getAudio, sheet, sheetLoading, openSheet, closeSheet }}>
       {children}
     </PlayerContext.Provider>
   );
