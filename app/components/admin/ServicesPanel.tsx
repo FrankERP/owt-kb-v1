@@ -802,7 +802,7 @@ export default function ServicesPanel() {
 // ─── Tiny helpers ─────────────────────────────────────────────────────────────
 
 function Pill({ children }: { children: React.ReactNode }) {
-  return <span className="font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-500">{children}</span>;
+  return <span className="font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-500 whitespace-nowrap">{children}</span>;
 }
 
 function fmtYM(ym: string) {
