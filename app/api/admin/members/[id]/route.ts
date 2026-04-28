@@ -11,12 +11,13 @@ async function requireSuperAdmin() {
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   if (!await requireSuperAdmin()) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const { id } = await params;
   const body = await req.json() as {
     member_name?: string;
     alias?: string;
@@ -27,7 +28,6 @@ export async function PATCH(
 
   const patch: Record<string, unknown> = {};
   if (body.member_name?.trim()) patch.member_name = body.member_name.trim();
-  // Allow clearing alias by passing empty string
   if (body.alias !== undefined) patch.alias = body.alias.trim();
   if (body.email?.trim()) patch.email = body.email.trim().toLowerCase();
   if (body.role) patch.role = body.role;
@@ -37,18 +37,19 @@ export async function PATCH(
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
-  const doc = await writeClient.patch(params.id).set(patch).commit();
+  const doc = await writeClient.patch(id).set(patch).commit();
   return NextResponse.json(doc);
 }
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   if (!await requireSuperAdmin()) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  await writeClient.delete(params.id);
+  const { id } = await params;
+  await writeClient.delete(id);
   return NextResponse.json({ ok: true });
 }

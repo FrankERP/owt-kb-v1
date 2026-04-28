@@ -37,12 +37,13 @@ function toFohSlots(slots: { role: string; personId: string }[]) {
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   if (!await requireSuperAdmin()) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const { id } = await params;
   const body = await req.json() as {
     _type: "sunday_role" | "saturday_role" | "special_role";
     date: string;
@@ -57,7 +58,7 @@ export async function PATCH(
   const dateField = body._type === "special_role" ? "date" : "week";
 
   const doc = await writeClient
-    .patch(params.id)
+    .patch(id)
     .set({
       [dateField]: body.date,
       ...(body._type === "special_role" ? { service_name: body.service_name ?? "" } : {}),
@@ -74,12 +75,13 @@ export async function PATCH(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   if (!await requireSuperAdmin()) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  await writeClient.delete(params.id);
+  const { id } = await params;
+  await writeClient.delete(id);
   return NextResponse.json({ ok: true });
 }

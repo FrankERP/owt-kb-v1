@@ -28,17 +28,16 @@ async function getPostsByTag(tag: string) {
 export const revalidate = 60;
 
 interface Params {
-  params: {
-    slug: string;
-  };
+  params: Promise<{ slug: string }>;
 }
 
 const page = async ({ params }: Params) => {
-  const posts: Array<Post> = await getPostsByTag(params.slug);
+  const { slug } = await params;
+  const posts: Array<Post> = await getPostsByTag(slug);
 
   return (
     <div>
-      <Navbar title={`#${params.slug}`} tags schedule />
+      <Navbar title={`#${slug}`} tags schedule />
       <div className="pt-10">
         <SongSearchList posts={posts} />
       </div>
