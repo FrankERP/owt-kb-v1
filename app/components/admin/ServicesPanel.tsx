@@ -522,6 +522,7 @@ export default function ServicesPanel() {
   const [loading, setLoading]   = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
+  const [showPastMonths, setShowPastMonths] = useState(false);
   const [toast, setToast]       = useState<string | null>(null);
 
   // Edit / delete modal
@@ -629,8 +630,11 @@ export default function ServicesPanel() {
 
   const today = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
 
-  // All unique YYYY-MM keys that have at least one service, sorted ascending
-  const allMonths = Array.from(new Set(roles.map(r => r.date.slice(0, 7)))).sort();
+  // Split months into current/future and past
+  const currentYM   = today.slice(0, 7);
+  const allMonths   = Array.from(new Set(roles.map(r => r.date.slice(0, 7)))).sort();
+  const futureMonths = allMonths.filter(ym => ym >= currentYM);
+  const pastMonths   = allMonths.filter(ym => ym < currentYM).reverse(); // most-recent first
 
   const toggleMonth = (ym: string) =>
     setSelectedMonths(prev => {
@@ -684,42 +688,31 @@ export default function ServicesPanel() {
 
       {/* Month filter */}
       {!loading && allMonths.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-label text-[10px] uppercase tracking-widest text-gray-600 shrink-0">Mes:</span>
-          <button
-            type="button"
-            onClick={() => setSelectedMonths(new Set())}
-            className={`font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
-              selectedMonths.size === 0
-                ? "border-[#00bfff]/60 bg-[#00bfff]/15 text-[#00bfff]"
-                : "border-[#00bfff]/20 text-gray-500 hover:border-[#00bfff]/40 hover:text-gray-300"
-            }`}
-          >
-            Próximos
-          </button>
-          {allMonths.map(ym => {
-            const isPastMonth = ym < today.slice(0, 7);
-            const isSelected  = selectedMonths.has(ym);
-            const label = new Date(ym + "-01T12:00:00").toLocaleDateString("es-MX", {
-              month: "short", year: "2-digit",
-            });
-            return (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-label text-[10px] uppercase tracking-widest text-gray-600 shrink-0">Mes:</span>
+            <MonthPill label="Próximos" selected={selectedMonths.size === 0} onClick={() => setSelectedMonths(new Set())} />
+            {futureMonths.map(ym => (
+              <MonthPill key={ym} label={fmtYM(ym)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} />
+            ))}
+            {pastMonths.length > 0 && (
               <button
-                key={ym}
                 type="button"
-                onClick={() => toggleMonth(ym)}
-                className={`font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
-                  isSelected
-                    ? "border-[#00bfff]/60 bg-[#00bfff]/15 text-[#00bfff]"
-                    : isPastMonth
-                    ? "border-[#00bfff]/10 text-gray-600 hover:border-[#00bfff]/30 hover:text-gray-400"
-                    : "border-[#00bfff]/20 text-gray-400 hover:border-[#00bfff]/40 hover:text-gray-200"
-                }`}
+                onClick={() => setShowPastMonths(v => !v)}
+                className="font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full border border-[#00bfff]/10 text-gray-600 hover:border-[#00bfff]/25 hover:text-gray-400 transition-colors flex items-center gap-1"
               >
-                {label}
+                Roles previos
+                <span className={`transition-transform ${showPastMonths ? "rotate-180" : ""}`}>▾</span>
               </button>
-            );
-          })}
+            )}
+          </div>
+          {showPastMonths && pastMonths.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap pl-12">
+              {pastMonths.map(ym => (
+                <MonthPill key={ym} label={fmtYM(ym)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} past />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -745,9 +738,9 @@ export default function ServicesPanel() {
       {/* Loading */}
       {loading && <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-20 rounded-xl bg-[#003572]/10 dark:bg-[#00bfff]/5 animate-pulse" />)}</div>}
 
-      {/* List */}
+      {/* Grid */}
       {!loading && (
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 items-start">
           {upcoming.length === 0 && selectedMonths.size === 0 && (
             <p className="font-body text-sm text-gray-500 text-center py-12">No hay servicios próximos.</p>
           )}
@@ -810,6 +803,28 @@ export default function ServicesPanel() {
 
 function Pill({ children }: { children: React.ReactNode }) {
   return <span className="font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-500">{children}</span>;
+}
+
+function fmtYM(ym: string) {
+  return new Date(ym + "-01T12:00:00").toLocaleDateString("es-MX", { month: "short", year: "2-digit" });
+}
+
+function MonthPill({ label, selected, onClick, past }: { label: string; selected: boolean; onClick: () => void; past?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
+        selected
+          ? "border-[#00bfff]/60 bg-[#00bfff]/15 text-[#00bfff]"
+          : past
+          ? "border-[#00bfff]/10 text-gray-600 hover:border-[#00bfff]/30 hover:text-gray-400"
+          : "border-[#00bfff]/20 text-gray-400 hover:border-[#00bfff]/40 hover:text-gray-200"
+      }`}
+    >
+      {label}
+    </button>
+  );
 }
 
 function ActionBtn({ onClick, title, danger, children }: { onClick: () => void; title: string; danger?: boolean; children: React.ReactNode }) {
