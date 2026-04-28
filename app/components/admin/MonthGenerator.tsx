@@ -1000,6 +1000,12 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
   const [solving, setSolving]     = useState(false);
   const [solverError, setSolverError] = useState<string | null>(null);
   const [solverConfig, setSolverConfig] = useState<SolverConfig>(DEFAULT_SOLVER_CONFIG);
+  const [activeSatDates, setActiveSatDates] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!saturdays) { setActiveSatDates([]); return; }
+    setActiveSatDates(getDates(year, month, 6));
+  }, [year, month, saturdays]);
 
   useEffect(() => {
     try {
@@ -1031,7 +1037,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
       }));
     }
     if (saturdays) {
-      getDates(year, month, 6).forEach(date => all.push({
+      getDates(year, month, 6).filter(d => activeSatDates.includes(d)).forEach(date => all.push({
         localId: uid(), _type: "saturday_role", date,
         exists: existing.has(`saturday_role__${date}`),
         skipped: existing.has(`saturday_role__${date}`),
@@ -1055,13 +1061,14 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
     const weeks         = sundayDates.length;
 
     const weekendsWithSaturday: number[] = [];
-    if (saturdays) {
+    if (saturdays && activeSatDates.length > 0) {
       sundayDates.forEach((sunDate, i) => {
         const prevDay = subtractDay(sunDate);
-        if (saturdayDates.includes(prevDay)) weekendsWithSaturday.push(i + 1);
+        if (activeSatDates.includes(prevDay)) weekendsWithSaturday.push(i + 1);
       });
-      if (weekendsWithSaturday.length === 0 && saturdayDates.length > 0) {
-        saturdayDates.forEach((_, i) => weekendsWithSaturday.push(i + 1));
+      // Fallback: if no Saturday is adjacent to a Sunday, assign by position
+      if (weekendsWithSaturday.length === 0) {
+        activeSatDates.forEach((_, i) => weekendsWithSaturday.push(i + 1));
       }
     }
 
@@ -1226,12 +1233,38 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
 
       <div className="space-y-2">
         <label className="font-label text-xs uppercase tracking-widest text-gray-500">Generar</label>
-        {([["Domingos", sundays, setSundays], ["Sábados", saturdays, setSaturdays]] as const).map(([label, val, set]) => (
-          <label key={label} className="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" checked={val} onChange={e => (set as any)(e.target.checked)} className="accent-[#00bfff] w-4 h-4" />
-            <span className="font-body text-sm">{label}</span>
-          </label>
-        ))}
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" checked={sundays} onChange={e => setSundays(e.target.checked)} className="accent-[#00bfff] w-4 h-4" />
+          <span className="font-body text-sm">Domingos</span>
+        </label>
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" checked={saturdays} onChange={e => setSaturdays(e.target.checked)} className="accent-[#00bfff] w-4 h-4" />
+          <span className="font-body text-sm">Sábados</span>
+        </label>
+        {saturdays && (
+          <div className="ml-7 flex flex-wrap gap-1.5">
+            {getDates(year, month, 6).map(date => {
+              const active = activeSatDates.includes(date);
+              return (
+                <label key={date} className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[9px] cursor-pointer transition-colors font-label uppercase tracking-widest ${
+                  active
+                    ? "border-yellow-400/50 bg-yellow-400/10 text-yellow-400"
+                    : "border-[#00bfff]/15 text-gray-500 hover:border-yellow-400/30 hover:text-yellow-400/60"
+                }`}>
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={() => setActiveSatDates(prev =>
+                      active ? prev.filter(d => d !== date) : [...prev, date]
+                    )}
+                    className="accent-yellow-400 w-3 h-3"
+                  />
+                  {fmtDate(date)}
+                </label>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="space-y-3">
