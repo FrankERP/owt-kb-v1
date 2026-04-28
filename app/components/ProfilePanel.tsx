@@ -73,7 +73,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
 
   // Identity form
   const [alias, setAlias]     = useState(initialMember.alias ?? "");
-  const [email, setEmail]     = useState(initialMember.email);
+  const [email, setEmail]     = useState(initialMember.email ?? "");
   const [savingProfile, setSavingProfile] = useState(false);
 
   // Photo
@@ -91,7 +91,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
   useEffect(() => {
     setMember(initialMember);
     setAlias(initialMember.alias ?? "");
-    setEmail(initialMember.email);
+    setEmail(initialMember.email ?? "");
   }, [initialMember]);
 
   // Lock body scroll while drawer is open

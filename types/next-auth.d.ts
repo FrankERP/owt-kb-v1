@@ -12,6 +12,8 @@ declare module "next-auth" {
       image?: string | null;
       role: OWTRole;
       sanityId: string;
+      isImpersonating?: boolean;
+      realAdminName?: string;
     };
   }
   interface User {
@@ -24,5 +26,12 @@ declare module "next-auth/jwt" {
   interface JWT {
     role?: OWTRole;
     sanityId?: string;
+    isImpersonating?: boolean;
+    realAdminName?: string;
+    __realAdmin?: {
+      role: OWTRole;
+      sanityId: string;
+      name: string | null | undefined;
+    };
   }
 }

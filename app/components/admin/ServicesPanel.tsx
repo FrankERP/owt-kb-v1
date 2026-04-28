@@ -14,6 +14,11 @@ const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;
 interface InstrumentSlot { id: string; instrument: string; personId: string; }
 interface FohSlot         { id: string; role: string; personId: string; }
 
+interface SetlistSong {
+  play_key: string;
+  song: { _id: string; title: string; author: string; key: string; slug: string };
+}
+
 interface ServiceRole {
   _id: string;
   _type: ServiceType;
@@ -24,7 +29,7 @@ interface ServiceRole {
   chorus:      MemberOption[];
   instruments: { instrument: string; person: MemberOption | null }[];
   foh:         { role: string;       person: MemberOption | null }[];
-  songCount?: number;
+  songs?: SetlistSong[];
 }
 
 // ─── Setlist types ────────────────────────────────────────────────────────────
@@ -54,11 +59,6 @@ const SERVICE_BADGE: Record<ServiceType, string> = {
   special_role:  "bg-[#00bfff]/15 text-[#00bfff] border border-[#00bfff]/30",
 };
 
-const CARD_THEME: Record<ServiceType, { base: string; hover: string; selected: string }> = {
-  sunday_role:   { base: "border-orange-500/25 bg-orange-500/5",  hover: "hover:border-orange-500/45",  selected: "border-orange-500/70 ring-1 ring-orange-500/25 bg-orange-500/10" },
-  saturday_role: { base: "border-yellow-400/25 bg-yellow-500/5",  hover: "hover:border-yellow-400/45",  selected: "border-yellow-400/70 ring-1 ring-yellow-400/25 bg-yellow-500/10" },
-  special_role:  { base: "border-[#00bfff]/20 bg-[#00bfff]/5",   hover: "hover:border-[#00bfff]/40",   selected: "border-[#00bfff] ring-1 ring-[#00bfff]/30 bg-[#00bfff]/10" },
-};
 const SECTION_LABEL: Record<string, string> = {
   leads: "Líder", bgvs: "BGV", chorus: "Coro", instruments: "Instrumento", foh: "FOH",
 };
@@ -574,7 +574,33 @@ function SetlistEditor({ week, type, roleId, onClose }: {
   );
 }
 
-// ─── Service card ─────────────────────────────────────────────────────────────
+// ─── DayCard-style service card ───────────────────────────────────────────────
+
+const CARD_HEADER: Record<ServiceType, string> = {
+  sunday_role:   "bg-[#003572] dark:bg-[#001f3f] border-[#002249] dark:border-[#00bfff]",
+  saturday_role: "bg-[#78350f] dark:bg-[#1c0800] border-[#92400e] dark:border-[#f59e0b]",
+  special_role:  "bg-[#4c1d95] dark:bg-[#1e0a3c] border-[#5b21b6] dark:border-[#a78bfa]",
+};
+const CARD_BORDER: Record<ServiceType, string> = {
+  sunday_role:   "border-[#003572] dark:border-[#00bfff]",
+  saturday_role: "border-[#78350f] dark:border-[#f59e0b]",
+  special_role:  "border-[#4c1d95] dark:border-[#a78bfa]",
+};
+const CARD_ACCENT: Record<ServiceType, string> = {
+  sunday_role:   "text-[#00bfff]",
+  saturday_role: "text-[#f59e0b]",
+  special_role:  "text-[#a78bfa]",
+};
+const CARD_ACCENT_MUTED: Record<ServiceType, string> = {
+  sunday_role:   "text-[#00bfff]/70",
+  saturday_role: "text-[#f59e0b]/70",
+  special_role:  "text-[#a78bfa]/70",
+};
+const CARD_DIVIDER: Record<ServiceType, string> = {
+  sunday_role:   "bg-[#00bfff]/20",
+  saturday_role: "bg-[#f59e0b]/20",
+  special_role:  "bg-[#a78bfa]/20",
+};
 
 function ServiceCard({ role, onEdit, onDelete, onSetlist, swapMode, swapSource, onCardSwapSelect, onMemberChipClick }: {
   role: ServiceRole; onEdit: () => void; onDelete: () => void; onSetlist: () => void;
@@ -582,139 +608,208 @@ function ServiceCard({ role, onEdit, onDelete, onSetlist, swapMode, swapSource, 
   onCardSwapSelect: () => void;
   onMemberChipClick: (src: Exclude<SwapSource, { kind: "card" }>) => void;
 }) {
-  const past     = isPast(role.date);
-  const leads    = role.leads      ?? [];
-  const bgvs     = role.bgvs       ?? [];
-  const chorus   = role.chorus     ?? [];
-  const instrs   = role.instruments ?? [];
-  const foh      = role.foh        ?? [];
+  const past    = isPast(role.date);
+  const leads   = role.leads       ?? [];
+  const bgvs    = role.bgvs        ?? [];
+  const chorus  = role.chorus      ?? [];
+  const instrs  = role.instruments ?? [];
+  const foh     = role.foh         ?? [];
+  const songs   = role.songs       ?? [];
 
-  const isCardSelected   = swapSource?.kind === "card"   && swapSource.roleId === role._id;
-  const isChipSource     = (section: string, i: number) =>
+  const isCardSelected = swapSource?.kind === "card" && swapSource.roleId === role._id;
+  const isChipSource   = (section: string, i: number) =>
     swapSource && swapSource.kind !== "card" && swapSource.roleId === role._id &&
     swapSource.section === section && swapSource.index === i;
-  const isChipTarget     = (section: string, i: number) =>
-    swapSource && swapSource.kind !== "card" && swapSource.roleId !== role._id &&
-    false; // target highlighting only on confirm hover — keep simple
 
-  const uniqueCount = new Set([
-    ...leads.map(m => m._id),
-    ...bgvs.map(m => m._id),
-    ...chorus.map(m => m._id),
-    ...instrs.map(s => s.person?._id).filter(Boolean),
-    ...foh.map(s => s.person?._id).filter(Boolean),
-  ]).size;
+  const hasTeam    = !!(leads.length || bgvs.length || chorus.length || instrs.filter(s => s.person).length || foh.filter(s => s.person).length);
+  const hasSetlist = songs.length > 0;
 
-  const ct = CARD_THEME[role._type];
   return (
-    <div className={`rounded-xl border transition-all ${
-      past && !swapMode ? `${ct.base} opacity-50` :
-      isCardSelected    ? ct.selected :
-                          `${ct.base} ${ct.hover}`
+    <div className={`rounded-xl border overflow-hidden transition-all shadow-md ${
+      past && !swapMode
+        ? `${CARD_BORDER[role._type]} opacity-50`
+        : isCardSelected
+          ? `${CARD_BORDER[role._type]} ring-2 ring-[#00bfff]/40`
+          : CARD_BORDER[role._type]
     } group`}>
 
-      {/* Header row */}
-      <div className="flex items-start gap-4 px-4 py-3">
-        <div className="shrink-0 text-center min-w-[48px]">
-          <p className="font-display text-xl leading-none">{new Date(role.date.slice(0,10) + "T12:00:00").getDate()}</p>
-          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">
-            {new Date(role.date.slice(0,10) + "T12:00:00").toLocaleDateString("es-MX", { month: "short" })}
+      {/* ── Colored header band ── */}
+      <div className={`${CARD_HEADER[role._type]} border-b px-4 py-3 flex items-start justify-between gap-2`}>
+        <div>
+          <h3 className="font-display text-xl md:text-2xl uppercase font-bold text-[#C8D8EB]">
+            {role.service_name || SERVICE_LABEL[role._type]}
+          </h3>
+          <p className="font-label text-xs text-[#C8D8EB]/60 capitalize mt-0.5">
+            {new Date(role.date.slice(0,10) + "T12:00:00").toLocaleDateString("es-ES", {
+              weekday: "long", day: "numeric", month: "long", year: "numeric",
+            })}
           </p>
         </div>
-        <div className="flex-1 min-w-0 space-y-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full ${SERVICE_BADGE[role._type]}`}>{SERVICE_LABEL[role._type]}</span>
-            {role.service_name && <span className="font-body text-sm font-semibold truncate">{role.service_name}</span>}
+
+        {/* Action buttons or swap button */}
+        {swapMode ? (
+          <button
+            type="button"
+            onClick={onCardSwapSelect}
+            title="Intercambiar equipo completo"
+            className={`mt-0.5 px-2.5 py-1.5 rounded-lg font-label text-xs transition-colors shrink-0 ${
+              isCardSelected
+                ? "bg-white/20 text-white border border-white/40"
+                : "text-[#C8D8EB]/70 hover:text-white hover:bg-white/15 border border-transparent"
+            }`}
+          >
+            ⇄ Equipo
+          </button>
+        ) : (
+          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5">
+            <HeaderBtn title="Setlist" onClick={onSetlist}><MusicIcon /></HeaderBtn>
+            <HeaderBtn title="Editar" onClick={onEdit}><PencilIcon /></HeaderBtn>
+            <HeaderBtn title="Eliminar" onClick={onDelete} danger><TrashIcon /></HeaderBtn>
           </div>
-          {!swapMode && (
-            <div className="space-y-0.5">
-              {leads.length > 0 && (
-                <p className="font-body text-xs text-gray-500">
-                  <span className="text-gray-400">Líder:</span> {leads.map(m => dn(m)).join(", ")}
-                </p>
-              )}
-              {bgvs.length > 0 && (
-                <p className="font-body text-xs text-gray-500">
-                  <span className="text-gray-400">BGV:</span> {bgvs.map(m => dn(m)).join(", ")}
-                </p>
-              )}
-              {uniqueCount > 0 && <p className="font-label text-[10px] uppercase tracking-widest text-gray-600">{uniqueCount} persona{uniqueCount > 1 ? "s" : ""}</p>}
-            </div>
-          )}
-          {!swapMode && (
-            <div className="flex gap-2 flex-wrap">
-              {instrs.length > 0 && <Pill>{instrs.length} instr.</Pill>}
-              {chorus.length > 0 && <Pill>{chorus.length} coro</Pill>}
-              {foh.length    > 0 && <Pill>{foh.length} FOH</Pill>}
-              {(role.songCount ?? 0) > 0 && <Pill>{role.songCount} canciones</Pill>}
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          {swapMode ? (
-            <button
-              type="button"
-              onClick={onCardSwapSelect}
-              title="Intercambiar equipo completo"
-              className={`px-2.5 py-1.5 rounded-lg font-label text-xs transition-colors ${
-                isCardSelected ? "bg-[#00bfff]/20 text-[#00bfff] border border-[#00bfff]/40" : "text-gray-500 hover:text-[#00bfff] hover:bg-[#00bfff]/10 border border-transparent"
-              }`}
-            >
-              ⇄ Equipo
-            </button>
-          ) : (
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <ActionBtn title="Setlist" onClick={onSetlist}><MusicIcon /></ActionBtn>
-              <ActionBtn title="Editar" onClick={onEdit}><PencilIcon /></ActionBtn>
-              <ActionBtn title="Eliminar" onClick={onDelete} danger><TrashIcon /></ActionBtn>
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
-      {/* Swap mode: expanded member chips */}
-      {swapMode && (
-        <div className="px-4 pb-3 pt-1 space-y-2 border-t border-[#00bfff]/10">
-          {([ ["leads", leads, "Líderes"], ["bgvs", bgvs, "BGVs"], ["chorus", chorus, "Coro"] ] as const).map(([section, arr, lbl]) => (
-            arr.length > 0 && (
-              <div key={section} className="flex items-start gap-2 flex-wrap">
-                <span className="font-label text-[9px] uppercase tracking-widest text-gray-600 pt-0.5 shrink-0 w-12">{lbl}</span>
-                <div className="flex flex-wrap gap-1">
-                  {arr.map((m, i) => (
-                    <MemberChip
-                      key={m._id}
-                      name={dn(m)}
-                      isSource={!!isChipSource(section, i)}
-                      isTarget={!!isChipTarget(section, i)}
-                      onClick={swapSource?.kind === "card" ? undefined : () => onMemberChipClick({ kind: "member", roleId: role._id, section, index: i, member: m })}
-                    />
-                  ))}
+      {/* ── Body ── */}
+      <div className="p-4 space-y-4">
+
+        {/* Setlist */}
+        {hasSetlist && (
+          <section>
+            <SectionHead label="Setlist" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
+            <ol className="space-y-2 mt-2">
+              {songs.map((entry, i) => (
+                <li key={entry.song._id} className="flex items-start gap-2">
+                  <span className="text-gray-500 text-sm w-5 shrink-0 mt-0.5">{i + 1}.</span>
+                  <div>
+                    <span className="font-body text-sm font-semibold">{entry.song.title}</span>
+                    <span className="text-gray-500 text-sm"> — {entry.song.author}</span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className={`font-label text-xs font-semibold ${CARD_ACCENT[role._type]}`}>
+                        {entry.play_key || entry.song.key}
+                      </span>
+                      {entry.play_key && entry.song.key && entry.play_key !== entry.song.key && (
+                        <span className="font-label text-[10px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800/60 text-gray-500 leading-tight">
+                          orig. {entry.song.key}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
+
+        {/* Team */}
+        {hasTeam && !swapMode && (
+          <section className={hasSetlist ? `border-t pt-4 border-gray-200 dark:border-gray-800` : ""}>
+            <SectionHead label="Equipo" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
+            <div className="mt-2 space-y-3">
+              {(leads.length || bgvs.length || chorus.length) ? (
+                <div className="grid grid-cols-3 gap-x-3">
+                  <VocalCol label="Lead" names={leads.map(m => dn(m))} />
+                  <VocalCol label="BGVs" names={bgvs.map(m => dn(m))} />
+                  <VocalCol label="Coro" names={chorus.map(m => dn(m))} />
                 </div>
-              </div>
-            )
-          ))}
-          {([ ["instruments", instrs, "Instr."], ["foh", foh, "FOH"] ] as const).map(([section, arr, lbl]) => (
-            arr.length > 0 && (
-              <div key={section} className="flex items-start gap-2 flex-wrap">
-                <span className="font-label text-[9px] uppercase tracking-widest text-gray-600 pt-0.5 shrink-0 w-12">{lbl}</span>
-                <div className="flex flex-wrap gap-1">
-                  {arr.map((s, i) => s.person && (
-                    <MemberChip
-                      key={i}
-                      name={`${dn(s.person)}${section === "instruments" ? ` · ${(s as any).instrument}` : ` · ${(s as any).role}`}`}
-                      isSource={!!isChipSource(section, i)}
-                      isTarget={!!isChipTarget(section, i)}
-                      onClick={swapSource?.kind === "card" ? undefined : () => onMemberChipClick({ kind: "slot", roleId: role._id, section, index: i, member: s.person, slotLabel: (s as any).instrument ?? (s as any).role })}
-                    />
-                  ))}
+              ) : null}
+              {instrs.filter(s => s.person).map((s, i) => (
+                <TeamRow key={i} label={s.instrument} value={dn(s.person!)} />
+              ))}
+              {foh.filter(s => s.person).map((s, i) => (
+                <TeamRow key={i} label={s.role} value={dn(s.person!)} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Swap mode: member chips */}
+        {swapMode && (
+          <div className="space-y-2">
+            {([ ["leads", leads, "Líderes"], ["bgvs", bgvs, "BGVs"], ["chorus", chorus, "Coro"] ] as const).map(([section, arr, lbl]) => (
+              arr.length > 0 && (
+                <div key={section} className="flex items-start gap-2 flex-wrap">
+                  <span className="font-label text-[9px] uppercase tracking-widest text-gray-600 pt-0.5 shrink-0 w-12">{lbl}</span>
+                  <div className="flex flex-wrap gap-1">
+                    {arr.map((m, i) => (
+                      <MemberChip
+                        key={m._id}
+                        name={dn(m)}
+                        isSource={!!isChipSource(section, i)}
+                        isTarget={false}
+                        onClick={swapSource?.kind === "card" ? undefined : () => onMemberChipClick({ kind: "member", roleId: role._id, section, index: i, member: m })}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )
-          ))}
-          {uniqueCount === 0 && <p className="font-body text-xs text-gray-600 italic">Sin miembros asignados</p>}
-        </div>
-      )}
+              )
+            ))}
+            {([ ["instruments", instrs, "Instr."], ["foh", foh, "FOH"] ] as const).map(([section, arr, lbl]) => (
+              arr.length > 0 && (
+                <div key={section} className="flex items-start gap-2 flex-wrap">
+                  <span className="font-label text-[9px] uppercase tracking-widest text-gray-600 pt-0.5 shrink-0 w-12">{lbl}</span>
+                  <div className="flex flex-wrap gap-1">
+                    {arr.map((s, i) => s.person && (
+                      <MemberChip
+                        key={i}
+                        name={`${dn(s.person)}${section === "instruments" ? ` · ${(s as any).instrument}` : ` · ${(s as any).role}`}`}
+                        isSource={!!isChipSource(section, i)}
+                        isTarget={false}
+                        onClick={swapSource?.kind === "card" ? undefined : () => onMemberChipClick({ kind: "slot", roleId: role._id, section, index: i, member: s.person, slotLabel: (s as any).instrument ?? (s as any).role })}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )
+            ))}
+            {!hasTeam && <p className="font-body text-xs text-gray-600 italic">Sin miembros asignados</p>}
+          </div>
+        )}
+
+        {!hasTeam && !hasSetlist && (
+          <p className="font-body text-xs text-gray-600 italic">Sin información todavía.</p>
+        )}
+      </div>
     </div>
+  );
+}
+
+function SectionHead({ label, accent, divider }: { label: string; accent: string; divider: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className={`font-label text-xs uppercase tracking-wide ${accent} shrink-0`}>{label}</span>
+      <div className={`flex-1 h-px ${divider}`} />
+    </div>
+  );
+}
+
+function VocalCol({ label, names }: { label: string; names: string[] }) {
+  if (!names.length) return <div />;
+  return (
+    <div>
+      <p className="font-label text-[10px] uppercase tracking-widest text-gray-400 mb-0.5">{label}</p>
+      <p className="font-body text-sm leading-snug">{names.join(", ")}</p>
+    </div>
+  );
+}
+
+function TeamRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-2 py-0.5">
+      <span className="font-label text-[10px] uppercase tracking-wide px-2 py-0.5 rounded border border-gray-700 bg-gray-800/60 text-gray-400 shrink-0 leading-tight">{label}:</span>
+      <span className="font-body text-sm">{value}</span>
+    </div>
+  );
+}
+
+function HeaderBtn({ onClick, title, danger, children }: { onClick: () => void; title: string; danger?: boolean; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`p-1.5 rounded-lg transition-colors ${danger ? "hover:bg-red-500/25 hover:text-red-300 text-[#C8D8EB]/60" : "hover:bg-white/15 hover:text-white text-[#C8D8EB]/60"}`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -1063,7 +1158,7 @@ export default function ServicesPanel() {
 
       {/* Grid */}
       {!loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 items-start">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
           {upcoming.length === 0 && selectedMonths.size === 0 && (
             <p className="font-body text-sm text-gray-500 text-center py-12">No hay servicios próximos.</p>
           )}

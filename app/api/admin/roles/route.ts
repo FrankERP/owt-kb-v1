@@ -42,6 +42,9 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const SONG_PROJ = `{ _id, title, author, key, "slug": slug.current }`;
+  const SETLIST_SONGS = `songs[]{ play_key, "song": song->${SONG_PROJ} }`;
+
   const roles = await serverClient.fetch(`
     *[_type in ["sunday_role", "saturday_role", "special_role"]]
     | order(coalesce(week, date) asc) {
@@ -52,7 +55,11 @@ export async function GET() {
       "chorus": Chorus[]->{_id, member_name, alias},
       "instruments": instruments[]{instrument, "person": person->{_id, member_name, alias}},
       "foh": foh_team[]{role, "person": person->{_id, member_name, alias}},
-      "songCount": count(songs)
+      "songs": select(
+        _type == "sunday_role"   => *[_type == "featuredSongs"  && week == ^.week][0].${SETLIST_SONGS},
+        _type == "saturday_role" => *[_type == "saturdarSongs"  && week == ^.week][0].${SETLIST_SONGS},
+        ${SETLIST_SONGS}
+      )
     }
   `);
 

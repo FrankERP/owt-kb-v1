@@ -100,7 +100,37 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session: updatePayload }) {
+      // Handle session.update() calls for impersonation
+      if (trigger === "update" && updatePayload) {
+        if (updatePayload.impersonating) {
+          const target = await serverClient.fetch<{ _id: string; member_name: string; role: OWTRole | null } | null>(
+            `*[_type == "teamMembers" && _id == $id][0] { _id, member_name, role }`,
+            { id: updatePayload.impersonating }
+          );
+          if (target) {
+            token.__realAdmin = {
+              role:     token.role ?? "member",
+              sanityId: token.sanityId ?? "",
+              name:     token.name,
+            };
+            token.role           = target.role ?? "member";
+            token.sanityId       = target._id;
+            token.name           = target.member_name;
+            token.isImpersonating = true;
+            token.realAdminName  = token.__realAdmin.name ?? undefined;
+          }
+        } else if (updatePayload.stopImpersonating && token.__realAdmin) {
+          token.role           = token.__realAdmin.role;
+          token.sanityId       = token.__realAdmin.sanityId;
+          token.name           = token.__realAdmin.name;
+          token.isImpersonating = false;
+          token.realAdminName  = undefined;
+          token.__realAdmin    = undefined;
+        }
+        return token;
+      }
+
       // On first sign-in, user object is populated
       if (user) {
         // Credentials provider already attaches role + sanityId
@@ -124,9 +154,11 @@ export const authOptions: NextAuthOptions = {
 
     async session({ session, token }) {
       if (session.user) {
-        session.user.id       = token.sub ?? "";
-        session.user.role     = token.role ?? "member";
-        session.user.sanityId = token.sanityId ?? "";
+        session.user.id              = token.sub ?? "";
+        session.user.role            = token.role ?? "member";
+        session.user.sanityId        = token.sanityId ?? "";
+        session.user.isImpersonating = token.isImpersonating ?? false;
+        session.user.realAdminName   = token.realAdminName;
       }
       return session;
     },

@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Fuse from "fuse.js";
 import ServicesPanel from "./ServicesPanel";
 import ActivityPanel from "./ActivityPanel";
 import ContentPanel from "./ContentPanel";
+import AvailabilityPanel from "./AvailabilityPanel";
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
@@ -288,13 +291,14 @@ function PasswordForm({
 }
 
 // ─── Tab nav ──────────────────────────────────────────────────────────────────
-type Tab = "members" | "services" | "activity" | "content";
+type Tab = "members" | "services" | "availability" | "activity" | "content";
 
 const ALL_TABS: { id: Tab; label: string; roles: OWTRole[] }[] = [
-  { id: "members",  label: "Miembros",  roles: ["super-admin"] },
-  { id: "services", label: "Servicios", roles: ["super-admin", "admin"] },
-  { id: "activity", label: "Actividad", roles: ["super-admin", "admin"] },
-  { id: "content",  label: "Contenido", roles: ["super-admin", "admin", "content-editor"] },
+  { id: "members",      label: "Miembros",       roles: ["super-admin"] },
+  { id: "services",     label: "Servicios",      roles: ["super-admin", "admin"] },
+  { id: "availability", label: "Disponibilidad", roles: ["super-admin", "admin"] },
+  { id: "activity",     label: "Actividad",      roles: ["super-admin", "admin"] },
+  { id: "content",      label: "Contenido",      roles: ["super-admin", "admin", "content-editor"] },
 ];
 
 function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) => void; role: OWTRole }) {
@@ -320,6 +324,8 @@ function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) =>
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
 export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole }) {
+  const { update } = useSession();
+  const router = useRouter();
   const firstTab = ALL_TABS.filter((t) => t.roles.includes(role))[0]?.id ?? "content";
   const [tab, setTab]           = useState<Tab>(firstTab);
   const [members, setMembers]   = useState<Member[]>([]);
@@ -335,6 +341,12 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
   const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null);
   const [photoTarget, setPhotoTarget]       = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImpersonate = async (memberId: string) => {
+    await update({ impersonating: memberId });
+    router.push("/me");
+    router.refresh();
+  };
 
   const filteredMembers = useMemo(() => {
     // 1. Category filter
@@ -468,6 +480,13 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
     <div className="space-y-6">
       <TabBar active={tab} onChange={setTab} role={role} />
       <ServicesPanel />
+    </div>
+  );
+
+  if (tab === "availability") return (
+    <div className="space-y-6">
+      <TabBar active={tab} onChange={setTab} role={role} />
+      <AvailabilityPanel />
     </div>
   );
 
@@ -666,6 +685,11 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
 
               {/* Actions */}
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {role === "super-admin" && (
+                  <ActionBtn title="Ver como este miembro" onClick={() => handleImpersonate(m._id)}>
+                    <MaskIcon />
+                  </ActionBtn>
+                )}
                 <ActionBtn title="Editar" onClick={() => setModal({ type: "edit", member: m })}>
                   <PencilIcon />
                 </ActionBtn>
@@ -782,6 +806,17 @@ function TrashIcon() {
       <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
       <path d="M10 11v6M14 11v6" />
       <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
+  );
+}
+
+function MaskIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
+      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+      <line x1="9" y1="9" x2="9.01" y2="9" strokeWidth="3" strokeLinecap="round" />
+      <line x1="15" y1="9" x2="15.01" y2="9" strokeWidth="3" strokeLinecap="round" />
     </svg>
   );
 }
