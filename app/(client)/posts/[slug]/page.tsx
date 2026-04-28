@@ -57,7 +57,12 @@ async function getSongHistory(songId: string) {
   return await client.fetch(query);
 }
 
-export const revalidate = 60;
+export const revalidate = 3600;
+
+export async function generateStaticParams() {
+  const slugs: string[] = await client.fetch(`*[_type == "post" && defined(slug.current)].slug.current`);
+  return slugs.map((slug) => ({ slug }));
+}
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 

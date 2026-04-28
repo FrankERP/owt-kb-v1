@@ -1,13 +1,31 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { usePlayer } from "@/app/context/PlayerContext";
 
 export default function AudioPlayer() {
-  const { player, togglePlay, closePlayer, seek } = usePlayer();
+  const { player, togglePlay, closePlayer, seek, getAudio } = usePlayer();
+  const [progress, setProgress] = useState(0);
+
+  // Local timeupdate listener — only this component re-renders during playback
+  useEffect(() => {
+    const el = getAudio();
+    if (!el) return;
+    const onTime = () => {
+      if (el.duration) setProgress(el.currentTime / el.duration);
+    };
+    el.addEventListener("timeupdate", onTime);
+    return () => el.removeEventListener("timeupdate", onTime);
+  }, [getAudio]);
+
+  // Reset progress bar when track changes
+  useEffect(() => {
+    if (!player.track) setProgress(0);
+  }, [player.track]);
 
   if (!player.track) return null;
 
-  const { track, isPlaying, progress } = player;
+  const { track, isPlaying } = player;
 
   return (
     <div className="fixed bottom-16 lg:bottom-0 inset-x-0 z-40 bg-[#0a1929]/95 backdrop-blur-md border-t border-[#00bfff]/20 shadow-lg">
@@ -32,14 +50,14 @@ export default function AudioPlayer() {
           </div>
           <div
             role="progressbar"
-            className="w-full h-1 bg-[#003572]/60 rounded-full cursor-pointer group"
+            className="w-full h-1 bg-[#003572]/60 rounded-full cursor-pointer"
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
               seek((e.clientX - rect.left) / rect.width);
             }}
           >
             <div
-              className="h-1 bg-[#00bfff] rounded-full transition-all duration-100"
+              className="h-1 bg-[#00bfff] rounded-full transition-[width] duration-100"
               style={{ width: `${progress * 100}%` }}
             />
           </div>
