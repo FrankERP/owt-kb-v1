@@ -195,6 +195,22 @@ function fmtDate(iso: string) {
   });
 }
 
+function buildUnavailabilityNotices(
+  sundayDates: string[],
+  activeSatDates: string[],
+  allMembers: MemberOption[]
+): { name: string; date: string; service: string }[] {
+  const out: { name: string; date: string; service: string }[] = [];
+  for (const m of allMembers) {
+    if (!m.unavailableDates?.length) continue;
+    const unavailable = new Set(m.unavailableDates);
+    const name = m.alias?.trim() || m.member_name;
+    for (const d of sundayDates)    if (unavailable.has(d)) out.push({ name, date: d, service: "Dom" });
+    for (const d of activeSatDates) if (unavailable.has(d)) out.push({ name, date: d, service: "Sáb" });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
+}
+
 function subtractDay(iso: string): string {
   const d = new Date(iso + "T12:00:00");
   d.setDate(d.getDate() - 1);
@@ -1038,6 +1054,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
   const [solverConfig, setSolverConfig] = useState<SolverConfig>(DEFAULT_SOLVER_CONFIG);
   const [activeSatDates, setActiveSatDates] = useState<string[]>([]);
   const [solverHistory, setSolverHistory] = useState<SolverHistoryEntry[]>([]);
+  const [unavailabilityNotices, setUnavailabilityNotices] = useState<{ name: string; date: string; service: string }[]>([]);
 
   useEffect(() => {
     if (!saturdays) { setActiveSatDates([]); return; }
@@ -1112,6 +1129,8 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
     setSolverError(null);
 
     if (!useSolver) {
+      const sunDates = sundays ? getDates(year, month, 0) : [];
+      setUnavailabilityNotices(buildUnavailabilityNotices(sunDates, saturdays ? activeSatDates : [], members));
       setDrafts(buildEmptyDrafts());
       setStep("preview");
       return;
@@ -1259,6 +1278,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
       }
     }
 
+    setUnavailabilityNotices(buildUnavailabilityNotices(sundayDates, activeSatDates, members));
     setDrafts(allDrafts.sort((a, b) => a.date.localeCompare(b.date)));
     if (result.total_counts && result.role_counts) {
       saveHistoryEntry(year, month, result.total_counts, result.role_counts);
@@ -1404,6 +1424,29 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
       {swapToast && (
         <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff] text-center bg-[#00bfff]/10 rounded-lg py-1.5">{swapToast}</p>
       )}
+
+      {unavailabilityNotices.length > 0 && (() => {
+        // Group by person name
+        const byPerson = new Map<string, { date: string; service: string }[]>();
+        for (const n of unavailabilityNotices) {
+          if (!byPerson.has(n.name)) byPerson.set(n.name, []);
+          byPerson.get(n.name)!.push({ date: n.date, service: n.service });
+        }
+        return (
+          <div className="rounded-lg border border-orange-500/25 bg-orange-500/8 px-3 py-2.5 space-y-1.5">
+            <p className="font-label text-[10px] uppercase tracking-widest text-orange-400">
+              No disponibles este mes
+            </p>
+            {Array.from(byPerson.entries()).map(([name, items]) => (
+              <p key={name} className="font-body text-xs text-gray-400">
+                <span className="text-orange-300 font-semibold">{name}</span>
+                {" — "}
+                {items.map(i => `${i.service} ${new Date(i.date + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })}`).join(", ")}
+              </p>
+            ))}
+          </div>
+        );
+      })()}
 
       <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-0.5">
         {drafts.map(d => (
