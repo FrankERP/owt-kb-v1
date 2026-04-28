@@ -7,6 +7,7 @@ async function getPostsByTag(tag: string) {
   const query = `
     *[_type == "post" && references(*[_type == "tag" && slug.current == "${tag}"]._id)] {
       _id,
+      _createdAt,
       title,
       author,
       slug,

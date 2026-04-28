@@ -5,6 +5,7 @@ import { client } from "@/sanity/lib/client";
 import { serverClient } from "@/sanity/lib/serverClient";
 import Navbar from "@/app/components/Navbar";
 import { DayCard } from "@/app/components/DayCard";
+import NextServiceHero from "@/app/components/NextServiceHero";
 import ProfilePanel from "@/app/components/ProfilePanel";
 import AvailabilityCalendar from "@/app/components/AvailabilityCalendar";
 import { Setlist, SetlistSong } from "@/app/utils/interface";
@@ -129,41 +130,63 @@ export default async function MePage() {
 
         {/* Upcoming services */}
         <div>
-        <h2 className="font-display text-center text-2xl md:text-3xl font-bold mb-2">
-          Mis próximos servicios
-        </h2>
-        <p className="font-label text-xs uppercase tracking-widest text-gray-500 text-center mb-10">
-          Próximos 3 meses
-        </p>
+          {allAssignments.length === 0 ? (
+            <>
+              <h2 className="font-display text-center text-2xl md:text-3xl font-bold mb-2">
+                Mis próximos servicios
+              </h2>
+              <p className="text-center font-label text-sm text-gray-400 py-20">
+                No tienes servicios asignados en los próximos tres meses.
+              </p>
+            </>
+          ) : (
+            <div className="space-y-10">
+              {/* Hero: next assignment */}
+              {(() => {
+                const { day, doc } = allAssignments[0];
+                const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: doc.date ?? "" } : undefined);
+                return (
+                  <NextServiceHero
+                    day={day}
+                    date={doc.week ?? doc.date}
+                    setlist={setlist}
+                    leads={doc.Lead?.map((m) => m.alias || m.member_name)}
+                    instruments={doc.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
+                    fohTeam={doc.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
+                    bgvs={doc.BGVs}
+                    chorus={doc.Chorus}
+                  />
+                );
+              })()}
 
-        {allAssignments.length === 0 ? (
-          <p className="text-center font-label text-sm text-gray-400 py-20">
-            No tienes servicios asignados en los próximos tres meses.
-          </p>
-        ) : (
-          <div className="space-y-6">
-            {allAssignments.map(({ day, doc }) => {
-              const setlist = doc.setlist ?? (
-                doc.songs?.length
-                  ? { songs: doc.songs, week: doc.date ?? "" }
-                  : undefined
-              );
-              return (
-                <DayCard
-                  key={doc._id}
-                  day={day}
-                  date={doc.week ?? doc.date}
-                  setlist={setlist}
-                  leads={doc.Lead?.map((m) => m.alias || m.member_name)}
-                  instruments={doc.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
-                  fohTeam={doc.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
-                  bgvs={doc.BGVs}
-                  chorus={doc.Chorus}
-                />
-              );
-            })}
-          </div>
-        )}
+              {/* Remaining assignments */}
+              {allAssignments.length > 1 && (
+                <div>
+                  <h2 className="font-display text-center text-xl md:text-2xl font-bold mb-6">
+                    Próximos servicios
+                  </h2>
+                  <div className="space-y-6">
+                    {allAssignments.slice(1).map(({ day, doc }) => {
+                      const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: doc.date ?? "" } : undefined);
+                      return (
+                        <DayCard
+                          key={doc._id}
+                          day={day}
+                          date={doc.week ?? doc.date}
+                          setlist={setlist}
+                          leads={doc.Lead?.map((m) => m.alias || m.member_name)}
+                          instruments={doc.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
+                          fohTeam={doc.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
+                          bgvs={doc.BGVs}
+                          chorus={doc.Chorus}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

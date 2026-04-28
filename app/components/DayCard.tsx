@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { Setlist } from "../utils/interface";
+import { usePlayer } from "@/app/context/PlayerContext";
 
 export interface DayCardProps {
   day: string;
@@ -20,6 +23,7 @@ const SUNDAY_THEME = {
   accent:       "text-[#00bfff]",
   accentMuted:  "text-[#00bfff]/70",
   songHover:    "hover:text-[#00bfff]",
+  sheetHover:   "hover:text-[#00bfff] hover:bg-[#00bfff]/10",
 };
 
 const SATURDAY_THEME = {
@@ -30,6 +34,7 @@ const SATURDAY_THEME = {
   accent:       "text-[#f59e0b]",
   accentMuted:  "text-[#f59e0b]/70",
   songHover:    "hover:text-[#f59e0b]",
+  sheetHover:   "hover:text-[#f59e0b] hover:bg-[#f59e0b]/10",
 };
 
 const SPECIAL_THEME = {
@@ -40,9 +45,11 @@ const SPECIAL_THEME = {
   accent:       "text-[#a78bfa]",
   accentMuted:  "text-[#a78bfa]/70",
   songHover:    "hover:text-[#a78bfa]",
+  sheetHover:   "hover:text-[#a78bfa] hover:bg-[#a78bfa]/10",
 };
 
 export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs, chorus }: DayCardProps) {
+  const { openSheet } = usePlayer();
   const hasRole = !!(leads?.length || instruments?.length || fohTeam?.length || bgvs?.length || chorus?.length);
   const hasSetlist = !!(setlist?.songs?.length);
 
@@ -78,7 +85,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
               {setlist!.songs.map((song, i) => (
                 <li key={song._id} className="flex items-start gap-2">
                   <span className="text-gray-400 text-sm md:text-base lg:text-lg w-5 shrink-0 mt-0.5">{i + 1}.</span>
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <Link href={`/posts/${song.slug.current}`} className={`${t.songHover} transition-colors`}>
                       <span className="font-body text-sm md:text-base lg:text-lg font-semibold">{song.title}</span>
                       <span className="text-gray-500 text-sm md:text-base lg:text-lg"> — {song.author}</span>
@@ -92,6 +99,13 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                       )}
                     </div>
                   </div>
+                  <button
+                    onClick={() => openSheet(song._id)}
+                    className={`shrink-0 w-7 h-7 mt-0.5 rounded-full flex items-center justify-center text-gray-500 ${t.sheetHover} transition-colors`}
+                    title="Audio y acordes"
+                  >
+                    <MusicNoteIcon />
+                  </button>
                 </li>
               ))}
             </ol>
@@ -104,7 +118,6 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
               Equipo
             </h4>
 
-            {/* Vocals — Lead / BGVs / Chorus as a single 3-column row */}
             {(leads?.length || bgvs?.length || chorus?.length) ? (
               <div>
                 <SectionDivider label="Líderes" accent={t.accentMuted} />
@@ -165,5 +178,15 @@ function SectionDivider({ label, accent }: { label: string; accent: string }) {
       </span>
       <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
     </div>
+  );
+}
+
+function MusicNoteIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 18V5l12-2v13" />
+      <circle cx="6" cy="18" r="3" />
+      <circle cx="18" cy="16" r="3" />
+    </svg>
   );
 }
