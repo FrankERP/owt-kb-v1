@@ -8,7 +8,8 @@ import { saturdayRole } from './schemas/satRole';
 import { sundayRole } from './schemas/sunRole';
 import { teamMembers } from './schemas/worshipTeam';
 import { specialRole } from './schemas/specialRole';
+import { loginEvent } from './schemas/loginEvent';
 
 export const schema: { types: SchemaTypeDefinition[] } = {
-  types: [post, tag, featuredSongs, saturdaySongs, saturdayRole, sundayRole, teamMembers, specialRole],
+  types: [post, tag, featuredSongs, saturdaySongs, saturdayRole, sundayRole, teamMembers, specialRole, loginEvent],
 }

@@ -12,6 +12,7 @@ export interface Post {
   lyricsURL: string;
   audioTracks: Array<{ title: string; tone: string; audioFileURL: string }>;
   chordsPDF: Array<{ title: string; key: string; chordsURL: string }>;
+  referenceLinks?: Array<{ label: string; url: string }>;
   tags: Array<Tag>;
   _id: string;
 }

@@ -2,8 +2,10 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/auth";
 import { client } from "@/sanity/lib/client";
+import { serverClient } from "@/sanity/lib/serverClient";
 import Navbar from "@/app/components/Navbar";
 import { DayCard } from "@/app/components/DayCard";
+import ProfilePanel from "@/app/components/ProfilePanel";
 import { Setlist, SetlistSong } from "@/app/utils/interface";
 
 export const revalidate = 60;
@@ -15,6 +17,16 @@ export default async function MePage() {
   if (!session) redirect("/auth/signin?callbackUrl=/me");
 
   const { sanityId, name } = session.user;
+
+  const member = await serverClient.fetch(
+    `*[_type == "teamMembers" && _id == $id][0] {
+      _id, member_name, alias, email, role, memberType,
+      "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl),
+      "hasPassword": defined(passwordHash) && passwordHash != ""
+    }`,
+    { id: sanityId }
+  );
+
   const today = new Date().toLocaleDateString("sv", { timeZone: TZ });
   const limit = new Date(Date.now() + 95 * 86400 * 1000)
     .toLocaleDateString("sv", { timeZone: TZ });
@@ -103,7 +115,13 @@ export default async function MePage() {
   return (
     <div>
       <Navbar title={firstName} schedule tags />
-      <div className="mx-auto max-w-4xl px-6 pt-10 pb-16">
+      <div className="mx-auto max-w-4xl px-6 pt-10 pb-16 space-y-12">
+
+        {/* Profile settings */}
+        {member && <ProfilePanel initialMember={member} />}
+
+        {/* Upcoming services */}
+        <div>
         <h2 className="font-display text-center text-2xl md:text-3xl font-bold mb-2">
           Mis próximos servicios
         </h2>
@@ -139,6 +157,7 @@ export default async function MePage() {
             })}
           </div>
         )}
+        </div>
       </div>
     </div>
   );

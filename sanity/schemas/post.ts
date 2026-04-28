@@ -117,6 +117,21 @@ export const post = {
 			]
 		},
 		{
+			name: "referenceLinks",
+			title: "Reference Links",
+			type: "array",
+			of: [
+				{
+					type: "object",
+					name: "referenceLink",
+					fields: [
+						{ name: "label", type: "string", title: "Label" },
+						{ name: "url",   type: "url",    title: "URL"   },
+					],
+				},
+			],
+		},
+		{
 			name: "tags",
 			title: "Tags",
 			type: "array",

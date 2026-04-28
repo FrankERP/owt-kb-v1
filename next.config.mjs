@@ -15,26 +15,23 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: '/(.*)', // Aplica a todas las rutas
+        source: '/(.*)',
         headers: [
-          {
-            key: 'X-Frame-Options',
-            value: 'SAMEORIGIN' // Protege contra clickjacking
-          },
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff' // Evita la deducción del tipo de contenido
-          },
-          {
-            key: 'X-XSS-Protection',
-            value: '1; mode=block' // Protege contra XSS en navegadores antiguos
-          },
-          {
-            key: 'Strict-Transport-Security',
-            value: 'max-age=31536000; includeSubDomains; preload' // Fuerza el uso de HTTPS
-          },
-        ]
-      }
+          { key: 'X-Frame-Options',           value: 'SAMEORIGIN' },
+          { key: 'X-Content-Type-Options',     value: 'nosniff' },
+          { key: 'X-XSS-Protection',           value: '1; mode=block' },
+          { key: 'Strict-Transport-Security',  value: 'max-age=31536000; includeSubDomains; preload' },
+          { key: 'Referrer-Policy',            value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy',         value: 'camera=(), microphone=(), geolocation=(), payment=()' },
+        ],
+      },
+      // Sanity Studio needs relaxed framing and eval for its own internals
+      {
+        source: '/studio/(.*)',
+        headers: [
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+        ],
+      },
     ]
   },
 };

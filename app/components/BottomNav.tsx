@@ -15,7 +15,7 @@ export default function BottomNav() {
     return null;
   }
 
-  const isAdmin = session.user.role === "super-admin" || session.user.role === "admin";
+  const isAdmin = session.user.role === "super-admin" || session.user.role === "admin" || session.user.role === "content-editor";
 
   const tabs = [
     { href: "/schedule", label: "Calendario", icon: <CalendarIcon /> },

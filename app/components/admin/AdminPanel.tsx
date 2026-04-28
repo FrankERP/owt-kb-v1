@@ -1,7 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import Fuse from "fuse.js";
 import ServicesPanel from "./ServicesPanel";
+import ActivityPanel from "./ActivityPanel";
+import ContentPanel from "./ContentPanel";
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
@@ -13,11 +16,16 @@ interface Member {
   role: OWTRole;
   memberType?: string[];
   hasPassword: boolean;
+  photoUrl?: string;
 }
 
 const TYPE_LABEL: Record<string, string> = {
   voz: "Voz", instrumento: "Instr.", foh: "FOH",
+  sunday_lead: "Líder Dom", saturday_lead: "Líder Sáb", support: "Soporte",
 };
+
+type FilterKey = "type" | "role";
+type SortDir  = "asc" | "desc";
 
 type ModalState =
   | { type: "add" }
@@ -54,17 +62,69 @@ const inputCls =
 const selectCls =
   "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-[#010b17] dark:bg-[#010b17] font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
 
-// ─── Initials avatar ──────────────────────────────────────────────────────────
-function Avatar({ name }: { name: string }) {
+// ─── Avatar ───────────────────────────────────────────────────────────────────
+function Avatar({
+  name,
+  photoUrl,
+  onClick,
+  uploading,
+}: {
+  name: string;
+  photoUrl?: string;
+  onClick?: () => void;
+  uploading?: boolean;
+}) {
   const initials = name
     .split(" ")
     .slice(0, 2)
     .map((w) => w[0])
     .join("")
     .toUpperCase();
+
+  const inner = (
+    <>
+      {photoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photoUrl} alt={name} className="w-full h-full object-cover" />
+      ) : (
+        <div className="w-full h-full bg-[#003572] dark:bg-[#00bfff]/10 flex items-center justify-center">
+          <span className="font-label text-[11px] text-[#00bfff]">{initials}</span>
+        </div>
+      )}
+      {onClick && (
+        <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity rounded-full">
+          {uploading ? (
+            <svg className="animate-spin w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+          ) : (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+          )}
+        </div>
+      )}
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title="Cambiar foto"
+        className="relative w-9 h-9 rounded-full overflow-hidden shrink-0 group/avatar cursor-pointer"
+      >
+        {inner}
+      </button>
+    );
+  }
+
   return (
-    <div className="w-9 h-9 rounded-full bg-[#003572] dark:bg-[#00bfff]/10 flex items-center justify-center shrink-0">
-      <span className="font-label text-[11px] text-[#00bfff]">{initials}</span>
+    <div className="relative w-9 h-9 rounded-full overflow-hidden shrink-0">
+      {inner}
     </div>
   );
 }
@@ -86,6 +146,15 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 }
 
 // ─── Add / Edit form ──────────────────────────────────────────────────────────
+const MEMBER_TYPES: { value: string; label: string }[] = [
+  { value: "voz",           label: "Voz" },
+  { value: "instrumento",   label: "Instrumento" },
+  { value: "foh",           label: "FOH" },
+  { value: "sunday_lead",   label: "Líder Dom" },
+  { value: "saturday_lead", label: "Líder Sáb" },
+  { value: "support",       label: "Soporte" },
+];
+
 function MemberForm({
   initial,
   onSubmit,
@@ -93,22 +162,34 @@ function MemberForm({
   loading,
 }: {
   initial?: Partial<Member>;
-  onSubmit: (data: { member_name: string; email: string; role: OWTRole }) => void;
+  onSubmit: (data: { member_name: string; alias: string; email: string; role: OWTRole; memberType: string[] }) => void;
   onClose: () => void;
   loading: boolean;
 }) {
-  const [name, setName]   = useState(initial?.member_name ?? "");
-  const [email, setEmail] = useState(initial?.email ?? "");
-  const [role, setRole]   = useState<OWTRole>(initial?.role ?? "member");
+  const [name, setName]             = useState(initial?.member_name ?? "");
+  const [alias, setAlias]           = useState(initial?.alias ?? "");
+  const [email, setEmail]           = useState(initial?.email ?? "");
+  const [role, setRole]             = useState<OWTRole>(initial?.role ?? "member");
+  const [memberType, setMemberType] = useState<string[]>(initial?.memberType ?? []);
+
+  const toggleType = (value: string) => {
+    setMemberType(prev =>
+      prev.includes(value) ? prev.filter(t => t !== value) : [...prev, value]
+    );
+  };
 
   return (
     <form
-      onSubmit={(e) => { e.preventDefault(); onSubmit({ member_name: name, email, role }); }}
+      onSubmit={(e) => { e.preventDefault(); onSubmit({ member_name: name, alias, email, role, memberType }); }}
       className="space-y-4"
     >
       <div className="space-y-1">
         <label className="font-label text-xs uppercase tracking-widest text-gray-500">Nombre</label>
         <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} required minLength={2} placeholder="Nombre completo" />
+      </div>
+      <div className="space-y-1">
+        <label className="font-label text-xs uppercase tracking-widest text-gray-500">Alias</label>
+        <input className={inputCls} value={alias} onChange={(e) => setAlias(e.target.value)} placeholder="Nombre corto o apodo (opcional)" />
       </div>
       <div className="space-y-1">
         <label className="font-label text-xs uppercase tracking-widest text-gray-500">Email</label>
@@ -121,6 +202,28 @@ function MemberForm({
             <option key={r.value} value={r.value}>{r.label}</option>
           ))}
         </select>
+      </div>
+      <div className="space-y-2">
+        <label className="font-label text-xs uppercase tracking-widest text-gray-500">Tipo</label>
+        <div className="flex gap-2">
+          {MEMBER_TYPES.map(({ value, label }) => {
+            const active = memberType.includes(value);
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => toggleType(value)}
+                className={`flex-1 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
+                  active
+                    ? "border-[#00bfff] bg-[#00bfff]/15 text-[#00bfff]"
+                    : "border-[#00bfff]/20 text-gray-500 hover:border-[#00bfff]/50"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div className="flex gap-3 pt-1">
         <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
@@ -185,38 +288,85 @@ function PasswordForm({
 }
 
 // ─── Tab nav ──────────────────────────────────────────────────────────────────
-type Tab = "members" | "services";
+type Tab = "members" | "services" | "activity" | "content";
 
-function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
-  const tab = (id: Tab, label: string) => (
-    <button
-      onClick={() => onChange(id)}
-      className={`font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors ${
-        active === id
-          ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#C8D8EB] dark:text-[#00bfff]"
-          : "text-gray-500 hover:text-[#00bfff]"
-      }`}
-    >
-      {label}
-    </button>
-  );
+const ALL_TABS: { id: Tab; label: string; roles: OWTRole[] }[] = [
+  { id: "members",  label: "Miembros",  roles: ["super-admin"] },
+  { id: "services", label: "Servicios", roles: ["super-admin", "admin"] },
+  { id: "activity", label: "Actividad", roles: ["super-admin", "admin"] },
+  { id: "content",  label: "Contenido", roles: ["super-admin", "admin", "content-editor"] },
+];
+
+function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) => void; role: OWTRole }) {
+  const visible = ALL_TABS.filter((t) => t.roles.includes(role));
   return (
-    <div className="flex gap-1 p-1 rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 w-fit">
-      {tab("members", "Miembros")}
-      {tab("services", "Servicios")}
+    <div className="flex flex-wrap gap-1 p-1 rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 w-fit">
+      {visible.map(({ id, label }) => (
+        <button
+          key={id}
+          onClick={() => onChange(id)}
+          className={`font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors ${
+            active === id
+              ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#C8D8EB] dark:text-[#00bfff]"
+              : "text-gray-500 hover:text-[#00bfff]"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 }
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
-export default function AdminPanel() {
-  const [tab, setTab]           = useState<Tab>("members");
+export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole }) {
+  const firstTab = ALL_TABS.filter((t) => t.roles.includes(role))[0]?.id ?? "content";
+  const [tab, setTab]           = useState<Tab>(firstTab);
   const [members, setMembers]   = useState<Member[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
   const [modal, setModal]       = useState<ModalState>(null);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast]       = useState<string | null>(null);
+  const [query, setQuery]           = useState("");
+  const [filterKey, setFilterKey]   = useState<FilterKey>("type");
+  const [filterValue, setFilterValue] = useState("");
+  const [sortDir, setSortDir]       = useState<SortDir>("asc");
+  const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null);
+  const [photoTarget, setPhotoTarget]       = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const filteredMembers = useMemo(() => {
+    // 1. Category filter
+    let list = members;
+    if (filterValue) {
+      if (filterKey === "type") {
+        list = list.filter((m) => m.memberType?.includes(filterValue));
+      } else {
+        list = list.filter((m) => m.role === filterValue);
+      }
+    }
+
+    // 2. Fuzzy text search within filtered set
+    if (query.trim()) {
+      const fuse = new Fuse(list, {
+        keys: [
+          { name: "alias",       weight: 0.5 },
+          { name: "member_name", weight: 0.4 },
+          { name: "email",       weight: 0.1 },
+        ],
+        threshold: 0.4,
+      });
+      list = fuse.search(query).map((r) => r.item);
+    }
+
+    // 3. Sort A→Z / Z→A by display name (alias preferred)
+    return [...list].sort((a, b) => {
+      const na = (a.alias?.trim() || a.member_name).toLocaleLowerCase("es");
+      const nb = (b.alias?.trim() || b.member_name).toLocaleLowerCase("es");
+      return sortDir === "asc" ? na.localeCompare(nb, "es") : nb.localeCompare(na, "es");
+    });
+  }, [members, filterKey, filterValue, query, sortDir]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -239,7 +389,7 @@ export default function AdminPanel() {
 
   useEffect(() => { fetchMembers(); }, [fetchMembers]);
 
-  const handleAdd = async (data: { member_name: string; email: string; role: OWTRole }) => {
+  const handleAdd = async (data: { member_name: string; alias: string; email: string; role: OWTRole; memberType: string[] }) => {
     setSubmitting(true);
     const res = await fetch("/api/admin/members", {
       method: "POST",
@@ -251,7 +401,7 @@ export default function AdminPanel() {
     else showToast("Error al agregar miembro.");
   };
 
-  const handleEdit = async (data: { member_name: string; email: string; role: OWTRole }) => {
+  const handleEdit = async (data: { member_name: string; alias: string; email: string; role: OWTRole; memberType: string[] }) => {
     if (modal?.type !== "edit") return;
     setSubmitting(true);
     const res = await fetch(`/api/admin/members/${modal.member._id}`, {
@@ -277,6 +427,34 @@ export default function AdminPanel() {
     else showToast("Error al establecer contraseña.");
   };
 
+  const handlePhotoClick = (memberId: string) => {
+    setPhotoTarget(memberId);
+    photoInputRef.current?.click();
+  };
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !photoTarget) return;
+    e.target.value = "";
+    setUploadingPhoto(photoTarget);
+    const formData = new FormData();
+    formData.append("photo", file);
+    try {
+      const res = await fetch(`/api/admin/members/${photoTarget}/photo`, { method: "POST", body: formData });
+      if (res.ok) {
+        const { photoUrl } = await res.json();
+        setMembers(prev => prev.map(m => m._id === photoTarget ? { ...m, photoUrl } : m));
+        showToast("Foto actualizada.");
+      } else {
+        showToast("Error al subir foto.");
+      }
+    } catch {
+      showToast("Error al subir foto.");
+    }
+    setUploadingPhoto(null);
+    setPhotoTarget(null);
+  };
+
   const handleDelete = async () => {
     if (modal?.type !== "delete") return;
     setSubmitting(true);
@@ -288,14 +466,28 @@ export default function AdminPanel() {
 
   if (tab === "services") return (
     <div className="space-y-6">
-      <TabBar active={tab} onChange={setTab} />
+      <TabBar active={tab} onChange={setTab} role={role} />
       <ServicesPanel />
+    </div>
+  );
+
+  if (tab === "activity") return (
+    <div className="space-y-6">
+      <TabBar active={tab} onChange={setTab} role={role} />
+      <ActivityPanel />
+    </div>
+  );
+
+  if (tab === "content") return (
+    <div className="space-y-6">
+      <TabBar active={tab} onChange={setTab} role={role} />
+      <ContentPanel canDelete={role === "super-admin" || role === "admin"} />
     </div>
   );
 
   return (
     <div className="space-y-6">
-      <TabBar active={tab} onChange={setTab} />
+      <TabBar active={tab} onChange={setTab} role={role} />
 
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -303,7 +495,10 @@ export default function AdminPanel() {
           <h1 className="font-display text-2xl uppercase tracking-wide">Miembros</h1>
           {!loading && (
             <p className="font-label text-xs uppercase tracking-widest text-gray-500 mt-0.5">
-              {members.length} {members.length === 1 ? "miembro" : "miembros"}
+              {query.trim() && filteredMembers.length !== members.length
+                ? `${filteredMembers.length} de ${members.length} ${members.length === 1 ? "miembro" : "miembros"}`
+                : `${members.length} ${members.length === 1 ? "miembro" : "miembros"}`
+              }
             </p>
           )}
         </div>
@@ -314,6 +509,91 @@ export default function AdminPanel() {
           <span className="text-base leading-none">+</span>
           Agregar
         </button>
+      </div>
+
+      {/* Filter + sort controls */}
+      <div className="space-y-2">
+        {/* Row 1: filter key + filter value + sort direction */}
+        <div className="flex gap-2 flex-wrap">
+          {/* Filter by: type | role */}
+          <div className="flex rounded-lg border border-[#00bfff]/20 overflow-hidden shrink-0">
+            {(["type", "role"] as FilterKey[]).map((k) => (
+              <button
+                key={k}
+                onClick={() => { setFilterKey(k); setFilterValue(""); }}
+                className={`px-3 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
+                  filterKey === k
+                    ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#00bfff]"
+                    : "text-gray-500 hover:text-[#00bfff]"
+                }`}
+              >
+                {k === "type" ? "Tipo" : "Rol"}
+              </button>
+            ))}
+          </div>
+
+          {/* Filter value dropdown */}
+          <select
+            value={filterValue}
+            onChange={(e) => setFilterValue(e.target.value)}
+            className="flex-1 min-w-[120px] px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-[#010b17] font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors text-gray-300"
+          >
+            <option value="">{filterKey === "type" ? "Todos los tipos" : "Todos los roles"}</option>
+            {filterKey === "type"
+              ? [
+                  { value: "voz",           label: "Voz"         },
+                  { value: "instrumento",   label: "Instrumento" },
+                  { value: "foh",           label: "FOH"         },
+                  { value: "sunday_lead",   label: "Líder Dom"   },
+                  { value: "saturday_lead", label: "Líder Sáb"   },
+                  { value: "support",       label: "Soporte"     },
+                ].map((o) => <option key={o.value} value={o.value}>{o.label}</option>)
+              : ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)
+            }
+          </select>
+
+          {/* Sort direction */}
+          <div className="flex rounded-lg border border-[#00bfff]/20 overflow-hidden shrink-0">
+            {(["asc", "desc"] as SortDir[]).map((d) => (
+              <button
+                key={d}
+                onClick={() => setSortDir(d)}
+                className={`px-3 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
+                  sortDir === d
+                    ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#00bfff]"
+                    : "text-gray-500 hover:text-[#00bfff]"
+                }`}
+              >
+                {d === "asc" ? "A→Z" : "Z→A"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Row 2: search */}
+        <div className="relative">
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
+            width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            className="w-full pl-9 pr-8 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors placeholder:text-gray-600"
+            placeholder="Buscar por nombre, alias o email…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {query && (
+            <button
+              onClick={() => setQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-[#00bfff] transition-colors text-lg leading-none"
+            >
+              ×
+            </button>
+          )}
+        </div>
       </div>
 
       {/* States */}
@@ -335,23 +615,36 @@ export default function AdminPanel() {
           {members.length === 0 && (
             <p className="font-body text-sm text-gray-500 text-center py-12">No hay miembros todavía.</p>
           )}
-          {members.map((m) => (
+          {members.length > 0 && filteredMembers.length === 0 && (
+            <p className="font-body text-sm text-gray-500 text-center py-12">
+              Sin resultados para &ldquo;{query}&rdquo;
+            </p>
+          )}
+          {filteredMembers.map((m) => (
             <div
               key={m._id}
               className="flex items-center gap-4 px-4 py-3 rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 bg-[#003572]/5 dark:bg-[#00bfff]/5 hover:border-[#003572]/30 dark:hover:border-[#00bfff]/20 transition-colors group"
             >
-              <Avatar name={m.member_name} />
+              <Avatar
+                name={m.alias?.trim() || m.member_name}
+                photoUrl={m.photoUrl}
+                uploading={uploadingPhoto === m._id}
+                onClick={() => handlePhotoClick(m._id)}
+              />
 
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2 flex-wrap">
-                  <p className="font-body text-sm font-semibold truncate">{m.member_name}</p>
+                  {m.alias?.trim()
+                    ? <p className="font-display text-base leading-tight truncate">{m.alias.trim()}</p>
+                    : <p className="font-body text-sm font-semibold truncate">{m.member_name}</p>
+                  }
                   {m.alias?.trim() && (
-                    <span className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/70 truncate">&ldquo;{m.alias.trim()}&rdquo;</span>
+                    <span className="font-body text-sm text-[#00bfff]/60 truncate">{m.member_name}</span>
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                  <p className="font-body text-xs text-gray-500 truncate">{m.email}</p>
+                  <p className="font-body text-sm text-[#C8D8EB]/50 dark:text-[#C8D8EB]/35 truncate">{m.email}</p>
                   {(m.memberType ?? []).map(t => (
                     <span key={t} className="font-label text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-400 border border-[#003572]/15 dark:border-[#00bfff]/15">
                       {TYPE_LABEL[t] ?? t}
@@ -395,6 +688,15 @@ export default function AdminPanel() {
           <span className="w-2 h-2 rounded-full bg-gray-600 inline-block ml-2" /> Solo SSO
         </p>
       )}
+
+      {/* Hidden photo input */}
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        onChange={handlePhotoChange}
+      />
 
       {/* Toast */}
       {toast && (

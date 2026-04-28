@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { SolveRequest, SolveResponse } from "@/app/api/admin/solve/route";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -10,6 +10,7 @@ type ServiceType = "sunday_role" | "saturday_role";
 interface MemberOption { _id: string; member_name: string; alias?: string; memberType?: string[]; }
 
 const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;
+
 interface ExistingRole  { _id: string; _type: string; date: string; }
 interface InstrSlot     { id: string; instrument: string; personId: string; }
 interface FohSlot       { id: string; role: string; personId: string; }
@@ -34,10 +35,133 @@ interface Props {
   onCreated: () => void;
 }
 
+// ─── Rule types ───────────────────────────────────────────────────────────────
+
+interface PersonRestriction {
+  id: string;
+  person: string;
+  excludedPatterns: string[];
+  fairness: "none" | "exempt" | "slack";
+  fairnessSlack: number;
+  weekExclusions: Array<{ id: string; week: number; pattern: string }>;
+  caps: Array<{
+    id: string; pattern: string; op: "<=" | ">=" | "==";
+    value: number;
+    relative: boolean;  // true → serialize as {weeks-relOffset}
+    relOffset: number;
+  }>;
+}
+
+interface ConflictRule {
+  id: string;
+  personA: string;
+  personB: string;
+  pattern: string;
+}
+
+interface PresenceRule {
+  id: string;
+  persons: string[];
+  pattern: string;
+}
+
+interface SolverConfig {
+  sundayLeads: string[];
+  saturdayLeads: string[];
+  support: string[];
+  restrictions: PersonRestriction[];
+  conflicts: ConflictRule[];
+  presence: PresenceRule[];
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MONTHS = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
                 "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+const PATTERNS: Array<{ value: string; label: string }> = [
+  { value: "Sun.*",     label: "Domingo (todo)"   },
+  { value: "Sat.*",     label: "Sábado (todo)"    },
+  { value: "*.*",       label: "Ambos servicios"  },
+  { value: "Sun.Lead",  label: "Dom Lead"         },
+  { value: "Sat.Lead",  label: "Sáb Lead"         },
+  { value: "Sun.BGV",   label: "Dom BGV"          },
+  { value: "Sat.BGV",   label: "Sáb BGV"          },
+  { value: "Sun.Choir", label: "Dom Coro"         },
+  { value: "*.Lead",    label: "Lead (ambos)"     },
+  { value: "*.BGV",     label: "BGV (ambos)"      },
+  { value: "*.LeadBGV", label: "Lead+BGV (ambos)" },
+];
+
+// Ordered list for the exclusion pill grid
+const EXCL_PATTERNS = [
+  "Sat.*", "Sun.*", "*.*",
+  "Sun.Lead", "Sun.BGV", "Sun.Choir",
+  "Sat.Lead", "Sat.BGV",
+  "*.Lead", "*.BGV", "*.LeadBGV",
+];
+
+const PAT_LABEL: Record<string, string> = {
+  "Sat.*": "Sáb.*",    "Sun.*": "Dom.*",       "*.*": "*.*",
+  "Sun.Lead": "Dom Lead", "Sun.BGV": "Dom BGV", "Sun.Choir": "Dom Coro",
+  "Sat.Lead": "Sáb Lead", "Sat.BGV": "Sáb BGV",
+  "*.Lead": "*.Lead",  "*.BGV": "*.BGV",       "*.LeadBGV": "*.LeadBGV",
+};
+
+const STORAGE_KEY = "owt_solver_config_v3";
+
+// Pre-loaded defaults — mirrors the production rules in CGPT_owt_roles.py.
+// Used on first open (no localStorage). Subsequent opens load from localStorage.
+const DEFAULT_SOLVER_CONFIG: SolverConfig = {
+  sundayLeads: [], saturdayLeads: [], support: [],
+  restrictions: [
+    {
+      id: "d-frank", person: "Frank",
+      excludedPatterns: ["Sat.*", "Sun.BGV", "Sun.Choir"],
+      fairness: "exempt", fairnessSlack: 1,
+      weekExclusions: [], caps: [],
+    },
+    {
+      id: "d-mkz", person: "Mkz",
+      excludedPatterns: ["Sat.*", "Sun.BGV", "Sun.Choir"],
+      fairness: "exempt", fairnessSlack: 1,
+      weekExclusions: [], caps: [],
+    },
+    {
+      id: "d-gaby", person: "Gaby",
+      // Merges both Gaby lines: !in Sat.* + !in Sun.Choir + slack 1 + Sun.BGV <= {weeks-2}
+      excludedPatterns: ["Sat.*", "Sun.Choir"],
+      fairness: "slack", fairnessSlack: 1,
+      weekExclusions: [],
+      caps: [{ id: "d-gaby-cap", pattern: "Sun.BGV", op: "<=", value: 0, relative: true, relOffset: 2 }],
+    },
+    {
+      id: "d-lucia-week", person: "Lucía",
+      excludedPatterns: [], fairness: "none", fairnessSlack: 1,
+      weekExclusions: [{ id: "d-lucia-w3", week: 3, pattern: "*.*" }], caps: [],
+    },
+    {
+      id: "d-liu-week", person: "Liu",
+      excludedPatterns: [], fairness: "none", fairnessSlack: 1,
+      weekExclusions: [{ id: "d-liu-w3", week: 3, pattern: "*.*" }], caps: [],
+    },
+    {
+      id: "d-marianne-week", person: "Marianne",
+      excludedPatterns: [], fairness: "none", fairnessSlack: 1,
+      weekExclusions: [{ id: "d-marianne-w1", week: 1, pattern: "*.*" }], caps: [],
+    },
+  ],
+  conflicts: [
+    { id: "d-lucia-niza",     personA: "Lucía", personB: "Niza",  pattern: "*.LeadBGV" },
+    { id: "d-hugo-lucia",     personA: "Hugo",  personB: "Lucía", pattern: "*.Lead"    },
+    { id: "d-niza-hugo",      personA: "Niza",  personB: "Hugo",  pattern: "*.Lead"    },
+    { id: "d-jakey-hugo-bgv", personA: "Jakey", personB: "Hugo",  pattern: "*.BGV"     },
+    { id: "d-jakey-hugo-lead",personA: "Jakey", personB: "Hugo",  pattern: "*.Lead"    },
+  ],
+  presence: [
+    { id: "d-hugo-jakey", persons: ["Hugo", "Jakey"], pattern: "Sun.BGV" },
+  ],
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -72,7 +196,32 @@ function nameToId(name: string, members: MemberOption[]): string | null {
   return members.find(m => m.member_name.toLowerCase().trim() === lo)?._id ?? null;
 }
 
-// ─── Shared form sub-components ───────────────────────────────────────────────
+// ─── DSL serialization ────────────────────────────────────────────────────────
+
+function restrictionToDs(r: PersonRestriction): string | null {
+  if (!r.person) return null;
+  const clauses: string[] = [];
+  for (const pat of r.excludedPatterns)  clauses.push(`!in ${pat}`);
+  for (const we of r.weekExclusions)     clauses.push(`!in week ${we.week} ${we.pattern}`);
+  for (const cap of r.caps) {
+    const val = cap.relative ? `{weeks-${cap.relOffset}}` : String(cap.value);
+    clauses.push(`${cap.pattern} ${cap.op} ${val}`);
+  }
+  if (r.fairness === "exempt")           clauses.push("fairness_exempt");
+  if (r.fairness === "slack" && r.fairnessSlack > 0) clauses.push(`fairness_slack ${r.fairnessSlack}`);
+  if (clauses.length === 0) return null;
+  return `${r.person} ${clauses.join(" & ")}`;
+}
+
+function allRulesToDs(config: SolverConfig): string[] {
+  const out: string[] = [];
+  for (const r of config.restrictions) { const ds = restrictionToDs(r); if (ds) out.push(ds); }
+  for (const r of config.conflicts)    out.push(`${r.personA} !with ${r.personB} on ${r.pattern}`);
+  for (const r of config.presence)     out.push(`any_of(${r.persons.join(",")}) on ${r.pattern} each_week`);
+  return out;
+}
+
+// ─── Shared sub-components ────────────────────────────────────────────────────
 
 const sel2Cls = "w-full px-2 py-1.5 rounded border border-[#00bfff]/15 bg-[#0a1929] font-body text-xs focus:outline-none focus:border-[#00bfff]";
 const in2Cls  = "w-full px-2 py-1.5 rounded border border-[#00bfff]/15 bg-transparent font-body text-xs focus:outline-none focus:border-[#00bfff]";
@@ -125,6 +274,499 @@ function SlotEditor2({ label, nameKey, slots, members, onChange }: {
   );
 }
 
+// ─── MemberPool — extracted to module level to prevent scroll-reset on remount ──
+
+function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search, onSearch }: {
+  field: "sundayLeads" | "saturdayLeads" | "support";
+  label: string;
+  pool: MemberOption[];
+  config: SolverConfig;
+  onToggle: (id: string) => void;
+  onSelectAll: () => void;
+  search: string;
+  onSearch: (q: string) => void;
+}) {
+  const visible = search.trim()
+    ? pool.filter(m => dn(m).toLowerCase().includes(search.toLowerCase()))
+    : pool;
+  const allSelected = pool.length > 0 && pool.every(m => config[field].includes(m._id));
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">{label}</p>
+        <button
+          type="button" onClick={onSelectAll}
+          className="font-label text-[9px] uppercase tracking-widest text-[#00bfff]/60 hover:text-[#00bfff] transition-colors"
+        >
+          {allSelected ? "Ninguno" : "Todos"}
+        </button>
+      </div>
+      <input
+        className="w-full px-2 py-1 mb-1 rounded border border-[#00bfff]/15 bg-transparent font-body text-xs focus:outline-none focus:border-[#00bfff] placeholder-gray-600"
+        placeholder="Buscar..." value={search} onChange={e => onSearch(e.target.value)}
+      />
+      <div className="max-h-32 overflow-y-auto rounded border border-[#00bfff]/10 divide-y divide-[#00bfff]/5">
+        {visible.length === 0 && <p className="px-2 py-1 font-body text-xs text-gray-600 italic">Sin resultados</p>}
+        {visible.map(m => (
+          <label key={m._id} className={`flex items-center gap-2 px-2 py-1 cursor-pointer text-xs transition-colors ${config[field].includes(m._id) ? "bg-[#00bfff]/10" : "hover:bg-[#00bfff]/5"}`}>
+            <input type="checkbox" checked={config[field].includes(m._id)} onChange={() => onToggle(m._id)} className="accent-[#00bfff]" />
+            <span className="font-body">{dn(m)}</span>
+          </label>
+        ))}
+      </div>
+      {config[field].length > 0 && (
+        <p className="font-label text-[9px] uppercase tracking-widest text-[#00bfff] mt-0.5">
+          {config[field].length} seleccionado{config[field].length !== 1 ? "s" : ""}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Rule builder — display cards ─────────────────────────────────────────────
+
+function RestrictionCard({ r, onDelete }: { r: PersonRestriction; onDelete: () => void }) {
+  return (
+    <div className="rounded-lg border border-[#00bfff]/10 bg-[#001830]/40 px-3 py-2 flex items-start gap-2">
+      <div className="flex-1 min-w-0 space-y-1">
+        <span className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/80 font-semibold">{r.person}</span>
+        <div className="flex flex-wrap gap-1">
+          {r.excludedPatterns.map(p => (
+            <span key={p} className="font-label text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30">
+              !{p}
+            </span>
+          ))}
+          {r.weekExclusions.map(we => (
+            <span key={we.id} className="font-label text-[9px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/30">
+              sem.{we.week} {we.pattern}
+            </span>
+          ))}
+          {r.caps.map(cap => (
+            <span key={cap.id} className="font-label text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30">
+              {cap.pattern} {cap.op} {cap.relative ? `sem−${cap.relOffset}` : cap.value}
+            </span>
+          ))}
+          {r.fairness === "exempt" && (
+            <span className="font-label text-[9px] px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30">
+              fairness_exempt
+            </span>
+          )}
+          {r.fairness === "slack" && (
+            <span className="font-label text-[9px] px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30">
+              slack {r.fairnessSlack}
+            </span>
+          )}
+        </div>
+      </div>
+      <button type="button" onClick={onDelete} className="text-gray-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none mt-0.5">×</button>
+    </div>
+  );
+}
+
+function ConflictCard({ r, onDelete }: { r: ConflictRule; onDelete: () => void }) {
+  return (
+    <div className="rounded-lg border border-[#00bfff]/10 bg-[#001830]/40 px-3 py-2 flex items-center gap-2">
+      <span className="font-label text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30 shrink-0">≠</span>
+      <span className="font-body text-xs flex-1">
+        <span className="text-gray-200">{r.personA}</span>
+        <span className="text-gray-500 mx-1">≠</span>
+        <span className="text-gray-200">{r.personB}</span>
+        <span className="text-gray-500 mx-1">en</span>
+        <span className="text-[#00bfff]/70">{r.pattern}</span>
+      </span>
+      <button type="button" onClick={onDelete} className="text-gray-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none">×</button>
+    </div>
+  );
+}
+
+function PresenceCard({ r, onDelete }: { r: PresenceRule; onDelete: () => void }) {
+  return (
+    <div className="rounded-lg border border-[#00bfff]/10 bg-[#001830]/40 px-3 py-2 flex items-center gap-2">
+      <span className="font-label text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/30 shrink-0">≥1</span>
+      <span className="font-body text-xs flex-1">
+        <span className="text-gray-200">{r.persons.join(", ")}</span>
+        <span className="text-gray-500 mx-1">en</span>
+        <span className="text-[#00bfff]/70">{r.pattern}</span>
+        <span className="text-gray-500 ml-1">c/sem</span>
+      </span>
+      <button type="button" onClick={onDelete} className="text-gray-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none">×</button>
+    </div>
+  );
+}
+
+// ─── Rule builder — add forms ─────────────────────────────────────────────────
+
+const rbSel = "px-2 py-1 rounded border border-[#00bfff]/15 bg-[#0a1929] font-body text-xs focus:outline-none focus:border-[#00bfff] w-full";
+const rbIn  = "px-2 py-1 rounded border border-[#00bfff]/15 bg-transparent font-body text-xs focus:outline-none focus:border-[#00bfff]";
+
+function PersonRestrictionForm({ members, onAdd, onCancel }: {
+  members: MemberOption[];
+  onAdd: (r: PersonRestriction) => void;
+  onCancel: () => void;
+}) {
+  const names = members.map(dn);
+  const [person,   setPerson]   = useState(names[0] ?? "");
+  const [excl,     setExcl]     = useState<string[]>([]);
+  const [fairness, setFairness] = useState<PersonRestriction["fairness"]>("none");
+  const [slack,    setSlack]    = useState(1);
+  const [weekEx,   setWeekEx]   = useState<Array<{ id: string; week: number; pattern: string }>>([]);
+  const [caps,     setCaps]     = useState<PersonRestriction["caps"]>([]);
+
+  const toggleExcl = (pat: string) =>
+    setExcl(e => e.includes(pat) ? e.filter(x => x !== pat) : [...e, pat]);
+
+  const canAdd = !!person && (excl.length > 0 || weekEx.length > 0 || caps.length > 0 || fairness !== "none");
+
+  const handleAdd = () => {
+    if (!canAdd) return;
+    onAdd({ id: uid(), person, excludedPatterns: excl, fairness, fairnessSlack: slack, weekExclusions: weekEx, caps });
+  };
+
+  return (
+    <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 space-y-3">
+      {/* Person */}
+      <div>
+        <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1">Persona</p>
+        <select className={rbSel} value={person} onChange={e => setPerson(e.target.value)}>
+          {names.map(n => <option key={n} value={n}>{n}</option>)}
+        </select>
+      </div>
+
+      {/* Exclusion pattern pills */}
+      <div>
+        <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1.5">Excluir de</p>
+        <div className="flex flex-wrap gap-1.5">
+          {EXCL_PATTERNS.map(pat => (
+            <button
+              key={pat} type="button" onClick={() => toggleExcl(pat)}
+              className={`font-label text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full border transition-colors ${
+                excl.includes(pat)
+                  ? "bg-red-500/20 text-red-400 border-red-500/40"
+                  : "text-gray-500 border-[#00bfff]/15 hover:border-red-500/30 hover:text-red-400"
+              }`}
+            >
+              {PAT_LABEL[pat] ?? pat}
+            </button>
+          ))}
+        </div>
+        {excl.length > 0 && (
+          <p className="font-label text-[9px] text-red-400/70 mt-1">{excl.join(" · ")}</p>
+        )}
+      </div>
+
+      {/* Fairness */}
+      <div>
+        <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1">Fairness</p>
+        <div className="flex items-center gap-3 flex-wrap">
+          {(["none", "exempt", "slack"] as const).map(f => (
+            <label key={f} className="flex items-center gap-1.5 cursor-pointer">
+              <input type="radio" name={`fairness-${person}`} value={f} checked={fairness === f} onChange={() => setFairness(f)} className="accent-[#00bfff]" />
+              <span className="font-body text-xs text-gray-400">
+                {f === "none" ? "Normal" : f === "exempt" ? "Exempt" : "Slack"}
+              </span>
+            </label>
+          ))}
+          {fairness === "slack" && (
+            <input
+              type="number" min={1} max={5}
+              className={`${rbIn} w-12`}
+              value={slack}
+              onChange={e => setSlack(Number(e.target.value))}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Week exclusions */}
+      <div>
+        <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1">Semanas excluidas</p>
+        <div className="space-y-1">
+          {weekEx.map(we => (
+            <div key={we.id} className="flex gap-1.5 items-center">
+              <select
+                className={`${rbSel} w-20 flex-none`}
+                value={we.week}
+                onChange={e => setWeekEx(ws => ws.map(x => x.id === we.id ? { ...x, week: Number(e.target.value) } : x))}
+              >
+                {[1,2,3,4,5].map(n => <option key={n} value={n}>Sem {n}</option>)}
+              </select>
+              <select
+                className={`${rbSel} flex-1`}
+                value={we.pattern}
+                onChange={e => setWeekEx(ws => ws.map(x => x.id === we.id ? { ...x, pattern: e.target.value } : x))}
+              >
+                {PATTERNS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+              <button type="button" onClick={() => setWeekEx(ws => ws.filter(x => x.id !== we.id))} className="text-gray-600 hover:text-red-400 text-sm flex-none">×</button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setWeekEx(ws => [...ws, { id: uid(), week: 1, pattern: "*.*" }])}
+          className="font-label text-[9px] uppercase tracking-widest text-[#00bfff]/60 hover:text-[#00bfff] transition-colors mt-1"
+        >
+          + Semana
+        </button>
+      </div>
+
+      {/* Caps */}
+      <div>
+        <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1">Caps</p>
+        <div className="space-y-1">
+          {caps.map(cap => (
+            <div key={cap.id} className="flex gap-1.5 items-center">
+              <select
+                className={`${rbSel} flex-1`}
+                value={cap.pattern}
+                onChange={e => setCaps(cs => cs.map(x => x.id === cap.id ? { ...x, pattern: e.target.value } : x))}
+              >
+                {PATTERNS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+              <select
+                className={`${rbSel} w-14 flex-none`}
+                value={cap.op}
+                onChange={e => setCaps(cs => cs.map(x => x.id === cap.id ? { ...x, op: e.target.value as any } : x))}
+              >
+                <option value="<=">≤</option>
+                <option value=">=">≥</option>
+                <option value="==">= </option>
+              </select>
+              {cap.relative ? (
+                <div className="flex items-center gap-0.5 flex-none">
+                  <span className="font-label text-[9px] text-[#00bfff]/70">sem−</span>
+                  <input
+                    type="number" min={0} max={4}
+                    className={`${rbIn} w-8 text-center`}
+                    value={cap.relOffset}
+                    onChange={e => setCaps(cs => cs.map(x => x.id === cap.id ? { ...x, relOffset: Number(e.target.value) } : x))}
+                  />
+                </div>
+              ) : (
+                <input
+                  type="number" min={0} max={10}
+                  className={`${rbIn} w-10 flex-none text-center`}
+                  value={cap.value}
+                  onChange={e => setCaps(cs => cs.map(x => x.id === cap.id ? { ...x, value: Number(e.target.value) } : x))}
+                />
+              )}
+              <button
+                type="button"
+                title={cap.relative ? "Cambiar a número fijo" : "Relativo al nº de semanas"}
+                onClick={() => setCaps(cs => cs.map(x => x.id === cap.id ? { ...x, relative: !x.relative } : x))}
+                className={`font-label text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded flex-none border transition-colors ${
+                  cap.relative
+                    ? "border-[#00bfff]/40 bg-[#00bfff]/10 text-[#00bfff]"
+                    : "border-[#00bfff]/15 text-gray-600 hover:text-[#00bfff]"
+                }`}
+              >sem</button>
+              <button type="button" onClick={() => setCaps(cs => cs.filter(x => x.id !== cap.id))} className="text-gray-600 hover:text-red-400 text-sm flex-none">×</button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setCaps(cs => [...cs, { id: uid(), pattern: "Sun.*", op: "<=", value: 2, relative: false, relOffset: 2 }])}
+          className="font-label text-[9px] uppercase tracking-widest text-[#00bfff]/60 hover:text-[#00bfff] transition-colors mt-1"
+        >
+          + Cap
+        </button>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-2 pt-1">
+        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[10px] uppercase tracking-widest border border-[#00bfff]/20 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff] transition-colors">
+          Cancelar
+        </button>
+        <button type="button" onClick={handleAdd} disabled={!canAdd} className="flex-1 py-1 rounded font-label text-[10px] uppercase tracking-widest bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors disabled:opacity-40">
+          Agregar restricción
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ConflictForm({ members, onAdd, onCancel }: {
+  members: MemberOption[];
+  onAdd: (r: ConflictRule) => void;
+  onCancel: () => void;
+}) {
+  const names = members.map(dn);
+  const [personA,  setPersonA]  = useState(names[0] ?? "");
+  const [personB,  setPersonB]  = useState(names[1] ?? "");
+  const [pattern,  setPattern]  = useState("*.Lead");
+
+  const canAdd = personA && personB && personA !== personB;
+
+  return (
+    <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3 space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1">Persona A</p>
+          <select className={rbSel} value={personA} onChange={e => setPersonA(e.target.value)}>
+            {names.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+        <div>
+          <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1">Persona B</p>
+          <select className={rbSel} value={personB} onChange={e => setPersonB(e.target.value)}>
+            {names.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+      </div>
+      <div>
+        <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1">Patrón — no pueden coincidir en</p>
+        <select className={rbSel} value={pattern} onChange={e => setPattern(e.target.value)}>
+          {PATTERNS.map(p => <option key={p.value} value={p.value}>{p.label} ({p.value})</option>)}
+        </select>
+      </div>
+      {personA === personB && personA && (
+        <p className="font-label text-[9px] text-red-400">Selecciona dos personas distintas</p>
+      )}
+      <div className="flex gap-2 pt-1">
+        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[10px] uppercase tracking-widest border border-[#00bfff]/20 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff] transition-colors">
+          Cancelar
+        </button>
+        <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: uid(), personA, personB, pattern })} className="flex-1 py-1 rounded font-label text-[10px] uppercase tracking-widest bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 transition-colors disabled:opacity-40">
+          Agregar conflicto
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PresenceForm({ members, onAdd, onCancel }: {
+  members: MemberOption[];
+  onAdd: (r: PresenceRule) => void;
+  onCancel: () => void;
+}) {
+  const [selected, setSelected] = useState<string[]>([]);
+  const [pattern,  setPattern]  = useState("Sun.BGV");
+
+  const canAdd = selected.length >= 2;
+
+  return (
+    <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-3 space-y-2">
+      <div>
+        <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1">Al menos uno de (mín. 2)</p>
+        <div className="max-h-28 overflow-y-auto rounded border border-[#00bfff]/10 divide-y divide-[#00bfff]/5">
+          {members.map(m => {
+            const name    = dn(m);
+            const checked = selected.includes(name);
+            return (
+              <label key={m._id} className={`flex items-center gap-2 px-2 py-1 cursor-pointer text-xs transition-colors ${checked ? "bg-[#00bfff]/10" : "hover:bg-[#00bfff]/5"}`}>
+                <input
+                  type="checkbox" checked={checked} className="accent-[#00bfff]"
+                  onChange={() => setSelected(s => checked ? s.filter(p => p !== name) : [...s, name])}
+                />
+                <span className="font-body">{name}</span>
+              </label>
+            );
+          })}
+        </div>
+        {selected.length > 0 && (
+          <p className="font-label text-[9px] text-green-400 mt-0.5">{selected.join(", ")}</p>
+        )}
+      </div>
+      <div>
+        <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1">Debe aparecer en</p>
+        <select className={rbSel} value={pattern} onChange={e => setPattern(e.target.value)}>
+          {PATTERNS.map(p => <option key={p.value} value={p.value}>{p.label} ({p.value})</option>)}
+        </select>
+      </div>
+      <div className="flex gap-2 pt-1">
+        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[10px] uppercase tracking-widest border border-[#00bfff]/20 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff] transition-colors">
+          Cancelar
+        </button>
+        <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: uid(), persons: selected, pattern })} className="flex-1 py-1 rounded font-label text-[10px] uppercase tracking-widest bg-green-500/20 hover:bg-green-500/30 text-green-400 transition-colors disabled:opacity-40">
+          Agregar presencia
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Rule builder — main orchestrator ────────────────────────────────────────
+
+function RuleBuilder({ config, onChange, members }: {
+  config: SolverConfig;
+  onChange: (c: SolverConfig) => void;
+  members: MemberOption[];
+}) {
+  const [adding, setAdding] = useState<"restriction" | "conflict" | "presence" | null>(null);
+
+  const rmRestriction = (id: string) => onChange({ ...config, restrictions: config.restrictions.filter(r => r.id !== id) });
+  const rmConflict    = (id: string) => onChange({ ...config, conflicts:    config.conflicts.filter(r => r.id !== id) });
+  const rmPresence    = (id: string) => onChange({ ...config, presence:     config.presence.filter(r => r.id !== id) });
+
+  const total = config.restrictions.length + config.conflicts.length + config.presence.length;
+
+  return (
+    <div className="space-y-2">
+      <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">
+        Reglas{total > 0 ? ` (${total})` : ""}
+      </p>
+
+      {/* Existing rule cards */}
+      {config.restrictions.map(r => <RestrictionCard key={r.id} r={r} onDelete={() => rmRestriction(r.id)} />)}
+      {config.conflicts.map(r    => <ConflictCard    key={r.id} r={r} onDelete={() => rmConflict(r.id)} />)}
+      {config.presence.map(r     => <PresenceCard    key={r.id} r={r} onDelete={() => rmPresence(r.id)} />)}
+
+      {total === 0 && !adding && (
+        <p className="font-body text-xs text-gray-600 italic px-1">Sin reglas configuradas</p>
+      )}
+
+      {/* Inline add forms */}
+      {adding === "restriction" && (
+        <PersonRestrictionForm
+          members={members}
+          onAdd={r => { onChange({ ...config, restrictions: [...config.restrictions, r] }); setAdding(null); }}
+          onCancel={() => setAdding(null)}
+        />
+      )}
+      {adding === "conflict" && (
+        <ConflictForm
+          members={members}
+          onAdd={r => { onChange({ ...config, conflicts: [...config.conflicts, r] }); setAdding(null); }}
+          onCancel={() => setAdding(null)}
+        />
+      )}
+      {adding === "presence" && (
+        <PresenceForm
+          members={members}
+          onAdd={r => { onChange({ ...config, presence: [...config.presence, r] }); setAdding(null); }}
+          onCancel={() => setAdding(null)}
+        />
+      )}
+
+      {/* Add buttons */}
+      {!adding && (
+        <div className="flex gap-2 pt-1 flex-wrap">
+          <button
+            type="button" onClick={() => setAdding("restriction")}
+            className="font-label text-[9px] uppercase tracking-widest px-2 py-1 rounded-full border border-red-500/30 text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+          >
+            + Persona
+          </button>
+          <button
+            type="button" onClick={() => setAdding("conflict")}
+            className="font-label text-[9px] uppercase tracking-widest px-2 py-1 rounded-full border border-purple-500/30 text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/10 transition-colors"
+          >
+            ≠ Conflicto
+          </button>
+          <button
+            type="button" onClick={() => setAdding("presence")}
+            className="font-label text-[9px] uppercase tracking-widest px-2 py-1 rounded-full border border-green-500/30 text-green-400/70 hover:text-green-400 hover:bg-green-500/10 transition-colors"
+          >
+            ≥1 Presencia
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Draft card editor ────────────────────────────────────────────────────────
 
 function DraftCardEditor({ draft, members, onChange, onToggleSkip, swapSelected, onSwapSelect }: {
@@ -173,27 +815,14 @@ function DraftCardEditor({ draft, members, onChange, onToggleSkip, swapSelected,
 
         <div className="flex items-center gap-1 shrink-0">
           {!draft.skipped && (
-            <button
-              type="button"
-              onClick={onSwapSelect}
-              title="Intercambiar equipo"
-              className={`px-2 py-1 rounded font-label text-xs transition-colors ${
-                swapSelected ? "bg-[#00bfff]/20 text-[#00bfff]" : "text-gray-500 hover:text-[#00bfff] hover:bg-[#00bfff]/10"
-              }`}
-            >
-              ⇄
-            </button>
+            <button type="button" onClick={onSwapSelect} title="Intercambiar equipo"
+              className={`px-2 py-1 rounded font-label text-xs transition-colors ${swapSelected ? "bg-[#00bfff]/20 text-[#00bfff]" : "text-gray-500 hover:text-[#00bfff] hover:bg-[#00bfff]/10"}`}
+            >⇄</button>
           )}
           {!draft.exists && (
-            <button
-              type="button"
-              onClick={onToggleSkip}
-              className={`px-2 py-1 rounded font-label text-[10px] uppercase tracking-widest transition-colors ${
-                draft.skipped ? "text-[#00bfff] hover:bg-[#00bfff]/10" : "text-gray-500 hover:text-red-400 hover:bg-red-500/10"
-              }`}
-            >
-              {draft.skipped ? "+ Incluir" : "Omitir"}
-            </button>
+            <button type="button" onClick={onToggleSkip}
+              className={`px-2 py-1 rounded font-label text-[10px] uppercase tracking-widest transition-colors ${draft.skipped ? "text-[#00bfff] hover:bg-[#00bfff]/10" : "text-gray-500 hover:text-red-400 hover:bg-red-500/10"}`}
+            >{draft.skipped ? "+ Incluir" : "Omitir"}</button>
           )}
           {!draft.skipped && (
             <button type="button" onClick={() => setExpanded(v => !v)} className="px-1.5 py-1 rounded text-gray-500 hover:text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors text-xs">
@@ -205,25 +834,18 @@ function DraftCardEditor({ draft, members, onChange, onToggleSkip, swapSelected,
 
       {expanded && !draft.skipped && (
         <div className="px-4 pb-4 pt-2 space-y-3 border-t border-[#00bfff]/10">
-          <MemberCheckboxes label="Líderes"  members={members} selected={draft.leads}  onChange={leads  => onChange({ ...draft, leads  })} />
-          <MemberCheckboxes label="BGVs"     members={members} selected={draft.bgvs}   onChange={bgvs   => onChange({ ...draft, bgvs   })} />
-          <MemberCheckboxes label="Coro"     members={members} selected={draft.chorus} onChange={chorus => onChange({ ...draft, chorus })} />
-          <SlotEditor2 label="Instrumentos" nameKey="instrument" slots={draft.instruments} members={members} onChange={s => onChange({ ...draft, instruments: s })} />
-          <SlotEditor2 label="FOH / Técnicos" nameKey="role"   slots={draft.foh}        members={members} onChange={s => onChange({ ...draft, foh: s })} />
+          <MemberCheckboxes label="Líderes"   members={members} selected={draft.leads}  onChange={leads  => onChange({ ...draft, leads  })} />
+          <MemberCheckboxes label="BGVs"      members={members} selected={draft.bgvs}   onChange={bgvs   => onChange({ ...draft, bgvs   })} />
+          <MemberCheckboxes label="Coro"      members={members} selected={draft.chorus} onChange={chorus => onChange({ ...draft, chorus })} />
+          <SlotEditor2 label="Instrumentos"   nameKey="instrument" slots={draft.instruments} members={members} onChange={s => onChange({ ...draft, instruments: s })} />
+          <SlotEditor2 label="FOH / Técnicos" nameKey="role"       slots={draft.foh}         members={members} onChange={s => onChange({ ...draft, foh: s })} />
         </div>
       )}
     </div>
   );
 }
 
-// ─── Solver config section ────────────────────────────────────────────────────
-
-interface SolverConfig {
-  sundayLeads: string[];
-  saturdayLeads: string[];
-  support: string[];
-  dslRules: string;
-}
+// ─── Solver config panel ──────────────────────────────────────────────────────
 
 function SolverConfigPanel({ members, config, onChange }: {
   members: MemberOption[];
@@ -231,10 +853,10 @@ function SolverConfigPanel({ members, config, onChange }: {
   onChange: (c: SolverConfig) => void;
 }) {
   const [searches, setSearches] = useState<Record<string, string>>({});
-  const inCls = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
 
-  // Only Voz members are valid for vocal pools
-  const vozMembers = members.filter(m => m.memberType?.includes("voz"));
+  const sundayPool   = members.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("sunday_lead"));
+  const saturdayPool = members.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("saturday_lead"));
+  const supportPool  = members.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("support"));
 
   const toggleMember = (field: "sundayLeads" | "saturdayLeads" | "support", id: string) => {
     const cur = config[field];
@@ -244,65 +866,46 @@ function SolverConfigPanel({ members, config, onChange }: {
   const selectAll = (field: "sundayLeads" | "saturdayLeads" | "support", pool: MemberOption[]) => {
     const allIds = pool.map(m => m._id);
     const allSelected = allIds.every(id => config[field].includes(id));
-    onChange({ ...config, [field]: allSelected ? config[field].filter(id => !allIds.includes(id)) : [...new Set([...config[field], ...allIds])] });
-  };
-
-  const MemberPool = ({ field, label }: { field: "sundayLeads" | "saturdayLeads" | "support"; label: string }) => {
-    const q = searches[field] ?? "";
-    const pool = vozMembers;
-    const visible = q.trim() ? pool.filter(m => dn(m).toLowerCase().includes(q.toLowerCase())) : pool;
-    const allSelected = pool.length > 0 && pool.every(m => config[field].includes(m._id));
-    return (
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">{label}</p>
-          <button
-            type="button"
-            onClick={() => selectAll(field, pool)}
-            className="font-label text-[9px] uppercase tracking-widest text-[#00bfff]/60 hover:text-[#00bfff] transition-colors"
-          >
-            {allSelected ? "Ninguno" : "Todos"}
-          </button>
-        </div>
-        <input
-          className="w-full px-2 py-1 mb-1 rounded border border-[#00bfff]/15 bg-transparent font-body text-xs focus:outline-none focus:border-[#00bfff] placeholder-gray-600"
-          placeholder="Buscar..."
-          value={q}
-          onChange={e => setSearches(s => ({ ...s, [field]: e.target.value }))}
-        />
-        <div className="max-h-32 overflow-y-auto rounded border border-[#00bfff]/10 divide-y divide-[#00bfff]/5">
-          {visible.length === 0 && <p className="px-2 py-1 font-body text-xs text-gray-600 italic">Sin resultados</p>}
-          {visible.map(m => (
-            <label key={m._id} className={`flex items-center gap-2 px-2 py-1 cursor-pointer text-xs transition-colors ${config[field].includes(m._id) ? "bg-[#00bfff]/10" : "hover:bg-[#00bfff]/5"}`}>
-              <input type="checkbox" checked={config[field].includes(m._id)} onChange={() => toggleMember(field, m._id)} className="accent-[#00bfff]" />
-              <span className="font-body">{dn(m)}</span>
-            </label>
-          ))}
-        </div>
-        {config[field].length > 0 && (
-          <p className="font-label text-[9px] uppercase tracking-widest text-[#00bfff] mt-0.5">{config[field].length} seleccionado{config[field].length !== 1 ? "s" : ""}</p>
-        )}
-      </div>
-    );
+    onChange({
+      ...config,
+      [field]: allSelected
+        ? config[field].filter(id => !allIds.includes(id))
+        : [...new Set([...config[field], ...allIds])],
+    });
   };
 
   return (
     <div className="space-y-3 p-3 rounded-xl border border-[#00bfff]/20 bg-[#00bfff]/5">
       <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]">Configuración del Solver</p>
+
       <div className="grid grid-cols-3 gap-3">
-        <MemberPool field="sundayLeads" label="Líderes Domingo" />
-        <MemberPool field="saturdayLeads" label="Líderes Sábado" />
-        <MemberPool field="support" label="Soporte" />
-      </div>
-      <div>
-        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Reglas DSL</p>
-        <textarea
-          className={`${inCls} h-28 resize-none font-mono text-xs`}
-          placeholder={`Ejemplos:\nFrank !in Sat.* & fairness_exempt\nany_of(Hugo,Jakey) on Sun.BGV each_week\nGaby Sun.BGV <= 2`}
-          value={config.dslRules}
-          onChange={e => onChange({ ...config, dslRules: e.target.value })}
+        <MemberPool
+          field="sundayLeads" label="Líderes Domingo"
+          pool={sundayPool} config={config}
+          onToggle={id => toggleMember("sundayLeads", id)}
+          onSelectAll={() => selectAll("sundayLeads", sundayPool)}
+          search={searches.sundayLeads ?? ""}
+          onSearch={q => setSearches(s => ({ ...s, sundayLeads: q }))}
+        />
+        <MemberPool
+          field="saturdayLeads" label="Líderes Sábado"
+          pool={saturdayPool} config={config}
+          onToggle={id => toggleMember("saturdayLeads", id)}
+          onSelectAll={() => selectAll("saturdayLeads", saturdayPool)}
+          search={searches.saturdayLeads ?? ""}
+          onSearch={q => setSearches(s => ({ ...s, saturdayLeads: q }))}
+        />
+        <MemberPool
+          field="support" label="Soporte"
+          pool={supportPool} config={config}
+          onToggle={id => toggleMember("support", id)}
+          onSelectAll={() => selectAll("support", supportPool)}
+          search={searches.support ?? ""}
+          onSearch={q => setSearches(s => ({ ...s, support: q }))}
         />
       </div>
+
+      <RuleBuilder config={config} onChange={onChange} members={members.filter(m => m.memberType?.includes("voz"))} />
     </div>
   );
 }
@@ -311,24 +914,34 @@ function SolverConfigPanel({ members, config, onChange }: {
 
 export default function MonthGenerator({ members, existingRoles, onClose, onCreated }: Props) {
   const now = new Date();
-  const [step, setStep]      = useState<"config" | "preview">("config");
-  const [year, setYear]      = useState(now.getFullYear());
-  const [month, setMonth]    = useState(now.getMonth() + 1);
-  const [sundays, setSundays]    = useState(true);
+  const [step, setStep]           = useState<"config" | "preview">("config");
+  const [year, setYear]           = useState(now.getFullYear());
+  const [month, setMonth]         = useState(now.getMonth() + 1);
+  const [sundays, setSundays]     = useState(true);
   const [saturdays, setSaturdays] = useState(true);
-  const [drafts, setDrafts]  = useState<DraftCard[]>([]);
-  const [swapSel, setSwapSel] = useState<string | null>(null);
-  const [pushing, setPushing] = useState(false);
+  const [drafts, setDrafts]       = useState<DraftCard[]>([]);
+  const [swapSel, setSwapSel]     = useState<string | null>(null);
+  const [pushing, setPushing]     = useState(false);
   const [swapToast, setSwapToast] = useState<string | null>(null);
   const [useSolver, setUseSolver] = useState(false);
-  const [solving, setSolving] = useState(false);
+  const [solving, setSolving]     = useState(false);
   const [solverError, setSolverError] = useState<string | null>(null);
-  const [solverConfig, setSolverConfig] = useState<SolverConfig>({
-    sundayLeads: [],
-    saturdayLeads: [],
-    support: [],
-    dslRules: "",
-  });
+  const [solverConfig, setSolverConfig] = useState<SolverConfig>(DEFAULT_SOLVER_CONFIG);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return;
+      const parsed = JSON.parse(saved) as SolverConfig;
+      if (Array.isArray(parsed.sundayLeads) && Array.isArray(parsed.restrictions)) {
+        setSolverConfig(parsed);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(solverConfig)); } catch {}
+  }, [solverConfig]);
 
   const inCls  = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
   const selCls = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-[#0a1929] font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
@@ -364,41 +977,30 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
       return;
     }
 
-    // Solver mode: build request and call API
-    const sundayDates = getDates(year, month, 0);
+    const sundayDates   = getDates(year, month, 0);
     const saturdayDates = getDates(year, month, 6);
-    const weeks = sundayDates.length;
+    const weeks         = sundayDates.length;
 
-    // Which "week numbers" (1-based) have Saturday service
-    // We assume: each Sunday date may have a Saturday (day before it) — include it if user wants saturdays
-    // Build a list of 1-based week indexes that have Saturday service
     const weekendsWithSaturday: number[] = [];
     if (saturdays) {
       sundayDates.forEach((sunDate, i) => {
         const prevDay = subtractDay(sunDate);
-        if (saturdayDates.includes(prevDay)) {
-          weekendsWithSaturday.push(i + 1);
-        }
+        if (saturdayDates.includes(prevDay)) weekendsWithSaturday.push(i + 1);
       });
-      // If no Saturday is directly before a Sunday, include all available Saturdays
       if (weekendsWithSaturday.length === 0 && saturdayDates.length > 0) {
         saturdayDates.forEach((_, i) => weekendsWithSaturday.push(i + 1));
       }
     }
 
-    // Map member IDs → names for solver, names → IDs for result mapping
     const idToName = (id: string) => members.find(m => m._id === id)?.member_name ?? id;
 
     const payload: SolveRequest = {
       weeks,
       weekends_with_saturday: weekendsWithSaturday,
-      sunday_leads: solverConfig.sundayLeads.map(idToName),
+      sunday_leads:   solverConfig.sundayLeads.map(idToName),
       saturday_leads: solverConfig.saturdayLeads.map(idToName),
-      support: solverConfig.support.map(idToName),
-      dsl_rules: solverConfig.dslRules
-        .split("\n")
-        .map(l => l.trim())
-        .filter(Boolean),
+      support:        solverConfig.support.map(idToName),
+      dsl_rules:      allRulesToDs(solverConfig),
       history: [],
     };
 
@@ -416,7 +1018,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
         body: JSON.stringify(payload),
       });
       result = await res.json();
-    } catch (e) {
+    } catch {
       setSolverError("Error de red al llamar al solver.");
       setSolving(false);
       return;
@@ -428,8 +1030,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
       return;
     }
 
-    // Map solver output → draft cards
-    const existing = new Set(existingRoles.map(r => `${r._type}__${r.date}`));
+    const existing  = new Set(existingRoles.map(r => `${r._type}__${r.date}`));
     const allDrafts: DraftCard[] = [];
 
     for (let w = 1; w <= weeks; w++) {
@@ -440,35 +1041,27 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
       if (sundays && sunDate) {
         const sun = weekData.Sunday ?? { Lead: [], BGV: [], Choir: [] };
         allDrafts.push({
-          localId: uid(),
-          _type: "sunday_role",
-          date: sunDate,
-          exists: existing.has(`sunday_role__${sunDate}`),
+          localId: uid(), _type: "sunday_role", date: sunDate,
+          exists:  existing.has(`sunday_role__${sunDate}`),
           skipped: existing.has(`sunday_role__${sunDate}`),
-          leads: sun.Lead.map(n => nameToId(n, members)).filter(Boolean) as string[],
-          bgvs: sun.BGV.map(n => nameToId(n, members)).filter(Boolean) as string[],
+          leads:  sun.Lead.map(n => nameToId(n, members)).filter(Boolean) as string[],
+          bgvs:   sun.BGV.map(n  => nameToId(n, members)).filter(Boolean) as string[],
           chorus: sun.Choir.map(n => nameToId(n, members)).filter(Boolean) as string[],
-          instruments: [],
-          foh: [],
+          instruments: [], foh: [],
         });
       }
 
       if (saturdays && weekData.Saturday) {
-        // Saturday date = day before this Sunday
         const satDate = subtractDay(sunDate);
         if (saturdayDates.includes(satDate)) {
           const sat = weekData.Saturday;
           allDrafts.push({
-            localId: uid(),
-            _type: "saturday_role",
-            date: satDate,
-            exists: existing.has(`saturday_role__${satDate}`),
+            localId: uid(), _type: "saturday_role", date: satDate,
+            exists:  existing.has(`saturday_role__${satDate}`),
             skipped: existing.has(`saturday_role__${satDate}`),
             leads: sat.Lead.map(n => nameToId(n, members)).filter(Boolean) as string[],
-            bgvs: sat.BGV.map(n => nameToId(n, members)).filter(Boolean) as string[],
-            chorus: [],
-            instruments: [],
-            foh: [],
+            bgvs:  sat.BGV.map(n  => nameToId(n, members)).filter(Boolean) as string[],
+            chorus: [], instruments: [], foh: [],
           });
         }
       }
@@ -484,8 +1077,8 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
     const a = drafts.find(d => d.localId === swapSel)!;
     const b = drafts.find(d => d.localId === localId)!;
     setDrafts(drafts.map(d => {
-      if (d.localId === swapSel) return { ...d, leads: b.leads, bgvs: b.bgvs, chorus: b.chorus, instruments: b.instruments, foh: b.foh };
-      if (d.localId === localId) return { ...d, leads: a.leads, bgvs: a.bgvs, chorus: a.chorus, instruments: a.instruments, foh: a.foh };
+      if (d.localId === swapSel)  return { ...d, leads: b.leads, bgvs: b.bgvs, chorus: b.chorus, instruments: b.instruments, foh: b.foh };
+      if (d.localId === localId)  return { ...d, leads: a.leads, bgvs: a.bgvs, chorus: a.chorus, instruments: a.instruments, foh: a.foh };
       return d;
     }));
     setSwapSel(null);
@@ -543,25 +1136,18 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
         ))}
       </div>
 
-      {/* Solver toggle */}
       <div className="space-y-3">
         <label className="flex items-center gap-3 cursor-pointer">
           <input type="checkbox" checked={useSolver} onChange={e => setUseSolver(e.target.checked)} className="accent-[#00bfff] w-4 h-4" />
           <span className="font-body text-sm">🤖 Auto-asignar con Solver</span>
         </label>
         {useSolver && (
-          <SolverConfigPanel
-            members={members}
-            config={solverConfig}
-            onChange={setSolverConfig}
-          />
+          <SolverConfigPanel members={members} config={solverConfig} onChange={setSolverConfig} />
         )}
       </div>
 
       {solverError && (
-        <p className="font-body text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
-          {solverError}
-        </p>
+        <p className="font-body text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{solverError}</p>
       )}
 
       <div className="flex gap-3">
@@ -587,11 +1173,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {swapSel && (
-            <span className="font-label text-[10px] uppercase tracking-widest text-[#00bfff] animate-pulse">
-              Selecciona otro ⇄
-            </span>
-          )}
+          {swapSel && <span className="font-label text-[10px] uppercase tracking-widest text-[#00bfff] animate-pulse">Selecciona otro ⇄</span>}
           <button type="button" onClick={() => { setStep("config"); setSwapSel(null); }} className="font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] transition-colors">
             ← Volver
           </button>
@@ -599,17 +1181,13 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
       </div>
 
       {swapToast && (
-        <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff] text-center bg-[#00bfff]/10 rounded-lg py-1.5">
-          {swapToast}
-        </p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff] text-center bg-[#00bfff]/10 rounded-lg py-1.5">{swapToast}</p>
       )}
 
       <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-0.5">
         {drafts.map(d => (
           <DraftCardEditor
-            key={d.localId}
-            draft={d}
-            members={members}
+            key={d.localId} draft={d} members={members}
             onChange={updated => setDrafts(drafts.map(x => x.localId === updated.localId ? updated : x))}
             onToggleSkip={() => setDrafts(drafts.map(x => x.localId === d.localId ? { ...x, skipped: !x.skipped } : x))}
             swapSelected={swapSel === d.localId}

@@ -4,10 +4,19 @@ import { NextResponse } from "next/server";
 export default withAuth(
   function middleware(req) {
     const { token } = req.nextauth;
+    const { pathname } = req.nextUrl;
 
     // Signed in via SSO but email not found in Sanity teamMembers
     if (token && !token.sanityId) {
       return NextResponse.redirect(new URL("/auth/not-a-member", req.url));
+    }
+
+    // Sanity Studio requires admin role or higher — members cannot access it
+    if (pathname.startsWith("/studio")) {
+      const role = token?.role as string | undefined;
+      if (role !== "super-admin" && role !== "admin") {
+        return NextResponse.redirect(new URL("/", req.url));
+      }
     }
 
     return NextResponse.next();
@@ -20,8 +29,9 @@ export default withAuth(
 );
 
 export const config = {
-  // Protect everything except: auth pages, NextAuth API, Sanity Studio, and static assets
+  // Protect everything except: auth pages, NextAuth API, and static assets.
+  // Studio is now included — it requires login + admin role (checked above).
   matcher: [
-    "/((?!auth|api/auth|studio|_next/static|_next/image|favicon\\.ico|LogoOasis\\.png).*)",
+    "/((?!auth|api/auth|_next/static|_next/image|favicon\\.ico|LogoOasis\\.png).*)",
   ],
 };

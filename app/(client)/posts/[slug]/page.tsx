@@ -25,6 +25,7 @@ async function getPost(slug: string) {
       key,
       body,
       tags[] -> { _id, slug, name },
+      referenceLinks[]{ label, url },
       tutorials2[]{ title, url },
       "lyricsURL": lyrics.asset->url,
       audioTracks[] {
@@ -99,13 +100,15 @@ const Page = async ({ params }: Params) => {
   const hasTutorials = (post?.tutorials2?.length ?? 0) > 0;
   const hasBody      = !!post?.body;
   const hasHistory   = history.length > 0;
+  const hasRefLinks  = (post?.referenceLinks?.length ?? 0) > 0;
 
   const sections = [
-    { id: "letra",      label: "Letra",      show: hasBody },
-    { id: "audio",      label: "Audio",      show: hasAudio },
-    { id: "acordes",    label: "Acordes",    show: hasChords },
-    { id: "tutoriales", label: "Tutoriales", show: hasTutorials },
-    { id: "historial",  label: "Historial",  show: hasHistory },
+    { id: "letra",      label: "Letra",        show: hasBody },
+    { id: "audio",      label: "Audio",        show: hasAudio },
+    { id: "acordes",    label: "Acordes",      show: hasChords },
+    { id: "tutoriales", label: "Tutoriales",   show: hasTutorials },
+    { id: "referencia", label: "Referencia",   show: hasRefLinks },
+    { id: "historial",  label: "Historial",    show: hasHistory },
   ].filter((s) => s.show);
 
   return (
@@ -307,6 +310,33 @@ const Page = async ({ params }: Params) => {
                     </div>
                   )}
                 </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Reference Links */}
+        {hasRefLinks && (
+          <section id="referencia">
+            <SectionHeader>Versión de referencia</SectionHeader>
+            <div className="flex flex-wrap justify-center gap-4">
+              {post.referenceLinks!.map((link, i) => (
+                <a
+                  key={i}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-5 py-3 rounded-xl border border-[#003572]/25 dark:border-[#00bfff]/15 hover:border-[#00bfff]/50 dark:hover:border-[#00bfff]/40 hover:bg-[#00bfff]/5 transition-colors group"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="text-[#00bfff] shrink-0">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg>
+                  <span className="font-label text-sm uppercase tracking-widest group-hover:text-[#00bfff] transition-colors">
+                    {link.label || link.url}
+                  </span>
+                </a>
               ))}
             </div>
           </section>
