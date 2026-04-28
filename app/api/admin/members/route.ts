@@ -17,6 +17,7 @@ export async function GET() {
   const members = await serverClient.fetch(
     `*[_type == "teamMembers"] | order(member_name asc) {
       _id, member_name, alias, email, role, memberType,
+      unavailableDates,
       "hasPassword": defined(passwordHash) && passwordHash != "",
       "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl)
     }`

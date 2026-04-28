@@ -91,5 +91,12 @@ export const teamMembers = defineType({
       hidden: true,
       description: "Set via the admin password-setup API or CLI script. Never edit manually.",
     },
+    {
+      name: "unavailableDates",
+      title: "Fechas no disponibles",
+      type: "array",
+      of: [{ type: "string" }],
+      description: "ISO dates (YYYY-MM-DD) when this member is unavailable. Set by the member from /me.",
+    },
   ],
 });
