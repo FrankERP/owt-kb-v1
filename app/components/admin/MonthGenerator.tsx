@@ -193,7 +193,19 @@ function subtractDay(iso: string): string {
 
 function nameToId(name: string, members: MemberOption[]): string | null {
   const lo = name.toLowerCase().trim();
-  return members.find(m => m.member_name.toLowerCase().trim() === lo)?._id ?? null;
+  return members.find(m =>
+    m.member_name.toLowerCase().trim() === lo ||
+    (m.alias?.trim().toLowerCase() === lo)
+  )?._id ?? null;
+}
+
+function resolveToMemberName(name: string, members: MemberOption[]): string {
+  const lo = name.toLowerCase().trim();
+  const m = members.find(m =>
+    m.member_name.toLowerCase().trim() === lo ||
+    (m.alias?.trim().toLowerCase() === lo)
+  );
+  return m?.member_name ?? name;
 }
 
 // ─── DSL serialization ────────────────────────────────────────────────────────
@@ -213,11 +225,18 @@ function restrictionToDs(r: PersonRestriction): string | null {
   return `${r.person} ${clauses.join(" & ")}`;
 }
 
-function allRulesToDs(config: SolverConfig): string[] {
+function allRulesToDs(config: SolverConfig, members: MemberOption[]): string[] {
+  const res = (name: string) => resolveToMemberName(name, members);
   const out: string[] = [];
-  for (const r of config.restrictions) { const ds = restrictionToDs(r); if (ds) out.push(ds); }
-  for (const r of config.conflicts)    out.push(`${r.personA} !with ${r.personB} on ${r.pattern}`);
-  for (const r of config.presence)     out.push(`any_of(${r.persons.join(",")}) on ${r.pattern} each_week`);
+  for (const r of config.restrictions) {
+    const resolved = { ...r, person: res(r.person) };
+    const ds = restrictionToDs(resolved);
+    if (ds) out.push(ds);
+  }
+  for (const r of config.conflicts)
+    out.push(`${res(r.personA)} !with ${res(r.personB)} on ${r.pattern}`);
+  for (const r of config.presence)
+    out.push(`any_of(${r.persons.map(res).join(",")}) on ${r.pattern} each_week`);
   return out;
 }
 
@@ -326,7 +345,7 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
 
 // ─── Rule builder — display cards ─────────────────────────────────────────────
 
-function RestrictionCard({ r, onDelete }: { r: PersonRestriction; onDelete: () => void }) {
+function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDelete: () => void; onEdit: () => void }) {
   return (
     <div className="rounded-lg border border-[#00bfff]/10 bg-[#001830]/40 px-3 py-2 flex items-start gap-2">
       <div className="flex-1 min-w-0 space-y-1">
@@ -359,12 +378,13 @@ function RestrictionCard({ r, onDelete }: { r: PersonRestriction; onDelete: () =
           )}
         </div>
       </div>
+      <button type="button" onClick={onEdit} className="text-gray-600 hover:text-[#00bfff] transition-colors shrink-0 text-xs leading-none mt-0.5 px-0.5" title="Editar">✎</button>
       <button type="button" onClick={onDelete} className="text-gray-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none mt-0.5">×</button>
     </div>
   );
 }
 
-function ConflictCard({ r, onDelete }: { r: ConflictRule; onDelete: () => void }) {
+function ConflictCard({ r, onDelete, onEdit }: { r: ConflictRule; onDelete: () => void; onEdit: () => void }) {
   return (
     <div className="rounded-lg border border-[#00bfff]/10 bg-[#001830]/40 px-3 py-2 flex items-center gap-2">
       <span className="font-label text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30 shrink-0">≠</span>
@@ -375,12 +395,13 @@ function ConflictCard({ r, onDelete }: { r: ConflictRule; onDelete: () => void }
         <span className="text-gray-500 mx-1">en</span>
         <span className="text-[#00bfff]/70">{r.pattern}</span>
       </span>
+      <button type="button" onClick={onEdit} className="text-gray-600 hover:text-[#00bfff] transition-colors shrink-0 text-xs leading-none px-0.5" title="Editar">✎</button>
       <button type="button" onClick={onDelete} className="text-gray-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none">×</button>
     </div>
   );
 }
 
-function PresenceCard({ r, onDelete }: { r: PresenceRule; onDelete: () => void }) {
+function PresenceCard({ r, onDelete, onEdit }: { r: PresenceRule; onDelete: () => void; onEdit: () => void }) {
   return (
     <div className="rounded-lg border border-[#00bfff]/10 bg-[#001830]/40 px-3 py-2 flex items-center gap-2">
       <span className="font-label text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/30 shrink-0">≥1</span>
@@ -390,6 +411,7 @@ function PresenceCard({ r, onDelete }: { r: PresenceRule; onDelete: () => void }
         <span className="text-[#00bfff]/70">{r.pattern}</span>
         <span className="text-gray-500 ml-1">c/sem</span>
       </span>
+      <button type="button" onClick={onEdit} className="text-gray-600 hover:text-[#00bfff] transition-colors shrink-0 text-xs leading-none px-0.5" title="Editar">✎</button>
       <button type="button" onClick={onDelete} className="text-gray-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none">×</button>
     </div>
   );
@@ -400,18 +422,19 @@ function PresenceCard({ r, onDelete }: { r: PresenceRule; onDelete: () => void }
 const rbSel = "px-2 py-1 rounded border border-[#00bfff]/15 bg-[#0a1929] font-body text-xs focus:outline-none focus:border-[#00bfff] w-full";
 const rbIn  = "px-2 py-1 rounded border border-[#00bfff]/15 bg-transparent font-body text-xs focus:outline-none focus:border-[#00bfff]";
 
-function PersonRestrictionForm({ members, onAdd, onCancel }: {
+function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
   members: MemberOption[];
   onAdd: (r: PersonRestriction) => void;
   onCancel: () => void;
+  initialValues?: PersonRestriction;
 }) {
   const names = members.map(dn);
-  const [person,   setPerson]   = useState(names[0] ?? "");
-  const [excl,     setExcl]     = useState<string[]>([]);
-  const [fairness, setFairness] = useState<PersonRestriction["fairness"]>("none");
-  const [slack,    setSlack]    = useState(1);
-  const [weekEx,   setWeekEx]   = useState<Array<{ id: string; week: number; pattern: string }>>([]);
-  const [caps,     setCaps]     = useState<PersonRestriction["caps"]>([]);
+  const [person,   setPerson]   = useState(initialValues?.person ?? (names[0] ?? ""));
+  const [excl,     setExcl]     = useState<string[]>(initialValues?.excludedPatterns ?? []);
+  const [fairness, setFairness] = useState<PersonRestriction["fairness"]>(initialValues?.fairness ?? "none");
+  const [slack,    setSlack]    = useState(initialValues?.fairnessSlack ?? 1);
+  const [weekEx,   setWeekEx]   = useState<Array<{ id: string; week: number; pattern: string }>>(initialValues?.weekExclusions ?? []);
+  const [caps,     setCaps]     = useState<PersonRestriction["caps"]>(initialValues?.caps ?? []);
 
   const toggleExcl = (pat: string) =>
     setExcl(e => e.includes(pat) ? e.filter(x => x !== pat) : [...e, pat]);
@@ -580,22 +603,23 @@ function PersonRestrictionForm({ members, onAdd, onCancel }: {
           Cancelar
         </button>
         <button type="button" onClick={handleAdd} disabled={!canAdd} className="flex-1 py-1 rounded font-label text-[10px] uppercase tracking-widest bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors disabled:opacity-40">
-          Agregar restricción
+          {initialValues ? "Guardar cambios" : "Agregar restricción"}
         </button>
       </div>
     </div>
   );
 }
 
-function ConflictForm({ members, onAdd, onCancel }: {
+function ConflictForm({ members, onAdd, onCancel, initialValues }: {
   members: MemberOption[];
   onAdd: (r: ConflictRule) => void;
   onCancel: () => void;
+  initialValues?: ConflictRule;
 }) {
   const names = members.map(dn);
-  const [personA,  setPersonA]  = useState(names[0] ?? "");
-  const [personB,  setPersonB]  = useState(names[1] ?? "");
-  const [pattern,  setPattern]  = useState("*.Lead");
+  const [personA,  setPersonA]  = useState(initialValues?.personA ?? (names[0] ?? ""));
+  const [personB,  setPersonB]  = useState(initialValues?.personB ?? (names[1] ?? ""));
+  const [pattern,  setPattern]  = useState(initialValues?.pattern ?? "*.Lead");
 
   const canAdd = personA && personB && personA !== personB;
 
@@ -628,21 +652,22 @@ function ConflictForm({ members, onAdd, onCancel }: {
         <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[10px] uppercase tracking-widest border border-[#00bfff]/20 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff] transition-colors">
           Cancelar
         </button>
-        <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: uid(), personA, personB, pattern })} className="flex-1 py-1 rounded font-label text-[10px] uppercase tracking-widest bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 transition-colors disabled:opacity-40">
-          Agregar conflicto
+        <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: initialValues?.id ?? uid(), personA, personB, pattern })} className="flex-1 py-1 rounded font-label text-[10px] uppercase tracking-widest bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 transition-colors disabled:opacity-40">
+          {initialValues ? "Guardar cambios" : "Agregar conflicto"}
         </button>
       </div>
     </div>
   );
 }
 
-function PresenceForm({ members, onAdd, onCancel }: {
+function PresenceForm({ members, onAdd, onCancel, initialValues }: {
   members: MemberOption[];
   onAdd: (r: PresenceRule) => void;
   onCancel: () => void;
+  initialValues?: PresenceRule;
 }) {
-  const [selected, setSelected] = useState<string[]>([]);
-  const [pattern,  setPattern]  = useState("Sun.BGV");
+  const [selected, setSelected] = useState<string[]>(initialValues?.persons ?? []);
+  const [pattern,  setPattern]  = useState(initialValues?.pattern ?? "Sun.BGV");
 
   const canAdd = selected.length >= 2;
 
@@ -679,8 +704,8 @@ function PresenceForm({ members, onAdd, onCancel }: {
         <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[10px] uppercase tracking-widest border border-[#00bfff]/20 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff] transition-colors">
           Cancelar
         </button>
-        <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: uid(), persons: selected, pattern })} className="flex-1 py-1 rounded font-label text-[10px] uppercase tracking-widest bg-green-500/20 hover:bg-green-500/30 text-green-400 transition-colors disabled:opacity-40">
-          Agregar presencia
+        <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: initialValues?.id ?? uid(), persons: selected, pattern })} className="flex-1 py-1 rounded font-label text-[10px] uppercase tracking-widest bg-green-500/20 hover:bg-green-500/30 text-green-400 transition-colors disabled:opacity-40">
+          {initialValues ? "Guardar cambios" : "Agregar presencia"}
         </button>
       </div>
     </div>
@@ -694,13 +719,30 @@ function RuleBuilder({ config, onChange, members }: {
   onChange: (c: SolverConfig) => void;
   members: MemberOption[];
 }) {
-  const [adding, setAdding] = useState<"restriction" | "conflict" | "presence" | null>(null);
+  const [adding,    setAdding]    = useState<"restriction" | "conflict" | "presence" | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const rmRestriction = (id: string) => onChange({ ...config, restrictions: config.restrictions.filter(r => r.id !== id) });
   const rmConflict    = (id: string) => onChange({ ...config, conflicts:    config.conflicts.filter(r => r.id !== id) });
   const rmPresence    = (id: string) => onChange({ ...config, presence:     config.presence.filter(r => r.id !== id) });
 
+  const saveRestriction = (r: PersonRestriction) => {
+    onChange({ ...config, restrictions: config.restrictions.map(x => x.id === r.id ? r : x) });
+    setEditingId(null);
+  };
+  const saveConflict = (r: ConflictRule) => {
+    onChange({ ...config, conflicts: config.conflicts.map(x => x.id === r.id ? r : x) });
+    setEditingId(null);
+  };
+  const savePresence = (r: PresenceRule) => {
+    onChange({ ...config, presence: config.presence.map(x => x.id === r.id ? r : x) });
+    setEditingId(null);
+  };
+
+  const cancelEdit = () => setEditingId(null);
+
   const total = config.restrictions.length + config.conflicts.length + config.presence.length;
+  const isFormOpen = !!adding || !!editingId;
 
   return (
     <div className="space-y-2">
@@ -708,12 +750,43 @@ function RuleBuilder({ config, onChange, members }: {
         Reglas{total > 0 ? ` (${total})` : ""}
       </p>
 
-      {/* Existing rule cards */}
-      {config.restrictions.map(r => <RestrictionCard key={r.id} r={r} onDelete={() => rmRestriction(r.id)} />)}
-      {config.conflicts.map(r    => <ConflictCard    key={r.id} r={r} onDelete={() => rmConflict(r.id)} />)}
-      {config.presence.map(r     => <PresenceCard    key={r.id} r={r} onDelete={() => rmPresence(r.id)} />)}
+      {/* Restriction cards / edit forms */}
+      {config.restrictions.map(r =>
+        editingId === r.id ? (
+          <PersonRestrictionForm key={r.id} members={members} initialValues={r}
+            onAdd={saveRestriction} onCancel={cancelEdit} />
+        ) : (
+          <RestrictionCard key={r.id} r={r}
+            onDelete={() => rmRestriction(r.id)}
+            onEdit={() => { setEditingId(r.id); setAdding(null); }} />
+        )
+      )}
 
-      {total === 0 && !adding && (
+      {/* Conflict cards / edit forms */}
+      {config.conflicts.map(r =>
+        editingId === r.id ? (
+          <ConflictForm key={r.id} members={members} initialValues={r}
+            onAdd={saveConflict} onCancel={cancelEdit} />
+        ) : (
+          <ConflictCard key={r.id} r={r}
+            onDelete={() => rmConflict(r.id)}
+            onEdit={() => { setEditingId(r.id); setAdding(null); }} />
+        )
+      )}
+
+      {/* Presence cards / edit forms */}
+      {config.presence.map(r =>
+        editingId === r.id ? (
+          <PresenceForm key={r.id} members={members} initialValues={r}
+            onAdd={savePresence} onCancel={cancelEdit} />
+        ) : (
+          <PresenceCard key={r.id} r={r}
+            onDelete={() => rmPresence(r.id)}
+            onEdit={() => { setEditingId(r.id); setAdding(null); }} />
+        )
+      )}
+
+      {total === 0 && !isFormOpen && (
         <p className="font-body text-xs text-gray-600 italic px-1">Sin reglas configuradas</p>
       )}
 
@@ -740,8 +813,8 @@ function RuleBuilder({ config, onChange, members }: {
         />
       )}
 
-      {/* Add buttons */}
-      {!adding && (
+      {/* Add buttons — hidden while any form is open */}
+      {!isFormOpen && (
         <div className="flex gap-2 pt-1 flex-wrap">
           <button
             type="button" onClick={() => setAdding("restriction")}
@@ -994,13 +1067,38 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
 
     const idToName = (id: string) => members.find(m => m._id === id)?.member_name ?? id;
 
+    // Deduplicate pools: sunday_leads takes priority, then saturday_leads, then support.
+    // The solver requires mutual exclusivity; sunday_leads members are already eligible
+    // for Saturday lead slots (see solver pool definition), so removing duplicates is safe.
+    const sundayLeadNames   = solverConfig.sundayLeads.map(idToName);
+    const sundaySet         = new Set(sundayLeadNames);
+    const saturdayLeadNames = solverConfig.saturdayLeads.map(idToName).filter(n => !sundaySet.has(n));
+    const satSet            = new Set([...sundayLeadNames, ...saturdayLeadNames]);
+    const supportNames      = solverConfig.support.map(idToName).filter(n => !satSet.has(n));
+    const poolNames         = new Set([...sundayLeadNames, ...saturdayLeadNames, ...supportNames]);
+
+    // Any person referenced in a DSL rule but not in any pool must be added to support
+    // so the solver knows about them. The solver validates all DSL persons against known people.
+    const extraSupport: string[] = [];
+    const allDslPersons = [
+      ...solverConfig.restrictions.map(r => r.person),
+      ...solverConfig.conflicts.flatMap(r => [r.personA, r.personB]),
+      ...solverConfig.presence.flatMap(r => r.persons),
+    ];
+    for (const name of allDslPersons) {
+      const resolved = resolveToMemberName(name, members);
+      if (!poolNames.has(resolved) && !extraSupport.includes(resolved)) {
+        extraSupport.push(resolved);
+      }
+    }
+
     const payload: SolveRequest = {
       weeks,
       weekends_with_saturday: weekendsWithSaturday,
-      sunday_leads:   solverConfig.sundayLeads.map(idToName),
-      saturday_leads: solverConfig.saturdayLeads.map(idToName),
-      support:        solverConfig.support.map(idToName),
-      dsl_rules:      allRulesToDs(solverConfig),
+      sunday_leads:   sundayLeadNames,
+      saturday_leads: saturdayLeadNames,
+      support:        [...supportNames, ...extraSupport],
+      dsl_rules:      allRulesToDs(solverConfig, members),
       history: [],
     };
 
