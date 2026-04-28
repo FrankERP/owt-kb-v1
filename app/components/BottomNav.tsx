@@ -92,7 +92,8 @@ export default function BottomNav() {
       </div>
 
       {/* Bottom bar */}
-      <nav className="fixed bottom-0 inset-x-0 z-50 lg:hidden bg-[#010b17]/90 backdrop-blur-sm border-t border-[#00bfff]/15">
+      <nav className="fixed bottom-0 inset-x-0 z-50 lg:hidden bg-[#010b17]/90 backdrop-blur-sm border-t border-[#00bfff]/15"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
         <div className="flex items-stretch h-16 max-w-7xl mx-auto">
           {tabs.map(tab => (
             <Link

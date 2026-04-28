@@ -140,8 +140,8 @@ function VocalCol({ label, names }: { label: string; names: string[] }) {
   if (!names.length) return <div />;
   return (
     <div>
-      <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-0.5">{label}</p>
-      <p className="font-body text-xs md:text-sm leading-snug">{names.join(", ")}</p>
+      <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-0.5">{label}</p>
+      <p className="font-body text-sm md:text-base lg:text-lg leading-snug">{names.join(", ")}</p>
     </div>
   );
 }

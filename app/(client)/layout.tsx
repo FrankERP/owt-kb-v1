@@ -43,7 +43,7 @@ export default function RootLayout({
         `}
       >
         <Provider>
-          <main className="mx-auto max-w-7xl pb-16 lg:pb-0">{children}</main>
+          <main className="mx-auto max-w-7xl pb-24 lg:pb-0">{children}</main>
           <BottomNav />
         </Provider>
       </body>
