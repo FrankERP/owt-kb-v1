@@ -8,7 +8,7 @@ import { notFound } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 
 interface Params {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }
 
 async function getPost(slug: string) {
@@ -76,7 +76,8 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const Page = async ({ params }: Params) => {
-  const post: Post = await getPost(params?.slug);
+  const { slug } = await params;
+  const post: Post = await getPost(slug);
 
   if (!post) notFound();
 
