@@ -106,6 +106,29 @@ export default function ProposalEditor({ roleDoc, existingProposal }: Props) {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
+  // Drag-and-drop state
+  const dragIdx = useRef<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
+  const onDragStart = (idx: number) => { dragIdx.current = idx; };
+  const onDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    setDragOverIdx(idx);
+  };
+  const onDrop = (targetIdx: number) => {
+    const from = dragIdx.current;
+    if (from === null || from === targetIdx) { setDragOverIdx(null); return; }
+    setSongs(prev => {
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(targetIdx, 0, item);
+      return next;
+    });
+    dragIdx.current = null;
+    setDragOverIdx(null);
+  };
+  const onDragEnd = () => { dragIdx.current = null; setDragOverIdx(null); };
+
   // Song search state
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SongResult[]>([]);
@@ -171,24 +194,6 @@ export default function ProposalEditor({ roleDoc, existingProposal }: Props) {
 
   const removeSong = (idx: number) => {
     setSongs(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  const moveUp = (idx: number) => {
-    if (idx === 0) return;
-    setSongs(prev => {
-      const next = [...prev];
-      [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
-      return next;
-    });
-  };
-
-  const moveDown = (idx: number) => {
-    setSongs(prev => {
-      if (idx >= prev.length - 1) return prev;
-      const next = [...prev];
-      [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
-      return next;
-    });
   };
 
   const setPlayKey = (idx: number, play_key: string) => {
@@ -282,8 +287,24 @@ export default function ProposalEditor({ roleDoc, existingProposal }: Props) {
         {songs.map((song, idx) => (
           <div
             key={song.songId}
-            className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 bg-[#003572]/5 dark:bg-[#00bfff]/5"
+            draggable={!isApproved}
+            onDragStart={() => onDragStart(idx)}
+            onDragOver={e => onDragOver(e, idx)}
+            onDrop={() => onDrop(idx)}
+            onDragEnd={onDragEnd}
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${
+              dragOverIdx === idx && dragIdx.current !== idx
+                ? "border-[#00bfff]/60 bg-[#00bfff]/10 scale-[1.01]"
+                : "border-[#003572]/15 dark:border-[#00bfff]/10 bg-[#003572]/5 dark:bg-[#00bfff]/5"
+            } ${!isApproved ? "cursor-grab active:cursor-grabbing" : ""}`}
           >
+            {/* Drag handle */}
+            {!isApproved && (
+              <span className="text-gray-600 shrink-0 select-none">
+                <GripIcon />
+              </span>
+            )}
+
             {/* Position */}
             <span className="font-label text-xs text-gray-500 w-5 text-center shrink-0">{idx + 1}</span>
 
@@ -300,6 +321,7 @@ export default function ProposalEditor({ roleDoc, existingProposal }: Props) {
                 onChange={e => setPlayKey(idx, e.target.value)}
                 className={selectCls}
                 title="Tonalidad"
+                onMouseDown={e => e.stopPropagation()}
               >
                 {KEY_OPTIONS.map(k => (
                   <option key={k} value={k}>{k}</option>
@@ -315,33 +337,15 @@ export default function ProposalEditor({ roleDoc, existingProposal }: Props) {
               </span>
             )}
 
-            {/* Reorder + remove */}
+            {/* Remove */}
             {!isApproved && (
-              <div className="flex items-center gap-0.5 shrink-0">
-                <button
-                  onClick={() => moveUp(idx)}
-                  disabled={idx === 0}
-                  className="p-1.5 rounded-lg text-gray-500 hover:text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors disabled:opacity-20"
-                  title="Subir"
-                >
-                  <ChevronUp />
-                </button>
-                <button
-                  onClick={() => moveDown(idx)}
-                  disabled={idx === songs.length - 1}
-                  className="p-1.5 rounded-lg text-gray-500 hover:text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors disabled:opacity-20"
-                  title="Bajar"
-                >
-                  <ChevronDown />
-                </button>
-                <button
-                  onClick={() => removeSong(idx)}
-                  className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                  title="Quitar"
-                >
-                  <XIcon />
-                </button>
-              </div>
+              <button
+                onClick={() => removeSong(idx)}
+                className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
+                title="Quitar"
+              >
+                <XIcon />
+              </button>
             )}
           </div>
         ))}
@@ -410,7 +414,7 @@ export default function ProposalEditor({ roleDoc, existingProposal }: Props) {
       {!isApproved && (
         <div className="space-y-2">
           <label className="font-label text-xs uppercase tracking-widest text-gray-500">
-            Notas para el admin <span className="normal-case tracking-normal text-gray-600">(opcional)</span>
+            Notas para revisión <span className="normal-case tracking-normal text-gray-600">(opcional)</span>
           </label>
           <textarea
             className={`${inputCls} resize-none`}
@@ -476,18 +480,11 @@ export default function ProposalEditor({ roleDoc, existingProposal }: Props) {
 }
 
 // ─── Icon helpers ─────────────────────────────────────────────────────────────
-function ChevronUp() {
+function GripIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="18 15 12 9 6 15" />
-    </svg>
-  );
-}
-
-function ChevronDown() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="6 9 12 15 18 9" />
+      <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+      <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
     </svg>
   );
 }
