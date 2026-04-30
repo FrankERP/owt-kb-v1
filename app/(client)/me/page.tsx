@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/auth";
@@ -8,11 +9,25 @@ import { DayCard } from "@/app/components/DayCard";
 import NextServiceHero from "@/app/components/NextServiceHero";
 import ProfilePanel from "@/app/components/ProfilePanel";
 import AvailabilityCalendar from "@/app/components/AvailabilityCalendar";
-import { Setlist, SetlistSong } from "@/app/utils/interface";
+import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
 
 export const revalidate = 60;
 
 const TZ = "America/Mexico_City";
+
+const STATUS_LABEL: Record<ProposalStatus, string> = {
+  draft: "Continuar propuesta",
+  pending: "Propuesta pendiente",
+  approved: "Setlist aprobada",
+  changes_requested: "Ver comentarios",
+};
+
+const STATUS_STYLE: Record<ProposalStatus, string> = {
+  draft: "border-[#003572]/30 dark:border-[#00bfff]/20 text-gray-400 hover:border-[#00bfff] hover:text-[#00bfff]",
+  pending: "border-yellow-500/40 text-yellow-400 hover:border-yellow-400",
+  approved: "border-green-500/40 text-green-400 cursor-default",
+  changes_requested: "border-red-500/40 text-red-400 hover:border-red-300",
+};
 
 export default async function MePage() {
   const session = await getServerSession(authOptions);
@@ -42,55 +57,72 @@ export default async function MePage() {
     $id in foh_team[].person._ref
   )`;
 
-  const data = await client.fetch(
-    `{
-      "sundays": *[_type == "sunday_role" && week >= $today && week <= $limit && ${memberFilter}] | order(week asc) {
-        _id, week,
-        Lead[]-> { member_name, alias },
-        instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
-        foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
-        BGVs[]-> { member_name, alias },
-        Chorus[]-> { member_name, alias },
-        "setlist": *[_type == "featuredSongs" && week == ^.week][0] {
+  const [data, proposals] = await Promise.all([
+    client.fetch(
+      `{
+        "sundays": *[_type == "sunday_role" && week >= $today && week <= $limit && ${memberFilter}] | order(week asc) {
+          _id, week,
+          "isLead": $id in Lead[]._ref,
+          Lead[]-> { member_name, alias },
+          instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
+          foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
+          BGVs[]-> { member_name, alias },
+          Chorus[]-> { member_name, alias },
+          "setlist": *[_type == "featuredSongs" && week == ^.week][0] {
+            songs[] {
+              play_key,
+              "title": song->title, "slug": song->slug, "_id": song->_id,
+              "author": song->author, "key": song->key,
+            },
+            week,
+          }
+        },
+        "saturdays": *[_type == "saturday_role" && week >= $today && week <= $limit && ${memberFilter}] | order(week asc) {
+          _id, week,
+          "isLead": $id in Lead[]._ref,
+          Lead[]-> { member_name, alias },
+          instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
+          foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
+          BGVs[]-> { member_name, alias },
+          Chorus[]-> { member_name, alias },
+          "setlist": *[_type == "saturdarSongs" && week == ^.week][0] {
+            songs[] {
+              play_key,
+              "title": song->title, "slug": song->slug, "_id": song->_id,
+              "author": song->author, "key": song->key,
+            },
+            week,
+          }
+        },
+        "specials": *[_type == "special_role" && date >= $today && date <= $limit && ${memberFilter}] | order(date asc) {
+          _id, date, service_name,
+          "isLead": $id in Lead[]._ref,
+          Lead[]-> { member_name, alias },
+          instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
+          foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
+          BGVs[]-> { member_name, alias },
+          Chorus[]-> { member_name, alias },
           songs[] {
             play_key,
             "title": song->title, "slug": song->slug, "_id": song->_id,
             "author": song->author, "key": song->key,
-          },
-          week,
+          }
         }
-      },
-      "saturdays": *[_type == "saturday_role" && week >= $today && week <= $limit && ${memberFilter}] | order(week asc) {
-        _id, week,
-        Lead[]-> { member_name, alias },
-        instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
-        foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
-        BGVs[]-> { member_name, alias },
-        Chorus[]-> { member_name, alias },
-        "setlist": *[_type == "saturdarSongs" && week == ^.week][0] {
-          songs[] {
-            play_key,
-            "title": song->title, "slug": song->slug, "_id": song->_id,
-            "author": song->author, "key": song->key,
-          },
-          week,
-        }
-      },
-      "specials": *[_type == "special_role" && date >= $today && date <= $limit && ${memberFilter}] | order(date asc) {
-        _id, date, service_name,
-        Lead[]-> { member_name, alias },
-        instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
-        foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
-        BGVs[]-> { member_name, alias },
-        Chorus[]-> { member_name, alias },
-        songs[] {
-          play_key,
-          "title": song->title, "slug": song->slug, "_id": song->_id,
-          "author": song->author, "key": song->key,
-        }
-      }
-    }`,
-    { today, limit, id: sanityId }
+      }`,
+      { today, limit, id: sanityId }
+    ),
+    serverClient.fetch(
+      `*[_type == "setlistProposal" && lead._ref == $id && service_date >= $today] {
+        _id, status, admin_notes, "service_ref": service_ref._ref
+      }`,
+      { id: sanityId, today }
+    ),
+  ]);
+
+  // Map roleId → proposal
+  const proposalMap = new Map<string, { _id: string; status: ProposalStatus; admin_notes?: string }>(
+    (proposals as Array<{ _id: string; status: ProposalStatus; admin_notes?: string; service_ref: string }>)
+      .map(p => [p.service_ref, { _id: p._id, status: p.status, admin_notes: p.admin_notes }])
   );
 
   type RoleDoc = {
@@ -98,6 +130,7 @@ export default async function MePage() {
     week?: string;
     date?: string;
     service_name?: string;
+    isLead?: boolean;
     Lead?: Array<{ member_name: string; alias?: string }>;
     instruments?: Array<{ instrument: string; person: string }>;
     foh_team?: Array<{ role: string; person: string }>;
@@ -114,6 +147,48 @@ export default async function MePage() {
   ].sort((a, b) => a.dateKey.localeCompare(b.dateKey));
 
   const firstName = name?.split(" ")[0] ?? "Miembro";
+
+  function renderProposalCta(doc: RoleDoc) {
+    if (!doc.isLead) return null;
+    const proposal = proposalMap.get(doc._id);
+
+    if (!proposal) {
+      return (
+        <Link
+          href={`/me/propose/${doc._id}`}
+          className="mt-3 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest text-gray-500 hover:border-[#00bfff] hover:text-[#00bfff] transition-colors"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Proponer setlist
+        </Link>
+      );
+    }
+
+    if (proposal.status === "approved") {
+      return (
+        <div className={`mt-3 flex items-center justify-center gap-1.5 py-2 rounded-lg border font-label text-xs uppercase tracking-widest ${STATUS_STYLE[proposal.status]}`}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          {STATUS_LABEL[proposal.status]}
+        </div>
+      );
+    }
+
+    return (
+      <Link
+        href={`/me/propose/${doc._id}`}
+        className={`mt-3 flex items-center justify-center gap-1.5 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${STATUS_STYLE[proposal.status]}`}
+      >
+        {STATUS_LABEL[proposal.status]}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 12h14M12 5l7 7-7 7" />
+        </svg>
+      </Link>
+    );
+  }
 
   return (
     <div>
@@ -146,16 +221,19 @@ export default async function MePage() {
                 const { day, doc } = allAssignments[0];
                 const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: doc.date ?? "" } : undefined);
                 return (
-                  <NextServiceHero
-                    day={day}
-                    date={doc.week ?? doc.date}
-                    setlist={setlist}
-                    leads={doc.Lead?.map((m) => m.alias || m.member_name)}
-                    instruments={doc.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
-                    fohTeam={doc.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
-                    bgvs={doc.BGVs}
-                    chorus={doc.Chorus}
-                  />
+                  <div>
+                    <NextServiceHero
+                      day={day}
+                      date={doc.week ?? doc.date}
+                      setlist={setlist}
+                      leads={doc.Lead?.map((m) => m.alias || m.member_name)}
+                      instruments={doc.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
+                      fohTeam={doc.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
+                      bgvs={doc.BGVs}
+                      chorus={doc.Chorus}
+                    />
+                    {renderProposalCta(doc)}
+                  </div>
                 );
               })()}
 
@@ -169,17 +247,19 @@ export default async function MePage() {
                     {allAssignments.slice(1).map(({ day, doc }) => {
                       const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: doc.date ?? "" } : undefined);
                       return (
-                        <DayCard
-                          key={doc._id}
-                          day={day}
-                          date={doc.week ?? doc.date}
-                          setlist={setlist}
-                          leads={doc.Lead?.map((m) => m.alias || m.member_name)}
-                          instruments={doc.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
-                          fohTeam={doc.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
-                          bgvs={doc.BGVs}
-                          chorus={doc.Chorus}
-                        />
+                        <div key={doc._id}>
+                          <DayCard
+                            day={day}
+                            date={doc.week ?? doc.date}
+                            setlist={setlist}
+                            leads={doc.Lead?.map((m) => m.alias || m.member_name)}
+                            instruments={doc.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
+                            fohTeam={doc.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
+                            bgvs={doc.BGVs}
+                            chorus={doc.Chorus}
+                          />
+                          {renderProposalCta(doc)}
+                        </div>
                       );
                     })}
                   </div>

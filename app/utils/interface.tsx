@@ -86,3 +86,30 @@ export interface SaturdayRole {
   BGVs: Array<TeamMember>;
   Chorus: Array<TeamMember>;
 }
+
+export type ProposalStatus = "draft" | "pending" | "approved" | "changes_requested";
+
+export interface SetlistProposal {
+  _id: string;
+  service_type: "sunday" | "saturday" | "special";
+  service_ref: { _ref: string };
+  service_date: string;
+  status: ProposalStatus;
+  lead_notes?: string;
+  admin_notes?: string;
+  submitted_at?: string;
+  reviewed_at?: string;
+  songs?: Array<{
+    _key: string;
+    song: { _ref: string };
+    play_key: string;
+  }>;
+}
+
+export interface ProposalSongItem {
+  songId: string;
+  play_key: string;
+  title: string;
+  author: string;
+  key: string;
+}
