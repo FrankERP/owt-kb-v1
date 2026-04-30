@@ -117,6 +117,39 @@ export const post = {
 			]
 		},
 		{
+			name: 'chords',
+			title: 'Chord Charts',
+			description: 'Written chord charts per key. Plain text — write chords above each lyric line.',
+			type: 'array',
+			of: [
+				{
+					type: 'object',
+					name: 'chord_chart',
+					fields: [
+						{
+							name: 'key',
+							title: 'Key',
+							type: 'string',
+							description: 'E.g. C, Am, Bb',
+						},
+						{
+							name: 'content',
+							title: 'Chart',
+							type: 'text',
+							rows: 20,
+							description: 'Write chords above the lyrics, one line at a time.',
+						},
+					],
+					preview: {
+						select: { key: 'key' },
+						prepare(sel: { key?: string }) {
+							return { title: sel.key ? `Acordes — ${sel.key}` : 'Sin tonalidad' };
+						},
+					},
+				},
+			],
+		},
+		{
 			name: "referenceLinks",
 			title: "Reference Links",
 			type: "array",

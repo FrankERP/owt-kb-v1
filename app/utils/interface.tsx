@@ -1,3 +1,8 @@
+export interface ChordChart {
+  key: string;
+  content: string;
+}
+
 export interface Post {
   _createdAt?: string;
   title: string;
@@ -13,6 +18,7 @@ export interface Post {
   lyricsURL: string;
   audioTracks: Array<{ title: string; tone: string; audioFileURL: string }>;
   chordsPDF: Array<{ title: string; key: string; chordsURL: string }>;
+  chords?: Array<ChordChart>;
   referenceLinks?: Array<{ label: string; url: string }>;
   tags: Array<Tag>;
   _id: string;

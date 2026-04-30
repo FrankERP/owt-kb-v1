@@ -21,6 +21,7 @@ interface Song {
   timeSig?: string;
   publishDate?: string;
   body?: any[];
+  chords?: Array<{ key: string; content: string }>;
   referenceLinks?: Array<{ label: string; url: string }>;
   tags?: SongTag[];
 }
@@ -32,6 +33,7 @@ interface FormState {
   bpm: string;
   timeSig: string;
   lyrics: string;
+  chords: Array<{ key: string; content: string }>;
   referenceLinks: Array<{ label: string; url: string }>;
   tagIds: string[];
 }
@@ -45,7 +47,7 @@ type ModalState =
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function blankForm(): FormState {
-  return { title: "", author: "", key: "", bpm: "", timeSig: "", lyrics: "", referenceLinks: [], tagIds: [] };
+  return { title: "", author: "", key: "", bpm: "", timeSig: "", lyrics: "", chords: [], referenceLinks: [], tagIds: [] };
 }
 
 function songToForm(song: Song): FormState {
@@ -56,6 +58,7 @@ function songToForm(song: Song): FormState {
     bpm:            song.bpm?.toString() ?? "",
     timeSig:        song.timeSig ?? "",
     lyrics:         bodyToLyrics(song.body),
+    chords:         song.chords ?? [],
     referenceLinks: song.referenceLinks ?? [],
     tagIds:         song.tags?.map((t) => t._id) ?? [],
   };
@@ -121,6 +124,19 @@ function SongForm({
       ...f,
       tagIds: f.tagIds.includes(id) ? f.tagIds.filter((t) => t !== id) : [...f.tagIds, id],
     }));
+
+  const addChordChart = () =>
+    setForm((f) => ({ ...f, chords: [...f.chords, { key: "", content: "" }] }));
+
+  const updateChord = (i: number, field: "key" | "content", val: string) =>
+    setForm((f) => {
+      const chords = [...f.chords];
+      chords[i] = { ...chords[i], [field]: val };
+      return { ...f, chords };
+    });
+
+  const removeChord = (i: number) =>
+    setForm((f) => ({ ...f, chords: f.chords.filter((_, j) => j !== i) }));
 
   const addRefLink = () =>
     setForm((f) => ({ ...f, referenceLinks: [...f.referenceLinks, { label: "", url: "" }] }));
@@ -265,6 +281,51 @@ function SongForm({
         <p className="font-label text-[10px] text-gray-600 uppercase tracking-wide mt-1">
           # Sección · **negrita** · *cursiva* · línea en blanco = nueva estrofa
         </p>
+      </div>
+
+      {/* Chord Charts */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="font-label text-xs uppercase tracking-widest text-gray-500">Acordes</label>
+          <button
+            type="button"
+            onClick={addChordChart}
+            className="font-label text-[10px] uppercase tracking-widest text-[#00bfff] hover:text-[#00bfff]/70 transition-colors"
+          >
+            + Agregar tonalidad
+          </button>
+        </div>
+        {form.chords.length === 0 && (
+          <p className="font-body text-xs text-gray-600">Sin acordes todavía. Agrega una tonalidad para empezar.</p>
+        )}
+        {form.chords.map((chart, i) => (
+          <div key={i} className="space-y-1.5 rounded-lg border border-[#00bfff]/15 p-3 bg-[#003572]/5 dark:bg-[#00bfff]/5">
+            <div className="flex items-center gap-2">
+              <input
+                className={`${inputCls} w-28 shrink-0`}
+                value={chart.key}
+                onChange={(e) => updateChord(i, "key", e.target.value)}
+                placeholder="Ej: C, Am, Bb"
+              />
+              <span className="font-label text-[10px] uppercase tracking-widest text-gray-500 flex-1">Tonalidad</span>
+              <button
+                type="button"
+                onClick={() => removeChord(i)}
+                className="text-gray-500 hover:text-red-400 transition-colors text-lg leading-none shrink-0"
+              >
+                ×
+              </button>
+            </div>
+            <textarea
+              className="w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-mono text-xs leading-relaxed resize-none focus:outline-none focus:border-[#00bfff] transition-colors"
+              rows={12}
+              value={chart.content}
+              onChange={(e) => updateChord(i, "content", e.target.value)}
+              placeholder={"# Verso 1\nAm         G\nLínea con acorde\nC          F\nOtra línea"}
+              spellCheck={false}
+            />
+          </div>
+        ))}
       </div>
 
       {/* Reference Links */}
@@ -433,6 +494,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
         bpm: form.bpm,
         timeSig: form.timeSig,
         lyrics: form.lyrics,
+        chords: form.chords,
         referenceLinks: form.referenceLinks,
         tagIds: form.tagIds,
       }),
@@ -455,6 +517,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
         bpm: form.bpm,
         timeSig: form.timeSig,
         lyrics: form.lyrics,
+        chords: form.chords,
         referenceLinks: form.referenceLinks,
         tagIds: form.tagIds,
       }),

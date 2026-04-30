@@ -38,6 +38,7 @@ export async function PATCH(
     bpm?: string;
     timeSig?: string;
     lyrics?: string;
+    chords?: Array<{ key: string; content: string }>;
     referenceLinks?: Array<{ label: string; url: string }>;
     tagIds?: string[];
   };
@@ -49,6 +50,11 @@ export async function PATCH(
   if (body.bpm    != null) patch.bpm    = body.bpm ? Number(body.bpm) : null;
   if (body.timeSig != null) patch.timeSig = body.timeSig.trim();
   if (body.lyrics  != null) patch.body  = textToBody(body.lyrics);
+  if (body.chords  != null) {
+    patch.chords = body.chords.map((c) => ({
+      _type: "chord_chart", _key: rng(), key: c.key, content: c.content,
+    }));
+  }
   if (body.referenceLinks != null) {
     patch.referenceLinks = body.referenceLinks.map((l) => ({
       _type: "referenceLink", _key: rng(), label: l.label, url: l.url,
