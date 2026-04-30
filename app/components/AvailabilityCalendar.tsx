@@ -12,31 +12,40 @@ const MONTHS_ES = [
 ];
 const DAYS_ES = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"];
 
+const TOTAL_MONTHS = 12;
+const PAGE_SIZE    = 3;
+
 function isoDate(year: number, month: number, day: number): string {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 function buildCalendar(year: number, month: number): (string | null)[] {
-  const firstDay = new Date(year, month - 1, 1).getDay(); // 0=Sun
+  const firstDay  = new Date(year, month - 1, 1).getDay();
   const daysInMonth = new Date(year, month, 0).getDate();
-  // Shift so Mon=0, Sun=6
-  const offset = (firstDay + 6) % 7;
+  const offset    = (firstDay + 6) % 7;
   const cells: (string | null)[] = Array(offset).fill(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(isoDate(year, month, d));
   return cells;
 }
 
 export default function AvailabilityCalendar({ initialDates }: Props) {
-  const [dates, setDates] = useState<Set<string>>(new Set(initialDates));
+  const [dates, setDates]   = useState<Set<string>>(new Set(initialDates));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved]   = useState(false);
+  const [page, setPage]     = useState(0); // 0 = current month, 1 = +3, 2 = +6, …
 
-  const now = new Date();
-  // Show 3 months starting this month
-  const months = [0, 1, 2].map(offset => {
-    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+  const now      = new Date();
+  const todayIso = now.toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
+
+  const allMonths = Array.from({ length: TOTAL_MONTHS }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     return { year: d.getFullYear(), month: d.getMonth() + 1 };
   });
+
+  const totalPages   = Math.ceil(TOTAL_MONTHS / PAGE_SIZE);
+  const visibleMonths = allMonths.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+  const canPrev      = page > 0;
+  const canNext      = page < totalPages - 1;
 
   const toggle = useCallback((iso: string) => {
     setDates(prev => {
@@ -59,10 +68,16 @@ export default function AvailabilityCalendar({ initialDates }: Props) {
     setTimeout(() => setSaved(false), 2500);
   }
 
-  const todayIso = now.toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
+  const first = visibleMonths[0];
+  const last  = visibleMonths[visibleMonths.length - 1];
+  const rangeLabel =
+    first.year === last.year
+      ? `${MONTHS_ES[first.month - 1]} – ${MONTHS_ES[last.month - 1]} ${last.year}`
+      : `${MONTHS_ES[first.month - 1]} ${first.year} – ${MONTHS_ES[last.month - 1]} ${last.year}`;
 
   return (
     <div className="space-y-4">
+      {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h3 className="font-display text-lg uppercase tracking-wide">Disponibilidad</h3>
@@ -86,8 +101,34 @@ export default function AvailabilityCalendar({ initialDates }: Props) {
         </p>
       )}
 
+      {/* Navigation */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setPage(p => p - 1)}
+          disabled={!canPrev}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#003572]/40 font-label text-[10px] uppercase tracking-widest text-gray-500 hover:border-[#00bfff]/40 hover:text-[#00bfff] disabled:opacity-20 disabled:cursor-default transition-colors"
+        >
+          <ChevronLeft /> Anterior
+        </button>
+
+        <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">
+          {rangeLabel}
+        </span>
+
+        <button
+          type="button"
+          onClick={() => setPage(p => p + 1)}
+          disabled={!canNext}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#003572]/40 font-label text-[10px] uppercase tracking-widest text-gray-500 hover:border-[#00bfff]/40 hover:text-[#00bfff] disabled:opacity-20 disabled:cursor-default transition-colors"
+        >
+          Siguiente <ChevronRight />
+        </button>
+      </div>
+
+      {/* Calendar grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {months.map(({ year, month }) => {
+        {visibleMonths.map(({ year, month }) => {
           const cells = buildCalendar(year, month);
           return (
             <div key={`${year}-${month}`} className="rounded-xl border border-[#00bfff]/15 bg-[#00bfff]/3 p-3">
@@ -131,6 +172,37 @@ export default function AvailabilityCalendar({ initialDates }: Props) {
           );
         })}
       </div>
+
+      {/* Page dots */}
+      <div className="flex justify-center gap-1.5 pt-1">
+        {Array.from({ length: totalPages }).map((_, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => setPage(i)}
+            className={`w-1.5 h-1.5 rounded-full transition-colors ${
+              i === page ? "bg-[#00bfff]" : "bg-[#003572]/50 hover:bg-[#003572]"
+            }`}
+            aria-label={`Página ${i + 1}`}
+          />
+        ))}
+      </div>
     </div>
+  );
+}
+
+function ChevronLeft() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  );
+}
+
+function ChevronRight() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
   );
 }

@@ -33,7 +33,6 @@ interface FormState {
   bpm: string;
   timeSig: string;
   lyrics: string;
-  chords: Array<{ key: string; content: string }>;
   referenceLinks: Array<{ label: string; url: string }>;
   tagIds: string[];
 }
@@ -47,7 +46,7 @@ type ModalState =
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function blankForm(): FormState {
-  return { title: "", author: "", key: "", bpm: "", timeSig: "", lyrics: "", chords: [], referenceLinks: [], tagIds: [] };
+  return { title: "", author: "", key: "", bpm: "", timeSig: "", lyrics: "", referenceLinks: [], tagIds: [] };
 }
 
 function songToForm(song: Song): FormState {
@@ -57,12 +56,13 @@ function songToForm(song: Song): FormState {
     key:            song.key ?? "",
     bpm:            song.bpm?.toString() ?? "",
     timeSig:        song.timeSig ?? "",
-    lyrics:         bodyToLyrics(song.body),
-    chords:         song.chords ?? [],
+    lyrics:         song.chords?.[0]?.content || bodyToLyrics(song.body),
     referenceLinks: song.referenceLinks ?? [],
     tagIds:         song.tags?.map((t) => t._id) ?? [],
   };
 }
+
+const CHORD_MARKER_RE = /\[[^\]]+\]/;
 
 // ─── Shared style ─────────────────────────────────────────────────────────────
 
@@ -114,6 +114,7 @@ function SongForm({
   const [newTag, setNewTag]           = useState("");
   const [creatingTag, setCreatingTag] = useState(false);
   const [localTags, setLocalTags]     = useState<SongTag[]>(allTags);
+  const [tagSearch, setTagSearch]     = useState("");
   const lyricsRef                     = useRef<HTMLTextAreaElement>(null);
 
   const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -124,19 +125,6 @@ function SongForm({
       ...f,
       tagIds: f.tagIds.includes(id) ? f.tagIds.filter((t) => t !== id) : [...f.tagIds, id],
     }));
-
-  const addChordChart = () =>
-    setForm((f) => ({ ...f, chords: [...f.chords, { key: "", content: "" }] }));
-
-  const updateChord = (i: number, field: "key" | "content", val: string) =>
-    setForm((f) => {
-      const chords = [...f.chords];
-      chords[i] = { ...chords[i], [field]: val };
-      return { ...f, chords };
-    });
-
-  const removeChord = (i: number) =>
-    setForm((f) => ({ ...f, chords: f.chords.filter((_, j) => j !== i) }));
 
   const addRefLink = () =>
     setForm((f) => ({ ...f, referenceLinks: [...f.referenceLinks, { label: "", url: "" }] }));
@@ -275,57 +263,12 @@ function SongForm({
           rows={14}
           value={form.lyrics}
           onChange={set("lyrics")}
-          placeholder={"# Verso 1\nLínea 1\nLínea 2\n\n# Coro\nLínea 1\nLínea 2"}
+          placeholder={"# Verso 1\n[Am]Ante Ti [F]Postrado estoy\n[C]aquí me rindo\n\n# Coro\nLínea 1\nLínea 2"}
           spellCheck={false}
         />
         <p className="font-label text-[10px] text-gray-600 uppercase tracking-wide mt-1">
-          # Sección · **negrita** · *cursiva* · línea en blanco = nueva estrofa
+          # Sección · [Acorde]palabra · **negrita** · *cursiva*
         </p>
-      </div>
-
-      {/* Chord Charts */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <label className="font-label text-xs uppercase tracking-widest text-gray-500">Acordes</label>
-          <button
-            type="button"
-            onClick={addChordChart}
-            className="font-label text-[10px] uppercase tracking-widest text-[#00bfff] hover:text-[#00bfff]/70 transition-colors"
-          >
-            + Agregar tonalidad
-          </button>
-        </div>
-        {form.chords.length === 0 && (
-          <p className="font-body text-xs text-gray-600">Sin acordes todavía. Agrega una tonalidad para empezar.</p>
-        )}
-        {form.chords.map((chart, i) => (
-          <div key={i} className="space-y-1.5 rounded-lg border border-[#00bfff]/15 p-3 bg-[#003572]/5 dark:bg-[#00bfff]/5">
-            <div className="flex items-center gap-2">
-              <input
-                className={`${inputCls} w-28 shrink-0`}
-                value={chart.key}
-                onChange={(e) => updateChord(i, "key", e.target.value)}
-                placeholder="Ej: C, Am, Bb"
-              />
-              <span className="font-label text-[10px] uppercase tracking-widest text-gray-500 flex-1">Tonalidad</span>
-              <button
-                type="button"
-                onClick={() => removeChord(i)}
-                className="text-gray-500 hover:text-red-400 transition-colors text-lg leading-none shrink-0"
-              >
-                ×
-              </button>
-            </div>
-            <textarea
-              className="w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-mono text-xs leading-relaxed resize-none focus:outline-none focus:border-[#00bfff] transition-colors"
-              rows={12}
-              value={chart.content}
-              onChange={(e) => updateChord(i, "content", e.target.value)}
-              placeholder={"# Verso 1\nAm         G\nLínea con acorde\nC          F\nOtra línea"}
-              spellCheck={false}
-            />
-          </div>
-        ))}
       </div>
 
       {/* Reference Links */}
@@ -372,24 +315,32 @@ function SongForm({
       {/* Tags */}
       <div className="space-y-2">
         <label className="font-label text-xs uppercase tracking-widest text-gray-500">Tags</label>
+        <input
+          className={inputCls}
+          value={tagSearch}
+          onChange={(e) => setTagSearch(e.target.value)}
+          placeholder="Filtrar tags..."
+        />
         <div className="flex flex-wrap gap-1.5">
-          {localTags.map((tag) => {
-            const active = form.tagIds.includes(tag._id);
-            return (
-              <button
-                key={tag._id}
-                type="button"
-                onClick={() => toggleTag(tag._id)}
-                className={`font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
-                  active
-                    ? "border-[#00bfff] bg-[#00bfff]/15 text-[#00bfff]"
-                    : "border-[#00bfff]/20 text-gray-500 hover:border-[#00bfff]/50"
-                }`}
-              >
-                #{tag.name}
-              </button>
-            );
-          })}
+          {localTags
+            .filter((t) => t.name.toLowerCase().includes(tagSearch.toLowerCase()))
+            .map((tag) => {
+              const active = form.tagIds.includes(tag._id);
+              return (
+                <button
+                  key={tag._id}
+                  type="button"
+                  onClick={() => toggleTag(tag._id)}
+                  className={`font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
+                    active
+                      ? "border-[#00bfff] bg-[#00bfff]/15 text-[#00bfff]"
+                      : "border-[#00bfff]/20 text-gray-500 hover:border-[#00bfff]/50"
+                  }`}
+                >
+                  #{tag.name}
+                </button>
+              );
+            })}
         </div>
         {/* Create new tag */}
         <div className="flex gap-2 pt-1">
@@ -482,22 +433,27 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
     return tag;
   };
 
+  const buildPayload = (form: FormState) => {
+    const hasChords = CHORD_MARKER_RE.test(form.lyrics);
+    return {
+      title: form.title,
+      author: form.author,
+      key: form.key,
+      bpm: form.bpm,
+      timeSig: form.timeSig,
+      lyrics: hasChords ? "" : form.lyrics,
+      chords: hasChords ? [{ key: form.key, content: form.lyrics }] : [],
+      referenceLinks: form.referenceLinks,
+      tagIds: form.tagIds,
+    };
+  };
+
   const handleAdd = async (form: FormState) => {
     setSubmitting(true);
     const res = await fetch("/api/content/posts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: form.title,
-        author: form.author,
-        key: form.key,
-        bpm: form.bpm,
-        timeSig: form.timeSig,
-        lyrics: form.lyrics,
-        chords: form.chords,
-        referenceLinks: form.referenceLinks,
-        tagIds: form.tagIds,
-      }),
+      body: JSON.stringify(buildPayload(form)),
     });
     setSubmitting(false);
     if (res.ok) { setModal(null); fetchAll(); showToast("Canción creada."); }
@@ -510,17 +466,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
     const res = await fetch(`/api/content/posts/${modal.song._id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: form.title,
-        author: form.author,
-        key: form.key,
-        bpm: form.bpm,
-        timeSig: form.timeSig,
-        lyrics: form.lyrics,
-        chords: form.chords,
-        referenceLinks: form.referenceLinks,
-        tagIds: form.tagIds,
-      }),
+      body: JSON.stringify(buildPayload(form)),
     });
     setSubmitting(false);
     if (res.ok) { setModal(null); fetchAll(); showToast("Canción actualizada."); }

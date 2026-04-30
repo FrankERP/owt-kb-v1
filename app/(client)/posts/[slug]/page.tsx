@@ -1,4 +1,5 @@
 import { Post } from "@/app/utils/interface";
+import { groupBySections } from "@/app/utils/lyrics";
 import { client } from "@/sanity/lib/client";
 import Link from "next/link";
 import { PortableText } from "next-sanity";
@@ -7,6 +8,9 @@ import { urlFor } from "@/sanity/lib/image";
 import { notFound } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 import ChordChart from "@/app/components/ChordChart";
+import EditSongButton from "@/app/components/EditSongButton";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
 
 interface Params {
   params: Promise<{ slug: string }>;
@@ -84,9 +88,14 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 
 const Page = async ({ params }: Params) => {
   const { slug } = await params;
-  const post: Post = await getPost(slug);
+  const [post, session]: [Post, any] = await Promise.all([
+    getPost(slug),
+    getServerSession(authOptions),
+  ]);
 
   if (!post) notFound();
+
+  const canEdit = ["super-admin", "admin", "content-editor"].includes(session?.user?.role);
 
   const history: Array<{
     week: string;
@@ -95,26 +104,17 @@ const Page = async ({ params }: Params) => {
     pairedSongs: Array<{ title: string; slug: { current: string }; play_key?: string }>;
   }> = await getSongHistory(post._id);
 
-  const pdfFiles = [
-    ...(post?.lyricsURL ? [{ url: post.lyricsURL, title: "Letra" }] : []),
-    ...(post?.chordsPDF?.map((c) => ({
-      url: c.chordsURL,
-      title: `Acordes${c.key ? ` — ${c.key}` : ""}`,
-    })) ?? []),
-  ];
-
   const hasAudio        = (post?.audioTracks?.length ?? 0) > 0;
   const hasInlineChords = (post?.chords?.length ?? 0) > 0;
-  const hasChords       = pdfFiles.length > 0 || hasInlineChords;
   const hasTutorials = (post?.tutorials2?.length ?? 0) > 0;
   const hasBody      = !!post?.body;
+  const hasLyrics    = hasBody || hasInlineChords;
   const hasHistory   = history.length > 0;
   const hasRefLinks  = (post?.referenceLinks?.length ?? 0) > 0;
 
   const sections = [
-    { id: "letra",      label: "Letra",        show: hasBody },
+    { id: "letra",      label: "Letra",        show: hasLyrics },
     { id: "audio",      label: "Audio",        show: hasAudio },
-    { id: "acordes",    label: "Acordes",      show: hasChords },
     { id: "tutoriales", label: "Tutoriales",   show: hasTutorials },
     { id: "referencia", label: "Referencia",   show: hasRefLinks },
     { id: "historial",  label: "Historial",    show: hasHistory },
@@ -191,15 +191,20 @@ const Page = async ({ params }: Params) => {
       <div className="max-w-7xl mx-auto px-6 py-12 space-y-20">
 
         {/* Letra / Body */}
-        {hasBody && (
+        {hasLyrics && (
           <section id="letra">
             <SectionHeader>Letra</SectionHeader>
-            <div className="prose prose-sm sm:prose dark:prose-invert prose-p:leading-7 prose-headings:font-display prose-headings:uppercase columns-1 sm:columns-2 gap-10 max-w-4xl mx-auto">
-              <PortableText
-                value={post.body}
-                components={myPortableTextComponents}
-              />
-            </div>
+            {hasInlineChords ? (
+              <ChordChart charts={post.chords!} />
+            ) : (
+              <div className="prose prose-sm sm:prose dark:prose-invert prose-p:leading-relaxed prose-p:!mt-0 prose-p:!mb-0 prose-headings:font-display prose-headings:uppercase prose-headings:!mt-6 prose-headings:!mb-1 columns-1 sm:columns-2 gap-10 max-w-4xl mx-auto">
+                {groupBySections(post.body).map((group, i) => (
+                  <div key={i} className="break-inside-avoid">
+                    <PortableText value={group} components={myPortableTextComponents} />
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         )}
 
@@ -238,63 +243,6 @@ const Page = async ({ params }: Params) => {
                 ) : null
               )}
             </div>
-          </section>
-        )}
-
-        {/* Acordes: inline charts + PDFs */}
-        {hasChords && (
-          <section id="acordes">
-            <SectionHeader>Acordes y Letras</SectionHeader>
-
-            {/* Inline chord charts */}
-            {hasInlineChords && (
-              <div className={pdfFiles.length > 0 ? "mb-12" : ""}>
-                <ChordChart charts={post.chords!} />
-              </div>
-            )}
-
-            {/* PDF files */}
-            {pdfFiles.length > 0 && <div className="flex flex-wrap justify-center gap-5">
-              {pdfFiles.map((pdf, i) => (
-                <div
-                  key={i}
-                  className="w-full max-w-xs rounded-xl border border-[#003572]/25 dark:border-[#00bfff]/15 p-6 flex flex-col items-center gap-5 text-center"
-                >
-                  {/* Document icon */}
-                  <div className="w-14 h-14 rounded-xl bg-[#003572]/15 dark:bg-[#00bfff]/10 flex items-center justify-center shrink-0">
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#00bfff]">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                      <polyline points="14 2 14 8 20 8" />
-                      <line x1="16" y1="13" x2="8" y2="13" />
-                      <line x1="16" y1="17" x2="8" y2="17" />
-                      <polyline points="10 9 9 9 8 9" />
-                    </svg>
-                  </div>
-
-                  <p className="font-display text-base font-semibold leading-snug">
-                    {pdf.title}
-                  </p>
-
-                  <div className="flex flex-col gap-2 w-full">
-                    <a
-                      href={pdf.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full rounded-lg border border-[#00bfff]/40 text-[#00bfff] font-label text-xs uppercase tracking-widest py-2 hover:bg-[#00bfff]/10 transition-colors"
-                    >
-                      Abrir ↗
-                    </a>
-                    <a
-                      href={pdf.url}
-                      download={`${post.title} — ${pdf.title}.pdf`}
-                      className="w-full rounded-lg border border-[#003572]/25 dark:border-[#00bfff]/15 font-label text-xs uppercase tracking-widest py-2 text-gray-500 dark:text-gray-400 hover:text-[#00bfff] hover:border-[#00bfff]/40 transition-colors"
-                    >
-                      Descargar ↓
-                    </a>
-                  </div>
-                </div>
-              ))}
-            </div>}
           </section>
         )}
 
@@ -418,6 +366,8 @@ const Page = async ({ params }: Params) => {
         )}
 
       </div>
+
+      {canEdit && <EditSongButton post={post} />}
     </div>
   );
 };
@@ -425,6 +375,11 @@ const Page = async ({ params }: Params) => {
 export default Page;
 
 const myPortableTextComponents = {
+  block: {
+    h1: ({ children }: any) => <h1 className="break-after-avoid">{children}</h1>,
+    h2: ({ children }: any) => <h2 className="break-after-avoid">{children}</h2>,
+    h3: ({ children }: any) => <h3 className="break-after-avoid">{children}</h3>,
+  },
   types: {
     image: ({ value }: any) => (
       <Image

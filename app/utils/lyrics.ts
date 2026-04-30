@@ -64,3 +64,19 @@ export function bodyToLyrics(body: any[] | undefined): string {
     })
     .join("\n");
 }
+
+export function groupBySections(blocks: any[]): any[][] {
+  if (!blocks?.length) return [];
+  const groups: any[][] = [];
+  let current: any[] = [];
+  for (const block of blocks) {
+    const isHeading = ["h1", "h2", "h3", "h4"].includes(block?.style);
+    if (isHeading && current.length > 0) {
+      groups.push(current);
+      current = [];
+    }
+    current.push(block);
+  }
+  if (current.length > 0) groups.push(current);
+  return groups;
+}

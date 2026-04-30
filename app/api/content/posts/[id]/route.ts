@@ -40,6 +40,7 @@ export async function PATCH(
     lyrics?: string;
     chords?: Array<{ key: string; content: string }>;
     referenceLinks?: Array<{ label: string; url: string }>;
+    tutorials?: Array<{ title: string; url: string }>;
     tagIds?: string[];
   };
 
@@ -58,6 +59,11 @@ export async function PATCH(
   if (body.referenceLinks != null) {
     patch.referenceLinks = body.referenceLinks.map((l) => ({
       _type: "referenceLink", _key: rng(), label: l.label, url: l.url,
+    }));
+  }
+  if (body.tutorials != null) {
+    patch.tutorials2 = body.tutorials.map((t) => ({
+      _type: "tutorial", _key: rng(), title: t.title, url: t.url,
     }));
   }
   if (body.tagIds != null) {

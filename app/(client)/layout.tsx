@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Advent_Pro, Urbanist, Jura } from "next/font/google";
 import "./globals.css";
 import { Provider } from "../utils/Provider";
-import BottomNav from "../components/BottomNav";
 import ActivityPing from "../components/ActivityPing";
 import ImpersonationBanner from "../components/ImpersonationBanner";
 import AudioPlayer from "../components/AudioPlayer";
@@ -49,8 +48,7 @@ export default function RootLayout({
         <Provider>
           <ImpersonationBanner />
           <ActivityPing />
-          <main className="mx-auto max-w-7xl pb-24 lg:pb-0">{children}</main>
-          <BottomNav />
+          <main className="mx-auto max-w-7xl pb-0">{children}</main>
           <AudioPlayer />
           <SongSheet />
         </Provider>

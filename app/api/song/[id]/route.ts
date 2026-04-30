@@ -13,6 +13,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     `*[_type == "post" && _id == $id][0] {
       _id, _createdAt, title, author, key, bpm, timeSig,
       "slug": slug.current,
+      body,
+      chords[]{ key, content },
       "lyricsURL": lyrics.asset->url,
       audioTracks[] { title, tone, "audioFileURL": audioFile.asset->url },
       chordsPDF[] { title, key, "chordsURL": chordsPDF.asset->url },

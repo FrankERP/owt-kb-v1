@@ -2,14 +2,41 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { PortableText } from "next-sanity";
 import { usePlayer, AudioTrack } from "@/app/context/PlayerContext";
+import ChordChart from "./ChordChart";
+import { groupBySections } from "@/app/utils/lyrics";
 
-const NEW_DAYS = 30;
+// ─── Portable-text renderer for the sheet (no prose class, tight spacing) ─────
 
-function isNew(createdAt?: string) {
-  if (!createdAt) return false;
-  return Date.now() - new Date(createdAt).getTime() < NEW_DAYS * 86400_000;
-}
+const bodyComponents = {
+  block: {
+    normal: ({ children }: any) => (
+      <p className="font-body text-sm leading-snug">{children}</p>
+    ),
+    h1: ({ children }: any) => (
+      <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/70 mt-4 mb-0.5 first:mt-0">
+        {children}
+      </p>
+    ),
+    h2: ({ children }: any) => (
+      <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/70 mt-4 mb-0.5 first:mt-0">
+        {children}
+      </p>
+    ),
+    h3: ({ children }: any) => (
+      <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/70 mt-4 mb-0.5 first:mt-0">
+        {children}
+      </p>
+    ),
+  },
+  marks: {
+    strong: ({ children }: any) => <strong className="font-semibold">{children}</strong>,
+    em: ({ children }: any) => <em className="italic">{children}</em>,
+  },
+};
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SongSheet() {
   const { sheet, sheetLoading, closeSheet, playTrack, player } = usePlayer();
@@ -29,13 +56,19 @@ export default function SongSheet() {
 
   if (!isOpen) return null;
 
+  const hasChords   = (sheet?.chords?.length ?? 0) > 0;
+  const hasBody     = (sheet?.body?.length ?? 0) > 0;
+  const hasAudio    = (sheet?.audioTracks?.filter(t => t.audioFileURL).length ?? 0) > 0;
+  const hasPDFs     = (sheet?.chordsPDF?.length ?? 0) > 0;
+  const hasContent  = hasChords || hasBody;
+
   return (
     <>
       {/* Backdrop */}
       <div className="fixed inset-0 z-[55] bg-black/60 backdrop-blur-sm" onClick={closeSheet} />
 
-      {/* Sheet — full-width bottom drawer on mobile, centered modal on lg+ */}
-      <div className="fixed inset-x-0 bottom-0 z-[60] max-h-[90svh] rounded-t-2xl bg-[#0a1929] border-t border-[#00bfff]/20 flex flex-col overflow-hidden lg:inset-auto lg:left-1/2 lg:-translate-x-1/2 lg:bottom-auto lg:top-1/2 lg:-translate-y-1/2 lg:w-full lg:max-w-md lg:rounded-2xl lg:border lg:border-[#00bfff]/20 lg:shadow-2xl">
+      {/* Sheet — bottom drawer on mobile, centered modal on lg+ */}
+      <div className="fixed inset-x-0 bottom-0 z-[60] max-h-[92svh] rounded-t-2xl bg-[#0a1929] border-t border-[#00bfff]/20 flex flex-col overflow-hidden lg:inset-auto lg:left-1/2 lg:-translate-x-1/2 lg:bottom-auto lg:top-1/2 lg:-translate-y-1/2 lg:w-full lg:max-w-2xl lg:rounded-2xl lg:border lg:border-[#00bfff]/20 lg:shadow-2xl">
 
         {/* Drag handle (mobile only) */}
         <div className="flex justify-center pt-3 pb-1 lg:hidden shrink-0">
@@ -52,27 +85,27 @@ export default function SongSheet() {
               </div>
             ) : (
               <>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="font-display text-xl">{sheet!.title}</h2>
-                  {isNew(sheet!._createdAt) && (
-                    <span className="font-label text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#00bfff]/15 text-[#00bfff] border border-[#00bfff]/30">
-                      Nuevo
-                    </span>
-                  )}
-                </div>
-                <p className="font-body text-sm text-gray-400 mt-0.5">{sheet!.author}</p>
+                <h2 className="font-display text-xl leading-snug">{sheet!.title}</h2>
+                {sheet!.author && (
+                  <p className="font-body text-sm text-gray-400 mt-0.5">{sheet!.author}</p>
+                )}
               </>
             )}
           </div>
-          <button onClick={closeSheet} className="text-gray-500 hover:text-gray-300 transition-colors text-2xl leading-none shrink-0 mt-0.5">×</button>
+          <button
+            onClick={closeSheet}
+            className="text-gray-500 hover:text-gray-300 transition-colors text-2xl leading-none shrink-0 mt-0.5"
+          >
+            ×
+          </button>
         </div>
 
         {/* Scrollable body */}
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
           {sheetLoading ? (
             <div className="space-y-3">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-12 rounded-xl bg-[#003572]/20 animate-pulse" />
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="h-4 rounded bg-[#003572]/20 animate-pulse" style={{ width: `${70 + (i % 3) * 10}%` }} />
               ))}
             </div>
           ) : sheet ? (
@@ -80,19 +113,42 @@ export default function SongSheet() {
               {/* Key / BPM / timeSig pills */}
               <div className="flex flex-wrap gap-2">
                 {sheet.key && (
-                  <span className="font-label text-sm px-3 py-1 rounded-full border border-[#00bfff]/40 text-[#00bfff]">{sheet.key}</span>
+                  <span className="font-label text-sm px-3 py-1 rounded-full border border-[#00bfff]/40 text-[#00bfff]">
+                    {sheet.key}
+                  </span>
                 )}
                 {sheet.bpm && (
-                  <span className="font-label text-sm px-3 py-1 rounded-full border border-[#C8D8EB]/15 text-[#C8D8EB]/50">{sheet.bpm} BPM</span>
+                  <span className="font-label text-sm px-3 py-1 rounded-full border border-[#C8D8EB]/15 text-[#C8D8EB]/50">
+                    {sheet.bpm} BPM
+                  </span>
                 )}
                 {sheet.timeSig && (
-                  <span className="font-label text-sm px-3 py-1 rounded-full border border-[#C8D8EB]/15 text-[#C8D8EB]/50">{sheet.timeSig}</span>
+                  <span className="font-label text-sm px-3 py-1 rounded-full border border-[#C8D8EB]/15 text-[#C8D8EB]/50">
+                    {sheet.timeSig}
+                  </span>
                 )}
               </div>
 
+              {/* Lyrics / Chords — primary content */}
+              {hasContent && (
+                <div>
+                  {hasChords ? (
+                    <ChordChart charts={sheet.chords!} />
+                  ) : (
+                    <div className="columns-1 sm:columns-2 gap-8">
+                      {groupBySections(sheet.body!).map((group, i) => (
+                        <div key={i} className="break-inside-avoid mb-4">
+                          <PortableText value={group} components={bodyComponents} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Audio tracks */}
-              {(sheet.audioTracks?.filter(t => t.audioFileURL).length ?? 0) > 0 && (
-                <div className="space-y-2">
+              {hasAudio && (
+                <div className="space-y-2 pt-1">
                   <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">Audio</p>
                   {sheet.audioTracks!.filter(t => t.audioFileURL).map((track, i) => {
                     const audioTrack: AudioTrack = {
@@ -134,9 +190,9 @@ export default function SongSheet() {
               )}
 
               {/* Chord PDFs */}
-              {(sheet.chordsPDF?.length ?? 0) > 0 && (
-                <div className="space-y-2">
-                  <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">Acordes</p>
+              {hasPDFs && (
+                <div className="space-y-2 pt-1">
+                  <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">PDFs</p>
                   {sheet.chordsPDF!.map((pdf, i) => (
                     <a
                       key={i}
@@ -157,20 +213,13 @@ export default function SongSheet() {
                 </div>
               )}
 
-              {/* Empty state */}
-              {!sheet.audioTracks?.filter(t => t.audioFileURL).length && !sheet.chordsPDF?.length && (
-                <p className="font-body text-sm text-gray-500 text-center py-4">
-                  No hay archivos de audio o acordes disponibles.
-                </p>
-              )}
-
               {/* Full page link */}
               <Link
                 href={`/posts/${sheet.slug}`}
                 onClick={closeSheet}
                 className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-[#003572]/25 hover:border-[#00bfff]/30 font-label text-xs uppercase tracking-widest text-gray-400 hover:text-[#00bfff] transition-colors"
               >
-                Ver canción completa ↗
+                Ver página completa ↗
               </Link>
             </>
           ) : null}

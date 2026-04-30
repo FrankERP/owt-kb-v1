@@ -20,10 +20,12 @@ async function getRoleDoc(roleId: string, leadId: string) {
   return doc ?? null;
 }
 
-async function getExistingProposal(leadId: string, roleId: string) {
-  return serverClient.fetch(
-    `*[_type == "setlistProposal" && lead._ref == $leadId && service_ref._ref == $roleId][0] {
+async function getProposalsForService(currentLeadId: string, roleId: string) {
+  const all = await serverClient.fetch(
+    `*[_type == "setlistProposal" && service_ref._ref == $roleId] {
       _id, status, lead_notes, admin_notes,
+      "isOwn": lead._ref == $currentLeadId,
+      "leadName": coalesce(lead->alias, lead->member_name),
       songs[] {
         _key, play_key,
         "song_id": song._ref,
@@ -32,8 +34,11 @@ async function getExistingProposal(leadId: string, roleId: string) {
         "key": song->key
       }
     }`,
-    { leadId, roleId }
+    { currentLeadId, roleId }
   );
+  const myProposal    = (all as any[]).find(p => p.isOwn)  ?? null;
+  const coLeadProposal = (all as any[]).find(p => !p.isOwn) ?? null;
+  return { myProposal, coLeadProposal };
 }
 
 export default async function ProposePage({
@@ -50,7 +55,7 @@ export default async function ProposePage({
   const roleDoc = await getRoleDoc(roleId, leadId);
   if (!roleDoc) notFound();
 
-  const existingProposal = await getExistingProposal(leadId, roleId);
+  const { myProposal, coLeadProposal } = await getProposalsForService(leadId, roleId);
 
   const serviceType: ServiceType =
     roleDoc._type === "sunday_role" ? "sunday" :
@@ -72,7 +77,8 @@ export default async function ProposePage({
             service_type: serviceType,
             service_date: serviceDate,
           }}
-          existingProposal={existingProposal ?? null}
+          existingProposal={myProposal ?? null}
+          coLeadProposal={coLeadProposal ?? null}
         />
       </div>
     </div>
