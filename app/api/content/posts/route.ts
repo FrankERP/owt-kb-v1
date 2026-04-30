@@ -24,6 +24,7 @@ export async function GET() {
     `*[_type == "post"] | order(title asc) {
       _id, title, author, slug, key, bpm, timeSig, publishDate,
       body,
+      chords[]{ key, content },
       referenceLinks[]{ label, url },
       tags[]->{ _id, name, slug }
     }`
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest) {
     bpm?: string;
     timeSig?: string;
     lyrics?: string;
+    chords?: Array<{ key: string; content: string }>;
     referenceLinks?: Array<{ label: string; url: string }>;
     tagIds?: string[];
   };
@@ -64,6 +66,9 @@ export async function POST(req: NextRequest) {
     bpm: body.bpm ? Number(body.bpm) : undefined,
     timeSig: body.timeSig?.trim() ?? "",
     body: body.lyrics ? textToBody(body.lyrics) : [],
+    chords: (body.chords ?? []).map((c) => ({
+      _type: "chord_chart", _key: rng(), key: c.key, content: c.content,
+    })),
     referenceLinks: (body.referenceLinks ?? []).map((l) => ({
       _type: "referenceLink", _key: rng(), label: l.label, url: l.url,
     })),

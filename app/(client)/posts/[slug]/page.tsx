@@ -6,6 +6,7 @@ import Image from "next/image";
 import { urlFor } from "@/sanity/lib/image";
 import { notFound } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
+import ChordChart from "@/app/components/ChordChart";
 
 interface Params {
   params: Promise<{ slug: string }>;
@@ -38,6 +39,7 @@ async function getPost(slug: string) {
         key,
         "chordsURL": chordsPDF.asset->url,
       },
+      chords[]{ key, content },
     }`;
   return await client.fetch(query);
 }
@@ -101,8 +103,9 @@ const Page = async ({ params }: Params) => {
     })) ?? []),
   ];
 
-  const hasAudio     = (post?.audioTracks?.length ?? 0) > 0;
-  const hasChords    = pdfFiles.length > 0;
+  const hasAudio        = (post?.audioTracks?.length ?? 0) > 0;
+  const hasInlineChords = (post?.chords?.length ?? 0) > 0;
+  const hasChords       = pdfFiles.length > 0 || hasInlineChords;
   const hasTutorials = (post?.tutorials2?.length ?? 0) > 0;
   const hasBody      = !!post?.body;
   const hasHistory   = history.length > 0;
@@ -238,11 +241,20 @@ const Page = async ({ params }: Params) => {
           </section>
         )}
 
-        {/* Acordes & PDFs */}
+        {/* Acordes: inline charts + PDFs */}
         {hasChords && (
           <section id="acordes">
             <SectionHeader>Acordes y Letras</SectionHeader>
-            <div className="flex flex-wrap justify-center gap-5">
+
+            {/* Inline chord charts */}
+            {hasInlineChords && (
+              <div className={pdfFiles.length > 0 ? "mb-12" : ""}>
+                <ChordChart charts={post.chords!} />
+              </div>
+            )}
+
+            {/* PDF files */}
+            {pdfFiles.length > 0 && <div className="flex flex-wrap justify-center gap-5">
               {pdfFiles.map((pdf, i) => (
                 <div
                   key={i}
@@ -282,7 +294,7 @@ const Page = async ({ params }: Params) => {
                   </div>
                 </div>
               ))}
-            </div>
+            </div>}
           </section>
         )}
 
