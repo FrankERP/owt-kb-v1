@@ -8,6 +8,7 @@ import ServicesPanel from "./ServicesPanel";
 import ActivityPanel from "./ActivityPanel";
 import ContentPanel from "./ContentPanel";
 import AvailabilityPanel from "./AvailabilityPanel";
+import ProposalsPanel from "./ProposalsPanel";
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
@@ -291,11 +292,12 @@ function PasswordForm({
 }
 
 // ─── Tab nav ──────────────────────────────────────────────────────────────────
-type Tab = "members" | "services" | "availability" | "activity" | "content";
+type Tab = "members" | "services" | "proposals" | "availability" | "activity" | "content";
 
 const ALL_TABS: { id: Tab; label: string; roles: OWTRole[] }[] = [
   { id: "members",      label: "Miembros",       roles: ["super-admin"] },
   { id: "services",     label: "Servicios",      roles: ["super-admin", "admin"] },
+  { id: "proposals",    label: "Propuestas",     roles: ["super-admin", "admin"] },
   { id: "availability", label: "Disponibilidad", roles: ["super-admin", "admin"] },
   { id: "activity",     label: "Actividad",      roles: ["super-admin", "admin"] },
   { id: "content",      label: "Contenido",      roles: ["super-admin", "admin", "content-editor"] },
@@ -480,6 +482,13 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
     <div className="space-y-6">
       <TabBar active={tab} onChange={setTab} role={role} />
       <ServicesPanel />
+    </div>
+  );
+
+  if (tab === "proposals") return (
+    <div className="space-y-6">
+      <TabBar active={tab} onChange={setTab} role={role} />
+      <ProposalsPanel />
     </div>
   );
 
