@@ -19,6 +19,8 @@ export interface SongSheetData {
   bpm?: string;
   timeSig?: string;
   _createdAt?: string;
+  body?: any[];
+  chords?: { key: string; content: string }[];
   audioTracks?: { title: string; tone?: string; audioFileURL: string }[];
   chordsPDF?: { title: string; key: string; chordsURL: string }[];
   lyricsURL?: string;

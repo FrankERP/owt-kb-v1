@@ -46,7 +46,7 @@ export default async function MePage() {
   );
 
   const today = new Date().toLocaleDateString("sv", { timeZone: TZ });
-  const limit = new Date(Date.now() + 95 * 86400 * 1000)
+  const limit = new Date(Date.now() + 365 * 86400 * 1000)
     .toLocaleDateString("sv", { timeZone: TZ });
 
   const memberFilter = `(

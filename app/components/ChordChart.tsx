@@ -2,27 +2,119 @@
 
 import { useState } from "react";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface Chart {
   key: string;
   content: string;
 }
 
+interface Segment {
+  chord?: string;
+  lyric: string;
+}
+
+// ─── Transposition ────────────────────────────────────────────────────────────
+
+const DISPLAY_NOTES = [
+  "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B",
+] as const;
+
+const NOTE_INDEX: Record<string, number> = {
+  C: 0, "B#": 0,
+  "C#": 1, Db: 1,
+  D: 2,
+  "D#": 3, Eb: 3,
+  E: 4, Fb: 4,
+  F: 5, "E#": 5,
+  "F#": 6, Gb: 6,
+  G: 7,
+  "G#": 8, Ab: 8,
+  A: 9,
+  "A#": 10, Bb: 10,
+  B: 11, Cb: 11,
+};
+
+function transposeChord(chord: string, semitones: number): string {
+  if (semitones === 0) return chord;
+  const m = chord.match(/^([A-G][b#]?)(.*)/);
+  if (!m) return chord;
+  const [, root, quality] = m;
+  const idx = NOTE_INDEX[root];
+  if (idx === undefined) return chord;
+  const newIdx = ((idx + semitones) % 12 + 12) % 12;
+  return DISPLAY_NOTES[newIdx] + quality;
+}
+
+function rootIndex(key: string): number {
+  const m = key.match(/^([A-G][b#]?)/);
+  if (!m) return -1;
+  return NOTE_INDEX[m[1]] ?? -1;
+}
+
+// ─── ChordPro parser ─────────────────────────────────────────────────────────
+
+function parseLine(line: string): Segment[] {
+  if (!line.includes("[")) return [{ lyric: line }];
+
+  const segments: Segment[] = [];
+  let rest = line;
+
+  const firstBracket = rest.indexOf("[");
+  if (firstBracket > 0) {
+    segments.push({ lyric: rest.slice(0, firstBracket) });
+    rest = rest.slice(firstBracket);
+  }
+
+  const re = /\[([^\]]+)\]([^[]*)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(rest)) !== null) {
+    segments.push({ chord: m[1], lyric: m[2] });
+  }
+
+  return segments;
+}
+
+const CHORD_RE = /\[[^\]]+\]/;
+
+function stripChords(line: string): string {
+  return line.replace(/\[[^\]]+\]/g, "");
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function ChordChart({ charts }: { charts: Chart[] }) {
   const [activeIdx, setActiveIdx] = useState(0);
+  const [showChords, setShowChords] = useState(true);
+  const [semitones, setSemitones] = useState(0);
 
   if (!charts.length) return null;
 
   const current = charts[activeIdx];
+  const isChordPro = CHORD_RE.test(current.content);
+  const nativeIdx = rootIndex(current.key);
+  const activeKeyIdx = nativeIdx >= 0 ? ((nativeIdx + semitones) % 12 + 12) % 12 : -1;
+
+  const handleTabChange = (i: number) => {
+    setActiveIdx(i);
+    setSemitones(0);
+  };
+
+  const handleKeyBtn = (btnIdx: number) => {
+    if (nativeIdx < 0) return;
+    setSemitones(((btnIdx - nativeIdx) % 12 + 12) % 12);
+  };
 
   return (
-    <div className="space-y-4 max-w-2xl mx-auto">
-      {/* Key tabs — only show when there are multiple charts */}
+    <div className="space-y-4 max-w-3xl mx-auto">
+
+      {/* Chart tabs */}
       {charts.length > 1 && (
         <div className="flex flex-wrap gap-2">
           {charts.map((c, i) => (
             <button
               key={i}
-              onClick={() => setActiveIdx(i)}
+              onClick={() => handleTabChange(i)}
               className={`font-label text-xs uppercase tracking-widest px-4 py-1.5 rounded-full border transition-colors ${
                 i === activeIdx
                   ? "border-[#00bfff] bg-[#00bfff]/15 text-[#00bfff]"
@@ -35,17 +127,127 @@ export default function ChordChart({ charts }: { charts: Chart[] }) {
         </div>
       )}
 
-      {/* Single key badge when there's only one */}
-      {charts.length === 1 && current.key && (
+      {/* ChordPro controls */}
+      {isChordPro && (
+        <div className="flex flex-col gap-3">
+
+          {/* Transposition keys */}
+          {nativeIdx >= 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {DISPLAY_NOTES.map((note, i) => {
+                const isActive = i === activeKeyIdx;
+                const isNative = i === nativeIdx && !isActive;
+                return (
+                  <button
+                    key={note}
+                    onClick={() => handleKeyBtn(i)}
+                    className={`font-label text-[11px] uppercase tracking-wide px-2.5 py-1 rounded border transition-colors min-w-[2rem] text-center ${
+                      isActive
+                        ? "border-[#00bfff] bg-[#00bfff] text-[#001f3f] font-bold"
+                        : isNative
+                        ? "border-[#00bfff] text-[#00bfff]"
+                        : "border-[#003572]/25 dark:border-[#00bfff]/15 text-gray-500 dark:text-gray-500 hover:border-[#00bfff]/50 hover:text-[#00bfff]"
+                    }`}
+                  >
+                    {note}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Chord toggle */}
+          <div className="flex items-center gap-2">
+            <button
+              role="switch"
+              aria-checked={showChords}
+              onClick={() => setShowChords((v) => !v)}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                showChords ? "bg-[#00bfff]" : "bg-gray-300 dark:bg-gray-600"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                  showChords ? "translate-x-4" : "translate-x-0"
+                }`}
+              />
+            </button>
+            <span className="font-label text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 select-none">
+              Acordes
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Single key badge for non-ChordPro chart */}
+      {!isChordPro && charts.length === 1 && current.key && (
         <span className="font-label text-xs uppercase tracking-widest px-3 py-1.5 rounded-full border border-[#00bfff]/40 text-[#00bfff] inline-block">
           {current.key}
         </span>
       )}
 
-      {/* Chart content */}
-      <pre className="font-mono text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 bg-[#003572]/5 dark:bg-[#00bfff]/5 px-5 py-5 overflow-x-auto">
-        {current.content}
-      </pre>
+      {/* Content */}
+      {isChordPro ? (
+        <div className="rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 bg-[#003572]/5 dark:bg-[#00bfff]/5 px-5 py-5 overflow-x-auto">
+          {current.content.split("\n").map((line, li) => {
+            // Section header: # Estribillo
+            if (line.startsWith("# ")) {
+              return (
+                <p
+                  key={li}
+                  className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]/70 mt-5 mb-1 first:mt-0"
+                >
+                  {line.slice(2)}
+                </p>
+              );
+            }
+
+            // Blank line → spacer
+            if (!line.trim()) {
+              return <div key={li} className="h-1" />;
+            }
+
+            const lineHasChords = CHORD_RE.test(line);
+
+            // Plain text line, or chords hidden
+            if (!showChords || !lineHasChords) {
+              const text = lineHasChords ? stripChords(line) : line;
+              if (!text.trim()) return null;
+              return (
+                <p key={li} className="font-body text-sm sm:text-base leading-snug">
+                  {text}
+                </p>
+              );
+            }
+
+            // Chord-above-lyric rendering
+            const segments = parseLine(line);
+            const allLyricsEmpty = segments.every((s) => !s.lyric.trim());
+            return (
+              <div key={li} className={`flex flex-wrap leading-none ${allLyricsEmpty ? "mb-0" : "mb-1"}`}>
+                {segments.map((seg, si) => (
+                  <span key={si} className="inline-block align-top">
+                    <span className="block font-mono font-semibold text-[#00bfff] text-sm leading-tight whitespace-nowrap">
+                      {seg.chord !== undefined
+                        ? transposeChord(seg.chord, semitones)
+                        : " "}
+                    </span>
+                    {seg.lyric.trim() !== "" && (
+                      <span className="block font-body text-sm sm:text-base leading-snug whitespace-pre">
+                        {seg.lyric}
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <pre className="font-mono text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 bg-[#003572]/5 dark:bg-[#00bfff]/5 px-5 py-5 overflow-x-auto">
+          {current.content}
+        </pre>
+      )}
     </div>
   );
 }

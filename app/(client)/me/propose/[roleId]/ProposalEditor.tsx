@@ -43,9 +43,24 @@ interface RoleDoc {
   service_date: string;
 }
 
+interface CoLeadProposal {
+  _id: string;
+  status: ProposalStatus;
+  leadName: string;
+  lead_notes?: string;
+  songs?: Array<{
+    song_id: string;
+    title: string;
+    author: string;
+    key: string;
+    play_key: string;
+  }>;
+}
+
 interface Props {
   roleDoc: RoleDoc;
   existingProposal: ExistingProposal | null;
+  coLeadProposal: CoLeadProposal | null;
 }
 
 // ─── Key options ─────────────────────────────────────────────────────────────
@@ -87,7 +102,7 @@ function capitalize(s: string) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ProposalEditor({ roleDoc, existingProposal }: Props) {
+export default function ProposalEditor({ roleDoc, existingProposal, coLeadProposal }: Props) {
   const router = useRouter();
 
   const [songs, setSongs] = useState<ProposalSong[]>(() => {
@@ -265,6 +280,46 @@ export default function ProposalEditor({ roleDoc, existingProposal }: Props) {
           </span>
         </div>
       </div>
+
+      {/* Co-lead draft panel */}
+      {coLeadProposal && (
+        <div className="rounded-xl border border-[#00bfff]/20 bg-[#00bfff]/5 p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/70">
+              Borrador de {coLeadProposal.leadName}
+            </p>
+            <span className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full ${STATUS_STYLE[coLeadProposal.status]}`}>
+              {STATUS_LABEL[coLeadProposal.status]}
+            </span>
+          </div>
+
+          {coLeadProposal.songs && coLeadProposal.songs.length > 0 ? (
+            <div className="space-y-1.5">
+              {coLeadProposal.songs.map((s, i) => (
+                <div key={s.song_id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#00bfff]/5">
+                  <span className="font-label text-[10px] text-gray-500 w-4 text-center shrink-0">{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-body text-sm truncate">{s.title}</p>
+                    <p className="font-body text-xs text-gray-500 truncate">{s.author}</p>
+                  </div>
+                  <span className="font-label text-[10px] px-2 py-0.5 rounded-full border border-[#00bfff]/20 text-[#00bfff]/70 shrink-0">
+                    {s.play_key}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="font-body text-xs text-gray-500">Sin canciones todavía.</p>
+          )}
+
+          {coLeadProposal.lead_notes && (
+            <div className="pt-1 border-t border-[#00bfff]/10">
+              <p className="font-label text-[10px] uppercase tracking-widest text-gray-600 mb-1">Notas</p>
+              <p className="font-body text-xs text-gray-400 whitespace-pre-wrap">{coLeadProposal.lead_notes}</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Admin notes banner (when changes requested) */}
       {status === "changes_requested" && existingProposal?.admin_notes && (

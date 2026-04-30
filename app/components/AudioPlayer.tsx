@@ -28,7 +28,7 @@ export default function AudioPlayer() {
   const { track, isPlaying } = player;
 
   return (
-    <div className="fixed bottom-16 lg:bottom-0 inset-x-0 z-40 bg-[#0a1929]/95 backdrop-blur-md border-t border-[#00bfff]/20 shadow-lg">
+    <div className="fixed bottom-0 inset-x-0 z-40 bg-[#0a1929]/95 backdrop-blur-md border-t border-[#00bfff]/20 shadow-lg">
       <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-3">
         {/* Play / Pause */}
         <button
