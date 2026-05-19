@@ -83,10 +83,16 @@ function stripChords(line: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ChordChart({ charts }: { charts: Chart[] }) {
+export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; defaultKey?: string }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [showChords, setShowChords] = useState(true);
-  const [semitones, setSemitones] = useState(0);
+  const [semitones, setSemitones] = useState(() => {
+    if (!defaultKey || !charts[0]) return 0;
+    const native = rootIndex(charts[0].key);
+    const target = rootIndex(defaultKey);
+    if (native < 0 || target < 0) return 0;
+    return ((target - native) % 12 + 12) % 12;
+  });
 
   if (!charts.length) return null;
 
@@ -137,19 +143,25 @@ export default function ChordChart({ charts }: { charts: Chart[] }) {
               {DISPLAY_NOTES.map((note, i) => {
                 const isActive = i === activeKeyIdx;
                 const isNative = i === nativeIdx && !isActive;
+                const isNativeNote = i === nativeIdx;
                 return (
                   <button
                     key={note}
                     onClick={() => handleKeyBtn(i)}
-                    className={`font-label text-[11px] uppercase tracking-wide px-2.5 py-1 rounded border transition-colors min-w-[2rem] text-center ${
+                    aria-label={`Tonalidad ${note}${isNativeNote ? " (original)" : ""}`}
+                    aria-pressed={isActive}
+                    className={`relative font-label text-[11px] uppercase tracking-wide px-2.5 py-1 rounded border transition-colors min-w-[2rem] text-center ${
                       isActive
                         ? "border-[#00bfff] bg-[#00bfff] text-[#001f3f] font-bold"
                         : isNative
-                        ? "border-[#00bfff] text-[#00bfff]"
+                        ? "border-[#00bfff]/60 text-[#00bfff]"
                         : "border-[#003572]/25 dark:border-[#00bfff]/15 text-gray-500 dark:text-gray-500 hover:border-[#00bfff]/50 hover:text-[#00bfff]"
                     }`}
                   >
                     {note}
+                    {isNativeNote && !isActive && (
+                      <span aria-hidden className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#00bfff]" />
+                    )}
                   </button>
                 );
               })}

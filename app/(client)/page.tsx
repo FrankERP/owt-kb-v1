@@ -83,6 +83,14 @@ export default async function Home() {
   const hasSpecials = specials.length > 0;
   const totalCards = (hasSaturday ? 1 : 0) + 1 + specials.length;
 
+  // Determine the nearest upcoming service date
+  const allDates = [
+    hasSaturday ? (satSongs?.week ?? satRole?.week) : undefined,
+    sunSongs?.week ?? sunRole?.week,
+    ...specials.map((s) => s.date),
+  ].filter((d): d is string => !!d && d >= today);
+  const nextDate = allDates.sort()[0] ?? null;
+
   return (
     <div>
       <Navbar title="OWT" tags schedule />
@@ -103,6 +111,7 @@ export default async function Home() {
               fohTeam={sp.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
               bgvs={sp.BGVs}
               chorus={sp.Chorus}
+              isNext={sp.date === nextDate}
             />
           ))}
           {hasSaturday && (
@@ -115,6 +124,7 @@ export default async function Home() {
               fohTeam={satRole?.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
               bgvs={satRole?.BGVs}
               chorus={satRole?.Chorus}
+              isNext={(satSongs?.week ?? satRole?.week) === nextDate}
             />
           )}
           <DayCard
@@ -126,6 +136,7 @@ export default async function Home() {
             fohTeam={sunRole?.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
             bgvs={sunRole?.BGVs}
             chorus={sunRole?.Chorus}
+            isNext={(sunSongs?.week ?? sunRole?.week) === nextDate}
           />
         </div>
       </div>

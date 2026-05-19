@@ -66,9 +66,9 @@ interface Props {
 // ─── Key options ─────────────────────────────────────────────────────────────
 
 const KEY_OPTIONS = [
-  "A", "Am", "Bb", "Bbm", "B", "Bm", "C", "Cm", "C#", "C#m",
-  "D", "Dm", "Eb", "Ebm", "E", "Em", "F", "Fm", "F#", "F#m",
-  "G", "Gm", "Ab", "Abm",
+  "A", "Am", "Bb", "Bbm", "B", "Bm", "C", "Cm",
+  "C#", "C#m", "D", "Dm", "Eb", "Ebm", "E", "Em",
+  "F", "Fm", "F#", "F#m", "G", "Gm", "Ab", "Abm",
 ];
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -117,20 +117,19 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
   });
 
   const [leadNotes, setLeadNotes] = useState(existingProposal?.lead_notes ?? "");
-  const [status, setStatus] = useState<ProposalStatus>(existingProposal?.status ?? "draft");
-  const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [status, setStatus]       = useState<ProposalStatus>(existingProposal?.status ?? "draft");
+  const [saving, setSaving]       = useState(false);
+  const [toast, setToast]         = useState<{ msg: string; ok: boolean } | null>(null);
+  const [confirmSubmit, setConfirmSubmit] = useState(false);
 
-  // Drag-and-drop state
-  const dragIdx = useRef<number | null>(null);
+  // Drag-and-drop
+  const dragIdx    = useRef<number | null>(null);
+  const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
-  const onDragStart = (idx: number) => { dragIdx.current = idx; };
-  const onDragOver = (e: React.DragEvent, idx: number) => {
-    e.preventDefault();
-    setDragOverIdx(idx);
-  };
-  const onDrop = (targetIdx: number) => {
+  const onDragStart = (idx: number) => { dragIdx.current = idx; setDraggingIdx(idx); };
+  const onDragOver  = (e: React.DragEvent, idx: number) => { e.preventDefault(); setDragOverIdx(idx); };
+  const onDrop      = (targetIdx: number) => {
     const from = dragIdx.current;
     if (from === null || from === targetIdx) { setDragOverIdx(null); return; }
     setSongs(prev => {
@@ -140,24 +139,49 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
       return next;
     });
     dragIdx.current = null;
+    setDraggingIdx(null);
     setDragOverIdx(null);
   };
-  const onDragEnd = () => { dragIdx.current = null; setDragOverIdx(null); };
+  const onDragEnd = () => { dragIdx.current = null; setDraggingIdx(null); setDragOverIdx(null); };
 
-  // Song search state
-  const [searchQuery, setSearchQuery] = useState("");
+  const moveSong = (from: number, to: number) => {
+    setSongs(prev => {
+      if (to < 0 || to >= prev.length) return prev;
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
+  };
+
+  // Key picker
+  const [keyPickerIdx, setKeyPickerIdx] = useState<number | null>(null);
+  const keyPickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (keyPickerIdx === null) return;
+    const handler = (e: MouseEvent) => {
+      if (keyPickerRef.current && !keyPickerRef.current.contains(e.target as Node)) {
+        setKeyPickerIdx(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [keyPickerIdx]);
+
+  // Song search
+  const [searchQuery, setSearchQuery]   = useState("");
   const [searchResults, setSearchResults] = useState<SongResult[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
-  const searchRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [searching, setSearching]       = useState(false);
+  const [showSearch, setShowSearch]     = useState(false);
+  const searchRef    = useRef<HTMLDivElement>(null);
+  const debounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 3000);
   };
 
-  // Close search dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
@@ -168,7 +192,6 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Debounced song search
   const search = useCallback((q: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
@@ -183,14 +206,10 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
     }, 300);
   }, []);
 
-  useEffect(() => {
-    search(searchQuery);
-  }, [searchQuery, search]);
+  useEffect(() => { search(searchQuery); }, [searchQuery, search]);
 
   useEffect(() => {
-    if (!showSearch && searchResults.length === 0) {
-      search("");
-    }
+    if (!showSearch && searchResults.length === 0) search("");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showSearch]);
 
@@ -207,12 +226,11 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
     setSearchQuery("");
   };
 
-  const removeSong = (idx: number) => {
-    setSongs(prev => prev.filter((_, i) => i !== idx));
-  };
+  const removeSong = (idx: number) => setSongs(prev => prev.filter((_, i) => i !== idx));
 
   const setPlayKey = (idx: number, play_key: string) => {
     setSongs(prev => prev.map((s, i) => i === idx ? { ...s, play_key } : s));
+    setKeyPickerIdx(null);
   };
 
   const save = async (submitStatus: "draft" | "pending") => {
@@ -243,15 +261,13 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
     }
   };
 
-  const isApproved = status === "approved";
+  const isApproved  = status === "approved";
   const serviceLabel =
-    roleDoc.service_type === "sunday" ? "Domingo" :
-    roleDoc.service_type === "saturday" ? "Sábado" :
+    roleDoc.service_type === "sunday"   ? "Domingo" :
+    roleDoc.service_type === "saturday" ? "Sábado"  :
     (roleDoc.service_name ?? "Servicio Especial");
 
-  // ─── Input styles ────────────────────────────────────────────────────────────
   const inputCls = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors placeholder:text-gray-600";
-  const selectCls = "px-2 py-1 rounded-lg border border-[#00bfff]/20 bg-[#010b17] dark:bg-[#010b17] font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
 
   return (
     <div className="space-y-8">
@@ -283,11 +299,14 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
 
       {/* Co-lead draft panel */}
       {coLeadProposal && (
-        <div className="rounded-xl border border-[#00bfff]/20 bg-[#00bfff]/5 p-4 space-y-3">
+        <div className="border-l-2 border-[#00bfff]/40 pl-4 space-y-3">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/70">
-              Borrador de {coLeadProposal.leadName}
-            </p>
+            <div className="flex items-center gap-2">
+              <UserIcon />
+              <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/70">
+                Borrador de {coLeadProposal.leadName}
+              </p>
+            </div>
             <span className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full ${STATUS_STYLE[coLeadProposal.status]}`}>
               {STATUS_LABEL[coLeadProposal.status]}
             </span>
@@ -321,7 +340,7 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
         </div>
       )}
 
-      {/* Admin notes banner (when changes requested) */}
+      {/* Admin notes banner (changes requested) */}
       {status === "changes_requested" && existingProposal?.admin_notes && (
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 space-y-1">
           <p className="font-label text-xs uppercase tracking-widest text-red-400">Comentarios del admin</p>
@@ -334,9 +353,12 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
         <h2 className="font-label text-xs uppercase tracking-widest text-gray-500">Lista de canciones</h2>
 
         {songs.length === 0 && (
-          <p className="font-body text-sm text-gray-500 py-4 text-center">
-            Agrega canciones usando el buscador abajo.
-          </p>
+          <div className="flex flex-col items-center py-8 gap-3 text-gray-600">
+            <MusicIcon />
+            <p className="font-body text-sm text-center">
+              Agrega canciones usando el buscador abajo.
+            </p>
+          </div>
         )}
 
         {songs.map((song, idx) => (
@@ -350,14 +372,44 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
             className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${
               dragOverIdx === idx && dragIdx.current !== idx
                 ? "border-[#00bfff]/60 bg-[#00bfff]/10 scale-[1.01]"
+                : draggingIdx === idx
+                ? "opacity-30"
                 : "border-[#003572]/15 dark:border-[#00bfff]/10 bg-[#003572]/5 dark:bg-[#00bfff]/5"
             } ${!isApproved ? "cursor-grab active:cursor-grabbing" : ""}`}
           >
-            {/* Drag handle */}
+            {/* Drag handle (desktop) */}
             {!isApproved && (
-              <span className="text-gray-600 shrink-0 select-none">
+              <span className="text-gray-400 shrink-0 select-none hidden md:inline-flex">
                 <GripIcon />
               </span>
+            )}
+
+            {/* Up / down buttons (mobile fallback for DnD) */}
+            {!isApproved && (
+              <div className="flex flex-col gap-0.5 shrink-0 md:hidden">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); moveSong(idx, idx - 1); }}
+                  disabled={idx === 0}
+                  className="p-1 rounded text-gray-400 hover:text-[#00bfff] disabled:opacity-20 disabled:cursor-default"
+                  aria-label="Mover arriba"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="18 15 12 9 6 15" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); moveSong(idx, idx + 1); }}
+                  disabled={idx === songs.length - 1}
+                  className="p-1 rounded text-gray-400 hover:text-[#00bfff] disabled:opacity-20 disabled:cursor-default"
+                  aria-label="Mover abajo"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+              </div>
             )}
 
             {/* Position */}
@@ -369,25 +421,45 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
               <p className="font-body text-xs text-gray-400 truncate">{song.author}</p>
             </div>
 
-            {/* Key select */}
+            {/* Custom key picker */}
             {!isApproved && (
-              <select
-                value={song.play_key}
-                onChange={e => setPlayKey(idx, e.target.value)}
-                className={selectCls}
-                title="Tonalidad"
-                onMouseDown={e => e.stopPropagation()}
+              <div
+                className="relative shrink-0"
+                ref={keyPickerIdx === idx ? keyPickerRef : undefined}
               >
-                {KEY_OPTIONS.map(k => (
-                  <option key={k} value={k}>{k}</option>
-                ))}
-                {!KEY_OPTIONS.includes(song.play_key) && (
-                  <option value={song.play_key}>{song.play_key}</option>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setKeyPickerIdx(keyPickerIdx === idx ? null : idx); }}
+                  onMouseDown={e => e.stopPropagation()}
+                  className="font-label text-xs px-2.5 py-1 rounded-lg border border-[#00bfff]/20 hover:border-[#00bfff]/50 text-[#00bfff] transition-colors min-w-[2.75rem] text-center"
+                >
+                  {song.play_key}
+                </button>
+                {keyPickerIdx === idx && (
+                  <div className="absolute right-0 top-full mt-1.5 z-30 bg-[#020f1c] border border-[#00bfff]/20 rounded-xl shadow-2xl p-2.5 min-w-[9rem]">
+                    <div className="grid grid-cols-4 gap-1">
+                      {KEY_OPTIONS.map(k => (
+                        <button
+                          key={k}
+                          type="button"
+                          onClick={() => setPlayKey(idx, k)}
+                          className={`font-label text-[10px] px-1.5 py-1.5 rounded-lg transition-colors ${
+                            k === song.play_key
+                              ? "bg-[#00bfff]/20 text-[#00bfff]"
+                              : "text-gray-400 hover:bg-[#00bfff]/10 hover:text-[#00bfff]"
+                          }`}
+                        >
+                          {k}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
-              </select>
+              </div>
             )}
+
             {isApproved && (
-              <span className="font-label text-xs px-2 py-0.5 rounded-full border border-[#00bfff]/20 text-[#00bfff]">
+              <span className="font-label text-xs px-2 py-0.5 rounded-full border border-[#00bfff]/20 text-[#00bfff] shrink-0">
                 {song.play_key}
               </span>
             )}
@@ -395,6 +467,7 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
             {/* Remove */}
             {!isApproved && (
               <button
+                type="button"
                 onClick={() => removeSong(idx)}
                 className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
                 title="Quitar"
@@ -410,7 +483,7 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
           <div ref={searchRef} className="relative">
             <div
               className="flex items-center gap-2 px-4 py-3 rounded-xl border border-dashed border-[#00bfff]/25 hover:border-[#00bfff]/50 transition-colors cursor-pointer"
-              onClick={() => setShowSearch(true)}
+              onClick={() => { setShowSearch(true); setKeyPickerIdx(null); }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#00bfff] shrink-0">
                 <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
@@ -419,7 +492,7 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
             </div>
 
             {showSearch && (
-              <div className="absolute top-full left-0 right-0 mt-1 z-20 rounded-xl border border-[#00bfff]/20 bg-[#020f1c] dark:bg-[#020f1c] shadow-2xl overflow-hidden">
+              <div className="absolute top-full left-0 right-0 mt-1 z-20 rounded-xl border border-[#00bfff]/20 bg-[#020f1c] shadow-2xl overflow-hidden">
                 <div className="p-2 border-b border-[#00bfff]/10">
                   <input
                     autoFocus
@@ -444,9 +517,7 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
                         onClick={() => !already && addSong(song)}
                         disabled={already}
                         className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-                          already
-                            ? "opacity-40 cursor-not-allowed"
-                            : "hover:bg-[#00bfff]/5"
+                          already ? "opacity-40 cursor-not-allowed" : "hover:bg-[#00bfff]/5"
                         }`}
                       >
                         <div className="flex-1 min-w-0">
@@ -488,26 +559,7 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
         </div>
       )}
 
-      {/* Actions */}
-      {!isApproved && (
-        <div className="flex gap-3 pt-2">
-          <button
-            onClick={() => save("draft")}
-            disabled={saving}
-            className="flex-1 py-2.5 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors disabled:opacity-50"
-          >
-            {saving ? "Guardando…" : "Guardar borrador"}
-          </button>
-          <button
-            onClick={() => save("pending")}
-            disabled={saving || songs.length === 0}
-            className="flex-1 py-2.5 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
-          >
-            {saving ? "Enviando…" : "Enviar propuesta"}
-          </button>
-        </div>
-      )}
-
+      {/* Approved banner */}
       {isApproved && (
         <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-green-500/20 bg-green-500/5">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-400 shrink-0">
@@ -520,9 +572,70 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
         </div>
       )}
 
+      {/* Sticky action bar */}
+      {!isApproved && (
+        <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-[#C8D8EB]/95 dark:bg-[#010b17]/95 backdrop-blur-sm border-t border-[#003572]/20 dark:border-[#00bfff]/10 z-10">
+          <div className="flex gap-3">
+            <button
+              onClick={() => save("draft")}
+              disabled={saving}
+              className="flex-1 py-2.5 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors disabled:opacity-50"
+            >
+              {saving ? "Guardando…" : "Guardar borrador"}
+            </button>
+            <button
+              onClick={() => setConfirmSubmit(true)}
+              disabled={saving || songs.length === 0}
+              className="flex-1 py-2.5 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+            >
+              {saving ? "Enviando…" : "Enviar propuesta"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Submit confirmation modal */}
+      {confirmSubmit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setConfirmSubmit(false)} />
+          <div className="relative z-10 w-full max-w-sm bg-[#0a1929] border border-[#00bfff]/20 rounded-2xl shadow-2xl p-6 space-y-5">
+            <div className="space-y-1">
+              <h3 className="font-display text-lg uppercase tracking-wide">Enviar propuesta</h3>
+              <p className="font-body text-sm text-gray-400">
+                Vas a enviar {songs.length} canción{songs.length !== 1 ? "es" : ""} para {serviceLabel}. El admin recibirá tu propuesta para revisión.
+              </p>
+            </div>
+            <ul className="space-y-1 border border-[#00bfff]/10 rounded-xl p-3 bg-[#003572]/10">
+              {songs.map((s, i) => (
+                <li key={s.songId} className="flex items-center gap-2">
+                  <span className="font-label text-[10px] text-gray-600 w-4 text-right tabular-nums">{i + 1}</span>
+                  <span className="font-body text-sm truncate flex-1">{s.title}</span>
+                  <span className="font-label text-xs text-[#00bfff] shrink-0">{s.play_key}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmSubmit(false)}
+                className="flex-1 py-2.5 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => { setConfirmSubmit(false); save("pending"); }}
+                disabled={saving}
+                className="flex-1 py-2.5 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toast */}
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl border font-label text-xs uppercase tracking-widest shadow-xl ${
+        <div className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl border font-label text-xs uppercase tracking-widest shadow-xl ${
           toast.ok
             ? "bg-[#003572] dark:bg-[#0a1929] border-[#00bfff]/30"
             : "bg-red-900/80 border-red-500/30"
@@ -534,7 +647,8 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
   );
 }
 
-// ─── Icon helpers ─────────────────────────────────────────────────────────────
+// ─── Icons ────────────────────────────────────────────────────────────────────
+
 function GripIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -548,6 +662,25 @@ function XIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
+function UserIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#00bfff]/60">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+
+function MusicIcon() {
+  return (
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-700">
+      <path d="M9 18V5l12-2v13" />
+      <circle cx="6" cy="18" r="3" />
+      <circle cx="18" cy="16" r="3" />
     </svg>
   );
 }

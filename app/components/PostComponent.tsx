@@ -22,12 +22,23 @@ const PostComponent = ({ post }: Props) => {
   return (
     <div
       onClick={() => openSheet(post._id)}
-      className="relative flex flex-col gap-2.5 p-4 lg:p-5 rounded-xl border border-[#003572]/25 dark:border-[#00bfff]/15 hover:border-[#003572]/50 dark:hover:border-[#00bfff]/40 hover:shadow-lg hover:shadow-[#00bfff]/10 cursor-pointer transition-all duration-200"
+      className="group relative flex flex-col gap-2.5 p-4 lg:p-5 rounded-xl border border-[#003572]/25 dark:border-[#00bfff]/15 hover:border-[#003572]/50 dark:hover:border-[#00bfff]/40 hover:shadow-lg hover:shadow-[#00bfff]/10 cursor-pointer transition-all duration-200"
     >
-      {/* New badge — absolute so it never pushes text */}
+      {/* New badge / hover eye — absolute, top-right */}
+      <span className={`absolute top-4 right-4 pointer-events-none transition-opacity duration-150 ${fresh ? "group-hover:opacity-0" : "opacity-0 group-hover:opacity-100"}`}>
+        {fresh ? (
+          <span className="font-label text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#00bfff]/15 text-[#00bfff] border border-[#00bfff]/30">
+            Nuevo
+          </span>
+        ) : (
+          <span className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/60 flex items-center gap-1">
+            <EyeIcon /> Ver
+          </span>
+        )}
+      </span>
       {fresh && (
-        <span className="absolute top-4 right-4 font-label text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#00bfff]/15 text-[#00bfff] border border-[#00bfff]/30 pointer-events-none">
-          Nuevo
+        <span className="absolute top-4 right-4 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 font-label text-[10px] uppercase tracking-widest text-[#00bfff]/60 flex items-center gap-1">
+          <EyeIcon /> Ver
         </span>
       )}
 
@@ -63,7 +74,7 @@ const PostComponent = ({ post }: Props) => {
 
       {/* Tags */}
       {post.tags?.length > 0 && (
-        <div className="flex flex-wrap gap-x-2 gap-y-0.5 pt-1 border-t border-[#003572]/10 dark:border-[#00bfff]/8">
+        <div className="flex flex-wrap gap-x-2 gap-y-0.5 pt-1 border-t border-[#003572]/10 dark:border-[#00bfff]/10">
           {post.tags.map((tag) => (
             <span key={tag._id} className="font-label text-[10px] text-gray-500 dark:text-gray-600 lowercase">
               #{tag.name}
@@ -74,5 +85,14 @@ const PostComponent = ({ post }: Props) => {
     </div>
   );
 };
+
+function EyeIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
 
 export default PostComponent;

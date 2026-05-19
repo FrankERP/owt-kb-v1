@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 
 interface Props {
   initialDates: string[];
+  serviceDates?: string[];
 }
 
 const MONTHS_ES = [
@@ -28,10 +29,12 @@ function buildCalendar(year: number, month: number): (string | null)[] {
   return cells;
 }
 
-export default function AvailabilityCalendar({ initialDates }: Props) {
+export default function AvailabilityCalendar({ initialDates, serviceDates = [] }: Props) {
   const [dates, setDates]   = useState<Set<string>>(new Set(initialDates));
+  const serviceSet = new Set(serviceDates);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved]   = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [page, setPage]     = useState(0); // 0 = current month, 1 = +3, 2 = +6, …
 
   const now      = new Date();
@@ -58,14 +61,21 @@ export default function AvailabilityCalendar({ initialDates }: Props) {
 
   async function save() {
     setSaving(true);
-    await fetch("/api/me/availability", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ unavailableDates: Array.from(dates) }),
-    });
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    setSaveError(null);
+    try {
+      const res = await fetch("/api/me/availability", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unavailableDates: Array.from(dates) }),
+      });
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Error al guardar");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const first = visibleMonths[0];
@@ -101,6 +111,12 @@ export default function AvailabilityCalendar({ initialDates }: Props) {
         </p>
       )}
 
+      {saveError && (
+        <p className="font-label text-[10px] uppercase tracking-widest text-red-400">
+          No se pudo guardar — {saveError}
+        </p>
+      )}
+
       {/* Navigation */}
       <div className="flex items-center justify-between">
         <button
@@ -131,7 +147,7 @@ export default function AvailabilityCalendar({ initialDates }: Props) {
         {visibleMonths.map(({ year, month }) => {
           const cells = buildCalendar(year, month);
           return (
-            <div key={`${year}-${month}`} className="rounded-xl border border-[#00bfff]/15 bg-[#00bfff]/3 p-3">
+            <div key={`${year}-${month}`} className="rounded-xl border border-[#00bfff]/15 bg-[#00bfff]/[0.04] p-3">
               <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/70 mb-2 text-center">
                 {MONTHS_ES[month - 1]} {year}
               </p>
@@ -147,6 +163,7 @@ export default function AvailabilityCalendar({ initialDates }: Props) {
                   if (!iso) return <div key={i} />;
                   const isPast      = iso < todayIso;
                   const unavailable = dates.has(iso);
+                  const hasService  = serviceSet.has(iso);
                   const dayNum      = new Date(iso + "T12:00:00").getDate();
                   return (
                     <button
@@ -155,7 +172,7 @@ export default function AvailabilityCalendar({ initialDates }: Props) {
                       onClick={() => !isPast && toggle(iso)}
                       disabled={isPast}
                       title={iso}
-                      className={`rounded text-center py-1 font-body text-xs transition-colors ${
+                      className={`relative rounded text-center font-body text-xs transition-colors min-h-[44px] sm:min-h-0 sm:py-1 sm:pb-2 ${
                         isPast
                           ? "text-gray-700 cursor-default"
                           : unavailable
@@ -164,6 +181,9 @@ export default function AvailabilityCalendar({ initialDates }: Props) {
                       }`}
                     >
                       {dayNum}
+                      {hasService && (
+                        <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${unavailable ? "bg-orange-400/60" : isPast ? "bg-gray-600" : "bg-[#00bfff]/70"}`} />
+                      )}
                     </button>
                   );
                 })}

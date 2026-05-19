@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
+import { serverClient } from "@/sanity/lib/serverClient";
 import NavMenu from "./NavMenu";
 
 interface Props {
@@ -15,9 +16,27 @@ interface Props {
 const Navbar = async ({ title = "", author = "", tags = false, schedule = false }: Props) => {
   const session = await getServerSession(authOptions);
 
+  let notifCount = 0;
+  if (session?.user?.sanityId) {
+    const role = session.user.role as string | undefined;
+    const isAdmin = role === "super-admin" || role === "admin";
+    const isLead  = role === "member" || role === "content-editor" || isAdmin;
+    if (isAdmin) {
+      notifCount = await serverClient.fetch<number>(
+        `count(*[_type == "setlistProposal" && status == "pending"])`,
+        {}
+      );
+    } else if (isLead) {
+      notifCount = await serverClient.fetch<number>(
+        `count(*[_type == "setlistProposal" && lead._ref == $id && status == "changes_requested"])`,
+        { id: session.user.sanityId }
+      );
+    }
+  }
+
   return (
     <nav className="sticky top-0 z-50 border-b border-[#003572]/20 dark:border-[#00bfff]/20 bg-[#C8D8EB]/80 dark:bg-[#010b17]/80 backdrop-blur-sm">
-      <div className="mx-auto max-w-7xl px-6 h-14 lg:h-20 flex items-center gap-4">
+      <div className="mx-auto max-w-7xl px-6 h-14 lg:h-20 transition-[height] duration-300 flex items-center gap-4">
 
         {/* Logo */}
         <Link href="/" className="shrink-0">
@@ -48,6 +67,7 @@ const Navbar = async ({ title = "", author = "", tags = false, schedule = false 
             user={session?.user ?? null}
             showSchedule={schedule}
             showTags={tags}
+            notifCount={notifCount}
           />
         </div>
 
