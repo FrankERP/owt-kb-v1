@@ -5,7 +5,7 @@ import { client } from "@/sanity/lib/client";
 
 async function getPostsByTag(tag: string) {
   const query = `
-    *[_type == "post" && references(*[_type == "tag" && slug.current == "${tag}"]._id)] {
+    *[_type == "post" && references(*[_type == "tag" && slug.current == $tagSlug]._id)] {
       _id,
       _createdAt,
       title,
@@ -23,7 +23,7 @@ async function getPostsByTag(tag: string) {
       }
     }
   `;
-  return await client.fetch(query);
+  return await client.fetch(query, { tagSlug: tag });
 }
 
 export const revalidate = 60;

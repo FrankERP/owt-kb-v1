@@ -10,6 +10,14 @@ const ADMIN_ROLES: OWTRole[] = ["super-admin", "admin"];
 
 function rng() { return Math.random().toString(36).slice(2, 9); }
 
+function isSafeHttpUrl(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  try {
+    const u = new URL(value);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch { return false; }
+}
+
 async function requireContentRole() {
   const session = await getServerSession(authOptions);
   if (!CONTENT_ROLES.includes(session?.user.role as OWTRole)) return null;
@@ -43,6 +51,13 @@ export async function PATCH(
     tutorials?: Array<{ title: string; url: string }>;
     tagIds?: string[];
   };
+
+  if (body.referenceLinks?.some((l) => !isSafeHttpUrl(l.url))) {
+    return NextResponse.json({ error: "referenceLinks must use http(s)" }, { status: 400 });
+  }
+  if (body.tutorials?.some((t) => !isSafeHttpUrl(t.url))) {
+    return NextResponse.json({ error: "tutorials must use http(s)" }, { status: 400 });
+  }
 
   const patch: Record<string, unknown> = {};
   if (body.title?.trim())  patch.title  = body.title.trim();

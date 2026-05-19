@@ -138,6 +138,13 @@ export async function PUT(req: NextRequest) {
       await writeClient.create({ _type: "saturdarSongs", week: body.week, songs: songDocs });
     }
   } else if (body.type === "special" && body.roleId) {
+    const targetType = await serverClient.fetch(
+      `*[_id == $id][0]._type`,
+      { id: body.roleId }
+    );
+    if (targetType !== "special_role") {
+      return NextResponse.json({ error: "roleId must reference a special_role document" }, { status: 400 });
+    }
     await writeClient.patch(body.roleId).set({ songs: songDocs }).commit();
   } else {
     return NextResponse.json({ error: "week (for sunday/saturday) or roleId (for special) required" }, { status: 400 });
