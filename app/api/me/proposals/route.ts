@@ -31,27 +31,40 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json() as {
     roleId: string;
-    serviceType: "sunday" | "saturday" | "special";
-    serviceDate: string;
     songs: Array<{ songId: string; play_key: string }>;
     leadNotes?: string;
     status: "draft" | "pending";
   };
 
-  const { roleId, serviceType, serviceDate, songs, leadNotes, status } = body;
-  if (!roleId || !serviceType || !serviceDate) {
-    return NextResponse.json({ error: "roleId, serviceType, serviceDate required" }, { status: 400 });
+  const { roleId, songs, leadNotes, status } = body;
+  if (!roleId) {
+    return NextResponse.json({ error: "roleId required" }, { status: 400 });
+  }
+  if (status !== "draft" && status !== "pending") {
+    return NextResponse.json({ error: "status must be 'draft' or 'pending'" }, { status: 400 });
   }
 
   const leadId = session.user.sanityId;
 
-  // Verify user is Lead on this service
+  // Verify user is Lead on this service AND derive service_type/service_date server-side
   const roleDoc = await serverClient.fetch(
-    `*[_id == $id && $leadId in Lead[]._ref][0]._id`,
+    `*[_id == $id && $leadId in Lead[]._ref][0]{ _id, _type, week, date }`,
     { id: roleId, leadId }
   );
   if (!roleDoc) {
     return NextResponse.json({ error: "Not a Lead on this service" }, { status: 403 });
+  }
+
+  const serviceType =
+    roleDoc._type === "sunday_role"   ? "sunday"   :
+    roleDoc._type === "saturday_role" ? "saturday" :
+    roleDoc._type === "special_role"  ? "special"  : null;
+  if (!serviceType) {
+    return NextResponse.json({ error: "Unsupported role type" }, { status: 400 });
+  }
+  const serviceDate: string | undefined = roleDoc.week ?? roleDoc.date;
+  if (!serviceDate) {
+    return NextResponse.json({ error: "Role document missing date" }, { status: 400 });
   }
 
   const songDocs = songs.map(s => ({

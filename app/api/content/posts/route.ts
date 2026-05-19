@@ -9,6 +9,14 @@ const CONTENT_ROLES: OWTRole[] = ["super-admin", "admin", "content-editor"];
 
 function rng() { return Math.random().toString(36).slice(2, 9); }
 
+function isSafeHttpUrl(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  try {
+    const u = new URL(value);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch { return false; }
+}
+
 async function requireContentRole() {
   const session = await getServerSession(authOptions);
   if (!CONTENT_ROLES.includes(session?.user.role as OWTRole)) return null;
@@ -52,6 +60,10 @@ export async function POST(req: NextRequest) {
 
   if (!body.title?.trim()) {
     return NextResponse.json({ error: "title required" }, { status: 400 });
+  }
+
+  if (body.referenceLinks?.some((l) => !isSafeHttpUrl(l.url))) {
+    return NextResponse.json({ error: "referenceLinks must use http(s)" }, { status: 400 });
   }
 
   const slugBase = `${body.title}-${body.author ?? ""}`.toLowerCase()
