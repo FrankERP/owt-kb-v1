@@ -179,7 +179,7 @@ export default function ActivityPanel() {
 
               {/* Expanded detail */}
               {expanded === m._id && (
-                <div className="border-t border-[#003572]/10 dark:border-[#00bfff]/10 px-4 py-3 space-y-3 bg-[#003572]/3 dark:bg-[#00bfff]/3">
+                <div className="border-t border-[#003572]/10 dark:border-[#00bfff]/10 px-4 py-3 space-y-3 bg-[#003572]/[0.04] dark:bg-[#00bfff]/[0.04]">
                   {/* Last seen vs last login */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>

@@ -304,7 +304,7 @@ function ServiceForm({ initial, members, onSubmit, onClose, loading }: {
 
       {/* Availability warning — replaces action buttons when conflicts are found */}
       {pendingData ? (
-        <div className="rounded-lg border border-orange-500/30 bg-orange-500/8 px-3 py-3 space-y-3 sticky bottom-0 bg-[#C8D8EB] dark:bg-[#0a1929]">
+        <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-3 space-y-3 sticky bottom-0 bg-[#C8D8EB] dark:bg-[#0a1929]">
           <p className="font-label text-[10px] uppercase tracking-widest text-orange-400">No disponibles el {fmtServiceDate}</p>
           <p className="font-body text-sm text-gray-300">
             <span className="text-orange-300">{unavailableNames.join(", ")}</span>
@@ -615,7 +615,7 @@ function HeaderBtn({ onClick, title, danger, children }: { onClick: () => void; 
 function AvailabilityWarning({ lines }: { lines: string[] }) {
   if (lines.length === 0) return null;
   return (
-    <div className="rounded-lg border border-orange-500/30 bg-orange-500/8 px-3 py-2.5 space-y-1">
+    <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2.5 space-y-1">
       <p className="font-label text-[10px] uppercase tracking-widest text-orange-400">No disponibles</p>
       {lines.map((l, i) => <p key={i} className="font-body text-xs text-gray-400">{l}</p>)}
     </div>
