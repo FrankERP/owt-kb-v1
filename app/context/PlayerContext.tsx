@@ -40,7 +40,8 @@ interface PlayerContextValue {
   getAudio: () => HTMLAudioElement | null;
   sheet: SongSheetData | null;
   sheetLoading: boolean;
-  openSheet: (songId: string) => void;
+  sheetPlayKey: string | null;
+  openSheet: (songId: string, playKey?: string) => void;
   closeSheet: () => void;
 }
 
@@ -57,6 +58,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [player, setPlayer] = useState<PlayerState>({ track: null, isPlaying: false });
   const [sheet, setSheet] = useState<SongSheetData | null>(null);
   const [sheetLoading, setSheetLoading] = useState(false);
+  const [sheetPlayKey, setSheetPlayKey] = useState<string | null>(null);
 
   useEffect(() => {
     const el = new Audio();
@@ -103,9 +105,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     el.currentTime = fraction * el.duration;
   }, []);
 
-  const openSheet = useCallback(async (songId: string) => {
+  const openSheet = useCallback(async (songId: string, playKey?: string) => {
     setSheet(null);
     setSheetLoading(true);
+    setSheetPlayKey(playKey ?? null);
     try {
       const res = await fetch(`/api/song/${encodeURIComponent(songId)}`);
       if (res.ok) setSheet(await res.json());
@@ -117,10 +120,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const closeSheet = useCallback(() => {
     setSheet(null);
     setSheetLoading(false);
+    setSheetPlayKey(null);
   }, []);
 
   return (
-    <PlayerContext.Provider value={{ player, playTrack, togglePlay, closePlayer, seek, getAudio, sheet, sheetLoading, openSheet, closeSheet }}>
+    <PlayerContext.Provider value={{ player, playTrack, togglePlay, closePlayer, seek, getAudio, sheet, sheetLoading, sheetPlayKey, openSheet, closeSheet }}>
       {children}
     </PlayerContext.Provider>
   );

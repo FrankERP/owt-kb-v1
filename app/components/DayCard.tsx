@@ -16,6 +16,7 @@ export interface DayCardProps {
   bgvs?: Array<{ member_name: string; alias?: string }>;
   chorus?: Array<{ member_name: string; alias?: string }>;
   roleId?: string;
+  isNext?: boolean;
 }
 
 const SUNDAY_THEME = {
@@ -45,7 +46,7 @@ const SPECIAL_THEME = {
   accentMuted:  "text-[#a78bfa]/70",
 };
 
-export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs, chorus, roleId }: DayCardProps) {
+export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs, chorus, roleId, isNext }: DayCardProps) {
   const { openSheet } = usePlayer();
   const { data: session } = useSession();
   const [editSetlist, setEditSetlist] = useState(false);
@@ -69,9 +70,16 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
       <div className={`border ${t.border} rounded-xl overflow-hidden shadow-md ${t.shadow}`}>
         {/* Header */}
         <div className={`${t.headerBg} px-5 py-4 border-b ${t.headerBorder}`}>
-          <h3 className="font-display text-xl md:text-2xl lg:text-3xl font-bold uppercase text-[#C8D8EB]">
-            {day}
-          </h3>
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="font-display text-xl md:text-2xl lg:text-3xl font-bold uppercase text-[#C8D8EB]">
+              {day}
+            </h3>
+            {isNext && (
+              <span className="font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full bg-white/15 text-[#C8D8EB] border border-white/20 shrink-0 mt-1">
+                Próximo
+              </span>
+            )}
+          </div>
           {date && (
             <p className="text-xs md:text-sm lg:text-base text-[#C8D8EB]/60 capitalize mt-0.5">
               {new Date(date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-ES", {
@@ -103,12 +111,12 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                 {setlist!.songs.map((song, i) => (
                   <li key={song._id}>
                     <button
-                      onClick={() => openSheet(song._id)}
-                      className="w-full flex items-center gap-3 px-2 py-2 -mx-2 rounded-lg text-left hover:bg-white/5 transition-colors"
+                      onClick={() => openSheet(song._id, song.play_key || undefined)}
+                      className="w-full flex items-center gap-3 px-2 py-2 -mx-2 rounded-lg text-left hover:bg-white/5 group transition-colors cursor-pointer"
                     >
                       <span className="font-label text-xs text-gray-600 w-4 shrink-0 text-right tabular-nums">{i + 1}</span>
                       <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
-                        <span className="font-body text-sm md:text-base font-semibold truncate">{song.title}</span>
+                        <span className="font-body text-sm md:text-base font-semibold truncate group-hover:text-[#00bfff] transition-colors">{song.title}</span>
                         {song.author && (
                           <span className="text-gray-500 text-xs truncate hidden sm:inline">· {song.author}</span>
                         )}

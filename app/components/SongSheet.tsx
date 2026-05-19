@@ -39,7 +39,7 @@ const bodyComponents = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SongSheet() {
-  const { sheet, sheetLoading, closeSheet, playTrack, player } = usePlayer();
+  const { sheet, sheetLoading, sheetPlayKey, closeSheet, playTrack, player } = usePlayer();
   const isOpen = !!(sheet || sheetLoading);
 
   useEffect(() => {
@@ -72,7 +72,7 @@ export default function SongSheet() {
 
         {/* Drag handle (mobile only) */}
         <div className="flex justify-center pt-3 pb-1 lg:hidden shrink-0">
-          <div className="w-10 h-1 rounded-full bg-[#00bfff]/20" />
+          <div className="w-12 h-1.5 rounded-full bg-[#00bfff]/25" />
         </div>
 
         {/* Header */}
@@ -94,9 +94,10 @@ export default function SongSheet() {
           </div>
           <button
             onClick={closeSheet}
-            className="text-gray-500 hover:text-gray-300 transition-colors text-2xl leading-none shrink-0 mt-0.5"
+            className="p-2 -mr-2 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-white/5 transition-colors shrink-0"
+            aria-label="Cerrar"
           >
-            ×
+            <CloseIcon />
           </button>
         </div>
 
@@ -133,7 +134,7 @@ export default function SongSheet() {
               {hasContent && (
                 <div>
                   {hasChords ? (
-                    <ChordChart charts={sheet.chords!} />
+                    <ChordChart charts={sheet.chords!} defaultKey={sheetPlayKey ?? undefined} />
                   ) : (
                     <div className="columns-1 sm:columns-2 gap-8">
                       {groupBySections(sheet.body!).map((group, i) => (
@@ -233,6 +234,15 @@ function PlayIcon() {
   return (
     <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
       <polygon points="5 3 19 12 5 21 5 3" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   );
 }

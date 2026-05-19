@@ -7,8 +7,10 @@ import Image from "next/image";
 import { urlFor } from "@/sanity/lib/image";
 import { notFound } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
+import SectionNav from "@/app/components/SectionNav";
 import ChordChart from "@/app/components/ChordChart";
 import EditSongButton from "@/app/components/EditSongButton";
+import SongAudioSection from "@/app/components/SongAudioSection";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 
@@ -18,7 +20,7 @@ interface Params {
 
 async function getPost(slug: string) {
   const query = `
-    *[_type == "post" && slug.current == "${slug}"][0] {
+    *[_type == "post" && slug.current == $slug][0] {
       _id,
       title,
       author,
@@ -45,22 +47,22 @@ async function getPost(slug: string) {
       },
       chords[]{ key, content },
     }`;
-  return await client.fetch(query);
+  return await client.fetch(query, { slug });
 }
 
 async function getSongHistory(songId: string) {
   const query = `
-    *[_type in ["featuredSongs", "saturdarSongs"] && references("${songId}")] | order(week desc)[0..2] {
+    *[_type in ["featuredSongs", "saturdarSongs"] && references($songId)] | order(week desc)[0..2] {
       week,
       _type,
-      "play_key": songs[song._ref == "${songId}"][0].play_key,
-      "pairedSongs": songs[song._ref != "${songId}"][] {
+      "play_key": songs[song._ref == $songId][0].play_key,
+      "pairedSongs": songs[song._ref != $songId][] {
         "title": song->title,
         "slug": song->slug,
         play_key,
       },
     }`;
-  return await client.fetch(query);
+  return await client.fetch(query, { songId });
 }
 
 export const revalidate = 3600;
@@ -171,21 +173,7 @@ const Page = async ({ params }: Params) => {
       </div>
 
       {/* ── Section nav ──────────────────────────────────────────────────── */}
-      {sections.length > 1 && (
-        <div className="sticky top-14 z-40 bg-[#C8D8EB]/90 dark:bg-[#010b17]/90 backdrop-blur-sm border-b border-[#003572]/15 dark:border-[#00bfff]/10">
-          <div className="max-w-7xl mx-auto px-6 flex justify-center gap-1 overflow-x-auto">
-            {sections.map((s) => (
-              <a
-                key={s.id}
-                href={`#${s.id}`}
-                className="font-label text-xs uppercase tracking-widest px-4 py-3 text-gray-500 dark:text-gray-400 hover:text-[#00bfff] dark:hover:text-[#00bfff] border-b-2 border-transparent hover:border-[#00bfff] transition-colors whitespace-nowrap"
-              >
-                {s.label}
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
+      {sections.length > 1 && <SectionNav sections={sections} />}
 
       {/* ── Content ──────────────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-6 py-12 space-y-20">
@@ -212,37 +200,11 @@ const Page = async ({ params }: Params) => {
         {hasAudio && (
           <section id="audio">
             <SectionHeader>Audio</SectionHeader>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {post.audioTracks!.map((track, i) =>
-                track.audioFileURL ? (
-                  <div
-                    key={i}
-                    className="rounded-xl border border-[#003572]/25 dark:border-[#00bfff]/15 p-5 space-y-4"
-                  >
-                    <div>
-                      <p className="font-display text-base font-semibold leading-snug">
-                        {track.title}
-                      </p>
-                      {track.tone && (
-                        <p className="font-label text-xs text-[#00bfff] uppercase tracking-wide mt-1">
-                          {track.tone}
-                        </p>
-                      )}
-                    </div>
-                    <audio controls className="w-full">
-                      <source src={track.audioFileURL} type="audio/mpeg" />
-                    </audio>
-                    <a
-                      href={track.audioFileURL}
-                      download={`${post.title} — ${track.title}.mp3`}
-                      className="block text-center font-label text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 hover:text-[#00bfff] dark:hover:text-[#00bfff] transition-colors"
-                    >
-                      Descargar ↓
-                    </a>
-                  </div>
-                ) : null
-              )}
-            </div>
+            <SongAudioSection
+              tracks={post.audioTracks!}
+              songTitle={post.title}
+              songSlug={post.slug.current}
+            />
           </section>
         )}
 

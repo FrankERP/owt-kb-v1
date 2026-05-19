@@ -57,7 +57,10 @@ export default async function MePage() {
     $id in foh_team[].person._ref
   )`;
 
-  const [data, proposals] = await Promise.all([
+  const calendarLimit = new Date(Date.now() + 365 * 86400 * 1000)
+    .toLocaleDateString("sv", { timeZone: TZ });
+
+  const [data, proposals, serviceDates] = await Promise.all([
     client.fetch(
       `{
         "sundays": *[_type == "sunday_role" && week >= $today && week <= $limit && ${memberFilter}] | order(week asc) {
@@ -116,6 +119,14 @@ export default async function MePage() {
         _id, status, admin_notes, "service_ref": service_ref._ref
       }`,
       { id: sanityId, today }
+    ),
+    client.fetch<string[]>(
+      `[
+        ...*[_type == "sunday_role"   && week >= $today && week <= $limit].week,
+        ...*[_type == "saturday_role" && week >= $today && week <= $limit].week,
+        ...*[_type == "special_role"  && date >= $today && date <= $limit].date,
+      ]`,
+      { today, limit: calendarLimit }
     ),
   ]);
 
@@ -195,14 +206,6 @@ export default async function MePage() {
       <Navbar title={firstName} schedule tags />
       <div className="mx-auto max-w-4xl px-6 pt-10 pb-16 space-y-12">
 
-        {/* Profile settings */}
-        {member && <ProfilePanel initialMember={member} />}
-
-        {/* Availability */}
-        {member && (
-          <AvailabilityCalendar initialDates={member.unavailableDates ?? []} />
-        )}
-
         {/* Upcoming services */}
         <div>
           {allAssignments.length === 0 ? (
@@ -210,9 +213,13 @@ export default async function MePage() {
               <h2 className="font-display text-center text-2xl md:text-3xl font-bold mb-2">
                 Mis próximos servicios
               </h2>
-              <p className="text-center font-label text-sm text-gray-400 py-20">
-                No tienes servicios asignados en los próximos tres meses.
-              </p>
+              <div className="flex flex-col items-center gap-3 py-20 text-gray-600">
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+                <p className="font-label text-sm uppercase tracking-widest">Sin servicios asignados próximamente</p>
+              </div>
             </>
           ) : (
             <div className="space-y-10">
@@ -268,6 +275,18 @@ export default async function MePage() {
             </div>
           )}
         </div>
+
+        {/* Availability */}
+        {member && (
+          <AvailabilityCalendar
+            initialDates={member.unavailableDates ?? []}
+            serviceDates={serviceDates ?? []}
+          />
+        )}
+
+        {/* Profile settings */}
+        {member && <ProfilePanel initialMember={member} />}
+
       </div>
     </div>
   );

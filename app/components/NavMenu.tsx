@@ -13,6 +13,7 @@ interface NavMenuProps {
   } | null;
   showSchedule?: boolean;
   showTags?: boolean;
+  notifCount?: number;
 }
 
 function MenuItem({ href, onClick, children }: { href?: string; onClick?: () => void; children: React.ReactNode }) {
@@ -22,7 +23,7 @@ function MenuItem({ href, onClick, children }: { href?: string; onClick?: () => 
   return <button onClick={onClick} className={cls}>{children}</button>;
 }
 
-export default function NavMenu({ user, showSchedule, showTags }: NavMenuProps) {
+export default function NavMenu({ user, showSchedule, showTags, notifCount = 0 }: NavMenuProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -58,7 +59,7 @@ export default function NavMenu({ user, showSchedule, showTags }: NavMenuProps) 
       {/* Avatar trigger */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-full focus:outline-none group"
+        className="relative flex items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00bfff]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#010b17] group"
         aria-label="Menu"
       >
         {user.image ? (
@@ -73,6 +74,11 @@ export default function NavMenu({ user, showSchedule, showTags }: NavMenuProps) 
           <div className="w-9 h-9 rounded-full bg-[#003572] dark:bg-[#00bfff]/20 flex items-center justify-center ring-2 ring-transparent group-hover:ring-[#00bfff]/40 transition-all">
             <span className="font-label text-xs text-[#00bfff]">{initials}</span>
           </div>
+        )}
+        {notifCount > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-red-500 border-2 border-[#C8D8EB] dark:border-[#010b17] flex items-center justify-center">
+            <span className="font-label text-[8px] text-white leading-none">{notifCount > 9 ? "9+" : notifCount}</span>
+          </span>
         )}
       </button>
 

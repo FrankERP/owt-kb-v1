@@ -136,14 +136,16 @@ function Avatar({
 // ─── Modal wrapper ────────────────────────────────────────────────────────────
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:px-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-md bg-[#C8D8EB] dark:bg-[#0a1929] border border-[#003572]/20 dark:border-[#00bfff]/20 rounded-xl shadow-2xl p-6 space-y-5">
-        <div className="flex items-center justify-between">
+      <div className="relative z-10 w-full max-w-md bg-[#C8D8EB] dark:bg-[#0a1929] border border-[#003572]/20 dark:border-[#00bfff]/20 rounded-t-2xl sm:rounded-xl shadow-2xl max-h-[90svh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#003572]/10 dark:border-[#00bfff]/10 shrink-0">
           <h2 className="font-display text-lg uppercase tracking-wide">{title}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-[#00bfff] transition-colors text-xl leading-none">×</button>
         </div>
-        {children}
+        <div className="overflow-y-auto p-6 space-y-5 flex-1">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -306,20 +308,22 @@ const ALL_TABS: { id: Tab; label: string; roles: OWTRole[] }[] = [
 function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) => void; role: OWTRole }) {
   const visible = ALL_TABS.filter((t) => t.roles.includes(role));
   return (
-    <div className="flex flex-wrap gap-1 p-1 rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 w-fit">
-      {visible.map(({ id, label }) => (
-        <button
-          key={id}
-          onClick={() => onChange(id)}
-          className={`font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors ${
-            active === id
-              ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#C8D8EB] dark:text-[#00bfff]"
-              : "text-gray-500 hover:text-[#00bfff]"
-          }`}
-        >
-          {label}
-        </button>
-      ))}
+    <div className="overflow-x-auto -mx-2 px-2 pb-1">
+      <div className="flex gap-1 p-1 rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 w-max min-w-full">
+        {visible.map(({ id, label }) => (
+          <button
+            key={id}
+            onClick={() => onChange(id)}
+            className={`font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${
+              active === id
+                ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#C8D8EB] dark:text-[#00bfff]"
+                : "text-gray-500 hover:text-[#00bfff]"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
