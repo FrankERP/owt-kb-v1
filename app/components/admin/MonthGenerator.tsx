@@ -1433,7 +1433,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
           byPerson.get(n.name)!.push({ date: n.date, service: n.service });
         }
         return (
-          <div className="rounded-lg border border-orange-500/25 bg-orange-500/8 px-3 py-2.5 space-y-1.5">
+          <div className="rounded-lg border border-orange-500/25 bg-orange-500/10 px-3 py-2.5 space-y-1.5">
             <p className="font-label text-[10px] uppercase tracking-widest text-orange-400">
               No disponibles este mes
             </p>

@@ -56,7 +56,7 @@ function Avatar({
   if (onClick) {
     return (
       <button type="button" onClick={onClick} title="Cambiar foto"
-        className={`relative ${dim} rounded-full overflow-hidden shrink-0 group/av cursor-pointer`}>
+        className={`relative ${dim} rounded-full overflow-hidden shrink-0 group/av cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00bfff]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#010b17]`}>
         {inner}
       </button>
     );
