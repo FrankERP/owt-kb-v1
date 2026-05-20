@@ -97,8 +97,11 @@ start_one() {
     printf "${c_dim}%-10s linked .env.local${c_reset}\n" "$name"
   fi
   # Boot dev server detached, port-pinned, logging to a per-variant file.
+  # NEXTAUTH_URL must match the actual origin or NextAuth throws a
+  # Configuration error; override it per port so each variant works.
   (
     cd "$path"
+    NEXTAUTH_URL="http://localhost:$port" \
     nohup npm run dev -- -p "$port" >>"$(log_file "$name")" 2>&1 &
     echo $! >"$(pid_file "$name")"
   )
