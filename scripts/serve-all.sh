@@ -90,6 +90,12 @@ start_one() {
     printf "${c_yellow}%-10s${c_reset} install (first run, ~30s)…\n" "$name"
     (cd "$path" && npm install --silent --no-audit --no-fund) >>"$(log_file "$name")" 2>&1
   fi
+  # Variants are git worktrees and don't get .env.local from the parent
+  # automatically. Link it on first run so Sanity env vars resolve.
+  if [[ "$path" != "$REPO_ROOT" && ! -e "$path/.env.local" && -f "$REPO_ROOT/.env.local" ]]; then
+    ln -s "$REPO_ROOT/.env.local" "$path/.env.local"
+    printf "${c_dim}%-10s linked .env.local${c_reset}\n" "$name"
+  fi
   # Boot dev server detached, port-pinned, logging to a per-variant file.
   (
     cd "$path"
