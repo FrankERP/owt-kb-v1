@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { Modal, SongForm, SongTag, FormState, buildPayload } from "./SongFormModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,6 +56,9 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
   const [addKey, setAddKey]             = useState("");
   const [draggingIdx, setDraggingIdx]   = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx]   = useState<number | null>(null);
+  const [allTags, setAllTags]           = useState<SongTag[]>([]);
+  const [createOpen, setCreateOpen]     = useState(false);
+  const [createSaving, setCreateSaving] = useState(false);
   const dragSrc     = useRef<number | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -63,12 +67,16 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
       setLoading(true);
       const params = new URLSearchParams({ type, week });
       if (roleId) params.set("roleId", roleId);
-      const res = await fetch(`/api/admin/setlists?${params}`);
-      if (res.ok) {
-        const data = await res.json() as { songs: Array<{ play_key: string; song: SongResult }>; recentSongs: Record<string, string> };
+      const [setlistRes, tagsRes] = await Promise.all([
+        fetch(`/api/admin/setlists?${params}`),
+        fetch("/api/content/tags"),
+      ]);
+      if (setlistRes.ok) {
+        const data = await setlistRes.json() as { songs: Array<{ play_key: string; song: SongResult }>; recentSongs: Record<string, string> };
         setEntries((data.songs ?? []).map(s => ({ localId: uid2(), play_key: s.play_key, song: s.song })));
         setRecentSongs(data.recentSongs ?? {});
       }
+      if (tagsRes.ok) setAllTags(await tagsRes.json());
       setLoading(false);
     }
     load();
@@ -101,6 +109,38 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
       next.splice(toIdx, 0, item);
       return next;
     });
+  }
+
+  async function handleCreateSong(form: FormState) {
+    setCreateSaving(true);
+    const res = await fetch("/api/content/posts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildPayload(form)),
+    });
+    setCreateSaving(false);
+    if (!res.ok) return;
+    const doc = await res.json();
+    addSong({
+      _id:    doc._id,
+      title:  doc.title,
+      author: doc.author ?? "",
+      key:    doc.key ?? "",
+      slug:   doc.slug?.current ?? "",
+    });
+    setCreateOpen(false);
+  }
+
+  async function handleCreateTag(name: string): Promise<SongTag | null> {
+    const res = await fetch("/api/content/tags", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) return null;
+    const tag = await res.json();
+    setAllTags(prev => [...prev, tag].sort((a, b) => a.name.localeCompare(b.name)));
+    return tag;
   }
 
   async function save() {
@@ -222,6 +262,18 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
             })}
           </div>
         )}
+        <div className="rounded-lg border border-[#00bfff]/20">
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-[#00bfff]/5 transition-colors text-left"
+          >
+            <span className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]">+ Crear</span>
+            {searchQ.trim()
+              ? <span className="font-body text-xs text-gray-400 truncate">"{searchQ}"</span>
+              : <span className="font-body text-xs text-gray-400">nueva canción</span>}
+          </button>
+        </div>
       </div>
 
       {/* Footer */}
@@ -233,6 +285,24 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
           {saving ? "Guardando..." : "Guardar setlist"}
         </button>
       </div>
+
+      {/* Create song modal (nested above the ServicesPanel modal) */}
+      {createOpen && (
+        <Modal
+          title="Nueva canción"
+          onClose={() => setCreateOpen(false)}
+          zClass="z-[60]"
+        >
+          <SongForm
+            initial={{ title: searchQ }}
+            allTags={allTags}
+            onSubmit={handleCreateSong}
+            onClose={() => setCreateOpen(false)}
+            loading={createSaving}
+            canCreateTag={handleCreateTag}
+          />
+        </Modal>
+      )}
     </div>
   );
 }
