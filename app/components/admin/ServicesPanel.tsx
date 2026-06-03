@@ -398,6 +398,11 @@ const CARD_DIVIDER: Record<ServiceType, string> = {
   saturday_role: "bg-[#f59e0b]/20",
   special_role:  "bg-[#a78bfa]/20",
 };
+const CARD_ACCENT_HEX: Record<ServiceType, string> = {
+  sunday_role:   "#00bfff",
+  saturday_role: "#f59e0b",
+  special_role:  "#a78bfa",
+};
 
 function ServiceCard({ role, onEdit, onDelete, onSetlist, swapMode, swapSource, onCardSwapSelect, onMemberChipClick }: {
   role: ServiceRole; onEdit: () => void; onDelete: () => void; onSetlist: () => void;
@@ -500,21 +505,38 @@ function ServiceCard({ role, onEdit, onDelete, onSetlist, swapMode, swapSource, 
         {/* Team */}
         {hasTeam && !swapMode && (
           <section className={hasSetlist ? `border-t pt-4 border-gray-200 dark:border-gray-800` : ""}>
-            <SectionHead label="Equipo" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
+            <p className="font-label text-xs uppercase tracking-widest text-gray-500 text-center mb-1">Equipo</p>
             <div className="mt-2 space-y-3">
               {(leads.length || bgvs.length || chorus.length) ? (
-                <div className="grid grid-cols-3 gap-x-3">
-                  <VocalCol label="Lead" names={leads.map(m => dn(m))} />
-                  <VocalCol label="BGVs" names={bgvs.map(m => dn(m))} />
-                  <VocalCol label="Coro" names={chorus.map(m => dn(m))} />
+                <div>
+                  <SectionHead label="Líderes" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
+                  <div className="grid grid-cols-3 gap-x-3 mt-2">
+                    <VocalCol label="Lead" names={leads.map(m => dn(m))} />
+                    <VocalCol label="BGVs" names={bgvs.map(m => dn(m))} />
+                    <VocalCol label="Coro" names={chorus.map(m => dn(m))} />
+                  </div>
                 </div>
               ) : null}
-              {instrs.filter(s => s.person).map((s, i) => (
-                <TeamRow key={i} label={s.instrument} value={dn(s.person!)} />
-              ))}
-              {foh.filter(s => s.person).map((s, i) => (
-                <TeamRow key={i} label={s.role} value={dn(s.person!)} />
-              ))}
+              {instrs.filter(s => s.person).length > 0 && (
+                <div>
+                  <SectionHead label="Instrumentos" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-2 mt-2">
+                    {instrs.filter(s => s.person).map((s, i) => (
+                      <TeamRow key={i} label={s.instrument} value={dn(s.person!)} accentHex={CARD_ACCENT_HEX[role._type]} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {foh.filter(s => s.person).length > 0 && (
+                <div>
+                  <SectionHead label="Front of House" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-2 mt-2">
+                    {foh.filter(s => s.person).map((s, i) => (
+                      <TeamRow key={i} label={s.role} value={dn(s.person!)} accentHex={CARD_ACCENT_HEX[role._type]} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </section>
         )}
@@ -589,11 +611,25 @@ function VocalCol({ label, names }: { label: string; names: string[] }) {
   );
 }
 
-function TeamRow({ label, value }: { label: string; value: string }) {
+function TeamRow({ label, value, accentHex }: { label: string; value: string; accentHex: string }) {
   return (
-    <div className="flex items-center gap-2 py-0.5">
-      <span className="font-label text-[10px] uppercase tracking-wide px-2 py-0.5 rounded border border-gray-700 bg-gray-800/60 text-gray-400 shrink-0 leading-tight">{label}:</span>
-      <span className="font-body text-sm">{value}</span>
+    <div
+      className="flex items-stretch rounded-lg overflow-hidden"
+      style={{ border: `1px solid ${accentHex}40` }}
+    >
+      <span
+        className="font-label text-xs uppercase tracking-wide px-2.5 flex items-center shrink-0 rounded-l-[7px]"
+        style={{
+          background: `${accentHex}18`,
+          color: accentHex,
+          borderRight: `1px solid ${accentHex}30`,
+        }}
+      >
+        {label}
+      </span>
+      <span className="font-body text-sm px-3 py-1.5 flex flex-1 items-center justify-center leading-tight">
+        {value}
+      </span>
     </div>
   );
 }
@@ -955,7 +991,7 @@ export default function ServicesPanel() {
 
       {/* Grid */}
       {!loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 items-start">
           {upcoming.length === 0 && selectedMonths.size === 0 && (
             <p className="font-body text-sm text-gray-500 text-center py-12">No hay servicios próximos.</p>
           )}
