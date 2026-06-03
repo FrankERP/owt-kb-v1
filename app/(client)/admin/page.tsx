@@ -16,8 +16,8 @@ export default async function AdminPage() {
 
   return (
     <>
-      <Navbar title="Panel de Admin" />
-      <div className="px-6 py-8 max-w-3xl mx-auto">
+      <Navbar title="Panel de Admin" tags schedule />
+      <div className="px-6 py-8 max-w-7xl mx-auto">
         <AdminPanel role={role} />
       </div>
     </>

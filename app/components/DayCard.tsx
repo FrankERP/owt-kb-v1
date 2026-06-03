@@ -26,6 +26,7 @@ const SUNDAY_THEME = {
   headerBorder: "border-[#002249] dark:border-[#00bfff]",
   accent:       "text-[#00bfff]",
   accentMuted:  "text-[#00bfff]/70",
+  accentHex:    "#00bfff",
 };
 
 const SATURDAY_THEME = {
@@ -35,6 +36,7 @@ const SATURDAY_THEME = {
   headerBorder: "border-[#92400e] dark:border-[#f59e0b]",
   accent:       "text-[#f59e0b]",
   accentMuted:  "text-[#f59e0b]/70",
+  accentHex:    "#f59e0b",
 };
 
 const SPECIAL_THEME = {
@@ -44,6 +46,7 @@ const SPECIAL_THEME = {
   headerBorder: "border-[#5b21b6] dark:border-[#a78bfa]",
   accent:       "text-[#a78bfa]",
   accentMuted:  "text-[#a78bfa]/70",
+  accentHex:    "#a78bfa",
 };
 
 export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs, chorus, roleId, isNext }: DayCardProps) {
@@ -157,14 +160,18 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
               {instruments && instruments.filter(s => s.person).length > 0 && (
                 <div>
                   <SectionDivider label="Instrumentos" accent={t.accentMuted} />
-                  {instruments.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} />)}
+                  <div className="flex flex-wrap gap-x-3 gap-y-2">
+                    {instruments.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} accentHex={t.accentHex} />)}
+                  </div>
                 </div>
               )}
 
               {fohTeam && fohTeam.filter(s => s.person).length > 0 && (
                 <div>
                   <SectionDivider label="Front of House" accent={t.accentMuted} />
-                  {fohTeam.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} />)}
+                  <div className="flex flex-wrap gap-x-3 gap-y-2">
+                    {fohTeam.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} accentHex={t.accentHex} />)}
+                  </div>
                 </div>
               )}
             </section>
@@ -210,13 +217,25 @@ function VocalCol({ label, names }: { label: string; names: string[] }) {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, accentHex }: { label: string; value: string; accentHex: string }) {
   return (
-    <div className="flex items-center gap-2 py-0.5">
-      <span className="font-label text-xs md:text-sm uppercase tracking-wide px-2 py-0.5 rounded border border-gray-700 bg-gray-800/60 text-gray-400 shrink-0 leading-tight">
-        {label}:
+    <div
+      className="inline-flex items-stretch rounded-lg"
+      style={{ border: `1px solid ${accentHex}40` }}
+    >
+      <span
+        className="font-label text-xs uppercase tracking-wide px-2.5 flex items-center shrink-0 rounded-l-[7px]"
+        style={{
+          background: `${accentHex}18`,
+          color: accentHex,
+          borderRight: `1px solid ${accentHex}30`,
+        }}
+      >
+        {label}
       </span>
-      <span className="font-body text-sm md:text-base lg:text-lg">{value}</span>
+      <span className="font-body text-sm md:text-base px-3 py-1.5 flex flex-1 items-center justify-center leading-tight">
+        {value}
+      </span>
     </div>
   );
 }
