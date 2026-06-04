@@ -404,8 +404,34 @@ const CARD_ACCENT_HEX: Record<ServiceType, string> = {
   special_role:  "#a78bfa",
 };
 
-function ServiceCard({ role, onEdit, onDelete, onSetlist, swapMode, swapSource, onCardSwapSelect, onMemberChipClick }: {
-  role: ServiceRole; onEdit: () => void; onDelete: () => void; onSetlist: () => void;
+// ─── Availability conflict helpers ────────────────────────────────────────────
+
+const EMPTY_SET: Set<string> = new Set();
+
+// _id -> Set<unavailable ISO date>
+function buildUnavailMap(members: MemberOption[]): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>();
+  for (const m of members) {
+    if (m.unavailableDates?.length) map.set(m._id, new Set(m.unavailableDates));
+  }
+  return map;
+}
+
+// Set of member _ids assigned to this role who marked its date unavailable
+function conflictIdsForRole(role: ServiceRole, unavail: Map<string, Set<string>>): Set<string> {
+  const date = role.date.slice(0, 10);
+  const ids = new Set<string>();
+  const check = (id?: string) => { if (id && unavail.get(id)?.has(date)) ids.add(id); };
+  (role.leads ?? []).forEach(m => check(m._id));
+  (role.bgvs ?? []).forEach(m => check(m._id));
+  (role.chorus ?? []).forEach(m => check(m._id));
+  (role.instruments ?? []).forEach(s => check(s.person?._id));
+  (role.foh ?? []).forEach(s => check(s.person?._id));
+  return ids;
+}
+
+function ServiceCard({ role, conflictIds, onEdit, onDelete, onSetlist, swapMode, swapSource, onCardSwapSelect, onMemberChipClick }: {
+  role: ServiceRole; conflictIds: Set<string>; onEdit: () => void; onDelete: () => void; onSetlist: () => void;
   swapMode: boolean; swapSource: SwapSource | null;
   onCardSwapSelect: () => void;
   onMemberChipClick: (src: Exclude<SwapSource, { kind: "card" }>) => void;
@@ -425,14 +451,17 @@ function ServiceCard({ role, onEdit, onDelete, onSetlist, swapMode, swapSource, 
 
   const hasTeam    = !!(leads.length || bgvs.length || chorus.length || instrs.filter(s => s.person).length || foh.filter(s => s.person).length);
   const hasSetlist = songs.length > 0;
+  const hasConflict = !past && conflictIds.size > 0;
 
   return (
-    <div className={`rounded-xl border overflow-hidden transition-all shadow-md ${
+    <div className={`rounded-xl border overflow-hidden transition-all ${
       past && !swapMode
-        ? `${CARD_BORDER[role._type]} opacity-50`
+        ? `${CARD_BORDER[role._type]} opacity-50 shadow-md`
         : isCardSelected
-          ? `${CARD_BORDER[role._type]} ring-2 ring-[#00bfff]/40`
-          : CARD_BORDER[role._type]
+          ? `${CARD_BORDER[role._type]} ring-2 ring-[#00bfff]/40 shadow-md`
+          : hasConflict
+            ? `border-2 border-red-500 ring-2 ring-red-500/40 shadow-lg shadow-red-500/30`
+            : `${CARD_BORDER[role._type]} shadow-md`
     } group`}>
 
       {/* ── Colored header band ── */}
@@ -446,6 +475,11 @@ function ServiceCard({ role, onEdit, onDelete, onSetlist, swapMode, swapSource, 
               weekday: "long", day: "numeric", month: "long", year: "numeric",
             })}
           </p>
+          {hasConflict && (
+            <span className="inline-flex items-center gap-1 mt-1.5 font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-red-500/25 text-red-200 border border-red-400/60">
+              ⚠ Conflicto de disponibilidad
+            </span>
+          )}
         </div>
 
         {/* Action buttons or swap button */}
@@ -509,11 +543,11 @@ function ServiceCard({ role, onEdit, onDelete, onSetlist, swapMode, swapSource, 
             <div className="mt-2 space-y-3">
               {(leads.length || bgvs.length || chorus.length) ? (
                 <div>
-                  <SectionHead label="Líderes" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
+                  <SectionHead label="Voces" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
                   <div className="grid grid-cols-3 gap-x-3 mt-2">
-                    <VocalCol label="Lead" names={leads.map(m => dn(m))} />
-                    <VocalCol label="BGVs" names={bgvs.map(m => dn(m))} />
-                    <VocalCol label="Coro" names={chorus.map(m => dn(m))} />
+                    <VocalCol label="Lead" entries={leads.map(m => ({ name: dn(m), conflict: conflictIds.has(m._id) }))} />
+                    <VocalCol label="BGVs" entries={bgvs.map(m => ({ name: dn(m), conflict: conflictIds.has(m._id) }))} />
+                    <VocalCol label="Coro" entries={chorus.map(m => ({ name: dn(m), conflict: conflictIds.has(m._id) }))} />
                   </div>
                 </div>
               ) : null}
@@ -522,7 +556,7 @@ function ServiceCard({ role, onEdit, onDelete, onSetlist, swapMode, swapSource, 
                   <SectionHead label="Instrumentos" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
                   <div className="grid grid-cols-2 gap-x-2 gap-y-2 mt-2">
                     {instrs.filter(s => s.person).map((s, i) => (
-                      <TeamRow key={i} label={s.instrument} value={dn(s.person!)} accentHex={CARD_ACCENT_HEX[role._type]} />
+                      <TeamRow key={i} label={s.instrument} value={dn(s.person!)} accentHex={CARD_ACCENT_HEX[role._type]} isConflict={conflictIds.has(s.person!._id)} />
                     ))}
                   </div>
                 </div>
@@ -532,7 +566,7 @@ function ServiceCard({ role, onEdit, onDelete, onSetlist, swapMode, swapSource, 
                   <SectionHead label="Front of House" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
                   <div className="grid grid-cols-2 gap-x-2 gap-y-2 mt-2">
                     {foh.filter(s => s.person).map((s, i) => (
-                      <TeamRow key={i} label={s.role} value={dn(s.person!)} accentHex={CARD_ACCENT_HEX[role._type]} />
+                      <TeamRow key={i} label={s.role} value={dn(s.person!)} accentHex={CARD_ACCENT_HEX[role._type]} isConflict={conflictIds.has(s.person!._id)} />
                     ))}
                   </div>
                 </div>
@@ -601,33 +635,48 @@ function SectionHead({ label, accent, divider }: { label: string; accent: string
   );
 }
 
-function VocalCol({ label, names }: { label: string; names: string[] }) {
-  if (!names.length) return <div />;
+function VocalCol({ label, entries }: { label: string; entries: { name: string; conflict: boolean }[] }) {
+  if (!entries.length) return <div />;
   return (
     <div>
       <p className="font-label text-[10px] uppercase tracking-widest text-gray-400 mb-0.5">{label}</p>
-      <p className="font-body text-sm leading-snug">{names.join(", ")}</p>
+      <p className="font-body text-sm leading-snug">
+        {entries.map((e, i) => (
+          <span key={i}>
+            {i > 0 && ", "}
+            {e.conflict ? (
+              <span className="text-red-400 font-semibold whitespace-nowrap">⚠&nbsp;{e.name}</span>
+            ) : (
+              <span className="whitespace-nowrap">{e.name}</span>
+            )}
+          </span>
+        ))}
+      </p>
     </div>
   );
 }
 
-function TeamRow({ label, value, accentHex }: { label: string; value: string; accentHex: string }) {
+function TeamRow({ label, value, accentHex, isConflict }: { label: string; value: string; accentHex: string; isConflict?: boolean }) {
   return (
     <div
       className="flex items-stretch rounded-lg overflow-hidden"
-      style={{ border: `1px solid ${accentHex}40` }}
+      style={{ border: isConflict ? "1px solid rgba(239,68,68,0.7)" : `1px solid ${accentHex}40` }}
     >
       <span
         className="font-label text-xs uppercase tracking-wide px-2.5 flex items-center shrink-0 rounded-l-[7px]"
         style={{
-          background: `${accentHex}18`,
-          color: accentHex,
-          borderRight: `1px solid ${accentHex}30`,
+          background: isConflict ? "rgba(239,68,68,0.18)" : `${accentHex}18`,
+          color: isConflict ? "#f87171" : accentHex,
+          borderRight: isConflict ? "1px solid rgba(239,68,68,0.45)" : `1px solid ${accentHex}30`,
         }}
       >
         {label}
       </span>
-      <span className="font-body text-sm px-3 py-1.5 flex flex-1 items-center justify-center leading-tight">
+      <span
+        className={`font-body text-sm px-3 py-1.5 flex flex-1 items-center justify-center gap-1 leading-tight ${isConflict ? "text-red-400 font-semibold" : ""}`}
+        style={isConflict ? { background: "rgba(239,68,68,0.10)" } : undefined}
+      >
+        {isConflict && <span>⚠</span>}
         {value}
       </span>
     </div>
@@ -902,6 +951,25 @@ export default function ServicesPanel() {
   const upcoming = roles.filter(r => r.date >= today);
   const past     = roles.filter(r => r.date < today);
 
+  // ── Availability conflicts (computed live from current member availability) ──
+  const unavail = buildUnavailMap(members);
+  const roleConflicts = new Map<string, Set<string>>(); // roleId -> conflicting member ids
+  for (const role of roles) {
+    if (role.date < today) continue; // only flag upcoming services
+    const ids = conflictIdsForRole(role, unavail);
+    if (ids.size) roleConflicts.set(role._id, ids);
+  }
+  // Summary notices for the cards currently visible
+  const conflictNotices = visible
+    .filter(r => roleConflicts.has(r._id))
+    .flatMap(role =>
+      [...roleConflicts.get(role._id)!].map(id => {
+        const m = members.find(x => x._id === id);
+        return { name: m ? dn(m) : "—", label: SERVICE_LABEL[role._type], date: role.date.slice(0, 10) };
+      })
+    )
+    .sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
+
   return (
     <div className="space-y-5">
 
@@ -967,6 +1035,24 @@ export default function ServicesPanel() {
         </div>
       )}
 
+      {/* Availability conflict summary */}
+      {!loading && conflictNotices.length > 0 && (
+        <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3">
+          <p className="font-label text-xs uppercase tracking-widest text-red-400 flex items-center gap-1.5">
+            ⚠ {conflictNotices.length} conflicto{conflictNotices.length !== 1 ? "s" : ""} de disponibilidad
+          </p>
+          <ul className="mt-1.5 space-y-0.5">
+            {conflictNotices.map((c, i) => (
+              <li key={i} className="font-body text-xs text-gray-300">
+                <span className="text-red-300 font-semibold">{c.name}</span>
+                {" · "}{c.label}{" "}
+                {new Date(c.date + "T12:00:00").toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short" })}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Swap mode banner */}
       {swapMode && (
         <div className="rounded-lg border border-[#00bfff]/30 bg-[#00bfff]/5 px-4 py-2.5 flex items-center justify-between">
@@ -999,6 +1085,7 @@ export default function ServicesPanel() {
             <ServiceCard
               key={role._id}
               role={role}
+              conflictIds={roleConflicts.get(role._id) ?? EMPTY_SET}
               onEdit={() => setEditModal({ type: "edit", role })}
               onDelete={() => setEditModal({ type: "delete", role })}
               onSetlist={() => setSetlistRole(role)}

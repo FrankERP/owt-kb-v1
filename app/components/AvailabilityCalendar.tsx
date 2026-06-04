@@ -40,6 +40,9 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [] }
   const now      = new Date();
   const todayIso = now.toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
 
+  // Only count dates from today onwards — past unavailability is no longer relevant
+  const upcomingCount = Array.from(dates).filter(d => d >= todayIso).length;
+
   const allMonths = Array.from({ length: TOTAL_MONTHS }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     return { year: d.getFullYear(), month: d.getMonth() + 1 };
@@ -105,9 +108,9 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [] }
         </button>
       </div>
 
-      {dates.size > 0 && (
+      {upcomingCount > 0 && (
         <p className="font-label text-[10px] uppercase tracking-widest text-orange-400">
-          {dates.size} fecha{dates.size !== 1 ? "s" : ""} marcada{dates.size !== 1 ? "s" : ""} como no disponible
+          {upcomingCount} fecha{upcomingCount !== 1 ? "s" : ""} marcada{upcomingCount !== 1 ? "s" : ""} como no disponible
         </p>
       )}
 
