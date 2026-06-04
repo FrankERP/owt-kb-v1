@@ -4,9 +4,10 @@ import { authOptions } from "@/auth";
 import { spawn } from "child_process";
 import path from "path";
 
-async function requireSuperAdmin() {
+async function requireManager() {
   const session = await getServerSession(authOptions);
-  if (session?.user.role !== "super-admin") return null;
+  const role = session?.user.role;
+  if (role !== "super-admin" && role !== "admin") return null;
   return session;
 }
 
@@ -111,7 +112,7 @@ function callLocalSolver(config: SolveRequest): Promise<SolveResponse> {
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  if (!await requireSuperAdmin()) {
+  if (!await requireManager()) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 

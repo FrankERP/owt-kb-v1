@@ -3,14 +3,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import { serverClient } from "@/sanity/lib/serverClient";
 
-async function requireSuperAdmin() {
+async function requireManager() {
   const session = await getServerSession(authOptions);
-  if (session?.user.role !== "super-admin") return null;
+  const role = session?.user.role;
+  if (role !== "super-admin" && role !== "admin") return null;
   return session;
 }
 
 export async function GET(req: NextRequest) {
-  if (!await requireSuperAdmin()) {
+  if (!await requireManager()) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

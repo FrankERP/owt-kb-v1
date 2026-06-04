@@ -9,6 +9,7 @@ type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 type SanityMember = {
   _id: string;
   member_name: string;
+  alias?: string | null;
   role: OWTRole | null;
   passwordHash: string | null;
 };
@@ -16,7 +17,7 @@ type SanityMember = {
 async function getMemberByEmail(email: string): Promise<SanityMember | null> {
   return serverClient.fetch(
     `*[_type == "teamMembers" && lower(email) == lower($email)][0] {
-      _id, member_name, role, passwordHash
+      _id, member_name, alias, role, passwordHash
     }`,
     { email }
   );
@@ -49,6 +50,7 @@ export const authOptions: NextAuthOptions = {
           email:    credentials.email,
           role:     member.role ?? "member",
           sanityId: member._id,
+          alias:    member.alias ?? null,
         };
       },
     }),
@@ -104,19 +106,32 @@ export const authOptions: NextAuthOptions = {
       // Handle session.update() calls for impersonation
       if (trigger === "update" && updatePayload) {
         if (updatePayload.impersonating) {
-          const target = await serverClient.fetch<{ _id: string; member_name: string; role: OWTRole | null } | null>(
-            `*[_type == "teamMembers" && _id == $id][0] { _id, member_name, role }`,
+          // SECURITY: impersonation is super-admin-only. Enforce it here, server-side,
+          // so a crafted session.update({ impersonating }) from a lesser role cannot
+          // escalate privileges. When already impersonating, the *real* identity (and
+          // therefore the role that matters) lives in __realAdmin.
+          const realRole = token.__realAdmin?.role ?? token.role;
+          if (realRole !== "super-admin") return token;
+
+          const target = await serverClient.fetch<{ _id: string; member_name: string; alias?: string | null; role: OWTRole | null } | null>(
+            `*[_type == "teamMembers" && _id == $id][0] { _id, member_name, alias, role }`,
             { id: updatePayload.impersonating }
           );
           if (target) {
-            token.__realAdmin = {
-              role:     token.role ?? "member",
-              sanityId: token.sanityId ?? "",
-              name:     token.name,
-            };
+            // Snapshot the original admin identity once; don't clobber it when
+            // switching impersonation targets, or "stop" would restore the wrong user.
+            if (!token.__realAdmin) {
+              token.__realAdmin = {
+                role:     token.role ?? "member",
+                sanityId: token.sanityId ?? "",
+                name:     token.name,
+                alias:    token.alias ?? null,
+              };
+            }
             token.role           = target.role ?? "member";
             token.sanityId       = target._id;
             token.name           = target.member_name;
+            token.alias          = target.alias ?? null;
             token.isImpersonating = true;
             token.realAdminName  = token.__realAdmin.name ?? undefined;
           }
@@ -124,6 +139,7 @@ export const authOptions: NextAuthOptions = {
           token.role           = token.__realAdmin.role;
           token.sanityId       = token.__realAdmin.sanityId;
           token.name           = token.__realAdmin.name;
+          token.alias          = token.__realAdmin.alias;
           token.isImpersonating = false;
           token.realAdminName  = undefined;
           token.__realAdmin    = undefined;
@@ -133,10 +149,11 @@ export const authOptions: NextAuthOptions = {
 
       // On first sign-in, user object is populated
       if (user) {
-        // Credentials provider already attaches role + sanityId
+        // Credentials provider already attaches role + sanityId + alias
         if ("sanityId" in user && user.sanityId) {
           token.role     = (user as any).role;
           token.sanityId = user.sanityId;
+          token.alias    = (user as any).alias ?? null;
           return token;
         }
         // SSO providers: look up member by email
@@ -145,10 +162,23 @@ export const authOptions: NextAuthOptions = {
           if (member) {
             token.role     = member.role ?? "member";
             token.sanityId = member._id;
+            token.alias    = member.alias ?? null;
           }
           // If member not found, sanityId stays undefined → middleware redirects
         }
       }
+
+      // Backfill alias for sessions that predate this field (runs once, then cached in JWT)
+      if (token.alias === undefined && token.sanityId) {
+        try {
+          const m = await serverClient.fetch<{ alias?: string | null } | null>(
+            `*[_type == "teamMembers" && _id == $id][0] { alias }`,
+            { id: token.sanityId }
+          );
+          token.alias = m?.alias ?? null;
+        } catch { /* non-fatal */ }
+      }
+
       return token;
     },
 
@@ -157,6 +187,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id              = token.sub ?? "";
         session.user.role            = token.role ?? "member";
         session.user.sanityId        = token.sanityId ?? "";
+        session.user.alias           = token.alias ?? null;
         session.user.isImpersonating = token.isImpersonating ?? false;
         session.user.realAdminName   = token.realAdminName;
       }

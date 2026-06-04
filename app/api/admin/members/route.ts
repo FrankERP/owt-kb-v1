@@ -9,8 +9,17 @@ async function requireSuperAdmin() {
   return session;
 }
 
+// Reading the member list is needed by the Servicios/Disponibilidad panels (admin-accessible).
+// Creating/editing members stays super-admin only (Miembros section).
+async function requireManager() {
+  const session = await getServerSession(authOptions);
+  const role = session?.user.role;
+  if (role !== "super-admin" && role !== "admin") return null;
+  return session;
+}
+
 export async function GET() {
-  if (!await requireSuperAdmin()) {
+  if (!await requireManager()) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
