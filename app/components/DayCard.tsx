@@ -57,6 +57,19 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
   const hasRole     = !!(leads?.length || instruments?.length || fohTeam?.length || bgvs?.length || chorus?.length);
   const hasSetlist  = !!(setlist?.songs?.length);
 
+  // The display name used in role cards is alias || member_name — match both
+  const myName = (session?.user?.alias?.trim() || session?.user?.name || "").toLowerCase();
+
+  // Detect the same person assigned twice within one section (voces / instrumentos / foh).
+  // A person may appear once in voces AND once in instrumentos — that's fine.
+  const vocesDups = findDuplicates([
+    ...(leads ?? []),
+    ...(bgvs ?? []).map(m => m.alias || m.member_name),
+    ...(chorus ?? []).map(m => m.alias || m.member_name),
+  ]);
+  const instrDups = findDuplicates((instruments ?? []).filter(s => s.person).map(s => s.person));
+  const fohDups   = findDuplicates((fohTeam ?? []).filter(s => s.person).map(s => s.person));
+
   if (!hasSetlist && !hasRole) return null;
 
   const t = day === "Sábado" ? SATURDAY_THEME : day === "Domingo" ? SUNDAY_THEME : SPECIAL_THEME;
@@ -148,11 +161,11 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
 
               {(leads?.length || bgvs?.length || chorus?.length) ? (
                 <div>
-                  <SectionDivider label="Líderes" accent={t.accentMuted} />
+                  <SectionDivider label="Voces" accent={t.accentMuted} />
                   <div className="grid grid-cols-3 gap-x-3">
-                    <VocalCol label="Lead" names={leads ?? []} />
-                    <VocalCol label="BGVs" names={(bgvs ?? []).map(m => m.alias || m.member_name)} />
-                    <VocalCol label="Coro" names={(chorus ?? []).map(m => m.alias || m.member_name)} />
+                    <VocalCol label="Lead" names={leads ?? []} highlightName={myName} duplicateNames={vocesDups} />
+                    <VocalCol label="BGVs" names={(bgvs ?? []).map(m => m.alias || m.member_name)} highlightName={myName} duplicateNames={vocesDups} />
+                    <VocalCol label="Coro" names={(chorus ?? []).map(m => m.alias || m.member_name)} highlightName={myName} duplicateNames={vocesDups} />
                   </div>
                 </div>
               ) : null}
@@ -161,7 +174,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                 <div>
                   <SectionDivider label="Instrumentos" accent={t.accentMuted} />
                   <div className="flex flex-wrap gap-x-3 gap-y-2">
-                    {instruments.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} accentHex={t.accentHex} />)}
+                    {instruments.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} accentHex={t.accentHex} highlightName={myName} isDuplicate={instrDups.has(s.person.toLowerCase().trim())} />)}
                   </div>
                 </div>
               )}
@@ -170,7 +183,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                 <div>
                   <SectionDivider label="Front of House" accent={t.accentMuted} />
                   <div className="flex flex-wrap gap-x-3 gap-y-2">
-                    {fohTeam.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} accentHex={t.accentHex} />)}
+                    {fohTeam.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} accentHex={t.accentHex} highlightName={myName} isDuplicate={fohDups.has(s.person.toLowerCase().trim())} />)}
                   </div>
                 </div>
               )}
@@ -207,21 +220,65 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function VocalCol({ label, names }: { label: string; names: string[] }) {
+// Lowercased names that appear more than once within a single section
+function findDuplicates(names: string[]): Set<string> {
+  const counts = new Map<string, number>();
+  for (const n of names) {
+    const k = n.toLowerCase().trim();
+    if (k) counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  const dups = new Set<string>();
+  for (const [k, c] of counts) if (c > 1) dups.add(k);
+  return dups;
+}
+
+function VocalCol({ label, names, highlightName, duplicateNames }: { label: string; names: string[]; highlightName?: string; duplicateNames?: Set<string> }) {
   if (!names.length) return <div />;
   return (
     <div>
       <p className="font-label text-xs uppercase tracking-widest text-gray-400 mb-0.5">{label}</p>
-      <p className="font-body text-sm md:text-base lg:text-lg leading-snug">{names.join(", ")}</p>
+      <p className="font-body text-sm md:text-base lg:text-lg leading-snug">
+        {names.map((name, i) => {
+          const key  = name.toLowerCase().trim();
+          const isDup = !!duplicateNames?.has(key);
+          const isMe  = !isDup && !!highlightName && key === highlightName;
+          return (
+            <span key={i}>
+              {i > 0 && ", "}
+              {isDup ? (
+                <span
+                  className="font-semibold text-amber-400 whitespace-nowrap"
+                  style={{ textShadow: "0 0 10px rgba(251,191,36,0.65)" }}
+                >⚠&nbsp;{name}</span>
+              ) : isMe ? (
+                <span
+                  className="font-semibold text-[#fb7185] whitespace-nowrap"
+                  style={{ textShadow: "0 0 10px rgba(251,113,133,0.8)" }}
+                >{name}</span>
+              ) : (
+                <span className="whitespace-nowrap">{name}</span>
+              )}
+            </span>
+          );
+        })}
+      </p>
     </div>
   );
 }
 
-function Row({ label, value, accentHex }: { label: string; value: string; accentHex: string }) {
+function Row({ label, value, accentHex, highlightName, isDuplicate }: { label: string; value: string; accentHex: string; highlightName?: string; isDuplicate?: boolean }) {
+  const isMe = !isDuplicate && !!highlightName && value.toLowerCase().trim() === highlightName;
   return (
     <div
       className="inline-flex items-stretch rounded-lg"
-      style={{ border: `1px solid ${accentHex}40` }}
+      style={{
+        border: isDuplicate
+          ? "1px solid rgba(251,191,36,0.6)"
+          : isMe ? "1px solid rgba(251,113,133,0.5)" : `1px solid ${accentHex}40`,
+        boxShadow: isDuplicate
+          ? "0 0 10px rgba(251,191,36,0.35)"
+          : isMe ? "0 0 10px rgba(251,113,133,0.3)" : undefined,
+      }}
     >
       <span
         className="font-label text-xs uppercase tracking-wide px-2.5 flex items-center shrink-0 rounded-l-[7px]"
@@ -233,7 +290,13 @@ function Row({ label, value, accentHex }: { label: string; value: string; accent
       >
         {label}
       </span>
-      <span className="font-body text-sm md:text-base px-3 py-1.5 flex flex-1 items-center justify-center leading-tight">
+      <span
+        className={`font-body text-sm md:text-base px-3 py-1.5 flex flex-1 items-center justify-center gap-1 leading-tight ${
+          isDuplicate ? "font-semibold text-amber-400" : isMe ? "font-semibold text-[#fb7185]" : ""
+        }`}
+        style={isDuplicate ? { background: "rgba(251,191,36,0.10)" } : isMe ? { background: "rgba(251,113,133,0.10)" } : undefined}
+      >
+        {isDuplicate && <span>⚠</span>}
         {value}
       </span>
     </div>
