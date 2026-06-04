@@ -5,9 +5,10 @@ import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 
 type ServiceType = "sunday_role" | "saturday_role" | "special_role";
 
-async function requireSuperAdmin() {
+async function requireManager() {
   const session = await getServerSession(authOptions);
-  if (session?.user.role !== "super-admin") return null;
+  const role = session?.user.role;
+  if (role !== "super-admin" && role !== "admin") return null;
   return session;
 }
 
@@ -38,7 +39,7 @@ function toFohSlots(slots: { role: string; personId: string }[]) {
 }
 
 export async function GET() {
-  if (!await requireSuperAdmin()) {
+  if (!await requireManager()) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -67,7 +68,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!await requireSuperAdmin()) {
+  if (!await requireManager()) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
