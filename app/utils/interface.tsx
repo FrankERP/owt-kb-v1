@@ -46,6 +46,7 @@ export interface SetlistSong {
   bpm: string | number;
   key: string;
   play_key: string;
+  medley_tag?: string;
 }
 
 export interface Setlist {

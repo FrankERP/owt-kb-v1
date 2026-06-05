@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import { Modal, SongForm, SongTag, FormState, buildPayload } from "./SongFormModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface SongResult   { _id: string; title: string; author: string; key: string; slug: string; }
-export interface SetlistEntry { localId: string; play_key: string; song: SongResult; }
+export interface SetlistEntry { localId: string; play_key: string; medley_tag?: string; song: SongResult; }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -35,6 +35,15 @@ function GripIcon() {
       <circle cx="4" cy="2.5" r="1" /><circle cx="8" cy="2.5" r="1" />
       <circle cx="4" cy="6"   r="1" /><circle cx="8" cy="6"   r="1" />
       <circle cx="4" cy="9.5" r="1" /><circle cx="8" cy="9.5" r="1" />
+    </svg>
+  );
+}
+
+function EditorChainIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={filled ? "2.5" : "1.5"} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
     </svg>
   );
 }
@@ -72,8 +81,8 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
         fetch("/api/content/tags"),
       ]);
       if (setlistRes.ok) {
-        const data = await setlistRes.json() as { songs: Array<{ play_key: string; song: SongResult }>; recentSongs: Record<string, string> };
-        setEntries((data.songs ?? []).map(s => ({ localId: uid2(), play_key: s.play_key, song: s.song })));
+        const data = await setlistRes.json() as { songs: Array<{ play_key: string; medley_tag?: string; song: SongResult }>; recentSongs: Record<string, string> };
+        setEntries((data.songs ?? []).map(s => ({ localId: uid2(), play_key: s.play_key, medley_tag: s.medley_tag, song: s.song })));
         setRecentSongs(data.recentSongs ?? {});
       }
       if (tagsRes.ok) setAllTags(await tagsRes.json());
@@ -107,6 +116,46 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
       const next = [...prev];
       const [item] = next.splice(from, 1);
       next.splice(toIdx, 0, item);
+      return next;
+    });
+  }
+
+  function toggleMedleyLink(idxA: number, idxB: number) {
+    setEntries(prev => {
+      const next = prev.map(e => ({ ...e }));
+      const a = next[idxA];
+      const b = next[idxB];
+
+      if (a.medley_tag && b.medley_tag && a.medley_tag === b.medley_tag) {
+        // Already linked — split at this boundary
+        const tag = a.medley_tag;
+        const groupIndices = next.reduce<number[]>((acc, e, i) => e.medley_tag === tag ? [...acc, i] : acc, []);
+        const splitPos = groupIndices.indexOf(idxB);
+        const leftGroup  = groupIndices.slice(0, splitPos);
+        const rightGroup = groupIndices.slice(splitPos);
+        if (leftGroup.length < 2)  leftGroup.forEach(i  => { next[i].medley_tag = undefined; });
+        if (rightGroup.length >= 2) {
+          const newTag = String(Date.now());
+          rightGroup.forEach(i => { next[i].medley_tag = newTag; });
+        } else {
+          rightGroup.forEach(i => { next[i].medley_tag = undefined; });
+        }
+      } else {
+        // Link them — merge groups or create new tag
+        const aTag = a.medley_tag;
+        const bTag = b.medley_tag;
+        if (aTag && bTag) {
+          next.forEach(e => { if (e.medley_tag === bTag) e.medley_tag = aTag; });
+        } else if (aTag) {
+          b.medley_tag = aTag;
+        } else if (bTag) {
+          a.medley_tag = bTag;
+        } else {
+          const newTag = String(Date.now());
+          a.medley_tag = newTag;
+          b.medley_tag = newTag;
+        }
+      }
       return next;
     });
   }
@@ -150,7 +199,7 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         week, type, roleId,
-        songs: entries.map(e => ({ songId: e.song._id, play_key: e.play_key })),
+        songs: entries.map(e => ({ songId: e.song._id, play_key: e.play_key, medley_tag: e.medley_tag })),
       }),
     });
     setSaving(false);
@@ -171,47 +220,69 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
         {entries.length === 0 && (
           <p className="font-body text-xs text-gray-600 italic">Sin canciones todavía</p>
         )}
-        <div className="space-y-1.5">
+        <div>
           {entries.map((e, idx) => {
             const lastUsed = recentSongs[e.song._id];
             const isDragging = draggingIdx === idx;
+            const nextEntry = entries[idx + 1];
+            const linked = !!e.medley_tag && !!nextEntry?.medley_tag && e.medley_tag === nextEntry.medley_tag;
             return (
-              <div
-                key={e.localId}
-                draggable
-                onDragStart={ev => { ev.dataTransfer.effectAllowed = "move"; dragSrc.current = idx; setDraggingIdx(idx); }}
-                onDragOver={ev => { ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; setDragOverIdx(idx); }}
-                onDragLeave={() => setDragOverIdx(null)}
-                onDrop={ev => { ev.preventDefault(); handleDrop(idx); setDragOverIdx(null); }}
-                onDragEnd={() => { dragSrc.current = null; setDraggingIdx(null); setDragOverIdx(null); }}
-                className={`flex items-center gap-2 rounded-lg border px-3 py-2 select-none transition-all ${
-                  isDragging
-                    ? "opacity-30 border-[#00bfff]/10 bg-[#001830]/30"
-                    : dragOverIdx === idx
-                    ? "border-[#00bfff]/50 bg-[#00bfff]/5"
-                    : "border-[#00bfff]/10 bg-[#001830]/30"
-                }`}
-              >
-                <div className="cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 shrink-0 transition-colors">
-                  <GripIcon />
-                </div>
-                <span className="font-label text-[10px] text-gray-600 shrink-0 w-4 text-center tabular-nums">{idx + 1}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-body text-xs truncate">{e.song.title}</p>
-                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                    <span className="font-label text-[9px] text-gray-600">{e.song.author}</span>
-                    {e.song.key && <span className="font-label text-[9px] text-gray-600">· {e.song.key}</span>}
-                    {lastUsed && <RepeatBadge lastUsed={lastUsed} />}
+              <Fragment key={e.localId}>
+                <div
+                  draggable
+                  onDragStart={ev => { ev.dataTransfer.effectAllowed = "move"; dragSrc.current = idx; setDraggingIdx(idx); }}
+                  onDragOver={ev => { ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; setDragOverIdx(idx); }}
+                  onDragLeave={() => setDragOverIdx(null)}
+                  onDrop={ev => { ev.preventDefault(); handleDrop(idx); setDragOverIdx(null); }}
+                  onDragEnd={() => { dragSrc.current = null; setDraggingIdx(null); setDragOverIdx(null); }}
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 select-none transition-all ${idx > 0 ? "mt-1.5" : ""} ${
+                    isDragging
+                      ? "opacity-30 border-[#00bfff]/10 bg-[#001830]/30"
+                      : dragOverIdx === idx
+                      ? "border-[#00bfff]/50 bg-[#00bfff]/5"
+                      : e.medley_tag
+                      ? "border-[#00bfff]/25 bg-[#001830]/50"
+                      : "border-[#00bfff]/10 bg-[#001830]/30"
+                  }`}
+                >
+                  <div className="cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 shrink-0 transition-colors">
+                    <GripIcon />
                   </div>
+                  <span className="font-label text-[10px] text-gray-600 shrink-0 w-4 text-center tabular-nums">{idx + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-body text-xs truncate">{e.song.title}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      <span className="font-label text-[9px] text-gray-600">{e.song.author}</span>
+                      {e.song.key && <span className="font-label text-[9px] text-gray-600">· {e.song.key}</span>}
+                      {lastUsed && <RepeatBadge lastUsed={lastUsed} />}
+                    </div>
+                  </div>
+                  <input
+                    className="w-14 px-1.5 py-1 rounded border border-[#00bfff]/15 bg-transparent font-body text-xs text-center focus:outline-none focus:border-[#00bfff]"
+                    placeholder="Tono"
+                    value={e.play_key}
+                    onChange={ev => setEntries(prev => prev.map(x => x.localId === e.localId ? { ...x, play_key: ev.target.value } : x))}
+                  />
+                  <button type="button" onClick={() => remove(e.localId)} className="text-gray-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none">×</button>
                 </div>
-                <input
-                  className="w-14 px-1.5 py-1 rounded border border-[#00bfff]/15 bg-transparent font-body text-xs text-center focus:outline-none focus:border-[#00bfff]"
-                  placeholder="Tono"
-                  value={e.play_key}
-                  onChange={ev => setEntries(prev => prev.map(x => x.localId === e.localId ? { ...x, play_key: ev.target.value } : x))}
-                />
-                <button type="button" onClick={() => remove(e.localId)} className="text-gray-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none">×</button>
-              </div>
+                {idx < entries.length - 1 && (
+                  <div className="-my-0.5 flex items-center justify-center relative z-10">
+                    <button
+                      type="button"
+                      onClick={() => toggleMedleyLink(idx, idx + 1)}
+                      title={linked ? "Desagrupar medley" : "Agrupar en medley"}
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all ${
+                        linked
+                          ? "border-[#00bfff]/30 bg-[#010b17] text-[#00bfff]/60"
+                          : "border-dashed border-gray-700/30 bg-[#010b17] text-gray-700/40 hover:border-[#00bfff]/30 hover:text-[#00bfff]/40"
+                      }`}
+                    >
+                      <EditorChainIcon filled={linked} />
+                      {linked && <span className="font-label text-[8px] uppercase tracking-widest ml-0.5">medley</span>}
+                    </button>
+                  </div>
+                )}
+              </Fragment>
             );
           })}
         </div>

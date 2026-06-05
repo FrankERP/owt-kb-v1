@@ -74,6 +74,7 @@ export default async function MePage() {
           "setlist": *[_type == "featuredSongs" && week == ^.week][0] {
             songs[] {
               play_key,
+              medley_tag,
               "title": song->title, "slug": song->slug, "_id": song->_id,
               "author": song->author, "key": song->key,
             },
@@ -91,6 +92,7 @@ export default async function MePage() {
           "setlist": *[_type == "saturdarSongs" && week == ^.week][0] {
             songs[] {
               play_key,
+              medley_tag,
               "title": song->title, "slug": song->slug, "_id": song->_id,
               "author": song->author, "key": song->key,
             },
@@ -107,6 +109,7 @@ export default async function MePage() {
           Chorus[]-> { member_name, alias },
           songs[] {
             play_key,
+            medley_tag,
             "title": song->title, "slug": song->slug, "_id": song->_id,
             "author": song->author, "key": song->key,
           }

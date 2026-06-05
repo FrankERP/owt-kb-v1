@@ -34,6 +34,7 @@ const POSTS_QUERY = `*[_type == "post"] | order(title asc) {
 
 const SETLIST_FIELDS = `songs[]{
   play_key,
+  medley_tag,
   "title": song->title, "slug": song->slug, "_id": song->_id,
   "author": song->author, "timeSig": song->timeSig, "bpm": song->bpm, "key": song->key
 }, week`;
@@ -53,7 +54,7 @@ const WEEKEND_QUERY = `{
   "satRole":  *[_type == "saturday_role"  && week == $sat][0] { ${ROLE_FIELDS} },
   "specials": *[_type == "special_role"   && date >= $today && date <= $sun] | order(date asc) {
     _id, date, service_name,
-    songs[]{ play_key, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "key": song->key },
+    songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "key": song->key },
     ${ROLE_FIELDS}
   }
 }`;

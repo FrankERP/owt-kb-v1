@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Setlist } from "../utils/interface";
+import { Setlist, SetlistSong } from "../utils/interface";
 import { usePlayer } from "@/app/context/PlayerContext";
 import { useSession } from "next-auth/react";
 import { SetlistEditor } from "./admin/SetlistEditor";
@@ -18,6 +18,10 @@ export interface DayCardProps {
   roleId?: string;
   isNext?: boolean;
 }
+
+type SongRun =
+  | { kind: "single"; song: SetlistSong; n: number }
+  | { kind: "medley"; songs: { song: SetlistSong; n: number }[] };
 
 const SUNDAY_THEME = {
   border:       "border-[#003572] dark:border-[#00bfff]",
@@ -81,6 +85,25 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
     ? new Date(date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })
     : "";
 
+  // Group songs into medley runs
+  const runs: SongRun[] = [];
+  if (hasSetlist) {
+    let counter = 0;
+    for (const song of setlist!.songs) {
+      counter++;
+      if (song.medley_tag) {
+        const last = runs[runs.length - 1];
+        if (last?.kind === "medley" && last.songs[0].song.medley_tag === song.medley_tag) {
+          last.songs.push({ song, n: counter });
+        } else {
+          runs.push({ kind: "medley", songs: [{ song, n: counter }] });
+        }
+      } else {
+        runs.push({ kind: "single", song, n: counter });
+      }
+    }
+  }
+
   return (
     <>
       <div className={`border ${t.border} rounded-xl overflow-hidden shadow-md ${t.shadow}`}>
@@ -124,30 +147,75 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                 )}
               </div>
               <ol>
-                {setlist!.songs.map((song, i) => (
-                  <li key={song._id}>
-                    <button
-                      onClick={() => openSheet(song._id, song.play_key || undefined)}
-                      className="w-full flex items-center gap-3 px-2 py-2 -mx-2 rounded-lg text-left hover:bg-white/5 group transition-colors cursor-pointer"
-                    >
-                      <span className="font-label text-xs text-gray-600 w-4 shrink-0 text-right tabular-nums">{i + 1}</span>
-                      <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
-                        <span className="font-body text-sm md:text-base font-semibold truncate group-hover:text-[#00bfff] transition-colors">{song.title}</span>
-                        {song.author && (
-                          <span className="text-gray-500 text-xs truncate hidden sm:inline">· {song.author}</span>
-                        )}
+                {runs.map((run) => {
+                  // Single-song medley groups render as plain singles
+                  if (run.kind === "single" || (run.kind === "medley" && run.songs.length === 1)) {
+                    const { song, n } = run.kind === "single" ? run : run.songs[0];
+                    return (
+                      <li key={song._id}>
+                        <button
+                          onClick={() => openSheet(song._id, song.play_key || undefined)}
+                          className="w-full flex items-center gap-3 px-2 py-2 -mx-2 rounded-lg text-left hover:bg-white/5 group transition-colors cursor-pointer"
+                        >
+                          <span className="font-label text-xs text-gray-600 w-4 shrink-0 text-right tabular-nums">{n}</span>
+                          <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
+                            <span className="font-body text-sm md:text-base font-semibold truncate group-hover:text-[#00bfff] transition-colors">{song.title}</span>
+                            {song.author && <span className="text-gray-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {song.play_key && song.key && song.play_key !== song.key && (
+                              <span className="font-label text-[10px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800/50 text-gray-500 leading-tight">orig. {song.key}</span>
+                            )}
+                            <span className={`font-label text-xs font-semibold ${t.accent}`}>{song.play_key || song.key}</span>
+                          </div>
+                        </button>
+                      </li>
+                    );
+                  }
+                  // Multi-song medley group
+                  return (
+                    <li key={run.songs[0].song._id + "_m"} className="my-1">
+                      <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${t.accentHex}35` }}>
+                        <div
+                          className="flex items-center gap-1.5 px-3 py-1"
+                          style={{ background: `${t.accentHex}12`, borderBottom: `1px solid ${t.accentHex}20` }}
+                        >
+                          <ChainLinkIcon color={t.accentHex} />
+                          <span className="font-label text-[9px] uppercase tracking-widest" style={{ color: `${t.accentHex}99` }}>Medley</span>
+                        </div>
+                        <div className="px-2">
+                          {run.songs.map(({ song, n }, si) => (
+                            <div key={song._id}>
+                              {si > 0 && (
+                                <div className="flex items-center gap-2 px-1">
+                                  <div className="flex-1 h-px" style={{ background: `${t.accentHex}20` }} />
+                                  <span className="font-label text-[9px]" style={{ color: `${t.accentHex}60` }}>+</span>
+                                  <div className="flex-1 h-px" style={{ background: `${t.accentHex}20` }} />
+                                </div>
+                              )}
+                              <button
+                                onClick={() => openSheet(song._id, song.play_key || undefined)}
+                                className="w-full flex items-center gap-3 px-2 py-2 -mx-2 rounded-lg text-left hover:bg-white/5 group transition-colors cursor-pointer"
+                              >
+                                <span className="font-label text-xs text-gray-600 w-4 shrink-0 text-right tabular-nums">{n}</span>
+                                <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
+                                  <span className="font-body text-sm md:text-base font-semibold truncate group-hover:text-[#00bfff] transition-colors">{song.title}</span>
+                                  {song.author && <span className="text-gray-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {song.play_key && song.key && song.play_key !== song.key && (
+                                    <span className="font-label text-[10px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800/50 text-gray-500 leading-tight">orig. {song.key}</span>
+                                  )}
+                                  <span className={`font-label text-xs font-semibold ${t.accent}`}>{song.play_key || song.key}</span>
+                                </div>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {song.play_key && song.key && song.play_key !== song.key && (
-                          <span className="font-label text-[10px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800/50 text-gray-500 leading-tight">
-                            orig. {song.key}
-                          </span>
-                        )}
-                        <span className={`font-label text-xs font-semibold ${t.accent}`}>{song.play_key || song.key}</span>
-                      </div>
-                    </button>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ol>
             </section>
           )}
@@ -319,6 +387,15 @@ function PencilIcon() {
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+function ChainLinkIcon({ color }: { color: string }) {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.65 }}>
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
     </svg>
   );
 }

@@ -26,6 +26,7 @@ const SONG_PROJECTION = `{
 
 const SETLIST_SONGS_PROJECTION = `songs[] {
   play_key,
+  medley_tag,
   "song": song-> ${SONG_PROJECTION}
 }`;
 
@@ -108,13 +109,14 @@ export async function PUT(req: NextRequest) {
     week?: string;
     type: "sunday" | "saturday" | "special";
     roleId?: string;
-    songs: { songId: string; play_key: string }[];
+    songs: { songId: string; play_key: string; medley_tag?: string }[];
   };
 
   const songDocs = (body.songs ?? []).map(s => ({
     _type: "setlist_song" as const,
     _key: key(),
     play_key: s.play_key,
+    ...(s.medley_tag ? { medley_tag: s.medley_tag } : {}),
     song: { _type: "reference" as const, _ref: s.songId },
   }));
 
