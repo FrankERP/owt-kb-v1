@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
 }
 
 // ── PUT /api/admin/setlists
-// Body: { week, type, roleId?, songs: [{ songId, play_key }] }
+// Body: { week, type, roleId?, songs: [{ songId, play_key, medley_tag? }] }
 export async function PUT(req: NextRequest) {
   if (!await requireManager()) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
