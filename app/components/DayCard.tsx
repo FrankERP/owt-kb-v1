@@ -172,47 +172,43 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                       </li>
                     );
                   }
-                  // Multi-song medley group
+                  // Multi-song medley group — left-spine bracket, no box
                   return (
-                    <li key={run.songs[0].song._id + "_m"} className="my-1">
-                      <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${t.accentHex}35` }}>
-                        <div
-                          className="flex items-center gap-1.5 px-3 py-1"
-                          style={{ background: `${t.accentHex}12`, borderBottom: `1px solid ${t.accentHex}20` }}
-                        >
-                          <ChainLinkIcon color={t.accentHex} />
-                          <span className="font-label text-[9px] uppercase tracking-widest" style={{ color: `${t.accentHex}99` }}>Medley</span>
-                        </div>
-                        <div className="px-2">
-                          {run.songs.map(({ song, n }, si) => (
-                            <div key={song._id}>
-                              {si > 0 && (
-                                <div className="flex items-center gap-2 px-1">
-                                  <div className="flex-1 h-px" style={{ background: `${t.accentHex}20` }} />
-                                  <span className="font-label text-[9px]" style={{ color: `${t.accentHex}60` }}>+</span>
-                                  <div className="flex-1 h-px" style={{ background: `${t.accentHex}20` }} />
-                                </div>
-                              )}
-                              <button
-                                onClick={() => openSheet(song._id, song.play_key || undefined)}
-                                className="w-full flex items-center gap-3 px-2 py-2 -mx-2 rounded-lg text-left hover:bg-white/5 group transition-colors cursor-pointer"
-                              >
-                                <span className="font-label text-xs text-gray-600 w-4 shrink-0 text-right tabular-nums">{n}</span>
-                                <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
-                                  <span className="font-body text-sm md:text-base font-semibold truncate group-hover:text-[#00bfff] transition-colors">{song.title}</span>
-                                  {song.author && <span className="text-gray-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
-                                </div>
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  {song.play_key && song.key && song.play_key !== song.key && (
-                                    <span className="font-label text-[10px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800/50 text-gray-500 leading-tight">orig. {song.key}</span>
-                                  )}
-                                  <span className={`font-label text-xs font-semibold ${t.accent}`}>{song.play_key || song.key}</span>
-                                </div>
-                              </button>
-                            </div>
-                          ))}
-                        </div>
+                    <li key={run.songs[0].song._id + "_m"} className="relative pl-4 my-0.5">
+                      {/* vertical accent spine */}
+                      <span
+                        aria-hidden
+                        className="absolute left-1 top-6 bottom-2 w-[2px] rounded-full"
+                        style={{ background: `linear-gradient(to bottom, ${t.accentHex}00, ${t.accentHex}55 12%, ${t.accentHex}55 88%, ${t.accentHex}00)` }}
+                      />
+                      {/* MEDLEY label */}
+                      <div className="flex items-center gap-1 pl-2 -ml-2 mb-0.5">
+                        <ChainLinkIcon color={t.accentHex} />
+                        <span className="font-label text-[9px] uppercase tracking-[0.18em]" style={{ color: `${t.accentHex}99` }}>Medley</span>
                       </div>
+                      {run.songs.map(({ song, n }, si) => (
+                        <div key={song._id}>
+                          {si > 0 && (
+                            <span className="block w-4 text-center font-label text-[10px] leading-none -my-0.5" style={{ color: `${t.accentHex}70` }}>+</span>
+                          )}
+                          <button
+                            onClick={() => openSheet(song._id, song.play_key || undefined)}
+                            className="w-full flex items-center gap-3 px-2 py-1.5 -mx-2 rounded-lg text-left hover:bg-white/5 group transition-colors cursor-pointer"
+                          >
+                            <span className="font-label text-xs text-gray-600 w-4 shrink-0 text-right tabular-nums">{n}</span>
+                            <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
+                              <span className="font-body text-sm md:text-base font-semibold truncate group-hover:text-[#00bfff] transition-colors">{song.title}</span>
+                              {song.author && <span className="text-gray-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {song.play_key && song.key && song.play_key !== song.key && (
+                                <span className="font-label text-[10px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800/50 text-gray-500 leading-tight">orig. {song.key}</span>
+                              )}
+                              <span className={`font-label text-xs font-semibold ${t.accent}`}>{song.play_key || song.key}</span>
+                            </div>
+                          </button>
+                        </div>
+                      ))}
                     </li>
                   );
                 })}
