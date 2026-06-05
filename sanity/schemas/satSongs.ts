@@ -19,6 +19,7 @@ export const saturdaySongs = {
               to: [{ type: 'post' }],
             },
 						{name: 'play_key', type: 'string', title: 'Key to play'},
+						{name: 'medley_tag', type: 'string', title: 'Medley / Mashup', hidden: true, description: 'Songs sharing the same tag are shown as a grouped medley. Managed by the setlist editor.'},
 					],
           preview: {
             select: {
