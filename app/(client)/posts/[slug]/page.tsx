@@ -11,8 +11,6 @@ import SectionNav from "@/app/components/SectionNav";
 import ChordChart from "@/app/components/ChordChart";
 import EditSongButton from "@/app/components/EditSongButton";
 import SongAudioSection from "@/app/components/SongAudioSection";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/auth";
 
 interface Params {
   params: Promise<{ slug: string }>;
@@ -90,14 +88,9 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 
 const Page = async ({ params }: Params) => {
   const { slug } = await params;
-  const [post, session]: [Post, any] = await Promise.all([
-    getPost(slug),
-    getServerSession(authOptions),
-  ]);
+  const post: Post = await getPost(slug);
 
   if (!post) notFound();
-
-  const canEdit = ["super-admin", "admin", "content-editor"].includes(session?.user?.role);
 
   const history: Array<{
     week: string;
@@ -329,7 +322,7 @@ const Page = async ({ params }: Params) => {
 
       </div>
 
-      {canEdit && <EditSongButton post={post} />}
+      <EditSongButton post={post} />
     </div>
   );
 };
