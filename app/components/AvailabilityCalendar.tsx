@@ -5,6 +5,7 @@ import { useState, useCallback } from "react";
 interface Props {
   initialDates: string[];
   serviceDates?: string[];
+  initialNotes?: { date: string; note: string }[];
 }
 
 const MONTHS_ES = [
@@ -29,19 +30,29 @@ function buildCalendar(year: number, month: number): (string | null)[] {
   return cells;
 }
 
-export default function AvailabilityCalendar({ initialDates, serviceDates = [] }: Props) {
+function fmtDayLabel(iso: string): string {
+  const d = new Date(iso + "T12:00:00");
+  return d.toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short" });
+}
+
+export default function AvailabilityCalendar({ initialDates, serviceDates = [], initialNotes = [] }: Props) {
   const [dates, setDates]   = useState<Set<string>>(new Set(initialDates));
   const serviceSet = new Set(serviceDates);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved]   = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [page, setPage]     = useState(0); // 0 = current month, 1 = +3, 2 = +6, …
+  const [page, setPage]     = useState(0);
+
+  const [notes, setNotes]   = useState<Map<string, string>>(
+    () => new Map(initialNotes.map(n => [n.date, n.note]))
+  );
+  const [bulkNote, setBulkNote] = useState("");
 
   const now      = new Date();
   const todayIso = now.toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
 
-  // Only count dates from today onwards — past unavailability is no longer relevant
   const upcomingCount = Array.from(dates).filter(d => d >= todayIso).length;
+  const upcomingSelectedDates = Array.from(dates).filter(d => d >= todayIso).sort();
 
   const allMonths = Array.from({ length: TOTAL_MONTHS }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
@@ -66,10 +77,17 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [] }
     setSaving(true);
     setSaveError(null);
     try {
+      const notesPayload = Array.from(notes.entries())
+        .filter(([d, n]) => dates.has(d) && n.trim())
+        .map(([date, note]) => ({ date, note: note.trim() }));
+
       const res = await fetch("/api/me/availability", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ unavailableDates: Array.from(dates) }),
+        body: JSON.stringify({
+          unavailableDates: Array.from(dates),
+          unavailabilityNotes: notesPayload,
+        }),
       });
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
       setSaved(true);
@@ -167,6 +185,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [] }
                   const isPast      = iso < todayIso;
                   const unavailable = dates.has(iso);
                   const hasService  = serviceSet.has(iso);
+                  const hasNote     = unavailable && notes.has(iso) && !!notes.get(iso)?.trim();
                   const dayNum      = new Date(iso + "T12:00:00").getDate();
                   return (
                     <button
@@ -174,7 +193,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [] }
                       type="button"
                       onClick={() => !isPast && toggle(iso)}
                       disabled={isPast}
-                      title={iso}
+                      title={hasNote ? notes.get(iso) : iso}
                       className={`relative rounded text-center font-body text-xs transition-colors min-h-[44px] sm:min-h-0 sm:py-1 sm:pb-2 ${
                         isPast
                           ? "text-gray-700 cursor-default"
@@ -186,6 +205,9 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [] }
                       {dayNum}
                       {hasService && (
                         <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${unavailable ? "bg-orange-400/60" : isPast ? "bg-gray-600" : "bg-[#00bfff]/70"}`} />
+                      )}
+                      {hasNote && (
+                        <span className="absolute top-0.5 right-0.5 w-1 h-1 rounded-full bg-white/50" />
                       )}
                     </button>
                   );
@@ -210,6 +232,70 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [] }
           />
         ))}
       </div>
+
+      {/* Notes section — only shown when there are upcoming selected dates */}
+      {upcomingSelectedDates.length > 0 && (
+        <div className="space-y-3 pt-2 border-t border-[#003572]/20 dark:border-[#00bfff]/10">
+          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 pt-1">
+            Razón de no disponibilidad (opcional)
+          </p>
+
+          {/* Bulk fill */}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Aplicar misma razón a todas..."
+              value={bulkNote}
+              onChange={e => setBulkNote(e.target.value)}
+              className="flex-1 rounded-lg border border-[#003572]/40 dark:border-[#00bfff]/15 bg-transparent px-3 py-1.5 font-body text-sm text-gray-300 placeholder:text-gray-600 focus:outline-none focus:border-[#00bfff]/40"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (!bulkNote.trim()) return;
+                setNotes(prev => {
+                  const m = new Map(prev);
+                  for (const d of upcomingSelectedDates) {
+                    if (!m.get(d)?.trim()) m.set(d, bulkNote.trim());
+                  }
+                  return m;
+                });
+                setSaved(false);
+              }}
+              className="px-3 py-1.5 rounded-lg border border-[#003572]/40 dark:border-[#00bfff]/15 font-label text-[10px] uppercase tracking-widest text-gray-500 hover:border-[#00bfff]/40 hover:text-[#00bfff] transition-colors shrink-0"
+            >
+              Aplicar
+            </button>
+          </div>
+
+          {/* Per-date rows */}
+          <div className="space-y-1.5">
+            {upcomingSelectedDates.map(iso => (
+              <div key={iso} className="flex items-center gap-3">
+                <span className="font-label text-[10px] uppercase tracking-widest text-orange-400/70 w-[88px] shrink-0">
+                  {fmtDayLabel(iso)}
+                </span>
+                <input
+                  type="text"
+                  placeholder="Razón opcional..."
+                  value={notes.get(iso) ?? ""}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setNotes(prev => {
+                      const m = new Map(prev);
+                      if (val) m.set(iso, val);
+                      else m.delete(iso);
+                      return m;
+                    });
+                    setSaved(false);
+                  }}
+                  className="flex-1 rounded-lg border border-[#003572]/40 dark:border-[#00bfff]/15 bg-transparent px-3 py-1.5 font-body text-sm text-gray-300 placeholder:text-gray-600 focus:outline-none focus:border-[#00bfff]/40"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

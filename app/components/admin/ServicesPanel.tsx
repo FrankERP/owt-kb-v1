@@ -7,7 +7,7 @@ import MonthGenerator from "./MonthGenerator";
 
 type ServiceType = "sunday_role" | "saturday_role" | "special_role";
 
-interface MemberOption { _id: string; member_name: string; alias?: string; memberType?: string[]; unavailableDates?: string[]; }
+interface MemberOption { _id: string; member_name: string; alias?: string; memberType?: string[]; unavailableDates?: string[]; unavailabilityNotes?: { date: string; note: string }[]; }
 
 const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;
 
@@ -430,8 +430,8 @@ function conflictIdsForRole(role: ServiceRole, unavail: Map<string, Set<string>>
   return ids;
 }
 
-function ServiceCard({ role, conflictIds, onEdit, onDelete, onSetlist, swapMode, swapSource, onCardSwapSelect, onMemberChipClick }: {
-  role: ServiceRole; conflictIds: Set<string>; onEdit: () => void; onDelete: () => void; onSetlist: () => void;
+function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSetlist, swapMode, swapSource, onCardSwapSelect, onMemberChipClick }: {
+  role: ServiceRole; conflictIds: Set<string>; conflictNotes?: Map<string, string>; onEdit: () => void; onDelete: () => void; onSetlist: () => void;
   swapMode: boolean; swapSource: SwapSource | null;
   onCardSwapSelect: () => void;
   onMemberChipClick: (src: Exclude<SwapSource, { kind: "card" }>) => void;
@@ -545,9 +545,9 @@ function ServiceCard({ role, conflictIds, onEdit, onDelete, onSetlist, swapMode,
                 <div>
                   <SectionHead label="Voces" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
                   <div className="grid grid-cols-3 gap-x-3 mt-2">
-                    <VocalCol label="Lead" entries={leads.map(m => ({ name: dn(m), conflict: conflictIds.has(m._id) }))} />
-                    <VocalCol label="BGVs" entries={bgvs.map(m => ({ name: dn(m), conflict: conflictIds.has(m._id) }))} />
-                    <VocalCol label="Coro" entries={chorus.map(m => ({ name: dn(m), conflict: conflictIds.has(m._id) }))} />
+                    <VocalCol label="Lead" entries={leads.map(m => ({ name: dn(m), conflict: conflictIds.has(m._id), note: conflictNotes?.get(m._id) }))} />
+                    <VocalCol label="BGVs" entries={bgvs.map(m => ({ name: dn(m), conflict: conflictIds.has(m._id), note: conflictNotes?.get(m._id) }))} />
+                    <VocalCol label="Coro" entries={chorus.map(m => ({ name: dn(m), conflict: conflictIds.has(m._id), note: conflictNotes?.get(m._id) }))} />
                   </div>
                 </div>
               ) : null}
@@ -556,7 +556,7 @@ function ServiceCard({ role, conflictIds, onEdit, onDelete, onSetlist, swapMode,
                   <SectionHead label="Instrumentos" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
                   <div className="grid grid-cols-2 gap-x-2 gap-y-2 mt-2">
                     {instrs.filter(s => s.person).map((s, i) => (
-                      <TeamRow key={i} label={s.instrument} value={dn(s.person!)} accentHex={CARD_ACCENT_HEX[role._type]} isConflict={conflictIds.has(s.person!._id)} />
+                      <TeamRow key={i} label={s.instrument} value={dn(s.person!)} accentHex={CARD_ACCENT_HEX[role._type]} isConflict={conflictIds.has(s.person!._id)} conflictNote={conflictNotes?.get(s.person!._id)} />
                     ))}
                   </div>
                 </div>
@@ -566,7 +566,7 @@ function ServiceCard({ role, conflictIds, onEdit, onDelete, onSetlist, swapMode,
                   <SectionHead label="Front of House" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
                   <div className="grid grid-cols-2 gap-x-2 gap-y-2 mt-2">
                     {foh.filter(s => s.person).map((s, i) => (
-                      <TeamRow key={i} label={s.role} value={dn(s.person!)} accentHex={CARD_ACCENT_HEX[role._type]} isConflict={conflictIds.has(s.person!._id)} />
+                      <TeamRow key={i} label={s.role} value={dn(s.person!)} accentHex={CARD_ACCENT_HEX[role._type]} isConflict={conflictIds.has(s.person!._id)} conflictNote={conflictNotes?.get(s.person!._id)} />
                     ))}
                   </div>
                 </div>
@@ -635,7 +635,7 @@ function SectionHead({ label, accent, divider }: { label: string; accent: string
   );
 }
 
-function VocalCol({ label, entries }: { label: string; entries: { name: string; conflict: boolean }[] }) {
+function VocalCol({ label, entries }: { label: string; entries: { name: string; conflict: boolean; note?: string }[] }) {
   if (!entries.length) return <div />;
   return (
     <div>
@@ -645,7 +645,7 @@ function VocalCol({ label, entries }: { label: string; entries: { name: string; 
           <span key={i}>
             {i > 0 && ", "}
             {e.conflict ? (
-              <span className="text-red-400 font-semibold whitespace-nowrap">⚠&nbsp;{e.name}</span>
+              <span title={e.note ?? undefined} className="text-red-400 font-semibold whitespace-nowrap">⚠&nbsp;{e.name}</span>
             ) : (
               <span className="whitespace-nowrap">{e.name}</span>
             )}
@@ -656,7 +656,7 @@ function VocalCol({ label, entries }: { label: string; entries: { name: string; 
   );
 }
 
-function TeamRow({ label, value, accentHex, isConflict }: { label: string; value: string; accentHex: string; isConflict?: boolean }) {
+function TeamRow({ label, value, accentHex, isConflict, conflictNote }: { label: string; value: string; accentHex: string; isConflict?: boolean; conflictNote?: string }) {
   return (
     <div
       className="flex items-stretch rounded-lg overflow-hidden"
@@ -673,6 +673,7 @@ function TeamRow({ label, value, accentHex, isConflict }: { label: string; value
         {label}
       </span>
       <span
+        title={isConflict && conflictNote ? conflictNote : undefined}
         className={`font-body text-sm px-3 py-1.5 flex flex-1 items-center justify-center gap-1 leading-tight ${isConflict ? "text-red-400 font-semibold" : ""}`}
         style={isConflict ? { background: "rgba(239,68,68,0.10)" } : undefined}
       >
@@ -959,15 +960,31 @@ export default function ServicesPanel() {
     const ids = conflictIdsForRole(role, unavail);
     if (ids.size) roleConflicts.set(role._id, ids);
   }
+  // Per-role map of memberId → note for that role's date (for tooltips)
+  const roleConflictNotes = new Map<string, Map<string, string>>();
+  for (const [roleId, ids] of roleConflicts) {
+    const role = roles.find(r => r._id === roleId);
+    if (!role) continue;
+    const date = role.date.slice(0, 10);
+    const noteMap = new Map<string, string>();
+    for (const id of ids) {
+      const note = members.find(x => x._id === id)?.unavailabilityNotes?.find(n => n.date === date)?.note;
+      if (note) noteMap.set(id, note);
+    }
+    if (noteMap.size) roleConflictNotes.set(roleId, noteMap);
+  }
+
   // Summary notices for the cards currently visible
   const conflictNotices = visible
     .filter(r => roleConflicts.has(r._id))
-    .flatMap(role =>
-      [...roleConflicts.get(role._id)!].map(id => {
+    .flatMap(role => {
+      const date = role.date.slice(0, 10);
+      return [...roleConflicts.get(role._id)!].map(id => {
         const m = members.find(x => x._id === id);
-        return { name: m ? dn(m) : "—", label: SERVICE_LABEL[role._type], date: role.date.slice(0, 10) };
-      })
-    )
+        const note = m?.unavailabilityNotes?.find(n => n.date === date)?.note;
+        return { name: m ? dn(m) : "—", label: SERVICE_LABEL[role._type], date, note };
+      });
+    })
     .sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
 
   return (
@@ -1047,6 +1064,9 @@ export default function ServicesPanel() {
                 <span className="text-red-300 font-semibold">{c.name}</span>
                 {" · "}{c.label}{" "}
                 {new Date(c.date + "T12:00:00").toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short" })}
+                {c.note && (
+                  <span className="text-gray-500 italic"> — "{c.note}"</span>
+                )}
               </li>
             ))}
           </ul>
@@ -1086,6 +1106,7 @@ export default function ServicesPanel() {
               key={role._id}
               role={role}
               conflictIds={roleConflicts.get(role._id) ?? EMPTY_SET}
+              conflictNotes={roleConflictNotes.get(role._id)}
               onEdit={() => setEditModal({ type: "edit", role })}
               onDelete={() => setEditModal({ type: "delete", role })}
               onSetlist={() => setSetlistRole(role)}
