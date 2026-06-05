@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface Props {
   initialDates: string[];
@@ -22,9 +22,9 @@ function isoDate(year: number, month: number, day: number): string {
 }
 
 function buildCalendar(year: number, month: number): (string | null)[] {
-  const firstDay  = new Date(year, month - 1, 1).getDay();
+  const firstDay    = new Date(year, month - 1, 1).getDay();
   const daysInMonth = new Date(year, month, 0).getDate();
-  const offset    = (firstDay + 6) % 7;
+  const offset      = (firstDay + 6) % 7;
   const cells: (string | null)[] = Array(offset).fill(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(isoDate(year, month, d));
   return cells;
@@ -32,8 +32,10 @@ function buildCalendar(year: number, month: number): (string | null)[] {
 
 function fmtDayLabel(iso: string): string {
   const d = new Date(iso + "T12:00:00");
-  return d.toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short" });
+  return d.toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
 }
+
+interface Popover { iso: string; x: number; y: number; above: boolean }
 
 export default function AvailabilityCalendar({ initialDates, serviceDates = [], initialNotes = [] }: Props) {
   const [dates, setDates]   = useState<Set<string>>(new Set(initialDates));
@@ -46,32 +48,62 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
   const [notes, setNotes]   = useState<Map<string, string>>(
     () => new Map(initialNotes.map(n => [n.date, n.note]))
   );
-  const [bulkNote, setBulkNote] = useState("");
+  const [popover, setPopover] = useState<Popover | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const now      = new Date();
   const todayIso = now.toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
 
   const upcomingCount = Array.from(dates).filter(d => d >= todayIso).length;
-  const upcomingSelectedDates = Array.from(dates).filter(d => d >= todayIso).sort();
 
   const allMonths = Array.from({ length: TOTAL_MONTHS }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     return { year: d.getFullYear(), month: d.getMonth() + 1 };
   });
 
-  const totalPages   = Math.ceil(TOTAL_MONTHS / PAGE_SIZE);
+  const totalPages    = Math.ceil(TOTAL_MONTHS / PAGE_SIZE);
   const visibleMonths = allMonths.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
-  const canPrev      = page > 0;
-  const canNext      = page < totalPages - 1;
+  const canPrev       = page > 0;
+  const canNext       = page < totalPages - 1;
 
-  const toggle = useCallback((iso: string) => {
-    setDates(prev => {
-      const next = new Set(prev);
-      next.has(iso) ? next.delete(iso) : next.add(iso);
-      return next;
-    });
+  // Focus the input whenever popover opens
+  useEffect(() => {
+    if (popover) {
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  }, [popover?.iso]);
+
+  // Close popover on Escape
+  useEffect(() => {
+    if (!popover) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPopover(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [popover]);
+
+  function handleDateClick(iso: string, e: React.MouseEvent<HTMLButtonElement>) {
+    if (!dates.has(iso)) {
+      // Select the date
+      setDates(prev => { const n = new Set(prev); n.add(iso); return n; });
+      setSaved(false);
+    }
+    // Open popover (whether newly selected or re-clicking to edit note)
+    const rect = e.currentTarget.getBoundingClientRect();
+    const POPOVER_H = 160;
+    const above = rect.bottom + POPOVER_H > window.innerHeight - 16;
+    const x = Math.min(rect.left, window.innerWidth - 272);
+    const y = above ? rect.top - POPOVER_H - 6 : rect.bottom + 6;
+    setPopover({ iso, x, y, above });
+  }
+
+  function removeDate(iso: string) {
+    setDates(prev => { const n = new Set(prev); n.delete(iso); return n; });
+    setNotes(prev => { const m = new Map(prev); m.delete(iso); return m; });
     setSaved(false);
-  }, []);
+    setPopover(null);
+  }
 
   async function save() {
     setSaving(true);
@@ -184,6 +216,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
                   if (!iso) return <div key={i} />;
                   const isPast      = iso < todayIso;
                   const unavailable = dates.has(iso);
+                  const isPopoverOpen = popover?.iso === iso;
                   const hasService  = serviceSet.has(iso);
                   const hasNote     = unavailable && notes.has(iso) && !!notes.get(iso)?.trim();
                   const dayNum      = new Date(iso + "T12:00:00").getDate();
@@ -191,12 +224,13 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
                     <button
                       key={iso}
                       type="button"
-                      onClick={() => !isPast && toggle(iso)}
+                      onClick={e => !isPast && handleDateClick(iso, e)}
                       disabled={isPast}
-                      title={hasNote ? notes.get(iso) : iso}
                       className={`relative rounded text-center font-body text-xs transition-colors min-h-[44px] sm:min-h-0 sm:py-1 sm:pb-2 ${
                         isPast
                           ? "text-gray-700 cursor-default"
+                          : isPopoverOpen
+                          ? "bg-orange-500/50 text-orange-200 border border-orange-400 ring-1 ring-orange-400/40"
                           : unavailable
                           ? "bg-orange-500/30 text-orange-300 border border-orange-500/50 hover:bg-orange-500/40"
                           : "text-gray-300 hover:bg-[#00bfff]/10 hover:text-[#00bfff]"
@@ -233,68 +267,68 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
         ))}
       </div>
 
-      {/* Notes section — only shown when there are upcoming selected dates */}
-      {upcomingSelectedDates.length > 0 && (
-        <div className="space-y-3 pt-2 border-t border-[#003572]/20 dark:border-[#00bfff]/10">
-          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 pt-1">
-            Razón de no disponibilidad (opcional)
-          </p>
+      {/* Floating note popover */}
+      {popover && (
+        <>
+          {/* Backdrop — click outside to close */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setPopover(null)}
+          />
+          <div
+            className="fixed z-50 w-64 rounded-xl border border-[#00bfff]/20 bg-[#010b17] shadow-2xl shadow-black/60 p-4 space-y-3"
+            style={{ top: popover.y, left: popover.x }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Date label + close */}
+            <div className="flex items-start justify-between gap-2">
+              <p className="font-label text-[10px] uppercase tracking-widest text-orange-400/80 leading-tight capitalize">
+                {fmtDayLabel(popover.iso)}
+              </p>
+              <button
+                type="button"
+                onClick={() => setPopover(null)}
+                className="text-gray-600 hover:text-gray-300 transition-colors shrink-0 -mt-0.5"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
 
-          {/* Bulk fill */}
-          <div className="flex gap-2">
+            {/* Note input */}
             <input
+              ref={inputRef}
               type="text"
-              placeholder="Aplicar misma razón a todas..."
-              value={bulkNote}
-              onChange={e => setBulkNote(e.target.value)}
-              className="flex-1 rounded-lg border border-[#003572]/40 dark:border-[#00bfff]/15 bg-transparent px-3 py-1.5 font-body text-sm text-gray-300 placeholder:text-gray-600 focus:outline-none focus:border-[#00bfff]/40"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                if (!bulkNote.trim()) return;
+              placeholder="Razón (opcional)..."
+              value={notes.get(popover.iso) ?? ""}
+              onChange={e => {
+                const val = e.target.value;
                 setNotes(prev => {
                   const m = new Map(prev);
-                  for (const d of upcomingSelectedDates) {
-                    if (!m.get(d)?.trim()) m.set(d, bulkNote.trim());
-                  }
+                  if (val) m.set(popover.iso, val);
+                  else m.delete(popover.iso);
                   return m;
                 });
                 setSaved(false);
               }}
-              className="px-3 py-1.5 rounded-lg border border-[#003572]/40 dark:border-[#00bfff]/15 font-label text-[10px] uppercase tracking-widest text-gray-500 hover:border-[#00bfff]/40 hover:text-[#00bfff] transition-colors shrink-0"
+              onKeyDown={e => { if (e.key === "Enter") setPopover(null); }}
+              className="w-full rounded-lg border border-[#003572]/50 dark:border-[#00bfff]/15 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-[#00bfff]/40"
+            />
+
+            {/* Remove date */}
+            <button
+              type="button"
+              onClick={() => removeDate(popover.iso)}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-red-500/20 font-label text-[10px] uppercase tracking-widest text-red-400/70 hover:border-red-500/40 hover:text-red-400 transition-colors"
             >
-              Aplicar
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+              Quitar esta fecha
             </button>
           </div>
-
-          {/* Per-date rows */}
-          <div className="space-y-1.5">
-            {upcomingSelectedDates.map(iso => (
-              <div key={iso} className="flex items-center gap-3">
-                <span className="font-label text-[10px] uppercase tracking-widest text-orange-400/70 w-[88px] shrink-0">
-                  {fmtDayLabel(iso)}
-                </span>
-                <input
-                  type="text"
-                  placeholder="Razón opcional..."
-                  value={notes.get(iso) ?? ""}
-                  onChange={e => {
-                    const val = e.target.value;
-                    setNotes(prev => {
-                      const m = new Map(prev);
-                      if (val) m.set(iso, val);
-                      else m.delete(iso);
-                      return m;
-                    });
-                    setSaved(false);
-                  }}
-                  className="flex-1 rounded-lg border border-[#003572]/40 dark:border-[#00bfff]/15 bg-transparent px-3 py-1.5 font-body text-sm text-gray-300 placeholder:text-gray-600 focus:outline-none focus:border-[#00bfff]/40"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
+        </>
       )}
     </div>
   );
