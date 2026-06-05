@@ -9,6 +9,7 @@ interface Member {
   member_name: string;
   alias?: string;
   unavailableDates?: string[];
+  unavailabilityNotes?: { date: string; note: string }[];
 }
 
 interface ServiceRole {
@@ -172,25 +173,33 @@ export default function AvailabilityPanel() {
                 Puedes ignorarlo o usar el panel de Servicios para reasignarlos.
               </p>
               <div className="space-y-2">
-                {conflicts.map(({ role, member }, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-3 px-4 py-3 rounded-xl border border-red-500/25 bg-red-500/5"
-                  >
-                    <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <span className="font-body text-sm font-semibold">{dn(member)}</span>
-                      <span className="font-body text-sm text-gray-400"> marcó </span>
-                      <span className="font-label text-xs uppercase tracking-widest text-red-400">
-                        {fmtDate(role.date)}
+                {conflicts.map(({ role, member }, i) => {
+                  const note = member.unavailabilityNotes?.find(n => n.date === role.date)?.note;
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-start gap-3 px-4 py-3 rounded-xl border border-red-500/25 bg-red-500/5"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-red-500 shrink-0 mt-1.5" />
+                      <div className="flex-1 min-w-0">
+                        <div>
+                          <span className="font-body text-sm font-semibold">{dn(member)}</span>
+                          <span className="font-body text-sm text-gray-400"> marcó </span>
+                          <span className="font-label text-xs uppercase tracking-widest text-red-400">
+                            {fmtDate(role.date)}
+                          </span>
+                          <span className="font-body text-sm text-gray-400"> como no disponible</span>
+                        </div>
+                        {note && (
+                          <p className="font-body text-[11px] italic text-gray-500 mt-0.5">"{note}"</p>
+                        )}
+                      </div>
+                      <span className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full shrink-0 mt-0.5 ${SERVICE_COLOR[role._type]}`}>
+                        {role.service_name || SERVICE_LABEL[role._type]}
                       </span>
-                      <span className="font-body text-sm text-gray-400"> como no disponible</span>
                     </div>
-                    <span className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full shrink-0 ${SERVICE_COLOR[role._type]}`}>
-                      {role.service_name || SERVICE_LABEL[role._type]}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </>
           )}
@@ -207,20 +216,29 @@ export default function AvailabilityPanel() {
                     .filter(d => d >= today)
                     .sort()
                     .slice(0, 6);
+                  const noteMap = new Map((m.unavailabilityNotes ?? []).map(n => [n.date, n.note]));
                   return (
                     <div key={m._id} className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-amber-500/20 bg-amber-500/5">
                       <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
                       <span className="font-body text-sm font-semibold min-w-[100px]">{dn(m)}</span>
                       <div className="flex flex-wrap gap-1.5">
-                        {futureDates.map(d => (
-                          <span key={d} className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full ${
-                            conflicts.some(c => c.member._id === m._id && c.role.date === d)
-                              ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                              : "bg-amber-500/15 text-amber-400 border border-amber-500/25"
-                          }`}>
-                            {fmtDate(d)}
-                          </span>
-                        ))}
+                        {futureDates.map(d => {
+                          const note = noteMap.get(d);
+                          const isConflict = conflicts.some(c => c.member._id === m._id && c.role.date === d);
+                          return (
+                            <span
+                              key={d}
+                              title={note ?? undefined}
+                              className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full ${
+                                isConflict
+                                  ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                                  : "bg-amber-500/15 text-amber-400 border border-amber-500/25"
+                              }`}
+                            >
+                              {fmtDate(d)}{note ? " ✎" : ""}
+                            </span>
+                          );
+                        })}
                       </div>
                     </div>
                   );
@@ -263,9 +281,12 @@ export default function AvailabilityPanel() {
                     </td>
                     {upcoming.map(role => {
                       const status = cellStatus(member, role);
+                      const note = (status === "conflict" || status === "unavailable")
+                        ? member.unavailabilityNotes?.find(n => n.date === role.date)?.note
+                        : undefined;
                       return (
                         <td key={role._id} className="px-1 py-1.5 text-center">
-                          <MatrixCell status={status} />
+                          <MatrixCell status={status} note={note} />
                         </td>
                       );
                     })}
@@ -295,10 +316,11 @@ export default function AvailabilityPanel() {
   );
 }
 
-function MatrixCell({ status }: { status: CellStatus }) {
+function MatrixCell({ status, note }: { status: CellStatus; note?: string }) {
   if (status === "conflict") {
+    const t = note ? `Asignado y no disponible — "${note}"` : "Asignado y no disponible";
     return (
-      <span title="Asignado y no disponible" className="inline-flex items-center justify-center w-6 h-6 rounded-sm bg-red-500/20 border border-red-500/50">
+      <span title={t} className="inline-flex items-center justify-center w-6 h-6 rounded-sm bg-red-500/20 border border-red-500/50">
         <span className="text-red-400 font-bold text-xs leading-none">!</span>
       </span>
     );
@@ -311,8 +333,9 @@ function MatrixCell({ status }: { status: CellStatus }) {
     );
   }
   if (status === "unavailable") {
+    const t = note ? `No disponible — "${note}"` : "Marcó no disponible";
     return (
-      <span title="Marcó no disponible" className="inline-flex items-center justify-center w-6 h-6 rounded-sm bg-amber-500/15 border border-amber-500/30">
+      <span title={t} className="inline-flex items-center justify-center w-6 h-6 rounded-sm bg-amber-500/15 border border-amber-500/30">
         <span className="text-amber-400 text-xs leading-none">×</span>
       </span>
     );

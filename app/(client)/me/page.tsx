@@ -38,7 +38,7 @@ export default async function MePage() {
   const member = await serverClient.fetch(
     `*[_type == "teamMembers" && _id == $id][0] {
       _id, member_name, alias, email, role, memberType,
-      unavailableDates,
+      unavailableDates, unavailabilityNotes,
       "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl),
       "hasPassword": defined(passwordHash) && passwordHash != ""
     }`,
@@ -280,6 +280,7 @@ export default async function MePage() {
         {member && (
           <AvailabilityCalendar
             initialDates={member.unavailableDates ?? []}
+            initialNotes={member.unavailabilityNotes ?? []}
             serviceDates={serviceDates ?? []}
           />
         )}

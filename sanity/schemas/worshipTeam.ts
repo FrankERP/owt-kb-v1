@@ -98,5 +98,19 @@ export const teamMembers = defineType({
       of: [{ type: "string" }],
       description: "ISO dates (YYYY-MM-DD) when this member is unavailable. Set by the member from /me.",
     },
+    {
+      name: "unavailabilityNotes",
+      title: "Notas de no disponibilidad",
+      type: "array",
+      of: [{
+        type: "object",
+        fields: [
+          { name: "date", type: "string", title: "Fecha (YYYY-MM-DD)" },
+          { name: "note", type: "string", title: "Nota" },
+        ],
+      }],
+      hidden: true,
+      description: "Optional reasons per unavailable date. Set by the member from /me.",
+    },
   ],
 });
