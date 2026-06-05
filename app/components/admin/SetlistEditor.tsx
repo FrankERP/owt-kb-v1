@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, Fragment } from "react";
 import { Modal, SongForm, SongTag, FormState, buildPayload } from "./SongFormModal";
+import { normalizeMedleyTags } from "../../utils/medley";
+import { ChainLinkIcon } from "../ChainLinkIcon";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,15 +37,6 @@ function GripIcon() {
       <circle cx="4" cy="2.5" r="1" /><circle cx="8" cy="2.5" r="1" />
       <circle cx="4" cy="6"   r="1" /><circle cx="8" cy="6"   r="1" />
       <circle cx="4" cy="9.5" r="1" /><circle cx="8" cy="9.5" r="1" />
-    </svg>
-  );
-}
-
-function EditorChainIcon({ filled }: { filled: boolean }) {
-  return (
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={filled ? "2.5" : "1.5"} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
     </svg>
   );
 }
@@ -106,7 +99,8 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
   }
 
   function remove(localId: string) {
-    setEntries(prev => prev.filter(e => e.localId !== localId));
+    // Removing a song can orphan its medley partner — re-normalize tags.
+    setEntries(prev => normalizeMedleyTags(prev.filter(e => e.localId !== localId), uid2));
   }
 
   function handleDrop(toIdx: number) {
@@ -116,10 +110,14 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
       const next = [...prev];
       const [item] = next.splice(from, 1);
       next.splice(toIdx, 0, item);
-      return next;
+      // Reordering can break a medley apart or interleave two — re-derive tags
+      // from the new adjacency so stored tags always match what's shown.
+      return normalizeMedleyTags(next, uid2);
     });
   }
 
+  // Precondition: idxA and idxB are adjacent (idxB === idxA + 1). The only caller
+  // is the toggle button rendered between consecutive rows, which guarantees this.
   function toggleMedleyLink(idxA: number, idxB: number) {
     setEntries(prev => {
       const next = prev.map(e => ({ ...e }));
@@ -135,7 +133,7 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
         const rightGroup = groupIndices.slice(splitPos);
         if (leftGroup.length < 2)  leftGroup.forEach(i  => { next[i].medley_tag = undefined; });
         if (rightGroup.length >= 2) {
-          const newTag = String(Date.now());
+          const newTag = uid2();
           rightGroup.forEach(i => { next[i].medley_tag = newTag; });
         } else {
           rightGroup.forEach(i => { next[i].medley_tag = undefined; });
@@ -151,7 +149,7 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
         } else if (bTag) {
           a.medley_tag = bTag;
         } else {
-          const newTag = String(Date.now());
+          const newTag = uid2();
           a.medley_tag = newTag;
           b.medley_tag = newTag;
         }
@@ -277,7 +275,7 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
                           : "border-dashed border-gray-700/30 bg-[#010b17] text-gray-700/40 hover:border-[#00bfff]/30 hover:text-[#00bfff]/40"
                       }`}
                     >
-                      <EditorChainIcon filled={linked} />
+                      <ChainLinkIcon strokeWidth={linked ? 2.5 : 1.5} />
                       {linked && <span className="font-label text-[8px] uppercase tracking-widest ml-0.5">medley</span>}
                     </button>
                   </div>

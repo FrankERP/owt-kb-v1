@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Setlist, SetlistSong } from "../utils/interface";
+import { Setlist } from "../utils/interface";
+import { buildRuns } from "../utils/medley";
+import { ChainLinkIcon } from "./ChainLinkIcon";
 import { usePlayer } from "@/app/context/PlayerContext";
 import { useSession } from "next-auth/react";
 import { SetlistEditor } from "./admin/SetlistEditor";
@@ -18,10 +20,6 @@ export interface DayCardProps {
   roleId?: string;
   isNext?: boolean;
 }
-
-type SongRun =
-  | { kind: "single"; song: SetlistSong; n: number }
-  | { kind: "medley"; songs: { song: SetlistSong; n: number }[] };
 
 const SUNDAY_THEME = {
   border:       "border-[#003572] dark:border-[#00bfff]",
@@ -86,23 +84,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
     : "";
 
   // Group songs into medley runs
-  const runs: SongRun[] = [];
-  if (hasSetlist) {
-    let counter = 0;
-    for (const song of setlist!.songs) {
-      counter++;
-      if (song.medley_tag) {
-        const last = runs[runs.length - 1];
-        if (last?.kind === "medley" && last.songs[0].song.medley_tag === song.medley_tag) {
-          last.songs.push({ song, n: counter });
-        } else {
-          runs.push({ kind: "medley", songs: [{ song, n: counter }] });
-        }
-      } else {
-        runs.push({ kind: "single", song, n: counter });
-      }
-    }
-  }
+  const runs = hasSetlist ? buildRuns(setlist!.songs) : [];
 
   return (
     <>
@@ -183,7 +165,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                       />
                       {/* MEDLEY label */}
                       <div className="flex items-center gap-1 pl-2 -ml-2 mb-0.5">
-                        <ChainLinkIcon color={t.accentHex} />
+                        <ChainLinkIcon color={t.accentHex} opacity={0.65} />
                         <span className="font-label text-[9px] uppercase tracking-[0.18em]" style={{ color: `${t.accentHex}99` }}>Medley</span>
                       </div>
                       {run.songs.map(({ song, n }, si) => (
@@ -387,11 +369,3 @@ function PencilIcon() {
   );
 }
 
-function ChainLinkIcon({ color }: { color: string }) {
-  return (
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.65 }}>
-      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-    </svg>
-  );
-}

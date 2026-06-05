@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import MonthGenerator from "./MonthGenerator";
+import { buildRuns } from "../../utils/medley";
+import { ChainLinkIcon } from "../ChainLinkIcon";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,29 +20,6 @@ interface SetlistSong {
   play_key: string;
   medley_tag?: string;
   song: { _id: string; title: string; author: string; key: string; slug: string };
-}
-
-type SongRun =
-  | { kind: "single"; song: SetlistSong; n: number }
-  | { kind: "medley"; songs: { song: SetlistSong; n: number }[] };
-
-function buildRuns(songs: SetlistSong[]): SongRun[] {
-  const runs: SongRun[] = [];
-  let counter = 0;
-  for (const song of songs) {
-    counter++;
-    if (song.medley_tag) {
-      const last = runs[runs.length - 1];
-      if (last?.kind === "medley" && last.songs[0].song.medley_tag === song.medley_tag) {
-        last.songs.push({ song, n: counter });
-      } else {
-        runs.push({ kind: "medley", songs: [{ song, n: counter }] });
-      }
-    } else {
-      runs.push({ kind: "single", song, n: counter });
-    }
-  }
-  return runs;
 }
 
 interface ServiceRole {
@@ -572,7 +551,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
                       style={{ background: `linear-gradient(to bottom, ${hex}00, ${hex}55 12%, ${hex}55 88%, ${hex}00)` }}
                     />
                     <div className="flex items-center gap-1 mb-1">
-                      <ChainLinkIcon color={hex} />
+                      <ChainLinkIcon color={hex} opacity={0.7} />
                       <span className="font-label text-[8px] uppercase tracking-[0.18em]" style={{ color: `${hex}99` }}>Medley</span>
                     </div>
                     <div className="space-y-1.5">
@@ -1273,10 +1252,6 @@ function PencilIcon() {
 
 function MusicIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>;
-}
-
-function ChainLinkIcon({ color }: { color: string }) {
-  return <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.7 }}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>;
 }
 
 function TrashIcon() {
