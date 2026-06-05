@@ -16,7 +16,31 @@ interface FohSlot         { id: string; role: string; personId: string; }
 
 interface SetlistSong {
   play_key: string;
+  medley_tag?: string;
   song: { _id: string; title: string; author: string; key: string; slug: string };
+}
+
+type SongRun =
+  | { kind: "single"; song: SetlistSong; n: number }
+  | { kind: "medley"; songs: { song: SetlistSong; n: number }[] };
+
+function buildRuns(songs: SetlistSong[]): SongRun[] {
+  const runs: SongRun[] = [];
+  let counter = 0;
+  for (const song of songs) {
+    counter++;
+    if (song.medley_tag) {
+      const last = runs[runs.length - 1];
+      if (last?.kind === "medley" && last.songs[0].song.medley_tag === song.medley_tag) {
+        last.songs.push({ song, n: counter });
+      } else {
+        runs.push({ kind: "medley", songs: [{ song, n: counter }] });
+      }
+    } else {
+      runs.push({ kind: "single", song, n: counter });
+    }
+  }
+  return runs;
 }
 
 interface ServiceRole {
@@ -513,25 +537,57 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
           <section>
             <SectionHead label="Setlist" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
             <ol className="space-y-2 mt-2">
-              {songs.map((entry, i) => (
-                <li key={entry.song._id} className="flex items-start gap-2">
-                  <span className="text-gray-500 text-sm w-5 shrink-0 mt-0.5">{i + 1}.</span>
-                  <div>
-                    <span className="font-body text-sm font-semibold">{entry.song.title}</span>
-                    <span className="text-gray-500 text-sm"> — {entry.song.author}</span>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className={`font-label text-xs font-semibold ${CARD_ACCENT[role._type]}`}>
-                        {entry.play_key || entry.song.key}
-                      </span>
-                      {entry.play_key && entry.song.key && entry.play_key !== entry.song.key && (
-                        <span className="font-label text-[10px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800/60 text-gray-500 leading-tight">
-                          orig. {entry.song.key}
+              {buildRuns(songs).map((run) => {
+                const renderRow = (entry: SetlistSong, n: number) => (
+                  <div className="flex items-start gap-2">
+                    <span className="text-gray-500 text-sm w-5 shrink-0 mt-0.5">{n}.</span>
+                    <div>
+                      <span className="font-body text-sm font-semibold">{entry.song.title}</span>
+                      <span className="text-gray-500 text-sm"> — {entry.song.author}</span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className={`font-label text-xs font-semibold ${CARD_ACCENT[role._type]}`}>
+                          {entry.play_key || entry.song.key}
                         </span>
-                      )}
+                        {entry.play_key && entry.song.key && entry.play_key !== entry.song.key && (
+                          <span className="font-label text-[10px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800/60 text-gray-500 leading-tight">
+                            orig. {entry.song.key}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </li>
-              ))}
+                );
+
+                if (run.kind === "single" || run.songs.length === 1) {
+                  const { song, n } = run.kind === "single" ? run : run.songs[0];
+                  return <li key={song.song._id}>{renderRow(song, n)}</li>;
+                }
+
+                const hex = CARD_ACCENT_HEX[role._type];
+                return (
+                  <li key={run.songs[0].song.song._id + "_m"} className="relative pl-3.5">
+                    <span
+                      aria-hidden
+                      className="absolute left-0.5 top-5 bottom-1 w-[2px] rounded-full"
+                      style={{ background: `linear-gradient(to bottom, ${hex}00, ${hex}55 12%, ${hex}55 88%, ${hex}00)` }}
+                    />
+                    <div className="flex items-center gap-1 mb-1">
+                      <ChainLinkIcon color={hex} />
+                      <span className="font-label text-[8px] uppercase tracking-[0.18em]" style={{ color: `${hex}99` }}>Medley</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {run.songs.map(({ song, n }, si) => (
+                        <div key={song.song._id}>
+                          {si > 0 && (
+                            <span className="block w-5 text-center font-label text-[10px] leading-none -my-0.5" style={{ color: `${hex}70` }}>+</span>
+                          )}
+                          {renderRow(song, n)}
+                        </div>
+                      ))}
+                    </div>
+                  </li>
+                );
+              })}
             </ol>
           </section>
         )}
@@ -1217,6 +1273,10 @@ function PencilIcon() {
 
 function MusicIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>;
+}
+
+function ChainLinkIcon({ color }: { color: string }) {
+  return <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.7 }}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>;
 }
 
 function TrashIcon() {

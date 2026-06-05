@@ -44,7 +44,7 @@ export async function GET() {
   }
 
   const SONG_PROJ = `{ _id, title, author, key, "slug": slug.current }`;
-  const SETLIST_SONGS = `songs[]{ play_key, "song": song->${SONG_PROJ} }`;
+  const SETLIST_SONGS = `songs[]{ play_key, medley_tag, "song": song->${SONG_PROJ} }`;
 
   const roles = await serverClient.fetch(`
     *[_type in ["sunday_role", "saturday_role", "special_role"]]
