@@ -1,19 +1,42 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
 
 interface NavMenuProps {
-  user?: {
-    name?: string | null;
-    image?: string | null;
-    role?: string;
-  } | null;
   showSchedule?: boolean;
   showTags?: boolean;
-  notifCount?: number;
+}
+
+// Cache the badge count briefly so it isn't refetched on every navigation.
+const NOTIF_KEY = "owt_notif_count";
+const NOTIF_TTL = 60 * 1000;
+
+function useNotifCount(authed: boolean): number {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!authed) { setCount(0); return; }
+    let cancelled = false;
+    try {
+      const raw = sessionStorage.getItem(NOTIF_KEY);
+      if (raw) {
+        const { c, t } = JSON.parse(raw);
+        if (Date.now() - t < NOTIF_TTL) { setCount(c); return; }
+      }
+    } catch { /* ignore */ }
+    fetch("/api/notifications/count")
+      .then(r => (r.ok ? r.json() : { count: 0 }))
+      .then(({ count: c }) => {
+        if (cancelled) return;
+        setCount(c ?? 0);
+        try { sessionStorage.setItem(NOTIF_KEY, JSON.stringify({ c: c ?? 0, t: Date.now() })); } catch { /* ignore */ }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [authed]);
+  return count;
 }
 
 function MenuItem({ href, onClick, children }: { href?: string; onClick?: () => void; children: React.ReactNode }) {
@@ -23,9 +46,12 @@ function MenuItem({ href, onClick, children }: { href?: string; onClick?: () => 
   return <button onClick={onClick} className={cls}>{children}</button>;
 }
 
-export default function NavMenu({ user, showSchedule, showTags, notifCount = 0 }: NavMenuProps) {
+export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
+  const { data: session, status } = useSession();
+  const user = session?.user ?? null;
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const notifCount = useNotifCount(!!user);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -39,6 +65,12 @@ export default function NavMenu({ user, showSchedule, showTags, notifCount = 0 }
     user?.role === "super-admin" ||
     user?.role === "admin" ||
     user?.role === "content-editor";
+
+  // While the session resolves on the client, reserve the avatar's space to
+  // avoid layout shift and a flash of the sign-in link for logged-in users.
+  if (status === "loading") {
+    return <div className="w-9 h-9 rounded-full bg-[#003572]/15 dark:bg-[#00bfff]/10 animate-pulse" />;
+  }
 
   if (!user) {
     return (

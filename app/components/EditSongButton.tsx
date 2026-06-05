@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { bodyToLyrics } from "@/app/utils/lyrics";
 import { Post } from "@/app/utils/interface";
 
@@ -56,6 +57,7 @@ function buildPayload(form: FormState) {
 
 export default function EditSongButton({ post, inline }: { post: Post; inline?: boolean }) {
   const router   = useRouter();
+  const { data: session } = useSession();
   const [open, setOpen]       = useState(false);
   const [form, setForm]       = useState<FormState>(() => postToForm(post));
   const [tags, setTags]       = useState<SongTag[]>([]);
@@ -159,6 +161,13 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
       showToast("Error al guardar.");
     }
   };
+
+  // Self-gate: only editors see the button. Keeping this client-side means the
+  // song page can be statically rendered (no server session read).
+  const canEdit = ["super-admin", "admin", "content-editor"].includes(
+    (session?.user?.role as string) ?? ""
+  );
+  if (!canEdit) return null;
 
   return (
     <>
