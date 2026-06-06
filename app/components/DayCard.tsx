@@ -143,7 +143,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                           onClick={() => openSheet(song._id, song.play_key || undefined)}
                           className="w-full flex items-center gap-3 px-2 py-2 -mx-2 rounded-lg text-left hover:bg-white/5 group transition-colors cursor-pointer"
                         >
-                          <span className="font-label text-xs text-gray-600 w-4 shrink-0 text-right tabular-nums">{n}</span>
+                          <span className="font-label text-xs text-gray-400 w-4 shrink-0 text-right tabular-nums">{n}</span>
                           <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
                             <span className="font-body text-sm md:text-base font-semibold truncate group-hover:text-[#00bfff] transition-colors">{song.title}</span>
                             {song.author && <span className="text-gray-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
@@ -181,7 +181,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                             onClick={() => openSheet(song._id, song.play_key || undefined)}
                             className="w-full flex items-center gap-3 px-2 py-1.5 -mx-2 rounded-lg text-left hover:bg-white/5 group transition-colors cursor-pointer"
                           >
-                            <span className="font-label text-xs text-gray-600 w-4 shrink-0 text-right tabular-nums">{n}</span>
+                            <span className="font-label text-xs text-gray-400 w-4 shrink-0 text-right tabular-nums">{n}</span>
                             <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
                               <span className="font-body text-sm md:text-base font-semibold truncate group-hover:text-[#00bfff] transition-colors">{song.title}</span>
                               {song.author && <span className="text-gray-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
@@ -302,8 +302,8 @@ function VocalCol({ label, names, highlightName, duplicateNames }: { label: stri
                 >⚠&nbsp;{name}</span>
               ) : isMe ? (
                 <span
-                  className="font-semibold text-[#fb7185] whitespace-nowrap"
-                  style={{ textShadow: "0 0 10px rgba(251,113,133,0.8)" }}
+                  className="font-semibold text-[#3dff7c] whitespace-nowrap"
+                  style={{ textShadow: "0 0 10px rgba(61,255,124,0.8)" }}
                 >{name}</span>
               ) : (
                 <span className="whitespace-nowrap">{name}</span>
@@ -324,10 +324,10 @@ function Row({ label, value, accentHex, highlightName, isDuplicate }: { label: s
       style={{
         border: isDuplicate
           ? "1px solid rgba(251,191,36,0.6)"
-          : isMe ? "1px solid rgba(251,113,133,0.5)" : `1px solid ${accentHex}40`,
+          : isMe ? "1px solid rgba(61,255,124,0.5)" : `1px solid ${accentHex}40`,
         boxShadow: isDuplicate
           ? "0 0 10px rgba(251,191,36,0.35)"
-          : isMe ? "0 0 10px rgba(251,113,133,0.3)" : undefined,
+          : isMe ? "0 0 10px rgba(61,255,124,0.3)" : undefined,
       }}
     >
       <span
@@ -342,9 +342,9 @@ function Row({ label, value, accentHex, highlightName, isDuplicate }: { label: s
       </span>
       <span
         className={`font-body text-sm md:text-base px-3 py-1.5 flex flex-1 items-center justify-center gap-1 leading-tight ${
-          isDuplicate ? "font-semibold text-amber-400" : isMe ? "font-semibold text-[#fb7185]" : ""
+          isDuplicate ? "font-semibold text-amber-400" : isMe ? "font-semibold text-[#3dff7c]" : ""
         }`}
-        style={isDuplicate ? { background: "rgba(251,191,36,0.10)" } : isMe ? { background: "rgba(251,113,133,0.10)" } : undefined}
+        style={isDuplicate ? { background: "rgba(251,191,36,0.10)" } : isMe ? { background: "rgba(61,255,124,0.10)" } : undefined}
       >
         {isDuplicate && <span>⚠</span>}
         {value}

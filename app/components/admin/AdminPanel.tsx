@@ -308,22 +308,26 @@ const ALL_TABS: { id: Tab; label: string; roles: OWTRole[] }[] = [
 function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) => void; role: OWTRole }) {
   const visible = ALL_TABS.filter((t) => t.roles.includes(role));
   return (
-    <div className="overflow-x-auto -mx-2 px-2 pb-1">
-      <div className="flex gap-1 p-1 rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 w-max min-w-full">
-        {visible.map(({ id, label }) => (
-          <button
-            key={id}
-            onClick={() => onChange(id)}
-            className={`font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${
-              active === id
-                ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#C8D8EB] dark:text-[#00bfff]"
-                : "text-gray-500 hover:text-[#00bfff]"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+    <div className="relative">
+      <div className="overflow-x-auto -mx-2 px-2 pb-1">
+        <div className="flex gap-1 p-1 rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 w-max min-w-full">
+          {visible.map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => onChange(id)}
+              className={`font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${
+                active === id
+                  ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#C8D8EB] dark:text-[#00bfff]"
+                  : "text-gray-500 hover:text-[#00bfff]"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
+      {/* Scroll-fade hint (mobile, where tabs overflow) */}
+      <div className="md:hidden pointer-events-none absolute top-0 right-0 bottom-1 w-8 bg-gradient-to-l from-[#C8D8EB] dark:from-[#010b17] to-transparent" />
     </div>
   );
 }

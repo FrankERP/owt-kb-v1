@@ -120,7 +120,11 @@ const Page = async ({ params }: Params) => {
       <Navbar title={post?.title} author={post?.author} tags schedule />
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <div className="bg-[#001f3f] dark:bg-[#00162e] border-b border-[#003572] dark:border-[#00bfff]/15">
+      <div className="relative bg-[#001f3f] dark:bg-[#00162e] border-b border-[#003572] dark:border-[#00bfff]/15">
+        {/* Edit control — inline, top-right (self-gates to editors); avoids a floating FAB over the lyrics */}
+        <div className="absolute top-4 right-4 z-10">
+          <EditSongButton post={post} inline />
+        </div>
         <div className="max-w-7xl mx-auto px-6 pt-10 pb-12 flex flex-col items-center text-center">
 
           {post?.tags && post.tags.length > 0 && (
@@ -322,7 +326,6 @@ const Page = async ({ params }: Params) => {
 
       </div>
 
-      <EditSongButton post={post} />
     </div>
   );
 };

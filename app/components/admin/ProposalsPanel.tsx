@@ -308,9 +308,14 @@ export default function ProposalsPanel() {
       )}
 
       {!loading && !error && visible.length === 0 && (
-        <p className="font-body text-sm text-gray-500 text-center py-12">
-          {filter === "all" ? "No hay propuestas todavía." : `Sin propuestas en esta categoría.`}
-        </p>
+        <div className="text-center py-12 space-y-1">
+          <p className="font-body text-sm text-gray-500">
+            {filter === "all" ? "No hay propuestas todavía." : `Sin propuestas en esta categoría.`}
+          </p>
+          <p className="font-body text-xs text-gray-500/80">
+            Los líderes proponen setlists desde su perfil; aparecerán aquí para revisión.
+          </p>
+        </div>
       )}
 
       {!loading && !error && (

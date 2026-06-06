@@ -76,7 +76,7 @@ const PostComponent = ({ post }: Props) => {
       {post.tags?.length > 0 && (
         <div className="flex flex-wrap gap-x-2 gap-y-0.5 pt-1 border-t border-[#003572]/10 dark:border-[#00bfff]/10">
           {post.tags.map((tag) => (
-            <span key={tag._id} className="font-label text-[10px] text-gray-500 dark:text-gray-600 lowercase">
+            <span key={tag._id} className="font-label text-[10px] text-gray-500 dark:text-gray-400 lowercase">
               #{tag.name}
             </span>
           ))}
