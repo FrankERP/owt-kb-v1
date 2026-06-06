@@ -9,6 +9,7 @@ import { DayCard } from "@/app/components/DayCard";
 import NextServiceHero from "@/app/components/NextServiceHero";
 import ProfilePanel from "@/app/components/ProfilePanel";
 import AvailabilityCalendar from "@/app/components/AvailabilityCalendar";
+import AddToCalendarButton from "@/app/components/AddToCalendarButton";
 import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
 
 export const revalidate = 60;
@@ -162,6 +163,13 @@ export default async function MePage() {
 
   const firstName = name?.split(" ")[0] ?? "Miembro";
 
+  const calendarServices = allAssignments.map(({ dateKey, day, doc }) => ({
+    uid: doc._id,
+    date: dateKey,
+    title: `${day} · Oasis Worship`,
+    description: doc.isLead ? "Eres líder de este servicio." : undefined,
+  }));
+
   function renderProposalCta(doc: RoleDoc) {
     if (!doc.isLead) return null;
     const proposal = proposalMap.get(doc._id);
@@ -226,6 +234,11 @@ export default async function MePage() {
             </>
           ) : (
             <div className="space-y-10">
+              {/* Toolbar */}
+              <div className="flex justify-end -mb-6">
+                <AddToCalendarButton services={calendarServices} />
+              </div>
+
               {/* Hero: next assignment */}
               {(() => {
                 const { day, doc } = allAssignments[0];

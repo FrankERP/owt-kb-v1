@@ -52,6 +52,19 @@ function rootIndex(key: string): number {
   return NOTE_INDEX[m[1]] ?? -1;
 }
 
+// Open-chord-friendly keys (CAGED): C, A, G, E, D.
+const OPEN_KEY_IDX = [0, 9, 7, 4, 2];
+
+// Smallest capo position that lets you play the sounding key with open shapes.
+function capoSuggestion(soundingIdx: number): { fret: number; shapeKey: string } | null {
+  if (soundingIdx < 0) return null;
+  for (let fret = 0; fret <= 11; fret++) {
+    const shapeIdx = ((soundingIdx - fret) % 12 + 12) % 12;
+    if (OPEN_KEY_IDX.includes(shapeIdx)) return { fret, shapeKey: DISPLAY_NOTES[shapeIdx] };
+  }
+  return null;
+}
+
 // ─── ChordPro parser ─────────────────────────────────────────────────────────
 
 function parseLine(line: string): Segment[] {
@@ -100,6 +113,7 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
   const isChordPro = CHORD_RE.test(current.content);
   const nativeIdx = rootIndex(current.key);
   const activeKeyIdx = nativeIdx >= 0 ? ((nativeIdx + semitones) % 12 + 12) % 12 : -1;
+  const capo = capoSuggestion(activeKeyIdx);
 
   const handleTabChange = (i: number) => {
     setActiveIdx(i);
@@ -165,6 +179,21 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
                   </button>
                 );
               })}
+            </div>
+          )}
+
+          {/* Capo suggestion */}
+          {capo && (
+            <div className="flex items-center gap-2">
+              <span
+                className="inline-flex items-center gap-1.5 font-label text-[11px] uppercase tracking-wide px-2.5 py-1 rounded-full border border-[#00bfff]/30 text-[#00bfff]/90"
+                title="Posición de capo para tocar con acordes abiertos en la tonalidad seleccionada"
+              >
+                <CapoIcon />
+                {capo.fret === 0
+                  ? `Acordes abiertos (${capo.shapeKey})`
+                  : `Capo ${capo.fret} · formas de ${capo.shapeKey}`}
+              </span>
             </div>
           )}
 
@@ -261,5 +290,14 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
         </pre>
       )}
     </div>
+  );
+}
+
+function CapoIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <line x1="6" y1="3" x2="6" y2="21" /><line x1="12" y1="3" x2="12" y2="21" /><line x1="18" y1="3" x2="18" y2="21" />
+      <rect x="3" y="9" width="18" height="3.5" rx="1.75" fill="currentColor" stroke="none" />
+    </svg>
   );
 }

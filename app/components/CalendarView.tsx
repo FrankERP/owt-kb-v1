@@ -126,6 +126,28 @@ export default function CalendarView({ activeDays }: Props) {
         </div>
       </div>
 
+      {/* Legend */}
+      {view === "calendar" && (
+        <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mb-8">
+          {([
+            ["#00bfff", "Domingo"],
+            ["#f59e0b", "Sábado"],
+            ["#a78bfa", "Especial"],
+          ] as const).map(([color, label]) => (
+            <span key={label} className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-[4px] border" style={{ borderColor: `${color}80`, background: `${color}33` }} />
+              <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">{label}</span>
+            </span>
+          ))}
+          <span className="flex items-center gap-1.5">
+            <span className="relative w-3 h-3 rounded-[4px] border border-[#00bfff]/50 bg-[#003572]/50">
+              <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-[#00bfff]" />
+            </span>
+            <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">Varios servicios</span>
+          </span>
+        </div>
+      )}
+
       {/* Calendar view */}
       {view === "calendar" && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
