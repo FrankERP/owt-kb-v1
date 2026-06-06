@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Setlist } from "../utils/interface";
 import { buildRuns } from "../utils/medley";
 import { ChainLinkIcon } from "./ChainLinkIcon";
+import PracticePlaylistButton from "./PracticePlaylistButton";
 import { usePlayer } from "@/app/context/PlayerContext";
 import { useSession } from "next-auth/react";
 import { SetlistEditor } from "./admin/SetlistEditor";
@@ -118,15 +119,18 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                 <h4 className="font-label text-xs md:text-sm lg:text-base uppercase tracking-widest text-[#C8D8EB]/70 dark:text-[#C8D8EB]/50">
                   Setlist
                 </h4>
-                {canEdit && date && (
-                  <button
-                    onClick={() => setEditSetlist(true)}
-                    className="flex items-center gap-1 font-label text-[10px] uppercase tracking-widest text-gray-500 hover:text-[#00bfff] transition-colors"
-                  >
-                    <PencilIcon />
-                    Editar
-                  </button>
-                )}
+                <div className="flex items-center gap-3">
+                  <PracticePlaylistButton songIds={setlist!.songs.map(s => s._id)} accent={t.accentHex} />
+                  {canEdit && date && (
+                    <button
+                      onClick={() => setEditSetlist(true)}
+                      className="flex items-center gap-1 font-label text-[10px] uppercase tracking-widest text-gray-500 hover:text-[#00bfff] transition-colors"
+                    >
+                      <PencilIcon />
+                      Editar
+                    </button>
+                  )}
+                </div>
               </div>
               <ol>
                 {runs.map((run) => {

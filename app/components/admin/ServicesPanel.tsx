@@ -509,13 +509,13 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
       </div>
 
       {/* ── Body ── */}
-      <div className="p-4 space-y-4">
+      <div className="p-5 space-y-5">
 
         {/* Setlist */}
         {hasSetlist && (
           <section>
             <SectionHead label="Setlist" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
-            <ol className="space-y-2 mt-2">
+            <ol className="space-y-2.5 mt-3">
               {buildRuns(songs).map((run) => {
                 const renderRow = (entry: SetlistSong, n: number) => (
                   <div className="flex items-start gap-2">
@@ -573,7 +573,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
 
         {/* Team */}
         {hasTeam && !swapMode && (
-          <section className={hasSetlist ? `border-t pt-4 border-gray-200 dark:border-gray-800` : ""}>
+          <section className={hasSetlist ? `border-t pt-5 border-gray-200 dark:border-gray-800` : ""}>
             <p className="font-label text-xs uppercase tracking-widest text-gray-500 text-center mb-1">Equipo</p>
             <div className="mt-2 space-y-3">
               {(leads.length || bgvs.length || chorus.length) ? (

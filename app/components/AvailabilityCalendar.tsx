@@ -17,6 +17,8 @@ const DAYS_ES = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"];
 const TOTAL_MONTHS = 12;
 const PAGE_SIZE    = 3;
 
+const WEEKDAYS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+
 function isoDate(year: number, month: number, day: number): string {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
@@ -50,6 +52,10 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
   );
   const [popover, setPopover] = useState<Popover | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const [recurOpen, setRecurOpen]         = useState(false);
+  const [recurDow, setRecurDow]           = useState(0); // 0 = Domingo
+  const [recurInterval, setRecurInterval] = useState(1);
 
   const now      = new Date();
   const todayIso = now.toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
@@ -105,6 +111,25 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
     setPopover(null);
   }
 
+  // Expand a recurring weekday pattern into concrete future dates (next 12 months).
+  function applyRecurring() {
+    const cur = new Date();
+    cur.setHours(12, 0, 0, 0);
+    while (cur.getDay() !== recurDow) cur.setDate(cur.getDate() + 1);
+    const end = new Date();
+    end.setDate(end.getDate() + 365);
+
+    const added: string[] = [];
+    while (cur <= end) {
+      const iso = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
+      if (iso >= todayIso) added.push(iso);
+      cur.setDate(cur.getDate() + 7 * recurInterval);
+    }
+    setDates(prev => { const n = new Set(prev); added.forEach(d => n.add(d)); return n; });
+    setSaved(false);
+    setRecurOpen(false);
+  }
+
   async function save() {
     setSaving(true);
     setSaveError(null);
@@ -148,15 +173,66 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
             Marca los días en que no puedes asistir
           </p>
         </div>
-        <button
-          type="button"
-          onClick={save}
-          disabled={saving}
-          className="px-4 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
-        >
-          {saving ? "Guardando..." : saved ? "Guardado ✓" : "Guardar"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setRecurOpen(v => !v)}
+            aria-expanded={recurOpen}
+            className={`px-3 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
+              recurOpen
+                ? "border-[#00bfff] text-[#00bfff]"
+                : "border-[#003572]/30 dark:border-[#00bfff]/20 text-gray-500 hover:border-[#00bfff] hover:text-[#00bfff]"
+            }`}
+          >
+            Repetir…
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="px-4 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+          >
+            {saving ? "Guardando..." : saved ? "Guardado ✓" : "Guardar"}
+          </button>
+        </div>
       </div>
+
+      {/* Recurring pattern */}
+      {recurOpen && (
+        <div className="rounded-xl border border-[#00bfff]/20 bg-[#00bfff]/[0.04] p-4 space-y-3">
+          <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/70">
+            Marcar un día recurrente como no disponible
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={recurDow}
+              onChange={e => setRecurDow(Number(e.target.value))}
+              className="rounded-lg border border-[#003572]/40 dark:border-[#00bfff]/20 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 focus:outline-none focus:border-[#00bfff]/50"
+            >
+              {WEEKDAYS.map((w, i) => <option key={i} value={i} className="bg-[#010b17]">{w}</option>)}
+            </select>
+            <select
+              value={recurInterval}
+              onChange={e => setRecurInterval(Number(e.target.value))}
+              className="rounded-lg border border-[#003572]/40 dark:border-[#00bfff]/20 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 focus:outline-none focus:border-[#00bfff]/50"
+            >
+              <option value={1} className="bg-[#010b17]">Cada semana</option>
+              <option value={2} className="bg-[#010b17]">Cada 2 semanas</option>
+              <option value={4} className="bg-[#010b17]">Cada 4 semanas</option>
+            </select>
+            <button
+              type="button"
+              onClick={applyRecurring}
+              className="px-4 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors"
+            >
+              Aplicar
+            </button>
+          </div>
+          <p className="font-body text-[11px] text-gray-500">
+            Agrega esas fechas durante los próximos 12 meses. Puedes ajustar días sueltos después; recuerda <span className="text-gray-400">Guardar</span>.
+          </p>
+        </div>
+      )}
 
       {upcomingCount > 0 && (
         <p className="font-label text-[10px] uppercase tracking-widest text-orange-400">
