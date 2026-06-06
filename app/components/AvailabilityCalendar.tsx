@@ -37,6 +37,16 @@ function fmtDayLabel(iso: string): string {
   return d.toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
 }
 
+// Stable fingerprint of the saved state, to detect unsaved changes.
+function snapshot(dates: Set<string>, notes: Map<string, string>): string {
+  const ds = Array.from(dates).sort();
+  const ns = Array.from(notes.entries())
+    .filter(([d, n]) => dates.has(d) && n.trim())
+    .map(([d, n]) => [d, n.trim()] as [string, string])
+    .sort((a, b) => a[0].localeCompare(b[0]));
+  return JSON.stringify([ds, ns]);
+}
+
 interface Popover { iso: string; x: number; y: number; above: boolean }
 
 export default function AvailabilityCalendar({ initialDates, serviceDates = [], initialNotes = [] }: Props) {
@@ -56,6 +66,9 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
   const [recurOpen, setRecurOpen]         = useState(false);
   const [recurDow, setRecurDow]           = useState(0); // 0 = Domingo
   const [recurInterval, setRecurInterval] = useState(1);
+
+  const initialSnap = useRef(snapshot(new Set(initialDates), new Map(initialNotes.map(n => [n.date, n.note]))));
+  const dirty = snapshot(dates, notes) !== initialSnap.current;
 
   const now      = new Date();
   const todayIso = now.toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
@@ -89,6 +102,14 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
     return () => window.removeEventListener("keydown", onKey);
   }, [popover]);
 
+  // Warn before leaving (tab close / refresh / external nav) with unsaved changes.
+  useEffect(() => {
+    if (!dirty) return;
+    const h = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [dirty]);
+
   function handleDateClick(iso: string, e: React.MouseEvent<HTMLButtonElement>) {
     if (!dates.has(iso)) {
       // Select the date
@@ -111,21 +132,23 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
     setPopover(null);
   }
 
-  // Expand a recurring weekday pattern into concrete future dates (next 12 months).
-  function applyRecurring() {
+  // Expand a recurring weekday pattern into concrete future dates (next 12 months),
+  // then either mark (add) the whole run or clear (remove) it.
+  function applyRecurring(add: boolean) {
     const cur = new Date();
     cur.setHours(12, 0, 0, 0);
     while (cur.getDay() !== recurDow) cur.setDate(cur.getDate() + 1);
     const end = new Date();
     end.setDate(end.getDate() + 365);
 
-    const added: string[] = [];
+    const series: string[] = [];
     while (cur <= end) {
       const iso = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
-      if (iso >= todayIso) added.push(iso);
+      if (iso >= todayIso) series.push(iso);
       cur.setDate(cur.getDate() + 7 * recurInterval);
     }
-    setDates(prev => { const n = new Set(prev); added.forEach(d => n.add(d)); return n; });
+    setDates(prev => { const n = new Set(prev); series.forEach(d => (add ? n.add(d) : n.delete(d))); return n; });
+    if (!add) setNotes(prev => { const m = new Map(prev); series.forEach(d => m.delete(d)); return m; });
     setSaved(false);
     setRecurOpen(false);
   }
@@ -147,6 +170,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
         }),
       });
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      initialSnap.current = snapshot(dates, notes);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
@@ -189,10 +213,14 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
           <button
             type="button"
             onClick={save}
-            disabled={saving}
-            className="px-4 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+            disabled={saving || !dirty}
+            className={`px-4 py-2 rounded-lg font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${
+              dirty
+                ? "bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 ring-1 ring-amber-400/50"
+                : "bg-[#003572] dark:bg-[#00bfff]/20"
+            }`}
           >
-            {saving ? "Guardando..." : saved ? "Guardado ✓" : "Guardar"}
+            {saving ? "Guardando..." : saved ? "Guardado ✓" : dirty ? "Guardar •" : "Guardar"}
           </button>
         </div>
       </div>
@@ -222,14 +250,21 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
             </select>
             <button
               type="button"
-              onClick={applyRecurring}
+              onClick={() => applyRecurring(true)}
               className="px-4 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors"
             >
-              Aplicar
+              Marcar
+            </button>
+            <button
+              type="button"
+              onClick={() => applyRecurring(false)}
+              className="px-4 py-2 rounded-lg border border-[#003572]/40 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest text-gray-400 hover:border-red-500/40 hover:text-red-400 transition-colors"
+            >
+              Quitar serie
             </button>
           </div>
           <p className="font-body text-[11px] text-gray-500">
-            Agrega esas fechas durante los próximos 12 meses. Puedes ajustar días sueltos después; recuerda <span className="text-gray-400">Guardar</span>.
+            <span className="text-gray-400">Marcar</span> agrega o <span className="text-gray-400">Quitar serie</span> borra ese día durante los próximos 12 meses. Puedes ajustar días sueltos después; recuerda <span className="text-gray-400">Guardar</span>.
           </p>
         </div>
       )}
@@ -237,6 +272,12 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
       {upcomingCount > 0 && (
         <p className="font-label text-[10px] uppercase tracking-widest text-orange-400">
           {upcomingCount} fecha{upcomingCount !== 1 ? "s" : ""} marcada{upcomingCount !== 1 ? "s" : ""} como no disponible
+        </p>
+      )}
+
+      {dirty && !saving && (
+        <p className="font-label text-[10px] uppercase tracking-widest text-amber-400">
+          Cambios sin guardar
         </p>
       )}
 
@@ -282,7 +323,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
               </p>
               <div className="grid grid-cols-7 gap-0.5 mb-1">
                 {DAYS_ES.map(d => (
-                  <div key={d} className="font-label text-[9px] uppercase tracking-widest text-gray-600 text-center py-0.5">
+                  <div key={d} className="font-label text-[9px] uppercase tracking-widest text-gray-400 text-center py-0.5">
                     {d}
                   </div>
                 ))}
@@ -364,7 +405,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
               <button
                 type="button"
                 onClick={() => setPopover(null)}
-                className="text-gray-600 hover:text-gray-300 transition-colors shrink-0 -mt-0.5"
+                className="text-gray-400 hover:text-gray-300 transition-colors shrink-0 -mt-0.5"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -389,7 +430,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
                 setSaved(false);
               }}
               onKeyDown={e => { if (e.key === "Enter") setPopover(null); }}
-              className="w-full rounded-lg border border-[#003572]/50 dark:border-[#00bfff]/15 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-[#00bfff]/40"
+              className="w-full rounded-lg border border-[#003572]/50 dark:border-[#00bfff]/15 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 placeholder:text-gray-400 focus:outline-none focus:border-[#00bfff]/40"
             />
 
             {/* Remove date */}

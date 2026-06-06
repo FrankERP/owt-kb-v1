@@ -95,6 +95,9 @@ function SignInForm() {
           >
             {loading ? "Iniciando..." : "Iniciar sesión"}
           </button>
+          <p className="font-body text-xs text-gray-500 text-center pt-1">
+            ¿Olvidaste tu contraseña? Pídele a un administrador que la restablezca.
+          </p>
         </form>
 
       </div>

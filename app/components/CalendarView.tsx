@@ -336,7 +336,7 @@ function MonthGrid({
               ? "bg-[#4c1d95]/50 border border-[#a78bfa]/50 text-[#a78bfa] cursor-pointer hover:bg-[#4c1d95]/80 hover:border-[#a78bfa]"
               : "bg-[#003572]/50 border border-[#00bfff]/50 text-[#00bfff] cursor-pointer hover:bg-[#003572]/80 hover:border-[#00bfff]";
           } else {
-            cls += "text-gray-600 dark:text-gray-600 cursor-default";
+            cls += "text-gray-400 dark:text-gray-400 cursor-default";
           }
 
           return (
