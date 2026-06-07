@@ -6,5 +6,8 @@ export const client = createClient({
   projectId,
   dataset,
   apiVersion,
-  useCdn: true, // Set to false if statically generating pages, using ISR or tag-based revalidation
+  // These pages are statically generated (ISR) and rely on revalidatePath() after
+  // admin mutations. The CDN serves cached query results, so a regenerated page would
+  // be rebuilt from stale data — keep this false so each regeneration reads live.
+  useCdn: false,
 })
