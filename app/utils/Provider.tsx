@@ -12,7 +12,9 @@ interface Props {
 export const Provider = ({ children }: Props) => {
   return (
     <SessionProvider>
-      <ThemeProvider attribute="class">
+      {/* Force dark as the default and ignore the OS `prefers-color-scheme`.
+          Light mode is kept intact — the ThemeSwitch toggle still works. */}
+      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
         <PlayerProvider>{children}</PlayerProvider>
       </ThemeProvider>
     </SessionProvider>
