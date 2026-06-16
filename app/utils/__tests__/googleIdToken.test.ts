@@ -13,6 +13,9 @@ describe("verifyGoogleIdToken", () => {
   it("returns the email for a valid, verified token", async () => {
     verifyIdToken.mockResolvedValueOnce({ getPayload: () => ({ email: "a@b.com", email_verified: true }) });
     expect(await verifyGoogleIdToken("tok")).toEqual({ email: "a@b.com" });
+    expect(verifyIdToken).toHaveBeenCalledWith(
+      expect.objectContaining({ idToken: "tok", audience: ["web-id", "ios-id", "android-id"] })
+    );
   });
 
   it("rejects an unverified email", async () => {

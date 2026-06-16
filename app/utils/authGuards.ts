@@ -9,7 +9,7 @@ export type ActiveSession = Session | null;
  * Returns null for: no session, no sanityId, or a disabled/removed member.
  * Use the effective sanityId so an impersonated-but-disabled target is blocked.
  */
-export async function requireActiveSession(): Promise<ActiveSession | null> {
+export async function requireActiveSession(): Promise<ActiveSession> {
   const session = await getServerSession(authOptions);
   const sanityId = session?.user?.sanityId;
   if (!sanityId) return null;
@@ -18,7 +18,7 @@ export async function requireActiveSession(): Promise<ActiveSession | null> {
 }
 
 /** As above, but also requires an admin/super-admin/content-editor role. */
-export async function requireActiveManager(): Promise<ActiveSession | null> {
+export async function requireActiveManager(): Promise<ActiveSession> {
   const session = await requireActiveSession();
   const role = session?.user?.role;
   if (!session || !role || !["super-admin", "admin", "content-editor"].includes(role)) return null;
