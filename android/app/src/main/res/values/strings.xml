@@ -4,4 +4,5 @@
     <string name="title_activity_main">OWT Backstage</string>
     <string name="package_name">com.owtBackstage.app</string>
     <string name="custom_url_scheme">com.owtBackstage.app</string>
+    <string name="server_client_id">893946038682-2bs0co56vmcknsvlu1i0a9qat0n8srre.apps.googleusercontent.com</string>
 </resources>
