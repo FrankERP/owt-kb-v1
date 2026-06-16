@@ -12,12 +12,14 @@ type SanityMember = {
   alias?: string | null;
   role: OWTRole | null;
   passwordHash: string | null;
+  image?: string | null;
 };
 
 async function getMemberByEmail(email: string): Promise<SanityMember | null> {
   return serverClient.fetch(
     `*[_type == "teamMembers" && lower(email) == lower($email)][0] {
-      _id, member_name, alias, role, passwordHash
+      _id, member_name, alias, role, passwordHash,
+      "image": coalesce(profilePhoto.asset->url, googlePhotoUrl)
     }`,
     { email }
   );
@@ -48,6 +50,10 @@ export const authOptions: NextAuthOptions = {
           id:       member._id,
           name:     member.member_name,
           email:    credentials.email,
+          // Attach the member's photo so the navbar avatar shows on credentials
+          // login too (Google login already supplies one). NextAuth maps
+          // user.image → token.picture → session.user.image.
+          image:    member.image ?? undefined,
           role:     member.role ?? "member",
           sanityId: member._id,
           alias:    member.alias ?? null,
