@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Advent_Pro, Urbanist, Jura } from "next/font/google";
 import "./globals.css";
 import { Provider } from "../utils/Provider";
@@ -26,6 +26,16 @@ const labelFont = Jura({
 export const metadata: Metadata = {
   title: "Oasis Worship Team",
   description: "Knowledge base for the Oasis Worship Team — songs, setlists, and role assignments.",
+};
+
+// `viewportFit: "cover"` lets the page extend under the iOS notch/Dynamic Island and
+// home indicator, which is what activates the `env(safe-area-inset-*)` values used by
+// the Navbar / BottomNav to keep their controls out from under the system bars.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#010b17",
 };
 
 export default function RootLayout({
