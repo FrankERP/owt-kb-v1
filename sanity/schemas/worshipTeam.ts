@@ -47,6 +47,13 @@ export const teamMembers = defineType({
       initialValue: "member",
     },
     {
+      name: "disabled",
+      title: "Acceso deshabilitado",
+      type: "boolean",
+      initialValue: false,
+      description: "Si está activo, este miembro pierde el acceso a la app en segundos (kill switch). Reversible.",
+    },
+    {
       name: "memberType",
       title: "Tipo",
       type: "array",
