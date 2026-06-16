@@ -18,10 +18,15 @@ function SignInForm() {
 
   async function handleGoogle() {
     if (isNativeApp()) {
-      const idToken = await nativeGoogleIdToken();
-      if (!idToken) { setCredError("No se pudo iniciar sesión con Google."); return; }
-      const res = await signIn("google-native", { idToken, callbackUrl, redirect: false });
-      if (res?.error) setCredError("Acceso denegado."); else window.location.assign(callbackUrl || "/");
+      setLoading(true);
+      try {
+        const idToken = await nativeGoogleIdToken();
+        if (!idToken) { setCredError("No se pudo iniciar sesión con Google."); return; }
+        const res = await signIn("google-native", { idToken, callbackUrl, redirect: false });
+        if (res?.error) setCredError("Acceso denegado."); else window.location.assign(res?.url ?? "/");
+      } finally {
+        setLoading(false);
+      }
       return;
     }
     signIn("google", { callbackUrl }); // unchanged web behavior
@@ -68,7 +73,8 @@ function SignInForm() {
         <div className="space-y-3">
           <button
             onClick={handleGoogle}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg border border-[#00bfff]/30 bg-[#00bfff]/5 hover:bg-[#00bfff]/10 transition-colors font-label text-xs uppercase tracking-widest"
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg border border-[#00bfff]/30 bg-[#00bfff]/5 hover:bg-[#00bfff]/10 transition-colors font-label text-xs uppercase tracking-widest disabled:opacity-50"
           >
             <GoogleIcon />
             Continuar con Google
