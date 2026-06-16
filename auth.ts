@@ -3,6 +3,8 @@ import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { serverClient, writeClient } from "./sanity/lib/serverClient";
+import { verifyGoogleIdToken } from "@/app/utils/googleIdToken";
+import { isMemberActive } from "@/app/utils/memberAccess";
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
@@ -30,6 +32,32 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId:     process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
+    CredentialsProvider({
+      id: "google-native",
+      name: "Google (app)",
+      credentials: { idToken: { label: "idToken", type: "text" } },
+      async authorize(credentials) {
+        if (!credentials?.idToken) return null;
+        let email: string;
+        try {
+          ({ email } = await verifyGoogleIdToken(credentials.idToken));
+        } catch {
+          return null;
+        }
+        const member = await getMemberByEmail(email);
+        if (!member?._id) return null;
+        if (!(await isMemberActive(member._id))) return null; // disabled/removed
+        return {
+          id:       member._id,
+          name:     member.member_name,
+          email,
+          image:    member.image ?? undefined,
+          role:     member.role ?? "member",
+          sanityId: member._id,
+          alias:    member.alias ?? null,
+        };
+      },
     }),
     CredentialsProvider({
       name: "Email y contraseña",
