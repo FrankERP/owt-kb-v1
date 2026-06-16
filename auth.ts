@@ -74,6 +74,8 @@ export const authOptions: NextAuthOptions = {
         const valid = await bcrypt.compare(credentials.password, member.passwordHash);
         if (!valid) return null;
 
+        if (!(await isMemberActive(member._id))) return null;
+
         return {
           id:       member._id,
           name:     member.member_name,
@@ -211,6 +213,19 @@ export const authOptions: NextAuthOptions = {
           );
           token.alias = m?.alias ?? null;
         } catch { /* non-fatal */ }
+      }
+
+      // Revocation: on token refresh, drop the session if the (effective) member
+      // was disabled/removed. During impersonation, also require the REAL admin to
+      // still be active, so a disabled super-admin can't keep operating as a target.
+      const effectiveId = token.sanityId;
+      const realAdminId = token.__realAdmin?.sanityId;
+      if (
+        (effectiveId && !(await isMemberActive(effectiveId))) ||
+        (realAdminId && !(await isMemberActive(realAdminId)))
+      ) {
+        // Returning a token without sanityId makes proxy.ts + guards treat it as unauthenticated.
+        return { ...token, sanityId: undefined, role: undefined };
       }
 
       return token;
