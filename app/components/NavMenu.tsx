@@ -100,6 +100,9 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
             alt={user.name ?? ""}
             width={36}
             height={36}
+            // unoptimized: serve the original JPEG/PNG, not Next's WebP — the iOS
+            // WKWebView (Capacitor wrap) fails to decode the optimized WebP avatar.
+            unoptimized
             className="rounded-full ring-2 ring-transparent group-hover:ring-[#00bfff]/40 transition-all"
           />
         ) : (
@@ -124,7 +127,7 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
           <div className="px-4 py-3 border-b border-[#003572]/15 dark:border-[#00bfff]/10">
             {user.image ? (
               <div className="flex items-center gap-2.5 mb-0">
-                <Image src={user.image} alt={user.name ?? ""} width={28} height={28} className="rounded-full" />
+                <Image src={user.image} alt={user.name ?? ""} width={28} height={28} unoptimized className="rounded-full" />
                 <span className="font-label text-xs uppercase tracking-widest text-gray-400">{firstName}</span>
               </div>
             ) : (
