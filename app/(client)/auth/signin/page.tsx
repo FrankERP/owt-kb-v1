@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
+import { isNativeApp, nativeGoogleIdToken } from "@/app/utils/native";
 import Image from "next/image";
 
 function SignInForm() {
@@ -14,6 +15,17 @@ function SignInForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading]   = useState(false);
   const [credError, setCredError] = useState<string | null>(null);
+
+  async function handleGoogle() {
+    if (isNativeApp()) {
+      const idToken = await nativeGoogleIdToken();
+      if (!idToken) { setCredError("No se pudo iniciar sesión con Google."); return; }
+      const res = await signIn("google-native", { idToken, callbackUrl, redirect: false });
+      if (res?.error) setCredError("Acceso denegado."); else window.location.assign(callbackUrl || "/");
+      return;
+    }
+    signIn("google", { callbackUrl }); // unchanged web behavior
+  }
 
   const handleCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,7 +67,7 @@ function SignInForm() {
         {/* SSO buttons */}
         <div className="space-y-3">
           <button
-            onClick={() => signIn("google", { callbackUrl })}
+            onClick={handleGoogle}
             className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg border border-[#00bfff]/30 bg-[#00bfff]/5 hover:bg-[#00bfff]/10 transition-colors font-label text-xs uppercase tracking-widest"
           >
             <GoogleIcon />
