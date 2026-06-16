@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireActiveSession } from "@/app/utils/authGuards";
 import { client } from "@/sanity/lib/client";
 
 // Builds an ad-hoc YouTube playlist URL from a setlist's song videos, so members
@@ -12,6 +13,9 @@ function ytId(url?: string): string | null {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await requireActiveSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { ids } = (await req.json()) as { ids?: string[] };
   if (!Array.isArray(ids) || ids.length === 0) {
     return NextResponse.json({ url: null, count: 0 });

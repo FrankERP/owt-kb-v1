@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { getServerSession } from "next-auth";
+import { requireActiveSession } from "@/app/utils/authGuards";
 import { redirect } from "next/navigation";
-import { authOptions } from "@/auth";
 import { client } from "@/sanity/lib/client";
 import { serverClient } from "@/sanity/lib/serverClient";
 import Navbar from "@/app/components/Navbar";
@@ -31,7 +30,7 @@ const STATUS_STYLE: Record<ProposalStatus, string> = {
 };
 
 export default async function MePage() {
-  const session = await getServerSession(authOptions);
+  const session = await requireActiveSession();
   if (!session) redirect("/auth/signin?callbackUrl=/me");
 
   const { sanityId, name } = session.user;

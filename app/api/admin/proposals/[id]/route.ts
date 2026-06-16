@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/auth";
+import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
-
-const ALLOWED = ["super-admin", "admin"];
 
 function rkey() {
   return Math.random().toString(36).slice(2, 9);
@@ -15,8 +12,12 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session || !ALLOWED.includes(session.user.role ?? "")) {
+  const session = await requireActiveManager();
+  if (!session) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  // Restricted to admin and super-admin (not content-editor)
+  if (session.user.role === "content-editor") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

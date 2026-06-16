@@ -1,17 +1,14 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/auth";
+import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient } from "@/sanity/lib/serverClient";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  const role = session?.user.role;
-  if (role !== "super-admin" && role !== "admin") return null;
-  return session;
-}
-
 export async function GET() {
-  if (!await requireAdmin()) {
+  const session = await requireActiveManager();
+  if (!session) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  // Restricted to admin and super-admin (not content-editor)
+  if (session.user.role === "content-editor") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/auth";
+import { requireActiveSession } from "@/app/utils/authGuards";
 import { serverClient } from "@/sanity/lib/serverClient";
 
 // Notification badge count for the current user. Fetched client-side by NavMenu
 // after paint so it never blocks page rendering / static caching.
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.sanityId) {
+  const session = await requireActiveSession();
+  if (!session) {
     return NextResponse.json({ count: 0 });
   }
 

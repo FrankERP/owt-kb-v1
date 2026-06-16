@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/auth";
+import { requireActiveSession } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 
 function rkey() {
@@ -9,7 +8,7 @@ function rkey() {
 
 // GET /api/me/proposals — all proposals for the current user
 export async function GET() {
-  const session = await getServerSession(authOptions);
+  const session = await requireActiveSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const proposals = await serverClient.fetch(
@@ -26,7 +25,7 @@ export async function GET() {
 // POST /api/me/proposals — create or update a proposal
 // Body: { roleId, serviceType, serviceDate, songs: [{songId, play_key}], leadNotes, status }
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session = await requireActiveSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json() as {

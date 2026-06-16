@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/auth";
+import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
-
-async function requireManager() {
-  const session = await getServerSession(authOptions);
-  const role = session?.user.role;
-  if (role !== "super-admin" && role !== "admin") return null;
-  return session;
-}
+import { revalidateServiceViews } from "@/app/utils/revalidate";
 
 function key() {
   return Math.random().toString(36).slice(2, 9);
@@ -32,7 +25,12 @@ const SETLIST_SONGS_PROJECTION = `songs[] {
 
 // ── GET /api/admin/setlists?week=YYYY-MM-DD&type=sunday|saturday|special&roleId=ID
 export async function GET(req: NextRequest) {
-  if (!await requireManager()) {
+  const session = await requireActiveManager();
+  if (!session) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  // Restricted to admin and super-admin (not content-editor)
+  if (session.user.role === "content-editor") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -101,7 +99,12 @@ export async function GET(req: NextRequest) {
 // ── PUT /api/admin/setlists
 // Body: { week, type, roleId?, songs: [{ songId, play_key, medley_tag? }] }
 export async function PUT(req: NextRequest) {
-  if (!await requireManager()) {
+  const session = await requireActiveManager();
+  if (!session) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  // Restricted to admin and super-admin (not content-editor)
+  if (session.user.role === "content-editor") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -152,6 +155,9 @@ export async function PUT(req: NextRequest) {
   } else {
     return NextResponse.json({ error: "week (for sunday/saturday) or roleId (for special) required" }, { status: 400 });
   }
+
+  // Invalidate the statically-cached pages so the edit appears immediately.
+  revalidateServiceViews();
 
   return NextResponse.json({ ok: true });
 }
