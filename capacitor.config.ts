@@ -15,8 +15,8 @@ import type { CapacitorConfig } from "@capacitor/cli";
 const config: CapacitorConfig = {
   // ⚠️ PERMANENT once published to the App Store / Play Store. Confirm before the
   // first store submission (reverse-DNS, must match your registered identifiers).
-  appId: "com.oasisworshipteam.app",
-  appName: "Oasis Worship Team",
+  appId: "com.owtBackstage.app",
+  appName: "OWT Backstage",
 
   // Phase 1 uses the committed fallback page (shown when the device is offline or
   // the remote URL is unreachable). Phase 2 switches this to "out" (Next export).
@@ -25,7 +25,7 @@ const config: CapacitorConfig = {
   server: {
     // ⚠️ REPLACE with your production URL before building (e.g. https://owt.example.com).
     // This is the only value required to make the Phase 1 wrap functional.
-    url: "https://REPLACE-WITH-PRODUCTION-URL",
+    url: "https://owt-backstage.vercel.app",
     cleartext: false,
   },
 };
