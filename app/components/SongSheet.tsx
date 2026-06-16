@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PortableText } from "next-sanity";
-import { usePlayer, AudioTrack } from "@/app/context/PlayerContext";
+import { usePlayer, AudioTrack, SongHistoryEntry } from "@/app/context/PlayerContext";
 import ChordChart from "./ChordChart";
 import { groupBySections } from "@/app/utils/lyrics";
 
@@ -39,15 +39,26 @@ const bodyComponents = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SongSheet() {
-  const { sheet, sheetLoading, sheetPlayKey, closeSheet, playTrack, player } = usePlayer();
+  const { sheet, sheetLoading, sheetPlayKey, closeSheet, openSheet, playTrack, player } = usePlayer();
   const isOpen = !!(sheet || sheetLoading);
+
+  // Which history week (if any) has its full setlist popover open.
+  const [openSetIdx, setOpenSetIdx] = useState<number | null>(null);
+
+  // Reset the setlist popover whenever a different song is loaded into the sheet.
+  useEffect(() => { setOpenSetIdx(null); }, [sheet?._id]);
 
   useEffect(() => {
     if (!isOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeSheet(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // Escape closes the setlist popover first, then the sheet itself.
+      if (openSetIdx !== null) setOpenSetIdx(null);
+      else closeSheet();
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [isOpen, closeSheet]);
+  }, [isOpen, closeSheet, openSetIdx]);
 
   useEffect(() => {
     document.body.style.overflow = isOpen ? "hidden" : "";
@@ -60,6 +71,7 @@ export default function SongSheet() {
   const hasBody     = (sheet?.body?.length ?? 0) > 0;
   const hasAudio    = (sheet?.audioTracks?.filter(t => t.audioFileURL).length ?? 0) > 0;
   const hasPDFs     = (sheet?.chordsPDF?.length ?? 0) > 0;
+  const hasHistory  = (sheet?.history?.length ?? 0) > 0;
   const hasContent  = hasChords || hasBody;
 
   return (
@@ -214,6 +226,79 @@ export default function SongSheet() {
                 </div>
               )}
 
+              {/* Historial — last 5 times played: key + who led */}
+              {hasHistory && (
+                <div className="space-y-2 pt-1">
+                  <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">
+                    Últimas veces tocada
+                  </p>
+                  <ul className="space-y-2">
+                    {sheet.history!.map((entry, i) => {
+                      const hasSet = (entry.setlist?.length ?? 0) > 0;
+                      return (
+                        <li key={i}>
+                          <button
+                            type="button"
+                            onClick={() => hasSet && setOpenSetIdx(i)}
+                            disabled={!hasSet}
+                            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border border-[#003572]/30 bg-[#00bfff]/[0.03] text-left transition-colors ${
+                              hasSet ? "hover:border-[#00bfff]/40 hover:bg-[#00bfff]/[0.07] cursor-pointer" : "cursor-default"
+                            }`}
+                            title={hasSet ? "Ver el set completo" : undefined}
+                          >
+                            {/* Date + service */}
+                            <div className="min-w-0 shrink-0">
+                              <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 leading-none mb-1">
+                                {entry._type === "featuredSongs" ? "Domingo" : "Sábado"}
+                              </p>
+                              <p className="font-body text-xs text-gray-300 leading-none whitespace-nowrap">
+                                {formatHistoryDate(entry.week)}
+                              </p>
+                            </div>
+
+                            {/* Leaders */}
+                            <div className="flex-1 min-w-0 flex items-center justify-center gap-1.5 flex-wrap">
+                              {entry.leaders && entry.leaders.length > 0 ? (
+                                entry.leaders.map((lead, j) => (
+                                  <span key={j} className="flex items-center gap-1.5 min-w-0">
+                                    {lead.photo ? (
+                                      <img
+                                        src={lead.photo}
+                                        alt=""
+                                        className="w-5 h-5 rounded-full object-cover border border-[#00bfff]/25 shrink-0"
+                                      />
+                                    ) : (
+                                      <span className="w-5 h-5 rounded-full bg-[#003572]/50 text-[#00bfff] flex items-center justify-center text-[9px] font-semibold shrink-0">
+                                        {(lead.name ?? "?").charAt(0).toUpperCase()}
+                                      </span>
+                                    )}
+                                    <span className="font-body text-xs text-gray-300 truncate">
+                                      {lead.name ?? "—"}
+                                    </span>
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="font-body text-xs text-gray-600 italic">
+                                  Sin líder
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Key played */}
+                            <span className="font-label text-xs px-2.5 py-1 rounded-full border border-[#00bfff]/40 text-[#00bfff] shrink-0">
+                              {entry.play_key || sheet!.key || "—"}
+                            </span>
+
+                            {/* Affordance */}
+                            {hasSet && <ChevronIcon />}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+
               {/* Full page link */}
               <Link
                 href={`/posts/${sheet.slug}`}
@@ -226,14 +311,119 @@ export default function SongSheet() {
           ) : null}
         </div>
       </div>
+
+      {/* Setlist popover — the whole set for a chosen history week */}
+      {openSetIdx !== null && sheet?.history?.[openSetIdx] && (
+        <SetlistPopover
+          entry={sheet.history[openSetIdx]}
+          currentSongId={sheet._id}
+          onClose={() => setOpenSetIdx(null)}
+          onPick={(songId, playKey) => { setOpenSetIdx(null); openSheet(songId, playKey); }}
+        />
+      )}
     </>
   );
+}
+
+// ─── Setlist popover ──────────────────────────────────────────────────────────
+
+function SetlistPopover({
+  entry,
+  currentSongId,
+  onClose,
+  onPick,
+}: {
+  entry: SongHistoryEntry;
+  currentSongId: string;
+  onClose: () => void;
+  onPick: (songId: string, playKey?: string) => void;
+}) {
+  return (
+    <>
+      {/* Dim layer above the sheet */}
+      <div className="fixed inset-0 z-[65] bg-black/50" onClick={onClose} />
+
+      {/* Floating card */}
+      <div
+        className="fixed left-1/2 top-1/2 z-[70] w-[min(20rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-[#0a1929] border border-[#00bfff]/25 shadow-2xl overflow-hidden"
+        role="dialog"
+        aria-label="Set completo"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#00bfff]/10 bg-[#00bfff]/[0.04]">
+          <div>
+            <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-0.5">
+              {entry._type === "featuredSongs" ? "Domingo" : "Sábado"} · Set completo
+            </p>
+            <p className="font-body text-sm font-semibold text-gray-200">
+              {formatHistoryDate(entry.week)}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 -mr-1 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-white/5 transition-colors"
+            aria-label="Cerrar"
+          >
+            <CloseIcon />
+          </button>
+        </div>
+
+        {/* Songs */}
+        <ol className="max-h-[60vh] overflow-y-auto py-1.5">
+          {entry.setlist!.map((song, i) => {
+            const isCurrent = song.id === currentSongId;
+            return (
+              <li key={i}>
+                <button
+                  type="button"
+                  onClick={() => !isCurrent && onPick(song.id, song.play_key)}
+                  disabled={isCurrent}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                    isCurrent ? "bg-[#00bfff]/[0.06] cursor-default" : "hover:bg-[#00bfff]/[0.06]"
+                  }`}
+                >
+                  <span className={`font-label text-[10px] w-4 shrink-0 ${isCurrent ? "text-[#00bfff]" : "text-gray-600"}`}>
+                    {i + 1}
+                  </span>
+                  <span className={`font-body text-sm flex-1 truncate ${isCurrent ? "text-[#00bfff] font-semibold" : "text-gray-200"}`}>
+                    {song.title ?? "—"}
+                  </span>
+                  {song.play_key && (
+                    <span className="font-label text-[11px] px-2 py-0.5 rounded-full border border-[#00bfff]/30 text-[#00bfff]/80 shrink-0">
+                      {song.play_key}
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </>
+  );
+}
+
+function formatHistoryDate(week: string) {
+  // Dates are stored as `date` (YYYY-MM-DD); pin to local noon to avoid UTC day-flip.
+  return new Date(week.slice(0, 10) + "T12:00:00").toLocaleDateString("es-ES", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function PlayIcon() {
   return (
     <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
       <polygon points="5 3 19 12 5 21 5 3" />
+    </svg>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600 shrink-0">
+      <polyline points="9 18 15 12 9 6" />
     </svg>
   );
 }

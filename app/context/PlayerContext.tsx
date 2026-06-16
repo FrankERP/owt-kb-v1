@@ -24,6 +24,15 @@ export interface SongSheetData {
   audioTracks?: { title: string; tone?: string; audioFileURL: string }[];
   chordsPDF?: { title: string; key: string; chordsURL: string }[];
   lyricsURL?: string;
+  history?: SongHistoryEntry[];
+}
+
+export interface SongHistoryEntry {
+  week: string;
+  _type: "featuredSongs" | "saturdarSongs";
+  play_key?: string;
+  leaders?: { name?: string; photo?: string }[];
+  setlist?: { id: string; title?: string; slug?: string; play_key?: string }[];
 }
 
 interface PlayerState {
