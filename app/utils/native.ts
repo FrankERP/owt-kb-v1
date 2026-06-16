@@ -5,20 +5,26 @@ export function isNativeApp(): boolean {
   return !!cap?.isNativePlatform?.();
 }
 
-let initialized = false;
-async function getSocialLogin() {
+let socialLoginPromise: ReturnType<typeof loadSocialLogin> | null = null;
+
+async function loadSocialLogin() {
   const { SocialLogin } = await import("@capgo/capacitor-social-login");
-  if (!initialized) {
-    await SocialLogin.initialize({
-      google: {
-        iOSClientId: process.env.NEXT_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-        webClientId: process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-        mode: "online",
-      },
-    });
-    initialized = true;
-  }
+  // NEXT_PUBLIC_GOOGLE_IOS_CLIENT_ID must equal the server's GOOGLE_IOS_CLIENT_ID,
+  // and NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID must equal GOOGLE_CLIENT_ID — the server
+  // verifies the ID token's `aud` against those server-side values.
+  await SocialLogin.initialize({
+    google: {
+      iOSClientId: process.env.NEXT_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+      webClientId: process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+      mode: "online",
+    },
+  });
   return SocialLogin;
+}
+
+function getSocialLogin() {
+  if (!socialLoginPromise) socialLoginPromise = loadSocialLogin();
+  return socialLoginPromise;
 }
 
 /** Native Google sign-in → returns a Google ID token, or null on cancel/failure. */
@@ -29,7 +35,8 @@ export async function nativeGoogleIdToken(): Promise<string | null> {
     // res.result is GoogleLoginResponse (online | offline union); in online mode idToken is present
     const result = res?.result as { idToken?: string | null } | undefined;
     return result?.idToken ?? null;
-  } catch {
+  } catch (err) {
+    console.error("[native] Google sign-in failed:", err);
     return null;
   }
 }
