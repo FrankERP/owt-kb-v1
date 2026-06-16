@@ -6,6 +6,7 @@ import ActivityPing from "../components/ActivityPing";
 import ImpersonationBanner from "../components/ImpersonationBanner";
 import AudioPlayer from "../components/AudioPlayer";
 import SongSheet from "../components/SongSheet";
+import NativeAuthBootstrap from "../components/NativeAuthBootstrap";
 
 const displayFont = Advent_Pro({
   weight: "600",
@@ -59,6 +60,7 @@ export default function RootLayout({
           <ImpersonationBanner />
           <ActivityPing />
           <main className="mx-auto max-w-7xl pb-0">{children}</main>
+          <NativeAuthBootstrap />
           <AudioPlayer />
           <SongSheet />
         </Provider>

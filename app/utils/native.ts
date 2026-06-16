@@ -27,6 +27,27 @@ function getSocialLogin() {
   return socialLoginPromise;
 }
 
+/**
+ * Best-effort SILENT Google sign-in for app cold start: only proceeds if the
+ * device already has a Google session (isLoggedIn), so logged-out users are not
+ * shown an account picker. The capgo plugin has no true no-UI restore that
+ * returns a fresh idToken, so this calls login() only when already authorized.
+ * Returns null if not logged in or on any error.
+ */
+export async function nativeGoogleSilentIdToken(): Promise<string | null> {
+  try {
+    const SocialLogin = await getSocialLogin();
+    const status = await SocialLogin.isLoggedIn({ provider: "google" });
+    if (!status?.isLoggedIn) return null;
+    const res = await SocialLogin.login({ provider: "google", options: { scopes: ["email", "profile"] } });
+    const result = res?.result as { idToken?: string | null } | undefined;
+    return result?.idToken ?? null;
+  } catch (err) {
+    console.error("[native] silent Google re-auth failed:", err);
+    return null;
+  }
+}
+
 /** Native Google sign-in → returns a Google ID token, or null on cancel/failure. */
 export async function nativeGoogleIdToken(): Promise<string | null> {
   try {
