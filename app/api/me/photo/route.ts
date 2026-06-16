@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/auth";
+import { requireActiveSession } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -19,8 +18,8 @@ function hasImageMagicBytes(buf: Buffer): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.sanityId) {
+  const session = await requireActiveSession();
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

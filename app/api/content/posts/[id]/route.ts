@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/auth";
+import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { textToBody } from "@/app/utils/lyrics";
-
-type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
-const CONTENT_ROLES: OWTRole[] = ["super-admin", "admin", "content-editor"];
-const ADMIN_ROLES: OWTRole[] = ["super-admin", "admin"];
 
 function rng() { return Math.random().toString(36).slice(2, 9); }
 
@@ -18,23 +13,11 @@ function isSafeHttpUrl(value: unknown): value is string {
   } catch { return false; }
 }
 
-async function requireContentRole() {
-  const session = await getServerSession(authOptions);
-  if (!CONTENT_ROLES.includes(session?.user.role as OWTRole)) return null;
-  return session;
-}
-
-async function requireAdminRole() {
-  const session = await getServerSession(authOptions);
-  if (!ADMIN_ROLES.includes(session?.user.role as OWTRole)) return null;
-  return session;
-}
-
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!await requireContentRole()) {
+  if (!await requireActiveManager()) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -95,7 +78,12 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!await requireAdminRole()) {
+  const session = await requireActiveManager();
+  if (!session) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  // DELETE requires admin or super-admin (not content-editor)
+  if (session.user.role === "content-editor") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

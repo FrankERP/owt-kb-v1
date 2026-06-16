@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/auth";
+import { requireActiveManager } from "@/app/utils/authGuards";
 import { spawn } from "child_process";
 import path from "path";
-
-async function requireManager() {
-  const session = await getServerSession(authOptions);
-  const role = session?.user.role;
-  if (role !== "super-admin" && role !== "admin") return null;
-  return session;
-}
 
 export interface SolveRequest {
   weeks: number;
@@ -112,7 +104,12 @@ function callLocalSolver(config: SolveRequest): Promise<SolveResponse> {
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  if (!await requireManager()) {
+  const session = await requireActiveManager();
+  if (!session) {
+    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
+  // Restricted to admin and super-admin (not content-editor)
+  if (session.user.role === "content-editor") {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 

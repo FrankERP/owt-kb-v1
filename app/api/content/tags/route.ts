@@ -1,19 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/auth";
+import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 
-type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
-const CONTENT_ROLES: OWTRole[] = ["super-admin", "admin", "content-editor"];
-
-async function requireContentRole() {
-  const session = await getServerSession(authOptions);
-  if (!CONTENT_ROLES.includes(session?.user.role as OWTRole)) return null;
-  return session;
-}
-
 export async function GET() {
-  if (!await requireContentRole()) {
+  if (!await requireActiveManager()) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -25,7 +15,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!await requireContentRole()) {
+  if (!await requireActiveManager()) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

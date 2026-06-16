@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/auth";
+import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 
 type ServiceType = "sunday_role" | "saturday_role" | "special_role";
-
-async function requireManager() {
-  const session = await getServerSession(authOptions);
-  const role = session?.user.role;
-  if (role !== "super-admin" && role !== "admin") return null;
-  return session;
-}
 
 function key() {
   return Math.random().toString(36).slice(2, 9);
@@ -39,7 +31,12 @@ function toFohSlots(slots: { role: string; personId: string }[]) {
 }
 
 export async function GET() {
-  if (!await requireManager()) {
+  const session = await requireActiveManager();
+  if (!session) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  // Restricted to admin and super-admin (not content-editor)
+  if (session.user.role === "content-editor") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -68,7 +65,12 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!await requireManager()) {
+  const session = await requireActiveManager();
+  if (!session) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  // Restricted to admin and super-admin (not content-editor)
+  if (session.user.role === "content-editor") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

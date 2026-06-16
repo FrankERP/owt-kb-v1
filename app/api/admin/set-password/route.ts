@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/auth";
+import { requireActiveManager } from "@/app/utils/authGuards";
 import bcrypt from "bcryptjs";
 import { writeClient } from "@/sanity/lib/serverClient";
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== "super-admin") {
+  const session = await requireActiveManager();
+  if (!session) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  // Restricted to super-admin only
+  if (session.user.role !== "super-admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

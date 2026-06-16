@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/auth";
+import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -20,17 +19,16 @@ function hasImageMagicBytes(buf: Buffer): boolean {
   return isJpeg || isPng || isGif || isWebp;
 }
 
-async function requireSuperAdmin() {
-  const session = await getServerSession(authOptions);
-  if (session?.user.role !== "super-admin") return null;
-  return session;
-}
-
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!await requireSuperAdmin()) {
+  const session = await requireActiveManager();
+  if (!session) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  // POST is super-admin only
+  if (session.user.role !== "super-admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

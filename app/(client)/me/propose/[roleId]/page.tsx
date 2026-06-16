@@ -1,6 +1,5 @@
-import { getServerSession } from "next-auth";
+import { requireActiveSession } from "@/app/utils/authGuards";
 import { redirect, notFound } from "next/navigation";
-import { authOptions } from "@/auth";
 import { serverClient } from "@/sanity/lib/serverClient";
 import Navbar from "@/app/components/Navbar";
 import ProposalEditor from "./ProposalEditor";
@@ -46,7 +45,7 @@ export default async function ProposePage({
 }: {
   params: Promise<{ roleId: string }>;
 }) {
-  const session = await getServerSession(authOptions);
+  const session = await requireActiveSession();
   if (!session) redirect("/auth/signin?callbackUrl=/me");
 
   const { roleId } = await params;

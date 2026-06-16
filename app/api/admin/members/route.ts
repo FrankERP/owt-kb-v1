@@ -1,25 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/auth";
+import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
-
-async function requireSuperAdmin() {
-  const session = await getServerSession(authOptions);
-  if (session?.user.role !== "super-admin") return null;
-  return session;
-}
 
 // Reading the member list is needed by the Servicios/Disponibilidad panels (admin-accessible).
 // Creating/editing members stays super-admin only (Miembros section).
-async function requireManager() {
-  const session = await getServerSession(authOptions);
-  const role = session?.user.role;
-  if (role !== "super-admin" && role !== "admin") return null;
-  return session;
-}
 
 export async function GET() {
-  if (!await requireManager()) {
+  const session = await requireActiveManager();
+  if (!session) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  // GET is restricted to admin and super-admin (not content-editor)
+  if (session.user.role === "content-editor") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -36,7 +28,12 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!await requireSuperAdmin()) {
+  const session = await requireActiveManager();
+  if (!session) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  // POST is super-admin only
+  if (session.user.role !== "super-admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

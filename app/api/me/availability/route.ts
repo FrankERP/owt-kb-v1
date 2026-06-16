@@ -1,16 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/auth";
+import { requireActiveSession } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 
-async function getSessionMember() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.sanityId) return null;
-  return session;
-}
-
 export async function GET() {
-  const session = await getSessionMember();
+  const session = await requireActiveSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const member = await serverClient.fetch(
@@ -25,7 +18,7 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
-  const session = await getSessionMember();
+  const session = await requireActiveSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json() as {
