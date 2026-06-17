@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
+import { sendPush } from "@/app/utils/push";
 
 function rkey() {
   return Math.random().toString(36).slice(2, 9);
@@ -89,6 +90,12 @@ export async function POST(req: NextRequest) {
       ...(status === "pending" ? { submitted_at: now } : {}),
     });
     await patch.commit();
+    if (status === "pending") {
+      const adminIds = await serverClient.fetch<string[]>(
+        `*[_type == "teamMembers" && role in ["super-admin","admin"]]._id`
+      );
+      void sendPush(adminIds, "proposals", { title: "Nueva propuesta", body: "Hay una propuesta de setlist por revisar.", path: "/admin" });
+    }
     return NextResponse.json({ _id: existing, status });
   }
 
@@ -103,6 +110,13 @@ export async function POST(req: NextRequest) {
     lead_notes: leadNotes ?? "",
     ...(status === "pending" ? { submitted_at: now } : {}),
   });
+
+  if (status === "pending") {
+    const adminIds = await serverClient.fetch<string[]>(
+      `*[_type == "teamMembers" && role in ["super-admin","admin"]]._id`
+    );
+    void sendPush(adminIds, "proposals", { title: "Nueva propuesta", body: "Hay una propuesta de setlist por revisar.", path: "/admin" });
+  }
 
   return NextResponse.json({ _id: created._id, status });
 }

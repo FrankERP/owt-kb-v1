@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
+import { sendPush } from "@/app/utils/push";
 
 function rkey() {
   return Math.random().toString(36).slice(2, 9);
@@ -50,6 +51,14 @@ export async function PATCH(
       admin_notes: body.adminNotes ?? "",
       reviewed_at: now,
     }).commit();
+    const leadId = await serverClient.fetch<string | null>(`*[_id == $id][0].lead._ref`, { id });
+    if (leadId) {
+      void sendPush([leadId], "proposals", {
+        title: "Cambios solicitados",
+        body: "Revisaron tu propuesta y pidieron cambios.",
+        path: "/me",
+      });
+    }
     return NextResponse.json({ ok: true, status: "changes_requested" });
   }
 
@@ -97,6 +106,15 @@ export async function PATCH(
       status: "approved",
       reviewed_at: now,
     }).commit();
+
+    const leadId = await serverClient.fetch<string | null>(`*[_id == $id][0].lead._ref`, { id });
+    if (leadId) {
+      void sendPush([leadId], "proposals", {
+        title: "Propuesta aprobada",
+        body: "Tu propuesta fue aprobada.",
+        path: "/me",
+      });
+    }
 
     return NextResponse.json({ ok: true, status: "approved" });
   }
