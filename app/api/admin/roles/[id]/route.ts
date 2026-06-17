@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
-import { writeClient } from "@/sanity/lib/serverClient";
+import { serverClient, writeClient } from "@/sanity/lib/serverClient";
+import { addedAssignees } from "@/app/utils/notifyTargets";
+import { sendPush } from "@/app/utils/push";
+
+function allAssignees(b: { leads?: string[]; bgvs?: string[]; chorus?: string[]; instruments?: { personId: string }[]; foh?: { personId: string }[] }): string[] {
+  return [
+    ...(b.leads ?? []), ...(b.bgvs ?? []), ...(b.chorus ?? []),
+    ...(b.instruments ?? []).map((i) => i.personId),
+    ...(b.foh ?? []).map((f) => f.personId),
+  ].filter(Boolean);
+}
 
 function key() {
   return Math.random().toString(36).slice(2, 9);
@@ -55,6 +65,11 @@ export async function PATCH(
 
   const dateField = body._type === "special_role" ? "date" : "week";
 
+  const prevDoc = await serverClient.fetch<{ leads?: string[]; bgvs?: string[]; chorus?: string[]; inst?: string[]; foh?: string[] } | null>(
+    `*[_id == $id][0]{ "leads": Lead[]._ref, "bgvs": BGVs[]._ref, "chorus": Chorus[]._ref, "inst": instruments[].person._ref, "foh": foh_team[].person._ref }`,
+    { id }
+  );
+
   const doc = await writeClient
     .patch(id)
     .set({
@@ -67,6 +82,14 @@ export async function PATCH(
       foh_team:    toFohSlots(body.foh ?? []),
     })
     .commit();
+
+  const prevIds = prevDoc ? [...(prevDoc.leads ?? []), ...(prevDoc.bgvs ?? []), ...(prevDoc.chorus ?? []), ...(prevDoc.inst ?? []), ...(prevDoc.foh ?? [])].filter(Boolean) : [];
+  const added = addedAssignees(prevIds, allAssignees(body));
+  void sendPush(added, "assignments", {
+    title: "Servicio actualizado",
+    body: `Te asignaron para el ${body.date}.`,
+    path: "/me",
+  });
 
   return NextResponse.json(doc);
 }

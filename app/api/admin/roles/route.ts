@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
+import { addedAssignees } from "@/app/utils/notifyTargets";
+import { sendPush } from "@/app/utils/push";
+
+function allAssignees(b: { leads?: string[]; bgvs?: string[]; chorus?: string[]; instruments?: { personId: string }[]; foh?: { personId: string }[] }): string[] {
+  return [
+    ...(b.leads ?? []), ...(b.bgvs ?? []), ...(b.chorus ?? []),
+    ...(b.instruments ?? []).map((i) => i.personId),
+    ...(b.foh ?? []).map((f) => f.personId),
+  ].filter(Boolean);
+}
 
 type ServiceType = "sunday_role" | "saturday_role" | "special_role";
 
@@ -100,6 +110,13 @@ export async function POST(req: NextRequest) {
     Chorus:      toRefs(body.chorus ?? []),
     instruments: toInstrumentSlots(body.instruments ?? []),
     foh_team:    toFohSlots(body.foh ?? []),
+  });
+
+  const added = allAssignees(body); // brand-new doc → everyone is "added"
+  void sendPush(added, "assignments", {
+    title: "Nuevo servicio asignado",
+    body: `Te asignaron para el ${body.date}.`,
+    path: "/me",
   });
 
   return NextResponse.json(doc, { status: 201 });
