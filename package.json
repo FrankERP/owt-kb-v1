@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@capacitor/core": "^8.4.0",
+    "@capacitor/text-zoom": "^8.0.1",
     "@capgo/capacitor-social-login": "^8.3.25",
     "@portabletext/react": "^6.0.3",
     "@sanity/image-url": "^2.1.1",
