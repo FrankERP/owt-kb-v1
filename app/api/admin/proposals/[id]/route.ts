@@ -51,13 +51,17 @@ export async function PATCH(
       admin_notes: body.adminNotes ?? "",
       reviewed_at: now,
     }).commit();
-    const leadId = await serverClient.fetch<string | null>(`*[_id == $id][0].lead._ref`, { id });
-    if (leadId) {
-      void sendPush([leadId], "proposals", {
-        title: "Cambios solicitados",
-        body: "Revisaron tu propuesta y pidieron cambios.",
-        path: "/me",
-      });
+    try {
+      const leadId = await serverClient.fetch<string | null>(`*[_id == $id][0].lead._ref`, { id });
+      if (leadId) {
+        void sendPush([leadId], "proposals", {
+          title: "Cambios solicitados",
+          body: "Revisaron tu propuesta y pidieron cambios.",
+          path: "/me",
+        });
+      }
+    } catch (err) {
+      console.error("[push] notify failed:", err);
     }
     return NextResponse.json({ ok: true, status: "changes_requested" });
   }
@@ -107,13 +111,17 @@ export async function PATCH(
       reviewed_at: now,
     }).commit();
 
-    const leadId = await serverClient.fetch<string | null>(`*[_id == $id][0].lead._ref`, { id });
-    if (leadId) {
-      void sendPush([leadId], "proposals", {
-        title: "Propuesta aprobada",
-        body: "Tu propuesta fue aprobada.",
-        path: "/me",
-      });
+    try {
+      const leadId = await serverClient.fetch<string | null>(`*[_id == $id][0].lead._ref`, { id });
+      if (leadId) {
+        void sendPush([leadId], "proposals", {
+          title: "Propuesta aprobada",
+          body: "Tu propuesta fue aprobada.",
+          path: "/me",
+        });
+      }
+    } catch (err) {
+      console.error("[push] notify failed:", err);
     }
 
     return NextResponse.json({ ok: true, status: "approved" });

@@ -26,6 +26,10 @@ describe("setlistRecipientIds", () => {
   it("excludes 'off' even if assigned", () => {
     expect(setlistRecipientIds(members, ["m3"])).toEqual(["m1"]);
   });
+  it("treats an unset preference as 'all' (opted-in)", () => {
+    const ms = [{ _id: "m1" }, { _id: "m2", setlist: "off" as const }];
+    expect(setlistRecipientIds(ms, [])).toEqual(["m1"]);
+  });
 });
 
 describe("tomorrowDateStr", () => {

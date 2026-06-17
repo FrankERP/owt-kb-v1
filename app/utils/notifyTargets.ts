@@ -13,7 +13,10 @@ export function setlistRecipientIds(
 ): string[] {
   const assigned = new Set(assignedIds);
   return members
-    .filter((m) => m.setlist === "all" || (m.setlist === "assigned" && assigned.has(m._id)))
+    .filter((m) => {
+      const pref = m.setlist ?? "all"; // unset = opted-in to all (spec default)
+      return pref === "all" || (pref === "assigned" && assigned.has(m._id));
+    })
     .map((m) => m._id);
 }
 
