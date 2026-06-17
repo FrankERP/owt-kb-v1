@@ -169,21 +169,25 @@ export async function PUT(req: NextRequest) {
   // Fire-and-forget: notify setlist subscribers. Never blocks the publish response.
   if (publishedWeek) {
     const week = publishedWeek;
-    const members = await serverClient.fetch<{ _id: string; setlist?: "all" | "assigned" | "off" }[]>(
-      `*[_type == "teamMembers"]{ _id, "setlist": notifPrefs.setlist }`
-    );
-    const assigned = await serverClient.fetch<string[]>(
-      `array::unique([
-        ...*[_type in ["sunday_role","saturday_role","special_role"] && (week == $week || date == $week)].Lead[]._ref,
-        ...*[_type in ["sunday_role","saturday_role","special_role"] && (week == $week || date == $week)].instruments[].person._ref
-      ][defined(@)])`,
-      { week }
-    );
-    void sendPush(setlistRecipientIds(members, assigned), "setlist", {
-      title: "Setlist de la semana",
-      body: "Ya están las canciones de este servicio.",
-      path: "/",
-    });
+    try {
+      const members = await serverClient.fetch<{ _id: string; setlist?: "all" | "assigned" | "off" }[]>(
+        `*[_type == "teamMembers"]{ _id, "setlist": notifPrefs.setlist }`
+      );
+      const assigned = await serverClient.fetch<string[]>(
+        `array::unique([
+          ...*[_type in ["sunday_role","saturday_role","special_role"] && (week == $week || date == $week)].Lead[]._ref,
+          ...*[_type in ["sunday_role","saturday_role","special_role"] && (week == $week || date == $week)].instruments[].person._ref
+        ][defined(@)])`,
+        { week }
+      );
+      void sendPush(setlistRecipientIds(members, assigned), "setlist", {
+        title: "Setlist de la semana",
+        body: "Ya están las canciones de este servicio.",
+        path: "/",
+      });
+    } catch (err) {
+      console.error("[push] notify failed:", err);
+    }
   }
 
   return NextResponse.json({ ok: true });
