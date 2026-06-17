@@ -54,6 +54,31 @@ export const teamMembers = defineType({
       description: "Si está activo, este miembro pierde el acceso a la app en segundos (kill switch). Reversible.",
     },
     {
+      name: "deviceTokens",
+      title: "Device push tokens",
+      type: "array",
+      hidden: true,
+      of: [{
+        type: "object",
+        fields: [
+          { name: "token", type: "string" },
+          { name: "platform", type: "string" },
+          { name: "updatedAt", type: "datetime" },
+        ],
+      }],
+    },
+    {
+      name: "notifPrefs",
+      title: "Preferencias de notificaciones",
+      type: "object",
+      fields: [
+        { name: "assignments", type: "boolean", initialValue: true },
+        { name: "setlist", type: "string", initialValue: "all", options: { list: ["all", "assigned", "off"] } },
+        { name: "proposals", type: "boolean", initialValue: true },
+        { name: "reminders", type: "boolean", initialValue: true },
+      ],
+    },
+    {
       name: "memberType",
       title: "Tipo",
       type: "array",
