@@ -127,8 +127,8 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
           <div className="px-4 py-3 border-b border-[#003572]/15 dark:border-[#00bfff]/10">
             {user.image ? (
               <div className="flex items-center gap-2.5 mb-0">
-                <Image src={user.image} alt={user.name ?? ""} width={28} height={28} unoptimized className="rounded-full" />
-                <span className="font-label text-xs uppercase tracking-widest text-gray-400">{firstName}</span>
+                <Image src={user.image} alt={user.name ?? ""} width={28} height={28} unoptimized className="rounded-full shrink-0" />
+                <span className="font-label text-xs uppercase tracking-widest text-gray-400 min-w-0 truncate">{firstName}</span>
               </div>
             ) : (
               <span className="font-label text-xs uppercase tracking-widest text-gray-400">{firstName}</span>
