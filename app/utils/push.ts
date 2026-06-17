@@ -10,6 +10,9 @@ type MemberRow = {
   notifPrefs?: Record<string, unknown>;
 };
 
+// NOTE: `invalid-argument` can also indicate a malformed *payload* (not just a bad
+// token); since we send a fixed, tested payload shape, in practice it only fires for
+// bad tokens. If payload structure changes, re-evaluate to avoid over-pruning.
 const PRUNE_CODES = new Set([
   "messaging/registration-token-not-registered",
   "messaging/invalid-argument",
@@ -71,6 +74,8 @@ export async function sendPush(
 
     for (const d of dead) {
       try {
+        // FCM tokens are opaque URL-safe strings (no quotes), so interpolating into the
+        // GROQ filter here is safe; they originate only from our own token API.
         await writeClient
           .patch(d.member)
           .unset([`deviceTokens[token == "${d.token}"]`])
