@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { revalidateServiceViews } from "@/app/utils/revalidate";
+import { setlistRecipientIds } from "@/app/utils/notifyTargets";
+import { sendPush } from "@/app/utils/push";
 
 function key() {
   return Math.random().toString(36).slice(2, 9);
@@ -123,6 +125,8 @@ export async function PUT(req: NextRequest) {
     song: { _type: "reference" as const, _ref: s.songId },
   }));
 
+  let publishedWeek: string | undefined;
+
   if (body.type === "sunday" && body.week) {
     const existing = await serverClient.fetch(
       `*[_type == "featuredSongs" && week == $week][0]._id`,
@@ -133,6 +137,7 @@ export async function PUT(req: NextRequest) {
     } else {
       await writeClient.create({ _type: "featuredSongs", week: body.week, songs: songDocs });
     }
+    publishedWeek = body.week;
   } else if (body.type === "saturday" && body.week) {
     const existing = await serverClient.fetch(
       `*[_type == "saturdarSongs" && week == $week][0]._id`,
@@ -143,21 +148,43 @@ export async function PUT(req: NextRequest) {
     } else {
       await writeClient.create({ _type: "saturdarSongs", week: body.week, songs: songDocs });
     }
+    publishedWeek = body.week;
   } else if (body.type === "special" && body.roleId) {
-    const targetType = await serverClient.fetch(
-      `*[_id == $id][0]._type`,
+    const roleDoc = await serverClient.fetch<{ _type: string; date?: string }>(
+      `*[_id == $id][0]{ _type, date }`,
       { id: body.roleId }
     );
-    if (targetType !== "special_role") {
+    if (roleDoc?._type !== "special_role") {
       return NextResponse.json({ error: "roleId must reference a special_role document" }, { status: 400 });
     }
     await writeClient.patch(body.roleId).set({ songs: songDocs }).commit();
+    publishedWeek = roleDoc?.date;
   } else {
     return NextResponse.json({ error: "week (for sunday/saturday) or roleId (for special) required" }, { status: 400 });
   }
 
   // Invalidate the statically-cached pages so the edit appears immediately.
   revalidateServiceViews();
+
+  // Fire-and-forget: notify setlist subscribers. Never blocks the publish response.
+  if (publishedWeek) {
+    const week = publishedWeek;
+    const members = await serverClient.fetch<{ _id: string; setlist?: "all" | "assigned" | "off" }[]>(
+      `*[_type == "teamMembers"]{ _id, "setlist": notifPrefs.setlist }`
+    );
+    const assigned = await serverClient.fetch<string[]>(
+      `array::unique([
+        ...*[_type in ["sunday_role","saturday_role","special_role"] && (week == $week || date == $week)].Lead[]._ref,
+        ...*[_type in ["sunday_role","saturday_role","special_role"] && (week == $week || date == $week)].instruments[].person._ref
+      ][defined(@)])`,
+      { week }
+    );
+    void sendPush(setlistRecipientIds(members, assigned), "setlist", {
+      title: "Setlist de la semana",
+      body: "Ya están las canciones de este servicio.",
+      path: "/",
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }
