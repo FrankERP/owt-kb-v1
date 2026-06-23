@@ -42,6 +42,34 @@ export function matchRow(row, existingPosts) {
   return { status: "ambiguous", matchId: null, candidateIds: candidates.map((c) => c._id) };
 }
 
+export function authorMatches(a, b) {
+  return !!a && !!b && normalizeForMatch(a) === normalizeForMatch(b);
+}
+
+// Given match results that may have multiple rows pointing at the same existing
+// doc, keep only the best row per existing _id (author-normalized match wins;
+// otherwise the first row), and demote the rest to "new".
+// results: Array<{ rowAuthor, status, matchId, candidateIds }> (mutated in place)
+// existingById: Map<_id, { author }>
+export function resolveMatchCollisions(results, existingById) {
+  const groups = new Map();
+  for (const r of results) {
+    if (r.status !== "matched" || !r.matchId) continue;
+    if (!groups.has(r.matchId)) groups.set(r.matchId, []);
+    groups.get(r.matchId).push(r);
+  }
+  for (const [id, group] of groups) {
+    if (group.length < 2) continue;
+    const exAuthor = existingById.get(id)?.author ?? "";
+    const keeper = group.find((r) => authorMatches(r.rowAuthor, exAuthor)) ?? group[0];
+    for (const r of group) {
+      if (r === keeper) continue;
+      r.status = "new"; r.matchId = null; r.candidateIds = [];
+    }
+  }
+  return results;
+}
+
 export function computeFieldUpdates(existing, row) {
   const set = {};
   const conflicts = [];
