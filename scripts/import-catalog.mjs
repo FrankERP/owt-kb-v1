@@ -85,3 +85,49 @@ async function phaseA() {
 if (!APPLY) {
   phaseA().catch((e) => { console.error(e); process.exit(1); });
 }
+
+function rng() { return Math.random().toString(36).slice(2, 9); }
+
+function slugify(s) {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").slice(0, 96);
+}
+
+async function resolveTagIds(names) {
+  const out = [];
+  for (const name of names) {
+    let doc = await client.fetch(`*[_type=="tag" && name==$name][0]{_id}`, { name });
+    if (!doc) doc = await client.create({ _type: "tag", name, slug: { _type: "slug", current: slugify(name) } });
+    out.push(doc._id);
+  }
+  return out;
+}
+
+function refList(ids) { return ids.map((_ref) => ({ _type: "reference", _ref, _key: rng() })); }
+
+async function phaseB() {
+  const plan = JSON.parse(readFileSync(PLAN, "utf-8"));
+  let created = 0, updated = 0, skipped = 0;
+  for (const p of plan) {
+    if (p.status === "ambiguous" && !p.matchId) { console.log(`SKIP ambiguous: ${p.rowTitle}`); skipped++; continue; }
+    const { _tagNames, ...fields } = p.set;
+    const tagIds = await resolveTagIds(_tagNames ?? []);
+    if (p.status === "new") {
+      const title = fields.title;
+      await client.create({
+        _type: "post", ...fields,
+        slug: { _type: "slug", current: slugify(`${title}-${p.rowAuthor}`) },
+        tags: refList(tagIds), publishDate: new Date().toISOString(),
+      });
+      created++;
+    } else {
+      await client.patch(p.matchId).set({ ...fields, tags: refList(tagIds) }).commit();
+      updated++;
+    }
+  }
+  console.log(`\nApplied: ${created} created, ${updated} updated, ${skipped} skipped.`);
+}
+
+if (APPLY) {
+  phaseB().catch((e) => { console.error(e); process.exit(1); });
+}
