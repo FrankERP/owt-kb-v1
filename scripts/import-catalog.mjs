@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 import { readFileSync, writeFileSync } from "node:fs";
 import { createClient } from "next-sanity";
-import { matchRow, computeFieldUpdates } from "./lib/catalog-reconcile.mjs";
+import { matchRow, computeFieldUpdates, resolveMatchCollisions } from "./lib/catalog-reconcile.mjs";
 
 const CATALOG_DIR = process.env.CATALOG_DIR
   || "/Users/frankrocha/Downloads/ContentUpdateProject";
@@ -33,17 +33,26 @@ async function loadExisting() {
 
 function buildPlan(rows, existing) {
   const byId = new Map(existing.map((p) => [p._id, p]));
-  return rows.map((row) => {
+
+  // Pass 1: URL validation + match each row
+  const matchResults = rows.map((row) => {
     for (const u of [row.musicalUrl, row.lyricsUrl]) {
       if (u && !isSafeHttpUrl(u)) throw new Error(`Unsafe URL in "${row.title}": ${u}`);
     }
     const m = matchRow(row, existing);
-    const target = m.matchId ? byId.get(m.matchId)
+    return { row, rowAuthor: row.author, status: m.status, matchId: m.matchId, candidateIds: m.candidateIds };
+  });
+
+  // Pass 2: resolve collisions (multiple rows matched to same existing doc)
+  resolveMatchCollisions(matchResults, byId);
+
+  // Pass 3: compute field updates now that statuses are final
+  return matchResults.map(({ row, status, matchId, candidateIds }) => {
+    const target = matchId ? byId.get(matchId)
       : { title: "", author: "", key: "", bpm: null, timeSig: "", tagNames: [] };
     const { set, conflicts, flags } = computeFieldUpdates(target, row);
-    if (m.status === "new") { set.title = row.title; set.author = row.author; }
-    return { rowTitle: row.title, rowAuthor: row.author, status: m.status,
-      matchId: m.matchId, candidateIds: m.candidateIds, set, conflicts, flags };
+    if (status === "new") { set.title = row.title; set.author = row.author; }
+    return { rowTitle: row.title, rowAuthor: row.author, status, matchId, candidateIds, set, conflicts, flags };
   });
 }
 

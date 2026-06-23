@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   stripDiacritics, normalizeForMatch, cleanTempoTags,
   mergeTagNames, matchRow, computeFieldUpdates,
+  authorMatches, resolveMatchCollisions,
 } from "../catalog-reconcile.mjs";
 
 describe("normalizeForMatch", () => {
@@ -50,6 +51,25 @@ describe("matchRow", () => {
   });
   it("returns new when no candidate", () => {
     expect(matchRow({ title: "Es Navidad", author: "" }, existing).status).toBe("new");
+  });
+});
+
+describe("resolveMatchCollisions", () => {
+  it("keeps the author-matching row and demotes the rest to new", () => {
+    const existingById = new Map([["d1", { author: "Un Corazón " }]]);
+    const results = [
+      { rowAuthor: "Un Corazón", status: "matched", matchId: "d1", candidateIds: ["d1"] },
+      { rowAuthor: "Hillsong Worship", status: "matched", matchId: "d1", candidateIds: ["d1"] },
+    ];
+    resolveMatchCollisions(results, existingById);
+    expect(results[0]).toMatchObject({ status: "matched", matchId: "d1" });
+    expect(results[1]).toMatchObject({ status: "new", matchId: null, candidateIds: [] });
+  });
+  it("leaves a single (non-colliding) match untouched even if author differs (typo tolerance)", () => {
+    const existingById = new Map([["d2", { author: "Elevation Worship" }]]);
+    const results = [{ rowAuthor: "Elevantion Worship", status: "matched", matchId: "d2", candidateIds: ["d2"] }];
+    resolveMatchCollisions(results, existingById);
+    expect(results[0]).toMatchObject({ status: "matched", matchId: "d2" });
   });
 });
 
