@@ -50,6 +50,18 @@ export const post = {
 			type: 'string',
 		},
 		{
+			name: 'musicalReferenceUrl',
+			title: 'Musical reference (URL)',
+			description: 'YouTube musical reference mix — what musicians rehearse with.',
+			type: 'url',
+		},
+		{
+			name: 'lyricsVideoUrl',
+			title: 'Spanish lyrics video (URL)',
+			description: 'YouTube video with the Spanish lyrics the team sings. Optional.',
+			type: 'url',
+		},
+		{
 			name: "body",
 			title: "Body",
 			type: "array",
