@@ -20,6 +20,8 @@ export interface Post {
   chordsPDF: Array<{ title: string; key: string; chordsURL: string }>;
   chords?: Array<ChordChart>;
   referenceLinks?: Array<{ label: string; url: string }>;
+  musicalReferenceUrl?: string;
+  lyricsVideoUrl?: string;
   tags: Array<Tag>;
   _id: string;
 }
