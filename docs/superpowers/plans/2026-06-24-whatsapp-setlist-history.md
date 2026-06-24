@@ -226,7 +226,10 @@ export function serviceDateFor(heading, messageDate) {
   const dNum = t.match(/\b(sabado|domingo)\s+(\d{1,2})\b/);
   if (dNum) {
     const sd = ymd(my, mm, +dNum[2]);
-    return { serviceDate: sd, type: dNum[1] === "sabado" ? "saturdarSongs" : "featuredSongs", confidence: "explicit" };
+    const wd = dow(sd);
+    const wantSat = dNum[1] === "sabado";
+    const confidence = (wantSat && wd !== 6) || (!wantSat && wd !== 0) ? "conflict" : "explicit";
+    return { serviceDate: sd, type: wantSat ? "saturdarSongs" : "featuredSongs", confidence };
   }
   if (hasSun || hasSat) {
     const target = hasSat && !hasSun ? 6 : 0;
@@ -356,7 +359,7 @@ git commit -m "feat(setlist): bilingual catalog matcher lib with tests"
 **Interfaces:**
 - Consumes: `whatsapp-setlists.mjs`, `setlist-match.mjs`, Sanity read client.
 - Produces (to the catalog working dir, default `/Users/frankrocha/Downloads/ContentUpdateProject`):
-  `setlist-plan.json` (array of `{ messageDate, serviceDate, type, confidence, songs:[{ rawName, key, postId|null, candidates? }] }`) and an `setlist-decisions.json` template `{ "<normName>": { action:"alias"|"skip"|"add", postId? } }` for the distinct unmatched names.
+  `setlist-plan.json` (array of `{ messageDate, serviceDate, type, confidence, songs:[{ rawName, key, postId|null, candidates? }] }`) and a `setlist-decisions.json` template keyed by normalized song name: unmatched → `{ action:"alias"|"skip", postId? }`; ambiguous → `{ action:"pick", postId, _candidates }`. Apply refuses until every surfaced unmatched AND ambiguous song has a valid decision.
 
 - [ ] **Step 1: Write the runner (Phase A only)**
 
@@ -398,7 +401,10 @@ function buildPlan(text, index) {
   const blocks = [];
   for (const m of detectSetlists(parseMessages(text))) {
     for (const sec of splitSections(m.body)) {
-      const { serviceDate, type, confidence } = serviceDateFor(sec.heading, m.messageDate);
+      // The day word ("para este domingo") is usually in the section PROSE, not a heading.
+      // Feed heading (if present) else the section's non-song lines to serviceDateFor.
+      const signal = sec.heading || sec.lines.filter(l => !/\(([A-G](#|b)?m?)\)/.test(l)).join(" ");
+      const { serviceDate, type, confidence } = serviceDateFor(signal, m.messageDate);
       if (serviceDate < FROM) continue;                       // scope filter on SERVICE date
       const songs = [];
       for (const line of sec.lines) {
@@ -425,27 +431,43 @@ async function phaseA() {
   const existing = await client.fetch(`*[_type in ["featuredSongs","saturdarSongs"]]{ _type, "week": string(week) }`);
   const existSet = new Set(existing.map(e => `${e._type}|${(e.week||"").slice(0,10)}`));
 
-  // distinct unmatched + collisions
-  const unmatched = new Map();
-  for (const b of plan) for (const s of b.songs) if (!s.postId && !s.candidates) unmatched.set(normalizeForMatch(s.rawName), s.rawName);
-  const seen = new Map(); const collisions = [];
-  for (const b of plan) { const key = `${b.type}|${b.serviceDate}`; if (seen.has(key)) collisions.push(key); else seen.set(key, b); }
+  // distinct unmatched (no candidate) and ambiguous (multiple candidates) — BOTH need decisions
+  const unmatched = new Map();   // normKey -> rawName
+  const ambiguous = new Map();   // normKey -> { raw, candidates }
+  for (const b of plan) for (const s of b.songs) {
+    if (s.postId) continue;
+    const k = normalizeForMatch(s.rawName);
+    if (s.candidates) ambiguous.set(k, { raw: s.rawName, candidates: s.candidates });
+    else unmatched.set(k, s.rawName);
+  }
+  // collisions: group blocks by (type, serviceDate)
+  const groups = new Map();
+  for (const b of plan) { const key = `${b.type}|${b.serviceDate}`; (groups.get(key) || groups.set(key, []).get(key)).push(b); }
+  const collisions = [...groups].filter(([, v]) => v.length > 1);
 
-  const byYear = {}; for (const b of plan) byYear[b.serviceDate.slice(0,4)] = (byYear[b.serviceDate.slice(0,4)]||0)+1;
-  const willWrite = plan.filter(b => !existSet.has(`${b.type}|${b.serviceDate}`));
+  const byYear = {}, byConf = {};
+  for (const b of plan) { byYear[b.serviceDate.slice(0,4)] = (byYear[b.serviceDate.slice(0,4)]||0)+1; byConf[b.confidence]=(byConf[b.confidence]||0)+1; }
+  const distinctWeeks = new Set(plan.map(b => `${b.type}|${b.serviceDate}`));
+  const willWrite = [...distinctWeeks].filter(k => !existSet.has(k));
 
-  console.log(`\n=== SETLISTS: ${plan.length} blocks (by year ${JSON.stringify(byYear)}) ===`);
-  console.log(`will create: ${willWrite.length} | skipped (already in Sanity): ${plan.length - willWrite.length}`);
-  console.log(`\n=== LOW-CONFIDENCE / CONFLICT rows (review these) ===`);
-  for (const b of plan.filter(b => b.confidence !== "explicit")) console.log(`  ${b.serviceDate} ${b.type} [${b.confidence}] from msg ${b.messageDate} — ${b.songs.length} songs`);
-  console.log(`\n=== COLLISIONS (same type+date twice) ===`); collisions.forEach(c => console.log("  " + c));
-  console.log(`\n=== DISTINCT UNMATCHED SONGS (${unmatched.size}) — resolve in setlist-decisions.json ===`);
+  console.log(`\n=== SETLISTS: ${plan.length} blocks, ${distinctWeeks.size} distinct (type,date) (by year ${JSON.stringify(byYear)}) ===`);
+  console.log(`confidence: ${JSON.stringify(byConf)}  (inferred = headless, assumed Sunday, dated to nearest upcoming Sunday — best-guess)`);
+  console.log(`will create: ${willWrite.length} | skip (already in Sanity): ${distinctWeeks.size - willWrite.length}`);
+  console.log(`\n=== LOW-CONFIDENCE / CONFLICT rows (eyeball dates/types) ===`);
+  for (const b of plan.filter(b => b.confidence !== "explicit")) console.log(`  ${b.serviceDate} ${b.type} [${b.confidence}] msg ${b.messageDate} — ${b.songs.length} songs`);
+  console.log(`\n=== COLLISIONS (${collisions.length} (type,date) with >1 block — apply keeps most-complete and PRINTS each drop) ===`);
+  for (const [k, v] of collisions) console.log(`  ${k}: ${v.map(b => `${b.songs.length}@${b.messageDate}`).join(", ")}`);
+  console.log(`\n=== AMBIGUOUS SONGS (${ambiguous.size}) — set action:"pick" + postId in setlist-decisions.json ===`);
+  for (const [, v] of ambiguous) console.log(`  ${v.raw} -> ${JSON.stringify(v.candidates)}`);
+  console.log(`\n=== DISTINCT UNMATCHED SONGS (${unmatched.size}) — set action:"alias"+postId or "skip" ===`);
   [...unmatched.values()].sort().forEach(n => console.log("  " + n));
 
   writeFileSync(`${WORKDIR}/setlist-plan.json`, JSON.stringify(plan, null, 2));
-  const decisions = {}; for (const [k, raw] of unmatched) decisions[k] = { _rawName: raw, action: "skip", postId: null };
+  const decisions = {};
+  for (const [k, raw] of unmatched) decisions[k] = { _rawName: raw, action: "skip", postId: null };
+  for (const [k, v] of ambiguous) decisions[k] = { _rawName: v.raw, action: "pick", postId: null, _candidates: v.candidates };
   if (!existsSync(`${WORKDIR}/setlist-decisions.json`)) writeFileSync(`${WORKDIR}/setlist-decisions.json`, JSON.stringify(decisions, null, 2));
-  console.log(`\nWrote setlist-plan.json (${plan.length}) and setlist-decisions.json (${unmatched.size} unmatched). Nothing written to Sanity.`);
+  console.log(`\nWrote setlist-plan.json (${plan.length}) and setlist-decisions.json (${unmatched.size} unmatched + ${ambiguous.size} ambiguous). Nothing written to Sanity.`);
 }
 
 if (!APPLY) phaseA().catch(e => { console.error(e); process.exit(1); });
@@ -483,30 +505,44 @@ async function phaseB() {
   const plan = JSON.parse(readFileSync(`${WORKDIR}/setlist-plan.json`, "utf-8"));
   const decisions = existsSync(`${WORKDIR}/setlist-decisions.json`) ? JSON.parse(readFileSync(`${WORKDIR}/setlist-decisions.json`, "utf-8")) : {};
 
-  // resolve unmatched per decisions: alias -> postId, skip/add -> dropped from history
+  // resolve a song to a postId: direct match → alias decision → pick decision (ambiguous). Else null (skip/add/unresolved).
   const resolve = (s) => {
     if (s.postId) return s.postId;
     const d = decisions[normalizeForMatch(s.rawName)];
-    if (d && d.action === "alias" && d.postId) return d.postId;
-    return null;  // skip, add (not yet created), or unresolved candidate
+    if (d && (d.action === "alias" || d.action === "pick") && d.postId) {
+      if (s.candidates && !s.candidates.includes(d.postId)) return null; // pick must be one of the candidates
+      return d.postId;
+    }
+    return null;
   };
+  // refuse to apply unless EVERY surfaced unmatched AND ambiguous song has a valid decision
   const unresolved = new Set();
   for (const b of plan) for (const s of b.songs) {
-    if (!s.postId && s.candidates) unresolved.add(`ambiguous: ${s.rawName}`);
+    if (s.postId) continue;
     const d = decisions[normalizeForMatch(s.rawName)];
-    if (!s.postId && !s.candidates && (!d || (d.action !== "skip" && !(d.action === "alias" && d.postId)))) unresolved.add(`unresolved: ${s.rawName}`);
+    if (s.candidates) {
+      if (!(d && d.action === "pick" && d.postId && s.candidates.includes(d.postId)))
+        unresolved.add(`ambiguous (need action:"pick"+valid postId): ${s.rawName}`);
+    } else if (!(d && (d.action === "skip" || (d.action === "alias" && d.postId)))) {
+      unresolved.add(`unmatched (need action:"alias"+postId or "skip"): ${s.rawName}`);
+    }
   }
-  if (unresolved.size) { console.error("Refusing to apply — resolve these first:\n  " + [...unresolved].join("\n  ")); process.exit(1); }
+  if (unresolved.size) { console.error("Refusing to apply — resolve these in setlist-decisions.json first:\n  " + [...unresolved].join("\n  ")); process.exit(1); }
 
   // dedup against existing
   const existing = await client.fetch(`*[_type in ["featuredSongs","saturdarSongs"]]{ _type, "week": string(week) }`);
   const existSet = new Set(existing.map(e => `${e._type}|${(e.week||"").slice(0,10)}`));
-  // dedup within plan: keep the most complete block per (type, serviceDate)
+  // within-plan dedup: keep the most-complete block per (type, serviceDate) — and PRINT every drop (never silent)
   const best = new Map();
   for (const b of plan) {
     const k = `${b.type}|${b.serviceDate}`;
     const cnt = b.songs.filter(s => resolve(s)).length;
-    if (!best.has(k) || cnt > best.get(k)._cnt) best.set(k, { ...b, _cnt: cnt });
+    const prev = best.get(k);
+    if (!prev) { best.set(k, { ...b, _cnt: cnt }); continue; }
+    const keep = cnt > prev._cnt ? { ...b, _cnt: cnt } : prev;
+    const drop = cnt > prev._cnt ? prev : { ...b, _cnt: cnt };
+    console.log(`COLLISION ${k}: kept ${keep._cnt}-song block (msg ${keep.messageDate}), DROPPED ${drop._cnt}-song block (msg ${drop.messageDate})`);
+    best.set(k, keep);
   }
 
   let created = 0, skipped = 0;
