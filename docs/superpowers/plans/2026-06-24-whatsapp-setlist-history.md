@@ -15,7 +15,7 @@
 - History types: **`featuredSongs`** = Sunday, **`saturdarSongs`** = Saturday (the typo'd name is intentional — it's what `getSongHistory` reads). `songs[]` items are `{ _type:"setlist_song", _key, song:{_type:"reference",_ref:postId}, play_key }`. `week` = `YYYY-MM-DD` date string.
 - **Input:** the chat `.txt` lives INSIDE `~/Downloads/Chat de WhatsApp con Colaboradores Alabanza.zip`. The runner extracts it to `/tmp/owt-chat/` at start. **Timestamps use U+202F** (narrow no-break space) between time and `a./p.`/`m.` — the timestamp regex must be whitespace-tolerant.
 - Scope filter is on the **computed serviceDate** (≥ `2022-01-01`), not the message date. Scan all messages.
-- **Never overwrite**: writes are `client.create` only; skip any `(type, week)` already in Sanity (13 existing docs). Dry-run is the human-correction gate; the user resolves every surfaced unmatched song before apply.
+- **Never overwrite**: writes are `client.create` only; skip any `(type, week)` already in Sanity (12 reader-relevant docs: 9 featuredSongs + 3 saturdarSongs; the dedup uses the live fetch). Dry-run is the human-correction gate; the user resolves every surfaced unmatched song before apply.
 - Vitest `include` already covers `scripts/**/*.test.mjs` (and `app/**/*.test.{ts,mjs}`).
 
 ---
@@ -95,6 +95,7 @@ describe("parseSongLine", () => {
     expect(parseSongLine("Cordero y león (B) - Bethel Music 90 BPM")).toMatchObject({ rawName: "Cordero y león", key: "B" });
     expect(parseSongLine("Infinito Dios | eeyv (C)")).toMatchObject({ rawName: "Infinito Dios", key: "C" });
     expect(parseSongLine("10,000 Razones (C)")).toMatchObject({ rawName: "10,000 Razones", key: "C" });
+    expect(parseSongLine("1.- Todo lo haces bien (A) - Gateway Worship")).toMatchObject({ rawName: "Todo lo haces bien", key: "A" });
     expect(parseSongLine("just some prose with no key")).toBeNull();
   });
 });
@@ -199,7 +200,7 @@ export function parseSongLine(line) {
   const m = line.match(LAST_KEY);
   if (!m) return null;
   let name = line.slice(0, m.index);
-  name = name.replace(/^\s*[-•*]\s*/, "").replace(/^\s*\d{1,2}[.)]\s+/, "");  // bullet / list-number prefix
+  name = name.replace(/^\s*[-•*]\s*/, "").replace(/^\s*\d{1,2}[.)-]+\s*/, "");  // bullet / list-number prefix (incl. "1.-" / "1)" / "1-")
   name = name.replace(/\s*\|[^|]*$/, "");                                       // "| eeyev" tail
   name = name.replace(/\s*-\s+[^-]*$/, "");                                     // trailing " - Artist"
   name = name.trim();
@@ -602,4 +603,4 @@ git commit -m "feat(setlist): apply phase — create history docs (gated, dedup)
 
 **Type consistency:** `serviceDateFor` returns `{serviceDate,type,confidence}` used identically in the runner; `matchSong` returns `{postId}|{candidates}|null` consumed consistently; plan entry shape `{messageDate,serviceDate,type,confidence,songs:[{rawName,key,postId,candidates?}]}` written in Task 3 and read in Task 4; `saturdarSongs`/`featuredSongs` spelled consistently; `setlist_song` item shape matches the schema.
 
-**Risks:** Task 4 is the only prod write, gated behind the dry-run review + the unresolved-refusal guard. The dedup keeps the most-complete block per (type, serviceDate) and skips the 13 existing weeks. The Spanish-date `serviceDateFor` is the fuzziest unit — its low-confidence rows are surfaced for human eyeballing before apply.
+**Risks:** Task 4 is the only prod write, gated behind the dry-run review + the unresolved-refusal guard. The dedup keeps the most-complete block per (type, serviceDate) and skips the existing weeks (live-fetched). The Spanish-date `serviceDateFor` is the fuzziest unit — its low-confidence rows are surfaced for human eyeballing before apply.
