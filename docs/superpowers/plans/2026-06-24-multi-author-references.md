@@ -17,7 +17,7 @@
 - Canonicalization pipeline (verified against live data): `dedupeKey(raw) = ALIAS[normalizeForMatch(raw)] ?? normalizeForMatch(raw)`; `canonicalName(raw) = KEY_CANONICAL[dedupeKey(raw)] ?? deterministicPick(dedupeKey)`. `ALIAS = {"hillsong yf":"hillsong young free","bethel":"bethel music"}`; `KEY_CANONICAL = {"hillsong young free":"Hillsong Young & Free","bethel music":"Bethel Music","en espiritu y en verdad":"En Espíritu y En Verdad"}`; `deterministicPick` = most-frequent raw spelling (ties → lexicographically smallest).
 - Expected migration outcome (verified): **35 author docs**, **18** recomputed display strings, idempotent (patches only). Migration NEVER rewrites slugs, never touches body/audio/chords/tags/links.
 - `normalizeForMatch` **deletes** punctuation (`Hillsong Y&F` → `hillsong yf`). The shared `slugifyAuthor` lives at `app/utils/slugifyAuthor.mjs` and is imported by BOTH the authors route and the migration.
-- Tests: Vitest (`npm run test`). Sanity reads/writes via `.env.local` (`NEXT_PUBLIC_SANITY_*`, `SANITY_WRITE_TOKEN`); load it with `dotenv.config({ path: ".env.local" })` in scripts.
+- Tests: Vitest (`npm run test`). Sanity env in `.env.local`: `NEXT_PUBLIC_SANITY_*`, `SANITY_WRITE_TOKEN` (writes), and `SANITY_API_READ_TOKEN` (the `serverClient` used by the authors-route GET — already present). Scripts load env with `dotenv.config({ path: ".env.local" })`.
 - The catalog working dir is `/Users/frankrocha/Downloads/ContentUpdateProject` (`oasis-songs.json`).
 
 ---
@@ -148,11 +148,25 @@ git commit -m "feat(author): add author document type and post.authors reference
 ### Task 2: Shared `slugifyAuthor` helper + tests
 
 **Files:**
+- Modify: `vitest.config.ts` (extend the `include` glob to collect `.test.mjs` under `app/`)
 - Create: `app/utils/slugifyAuthor.mjs`
 - Test: `app/utils/__tests__/slugifyAuthor.test.mjs`
 
 **Interfaces:**
 - Produces: `slugifyAuthor(name: string): string` — diacritic-transliterating, lowercased, `&`→space, non-alphanumerics→`-`, collapsed. Imported by the authors route AND the migration.
+
+- [ ] **Step 0: Make Vitest collect `.test.mjs` under `app/` (REQUIRED — else the test silently collects nothing)**
+
+`vitest.config.ts` has `passWithNoTests: true` and `include: ["app/**/*.test.ts", "scripts/**/*.test.mjs"]` — which does NOT match `app/**/*.test.mjs`, so `npm run test -- slugifyAuthor` prints "No test files found" and **exits 0** (a false green). In `vitest.config.ts`, replace exactly:
+```ts
+include: ["app/**/*.test.ts", "scripts/**/*.test.mjs"]
+```
+with:
+```ts
+include: ["app/**/*.test.ts", "app/**/*.test.mjs", "scripts/**/*.test.mjs"]
+```
+
+Verify the glob now collects the file (after Step 1 creates it): `npm run test -- slugifyAuthor` must report a non-zero test count, not "No test files found".
 
 - [ ] **Step 1: Write the failing test**
 
@@ -189,7 +203,7 @@ Create `app/utils/slugifyAuthor.mjs`:
 export function slugifyAuthor(name) {
   return (name ?? "")
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")   // strip combining marks: á -> a
+    .replace(/[\u0300-\u036f]/g, "")   // strip combining marks: á -> a (explicit codepoints, copy-safe)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")       // any run of non-alphanumerics -> one dash
     .replace(/^-+|-+$/g, "")           // trim edge dashes
@@ -869,10 +883,10 @@ git commit -m "feat(author): /author index and /author/[slug] filter pages"
 
 In `app/api/content/posts/route.ts`:
 
-(a) Add to the GET projection (after `author,`):
-```
-      authors[]->{ _id, name },
-```
+(a) Add `authors[]->{ _id, name },` to the GET projection. Note the GET query's projection has
+`author` inline (`_id, title, author, slug, key, bpm, timeSig, publishDate,`), not on its own
+line — insert `authors[]->{ _id, name },` as a new line within that projection block (e.g. right
+after the `body,` line). It just needs to be inside the `{ ... }` projection.
 
 (b) Add to the POST body type (after `tagIds?: string[];`):
 ```ts
@@ -922,9 +936,9 @@ In `app/api/content/posts/[id]/route.ts`:
     authorIds?: string[];
 ```
 
-(b) The current author patch line is:
+(b) The current author patch line is (note: single space, not aligned):
 ```ts
-  if (body.author    != null) patch.author = body.author.trim();
+  if (body.author != null) patch.author = body.author.trim();
 ```
 Replace it with the `authorIds`-precedence branch:
 ```ts
@@ -957,22 +971,29 @@ git commit -m "feat(author): routes accept authorIds and recompute denormalized 
 
 ### Task 9: Admin editor (`SongFormModal`) author multi-select + create
 
+**PREREQUISITE:** Task 8 Step 1a (adding `authors[]->{_id,name}` to the `GET /api/content/posts`
+projection) must be complete — the modal's `songToForm` reads `song.authors`, which only arrives if
+the song list GET projects it.
+
 **Files:**
-- Modify: `app/components/admin/SongFormModal.tsx` (FormState, blankForm, songToForm, buildPayload, the Artista field → author multi-select with create)
-- Modify: `app/components/admin/ContentPanel.tsx` (load authors, pass `allAuthors` + `canCreateAuthor`)
-- Modify: `app/components/admin/SetlistEditor.tsx` (same props, mirroring how it passes tags)
+- Modify: `app/components/admin/SongFormModal.tsx` (`SongForForm` interface + `FormState`, `blankForm`, `songToForm`, `buildPayload`, the Artista field → author multi-select with create; new **optional** props)
+- Modify: `app/components/admin/ContentPanel.tsx` (its `Song` interface gains `authors`; load authors; pass `allAuthors` + `canCreateAuthor`)
+- Modify: `app/components/admin/SetlistEditor.tsx` (relies on the new props' defaults — no change required to compile; optionally pass authors)
 
 **Interfaces:**
 - Consumes: `GET/POST /api/content/authors`; submits `authorIds: string[]` to the posts routes.
 
-- [ ] **Step 1: FormState + mappers**
+- [ ] **Step 1: Types + FormState + mappers + optional props**
 
 In `app/components/admin/SongFormModal.tsx`:
+- Add `authors?: Array<{ _id: string }>;` to the **`SongForForm` interface** (the type of the `song`/`initial` shape). Without this, `songToForm` reading `song.authors` is a TS error.
 - In `FormState`, replace `author: string;` with `authorIds: string[];`.
 - In `blankForm()`, replace `author: ""` with `authorIds: []`.
-- In `songToForm(song)`, replace `author: song.author ?? ""` with `authorIds: song.authors?.map((a: any) => a._id) ?? []`.
+- In `songToForm(song)`, replace `author: song.author ?? ""` with `authorIds: song.authors?.map((a) => a._id) ?? []`.
 - In `buildPayload(form)`, replace `author: form.author,` with `authorIds: form.authorIds,`.
-- Add an author multi-select component identical in structure to the existing tag selector. Add the props `allAuthors: SongTag[]` and `canCreateAuthor: (name: string) => Promise<SongTag | null>` to the component signature (reuse the `SongTag` shape `{_id,name,slug}`), plus local state mirroring tags: `const [localAuthors, setLocalAuthors] = useState(allAuthors)`, `const [authorSearch, setAuthorSearch] = useState("")`, `const [creatingAuthor, setCreatingAuthor] = useState(false)`, a `toggleAuthor(id)` (same shape as `toggleTag`), and a `handleCreateAuthor` (copy of `handleCreateTag` using `canCreateAuthor`/`authorSearch`/`setLocalAuthors`/`authorIds`).
+- Add the new component props **as OPTIONAL with safe defaults** so the SetlistEditor call site (and any other) compiles unchanged:
+  `allAuthors: SongTag[] = []` and `canCreateAuthor: (name: string) => Promise<SongTag | null> = async () => null`. (Reuse the `SongTag` shape `{_id,name,slug}`.)
+- Add local state mirroring tags: `const [localAuthors, setLocalAuthors] = useState(allAuthors)`, `const [authorSearch, setAuthorSearch] = useState("")`, `const [creatingAuthor, setCreatingAuthor] = useState(false)`, a `toggleAuthor(id)` (same shape as `toggleTag`), and a `handleCreateAuthor` (copy of `handleCreateTag` using `canCreateAuthor`/`authorSearch`/`setLocalAuthors`/`authorIds`).
 - Replace the "Artista" text input block:
 ```tsx
         <div className="space-y-1">
@@ -982,9 +1003,13 @@ In `app/components/admin/SongFormModal.tsx`:
 ```
 with an author picker mirroring the tags block (search input that also offers "+ Crear" when no exact match, and toggle chips for `localAuthors`), writing to `form.authorIds`.
 
-- [ ] **Step 2: Parent wiring (ContentPanel + SetlistEditor)**
+- [ ] **Step 2: Parent wiring (ContentPanel; SetlistEditor optional)**
 
-In both `ContentPanel.tsx` and `SetlistEditor.tsx`, wherever they currently fetch `allTags` and define `canCreateTag` (passing them to `SongFormModal`), add the analogous `allAuthors` (from `GET /api/content/authors`) and `canCreateAuthor` (POST to `/api/content/authors`, same shape as the tag creator), and pass both as the new props.
+In `ContentPanel.tsx`:
+- Add `authors?: Array<{ _id: string; name: string }>;` to its local **`Song` interface** (so the song objects it passes into `songToForm` carry authors; the data arrives via the Task-8 GET projection).
+- Where it fetches `allTags` and defines `canCreateTag` (passing them to `SongFormModal`), add the analogous `allAuthors` (from `GET /api/content/authors`) and `canCreateAuthor` (POST to `/api/content/authors`, same shape as the tag creator), and pass both as the new props.
+
+`SetlistEditor.tsx` invokes the modal for quick create-only; because the new props are **optional with defaults**, it compiles and works without changes (its author picker is simply empty until a song is opened in the full editor). Passing `allAuthors`/`canCreateAuthor` there too is optional polish, not required.
 
 - [ ] **Step 3: Typecheck + manual verify**
 
@@ -1003,6 +1028,11 @@ git commit -m "feat(author): admin song form author multi-select with create"
 
 **Files:**
 - Modify: `app/components/EditSongButton.tsx` (FormState, postToForm, buildPayload, Artista field → author multi-select; load authors)
+
+**PREREQUISITE:** Task 6 (song-page GROQ now projects `authors[]->{_id,slug,name}`) must be
+complete. `EditSongButton` initializes its form via `useState(() => postToForm(post))` from the
+`post` prop the song page passes in — so `post.authors` is only populated for pre-fill once Task 6
+ships. (No crash if absent — `postToForm` falls back to `[]` — but the picker won't pre-select.)
 
 **Interfaces:**
 - Consumes: `GET /api/content/authors`; submits `authorIds` to `PATCH /api/content/posts/[id]`.
