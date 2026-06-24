@@ -35,6 +35,7 @@ export async function PATCH(
     lyricsVideoUrl?: string;
     tutorials?: Array<{ title: string; url: string }>;
     tagIds?: string[];
+    authorIds?: string[];
   };
 
   if (body.referenceLinks?.some((l) => !isSafeHttpUrl(l.url))) {
@@ -51,7 +52,16 @@ export async function PATCH(
 
   const patch: Record<string, unknown> = {};
   if (body.title?.trim())  patch.title  = body.title.trim();
-  if (body.author != null) patch.author = body.author.trim();
+  if (body.authorIds != null) {
+    const names: Array<{ _id: string; name: string }> = await writeClient.fetch(
+      `*[_type=="author" && _id in $ids]{ _id, name }`, { ids: body.authorIds }
+    );
+    const byId = new Map(names.map((n) => [n._id, n.name]));
+    patch.author = body.authorIds.map((id) => byId.get(id)).filter(Boolean).join(", ");
+    patch.authors = body.authorIds.map((id) => ({ _type: "reference", _ref: id, _key: rng() }));
+  } else if (body.author != null) {
+    patch.author = body.author.trim();
+  }
   if (body.key    != null) patch.key    = body.key.trim();
   if (body.bpm    != null) patch.bpm    = body.bpm ? Number(body.bpm) : null;
   if (body.timeSig != null) patch.timeSig = body.timeSig.trim();
