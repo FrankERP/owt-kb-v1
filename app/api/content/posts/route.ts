@@ -21,6 +21,7 @@ export async function GET() {
   const posts = await serverClient.fetch(
     `*[_type == "post"] | order(title asc) {
       _id, title, author, slug, key, bpm, timeSig, publishDate,
+      musicalReferenceUrl, lyricsVideoUrl,
       body,
       chords[]{ key, content },
       referenceLinks[]{ label, url },
@@ -45,6 +46,8 @@ export async function POST(req: NextRequest) {
     lyrics?: string;
     chords?: Array<{ key: string; content: string }>;
     referenceLinks?: Array<{ label: string; url: string }>;
+    musicalReferenceUrl?: string;
+    lyricsVideoUrl?: string;
     tagIds?: string[];
   };
 
@@ -54,6 +57,11 @@ export async function POST(req: NextRequest) {
 
   if (body.referenceLinks?.some((l) => !isSafeHttpUrl(l.url))) {
     return NextResponse.json({ error: "referenceLinks must use http(s)" }, { status: 400 });
+  }
+  for (const u of [body.musicalReferenceUrl, body.lyricsVideoUrl]) {
+    if (u != null && u !== "" && !isSafeHttpUrl(u)) {
+      return NextResponse.json({ error: "reference URLs must use http(s)" }, { status: 400 });
+    }
   }
 
   const slugBase = `${body.title}-${body.author ?? ""}`.toLowerCase()
@@ -74,6 +82,8 @@ export async function POST(req: NextRequest) {
     referenceLinks: (body.referenceLinks ?? []).map((l) => ({
       _type: "referenceLink", _key: rng(), label: l.label, url: l.url,
     })),
+    musicalReferenceUrl: body.musicalReferenceUrl?.trim() || undefined,
+    lyricsVideoUrl: body.lyricsVideoUrl?.trim() || undefined,
     tags: (body.tagIds ?? []).map((id) => ({
       _type: "reference", _ref: id, _key: rng(),
     })),
