@@ -31,6 +31,8 @@ async function getPost(slug: string) {
       body,
       tags[] -> { _id, slug, name },
       referenceLinks[]{ label, url },
+      musicalReferenceUrl,
+      lyricsVideoUrl,
       tutorials2[]{ title, url },
       "lyricsURL": lyrics.asset->url,
       audioTracks[] {
@@ -105,7 +107,9 @@ const Page = async ({ params }: Params) => {
   const hasBody      = !!post?.body;
   const hasLyrics    = hasBody || hasInlineChords;
   const hasHistory   = history.length > 0;
-  const hasRefLinks  = (post?.referenceLinks?.length ?? 0) > 0;
+  const hasMusicalRef = !!post?.musicalReferenceUrl;
+  const hasLyricsVid  = !!post?.lyricsVideoUrl;
+  const hasRefLinks   = hasMusicalRef || hasLyricsVid || (post?.referenceLinks?.length ?? 0) > 0;
 
   const sections = [
     { id: "letra",      label: "Letra",        show: hasLyrics },
@@ -244,25 +248,33 @@ const Page = async ({ params }: Params) => {
         {hasRefLinks && (
           <section id="referencia">
             <SectionHeader>Versión de referencia</SectionHeader>
-            <div className="flex flex-wrap justify-center gap-4">
-              {post.referenceLinks!.map((link, i) => (
-                <a
-                  key={i}
-                  href={link.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-5 py-3 rounded-xl border border-[#003572]/25 dark:border-[#00bfff]/15 hover:border-[#00bfff]/50 dark:hover:border-[#00bfff]/40 hover:bg-[#00bfff]/5 transition-colors group"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="text-[#00bfff] shrink-0">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                    <polyline points="15 3 21 3 21 9" />
-                    <line x1="10" y1="14" x2="21" y2="3" />
-                  </svg>
-                  <span className="font-label text-sm uppercase tracking-widest group-hover:text-[#00bfff] transition-colors">
-                    {link.label || link.url}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
+              {(post.musicalReferenceUrl || (post.referenceLinks?.[0]?.url)) && (
+                <a href={post.musicalReferenceUrl || post.referenceLinks![0].url}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-4 p-4 rounded-xl border border-[#003572]/25 dark:border-[#00bfff]/15 hover:border-[#00bfff]/50 hover:bg-[#00bfff]/5 transition-colors group">
+                  <span className="flex items-center justify-center w-11 h-11 rounded-full bg-[#00bfff]/12 text-[#00bfff] shrink-0">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg>
+                  </span>
+                  <span className="flex-1">
+                    <span className="block font-display text-sm font-semibold group-hover:text-[#00bfff] transition-colors">Referencia musical</span>
+                    <span className="block font-body text-xs text-[#C8D8EB]/60 dark:text-[#C8D8EB]/50">Para ensayar — músicos</span>
                   </span>
                 </a>
-              ))}
+              )}
+              {post.lyricsVideoUrl && (
+                <a href={post.lyricsVideoUrl}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-4 p-4 rounded-xl border border-[#003572]/25 dark:border-[#00bfff]/15 hover:border-[#00bfff]/50 hover:bg-[#00bfff]/5 transition-colors group">
+                  <span className="flex items-center justify-center w-11 h-11 rounded-full bg-[#00bfff]/12 text-[#00bfff] shrink-0">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="22" /></svg>
+                  </span>
+                  <span className="flex-1">
+                    <span className="block font-display text-sm font-semibold group-hover:text-[#00bfff] transition-colors">Versión con letra</span>
+                    <span className="block font-body text-xs text-[#C8D8EB]/60 dark:text-[#C8D8EB]/50">Letra en español</span>
+                  </span>
+                </a>
+              )}
             </div>
           </section>
         )}
