@@ -26,6 +26,7 @@ interface Song {
   chords?: Array<{ key: string; content: string }>;
   referenceLinks?: Array<{ label: string; url: string }>;
   tags?: SongTag[];
+  authors?: Array<{ _id: string; name: string }>;
 }
 
 type ModalState =
@@ -37,9 +38,10 @@ type ModalState =
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
 export default function ContentPanel({ canDelete = false }: { canDelete?: boolean }) {
-  const [songs, setSongs]     = useState<Song[]>([]);
-  const [tags, setTags]       = useState<SongTag[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [songs, setSongs]       = useState<Song[]>([]);
+  const [tags, setTags]         = useState<SongTag[]>([]);
+  const [authors, setAuthors]   = useState<SongTag[]>([]);
+  const [loading, setLoading]   = useState(true);
   const [error, setError]     = useState<string | null>(null);
   const [search, setSearch]   = useState("");
   const [modal, setModal]     = useState<ModalState>(null);
@@ -55,14 +57,16 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
     setLoading(true);
     setError(null);
     try {
-      const [songsRes, tagsRes] = await Promise.all([
+      const [songsRes, tagsRes, authorsRes] = await Promise.all([
         fetch("/api/content/posts"),
         fetch("/api/content/tags"),
+        fetch("/api/content/authors"),
       ]);
-      if (!songsRes.ok || !tagsRes.ok) throw new Error();
-      const [songsData, tagsData] = await Promise.all([songsRes.json(), tagsRes.json()]);
+      if (!songsRes.ok || !tagsRes.ok || !authorsRes.ok) throw new Error();
+      const [songsData, tagsData, authorsData] = await Promise.all([songsRes.json(), tagsRes.json(), authorsRes.json()]);
       setSongs(songsData);
       setTags(tagsData);
+      setAuthors(authorsData);
     } catch {
       setError("Error al cargar canciones.");
     } finally {
@@ -82,6 +86,18 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
     const tag = await res.json();
     setTags((prev) => [...prev, tag].sort((a, b) => a.name.localeCompare(b.name)));
     return tag;
+  };
+
+  const handleCreateAuthor = async (name: string): Promise<SongTag | null> => {
+    const res = await fetch("/api/content/authors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) return null;
+    const author = await res.json();
+    setAuthors((prev) => [...prev, author].sort((a, b) => a.name.localeCompare(b.name)));
+    return author;
   };
 
   const handleAdd = async (form: FormState) => {
@@ -242,10 +258,12 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
           <SongForm
             initial={modal.type === "edit" ? songToFormInitial(modal.song) : undefined}
             allTags={tags}
+            allAuthors={authors}
             onSubmit={modal.type === "add" ? handleAdd : handleEdit}
             onClose={() => setModal(null)}
             loading={submitting}
             canCreateTag={handleCreateTag}
+            canCreateAuthor={handleCreateAuthor}
           />
         </Modal>
       )}
