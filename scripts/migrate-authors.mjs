@@ -3,7 +3,7 @@ dotenv.config({ path: ".env.local" });
 import { readFileSync } from "node:fs";
 import { createClient } from "next-sanity";
 import { parseAuthors, dedupeKey, buildFreq, canonicalName } from "./lib/author-canon.mjs";
-import { matchRow, normalizeForMatch } from "./lib/catalog-reconcile.mjs";
+import { matchRow } from "./lib/catalog-reconcile.mjs";
 import { slugifyAuthor } from "../app/utils/slugifyAuthor.mjs";
 
 const CATALOG_DIR = process.env.CATALOG_DIR || "/Users/frankrocha/Downloads/ContentUpdateProject";
@@ -22,8 +22,9 @@ function rng() { return Math.random().toString(36).slice(2, 9); }
 // Operator-approved xlsx co-author ADDITIONS (superset cases surfaced by the dry-run).
 // Empty until the operator approves the dry-run; then fill with the exact post titles.
 const APPROVED_ADDITIONS = {
-  // "Somos Libres": ["Matt Redman", "En Espíritu y En Verdad"],
-  // "Vamos A Cantar (Sing Sing Sing)": ["En Espíritu y En Verdad", "Chris Tomlin"],
+  "Somos Libres": ["Matt Redman", "En Espíritu y En Verdad"],
+  "Vamos A Cantar (Sing Sing Sing)": ["En Espíritu y En Verdad", "Chris Tomlin"],
+  "Dios Está Aquí": ["Miel San Marcos"],
 };
 
 async function loadPosts() {
