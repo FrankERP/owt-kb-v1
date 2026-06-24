@@ -13,18 +13,18 @@ export interface SongTag {
 
 export interface FormState {
   title: string;
-  author: string;
   key: string;
   bpm: string;
   timeSig: string;
   lyrics: string;
   referenceLinks: Array<{ label: string; url: string }>;
   tagIds: string[];
+  authorIds: string[];
 }
 
 interface SongForForm {
   title: string;
-  author: string;
+  author?: string;
   key?: string;
   bpm?: number;
   timeSig?: string;
@@ -32,6 +32,7 @@ interface SongForForm {
   chords?: Array<{ key: string; content: string }>;
   referenceLinks?: Array<{ label: string; url: string }>;
   tags?: SongTag[];
+  authors?: Array<{ _id: string }>;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -46,19 +47,19 @@ export const selectCls =
   "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-[#010b17] dark:bg-[#010b17] font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
 
 export function blankForm(): FormState {
-  return { title: "", author: "", key: "", bpm: "", timeSig: "", lyrics: "", referenceLinks: [], tagIds: [] };
+  return { title: "", key: "", bpm: "", timeSig: "", lyrics: "", referenceLinks: [], tagIds: [], authorIds: [] };
 }
 
 export function songToForm(song: SongForForm): FormState {
   return {
     title:          song.title ?? "",
-    author:         song.author ?? "",
     key:            song.key ?? "",
     bpm:            song.bpm?.toString() ?? "",
     timeSig:        song.timeSig ?? "",
     lyrics:         song.chords?.[0]?.content || bodyToLyrics(song.body),
     referenceLinks: song.referenceLinks ?? [],
     tagIds:         song.tags?.map((t) => t._id) ?? [],
+    authorIds:      song.authors?.map((a) => a._id) ?? [],
   };
 }
 
@@ -66,7 +67,7 @@ export function buildPayload(form: FormState) {
   const hasChords = CHORD_MARKER_RE.test(form.lyrics);
   return {
     title: form.title,
-    author: form.author,
+    authorIds: form.authorIds,
     key: form.key,
     bpm: form.bpm,
     timeSig: form.timeSig,
@@ -109,23 +110,30 @@ export function Modal({
 export function SongForm({
   initial,
   allTags,
+  allAuthors = [],
   onSubmit,
   onClose,
   loading,
   canCreateTag,
+  canCreateAuthor = async () => null,
 }: {
   initial?: Partial<FormState>;
   allTags: SongTag[];
+  allAuthors?: SongTag[];
   onSubmit: (form: FormState) => void;
   onClose: () => void;
   loading: boolean;
   canCreateTag: (name: string) => Promise<SongTag | null>;
+  canCreateAuthor?: (name: string) => Promise<SongTag | null>;
 }) {
-  const [form, setForm]               = useState<FormState>(() => initial ? { ...blankForm(), ...initial } : blankForm());
-  const [creatingTag, setCreatingTag] = useState(false);
-  const [localTags, setLocalTags]     = useState<SongTag[]>(allTags);
-  const [tagSearch, setTagSearch]     = useState("");
-  const lyricsRef                     = useRef<HTMLTextAreaElement>(null);
+  const [form, setForm]                   = useState<FormState>(() => initial ? { ...blankForm(), ...initial } : blankForm());
+  const [creatingTag, setCreatingTag]     = useState(false);
+  const [localTags, setLocalTags]         = useState<SongTag[]>(allTags);
+  const [tagSearch, setTagSearch]         = useState("");
+  const [localAuthors, setLocalAuthors]   = useState<SongTag[]>(allAuthors);
+  const [authorSearch, setAuthorSearch]   = useState("");
+  const [creatingAuthor, setCreatingAuthor] = useState(false);
+  const lyricsRef                         = useRef<HTMLTextAreaElement>(null);
 
   const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -134,6 +142,12 @@ export function SongForm({
     setForm((f) => ({
       ...f,
       tagIds: f.tagIds.includes(id) ? f.tagIds.filter((t) => t !== id) : [...f.tagIds, id],
+    }));
+
+  const toggleAuthor = (id: string) =>
+    setForm((f) => ({
+      ...f,
+      authorIds: f.authorIds.includes(id) ? f.authorIds.filter((a) => a !== id) : [...f.authorIds, id],
     }));
 
   const addRefLink = () =>
@@ -159,6 +173,18 @@ export function SongForm({
       setTagSearch("");
     }
     setCreatingTag(false);
+  };
+
+  const handleCreateAuthor = async () => {
+    if (!authorSearch.trim() || creatingAuthor) return;
+    setCreatingAuthor(true);
+    const author = await canCreateAuthor(authorSearch.trim());
+    if (author) {
+      setLocalAuthors((prev) => [...prev, author].sort((a, b) => a.name.localeCompare(b.name)));
+      setForm((f) => ({ ...f, authorIds: [...f.authorIds, author._id] }));
+      setAuthorSearch("");
+    }
+    setCreatingAuthor(false);
   };
 
   const insertLabel = (label: string) => {
@@ -193,16 +219,73 @@ export function SongForm({
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); onSubmit(form); }} className="space-y-5">
-      {/* Title + Author */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <label className="font-label text-xs uppercase tracking-widest text-gray-500">Título *</label>
-          <input className={inputCls} value={form.title} onChange={set("title")} required placeholder="Nombre de la canción" />
-        </div>
-        <div className="space-y-1">
-          <label className="font-label text-xs uppercase tracking-widest text-gray-500">Artista</label>
-          <input className={inputCls} value={form.author} onChange={set("author")} placeholder="Artista / Banda" />
-        </div>
+      {/* Title */}
+      <div className="space-y-1">
+        <label className="font-label text-xs uppercase tracking-widest text-gray-500">Título *</label>
+        <input className={inputCls} value={form.title} onChange={set("title")} required placeholder="Nombre de la canción" />
+      </div>
+
+      {/* Artista (multi-select) */}
+      <div className="space-y-2">
+        <label className="font-label text-xs uppercase tracking-widest text-gray-500">Artista</label>
+        <input
+          className={inputCls}
+          value={authorSearch}
+          onChange={(e) => setAuthorSearch(e.target.value)}
+          placeholder="Filtrar o crear artista..."
+        />
+        {authorSearch.trim() ? (
+          <div className="rounded-lg border border-[#00bfff]/20 divide-y divide-[#00bfff]/10 max-h-48 overflow-y-auto">
+            {localAuthors
+              .filter((a) => a.name.toLowerCase().includes(authorSearch.toLowerCase()))
+              .map((author) => {
+                const active = form.authorIds.includes(author._id);
+                return (
+                  <div key={author._id} className="flex items-center gap-3 px-3 py-2 hover:bg-[#00bfff]/5 transition-colors">
+                    <button type="button" onClick={() => toggleAuthor(author._id)} className="flex-1 flex items-center gap-2 text-left">
+                      <span className={`font-label text-[10px] uppercase tracking-widest ${active ? "text-[#00bfff]" : "text-gray-400"}`}>
+                        {author.name}
+                      </span>
+                    </button>
+                    {active && <span className="font-label text-[9px] text-[#00bfff] shrink-0">✓</span>}
+                  </div>
+                );
+              })}
+            <div className="hover:bg-[#00bfff]/5 transition-colors">
+              <button
+                type="button"
+                onClick={handleCreateAuthor}
+                disabled={creatingAuthor}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-left disabled:opacity-50"
+              >
+                <span className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]">
+                  {creatingAuthor ? "Creando..." : "+ Crear"}
+                </span>
+                <span className="font-body text-xs text-gray-400 truncate">"{authorSearch}"</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {localAuthors.map((author) => {
+              const active = form.authorIds.includes(author._id);
+              return (
+                <button
+                  key={author._id}
+                  type="button"
+                  onClick={() => toggleAuthor(author._id)}
+                  className={`font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
+                    active
+                      ? "border-[#00bfff] bg-[#00bfff]/15 text-[#00bfff]"
+                      : "border-[#00bfff]/20 text-gray-500 hover:border-[#00bfff]/50"
+                  }`}
+                >
+                  {author.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Key + BPM + Time Sig */}
