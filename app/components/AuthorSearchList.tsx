@@ -1,0 +1,78 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import { Author } from "../utils/interface";
+import Link from "next/link";
+
+type SortMode = "popular" | "alpha";
+
+export default function AuthorSearchList({ authors }: { authors: Author[] }) {
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortMode>("popular");
+  const isSearching = query.trim().length > 0;
+
+  const totalSongs = useMemo(
+    () => authors.reduce((sum, a) => sum + (a.postCount ?? 0), 0),
+    [authors]
+  );
+
+  const grid = useMemo(() => {
+    const base = isSearching
+      ? authors.filter((a) => a.name.toLowerCase().includes(query.toLowerCase()))
+      : authors;
+    return [...base].sort((a, b) =>
+      sort === "alpha" ? a.name.localeCompare(b.name) : (b.postCount ?? 0) - (a.postCount ?? 0)
+    );
+  }, [query, sort, authors, isSearching]);
+
+  return (
+    <div className="mx-auto max-w-7xl px-6 pt-8 pb-20 space-y-10">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="flex items-baseline gap-4 flex-1">
+          <div className="flex items-baseline gap-1.5">
+            <span className="font-display text-3xl text-[#00bfff]">{authors.length}</span>
+            <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">artistas</span>
+          </div>
+          <span className="text-gray-700 text-sm">·</span>
+          <div className="flex items-baseline gap-1.5">
+            <span className="font-display text-3xl text-[#00bfff]">{totalSongs}</span>
+            <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">canciones</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex rounded-lg border border-[#003572]/20 dark:border-[#00bfff]/15 overflow-hidden">
+            {(["popular", "alpha"] as SortMode[]).map((mode, i) => (
+              <button key={mode} onClick={() => setSort(mode)}
+                className={`px-3 py-1.5 font-label text-[10px] uppercase tracking-widest transition-colors duration-150 ${i > 0 ? "border-l border-[#003572]/20 dark:border-[#00bfff]/15" : ""} ${sort === mode ? "bg-[#00bfff]/15 text-[#00bfff]" : "text-gray-500 hover:text-gray-300 hover:bg-[#00bfff]/5"}`}>
+                {mode === "popular" ? "Popular" : "A–Z"}
+              </button>
+            ))}
+          </div>
+          <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar..."
+            className="font-label px-3 py-1.5 rounded-lg border border-[#003572]/20 dark:border-[#00bfff]/15 bg-transparent focus:outline-none focus:border-[#00bfff] text-sm placeholder:text-gray-600 transition-colors w-36 sm:w-48" />
+        </div>
+      </div>
+
+      {grid.length > 0 ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          {grid.map((a) => (
+            <Link key={a._id} href={`/author/${a.slug.current}`}>
+              <div className="relative group overflow-hidden rounded-xl border border-[#003572]/20 dark:border-[#00bfff]/10 p-4 hover:border-[#003572]/50 dark:hover:border-[#00bfff]/40 hover:shadow-lg hover:shadow-[#00bfff]/10 transition-all duration-200 cursor-pointer">
+                <h3 className="font-display text-sm mb-1 group-hover:text-[#00bfff] transition-colors duration-200 leading-snug">
+                  {a.name}
+                </h3>
+                <p className="font-label text-[10px] uppercase tracking-widest text-gray-600">
+                  {a.postCount ?? 0} {(a.postCount ?? 0) === 1 ? "canción" : "canciones"}
+                </p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-3 py-24 text-gray-600">
+          <p className="font-label text-sm uppercase tracking-widest">No se encontraron artistas</p>
+        </div>
+      )}
+    </div>
+  );
+}
