@@ -22,6 +22,7 @@ async function getPost(slug: string) {
       _id,
       title,
       author,
+      authors[] -> { _id, slug, name },
       slug,
       publishDate,
       excerpt,
@@ -147,11 +148,20 @@ const Page = async ({ params }: Params) => {
             {post?.title}
           </h1>
 
-          {post?.author && (
-            <p className="font-body text-lg text-[#C8D8EB]/60 mb-8">
-              {post.author}
-            </p>
-          )}
+          {post?.authors && post.authors.length > 0 ? (
+            <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 mb-8">
+              {post.authors.map((a, i) => (
+                <span key={a._id} className="font-body text-lg text-[#C8D8EB]/60">
+                  <Link href={`/author/${a.slug.current}`} className="hover:text-[#00bfff] transition-colors">
+                    {a.name}
+                  </Link>
+                  {i < post.authors!.length - 1 && <span className="text-[#C8D8EB]/30">,</span>}
+                </span>
+              ))}
+            </div>
+          ) : post?.author ? (
+            <p className="font-body text-lg text-[#C8D8EB]/60 mb-8">{post.author}</p>
+          ) : null}
 
           <div className="flex flex-wrap justify-center gap-3">
             {post?.key && (
