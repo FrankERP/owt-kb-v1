@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     );
     const byId = new Map(names.map((n) => [n._id, n.name]));
     authorStr = body.authorIds.map((id) => byId.get(id)).filter(Boolean).join(", ");
-    authorRefs = body.authorIds.map((id) => ({ _type: "reference", _ref: id, _key: rng() }));
+    authorRefs = body.authorIds.filter((id) => byId.has(id)).map((id) => ({ _type: "reference", _ref: id, _key: rng() }));
   }
 
   const slugBase = `${body.title}-${authorStr}`.toLowerCase()

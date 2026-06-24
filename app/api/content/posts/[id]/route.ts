@@ -58,7 +58,7 @@ export async function PATCH(
     );
     const byId = new Map(names.map((n) => [n._id, n.name]));
     patch.author = body.authorIds.map((id) => byId.get(id)).filter(Boolean).join(", ");
-    patch.authors = body.authorIds.map((id) => ({ _type: "reference", _ref: id, _key: rng() }));
+    patch.authors = body.authorIds.filter((id) => byId.has(id)).map((id) => ({ _type: "reference", _ref: id, _key: rng() }));
   } else if (body.author != null) {
     patch.author = body.author.trim();
   }
