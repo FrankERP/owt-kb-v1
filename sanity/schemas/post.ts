@@ -1,4 +1,3 @@
-import { title } from "process";
 import { Rule } from "sanity";
 
 export const post = {
@@ -191,6 +190,17 @@ export const post = {
 				},
 			],
 		},
+		{
+			name: "authors",
+			title: "Authors",
+			type: "array",
+			of: [
+				{
+					type: "reference",
+					to: [{ type: "author" }],
+				},
+			],
+		},
 	],
 
 	preview: {
@@ -201,7 +211,7 @@ export const post = {
 		prepare(selection:any) {
 			const {title, author} = selection;
 			return {
-				title: `${title} - ${author}`,
+				title: author ? `${title} - ${author}` : title,
 			};
 		}
 	}
