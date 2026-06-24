@@ -8,10 +8,11 @@ import { Post } from "@/app/utils/interface";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface SongTag { _id: string; name: string; slug: { current: string }; }
+interface SongTag    { _id: string; name: string; slug: { current: string }; }
+interface SongAuthor { _id: string; name: string; }
 
 interface FormState {
-  title: string; author: string; key: string; bpm: string; timeSig: string;
+  title: string; authorIds: string[]; key: string; bpm: string; timeSig: string;
   lyrics: string;
   tutorials: { title: string; url: string }[];
   referenceLinks: { label: string; url: string }[];
@@ -31,7 +32,7 @@ const inputCls =
 function postToForm(post: Post): FormState {
   return {
     title:          post.title ?? "",
-    author:         post.author ?? "",
+    authorIds:      post.authors?.map((a) => a._id) ?? [],
     key:            post.key ?? "",
     bpm:            post.bpm?.toString() ?? "",
     timeSig:        post.timeSig ?? "",
@@ -47,7 +48,7 @@ function postToForm(post: Post): FormState {
 function buildPayload(form: FormState) {
   const hasChords = CHORD_MARKER_RE.test(form.lyrics);
   return {
-    title: form.title, author: form.author, key: form.key,
+    title: form.title, authorIds: form.authorIds, key: form.key,
     bpm: form.bpm, timeSig: form.timeSig,
     lyrics: hasChords ? "" : form.lyrics,
     chords: hasChords ? [{ key: form.key, content: form.lyrics }] : [],
@@ -66,9 +67,12 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
   const { data: session } = useSession();
   const [open, setOpen]       = useState(false);
   const [form, setForm]       = useState<FormState>(() => postToForm(post));
-  const [tags, setTags]       = useState<SongTag[]>([]);
-  const [tagSearch, setTagSearch] = useState("");
+  const [tags, setTags]             = useState<SongTag[]>([]);
+  const [tagSearch, setTagSearch]   = useState("");
   const [tagsLoaded, setTagsLoaded] = useState(false);
+  const [authors, setAuthors]             = useState<SongAuthor[]>([]);
+  const [authorSearch, setAuthorSearch]   = useState("");
+  const [authorsLoaded, setAuthorsLoaded] = useState(false);
   const [saving, setSaving]   = useState(false);
   const [toast, setToast]     = useState<string | null>(null);
   const lyricsRef             = useRef<HTMLTextAreaElement>(null);
@@ -85,7 +89,11 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
       const res = await fetch("/api/content/tags");
       if (res.ok) { setTags(await res.json()); setTagsLoaded(true); }
     }
-  }, [post, tagsLoaded]);
+    if (!authorsLoaded) {
+      const res = await fetch("/api/content/authors");
+      if (res.ok) { setAuthors(await res.json()); setAuthorsLoaded(true); }
+    }
+  }, [post, tagsLoaded, authorsLoaded]);
 
   const set = (key: keyof FormState) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -95,6 +103,12 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
     setForm((f) => ({
       ...f,
       tagIds: f.tagIds.includes(id) ? f.tagIds.filter((t) => t !== id) : [...f.tagIds, id],
+    }));
+
+  const toggleAuthor = (id: string) =>
+    setForm((f) => ({
+      ...f,
+      authorIds: f.authorIds.includes(id) ? f.authorIds.filter((a) => a !== id) : [...f.authorIds, id],
     }));
 
   const addTutorial = () =>
@@ -212,15 +226,33 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
             <div className="overflow-y-auto overflow-x-hidden p-6 flex-1">
               <form onSubmit={handleSubmit} className="space-y-5">
 
-                {/* Title + Author */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="font-label text-xs uppercase tracking-widest text-gray-500">Título *</label>
-                    <input className={inputCls} value={form.title} onChange={set("title")} required />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="font-label text-xs uppercase tracking-widest text-gray-500">Artista</label>
-                    <input className={inputCls} value={form.author} onChange={set("author")} />
+                {/* Title */}
+                <div className="space-y-1">
+                  <label className="font-label text-xs uppercase tracking-widest text-gray-500">Título *</label>
+                  <input className={inputCls} value={form.title} onChange={set("title")} required />
+                </div>
+
+                {/* Artista (multi-select) */}
+                <div className="space-y-2">
+                  <label className="font-label text-xs uppercase tracking-widest text-gray-500">Artista</label>
+                  <input className={inputCls} value={authorSearch}
+                    onChange={(e) => setAuthorSearch(e.target.value)} placeholder="Filtrar artistas…" />
+                  <div className="flex flex-wrap gap-1.5">
+                    {authors
+                      .filter((a) => a.name.toLowerCase().includes(authorSearch.toLowerCase()))
+                      .map((author) => {
+                        const active = form.authorIds.includes(author._id);
+                        return (
+                          <button key={author._id} type="button" onClick={() => toggleAuthor(author._id)}
+                            className={`font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
+                              active
+                                ? "border-[#00bfff] bg-[#00bfff]/15 text-[#00bfff]"
+                                : "border-[#00bfff]/20 text-gray-500 hover:border-[#00bfff]/50"
+                            }`}>
+                            {author.name}
+                          </button>
+                        );
+                      })}
                   </div>
                 </div>
 
