@@ -2,6 +2,7 @@ import { type SchemaTypeDefinition } from 'sanity';
 import { post } from './schemas/post';
 import { youtubeType } from './schemas/youtubeType/youtubeType';
 import { tag } from './schemas/tag';
+import { author } from './schemas/author';
 import { featuredSongs } from './schemas/setList';
 import { saturdaySongs } from './schemas/satSongs';
 import { saturdayRole } from './schemas/satRole';
@@ -12,5 +13,5 @@ import { loginEvent } from './schemas/loginEvent';
 import { setlistProposal } from './schemas/setlistProposal';
 
 export const schema: { types: SchemaTypeDefinition[] } = {
-  types: [post, tag, featuredSongs, saturdaySongs, saturdayRole, sundayRole, teamMembers, specialRole, loginEvent, setlistProposal],
+  types: [post, tag, author, featuredSongs, saturdaySongs, saturdayRole, sundayRole, teamMembers, specialRole, loginEvent, setlistProposal],
 }
