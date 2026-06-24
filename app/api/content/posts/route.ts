@@ -23,6 +23,7 @@ export async function GET() {
       _id, title, author, slug, key, bpm, timeSig, publishDate,
       musicalReferenceUrl, lyricsVideoUrl,
       body,
+      authors[]->{ _id, name },
       chords[]{ key, content },
       referenceLinks[]{ label, url },
       tags[]->{ _id, name, slug }
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
     musicalReferenceUrl?: string;
     lyricsVideoUrl?: string;
     tagIds?: string[];
+    authorIds?: string[];
   };
 
   if (!body.title?.trim()) {
@@ -64,13 +66,25 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const slugBase = `${body.title}-${body.author ?? ""}`.toLowerCase()
+  let authorStr = body.author?.trim() ?? "";
+  let authorRefs: Array<{ _type: "reference"; _ref: string; _key: string }> = [];
+  if (body.authorIds != null) {
+    const names: Array<{ _id: string; name: string }> = await writeClient.fetch(
+      `*[_type=="author" && _id in $ids]{ _id, name }`, { ids: body.authorIds }
+    );
+    const byId = new Map(names.map((n) => [n._id, n.name]));
+    authorStr = body.authorIds.map((id) => byId.get(id)).filter(Boolean).join(", ");
+    authorRefs = body.authorIds.map((id) => ({ _type: "reference", _ref: id, _key: rng() }));
+  }
+
+  const slugBase = `${body.title}-${authorStr}`.toLowerCase()
     .replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").slice(0, 96);
 
   const doc = await writeClient.create({
     _type: "post",
     title: body.title.trim(),
-    author: body.author?.trim() ?? "",
+    author: authorStr,
+    authors: authorRefs,
     slug: { _type: "slug", current: slugBase },
     key: body.key?.trim() ?? "",
     bpm: body.bpm ? Number(body.bpm) : undefined,
