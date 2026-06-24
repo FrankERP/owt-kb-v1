@@ -31,8 +31,9 @@ export async function POST(req: NextRequest) {
   );
   const byId = new Map(songs.map((s) => [s._id, s]));
 
-  // One video per song, in setlist order. Prefer the reference (official) video,
-  // fall back to the first tutorial.
+  // One video per song, in setlist order. pickPracticeVideoUrl chooses by mode:
+  // "musica" -> musical reference, "letras" -> lyrics video (falling back to the
+  // musical reference), each falling back to legacy referenceLinks/tutorials2.
   const videoIds: string[] = [];
   for (const id of ids) {
     const s = byId.get(id);
