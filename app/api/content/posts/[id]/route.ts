@@ -31,6 +31,8 @@ export async function PATCH(
     lyrics?: string;
     chords?: Array<{ key: string; content: string }>;
     referenceLinks?: Array<{ label: string; url: string }>;
+    musicalReferenceUrl?: string;
+    lyricsVideoUrl?: string;
     tutorials?: Array<{ title: string; url: string }>;
     tagIds?: string[];
   };
@@ -40,6 +42,11 @@ export async function PATCH(
   }
   if (body.tutorials?.some((t) => !isSafeHttpUrl(t.url))) {
     return NextResponse.json({ error: "tutorials must use http(s)" }, { status: 400 });
+  }
+  for (const u of [body.musicalReferenceUrl, body.lyricsVideoUrl]) {
+    if (u != null && u !== "" && !isSafeHttpUrl(u)) {
+      return NextResponse.json({ error: "reference URLs must use http(s)" }, { status: 400 });
+    }
   }
 
   const patch: Record<string, unknown> = {};
@@ -59,6 +66,8 @@ export async function PATCH(
       _type: "referenceLink", _key: rng(), label: l.label, url: l.url,
     }));
   }
+  if (body.musicalReferenceUrl != null) patch.musicalReferenceUrl = body.musicalReferenceUrl || undefined;
+  if (body.lyricsVideoUrl != null)      patch.lyricsVideoUrl = body.lyricsVideoUrl || undefined;
   if (body.tutorials != null) {
     patch.tutorials2 = body.tutorials.map((t) => ({
       _type: "tutorial", _key: rng(), title: t.title, url: t.url,

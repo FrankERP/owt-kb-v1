@@ -15,6 +15,8 @@ interface FormState {
   lyrics: string;
   tutorials: { title: string; url: string }[];
   referenceLinks: { label: string; url: string }[];
+  musicalReferenceUrl: string;
+  lyricsVideoUrl: string;
   tagIds: string[];
 }
 
@@ -36,6 +38,8 @@ function postToForm(post: Post): FormState {
     lyrics:         post.chords?.[0]?.content || bodyToLyrics(post.body),
     tutorials:      (post.tutorials2 ?? []).map((t: any) => ({ title: t.title ?? "", url: t.url ?? "" })),
     referenceLinks: post.referenceLinks ?? [],
+    musicalReferenceUrl: post.musicalReferenceUrl ?? "",
+    lyricsVideoUrl:      post.lyricsVideoUrl ?? "",
     tagIds:         post.tags?.map((t) => t._id) ?? [],
   };
 }
@@ -49,6 +53,8 @@ function buildPayload(form: FormState) {
     chords: hasChords ? [{ key: form.key, content: form.lyrics }] : [],
     tutorials: form.tutorials,
     referenceLinks: form.referenceLinks,
+    musicalReferenceUrl: form.musicalReferenceUrl.trim(),
+    lyricsVideoUrl:      form.lyricsVideoUrl.trim(),
     tagIds: form.tagIds,
   };
 }
@@ -354,6 +360,20 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
                       ))}
                     </div>
                   )}
+                </div>
+
+                {/* Musical & lyrics reference videos */}
+                <div className="space-y-2">
+                  <label className="font-label text-xs uppercase tracking-widest text-gray-500">Referencia musical (URL)</label>
+                  <input className={inputCls} value={form.musicalReferenceUrl}
+                    onChange={(e) => setForm((f) => ({ ...f, musicalReferenceUrl: e.target.value }))}
+                    placeholder="https://youtu.be/…" />
+                </div>
+                <div className="space-y-2">
+                  <label className="font-label text-xs uppercase tracking-widest text-gray-500">Video con letra en español (URL)</label>
+                  <input className={inputCls} value={form.lyricsVideoUrl}
+                    onChange={(e) => setForm((f) => ({ ...f, lyricsVideoUrl: e.target.value }))}
+                    placeholder="https://youtu.be/…" />
                 </div>
 
                 {/* Tags */}
