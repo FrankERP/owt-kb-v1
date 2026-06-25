@@ -79,4 +79,20 @@ describe("serviceDateFor", () => {
     // 2022-07-03 is a Sunday, but heading says Sábado
     expect(serviceDateFor("Sábado 3 de Julio", "2022-06-20").confidence).toBe("conflict");
   });
+  it("day-number: Domingo 3 where July 3 2022 is Sunday -> explicit confidence", () => {
+    // July 3, 2022 is a Sunday; heading says Domingo -> match
+    expect(serviceDateFor("Domingo 3", "2022-07-01")).toMatchObject({
+      serviceDate: "2022-07-03",
+      type: "featuredSongs",
+      confidence: "explicit"
+    });
+  });
+  it("day-number: Sábado 3 where July 3 2022 is Sunday -> conflict confidence", () => {
+    // July 3, 2022 is a Sunday; heading says Sábado -> conflict
+    expect(serviceDateFor("Sábado 3", "2022-07-01")).toMatchObject({
+      serviceDate: "2022-07-03",
+      type: "saturdarSongs",
+      confidence: "conflict"
+    });
+  });
 });
