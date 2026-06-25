@@ -38,3 +38,20 @@ next-env.d.ts
 # Service account creds + UX walkthrough artifacts (local only)
 scripts/.sa-creds.json
 .ux-shots/
+
+# Local-only leftover one-off scripts (not part of the app)
+scripts/create-service-account.mjs
+scripts/sa-roster.mjs
+scripts/fix-song-bodies.mjs
+scripts/fix-section-colons.mjs
+scripts/maya-shots.mjs
+scripts/skeptic-desktop.mjs
+scripts/ux-shots.mjs
+scripts/ux-shots-fix.mjs
+scripts/ux-shots-fix2.mjs
+scripts/ux-verify.mjs
+
+# Local config / generated artifacts left untracked
+.claudeignore
+public/manifest.webmanifest
+ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
