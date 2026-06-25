@@ -103,3 +103,61 @@ async function phaseA() {
 }
 
 if (!APPLY) phaseA().catch(e => { console.error(e); process.exit(1); });
+
+async function phaseB() {
+  const plan = JSON.parse(readFileSync(`${WORKDIR}/setlist-plan.json`, "utf-8"));
+  const decisions = existsSync(`${WORKDIR}/setlist-decisions.json`) ? JSON.parse(readFileSync(`${WORKDIR}/setlist-decisions.json`, "utf-8")) : {};
+
+  // resolve a song to a postId: direct match → alias decision → pick decision (ambiguous). Else null (skip/add/unresolved).
+  const resolve = (s) => {
+    if (s.postId) return s.postId;
+    const d = decisions[normalizeForMatch(s.rawName)];
+    if (d && (d.action === "alias" || d.action === "pick") && d.postId) {
+      if (s.candidates && !s.candidates.includes(d.postId)) return null; // pick must be one of the candidates
+      return d.postId;
+    }
+    return null;
+  };
+  // refuse to apply unless EVERY surfaced unmatched AND ambiguous song has a valid decision
+  const unresolved = new Set();
+  for (const b of plan) for (const s of b.songs) {
+    if (s.postId) continue;
+    const d = decisions[normalizeForMatch(s.rawName)];
+    if (s.candidates) {
+      if (!(d && d.action === "pick" && d.postId && s.candidates.includes(d.postId)))
+        unresolved.add(`ambiguous (need action:"pick"+valid postId): ${s.rawName}`);
+    } else if (!(d && (d.action === "skip" || (d.action === "alias" && d.postId)))) {
+      unresolved.add(`unmatched (need action:"alias"+postId or "skip"): ${s.rawName}`);
+    }
+  }
+  if (unresolved.size) { console.error("Refusing to apply — resolve these in setlist-decisions.json first:\n  " + [...unresolved].join("\n  ")); process.exit(1); }
+
+  // dedup against existing
+  const existing = await client.fetch(`*[_type in ["featuredSongs","saturdarSongs"]]{ _type, "week": string(week) }`);
+  const existSet = new Set(existing.map(e => `${e._type}|${(e.week||"").slice(0,10)}`));
+  // within-plan dedup: keep the most-complete block per (type, serviceDate) — and PRINT every drop (never silent)
+  const best = new Map();
+  for (const b of plan) {
+    const k = `${b.type}|${b.serviceDate}`;
+    const cnt = b.songs.filter(s => resolve(s)).length;
+    const prev = best.get(k);
+    if (!prev) { best.set(k, { ...b, _cnt: cnt }); continue; }
+    const keep = cnt > prev._cnt ? { ...b, _cnt: cnt } : prev;
+    const drop = cnt > prev._cnt ? prev : { ...b, _cnt: cnt };
+    console.log(`COLLISION ${k}: kept ${keep._cnt}-song block (msg ${keep.messageDate}), DROPPED ${drop._cnt}-song block (msg ${drop.messageDate})`);
+    best.set(k, keep);
+  }
+
+  let created = 0, skipped = 0;
+  for (const [k, b] of best) {
+    if (existSet.has(k)) { skipped++; continue; }
+    const songs = b.songs.map(s => ({ id: resolve(s), key: s.key })).filter(s => s.id)
+      .map(s => ({ _type: "setlist_song", _key: rng(), song: { _type: "reference", _ref: s.id }, play_key: s.key }));
+    if (!songs.length) { skipped++; continue; }
+    await client.create({ _type: b.type, week: b.serviceDate, songs });
+    created++;
+  }
+  console.log(`Applied: ${created} history docs created, ${skipped} skipped (existing/empty).`);
+}
+
+if (APPLY) phaseB().catch(e => { console.error(e); process.exit(1); });
