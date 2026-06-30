@@ -25,6 +25,7 @@ import json
 import random
 import re
 import sys
+import time
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Dict, List, Sequence, Set, Tuple
@@ -94,8 +95,15 @@ class ScheduleConfig:
     history: List[Dict]             # pre-loaded history entries (oldest first)
     seed: int | None = None
     random_tie_break_weight_max: int = 9
-    solver_max_time_seconds: int = 20
-    solver_num_search_workers: int = 8
+    # Per-solve cap. Kept small because the production function runs on a
+    # fractional vCPU (~0.33) — CP-SAT finds good solutions fast there but proves
+    # optimality slowly, so a short cap returns near-identical quality much sooner.
+    solver_max_time_seconds: int = 5
+    # 1 worker beats 8 on a sub-1-vCPU container (8 threads thrash one core).
+    solver_num_search_workers: int = 1
+    # Wall-clock ceiling across ALL internal solves (stage A + relaxation loop);
+    # once exceeded, return the best schedule found so far instead of grinding.
+    solver_total_budget_seconds: int = 40
     discourage_consecutive_role_repeats: bool = True
 
 
@@ -617,6 +625,7 @@ def create_model_and_solve(
     optimize: bool = True,
     empty_objective_only: bool = False,
     empty_target: int | None = None,
+    max_time_override: float | None = None,
 ) -> SolveResult | None:
 
     model = cp_model.CpModel()
@@ -951,7 +960,10 @@ def create_model_and_solve(
         model.Minimize(sum(obj))
 
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = config.solver_max_time_seconds
+    solver.parameters.max_time_in_seconds = (
+        max_time_override if max_time_override is not None
+        else config.solver_max_time_seconds
+    )
     solver.parameters.num_search_workers = config.solver_num_search_workers
     solver.parameters.search_branching = (
         cp_model.RANDOMIZED_SEARCH if optimize else cp_model.AUTOMATIC_SEARCH
@@ -1081,12 +1093,20 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
 
     big = len(slots) + 1  # a fairness limit so loose it never binds
 
+    # Global wall-clock budget across all internal solves. On a fractional-vCPU
+    # container each solve is slow, so we cap total time and return the best
+    # schedule found so far rather than letting the HTTP request time out.
+    deadline = time.monotonic() + max(1, config.solver_total_budget_seconds)
+
+    def solve_time() -> float:
+        return min(config.solver_max_time_seconds, max(1.0, deadline - time.monotonic()))
+
     # Stage A: fill as many seats as availability allows (Choir → BGV → 2nd-Lead
     # degradation), ignoring fairness entirely. This decouples seat-filling from
     # fairness so a tight fairness cap can never force a seat empty.
     stage_a = create_model_and_solve(
         **common, fairness_limit=big, sun_lead_limit=big, sun_bgv_limit=big,
-        optimize=False, empty_objective_only=True,
+        optimize=False, empty_objective_only=True, max_time_override=solve_time(),
     )
     if stage_a is None:
         # The only true infeasibility: a service can't field its mandatory lead
@@ -1101,10 +1121,13 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
         for sb_limit in (1, 2):
             for g_limit in (1, 2):
                 for opt in (True, False):
+                    if deadline - time.monotonic() < 1.0:
+                        return stage_a  # out of budget — return the max-fill solution
                     result = create_model_and_solve(
                         **common, fairness_limit=g_limit,
                         sun_lead_limit=sl_limit, sun_bgv_limit=sb_limit,
                         optimize=opt, empty_target=empty_target,
+                        max_time_override=solve_time(),
                     )
                     if result is not None:
                         return result
@@ -1163,8 +1186,9 @@ def solve_from_dict(data: Dict) -> Dict:
             dsl_restrictions=list(data.get("dsl_rules", [])),
             history=list(data.get("history", [])),
             seed=data.get("seed"),
-            solver_max_time_seconds=int(data.get("solver_max_time_seconds", 20)),
-            solver_num_search_workers=int(data.get("solver_num_search_workers", 8)),
+            solver_max_time_seconds=int(data.get("solver_max_time_seconds", 5)),
+            solver_num_search_workers=int(data.get("solver_num_search_workers", 1)),
+            solver_total_budget_seconds=int(data.get("solver_total_budget_seconds", 40)),
             discourage_consecutive_role_repeats=bool(
                 data.get("discourage_consecutive", True)
             ),
