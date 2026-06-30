@@ -26,12 +26,11 @@ FUNCTION_NAME="owt-solver"
 RUNTIME="python312"
 MEMORY="512MB"
 TIMEOUT="120s"
+# The gcf/ directory is self-contained (main.py + owt_solver_v2.py + requirements.txt),
+# so it deploys as-is. This is the same source GitHub continuous deployment builds.
 SOURCE_DIR="$(cd "$(dirname "$0")/.." && pwd)/gcf"
 
-echo "→ Copying solver script into deployment directory..."
-cp "$(dirname "$0")/../scripts/owt_solver_v2.py" "$SOURCE_DIR/owt_solver_v2.py"
-
-echo "→ Deploying $FUNCTION_NAME to $REGION..."
+echo "→ Deploying $FUNCTION_NAME to $REGION (manual fallback; CI deploys on push to main)..."
 gcloud functions deploy "$FUNCTION_NAME" \
   --project="$GCP_PROJECT" \
   --region="$REGION" \
@@ -43,9 +42,6 @@ gcloud functions deploy "$FUNCTION_NAME" \
   --memory="$MEMORY" \
   --timeout="$TIMEOUT" \
   --set-env-vars="OWT_SOLVER_API_KEY=$OWT_SOLVER_API_KEY"
-
-echo "→ Cleaning up temporary solver copy..."
-rm -f "$SOURCE_DIR/owt_solver_v2.py"
 
 echo ""
 echo "✓ Deployed. Function URL:"

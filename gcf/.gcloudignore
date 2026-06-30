@@ -1,0 +1,7 @@
+# Keep the build context to the three files the function needs.
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.err
+.DS_Store
