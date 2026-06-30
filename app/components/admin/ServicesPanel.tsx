@@ -27,6 +27,7 @@ interface ServiceRole {
   _type: ServiceType;
   date: string;
   service_name?: string;
+  published?: boolean;
   leads:       MemberOption[];
   bgvs:        MemberOption[];
   chorus:      MemberOption[];
@@ -240,15 +241,39 @@ function ServiceForm({ initial, members, onSubmit, onClose, loading }: {
   const [pendingData, setPendingData] = useState<any>(null);
   const [unavailableNames, setUnavailableNames] = useState<string[]>([]);
 
-  function buildData() {
-    return { _type: type, date, service_name: serviceName, leads, bgvs, chorus,
+  function buildData(published?: boolean) {
+    const base = { _type: type, date, service_name: serviceName, leads, bgvs, chorus,
       instruments: instruments.filter(s => s.instrument && s.personId),
       foh: foh.filter(s => s.role && s.personId) };
+    // Only include published on create (no initial), not on edit/PATCH
+    if (!initial && published !== undefined) return { ...base, published };
+    return base;
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // This path is used for edit (Guardar button). For create, use submit(published).
     const data = buildData();
+    if (!date) return onSubmit(data);
+    const allIds = [
+      ...leads, ...bgvs, ...chorus,
+      ...instruments.filter(s => s.personId).map(s => s.personId),
+      ...foh.filter(s => s.personId).map(s => s.personId),
+    ];
+    const conflicts = allIds
+      .map(id => members.find(m => m._id === id))
+      .filter((m): m is MemberOption => !!(m?.unavailableDates?.includes(date)))
+      .map(m => m.alias?.trim() || m.member_name);
+    if (conflicts.length > 0) {
+      setUnavailableNames(conflicts);
+      setPendingData(data);
+      return;
+    }
+    onSubmit(data);
+  }
+
+  function submit(published: boolean) {
+    const data = buildData(published);
     if (!date) return onSubmit(data);
     const allIds = [
       ...leads, ...bgvs, ...chorus,
@@ -327,7 +352,14 @@ function ServiceForm({ initial, members, onSubmit, onClose, loading }: {
       ) : (
         <div className="flex gap-3 pt-1 sticky bottom-0 bg-[#C8D8EB] dark:bg-[#0a1929] py-2">
           <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">Cancelar</button>
-          <button type="submit" disabled={loading} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{loading ? "Guardando..." : "Guardar"}</button>
+          {!initial ? (
+            <>
+              <button type="button" onClick={() => submit(false)} disabled={loading} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 hover:border-[#00bfff] font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{loading ? "Guardando..." : "Crear"}</button>
+              <button type="button" onClick={() => submit(true)} disabled={loading} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{loading ? "Guardando..." : "Crear y publicar"}</button>
+            </>
+          ) : (
+            <button type="submit" disabled={loading} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{loading ? "Guardando..." : "Guardar"}</button>
+          )}
         </div>
       )}
     </form>
@@ -433,8 +465,8 @@ function conflictIdsForRole(role: ServiceRole, unavail: Map<string, Set<string>>
   return ids;
 }
 
-function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSetlist, swapMode, swapSource, onCardSwapSelect, onMemberChipClick }: {
-  role: ServiceRole; conflictIds: Set<string>; conflictNotes?: Map<string, string>; onEdit: () => void; onDelete: () => void; onSetlist: () => void;
+function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSetlist, onPublish, swapMode, swapSource, onCardSwapSelect, onMemberChipClick }: {
+  role: ServiceRole; conflictIds: Set<string>; conflictNotes?: Map<string, string>; onEdit: () => void; onDelete: () => void; onSetlist: () => void; onPublish: (ids: string[], published: boolean) => void;
   swapMode: boolean; swapSource: SwapSource | null;
   onCardSwapSelect: () => void;
   onMemberChipClick: (src: Exclude<SwapSource, { kind: "card" }>) => void;
@@ -455,6 +487,19 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
   const hasTeam    = !!(leads.length || bgvs.length || chorus.length || instrs.filter(s => s.person).length || foh.filter(s => s.person).length);
   const hasSetlist = songs.length > 0;
   const hasConflict = !past && conflictIds.size > 0;
+
+  // Conflicting members with their reason, for a visible (non-hover) card footer.
+  const conflictReasons = hasConflict
+    ? [...conflictIds].flatMap(id => {
+        const m =
+          leads.find(p => p._id === id) ??
+          bgvs.find(p => p._id === id) ??
+          chorus.find(p => p._id === id) ??
+          instrs.find(s => s.person?._id === id)?.person ??
+          foh.find(s => s.person?._id === id)?.person ?? null;
+        return m ? [{ name: dn(m), note: conflictNotes?.get(id) }] : [];
+      })
+    : [];
 
   return (
     <div className={`rounded-xl border overflow-hidden transition-all ${
@@ -478,6 +523,11 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
               weekday: "long", day: "numeric", month: "long", year: "numeric",
             })}
           </p>
+          {role.published === false && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-label uppercase tracking-widest bg-amber-500/15 text-amber-400 border border-amber-500/30">
+              Borrador
+            </span>
+          )}
           {hasConflict && (
             <span className="inline-flex items-center gap-1 mt-1.5 font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-red-500/25 text-red-200 border border-red-400/60">
               ⚠ Conflicto de disponibilidad
@@ -501,6 +551,10 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
           </button>
         ) : (
           <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5">
+            <button type="button" onClick={() => onPublish([role._id], role.published === false)}
+              className="px-2 py-1 rounded-lg border border-[#00bfff]/20 text-xs hover:border-[#00bfff] transition-colors text-[#C8D8EB]/70 hover:text-white">
+              {role.published === false ? "Publicar" : "Despublicar"}
+            </button>
             <HeaderBtn title="Setlist" onClick={onSetlist}><MusicIcon /></HeaderBtn>
             <HeaderBtn title="Editar" onClick={onEdit}><PencilIcon /></HeaderBtn>
             <HeaderBtn title="Eliminar" onClick={onDelete} danger><TrashIcon /></HeaderBtn>
@@ -607,6 +661,23 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
                 </div>
               )}
             </div>
+          </section>
+        )}
+
+        {/* Availability conflicts — reasons shown as text (works without hover, e.g. on mobile) */}
+        {hasConflict && !swapMode && conflictReasons.length > 0 && (
+          <section className="rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2.5">
+            <p className="font-label text-[10px] uppercase tracking-widest text-red-400 mb-1">No disponible</p>
+            <ul className="space-y-0.5">
+              {conflictReasons.map((c, i) => (
+                <li key={i} className="font-body text-xs text-gray-300">
+                  <span className="text-red-300 font-semibold">⚠ {c.name}</span>
+                  {c.note
+                    ? <span className="text-gray-500 italic"> — "{c.note}"</span>
+                    : <span className="text-gray-500"> — sin razón indicada</span>}
+                </li>
+              ))}
+            </ul>
           </section>
         )}
 
@@ -962,6 +1033,16 @@ export default function ServicesPanel() {
 
   function exitSwapMode() { setSwapMode(false); setSwapSource(null); setSwapConfirm(null); }
 
+  // ── Publish ───────────────────────────────────────────────────────────────
+
+  async function handlePublish(ids: string[], published: boolean) {
+    const res = await fetch("/api/admin/roles/publish", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids, published }),
+    });
+    if (res.ok) fetchData();
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   const today = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
@@ -1046,6 +1127,16 @@ export default function ServicesPanel() {
           >
             ⇄ {swapMode ? "Salir" : "Intercambiar"}
           </button>
+          {(() => {
+            const draftIds = visible.filter(r => r.published === false).map(r => r._id);
+            return draftIds.length > 0 ? (
+              <button type="button"
+                onClick={() => { if (confirm(`¿Publicar ${draftIds.length} servicio(s) del filtro actual?`)) handlePublish(draftIds, true); }}
+                className="px-3 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 font-label text-xs uppercase tracking-widest transition-colors">
+                Publicar todo ({draftIds.length})
+              </button>
+            ) : null;
+          })()}
           <button onClick={() => setShowGenerator(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#003572]/20 dark:border-[#00bfff]/15 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff]/30 transition-colors">
             📅 Generar mes
           </button>
@@ -1145,6 +1236,7 @@ export default function ServicesPanel() {
               onEdit={() => setEditModal({ type: "edit", role })}
               onDelete={() => setEditModal({ type: "delete", role })}
               onSetlist={() => setSetlistRole(role)}
+              onPublish={handlePublish}
               swapMode={swapMode}
               swapSource={swapSource}
               onCardSwapSelect={() => handleCardSwapSelect(role._id)}
