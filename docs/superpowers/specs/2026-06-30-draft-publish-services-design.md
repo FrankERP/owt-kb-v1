@@ -13,11 +13,28 @@ Publishing is a reversible toggle.
 
 ### Core invariant (the spine of this feature)
 
-> **A member learns about a service — in the app UI, in push, in email, and in
-> the reminder cron — ONLY once that service is published.**
+> **A member learns about a service's ROLE — who is assigned (Lead / BGV / Coro /
+> instruments / FOH) — in the app UI, in push, in email, and in the reminder cron
+> — ONLY once that service is published.**
 
-Visibility and notifications are gated by the same `published` state. Nothing
-member-facing ever surfaces a draft.
+The invariant is scoped to the **role documents** (the assignments). Role
+visibility and role-assignment notifications are gated by the same `published`
+state. Nothing member-facing ever surfaces a draft service's *assignments*.
+
+**Deliberately out of scope (separate follow-up): the setlist channel.** A
+service's *songs* live in separate `featuredSongs` / `saturdarSongs` documents
+keyed by the same `week`, written by the existing Lead-proposes → admin-approves
+setlist flow. Those documents (a) render on home/schedule by week independent of
+the role doc, and (b) trigger a "setlist ready" push from
+`PUT /api/admin/setlists`. This spec does NOT gate that channel, for three
+reasons: (1) songs are chosen by the assigned people, so a published setlist
+without a published role is an unusual transient state, not the normal flow;
+(2) gating it correctly means coordinating with the existing setlist
+proposal/approval system, which deserves its own design; (3) keeping this change
+to role visibility limits the blast radius. A follow-up spec will coordinate
+setlist visibility/notification with role `published` state. This is an explicit,
+reasoned exemption — not a gap — so the invariant above is stated for *role
+assignments*, which it fully covers.
 
 ## Data model
 
@@ -55,8 +72,9 @@ grepping every `sunday_role`/`saturday_role`/`special_role` occurrence AND the t
 6. `app/api/cron/service-reminders/route.ts` — reminder recipient reads — lines 13, 14, 15 (3)
 7. `app/api/song/[id]/route.ts` — the song-history `leaders` sub-query joins the
    matching `sunday_role`/`saturday_role` by week to show who led; an upcoming
-   draft + its setlist would leak its leads here. Add `&& published != false` to
-   the `leaders` role filter — line ~32 (1)
+   draft + its setlist would leak its leads here. Add `&& published != false`
+   **inside the inner role filter** `*[ _type == select(...) && week == ^.week
+   && published != false ][0]` — NOT on the outer setlist-history query — line ~32 (1)
 
 (The `_id`-by-`Lead` reads in #4/#5 are why a literal grep alone is insufficient;
 both are confirmed member-facing — `requireActiveSession` — and must be filtered.)
@@ -107,6 +125,13 @@ New endpoint **`POST /api/admin/roles/publish`** — `{ ids: string[], published
   `sendPush(assignees, "assignments", …)` and `sendAssignmentEmails(assignees, …)`
   for each newly-published service (assignees = its Lead+BGV+Chorus+instruments+foh).
 - **Unpublishing (published→draft) is silent** — no notification.
+- **Revalidate member-facing views** after any publish/unpublish so the change
+  isn't delayed by the CDN cache. Home/schedule/`/me` use the CDN `client` with
+  `revalidate = 60`, so without this a published service can take ~60s to appear
+  and (more importantly for safety) an unpublished one ~60s to disappear. Mirror
+  what `PUT /api/admin/setlists` already does (`revalidateServiceViews()`-style
+  `revalidatePath('/')`, `/schedule`, `/me`). The 60s window is otherwise an
+  accepted, documented bound.
 - Returns `{ ok, published: <count>, unpublished: <count> }`.
 
 Note on re-publish: only the **transition into published** notifies. A genuine
@@ -139,9 +164,11 @@ PATCH cannot transition draft→published, gating on the current state is correc
 
 After the feature ships, set `published: false` on existing **July 2026** services
 so they become drafts the user can test publishing with (all other existing
-services stay grandfathered-visible). A one-shot script/patch:
-`*[_type in [roles] && (week match "2026-07*" || date match "2026-07*")]` → set
-`published: false`. Run once, idempotent.
+services stay grandfathered-visible). A one-shot script/patch selecting July via
+an explicit date range (NOT `match` — `week`/`date` are `date`-typed; a range is
+unambiguous): `*[_type in ["sunday_role","saturday_role","special_role"] &&
+coalesce(week, date) >= "2026-07-01" && coalesce(week, date) < "2026-08-01"]` →
+set `published: false`. Dry-run first; run once; idempotent.
 
 ## Studio schema deploy
 
@@ -162,16 +189,23 @@ regardless (GROQ tolerates missing fields), but Studio editing needs the deploy.
 
 ## Adversarial review focus
 
-A fresh reviewer must re-audit that **every** member-facing read and **every**
-notification path (push, email, cron) is gated on `published`, with NO leak: no
-member-facing query missing the filter, no notification firing for a draft.
+A fresh reviewer must re-audit that **every** member-facing read of a **role doc**
+and **every** role-assignment notification path (POST push/email, PATCH push,
+reminder cron, the new publish endpoint) is gated on `published`, with NO leak.
+The **setlist channel** (home/schedule setlist reads + `PUT /api/admin/setlists`
+push) is explicitly and reasonedly out of scope (see *Core invariant*) — a
+reviewer may note it, but it is a deliberate deferral, not a defect in this spec.
 
 ## Non-goals
 
 - The participation sidebar (separate, queued feature).
 - Per-field draft (whole-service granularity only).
 - Scheduled/auto-publish, publish history/audit log.
-- Changing setlist (`featuredSongs`/`saturdarSongs`) visibility.
+- **The setlist channel** — `featuredSongs`/`saturdarSongs` visibility on
+  home/schedule AND the `PUT /api/admin/setlists` "setlist ready" push. Explicitly
+  deferred to a follow-up spec that coordinates with the existing setlist
+  proposal/approval flow (see the reasoned exemption under *Core invariant*). This
+  spec's invariant is scoped to role **assignments**, which it fully covers.
 - A draft/publish concept for anything other than the three role types.
 
 ## Risks / mitigations
@@ -180,8 +214,10 @@ member-facing query missing the filter, no notification firing for a draft.
   (7 files / 18 query clauses, incl. the song-history `leaders` join and the two
   `_id`-based reads), the unified `published != false` filter, and an adversarial
   re-audit that must independently re-grep for any read not on the list.
-- **Notifying about drafts** — mitigated by the core invariant: POST/PATCH/cron/
-  publish-endpoint all gate notifications on `published`.
+- **Notifying about drafts (role assignments)** — mitigated by the core invariant:
+  POST/PATCH/cron/publish-endpoint all gate role-assignment notifications on
+  `published`. The setlist "ready" push is the one known, deferred exception
+  (separate follow-up spec).
 - **Existing schedules vanishing** — mitigated by grandfathering (`!= false`);
   only July is explicitly unpublished, by an idempotent one-shot.
 - **Double-notify on re-publish** — mitigated by skipping no-op patches (only the
