@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
 
   // Verify user is Lead on this service AND derive service_type/service_date server-side
   const roleDoc = await serverClient.fetch(
-    `*[_id == $id && $leadId in Lead[]._ref][0]{ _id, _type, week, date }`,
+    `*[_id == $id && $leadId in Lead[]._ref && published != false][0]{ _id, _type, week, date }`,
     { id: roleId, leadId }
   );
   if (!roleDoc) {

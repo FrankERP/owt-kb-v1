@@ -31,6 +31,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         "leaders": *[
           _type == select(^._type == "featuredSongs" => "sunday_role", "saturday_role")
           && week == ^.week
+          && published != false
         ][0].Lead[]-> {
           "name": coalesce(alias, member_name),
           "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl)

@@ -10,9 +10,9 @@ export async function GET(req: NextRequest) {
   const day = tomorrowDateStr("America/Mexico_City");
   const assigned = await serverClient.fetch<string[]>(
     `array::unique([
-      ...*[_type in ["sunday_role","saturday_role","special_role"] && (week == $day || date == $day)].Lead[]._ref,
-      ...*[_type in ["sunday_role","saturday_role","special_role"] && (week == $day || date == $day)].instruments[].person._ref,
-      ...*[_type in ["sunday_role","saturday_role","special_role"] && (week == $day || date == $day)].BGVs[]._ref
+      ...*[_type in ["sunday_role","saturday_role","special_role"] && (week == $day || date == $day) && published != false].Lead[]._ref,
+      ...*[_type in ["sunday_role","saturday_role","special_role"] && (week == $day || date == $day) && published != false].instruments[].person._ref,
+      ...*[_type in ["sunday_role","saturday_role","special_role"] && (week == $day || date == $day) && published != false].BGVs[]._ref
     ][defined(@)])`,
     { day }
   );
