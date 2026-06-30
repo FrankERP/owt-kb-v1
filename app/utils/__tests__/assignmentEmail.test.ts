@@ -7,7 +7,7 @@ vi.mock("../email", () => ({ sendEmail: (...a: unknown[]) => sendEmailMock(...a)
 const fetchMock = vi.fn();
 vi.mock("@/sanity/lib/serverClient", () => ({ serverClient: { fetch: (...a: unknown[]) => fetchMock(...a) } }));
 
-import { rolesForMember, buildAssignmentEmail, sendAssignmentEmails } from "../assignmentEmail";
+import { rolesForMember, buildAssignmentEmail, sendAssignmentEmails, sendAssignmentEmailsBatch } from "../assignmentEmail";
 
 const body = {
   leads: ["m1"], bgvs: ["m2"], chorus: [],
@@ -90,5 +90,39 @@ describe("sendAssignmentEmails gating", () => {
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
     const html = sendEmailMock.mock.calls[0][0].html as string;
     expect(html).toContain("Líder, Guitarra");
+  });
+});
+
+describe("sendAssignmentEmailsBatch", () => {
+  beforeEach(() => { sendEmailMock.mockReset(); fetchMock.mockReset(); process.env.EMAIL_ALLOWLIST = "frank@x.com"; });
+  afterEach(() => { delete process.env.EMAIL_ALLOWLIST; });
+
+  const svcA = { type: "sunday_role" as const, date: "2026-07-05", body: { leads: ["m1"], bgvs: ["m2"] } };
+  const svcB = { type: "saturday_role" as const, date: "2026-07-11", body: { bgvs: ["m1"], instruments: [{ instrument: "Batería", personId: "m1" }] } };
+
+  it("sends ONE email per member covering all their services", async () => {
+    fetchMock.mockResolvedValue([{ _id: "m1", member_name: "Frank", email: "frank@x.com" }]);
+    sendEmailMock.mockResolvedValue({ ok: true });
+    await sendAssignmentEmailsBatch([svcA, svcB]);
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    const call = sendEmailMock.mock.calls[0][0];
+    expect(call.to).toBe("frank@x.com");
+    expect(call.subject).toContain("2 servicios");
+    expect(call.html).toContain("Líder");          // from svcA
+    expect(call.html).toContain("BGV, Batería");    // combined roles from svcB
+  });
+
+  it("uses the single-service template when a member has only one service", async () => {
+    fetchMock.mockResolvedValue([{ _id: "m2", member_name: "Gaby", email: "frank@x.com" }]);
+    sendEmailMock.mockResolvedValue({ ok: true });
+    await sendAssignmentEmailsBatch([svcA, svcB]); // m2 only in svcA
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock.mock.calls[0][0].subject).toContain("Domingo");
+  });
+
+  it("still gates on the allowlist", async () => {
+    fetchMock.mockResolvedValue([{ _id: "m1", member_name: "Frank", email: "notallowed@x.com" }]);
+    await sendAssignmentEmailsBatch([svcA, svcB]);
+    expect(sendEmailMock).not.toHaveBeenCalled();
   });
 });

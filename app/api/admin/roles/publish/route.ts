@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { sendPush } from "@/app/utils/push";
-import { sendAssignmentEmails, type ServiceType } from "@/app/utils/assignmentEmail";
+import { sendAssignmentEmailsBatch, assigneesOf, type ServiceType } from "@/app/utils/assignmentEmail";
 import { computePublishTransitions } from "@/app/utils/publishTransitions";
 
 export async function POST(req: NextRequest) {
@@ -43,14 +43,11 @@ export async function POST(req: NextRequest) {
       }`, { ids: toNotify },
     );
     for (const d of docs) {
-      const added = [
-        ...(d.leads ?? []), ...(d.bgvs ?? []), ...(d.chorus ?? []),
-        ...(d.instruments ?? []).map((i) => i.personId),
-        ...(d.foh ?? []).map((f) => f.personId),
-      ].filter(Boolean);
+      const added = assigneesOf(d);
       void sendPush(added, "assignments", { title: "Nuevo servicio asignado", body: `Te asignaron para el ${d.date}.`, path: "/me" });
-      void sendAssignmentEmails(added, { type: d._type, date: d.date, body: d });
     }
+    // One consolidated email per member across all newly-published services.
+    void sendAssignmentEmailsBatch(docs.map((d) => ({ type: d._type, date: d.date, body: d })));
   }
 
   // Invalidate member-facing caches so the change is prompt (esp. on unpublish).
