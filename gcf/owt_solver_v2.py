@@ -37,6 +37,19 @@ ROLE_ORDER = ["Sun.Lead", "Sat.Lead", "Sun.BGV", "Sat.BGV", "Sun.Choir"]
 SATURDAY_ROLES = {"Sat.Lead", "Sat.BGV"}
 LEAD_BGV_ROLES = {"Sun.Lead", "Sun.BGV", "Sat.Lead", "Sat.BGV"}
 ALL_ROLE_TYPES = set(ROLE_ORDER)
+
+# Mandatory vs optional seats for graceful degradation. At least one Lead per
+# service is always required; BGV/Choir seats (and the 2nd Lead, as a last resort)
+# may go unfilled when availability is too tight. Degradation order is encoded by
+# the empty-seat penalty weights: Choir empties first, then BGV, then the 2nd Lead.
+LEAD_ROLES = {"Sun.Lead", "Sat.Lead"}
+BGV_ROLES = {"Sun.BGV", "Sat.BGV"}
+CHOIR_ROLES = {"Sun.Choir"}
+# Roles that make up each service — used to decide when a person is fully absent.
+SERVICE_ROLES = {
+    "Sunday": {"Sun.Lead", "Sun.BGV", "Sun.Choir"},
+    "Saturday": {"Sat.Lead", "Sat.BGV"},
+}
 LEGACY_PATTERN_ALIASES = {
     "Lead.*": "*.Lead",
     "BGV.*": "*.BGV",
@@ -135,6 +148,8 @@ class SolveResult:
     assignments: Dict[str, List[Slot]]
     total_counts: Dict[str, int]
     role_counts: Dict[str, Dict[str, int]]
+    weighted_empty_used: int = 0          # tiered penalty value for unfilled seats
+    unfilled: List[str] = None            # human-readable list of empty seats
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -485,6 +500,40 @@ def build_history_offsets(
     return total_counts, role_counts, len(recent)
 
 
+# ─── Absence-based fairness slack ─────────────────────────────────────────────
+
+def compute_absence_slack(
+    week_exclusions: Sequence[DslWeekExclusionRule],
+    weeks: int,
+    sat_weeks: Sequence[int],
+    all_people: Sequence[str],
+) -> Dict[str, int]:
+    """
+    How many SERVICES each person is fully unavailable for, derived from
+    ``!in week N <pattern>`` exclusions. A person counts as absent from a service
+    only when their exclusions for that week cover *every* role of that service
+    (e.g. ``!in week 2 *.*`` covers all of Sunday, and Saturday too if week 2 has
+    one). This becomes their automatic fairness slack so an unavoidable shortfall
+    never reads as unfairness.
+    """
+    sat_set = set(sat_weeks)
+    # person -> week -> set of excluded role types
+    excluded: Dict[str, Dict[int, Set[str]]] = defaultdict(lambda: defaultdict(set))
+    for rule in week_exclusions:
+        excluded[rule.person][rule.week].update(rule.role_types)
+
+    slack: Dict[str, int] = {p: 0 for p in all_people}
+    for person, by_week in excluded.items():
+        if person not in slack:
+            continue
+        for week, roles in by_week.items():
+            if 1 <= week <= weeks and SERVICE_ROLES["Sunday"] <= roles:
+                slack[person] += 1
+            if week in sat_set and SERVICE_ROLES["Saturday"] <= roles:
+                slack[person] += 1
+    return slack
+
+
 # ─── Slot building ────────────────────────────────────────────────────────────
 
 def build_slots(config: ScheduleConfig) -> List[Slot]:
@@ -517,8 +566,9 @@ def build_candidate_map(
     result: Dict[str, List[str]] = {}
     for slot in slots:
         eligible = [p for p in people if is_eligible(p, slot.role_type, pools, forbidden)]
-        if not eligible:
-            raise ValueError(f"No eligible candidates for W{slot.week} {slot.service} {slot.role_type}.")
+        # An empty candidate list is allowed: optional seats (BGV/Choir, or the
+        # 2nd Lead) simply go unfilled. A mandatory-lead shortfall is caught later
+        # by the per-service ">= 1 lead" constraint and reported by the diagnostic.
         result[slot.key] = eligible
     return result
 
@@ -565,6 +615,8 @@ def create_model_and_solve(
     hist_role: Dict[Tuple[str, str], int],
     hist_runs: int,
     optimize: bool = True,
+    empty_objective_only: bool = False,
+    empty_target: int | None = None,
 ) -> SolveResult | None:
 
     model = cp_model.CpModel()
@@ -579,9 +631,42 @@ def create_model_and_solve(
         for person in candidates[slot.key]:
             x[(person, slot.key)] = model.NewBoolVar(f"x[{person},{slot.key}]")
 
-    # Each slot filled by exactly one person
+    # Seat occupancy: a `filled` bool per slot. Optional seats (BGV/Choir, and the
+    # 2nd Lead as a last resort) may go unfilled; every service keeps >= 1 Lead.
+    filled: Dict[str, cp_model.BoolVar] = {}
     for slot in slots:
-        model.Add(sum(x[(p, slot.key)] for p in candidates[slot.key]) == 1)
+        f = model.NewBoolVar(f"filled[{slot.key}]")
+        cand = candidates[slot.key]
+        if cand:
+            model.Add(sum(x[(p, slot.key)] for p in cand) == f)
+        else:
+            model.Add(f == 0)
+        filled[slot.key] = f
+
+    # At least one Lead per service — never zero leads.
+    for week in range(1, config.weeks + 1):
+        for _service, lead_role in (("Sunday", "Sun.Lead"), ("Saturday", "Sat.Lead")):
+            lead_slots = [s for s in slots if s.week == week and s.role_type == lead_role]
+            if lead_slots:
+                model.Add(sum(filled[s.key] for s in lead_slots) >= 1)
+
+    # Empty-seat penalties, tiered so degradation goes Choir -> BGV -> 2nd Lead.
+    choir_empty = [1 - filled[s.key] for s in slots if s.role_type in CHOIR_ROLES]
+    bgv_empty   = [1 - filled[s.key] for s in slots if s.role_type in BGV_ROLES]
+    lead_empty  = [1 - filled[s.key] for s in slots if s.role_type in LEAD_ROLES]
+    w_choir = 1
+    w_bgv = len(choir_empty) + 1
+    w_lead = (len(choir_empty) + 1) * (len(bgv_empty) + 1)
+    max_weighted_empty = (w_lead * len(lead_empty) + w_bgv * len(bgv_empty)
+                          + w_choir * len(choir_empty))
+    weighted_empty = model.NewIntVar(0, max_weighted_empty, "weighted_empty")
+    model.Add(weighted_empty == sum(
+        [w_lead * e for e in lead_empty]
+        + [w_bgv * e for e in bgv_empty]
+        + [w_choir * e for e in choir_empty]
+    ))
+    if empty_target is not None:
+        model.Add(weighted_empty <= empty_target)
 
     # Week exclusion hard constraints
     for rule in dsl_week_exclusion_rules:
@@ -609,7 +694,10 @@ def create_model_and_solve(
             if not any(r.person == p and r.week == week for r in dsl_week_exclusion_rules)
         }
         if dedicated_terms and available_dedicated:
-            model.Add(sum(dedicated_terms) == 1)
+            # At least one dedicated Saturday lead anchors each Saturday (when any
+            # is available). Previously "== 1", which made the model infeasible
+            # whenever the only remaining lead options were all dedicated.
+            model.Add(sum(dedicated_terms) >= 1)
 
     # Pair exclusion: A and B not in same week/service for matching roles
     for rule in dsl_pair_rules:
@@ -624,18 +712,25 @@ def create_model_and_solve(
                 if lt and rt:
                     model.Add(sum(lt) + sum(rt) <= 1)
 
-    # Weekly presence: at least one from group each week
+    # Weekly presence: at least one from group each week. A person week-excluded
+    # for the matching role that week can't satisfy it, so we enforce only over
+    # still-available group members; if none are available that week, the rule is
+    # skipped rather than making the whole month infeasible.
+    excluded_pwr = {
+        (r.person, r.week, rt)
+        for r in dsl_week_exclusion_rules for rt in r.role_types
+    }
     for rule in dsl_weekly_presence_rules:
         for week in range(1, config.weeks + 1):
             terms = [
                 x[(p, s.key)]
                 for p in rule.people
                 for s in slots
-                if s.week == week and s.role_type in rule.role_types and (p, s.key) in x
+                if s.week == week and s.role_type in rule.role_types
+                and (p, s.key) in x and (p, week, s.role_type) not in excluded_pwr
             ]
-            if not terms:
-                raise ValueError(f"Weekly presence rule has no eligible slots in week {week}: '{rule.source}'")
-            model.Add(sum(terms) >= 1)
+            if terms:
+                model.Add(sum(terms) >= 1)
 
     # Consecutive hard constraint (NEW): person not in same role pattern in consecutive weeks
     for rule in dsl_consecutive_rules:
@@ -792,7 +887,11 @@ def create_model_and_solve(
         else:
             model.Add(expr <= rule.value)
 
-    if optimize:
+    if empty_objective_only:
+        # Stage A: fill as many seats as possible (availability-limited), in the
+        # Choir -> BGV -> 2nd-Lead degradation order, ignoring fairness.
+        model.Minimize(weighted_empty)
+    elif optimize:
         # Soft consecutive discouragement
         consec_penalties: List[cp_model.BoolVar] = []
         if config.discourage_consecutive_role_repeats:
@@ -873,6 +972,11 @@ def create_model_and_solve(
     total_counts = {p: solver.Value(total_vars[p]) for p in all_people}
     rc = {p: {rt: solver.Value(role_vars[(p, rt)]) for rt in ROLE_ORDER} for p in all_people}
 
+    unfilled = [
+        f"W{s.week} {s.service} {s.role_type} #{s.slot_index}"
+        for s in slots if solver.Value(filled[s.key]) == 0
+    ]
+
     return SolveResult(
         fairness_limit_used=fairness_limit,
         sun_lead_fairness_limit_used=sun_lead_limit,
@@ -881,20 +985,54 @@ def create_model_and_solve(
         assignments=assignments,
         total_counts=total_counts,
         role_counts=rc,
+        weighted_empty_used=int(solver.Value(weighted_empty)),
+        unfilled=unfilled,
     )
 
 
-def diagnose_infeasibility(slots: Sequence[Slot], candidates: Dict[str, List[str]]) -> str:
-    tight = sorted(
-        ((len(candidates[s.key]), s) for s in slots),
-        key=lambda t: (t[0], t[1].week, t[1].service, t[1].role_type)
-    )
-    lines = ["Even after relaxing all fairness limits, the model is infeasible."]
-    lines.append("Slots with fewest candidates (most likely bottlenecks):")
-    for count, slot in tight[:5]:
-        names = ", ".join(candidates[slot.key])
-        lines.append(f"  W{slot.week} {slot.service} {slot.role_type} #{slot.slot_index}: "
-                     f"{count} candidate(s) [{names}]")
+def diagnose_infeasibility(
+    config: ScheduleConfig,
+    slots: Sequence[Slot],
+    week_exclusions: Sequence[DslWeekExclusionRule],
+    pools: Dict[str, Set[str]],
+    forbidden: Dict[str, Set[str]],
+) -> str:
+    """
+    Availability-aware diagnosis. With optional BGV/Choir seats, the only true
+    infeasibility is a service that cannot field its mandatory Lead — so report
+    exactly which week/service has no available lead, accounting for who is marked
+    unavailable that week. (Falls back to a generic message if leads are available
+    yet some other hard restriction over-constrains the model.)
+    """
+    excluded_pwr = {
+        (r.person, r.week, rt)
+        for r in week_exclusions for rt in r.role_types
+    }
+    problems: List[str] = []
+    for week in range(1, config.weeks + 1):
+        for service, lead_role in (("Sunday", "Sun.Lead"), ("Saturday", "Sat.Lead")):
+            lead_slots = [s for s in slots if s.week == week and s.role_type == lead_role]
+            if not lead_slots:
+                continue
+            available = [
+                p for p in pools[lead_role]
+                if lead_role not in forbidden.get(p, set())
+                and (p, week, lead_role) not in excluded_pwr
+            ]
+            if not available:
+                problems.append(
+                    f"  Week {week} {service}: no one available to lead "
+                    f"({lead_role}) — every eligible lead is unavailable or excluded.")
+
+    lines = ["The schedule is infeasible: a mandatory Lead seat cannot be filled."]
+    if problems:
+        lines.extend(problems)
+        lines.append("Fix: free up a lead that week, or widen the lead pool.")
+    else:
+        lines.append(
+            "  Leads are available, so a hard restriction (a conflict, pairing, "
+            "weekly-presence, or count rule) is over-constraining the model. "
+            "Review the rules involved.")
     return "\n".join(lines)
 
 
@@ -908,10 +1046,17 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
      weekly_presence, week_exclusions, role_fairness_exempt, role_fairness_slack,
      consecutive_rules) = parse_dsl_rules(config.dsl_restrictions, set(all_people))
 
-    # Apply case-insensitive name normalization already done in parse_dsl_rules
+    sat_weeks = normalize_weekend_indexes(config.weeks, config.weekends_w_sat)
+
+    # Automatic fairness slack from absences: a person unavailable for K services
+    # gets K slack, so their unavoidable shortfall never reads as unfairness.
+    absence_slack = compute_absence_slack(week_exclusions, config.weeks, sat_weeks, all_people)
+    combined_slack = {p: fairness_slack.get(p, 0) + absence_slack.get(p, 0) for p in all_people}
+
     # Global fairness groups
-    strict = [p for p in all_people if p not in fairness_exempt and fairness_slack.get(p, 0) == 0]
-    relaxed = {p: fairness_slack[p] for p in all_people if p not in fairness_exempt and p in fairness_slack}
+    strict = [p for p in all_people if p not in fairness_exempt and combined_slack.get(p, 0) == 0]
+    relaxed = {p: combined_slack[p] for p in all_people
+               if p not in fairness_exempt and combined_slack.get(p, 0) > 0}
     if len(strict) < 2:
         strict = [p for p in all_people if p not in fairness_exempt]
         relaxed = {}
@@ -934,25 +1079,39 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
         hist_total=hist_total, hist_role=hist_role, hist_runs=hist_runs,
     )
 
-    # 8-tier relaxation loop: Sun.Lead fairness → Sun.BGV fairness → global fairness
+    big = len(slots) + 1  # a fairness limit so loose it never binds
+
+    # Stage A: fill as many seats as availability allows (Choir → BGV → 2nd-Lead
+    # degradation), ignoring fairness entirely. This decouples seat-filling from
+    # fairness so a tight fairness cap can never force a seat empty.
+    stage_a = create_model_and_solve(
+        **common, fairness_limit=big, sun_lead_limit=big, sun_bgv_limit=big,
+        optimize=False, empty_objective_only=True,
+    )
+    if stage_a is None:
+        # The only true infeasibility: a service can't field its mandatory lead
+        # (or a hard restriction over-constrains the model).
+        raise RuntimeError(
+            diagnose_infeasibility(config, slots, week_exclusions, pools, forbidden))
+    empty_target = stage_a.weighted_empty_used
+
+    # Stage B: among the max-fill solutions, optimize fairness via the relaxation
+    # loop (Sun.Lead → Sun.BGV → global). empty_target keeps the fill maximal.
     for sl_limit in (1, 2):
         for sb_limit in (1, 2):
             for g_limit in (1, 2):
-                result = create_model_and_solve(
-                    **common, fairness_limit=g_limit,
-                    sun_lead_limit=sl_limit, sun_bgv_limit=sb_limit, optimize=True,
-                )
-                if result is not None:
-                    return result
-                # Feasibility-only rescue pass
-                result = create_model_and_solve(
-                    **common, fairness_limit=g_limit,
-                    sun_lead_limit=sl_limit, sun_bgv_limit=sb_limit, optimize=False,
-                )
-                if result is not None:
-                    return result
+                for opt in (True, False):
+                    result = create_model_and_solve(
+                        **common, fairness_limit=g_limit,
+                        sun_lead_limit=sl_limit, sun_bgv_limit=sb_limit,
+                        optimize=opt, empty_target=empty_target,
+                    )
+                    if result is not None:
+                        return result
 
-    raise RuntimeError(diagnose_infeasibility(slots, candidates))
+    # Every fairness tier was infeasible even at max fill — return the max-fill
+    # solution rather than failing. (Fairness simply couldn't be tightened.)
+    return stage_a
 
 
 # ─── Schedule view / output ───────────────────────────────────────────────────
@@ -1026,6 +1185,7 @@ def solve_from_dict(data: Dict) -> Dict:
         "history_runs_used": result.history_runs_used,
         "total_counts": result.total_counts,
         "role_counts": result.role_counts,
+        "unfilled_seats": result.unfilled or [],
     }
 
 
