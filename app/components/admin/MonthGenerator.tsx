@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import type { SolveRequest, SolveResponse } from "@/app/api/admin/solve/route";
 import { summarizeUnfilledSeats } from "@/app/utils/unfilledSeats";
+import { DayCard } from "@/app/components/DayCard";
+import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1047,6 +1049,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
   const [saturdays, setSaturdays] = useState(true);
   const [drafts, setDrafts]       = useState<DraftCard[]>([]);
   const [swapSel, setSwapSel]     = useState<string | null>(null);
+  const [viewMode, setViewMode]   = useState<"edit" | "view">("edit");
   const [pushing, setPushing]     = useState(false);
   const [swapToast, setSwapToast] = useState<string | null>(null);
   const [useSolver, setUseSolver] = useState(false);
@@ -1424,6 +1427,21 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
         </div>
       </div>
 
+      <div className="flex justify-center">
+        <div className="flex rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 overflow-hidden">
+          <button type="button" onClick={() => setViewMode("edit")}
+            className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
+              viewMode === "edit" ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#C8D8EB]" : "text-gray-500 hover:text-[#C8D8EB]"}`}>
+            Editar
+          </button>
+          <button type="button" onClick={() => setViewMode("view")}
+            className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors border-l border-[#003572]/30 dark:border-[#00bfff]/20 ${
+              viewMode === "view" ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#C8D8EB]" : "text-gray-500 hover:text-[#C8D8EB]"}`}>
+            Vista
+          </button>
+        </div>
+      </div>
+
       {swapToast && (
         <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff] text-center bg-[#00bfff]/10 rounded-lg py-1.5">{swapToast}</p>
       )}
@@ -1469,17 +1487,27 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
         </div>
       )}
 
-      <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-0.5">
-        {drafts.map(d => (
-          <DraftCardEditor
-            key={d.localId} draft={d} members={members}
-            onChange={updated => setDrafts(drafts.map(x => x.localId === updated.localId ? updated : x))}
-            onToggleSkip={() => setDrafts(drafts.map(x => x.localId === d.localId ? { ...x, skipped: !x.skipped } : x))}
-            swapSelected={swapSel === d.localId}
-            onSwapSelect={() => handleCardSwap(d.localId)}
-          />
-        ))}
-      </div>
+      {viewMode === "edit" ? (
+        <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-0.5">
+          {drafts.map(d => (
+            <DraftCardEditor
+              key={d.localId} draft={d} members={members}
+              onChange={updated => setDrafts(drafts.map(x => x.localId === updated.localId ? updated : x))}
+              onToggleSkip={() => setDrafts(drafts.map(x => x.localId === d.localId ? { ...x, skipped: !x.skipped } : x))}
+              swapSelected={swapSel === d.localId}
+              onSwapSelect={() => handleCardSwap(d.localId)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-0.5">
+          {drafts.filter(d => !d.skipped).map(d => {
+            const p = draftToDayCardProps(d, members);
+            return <DayCard key={d.localId} day={p.day} date={p.date} leads={p.leads}
+                      bgvs={p.bgvs} chorus={p.chorus} instruments={p.instruments} fohTeam={p.fohTeam} />;
+          })}
+        </div>
+      )}
 
       <div className="flex gap-3">
         <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
