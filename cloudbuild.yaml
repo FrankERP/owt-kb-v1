@@ -22,7 +22,11 @@ steps:
       - --source=gcf
       - --entry-point=solve
       - --trigger-http
-      - --allow-unauthenticated
+      # NOTE: public access (allUsers -> run.invoker) is already set on the service
+      # and persists across revisions. We intentionally do NOT pass
+      # --allow-unauthenticated here: it calls run.services.setIamPolicy, which the
+      # build SA (roles/editor) can't do. Auth is enforced at the app layer via the
+      # X-Api-Key header. To change public access, edit the IAM binding directly.
       - --memory=512MB
       - --timeout=120s
       # Drop any plaintext OWT_SOLVER_API_KEY left over from the old deploy script;
