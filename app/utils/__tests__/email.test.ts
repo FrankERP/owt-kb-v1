@@ -11,9 +11,19 @@ vi.mock("resend", () => ({
   }),
 }));
 
+const sendMailMock = vi.fn();
+const createTransportMock = vi.fn(() => ({ sendMail: sendMailMock }));
+vi.mock("nodemailer", () => ({
+  default: { createTransport: createTransportMock },
+}));
+
 describe("sendEmail", () => {
-  beforeEach(() => { sendMock.mockReset(); vi.resetModules(); });
-  afterEach(() => { delete process.env.RESEND_API_KEY; delete process.env.EMAIL_FROM; });
+  beforeEach(() => { sendMock.mockReset(); sendMailMock.mockReset(); createTransportMock.mockClear(); vi.resetModules(); });
+  afterEach(() => {
+    delete process.env.RESEND_API_KEY; delete process.env.EMAIL_FROM;
+    delete process.env.SMTP_HOST; delete process.env.SMTP_USER; delete process.env.SMTP_PASS;
+    delete process.env.SMTP_PORT; delete process.env.SMTP_SECURE;
+  });
 
   it("no-ops when env is unset", async () => {
     const { sendEmail } = await import("../email");
@@ -36,6 +46,56 @@ describe("sendEmail", () => {
     process.env.RESEND_API_KEY = "re_test";
     process.env.EMAIL_FROM = "Oasis <onboarding@resend.dev>";
     sendMock.mockResolvedValue({ data: null, error: { message: "bad" } });
+    const { sendEmail } = await import("../email");
+    const r = await sendEmail({ to: "a@b.com", subject: "s", html: "<p>h</p>" });
+    expect(r.ok).toBe(false);
+  });
+
+  it("prefers SMTP when SMTP_HOST is set, even if Resend is configured", async () => {
+    process.env.RESEND_API_KEY = "re_test";
+    process.env.EMAIL_FROM = "Oasis <contacto@oasis.mx>";
+    process.env.SMTP_HOST = "mail.oasis.mx";
+    process.env.SMTP_USER = "contacto@oasis.mx";
+    process.env.SMTP_PASS = "secret";
+    sendMailMock.mockResolvedValue({ messageId: "1" });
+    const { sendEmail } = await import("../email");
+    const r = await sendEmail({ to: "a@b.com", subject: "s", html: "<p>h</p>" });
+    expect(r.ok).toBe(true);
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(createTransportMock).toHaveBeenCalledWith({
+      host: "mail.oasis.mx", port: 465, secure: true,
+      auth: { user: "contacto@oasis.mx", pass: "secret" },
+    });
+    expect(sendMailMock).toHaveBeenCalledWith({ from: "Oasis <contacto@oasis.mx>", to: "a@b.com", subject: "s", html: "<p>h</p>" });
+  });
+
+  it("uses STARTTLS (secure:false) on port 587", async () => {
+    process.env.EMAIL_FROM = "Oasis <contacto@oasis.mx>";
+    process.env.SMTP_HOST = "mail.oasis.mx";
+    process.env.SMTP_USER = "contacto@oasis.mx";
+    process.env.SMTP_PASS = "secret";
+    process.env.SMTP_PORT = "587";
+    sendMailMock.mockResolvedValue({ messageId: "1" });
+    const { sendEmail } = await import("../email");
+    await sendEmail({ to: "a@b.com", subject: "s", html: "<p>h</p>" });
+    expect(createTransportMock).toHaveBeenCalledWith(expect.objectContaining({ port: 587, secure: false }));
+  });
+
+  it("no-ops when SMTP_HOST is set but credentials are missing", async () => {
+    process.env.EMAIL_FROM = "Oasis <contacto@oasis.mx>";
+    process.env.SMTP_HOST = "mail.oasis.mx";
+    const { sendEmail } = await import("../email");
+    const r = await sendEmail({ to: "a@b.com", subject: "s", html: "<p>h</p>" });
+    expect(r.ok).toBe(false);
+    expect(createTransportMock).not.toHaveBeenCalled();
+  });
+
+  it("returns ok:false when SMTP send throws", async () => {
+    process.env.EMAIL_FROM = "Oasis <contacto@oasis.mx>";
+    process.env.SMTP_HOST = "mail.oasis.mx";
+    process.env.SMTP_USER = "contacto@oasis.mx";
+    process.env.SMTP_PASS = "secret";
+    sendMailMock.mockRejectedValue(new Error("auth failed"));
     const { sendEmail } = await import("../email");
     const r = await sendEmail({ to: "a@b.com", subject: "s", html: "<p>h</p>" });
     expect(r.ok).toBe(false);
