@@ -1,7 +1,9 @@
 # Design — Draft / Publish workflow for services
 
 Date: 2026-06-30
-Status: Approved (pending adversarial review)
+Status: APPROVED — adversarial review passed (3 fresh rounds; r1 caught a missed
+song-history read, r2 caught the setlist leak channel → scoped out by owner, r3
+APPROVED with no blocking issues).
 
 ## Summary
 
@@ -128,10 +130,13 @@ New endpoint **`POST /api/admin/roles/publish`** — `{ ids: string[], published
 - **Revalidate member-facing views** after any publish/unpublish so the change
   isn't delayed by the CDN cache. Home/schedule/`/me` use the CDN `client` with
   `revalidate = 60`, so without this a published service can take ~60s to appear
-  and (more importantly for safety) an unpublished one ~60s to disappear. Mirror
-  what `PUT /api/admin/setlists` already does (`revalidateServiceViews()`-style
-  `revalidatePath('/')`, `/schedule`, `/me`). The 60s window is otherwise an
-  accepted, documented bound.
+  and (more importantly for safety) an unpublished one ~60s to disappear. The
+  endpoint must call `revalidatePath('/')`, `revalidatePath('/schedule')`, AND
+  `revalidatePath('/me')`. NOTE: the existing `revalidateServiceViews()` helper
+  (`app/utils/revalidate.ts`) covers `/`, `/schedule`, `/posts/[slug]` but **NOT
+  `/me`** — so either add `/me` to that helper or revalidate `/me` separately here.
+  Do not assume the helper alone is sufficient. The 60s window is the accepted
+  documented fallback bound.
 - Returns `{ ok, published: <count>, unpublished: <count> }`.
 
 Note on re-publish: only the **transition into published** notifies. A genuine
