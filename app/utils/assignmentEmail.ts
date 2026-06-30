@@ -77,12 +77,20 @@ export async function sendAssignmentEmails(
       `*[_type == "teamMembers" && _id in $ids]{ _id, member_name, alias, email }`,
       { ids },
     );
+    // Optional test override: when set, deliver every email to this address
+    // instead of the real member (e.g. Resend test mode can only send to the
+    // account's own inbox). The allowlist still gates WHICH members generate an
+    // email; only the delivery target is rerouted. The original recipient is
+    // shown in the subject so it's clear who the message was meant for.
+    const redirectTo = process.env.EMAIL_REDIRECT_TO?.trim();
     for (const m of members) {
       const email = m.email?.trim().toLowerCase();
       if (!email || !allow.includes(email)) continue;
       const roles = rolesForMember(m._id, service.body);
       const { subject, html } = buildAssignmentEmail({ name: m.alias || m.member_name || "", roles, type: service.type, date: service.date });
-      const res = await sendEmail({ to: email, subject, html });
+      const to = redirectTo || email;
+      const finalSubject = redirectTo ? `[→ ${email}] ${subject}` : subject;
+      const res = await sendEmail({ to, subject: finalSubject, html });
       if (!res.ok) console.error(`[assignmentEmail] send failed for ${m._id}:`, res.error);
     }
   } catch (err) {
