@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
-import { addedAssignees } from "@/app/utils/notifyTargets";
 import { sendPush } from "@/app/utils/push";
 import { sendAssignmentEmails } from "@/app/utils/assignmentEmail";
 
