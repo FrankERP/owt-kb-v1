@@ -39,14 +39,27 @@ Add a boolean `published` field to all three role schemas
 Member-facing reads add `&& published != false` to each role query. `!= false`
 matches `true` AND missing (grandfathered) and excludes only explicit `false`.
 
-The **8 member-facing reads** (from the audit) that MUST get the filter:
+The complete member-facing surface is **7 files / 18 query clauses** (re-derived by
+grepping every `sunday_role`/`saturday_role`/`special_role` occurrence AND the two
+`_id`-based role reads that carry no type literal). ALL must get the filter:
 
-1. `app/(client)/page.tsx` — `WEEKEND_QUERY` (sunRole, satRole, special) — ~lines 53–55
-2. `app/(client)/schedule/page.tsx` — `SCHEDULE_QUERY` (3 role queries) — ~lines 32–36
-3. `app/(client)/me/page.tsx` — member assignment reads + calendar-date reads (6 queries) — ~lines 67, 85, 103, 129, 130, 131
-4. `app/(client)/me/propose/[roleId]/page.tsx` — `getRoleDoc()` (1) — ~line 14
-5. `app/api/me/proposals/route.ts` — lead verification (1) — ~line 51
-6. `app/api/cron/service-reminders/route.ts` — reminder recipient reads (3) — ~lines 13–15
+1. `app/(client)/page.tsx` — `WEEKEND_QUERY` sunRole/satRole/special — lines 53, 54, 55 (3)
+2. `app/(client)/schedule/page.tsx` — `SCHEDULE_QUERY` 3 role queries — lines 32, 33, 36 (3)
+3. `app/(client)/me/page.tsx` — 3 member-assignment reads (67, 85, 103) **and 3
+   calendar-date reads (129, 130, 131)**. The calendar-date reads have no
+   `memberFilter` and return ALL service dates — they MUST be filtered too, so a
+   draft's date never appears on a member's availability calendar. (6)
+4. `app/(client)/me/propose/[roleId]/page.tsx` — `getRoleDoc()` — line 14 (1)
+5. `app/api/me/proposals/route.ts` — lead verification (queries by `_id` + `Lead`
+   membership, no type literal) — line 51 (1)
+6. `app/api/cron/service-reminders/route.ts` — reminder recipient reads — lines 13, 14, 15 (3)
+7. `app/api/song/[id]/route.ts` — the song-history `leaders` sub-query joins the
+   matching `sunday_role`/`saturday_role` by week to show who led; an upcoming
+   draft + its setlist would leak its leads here. Add `&& published != false` to
+   the `leaders` role filter — line ~32 (1)
+
+(The `_id`-by-`Lead` reads in #4/#5 are why a literal grep alone is insufficient;
+both are confirmed member-facing — `requireActiveSession` — and must be filtered.)
 
 Reads that must **NOT** be filtered (admin sees all):
 - `app/api/admin/roles/route.ts` GET — additionally, **add `published` to its GROQ
@@ -96,6 +109,12 @@ New endpoint **`POST /api/admin/roles/publish`** — `{ ids: string[], published
 - **Unpublishing (published→draft) is silent** — no notification.
 - Returns `{ ok, published: <count>, unpublished: <count> }`.
 
+Note on re-publish: only the **transition into published** notifies. A genuine
+unpublish→re-publish cycle WILL notify again (the assignees are told again) — this
+is acceptable and intended (it's effectively a fresh announcement). Only redundant
+no-op patches (already in target state) are skipped, so a single "Publicar todo"
+press never double-notifies the same service.
+
 ServicesPanel UI:
 - Each service card shows a **"Borrador"** badge when `published === false`
   (existing/published services show no badge). Use the amber/draft accent.
@@ -111,8 +130,10 @@ ServicesPanel UI:
 
 `PATCH /api/admin/roles/[id]` does **not** change `published` (not in its payload),
 so editing preserves draft/published state. Its existing "newly-added member" push
-fires **only if the service is published** (read the doc's current `published`
-in the PATCH, gate the notification on `published !== false`).
+fires **only if the service is published**. The PATCH already fetches `prevDoc`
+(`roles/[id]/route.ts:69`); add `"published": published` to that projection and
+gate the notification on `prevDoc.published !== false` (no separate fetch). Since
+PATCH cannot transition draft→published, gating on the current state is correct.
 
 ## One-time data step (post-deploy)
 
@@ -155,8 +176,10 @@ member-facing query missing the filter, no notification firing for a draft.
 
 ## Risks / mitigations
 
-- **Draft leak to members** — mitigated by the exhaustive audit list (8 reads),
-  the unified `published != false` filter, and an adversarial re-audit.
+- **Draft leak to members** — mitigated by the re-derived exhaustive audit
+  (7 files / 18 query clauses, incl. the song-history `leaders` join and the two
+  `_id`-based reads), the unified `published != false` filter, and an adversarial
+  re-audit that must independently re-grep for any read not on the list.
 - **Notifying about drafts** — mitigated by the core invariant: POST/PATCH/cron/
   publish-endpoint all gate notifications on `published`.
 - **Existing schedules vanishing** — mitigated by grandfathering (`!= false`);
