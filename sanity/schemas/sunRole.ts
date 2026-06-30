@@ -4,6 +4,13 @@ export const sundayRole = {
   type: 'document',
   fields: [
     {
+      name: "published",
+      title: "Publicado",
+      type: "boolean",
+      initialValue: true,
+      description: "Si está apagado, el servicio es un borrador visible solo para admins.",
+    },
+    {
       name: 'week',
       title: 'Week',
       type: 'date',
