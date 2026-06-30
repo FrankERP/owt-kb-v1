@@ -33,6 +33,8 @@ export interface SolveResponse {
   history_runs_used?: number;
   total_counts?: Record<string, number>;
   role_counts?: Record<string, Record<string, number>>;
+  /** Seats the solver left unfilled when short-staffed, e.g. "W2 Sunday Sun.Choir #2". */
+  unfilled_seats?: string[];
 }
 
 // ── Production path: call remote solver (GCF or any HTTP endpoint) ────────────

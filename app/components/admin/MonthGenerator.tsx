@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { SolveRequest, SolveResponse } from "@/app/api/admin/solve/route";
+import { summarizeUnfilledSeats } from "@/app/utils/unfilledSeats";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1055,6 +1056,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
   const [activeSatDates, setActiveSatDates] = useState<string[]>([]);
   const [solverHistory, setSolverHistory] = useState<SolverHistoryEntry[]>([]);
   const [unavailabilityNotices, setUnavailabilityNotices] = useState<{ name: string; date: string; service: string }[]>([]);
+  const [unfilledSeats, setUnfilledSeats] = useState<string[]>([]);
 
   useEffect(() => {
     if (!saturdays) { setActiveSatDates([]); return; }
@@ -1279,6 +1281,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
     }
 
     setUnavailabilityNotices(buildUnavailabilityNotices(sundayDates, activeSatDates, members));
+    setUnfilledSeats(result.unfilled_seats ?? []);
     setDrafts(allDrafts.sort((a, b) => a.date.localeCompare(b.date)));
     if (result.total_counts && result.role_counts) {
       saveHistoryEntry(year, month, result.total_counts, result.role_counts);
@@ -1447,6 +1450,24 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
           </div>
         );
       })()}
+
+      {unfilledSeats.length > 0 && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 space-y-1.5">
+          <p className="font-label text-[10px] uppercase tracking-widest text-amber-400">
+            Lugares sin cubrir (faltó gente)
+          </p>
+          {summarizeUnfilledSeats(unfilledSeats).map(s => (
+            <p key={`${s.week}-${s.service}`} className="font-body text-xs text-gray-400">
+              <span className="text-amber-300 font-semibold">Semana {s.week} · {s.service}</span>
+              {" — "}
+              {s.labels.join(", ")}
+            </p>
+          ))}
+          <p className="font-body text-[11px] text-gray-500 italic">
+            El líder siempre se asigna; primero queda vacío el coro, luego BGV.
+          </p>
+        </div>
+      )}
 
       <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-0.5">
         {drafts.map(d => (
