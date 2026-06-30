@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+
+export const maxDuration = 60;
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { sendPush } from "@/app/utils/push";
@@ -116,12 +118,14 @@ export async function POST(req: NextRequest) {
 
   const added = allAssignees(body); // brand-new doc → everyone is "added"
   if (body.published === true) {
-    void sendPush(added, "assignments", {
-      title: "Nuevo servicio asignado",
-      body: `Te asignaron para el ${body.date}.`,
-      path: "/me",
+    after(async () => {
+      await sendPush(added, "assignments", {
+        title: "Nuevo servicio asignado",
+        body: `Te asignaron para el ${body.date}.`,
+        path: "/me",
+      });
+      await sendAssignmentEmails(added, { type: body._type, date: body.date, body });
     });
-    void sendAssignmentEmails(added, { type: body._type, date: body.date, body });
   }
 
   return NextResponse.json(doc, { status: 201 });
