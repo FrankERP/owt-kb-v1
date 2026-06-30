@@ -19,9 +19,12 @@ Computed over the **visible** (month-filtered) services. Two unit families:
   - `sunBGV` (Sunday BGV), `satBGV` (Saturday BGV)
   - `coro` (Choir). In practice Sunday-only, but `saturday_role` ALSO defines a
     `Chorus` field and the Coro picker in `ServiceForm` is ungated, so a Saturday
-    chorus assignment is schema-/UI-possible. To avoid silently dropping such a
-    member, `coro` counts chorus appearances on **any** service type (`_type`-agnostic
-    for chorus), not just Sunday.
+    chorus assignment is schema-/UI-possible. So `coro` counts chorus appearances on
+    any **Sunday OR Saturday** service (not gated to Sunday — the Sunday-only premise
+    was wrong). `special_role` chorus is NOT counted: `special_role` is excluded
+    **entirely** (voz, chorus, instruments, FOH) per the scope decision below, so this
+    rule is internally consistent — "skip special_role" applies uniformly, including
+    its chorus.
   - **`total` = sunLead + satLead + sunBGV + satBGV + coro** (the prominent number).
 - **Weeks** — counted **per week** (a Saturday + Sunday of the same week count once):
   - `instrWeeks` — distinct weeks the member plays an instrument
@@ -50,9 +53,11 @@ computeParticipation(roles, members) -> MemberParticipation[]
 ```
 
 - `MemberParticipation = { id, name, sunLead, satLead, sunBGV, satBGV, coro, total, instrWeeks, fohWeeks }`
-- Iterate `roles` (skip `special_role`). For each member id in `leads`/`bgvs`,
-  increment the matching Sun/Sat column; for each member id in `chorus`, increment
-  `coro` (regardless of `_type`). For `instruments[].person` / `foh[].person`,
+- Iterate `roles`, **skipping `special_role` entirely** (so all of its voz/chorus/
+  instr/FOH are excluded uniformly). Note `leads`/`bgvs`/`chorus` are `MemberOption[]`
+  objects (read `m._id`), not id strings. For each member in `leads`/`bgvs`, increment
+  the matching Sun/Sat column; for each member in `chorus`, increment `coro` (works for
+  both `sunday_role` and `saturday_role`). For `instruments[].person` / `foh[].person`,
   **guard `person` against `null`** (live data has unassigned instrument/FOH slots —
   `ServiceRole` types `person` as `MemberOption | null`; skip null), then add
   **`weekKey(role)`** (Saturday normalized to its Sunday — see above) to that
@@ -70,14 +75,17 @@ counts as `instrWeeks: 1` — the saturday normalizes to its sunday weekKey (the
 dedup, and the case the audit got wrong); instruments on two *different* weekends = 2;
 `special_role` ignored; zero-participation member omitted; sorted by total desc;
 **a `null` instrument/FOH `person` is skipped without throwing** (unassigned slot);
-**a chorus member on a `saturday_role` is counted into `coro`** (not dropped).
+**a chorus member on a `saturday_role` is counted into `coro`** (not dropped); and
+**a `special_role` is fully ignored** (its chorus/voz/instr/FOH contribute nothing).
 
 ## UI
 
 New component `app/components/admin/ParticipationSidebar.tsx`:
 - Props: `roles: ServiceRole[]` (the panel's already-filtered `visible` list),
-  `members: MemberOption[]`, `monthLabel: string` (header context, e.g. "Julio 2026"
-  or "Próximos").
+  `members: MemberOption[]`, `monthLabel: string` (header context). The panel computes
+  the label from `selectedMonths`: **0 selected →** "Próximos"; **1 →** that month
+  formatted (e.g. "Julio 2026"); **2+ →** "N meses" (the count). Derived in
+  `ServicesPanel` and passed in, so the sidebar stays presentational.
 - Calls `computeParticipation(roles, members)` inside a `useMemo`.
 - Header: "Participaciones" + the month label + a small sort `<select>` (Total
   default; or by a single role column). A color legend (Líder/BGV/Coro/Instr/FOH).
@@ -94,7 +102,10 @@ Wiring in `ServicesPanel.tsx`:
 - Wrap the preview content so the cards grid and the sidebar sit side-by-side on
   large screens: an outer `lg:grid-cols-[320px_1fr] gap-6` (sidebar first =
   left). Below `lg`, single column with the sidebar collapsing above the cards
-  (or a simple toggle) — must not break the existing responsive card grid.
+  (or a simple toggle) — must not break the existing responsive card grid. Since the
+  cards now live in a `1fr` column next to a 320px sidebar, cap their max columns for
+  readability (e.g. the inner grid tops out at `xl:grid-cols-3 2xl:grid-cols-4`
+  instead of `2xl:grid-cols-5`). Cosmetic tuning, not load-bearing.
 - Pass the existing `visible` filtered roles + `members` + a derived month label.
 - Theme: match the panel's cyan/blue styling; role colors Líder=blue, BGV=teal,
   Coro=purple, Instr=amber, FOH=gray.
