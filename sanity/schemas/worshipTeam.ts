@@ -73,6 +73,13 @@ export const teamMembers = defineType({
       type: "object",
       fields: [
         { name: "assignments", type: "boolean", initialValue: true },
+        {
+          name: "email",
+          title: "Asignaciones por correo",
+          type: "boolean",
+          initialValue: false,
+          description: "Recibir asignaciones por correo electrónico (próximamente).",
+        },
         { name: "setlist", type: "string", initialValue: "all", options: { list: ["all", "assigned", "off"] } },
         { name: "proposals", type: "boolean", initialValue: true },
         { name: "reminders", type: "boolean", initialValue: true },
