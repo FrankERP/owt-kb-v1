@@ -1,3 +1,17 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Service-card instrument/FOH pill grids: 1 column when the card is narrow,
+   2 when it's wide. The card body is the query container (container-type:
+   inline-size), so this responds to the card's own width — not the viewport —
+   which keeps names from being clipped in narrow multi-column card layouts. */
+.svc-card-body { container-type: inline-size; }
+.pill-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+@container (min-width: 280px) {
+  .pill-grid { grid-template-columns: 1fr 1fr; }
+}
