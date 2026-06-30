@@ -481,6 +481,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
   const instrs  = role.instruments ?? [];
   const foh     = role.foh         ?? [];
   const songs   = role.songs       ?? [];
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const isCardSelected = swapSource?.kind === "card" && swapSource.roleId === role._id;
   const isChipSource   = (section: string, i: number) =>
@@ -505,7 +506,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
     : [];
 
   return (
-    <div className={`rounded-xl border overflow-hidden transition-all ${
+    <div className={`rounded-xl border transition-all ${
       past && !swapMode && !copyMode
         ? `${CARD_BORDER[role._type]} opacity-50 shadow-md`
         : isCardSelected || (copyMode && isCopySource)
@@ -516,7 +517,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
     } group`}>
 
       {/* ── Colored header band ── */}
-      <div className={`${CARD_HEADER[role._type]} border-b px-4 py-3 flex items-start justify-between gap-2`}>
+      <div className={`${CARD_HEADER[role._type]} rounded-t-xl border-b px-4 py-3 flex items-start justify-between gap-2`}>
         <div>
           <h3 className="font-display text-xl md:text-2xl uppercase font-bold text-[#C8D8EB]">
             {role.service_name || SERVICE_LABEL[role._type]}
@@ -564,20 +565,36 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
             </button>
           )
         ) : (
-          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5">
-            {instrs.filter(s => s.person).length > 0 && (
-              <button type="button" onClick={onCopyStart} title="Repetir estos instrumentos en otro día"
-                className="px-2 py-1 rounded-lg border border-[#00bfff]/20 text-xs hover:border-[#00bfff] transition-colors text-[#C8D8EB]/70 hover:text-white">
-                Copiar instr.
-              </button>
-            )}
-            <button type="button" onClick={() => onPublish([role._id], role.published === false)}
-              className="px-2 py-1 rounded-lg border border-[#00bfff]/20 text-xs hover:border-[#00bfff] transition-colors text-[#C8D8EB]/70 hover:text-white">
-              {role.published === false ? "Publicar" : "Despublicar"}
+          <div className="relative shrink-0 mt-0.5">
+            <button
+              type="button"
+              onClick={() => setMenuOpen(o => !o)}
+              title="Acciones"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              className="p-1.5 rounded-lg text-[#C8D8EB]/70 hover:text-white hover:bg-white/15 transition-colors"
+            >
+              <KebabIcon />
             </button>
-            <HeaderBtn title="Setlist" onClick={onSetlist}><MusicIcon /></HeaderBtn>
-            <HeaderBtn title="Editar" onClick={onEdit}><PencilIcon /></HeaderBtn>
-            <HeaderBtn title="Eliminar" onClick={onDelete} danger><TrashIcon /></HeaderBtn>
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                <div role="menu" className="absolute right-0 top-full mt-1 z-50 w-52 rounded-lg border border-[#00bfff]/25 bg-[#03101f] shadow-xl shadow-black/50 py-1 overflow-hidden">
+                  <MenuItem icon={<PencilIcon />} label="Editar equipo" onClick={() => { setMenuOpen(false); onEdit(); }} />
+                  <MenuItem icon={<MusicIcon />} label="Editar setlist" onClick={() => { setMenuOpen(false); onSetlist(); }} />
+                  {instrs.filter(s => s.person).length > 0 && (
+                    <MenuItem icon={<CopyIcon />} label="Copiar instrumentos a otro día" onClick={() => { setMenuOpen(false); onCopyStart(); }} />
+                  )}
+                  <MenuItem
+                    icon={<EyeIcon />}
+                    label={role.published === false ? "Publicar" : "Despublicar"}
+                    onClick={() => { setMenuOpen(false); onPublish([role._id], role.published === false); }}
+                  />
+                  <div className="my-1 border-t border-[#00bfff]/15" />
+                  <MenuItem icon={<TrashIcon />} label="Eliminar servicio" danger onClick={() => { setMenuOpen(false); onDelete(); }} />
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -810,17 +827,6 @@ function TeamRow({ label, value, accentHex, isConflict, conflictNote }: { label:
   );
 }
 
-function HeaderBtn({ onClick, title, danger, children }: { onClick: () => void; title: string; danger?: boolean; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      className={`p-1.5 rounded-lg transition-colors ${danger ? "hover:bg-red-500/25 hover:text-red-300 text-[#C8D8EB]/60" : "hover:bg-white/15 hover:text-white text-[#C8D8EB]/60"}`}
-    >
-      {children}
-    </button>
-  );
-}
 
 // ─── Swap confirm modal ───────────────────────────────────────────────────────
 
@@ -1429,4 +1435,29 @@ function MusicIcon() {
 
 function TrashIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>;
+}
+
+function KebabIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>;
+}
+
+function CopyIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>;
+}
+
+function EyeIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>;
+}
+
+function MenuItem({ icon, label, onClick, danger }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors ${danger ? "text-red-300 hover:bg-red-500/15" : "text-[#C8D8EB] hover:bg-white/10"}`}
+    >
+      <span className="shrink-0 opacity-80">{icon}</span>{label}
+    </button>
+  );
 }
