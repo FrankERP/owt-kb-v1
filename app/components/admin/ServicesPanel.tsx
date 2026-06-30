@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import MonthGenerator from "./MonthGenerator";
 import { buildRuns } from "../../utils/medley";
 import { ChainLinkIcon } from "../ChainLinkIcon";
+import { ParticipationSidebar } from "@/app/components/admin/ParticipationSidebar";
+import type { ParticipantRole } from "@/app/utils/computeParticipation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1065,6 +1067,11 @@ export default function ServicesPanel() {
     ? roles.filter(r => r.date >= today)
     : roles.filter(r => selectedMonths.has(r.date.slice(0, 7)));
 
+  const monthLabel =
+    selectedMonths.size === 0 ? "Próximos"
+    : selectedMonths.size === 1 ? fmtYM([...selectedMonths][0])
+    : `${selectedMonths.size} meses`;
+
   const upcoming = roles.filter(r => r.date >= today);
   const past     = roles.filter(r => r.date < today);
 
@@ -1223,7 +1230,9 @@ export default function ServicesPanel() {
 
       {/* Grid */}
       {!loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
+          <ParticipationSidebar roles={visible as ParticipantRole[]} monthLabel={monthLabel} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 items-start">
           {upcoming.length === 0 && selectedMonths.size === 0 && (
             <p className="font-body text-sm text-gray-500 text-center py-12">No hay servicios próximos.</p>
           )}
@@ -1243,6 +1252,7 @@ export default function ServicesPanel() {
               onMemberChipClick={handleMemberChipClick}
             />
           ))}
+          </div>
         </div>
       )}
 
