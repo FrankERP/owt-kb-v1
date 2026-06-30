@@ -25,6 +25,10 @@ steps:
       - --allow-unauthenticated
       - --memory=512MB
       - --timeout=120s
+      # Drop any plaintext OWT_SOLVER_API_KEY left over from the old deploy script;
+      # the key now comes only from Secret Manager. Cloud Run rejects a name that is
+      # both a plain env var and a secret, so removing it here keeps deploys clean.
+      - --remove-env-vars=OWT_SOLVER_API_KEY
       - --set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest
 
 options:
