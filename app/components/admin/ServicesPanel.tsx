@@ -15,6 +15,13 @@ interface MemberOption { _id: string; member_name: string; alias?: string; membe
 
 const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;
 
+// Rough rendered-width of an instrument/FOH pill (label chip + name), in
+// char-widths, so pills can be sorted narrow→wide. Names/labels at or below the
+// CSS min-width floor count as equal; an emoji suffix adds a bit of width.
+const pillWidth = (label: string, value: string) =>
+  Math.max(label.length, 4) +
+  Math.max([...value].length + (/\p{Extended_Pictographic}/u.test(value) ? 2 : 0), 4);
+
 interface InstrumentSlot { id: string; instrument: string; personId: string; }
 interface FohSlot         { id: string; role: string; personId: string; }
 
@@ -483,6 +490,15 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
   const songs   = role.songs       ?? [];
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // Pills sorted narrow→wide so the widest sink to the end of the list — any
+  // lone pill on a row ends up being a large one at the bottom, not a gap.
+  const instrPills = instrs.filter(s => s.person)
+    .map(s => ({ label: s.instrument, person: s.person! }))
+    .sort((a, b) => pillWidth(a.label, dn(a.person)) - pillWidth(b.label, dn(b.person)));
+  const fohPills = foh.filter(s => s.person)
+    .map(s => ({ label: s.role, person: s.person! }))
+    .sort((a, b) => pillWidth(a.label, dn(a.person)) - pillWidth(b.label, dn(b.person)));
+
   const isCardSelected = swapSource?.kind === "card" && swapSource.roleId === role._id;
   const isChipSource   = (section: string, i: number) =>
     swapSource && swapSource.kind !== "card" && swapSource.roleId === role._id &&
@@ -677,22 +693,22 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
                   </div>
                 </div>
               ) : null}
-              {instrs.filter(s => s.person).length > 0 && (
+              {instrPills.length > 0 && (
                 <div>
                   <SectionHead label="Instrumentos" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {instrs.filter(s => s.person).map((s, i) => (
-                      <TeamRow key={i} label={s.instrument} value={dn(s.person!)} accentHex={CARD_ACCENT_HEX[role._type]} isConflict={conflictIds.has(s.person!._id)} conflictNote={conflictNotes?.get(s.person!._id)} />
+                    {instrPills.map((p, i) => (
+                      <TeamRow key={i} label={p.label} value={dn(p.person)} accentHex={CARD_ACCENT_HEX[role._type]} isConflict={conflictIds.has(p.person._id)} conflictNote={conflictNotes?.get(p.person._id)} />
                     ))}
                   </div>
                 </div>
               )}
-              {foh.filter(s => s.person).length > 0 && (
+              {fohPills.length > 0 && (
                 <div>
                   <SectionHead label="Front of House" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {foh.filter(s => s.person).map((s, i) => (
-                      <TeamRow key={i} label={s.role} value={dn(s.person!)} accentHex={CARD_ACCENT_HEX[role._type]} isConflict={conflictIds.has(s.person!._id)} conflictNote={conflictNotes?.get(s.person!._id)} />
+                    {fohPills.map((p, i) => (
+                      <TeamRow key={i} label={p.label} value={dn(p.person)} accentHex={CARD_ACCENT_HEX[role._type]} isConflict={conflictIds.has(p.person._id)} conflictNote={conflictNotes?.get(p.person._id)} />
                     ))}
                   </div>
                 </div>
