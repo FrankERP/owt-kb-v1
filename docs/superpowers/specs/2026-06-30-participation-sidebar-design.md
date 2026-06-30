@@ -17,7 +17,11 @@ Computed over the **visible** (month-filtered) services. Two unit families:
 - **Voz appearances** — counted **per service**:
   - `sunLead` (Sunday Lead), `satLead` (Saturday Lead)
   - `sunBGV` (Sunday BGV), `satBGV` (Saturday BGV)
-  - `coro` (Sunday Choir; Saturday has no choir)
+  - `coro` (Choir). In practice Sunday-only, but `saturday_role` ALSO defines a
+    `Chorus` field and the Coro picker in `ServiceForm` is ungated, so a Saturday
+    chorus assignment is schema-/UI-possible. To avoid silently dropping such a
+    member, `coro` counts chorus appearances on **any** service type (`_type`-agnostic
+    for chorus), not just Sunday.
   - **`total` = sunLead + satLead + sunBGV + satBGV + coro** (the prominent number).
 - **Weeks** — counted **per week** (a Saturday + Sunday of the same week count once):
   - `instrWeeks` — distinct weeks the member plays an instrument
@@ -46,10 +50,13 @@ computeParticipation(roles, members) -> MemberParticipation[]
 ```
 
 - `MemberParticipation = { id, name, sunLead, satLead, sunBGV, satBGV, coro, total, instrWeeks, fohWeeks }`
-- Iterate `roles` (skip `special_role`). For each member id found in `leads`/`bgvs`/
-  `chorus`, increment the matching Sun/Sat column. For `instruments[].person` /
-  `foh[].person`, add **`weekKey(role)`** (Saturday normalized to its Sunday — see
-  above) to that member's instrument/FOH week-set.
+- Iterate `roles` (skip `special_role`). For each member id in `leads`/`bgvs`,
+  increment the matching Sun/Sat column; for each member id in `chorus`, increment
+  `coro` (regardless of `_type`). For `instruments[].person` / `foh[].person`,
+  **guard `person` against `null`** (live data has unassigned instrument/FOH slots —
+  `ServiceRole` types `person` as `MemberOption | null`; skip null), then add
+  **`weekKey(role)`** (Saturday normalized to its Sunday — see above) to that
+  member's instrument/FOH week-set.
 - `total` = the five voz columns. `instrWeeks`/`fohWeeks` = week-set sizes.
 - `name` = `alias || member_name` (the existing `dn()` convention).
 - Return only members with any participation (`total>0 || instrWeeks>0 || fohWeeks>0`),
@@ -61,7 +68,9 @@ Tests (vitest): Sun vs Sat column routing; `total` = sum of voz columns; instrum
 played on the Saturday (`2026-07-25`) AND the Sunday (`2026-07-26`) of ONE weekend
 counts as `instrWeeks: 1` — the saturday normalizes to its sunday weekKey (the key
 dedup, and the case the audit got wrong); instruments on two *different* weekends = 2;
-`special_role` ignored; zero-participation member omitted; sorted by total desc.
+`special_role` ignored; zero-participation member omitted; sorted by total desc;
+**a `null` instrument/FOH `person` is skipped without throwing** (unassigned slot);
+**a chorus member on a `saturday_role` is counted into `coro`** (not dropped).
 
 ## UI
 
