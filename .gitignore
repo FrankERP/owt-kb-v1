@@ -55,3 +55,8 @@ scripts/ux-verify.mjs
 .claudeignore
 public/manifest.webmanifest
 ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+
+# Python (solver in gcf/)
+__pycache__/
+*.pyc
+*.pyo
