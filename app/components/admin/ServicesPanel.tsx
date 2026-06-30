@@ -467,11 +467,12 @@ function conflictIdsForRole(role: ServiceRole, unavail: Map<string, Set<string>>
   return ids;
 }
 
-function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSetlist, onPublish, swapMode, swapSource, onCardSwapSelect, onMemberChipClick }: {
+function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSetlist, onPublish, swapMode, swapSource, onCardSwapSelect, onMemberChipClick, copyMode, isCopySource, onCopyStart, onCopyPick }: {
   role: ServiceRole; conflictIds: Set<string>; conflictNotes?: Map<string, string>; onEdit: () => void; onDelete: () => void; onSetlist: () => void; onPublish: (ids: string[], published: boolean) => void;
   swapMode: boolean; swapSource: SwapSource | null;
   onCardSwapSelect: () => void;
   onMemberChipClick: (src: Exclude<SwapSource, { kind: "card" }>) => void;
+  copyMode: boolean; isCopySource: boolean; onCopyStart: () => void; onCopyPick: () => void;
 }) {
   const past    = isPast(role.date);
   const leads   = role.leads       ?? [];
@@ -505,9 +506,9 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
 
   return (
     <div className={`rounded-xl border overflow-hidden transition-all ${
-      past && !swapMode
+      past && !swapMode && !copyMode
         ? `${CARD_BORDER[role._type]} opacity-50 shadow-md`
-        : isCardSelected
+        : isCardSelected || (copyMode && isCopySource)
           ? `${CARD_BORDER[role._type]} ring-2 ring-[#00bfff]/40 shadow-md`
           : hasConflict
             ? `border-2 border-red-500 ring-2 ring-red-500/40 shadow-lg shadow-red-500/30`
@@ -537,7 +538,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
           )}
         </div>
 
-        {/* Action buttons or swap button */}
+        {/* Action buttons / swap button / copy-instruments controls */}
         {swapMode ? (
           <button
             type="button"
@@ -551,8 +552,25 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
           >
             ⇄ Equipo
           </button>
+        ) : copyMode ? (
+          isCopySource ? (
+            <span className="mt-0.5 px-2.5 py-1.5 rounded-lg font-label text-[10px] uppercase tracking-widest bg-white/20 text-white border border-white/40 shrink-0">
+              Origen
+            </span>
+          ) : (
+            <button type="button" onClick={onCopyPick} title="Copiar los instrumentos del origen a este día"
+              className="mt-0.5 px-2.5 py-1.5 rounded-lg font-label text-xs transition-colors shrink-0 text-[#C8D8EB]/70 hover:text-white hover:bg-[#00bfff]/25 border border-[#00bfff]/40">
+              Pegar aquí
+            </button>
+          )
         ) : (
           <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5">
+            {instrs.filter(s => s.person).length > 0 && (
+              <button type="button" onClick={onCopyStart} title="Repetir estos instrumentos en otro día"
+                className="px-2 py-1 rounded-lg border border-[#00bfff]/20 text-xs hover:border-[#00bfff] transition-colors text-[#C8D8EB]/70 hover:text-white">
+                Copiar instr.
+              </button>
+            )}
             <button type="button" onClick={() => onPublish([role._id], role.published === false)}
               className="px-2 py-1 rounded-lg border border-[#00bfff]/20 text-xs hover:border-[#00bfff] transition-colors text-[#C8D8EB]/70 hover:text-white">
               {role.published === false ? "Publicar" : "Despublicar"}
@@ -946,6 +964,10 @@ export default function ServicesPanel() {
   const [swapSource, setSwapSource] = useState<SwapSource | null>(null);
   const [swapConfirm, setSwapConfirm] = useState<SwapConfirm | null>(null);
 
+  // Copy-instruments mode: pick a source card, then a target day to repeat its lineup.
+  const [copySource, setCopySource] = useState<string | null>(null);
+  const copyMode = copySource !== null;
+
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
   const fetchData = useCallback(async () => {
@@ -1034,6 +1056,30 @@ export default function ServicesPanel() {
   }
 
   function exitSwapMode() { setSwapMode(false); setSwapSource(null); setSwapConfirm(null); }
+
+  // ── Copy instruments to another day ─────────────────────────────────────────
+
+  function startCopyInstruments(roleId: string) { exitSwapMode(); setCopySource(roleId); }
+
+  async function copyInstrumentsTo(targetId: string) {
+    if (!copySource || copySource === targetId) return;
+    const source = roles.find(r => r._id === copySource);
+    const target = roles.find(r => r._id === targetId);
+    if (!source || !target) return;
+    const count = (source.instruments ?? []).filter(s => s.person).length;
+    const fmt = (r: ServiceRole) =>
+      new Date(r.date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short" });
+    if (!confirm(`¿Copiar ${count} instrumento(s) de ${fmt(source)} a ${fmt(target)}? Reemplazará los instrumentos del destino.`)) return;
+    setSubmitting(true);
+    await fetch(`/api/admin/roles/${target._id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(roleToPatchPayload({ ...target, instruments: source.instruments })),
+    });
+    setSubmitting(false);
+    setCopySource(null);
+    fetchData();
+    showToast("Instrumentos copiados.");
+  }
 
   // ── Publish ───────────────────────────────────────────────────────────────
 
@@ -1127,7 +1173,7 @@ export default function ServicesPanel() {
         <div className="flex items-center gap-2 flex-wrap">
           {/* Swap mode toggle */}
           <button
-            onClick={() => swapMode ? exitSwapMode() : setSwapMode(true)}
+            onClick={() => { if (swapMode) { exitSwapMode(); } else { setCopySource(null); setSwapMode(true); } }}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
               swapMode ? "border-[#00bfff] bg-[#00bfff]/10 text-[#00bfff]" : "border-[#003572]/20 dark:border-[#00bfff]/15 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff]/30"
             }`}
@@ -1147,7 +1193,7 @@ export default function ServicesPanel() {
           <button onClick={() => setShowGenerator(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#003572]/20 dark:border-[#00bfff]/15 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff]/30 transition-colors">
             📅 Generar mes
           </button>
-          {!swapMode && (
+          {!swapMode && !copyMode && (
             <button onClick={() => setEditModal({ type: "add" })} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors">
               <span className="text-base leading-none">+</span> Nuevo
             </button>
@@ -1225,6 +1271,27 @@ export default function ServicesPanel() {
         </div>
       )}
 
+      {/* Copy-instruments mode banner */}
+      {copyMode && (() => {
+        const src = roles.find(r => r._id === copySource);
+        const srcLabel = src
+          ? new Date(src.date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })
+          : "";
+        return (
+          <div className="rounded-lg border border-[#00bfff]/30 bg-[#00bfff]/5 px-4 py-2.5 flex items-center justify-between">
+            <div>
+              <p className="font-label text-xs uppercase tracking-widest text-[#00bfff]">Copiar instrumentos</p>
+              <p className="font-body text-xs text-gray-500 mt-0.5">
+                Copiando los instrumentos de <span className="text-gray-300 capitalize">{srcLabel}</span>. Haz clic en «Pegar aquí» en el día destino (reemplaza sus instrumentos).
+              </p>
+            </div>
+            <button onClick={() => setCopySource(null)} className="font-label text-[10px] uppercase tracking-widest text-gray-500 hover:text-red-400 transition-colors ml-4 shrink-0">
+              Cancelar
+            </button>
+          </div>
+        );
+      })()}
+
       {/* Loading */}
       {loading && <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-20 rounded-xl bg-[#003572]/10 dark:bg-[#00bfff]/5 animate-pulse" />)}</div>}
 
@@ -1250,6 +1317,10 @@ export default function ServicesPanel() {
               swapSource={swapSource}
               onCardSwapSelect={() => handleCardSwapSelect(role._id)}
               onMemberChipClick={handleMemberChipClick}
+              copyMode={copyMode}
+              isCopySource={copySource === role._id}
+              onCopyStart={() => startCopyInstruments(role._id)}
+              onCopyPick={() => copyInstrumentsTo(role._id)}
             />
           ))}
           </div>
