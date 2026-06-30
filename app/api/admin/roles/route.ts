@@ -56,7 +56,7 @@ export async function GET() {
   const roles = await serverClient.fetch(`
     *[_type in ["sunday_role", "saturday_role", "special_role"]]
     | order(coalesce(week, date) asc) {
-      _id, _type, service_name,
+      _id, _type, service_name, published,
       "date": coalesce(week, date),
       "leads": Lead[]->{_id, member_name, alias},
       "bgvs": BGVs[]->{_id, member_name, alias},
@@ -88,6 +88,7 @@ export async function POST(req: NextRequest) {
     _type: ServiceType;
     date: string;
     service_name?: string;
+    published?: boolean;
     leads?: string[];
     bgvs?: string[];
     chorus?: string[];
@@ -110,15 +111,18 @@ export async function POST(req: NextRequest) {
     Chorus:      toRefs(body.chorus ?? []),
     instruments: toInstrumentSlots(body.instruments ?? []),
     foh_team:    toFohSlots(body.foh ?? []),
+    published:   body.published === true,   // default false = draft
   });
 
   const added = allAssignees(body); // brand-new doc → everyone is "added"
-  void sendPush(added, "assignments", {
-    title: "Nuevo servicio asignado",
-    body: `Te asignaron para el ${body.date}.`,
-    path: "/me",
-  });
-  void sendAssignmentEmails(added, { type: body._type, date: body.date, body });
+  if (body.published === true) {
+    void sendPush(added, "assignments", {
+      title: "Nuevo servicio asignado",
+      body: `Te asignaron para el ${body.date}.`,
+      path: "/me",
+    });
+    void sendAssignmentEmails(added, { type: body._type, date: body.date, body });
+  }
 
   return NextResponse.json(doc, { status: 201 });
 }
