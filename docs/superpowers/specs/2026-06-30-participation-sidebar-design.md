@@ -1,7 +1,9 @@
 # Design — Participation sidebar in the Servicios panel
 
 Date: 2026-06-30
-Status: Approved (pending adversarial review)
+Status: APPROVED — adversarial review passed (3 fresh rounds; r1 surfaced Saturday-
+chorus + null-person gaps, r2 caught a chorus/special_role contradiction, r3 APPROVED;
+week-dedup bug caught in self-review before review).
 
 ## Summary
 
@@ -49,8 +51,13 @@ by definition and special services are irregular one-offs. The sidebar aggregate
 ## Core logic (pure, unit-tested)
 
 ```
-computeParticipation(roles, members) -> MemberParticipation[]
+computeParticipation(roles) -> MemberParticipation[]
 ```
+
+(No `members` param needed — the role-embedded member objects carry `_id`,
+`member_name`, and `alias`, so names resolve from `roles` directly. **Drafts are
+counted:** `roles`/`visible` include unpublished services, and the sidebar counts
+their assignments on purpose — you balance the month while it's still in draft.)
 
 - `MemberParticipation = { id, name, sunLead, satLead, sunBGV, satBGV, coro, total, instrWeeks, fohWeeks }`
 - Iterate `roles`, **skipping `special_role` entirely** (so all of its voz/chorus/
@@ -63,11 +70,12 @@ computeParticipation(roles, members) -> MemberParticipation[]
   **`weekKey(role)`** (Saturday normalized to its Sunday — see above) to that
   member's instrument/FOH week-set.
 - `total` = the five voz columns. `instrWeeks`/`fohWeeks` = week-set sizes.
-- `name` = `alias || member_name` (the existing `dn()` convention).
+- `name` = `alias || member_name` (the existing `dn()` convention), read from the
+  member object embedded in the role's `leads`/`bgvs`/`chorus`/`person` arrays.
 - Return only members with any participation (`total>0 || instrWeeks>0 || fohWeeks>0`),
-  sorted by `total` desc (UI can re-sort). Members with zero are omitted (a small
-  "N sin participación" footnote may note how many were hidden).
-- Pure: no I/O, no React. Lives in `app/utils/computeParticipation.ts`.
+  sorted by `total` desc (UI can re-sort). Members with zero are omitted.
+- Pure: no I/O, no React. Lives in `app/utils/computeParticipation.ts`; tests at
+  `app/utils/__tests__/computeParticipation.test.ts` (repo vitest convention).
 
 Tests (vitest): Sun vs Sat column routing; `total` = sum of voz columns; instrument
 played on the Saturday (`2026-07-25`) AND the Sunday (`2026-07-26`) of ONE weekend
@@ -82,11 +90,11 @@ dedup, and the case the audit got wrong); instruments on two *different* weekend
 
 New component `app/components/admin/ParticipationSidebar.tsx`:
 - Props: `roles: ServiceRole[]` (the panel's already-filtered `visible` list),
-  `members: MemberOption[]`, `monthLabel: string` (header context). The panel computes
+  `monthLabel: string` (header context). The panel computes
   the label from `selectedMonths`: **0 selected →** "Próximos"; **1 →** that month
   formatted (e.g. "Julio 2026"); **2+ →** "N meses" (the count). Derived in
   `ServicesPanel` and passed in, so the sidebar stays presentational.
-- Calls `computeParticipation(roles, members)` inside a `useMemo`.
+- Calls `computeParticipation(roles)` inside a `useMemo`.
 - Header: "Participaciones" + the month label + a small sort `<select>` (Total
   default; or by a single role column). A color legend (Líder/BGV/Coro/Instr/FOH).
 - One row per member: name; the **`total`** as the prominent number; a horizontal
