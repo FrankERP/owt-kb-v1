@@ -33,12 +33,18 @@ function escapeHtml(s: string): string {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
 }
 
-// Absolute base URL for email links. NEXTAUTH_URL is the canonical app origin in
-// this NextAuth app and is guaranteed set to the real domain in production (auth
-// breaks otherwise), and to http://localhost:3000 in dev. Email links use it
-// directly; if somehow unset, fall back to a relative path rather than a guess.
+// Absolute base URL for email links (emails can't use relative paths).
+// Priority: an explicit non-localhost NEXTAUTH_URL, else Vercel's auto-set
+// VERCEL_PROJECT_PRODUCTION_URL (host only — prepend https), else the raw
+// NEXTAUTH_URL (covers localhost in dev), else "" (relative, last resort).
+// This app uses Auth.js URL auto-detection, so NEXTAUTH_URL may be unset in
+// production — VERCEL_PROJECT_PRODUCTION_URL is always present on Vercel.
 function appBaseUrl(): string {
-  return (process.env.NEXTAUTH_URL?.trim() ?? "").replace(/\/$/, "");
+  const explicit = process.env.NEXTAUTH_URL?.trim();
+  if (explicit && !explicit.includes("localhost")) return explicit.replace(/\/$/, "");
+  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  if (vercel) return `https://${vercel.replace(/^https?:\/\//, "").replace(/\/$/, "")}`;
+  return (explicit ?? "").replace(/\/$/, "");
 }
 
 export function buildAssignmentEmail(o: { name: string; roles: string[]; type: ServiceType; date: string }): { subject: string; html: string } {
