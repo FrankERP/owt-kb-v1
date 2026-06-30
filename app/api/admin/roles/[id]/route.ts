@@ -66,8 +66,8 @@ export async function PATCH(
 
   const dateField = body._type === "special_role" ? "date" : "week";
 
-  const prevDoc = await serverClient.fetch<{ leads?: string[]; bgvs?: string[]; chorus?: string[]; inst?: string[]; foh?: string[] } | null>(
-    `*[_id == $id][0]{ "leads": Lead[]._ref, "bgvs": BGVs[]._ref, "chorus": Chorus[]._ref, "inst": instruments[].person._ref, "foh": foh_team[].person._ref }`,
+  const prevDoc = await serverClient.fetch<{ leads?: string[]; bgvs?: string[]; chorus?: string[]; inst?: string[]; foh?: string[]; published?: boolean } | null>(
+    `*[_id == $id][0]{ "leads": Lead[]._ref, "bgvs": BGVs[]._ref, "chorus": Chorus[]._ref, "inst": instruments[].person._ref, "foh": foh_team[].person._ref, "published": published }`,
     { id }
   );
 
@@ -86,12 +86,14 @@ export async function PATCH(
 
   const prevIds = prevDoc ? [...(prevDoc.leads ?? []), ...(prevDoc.bgvs ?? []), ...(prevDoc.chorus ?? []), ...(prevDoc.inst ?? []), ...(prevDoc.foh ?? [])].filter(Boolean) : [];
   const added = addedAssignees(prevIds, allAssignees(body));
-  void sendPush(added, "assignments", {
-    title: "Servicio actualizado",
-    body: `Te asignaron para el ${body.date}.`,
-    path: "/me",
-  });
-  void sendAssignmentEmails(added, { type: body._type, date: body.date, body });
+  if (prevDoc?.published !== false) {   // published or grandfathered; drafts stay silent
+    void sendPush(added, "assignments", {
+      title: "Servicio actualizado",
+      body: `Te asignaron para el ${body.date}.`,
+      path: "/me",
+    });
+    void sendAssignmentEmails(added, { type: body._type, date: body.date, body });
+  }
 
   return NextResponse.json(doc);
 }
