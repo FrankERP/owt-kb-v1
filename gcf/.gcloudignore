@@ -5,3 +5,6 @@ __pycache__/
 .pytest_cache/
 *.err
 .DS_Store
+# Tests don't belong in the deployed function.
+test_*.py
+*_test.py
