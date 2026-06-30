@@ -29,11 +29,11 @@ const ROLE_FIELDS = `_id, week,
   Chorus[]->{ member_name, alias }`;
 
 const SCHEDULE_QUERY = `{
-  "sundays":     *[_type == "sunday_role"   && week >= $today && week <= $limit] | order(week asc)  { ${ROLE_FIELDS} },
-  "saturdays":   *[_type == "saturday_role" && week >= $today && week <= $limit] | order(week asc)  { ${ROLE_FIELDS} },
+  "sundays":     *[_type == "sunday_role"   && week >= $today && week <= $limit && published != false] | order(week asc)  { ${ROLE_FIELDS} },
+  "saturdays":   *[_type == "saturday_role" && week >= $today && week <= $limit && published != false] | order(week asc)  { ${ROLE_FIELDS} },
   "sunSetlists": *[_type == "featuredSongs" && week >= $today && week <= $limit] | order(week asc)  { ${SETLIST_FRAGMENT} },
   "satSetlists": *[_type == "saturdarSongs" && week >= $today && week <= $limit] | order(week asc)  { ${SETLIST_FRAGMENT} },
-  "specials":    *[_type == "special_role"  && date >= $weekStart && date <= $limit] | order(date asc) {
+  "specials":    *[_type == "special_role"  && date >= $weekStart && date <= $limit && published != false] | order(date asc) {
     _id, date, service_name,
     songs[]{ play_key, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "key": song->key },
     ${ROLE_FIELDS}

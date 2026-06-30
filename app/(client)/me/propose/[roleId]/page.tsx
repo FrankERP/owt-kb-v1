@@ -11,7 +11,7 @@ type ServiceType = "sunday" | "saturday" | "special";
 async function getRoleDoc(roleId: string, leadId: string) {
   // Try all three role types — only returns if the user is a Lead on this doc
   const doc = await serverClient.fetch(
-    `*[_id == $id && (_type == "sunday_role" || _type == "saturday_role" || _type == "special_role") && $leadId in Lead[]._ref][0] {
+    `*[_id == $id && (_type == "sunday_role" || _type == "saturday_role" || _type == "special_role") && $leadId in Lead[]._ref && published != false][0] {
       _id, _type, week, date, service_name
     }`,
     { id: roleId, leadId }

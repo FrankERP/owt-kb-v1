@@ -50,9 +50,9 @@ const ROLE_FIELDS = `week,
 const WEEKEND_QUERY = `{
   "sunSongs": *[_type == "featuredSongs"  && week == $sun][0] { ${SETLIST_FIELDS} },
   "satSongs": *[_type == "saturdarSongs"  && week == $sat][0] { ${SETLIST_FIELDS} },
-  "sunRole":  *[_type == "sunday_role"    && week == $sun][0] { ${ROLE_FIELDS} },
-  "satRole":  *[_type == "saturday_role"  && week == $sat][0] { ${ROLE_FIELDS} },
-  "specials": *[_type == "special_role"   && date >= $today && date <= $sun] | order(date asc) {
+  "sunRole":  *[_type == "sunday_role"    && week == $sun && published != false][0] { ${ROLE_FIELDS} },
+  "satRole":  *[_type == "saturday_role"  && week == $sat && published != false][0] { ${ROLE_FIELDS} },
+  "specials": *[_type == "special_role"   && date >= $today && date <= $sun && published != false] | order(date asc) {
     _id, date, service_name,
     songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "key": song->key },
     ${ROLE_FIELDS}

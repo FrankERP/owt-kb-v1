@@ -64,7 +64,7 @@ export default async function MePage() {
   const [data, proposals, serviceDates] = await Promise.all([
     client.fetch(
       `{
-        "sundays": *[_type == "sunday_role" && week >= $today && week <= $limit && ${memberFilter}] | order(week asc) {
+        "sundays": *[_type == "sunday_role" && week >= $today && week <= $limit && published != false && ${memberFilter}] | order(week asc) {
           _id, week,
           "isLead": $id in Lead[]._ref,
           Lead[]-> { member_name, alias },
@@ -82,7 +82,7 @@ export default async function MePage() {
             week,
           }
         },
-        "saturdays": *[_type == "saturday_role" && week >= $today && week <= $limit && ${memberFilter}] | order(week asc) {
+        "saturdays": *[_type == "saturday_role" && week >= $today && week <= $limit && published != false && ${memberFilter}] | order(week asc) {
           _id, week,
           "isLead": $id in Lead[]._ref,
           Lead[]-> { member_name, alias },
@@ -100,7 +100,7 @@ export default async function MePage() {
             week,
           }
         },
-        "specials": *[_type == "special_role" && date >= $today && date <= $limit && ${memberFilter}] | order(date asc) {
+        "specials": *[_type == "special_role" && date >= $today && date <= $limit && published != false && ${memberFilter}] | order(date asc) {
           _id, date, service_name,
           "isLead": $id in Lead[]._ref,
           Lead[]-> { member_name, alias },
@@ -126,9 +126,9 @@ export default async function MePage() {
     ),
     client.fetch<string[]>(
       `[
-        ...*[_type == "sunday_role"   && week >= $today && week <= $limit].week,
-        ...*[_type == "saturday_role" && week >= $today && week <= $limit].week,
-        ...*[_type == "special_role"  && date >= $today && date <= $limit].date,
+        ...*[_type == "sunday_role"   && week >= $today && week <= $limit && published != false].week,
+        ...*[_type == "saturday_role" && week >= $today && week <= $limit && published != false].week,
+        ...*[_type == "special_role"  && date >= $today && date <= $limit && published != false].date,
       ]`,
       { today, limit: calendarLimit }
     ),
