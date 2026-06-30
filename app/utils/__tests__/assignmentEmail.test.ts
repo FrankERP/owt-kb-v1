@@ -39,6 +39,23 @@ describe("buildAssignmentEmail", () => {
     expect(e.html).toContain("&lt;x&gt;");
     expect(e.html).not.toContain("<x>");
   });
+
+  it("falls back to VERCEL_PROJECT_PRODUCTION_URL (https) when NEXTAUTH_URL is unset", () => {
+    delete process.env.NEXTAUTH_URL;
+    process.env.VERCEL_PROJECT_PRODUCTION_URL = "owt.example.app";
+    const e = buildAssignmentEmail({ name: "Frank", roles: ["Líder"], type: "sunday_role", date: "2026-07-05" });
+    expect(e.html).toContain('href="https://owt.example.app/me"');
+    delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  });
+
+  it("ignores a localhost NEXTAUTH_URL in favor of the Vercel production URL", () => {
+    process.env.NEXTAUTH_URL = "http://localhost:3000";
+    process.env.VERCEL_PROJECT_PRODUCTION_URL = "owt.example.app";
+    const e = buildAssignmentEmail({ name: "Frank", roles: ["Líder"], type: "sunday_role", date: "2026-07-05" });
+    expect(e.html).toContain('href="https://owt.example.app/me"');
+    delete process.env.NEXTAUTH_URL;
+    delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  });
 });
 
 describe("sendAssignmentEmails gating", () => {
