@@ -1307,7 +1307,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
     setTimeout(() => setSwapToast(null), 2500);
   }
 
-  async function handleConfirm() {
+  async function handleConfirm(publish: boolean) {
     const toCreate = drafts.filter(d => !d.skipped && !d.exists);
     if (!toCreate.length) return;
     setPushing(true);
@@ -1320,6 +1320,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
           leads: d.leads, bgvs: d.bgvs, chorus: d.chorus,
           instruments: d.instruments.filter(s => s.instrument && s.personId),
           foh: d.foh.filter(s => s.role && s.personId),
+          published: publish,
         }),
       });
     }
@@ -1513,8 +1514,11 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
         <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
           Cancelar
         </button>
-        <button type="button" onClick={handleConfirm} disabled={pushing || toCreate.length === 0} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
-          {pushing ? "Creando..." : `Crear ${toCreate.length} servicio${toCreate.length !== 1 ? "s" : ""}`}
+        <button type="button" onClick={() => handleConfirm(false)} disabled={pushing || toCreate.length === 0} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+          {pushing ? "Creando..." : `Crear ${toCreate.length} borrador${toCreate.length !== 1 ? "es" : ""}`}
+        </button>
+        <button type="button" onClick={() => handleConfirm(true)} disabled={pushing || toCreate.length === 0} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+          Crear y publicar
         </button>
       </div>
     </div>
