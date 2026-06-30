@@ -62,10 +62,10 @@ describe("sendEmail", () => {
     const r = await sendEmail({ to: "a@b.com", subject: "s", html: "<p>h</p>" });
     expect(r.ok).toBe(true);
     expect(sendMock).not.toHaveBeenCalled();
-    expect(createTransportMock).toHaveBeenCalledWith({
+    expect(createTransportMock).toHaveBeenCalledWith(expect.objectContaining({
       host: "mail.oasis.mx", port: 465, secure: true,
       auth: { user: "contacto@oasis.mx", pass: "secret" },
-    });
+    }));
     expect(sendMailMock).toHaveBeenCalledWith({ from: "Oasis <contacto@oasis.mx>", to: "a@b.com", subject: "s", html: "<p>h</p>" });
   });
 

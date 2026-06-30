@@ -125,4 +125,17 @@ describe("sendAssignmentEmailsBatch", () => {
     await sendAssignmentEmailsBatch([svcA, svcB]);
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
+
+  it("emails the whole team when EMAIL_ALLOWLIST is '*'", async () => {
+    process.env.EMAIL_ALLOWLIST = "*";
+    fetchMock.mockResolvedValue([
+      { _id: "m1", member_name: "Frank", email: "frank@x.com" },
+      { _id: "m2", member_name: "Gaby", email: "gaby@y.com" },
+    ]);
+    sendEmailMock.mockResolvedValue({ ok: true });
+    await sendAssignmentEmailsBatch([svcA, svcB]);
+    expect(sendEmailMock).toHaveBeenCalledTimes(2);
+    const recipients = sendEmailMock.mock.calls.map((c) => c[0].to).sort();
+    expect(recipients).toEqual(["frank@x.com", "gaby@y.com"]);
+  });
 });

@@ -1,5 +1,21 @@
 import { Resend } from "resend";
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
+
+// Reuse one pooled SMTP connection across a batch (and across warm invocations)
+// instead of opening a fresh auth per email — gentler on the cPanel/MailBaby
+// server and much faster when notifying the whole team. maxConnections:1 keeps
+// sends serialized over a single connection.
+let cachedTransport: { key: string; transport: Transporter } | null = null;
+function smtpTransport(host: string, port: number, secure: boolean, user: string, pass: string): Transporter {
+  const key = `${host}:${port}:${secure}:${user}`;
+  if (cachedTransport?.key === key) return cachedTransport.transport;
+  const transport = nodemailer.createTransport({
+    host, port, secure, auth: { user, pass },
+    pool: true, maxConnections: 1, maxMessages: 100,
+  });
+  cachedTransport = { key, transport };
+  return transport;
+}
 
 // Sends one email. Two backends, chosen by env:
 //   1. SMTP (preferred) — when SMTP_HOST + SMTP_USER + SMTP_PASS are set, sends
@@ -22,7 +38,7 @@ export async function sendEmail(opts: { to: string; subject: string; html: strin
     // Implicit TLS on 465; STARTTLS on 587. Override with SMTP_SECURE if needed.
     const secure = process.env.SMTP_SECURE != null ? process.env.SMTP_SECURE === "true" : port === 465;
     try {
-      const transport = nodemailer.createTransport({ host, port, secure, auth: { user, pass } });
+      const transport = smtpTransport(host, port, secure, user, pass);
       await transport.sendMail({ from, to: opts.to, subject: opts.subject, html: opts.html });
       return { ok: true };
     } catch (err) {

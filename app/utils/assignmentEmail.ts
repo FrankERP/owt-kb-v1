@@ -18,6 +18,14 @@ export function getAllowlist(): string[] {
     .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 }
 
+// Whether a recipient may be emailed. `EMAIL_ALLOWLIST="*"` opens it to every
+// member with a valid email (whole team); otherwise only listed addresses.
+// Default (env unset) is Frank-only.
+export function isEmailAllowed(email: string | undefined, allow: string[] = getAllowlist()): boolean {
+  if (!email) return false;
+  return allow.includes("*") || allow.includes(email);
+}
+
 export function assigneesOf(b: ServiceBody): string[] {
   return [
     ...(b.leads ?? []), ...(b.bgvs ?? []), ...(b.chorus ?? []),
@@ -130,7 +138,7 @@ export async function sendAssignmentEmailsBatch(
     const redirectTo = process.env.EMAIL_REDIRECT_TO?.trim();
     for (const m of members) {
       const email = m.email?.trim().toLowerCase();
-      if (!email || !allow.includes(email)) continue;
+      if (!email || !isEmailAllowed(email, allow)) continue;
       const items = (byMember.get(m._id) ?? []).slice().sort((a, b) => a.date.localeCompare(b.date));
       if (!items.length) continue;
       const { subject, html } = buildBatchAssignmentEmail({ name: m.alias || m.member_name || "", items });
@@ -164,7 +172,7 @@ export async function sendAssignmentEmails(
     const redirectTo = process.env.EMAIL_REDIRECT_TO?.trim();
     for (const m of members) {
       const email = m.email?.trim().toLowerCase();
-      if (!email || !allow.includes(email)) continue;
+      if (!email || !isEmailAllowed(email, allow)) continue;
       const roles = rolesForMember(m._id, service.body);
       const { subject, html } = buildAssignmentEmail({ name: m.alias || m.member_name || "", roles, type: service.type, date: service.date });
       const to = redirectTo || email;

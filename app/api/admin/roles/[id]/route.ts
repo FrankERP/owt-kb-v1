@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+
+export const maxDuration = 60;
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { addedAssignees } from "@/app/utils/notifyTargets";
@@ -87,12 +89,14 @@ export async function PATCH(
   const prevIds = prevDoc ? [...(prevDoc.leads ?? []), ...(prevDoc.bgvs ?? []), ...(prevDoc.chorus ?? []), ...(prevDoc.inst ?? []), ...(prevDoc.foh ?? [])].filter(Boolean) : [];
   const added = addedAssignees(prevIds, allAssignees(body));
   if (prevDoc?.published !== false) {   // published or grandfathered; drafts stay silent
-    void sendPush(added, "assignments", {
-      title: "Servicio actualizado",
-      body: `Te asignaron para el ${body.date}.`,
-      path: "/me",
+    after(async () => {
+      await sendPush(added, "assignments", {
+        title: "Servicio actualizado",
+        body: `Te asignaron para el ${body.date}.`,
+        path: "/me",
+      });
+      await sendAssignmentEmails(added, { type: body._type, date: body.date, body });
     });
-    void sendAssignmentEmails(added, { type: body._type, date: body.date, body });
   }
 
   return NextResponse.json(doc);
