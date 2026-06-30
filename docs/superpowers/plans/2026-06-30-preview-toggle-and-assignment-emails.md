@@ -377,11 +377,21 @@ describe("rolesForMember", () => {
 });
 
 describe("buildAssignmentEmail", () => {
-  it("builds a Spanish subject and body", () => {
+  it("builds a Spanish subject and body with an absolute link", () => {
+    process.env.NEXTAUTH_URL = "https://example.com";
     const e = buildAssignmentEmail({ name: "Frank", roles: ["Líder"], type: "sunday_role", date: "2026-07-05" });
     expect(e.subject).toContain("Domingo");
     expect(e.html).toContain("Frank");
     expect(e.html).toContain("Líder");
+    expect(e.html).toContain('href="https://example.com/me"');
+    delete process.env.NEXTAUTH_URL;
+  });
+
+  it("escapes HTML in interpolated name/roles", () => {
+    const e = buildAssignmentEmail({ name: "A & B", roles: ["<x>"], type: "saturday_role", date: "2026-07-11" });
+    expect(e.html).toContain("A &amp; B");
+    expect(e.html).toContain("&lt;x&gt;");
+    expect(e.html).not.toContain("<x>");
   });
 });
 
@@ -407,6 +417,16 @@ describe("sendAssignmentEmails gating", () => {
     fetchMock.mockResolvedValue([{ _id: "m1", member_name: "Frank" }]);
     await sendAssignmentEmails(["m1"], { type: "sunday_role", date: "2026-07-05", body });
     expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("sends ONE email listing all roles for a member in multiple sections", async () => {
+    // m1 is both Líder and Guitarra in `body`.
+    fetchMock.mockResolvedValue([{ _id: "m1", member_name: "Frank", email: "frank@x.com" }]);
+    sendEmailMock.mockResolvedValue({ ok: true });
+    await sendAssignmentEmails(["m1"], { type: "sunday_role", date: "2026-07-05", body });
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    const html = sendEmailMock.mock.calls[0][0].html as string;
+    expect(html).toContain("Líder, Guitarra");
   });
 });
 ```
@@ -449,16 +469,30 @@ export function rolesForMember(id: string, b: ServiceBody): string[] {
   return roles;
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
+}
+
+// Absolute base URL for email links. NEXTAUTH_URL is the canonical app origin in
+// this NextAuth app and is guaranteed set to the real domain in production (auth
+// breaks otherwise), and to http://localhost:3000 in dev. Email links use it
+// directly; if somehow unset, fall back to a relative path rather than a guess.
+function appBaseUrl(): string {
+  return (process.env.NEXTAUTH_URL?.trim() ?? "").replace(/\/$/, "");
+}
+
 export function buildAssignmentEmail(o: { name: string; roles: string[]; type: ServiceType; date: string }): { subject: string; html: string } {
   const svc = SERVICE_LABEL[o.type];
   const dateFmt = new Date(o.date + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" });
-  const rolesText = o.roles.length ? o.roles.join(", ") : "el equipo";
-  const link = `${process.env.NEXTAUTH_URL ?? ""}/me`;
+  const rolesText = escapeHtml(o.roles.length ? o.roles.join(", ") : "el equipo");
+  const name = escapeHtml(o.name || "equipo");
+  const link = `${appBaseUrl()}/me`;
   const subject = `Asignación — ${svc} ${dateFmt}`;
   const html = `
     <div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;color:#0b1f33">
       <h2 style="color:#003572">Nueva asignación</h2>
-      <p>Hola ${o.name || "equipo"},</p>
+      <p>Hola ${name},</p>
       <p>Estás asignado como <strong>${rolesText}</strong> el <strong>${svc} ${dateFmt}</strong>.</p>
       <p><a href="${link}" style="display:inline-block;background:#003572;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px">Ver servicio →</a></p>
       <p style="color:#6b7280;font-size:12px">Oasis Worship Team</p>
@@ -604,7 +638,11 @@ git commit -m "feat(schema): add notifPrefs.email field (reserved, no UI)"
 RESEND_API_KEY=re_xxx                     # from resend.com (free account)
 EMAIL_FROM=Oasis Worship <onboarding@resend.dev>   # later: equipo@send.oasis.mx
 # EMAIL_ALLOWLIST=chikipuas@gmail.com      # optional; default is this value
+# NEXTAUTH_URL must be the real prod origin (already required by NextAuth) —
+# email "Ver servicio" links are built from it. Confirm it is NOT localhost in prod.
 ```
+
+Verify in the **Vercel Production** env that `NEXTAUTH_URL` is the public site URL (it must already be, for auth). The email link uses it; a localhost/unset value yields a broken link (emails still send + gate correctly).
 
 - [ ] **Step 2: Verify** the app boots with these unset (email no-ops) and with them set (sends to Frank). No commit needed for `.env.local` (gitignored); record the values in the team's secret store.
 
