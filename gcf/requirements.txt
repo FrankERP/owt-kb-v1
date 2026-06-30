@@ -1,2 +1,5 @@
-ortools>=9.0
-functions-framework>=3.0
+# Pinned for parity: this exact ortools version is what local dev (the owt-roles
+# conda env) runs, so cloud and local produce identical solver results.
+# Bump deliberately and re-pin the local env to match — never with a floating range.
+ortools==9.15.6755
+functions-framework>=3.0,<4
