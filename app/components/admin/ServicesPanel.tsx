@@ -600,7 +600,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
       </div>
 
       {/* ── Body ── */}
-      <div className="p-5 space-y-5">
+      <div className="svc-card-body p-5 space-y-5">
 
         {/* Setlist */}
         {hasSetlist && (
@@ -680,7 +680,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
               {instrs.filter(s => s.person).length > 0 && (
                 <div>
                   <SectionHead label="Instrumentos" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-2 mt-2">
+                  <div className="pill-grid mt-2">
                     {instrs.filter(s => s.person).map((s, i) => (
                       <TeamRow key={i} label={s.instrument} value={dn(s.person!)} accentHex={CARD_ACCENT_HEX[role._type]} isConflict={conflictIds.has(s.person!._id)} conflictNote={conflictNotes?.get(s.person!._id)} />
                     ))}
@@ -690,7 +690,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
               {foh.filter(s => s.person).length > 0 && (
                 <div>
                   <SectionHead label="Front of House" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-2 mt-2">
+                  <div className="pill-grid mt-2">
                     {foh.filter(s => s.person).map((s, i) => (
                       <TeamRow key={i} label={s.role} value={dn(s.person!)} accentHex={CARD_ACCENT_HEX[role._type]} isConflict={conflictIds.has(s.person!._id)} conflictNote={conflictNotes?.get(s.person!._id)} />
                     ))}
@@ -817,7 +817,7 @@ function TeamRow({ label, value, accentHex, isConflict, conflictNote }: { label:
       </span>
       <span
         title={isConflict && conflictNote ? conflictNote : undefined}
-        className={`font-body text-sm px-3 py-1.5 flex flex-1 items-center justify-center gap-1 leading-tight whitespace-nowrap ${isConflict ? "text-red-400 font-semibold" : ""}`}
+        className={`font-body text-sm px-2 py-1.5 flex flex-1 items-center justify-center gap-1 leading-tight whitespace-nowrap min-w-0 ${isConflict ? "text-red-400 font-semibold" : ""}`}
         style={isConflict ? { background: "rgba(239,68,68,0.10)" } : undefined}
       >
         {isConflict && <span>⚠</span>}
