@@ -771,7 +771,7 @@ function TeamRow({ label, value, accentHex, isConflict, conflictNote }: { label:
       style={{ border: isConflict ? "1px solid rgba(239,68,68,0.7)" : `1px solid ${accentHex}40` }}
     >
       <span
-        className="font-label text-xs uppercase tracking-wide px-2.5 flex items-center shrink-0 rounded-l-[7px]"
+        className="font-label text-xs uppercase tracking-wide px-2.5 flex items-center justify-center shrink-0 min-w-[3.5rem] rounded-l-[7px]"
         style={{
           background: isConflict ? "rgba(239,68,68,0.18)" : `${accentHex}18`,
           color: isConflict ? "#f87171" : accentHex,
@@ -782,7 +782,7 @@ function TeamRow({ label, value, accentHex, isConflict, conflictNote }: { label:
       </span>
       <span
         title={isConflict && conflictNote ? conflictNote : undefined}
-        className={`font-body text-sm px-3 py-1.5 flex flex-1 items-center justify-center gap-1 leading-tight ${isConflict ? "text-red-400 font-semibold" : ""}`}
+        className={`font-body text-sm px-3 py-1.5 flex flex-1 items-center justify-center gap-1 leading-tight whitespace-nowrap ${isConflict ? "text-red-400 font-semibold" : ""}`}
         style={isConflict ? { background: "rgba(239,68,68,0.10)" } : undefined}
       >
         {isConflict && <span>⚠</span>}
