@@ -62,7 +62,7 @@ async function callRemoteSolver(config: SolveRequest): Promise<SolveResponse> {
 
 function callLocalSolver(config: SolveRequest): Promise<SolveResponse> {
   return new Promise((resolve) => {
-    const scriptPath = path.join(process.cwd(), "scripts", "owt_solver_v2.py");
+    const scriptPath = path.join(process.cwd(), "gcf", "owt_solver_v2.py");
     const python = process.env.OWT_SOLVER_PYTHON
       ?? "/opt/homebrew/Caskroom/miniforge/base/envs/owt-roles/bin/python3";
 

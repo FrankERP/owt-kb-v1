@@ -1,0 +1,31 @@
+# Cloud Build config for continuous deployment of the OWT solver.
+#
+# A Cloud Build trigger (connected to GitHub, branch main, file filter gcf/**)
+# runs this on every push that touches the solver. It deploys the self-contained
+# gcf/ directory as the Gen 2 Cloud Function `owt-solver`.
+#
+# The API key is read from Secret Manager (secret: owt-solver-api-key) and exposed
+# to the function as the OWT_SOLVER_API_KEY env var — nothing sensitive lives here.
+#
+# Manual fallback deploy: bash scripts/deploy-solver-gcf.sh
+steps:
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: deploy-solver
+    entrypoint: gcloud
+    args:
+      - functions
+      - deploy
+      - owt-solver
+      - --gen2
+      - --region=us-central1
+      - --runtime=python312
+      - --source=gcf
+      - --entry-point=solve
+      - --trigger-http
+      - --allow-unauthenticated
+      - --memory=512MB
+      - --timeout=120s
+      - --set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY

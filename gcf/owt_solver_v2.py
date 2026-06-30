@@ -3,10 +3,10 @@ owt_solver_v2.py — Monthly worship team scheduler using OR-Tools CP-SAT.
 
 Usage:
   JSON mode (Next.js integration):
-    echo '<json_config>' | python3 scripts/owt_solver_v2.py --json-mode
+    echo '<json_config>' | python3 gcf/owt_solver_v2.py --json-mode
 
   Test mode (built-in default config):
-    python3 scripts/owt_solver_v2.py
+    python3 gcf/owt_solver_v2.py
 
 Improvements over CGPT_owt_roles.py:
   - Weighted history decay: weights [10, 6, 3] for [most recent, 2nd, oldest]

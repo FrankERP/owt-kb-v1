@@ -15,7 +15,7 @@ import sys
 
 import functions_framework
 
-# owt_solver_v2.py is copied into this directory by the deploy script.
+# owt_solver_v2.py lives alongside this file (single source of truth for the solver).
 sys.path.insert(0, os.path.dirname(__file__))
 from owt_solver_v2 import solve_from_dict  # noqa: E402
 
