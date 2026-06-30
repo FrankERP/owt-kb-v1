@@ -3,6 +3,7 @@ import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { addedAssignees } from "@/app/utils/notifyTargets";
 import { sendPush } from "@/app/utils/push";
+import { sendAssignmentEmails } from "@/app/utils/assignmentEmail";
 
 function allAssignees(b: { leads?: string[]; bgvs?: string[]; chorus?: string[]; instruments?: { personId: string }[]; foh?: { personId: string }[] }): string[] {
   return [
@@ -90,6 +91,7 @@ export async function PATCH(
     body: `Te asignaron para el ${body.date}.`,
     path: "/me",
   });
+  void sendAssignmentEmails(added, { type: body._type, date: body.date, body });
 
   return NextResponse.json(doc);
 }
