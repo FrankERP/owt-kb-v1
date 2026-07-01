@@ -21,6 +21,7 @@ interface Member {
   memberType?: string[];
   hasPassword: boolean;
   photoUrl?: string;
+  notifPrefs?: { email?: boolean };
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -168,7 +169,7 @@ function MemberForm({
   loading,
 }: {
   initial?: Partial<Member>;
-  onSubmit: (data: { member_name: string; alias: string; email: string; role: OWTRole; memberType: string[] }) => void;
+  onSubmit: (data: { member_name: string; alias: string; email: string; role: OWTRole; memberType: string[]; notifEmail?: boolean }) => void;
   onClose: () => void;
   loading: boolean;
 }) {
@@ -177,6 +178,7 @@ function MemberForm({
   const [email, setEmail]           = useState(initial?.email ?? "");
   const [role, setRole]             = useState<OWTRole>(initial?.role ?? "member");
   const [memberType, setMemberType] = useState<string[]>(initial?.memberType ?? []);
+  const [notifEmail, setNotifEmail] = useState<boolean>(initial?.notifPrefs?.email !== false);
 
   const toggleType = (value: string) => {
     setMemberType(prev =>
@@ -186,7 +188,7 @@ function MemberForm({
 
   return (
     <form
-      onSubmit={(e) => { e.preventDefault(); onSubmit({ member_name: name, alias, email, role, memberType }); }}
+      onSubmit={(e) => { e.preventDefault(); onSubmit({ member_name: name, alias, email, role, memberType, notifEmail }); }}
       className="space-y-4"
     >
       <div className="space-y-1">
@@ -231,6 +233,21 @@ function MemberForm({
           })}
         </div>
       </div>
+      {initial && (
+        <div className="flex items-center justify-between gap-4 pt-1">
+          <label className="font-label text-xs uppercase tracking-widest text-gray-500">Correo de asignaciones</label>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={notifEmail}
+            aria-label="Correo de asignaciones"
+            onClick={() => setNotifEmail((v) => !v)}
+            className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${notifEmail ? "bg-[#00bfff]" : "bg-gray-500/40"}`}
+          >
+            <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${notifEmail ? "translate-x-5" : "translate-x-0"}`} />
+          </button>
+        </div>
+      )}
       <div className="flex gap-3 pt-1">
         <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
           Cancelar
@@ -411,7 +428,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
 
   useEffect(() => { fetchMembers(); }, [fetchMembers]);
 
-  const handleAdd = async (data: { member_name: string; alias: string; email: string; role: OWTRole; memberType: string[] }) => {
+  const handleAdd = async (data: { member_name: string; alias: string; email: string; role: OWTRole; memberType: string[]; notifEmail?: boolean }) => {
     setSubmitting(true);
     const res = await fetch("/api/admin/members", {
       method: "POST",
@@ -423,7 +440,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
     else showToast("Error al agregar miembro.");
   };
 
-  const handleEdit = async (data: { member_name: string; alias: string; email: string; role: OWTRole; memberType: string[] }) => {
+  const handleEdit = async (data: { member_name: string; alias: string; email: string; role: OWTRole; memberType: string[]; notifEmail?: boolean }) => {
     if (modal?.type !== "edit") return;
     setSubmitting(true);
     const res = await fetch(`/api/admin/members/${modal.member._id}`, {

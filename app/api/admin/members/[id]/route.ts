@@ -22,6 +22,7 @@ export async function PATCH(
     email?: string;
     role?: string;
     memberType?: string[];
+    notifEmail?: boolean;
   };
 
   const patch: Record<string, unknown> = {};
@@ -31,11 +32,15 @@ export async function PATCH(
   if (body.role) patch.role = body.role;
   if (Array.isArray(body.memberType)) patch.memberType = body.memberType;
 
-  if (Object.keys(patch).length === 0) {
+  if (Object.keys(patch).length === 0 && typeof body.notifEmail !== "boolean") {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
-  const doc = await writeClient.patch(id).set(patch).commit();
+  let mutation = writeClient.patch(id).set(patch);
+  if (typeof body.notifEmail === "boolean") {
+    mutation = mutation.setIfMissing({ notifPrefs: {} }).set({ "notifPrefs.email": body.notifEmail });
+  }
+  const doc = await mutation.commit();
   return NextResponse.json(doc);
 }
 
