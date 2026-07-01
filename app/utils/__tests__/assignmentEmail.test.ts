@@ -91,6 +91,12 @@ describe("sendAssignmentEmails gating", () => {
     const html = sendEmailMock.mock.calls[0][0].html as string;
     expect(html).toContain("Líder, Guitarra");
   });
+
+  it("skips a member who opted out of email (emailPref false)", async () => {
+    fetchMock.mockResolvedValue([{ _id: "m1", member_name: "Frank", email: "frank@x.com", emailPref: false }]);
+    await sendAssignmentEmails(["m1"], { type: "sunday_role", date: "2026-07-05", body });
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("sendAssignmentEmailsBatch", () => {
@@ -137,5 +143,17 @@ describe("sendAssignmentEmailsBatch", () => {
     expect(sendEmailMock).toHaveBeenCalledTimes(2);
     const recipients = sendEmailMock.mock.calls.map((c) => c[0].to).sort();
     expect(recipients).toEqual(["frank@x.com", "gaby@y.com"]);
+  });
+
+  it("skips an opted-out member even when EMAIL_ALLOWLIST is '*'", async () => {
+    process.env.EMAIL_ALLOWLIST = "*";
+    fetchMock.mockResolvedValue([
+      { _id: "m1", member_name: "Frank", email: "frank@x.com", emailPref: false },
+      { _id: "m2", member_name: "Gaby", email: "gaby@y.com" }, // unset → receives
+    ]);
+    sendEmailMock.mockResolvedValue({ ok: true });
+    await sendAssignmentEmailsBatch([svcA, svcB]);
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock.mock.calls[0][0].to).toBe("gaby@y.com");
   });
 });
