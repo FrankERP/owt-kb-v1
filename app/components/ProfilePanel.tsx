@@ -10,6 +10,7 @@ interface MemberProfile {
   role: string;
   photoUrl?: string;
   hasPassword: boolean;
+  notifPrefs?: { email?: boolean };
 }
 
 const inputCls =
@@ -87,11 +88,16 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
   const [savingPw, setSavingPw]   = useState(false);
   const [pwError, setPwError]     = useState<string | null>(null);
 
+  // Email notifications (opt-out: default ON when unset)
+  const [emailPref, setEmailPref] = useState(initialMember.notifPrefs?.email !== false);
+  const [savingEmailPref, setSavingEmailPref] = useState(false);
+
   // Sync form state when initialMember prop changes
   useEffect(() => {
     setMember(initialMember);
     setAlias(initialMember.alias ?? "");
     setEmail(initialMember.email ?? "");
+    setEmailPref(initialMember.notifPrefs?.email !== false);
   }, [initialMember]);
 
   // Lock body scroll while drawer is open
@@ -159,6 +165,24 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
     } else {
       const { error } = await res.json().catch(() => ({ error: "Error al actualizar contraseña." }));
       setPwError(error);
+    }
+  };
+
+  const handleToggleEmailPref = async () => {
+    const next = !emailPref;
+    setEmailPref(next);            // optimistic
+    setSavingEmailPref(true);
+    const res = await fetch("/api/me/notif-prefs", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: next }),
+    });
+    setSavingEmailPref(false);
+    if (res.ok) {
+      showToast(next ? "Recibirás correos de asignación." : "Ya no recibirás correos de asignación.");
+    } else {
+      setEmailPref(!next);         // revert on failure
+      showToast("Error al guardar la preferencia.", false);
     }
   };
 
@@ -294,6 +318,28 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
             >
               {savingPw ? "Guardando…" : member.hasPassword ? "Actualizar contraseña" : "Establecer contraseña"}
             </button>
+          </section>
+
+          {/* Notifications */}
+          <section className="space-y-4 border-t border-[#003572]/10 dark:border-[#00bfff]/10 pt-6">
+            <h3 className="font-label text-[10px] uppercase tracking-widest text-gray-500">Notificaciones</h3>
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="font-body text-sm">Recibir asignaciones por correo</p>
+                <p className="font-body text-xs text-gray-500 mt-0.5">Te avisamos por email cuando te asignen a un servicio.</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={emailPref}
+                aria-label="Recibir asignaciones por correo"
+                disabled={savingEmailPref}
+                onClick={handleToggleEmailPref}
+                className={`relative shrink-0 w-11 h-6 rounded-full transition-colors disabled:opacity-50 ${emailPref ? "bg-[#00bfff]" : "bg-gray-500/40"}`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${emailPref ? "translate-x-5" : "translate-x-0"}`} />
+              </button>
+            </div>
           </section>
         </div>
       </div>

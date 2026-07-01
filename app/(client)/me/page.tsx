@@ -38,7 +38,7 @@ export default async function MePage() {
 
   const member = await serverClient.fetch(
     `*[_type == "teamMembers" && _id == $id][0] {
-      _id, member_name, alias, email, role, memberType,
+      _id, member_name, alias, email, role, memberType, notifPrefs,
       unavailableDates, unavailabilityNotes,
       "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl),
       "hasPassword": defined(passwordHash) && passwordHash != ""
