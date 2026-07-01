@@ -26,6 +26,12 @@ export function isEmailAllowed(email: string | undefined, allow: string[] = getA
   return allow.includes("*") || allow.includes(email);
 }
 
+// Whether a member wants assignment emails. Opt-out: unset/null/true → yes,
+// only an explicit false → no. Mirrors push.ts optedIn semantics.
+export function wantsEmail(pref: unknown): boolean {
+  return pref !== false;
+}
+
 export function assigneesOf(b: ServiceBody): string[] {
   return [
     ...(b.leads ?? []), ...(b.bgvs ?? []), ...(b.chorus ?? []),
@@ -131,14 +137,14 @@ export async function sendAssignmentEmailsBatch(
     const ids = [...byMember.keys()];
     if (!ids.length) return;
     const allow = getAllowlist();
-    const members = await serverClient.fetch<{ _id: string; member_name?: string; alias?: string; email?: string }[]>(
-      `*[_type == "teamMembers" && _id in $ids]{ _id, member_name, alias, email }`,
+    const members = await serverClient.fetch<{ _id: string; member_name?: string; alias?: string; email?: string; emailPref?: boolean | null }[]>(
+      `*[_type == "teamMembers" && _id in $ids]{ _id, member_name, alias, email, "emailPref": notifPrefs.email }`,
       { ids },
     );
     const redirectTo = process.env.EMAIL_REDIRECT_TO?.trim();
     for (const m of members) {
       const email = m.email?.trim().toLowerCase();
-      if (!email || !isEmailAllowed(email, allow)) continue;
+      if (!email || !isEmailAllowed(email, allow) || !wantsEmail(m.emailPref)) continue;
       const items = (byMember.get(m._id) ?? []).slice().sort((a, b) => a.date.localeCompare(b.date));
       if (!items.length) continue;
       const { subject, html } = buildBatchAssignmentEmail({ name: m.alias || m.member_name || "", items });
@@ -160,8 +166,8 @@ export async function sendAssignmentEmails(
     const ids = [...new Set(memberIds)].filter(Boolean);
     if (!ids.length) return;
     const allow = getAllowlist();
-    const members = await serverClient.fetch<{ _id: string; member_name?: string; alias?: string; email?: string }[]>(
-      `*[_type == "teamMembers" && _id in $ids]{ _id, member_name, alias, email }`,
+    const members = await serverClient.fetch<{ _id: string; member_name?: string; alias?: string; email?: string; emailPref?: boolean | null }[]>(
+      `*[_type == "teamMembers" && _id in $ids]{ _id, member_name, alias, email, "emailPref": notifPrefs.email }`,
       { ids },
     );
     // Optional test override: when set, deliver every email to this address
@@ -172,7 +178,7 @@ export async function sendAssignmentEmails(
     const redirectTo = process.env.EMAIL_REDIRECT_TO?.trim();
     for (const m of members) {
       const email = m.email?.trim().toLowerCase();
-      if (!email || !isEmailAllowed(email, allow)) continue;
+      if (!email || !isEmailAllowed(email, allow) || !wantsEmail(m.emailPref)) continue;
       const roles = rolesForMember(m._id, service.body);
       const { subject, html } = buildAssignmentEmail({ name: m.alias || m.member_name || "", roles, type: service.type, date: service.date });
       const to = redirectTo || email;
