@@ -1006,28 +1006,43 @@ export default function ServicesPanel() {
 
   const handleAdd = async (data: any) => {
     setSubmitting(true);
-    const res = await fetch("/api/admin/roles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-    setSubmitting(false);
-    if (res.ok) { setEditModal(null); fetchData(); showToast("Servicio creado."); }
-    else showToast("Error al crear.");
+    try {
+      const res = await fetch("/api/admin/roles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      if (res.ok) { setEditModal(null); fetchData(); showToast("Servicio creado."); }
+      else showToast("Error al crear.");
+    } catch {
+      showToast("Error de conexión.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleEdit = async (data: any) => {
     if (editModal?.type !== "edit") return;
     setSubmitting(true);
-    const res = await fetch(`/api/admin/roles/${editModal.role._id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-    setSubmitting(false);
-    if (res.ok) { setEditModal(null); fetchData(); showToast("Actualizado."); }
-    else showToast("Error al actualizar.");
+    try {
+      const res = await fetch(`/api/admin/roles/${editModal.role._id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      if (res.ok) { setEditModal(null); fetchData(); showToast("Actualizado."); }
+      else showToast("Error al actualizar.");
+    } catch {
+      showToast("Error de conexión.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleDelete = async () => {
     if (editModal?.type !== "delete") return;
     setSubmitting(true);
-    const res = await fetch(`/api/admin/roles/${editModal.role._id}`, { method: "DELETE" });
-    setSubmitting(false);
-    if (res.ok) { setEditModal(null); fetchData(); showToast("Eliminado."); }
-    else showToast("Error al eliminar.");
+    try {
+      const res = await fetch(`/api/admin/roles/${editModal.role._id}`, { method: "DELETE" });
+      if (res.ok) { setEditModal(null); fetchData(); showToast("Eliminado."); }
+      else showToast("Error al eliminar.");
+    } catch {
+      showToast("Error de conexión.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // ── Swap logic ────────────────────────────────────────────────────────────
@@ -1056,25 +1071,33 @@ export default function ServicesPanel() {
   async function confirmSwap() {
     if (!swapConfirm) return;
     setSubmitting(true);
-    if (swapConfirm.kind === "card") {
-      const [newA, newB] = swapCardTeams(swapConfirm.roleA, swapConfirm.roleB);
-      await Promise.all([
-        fetch(`/api/admin/roles/${swapConfirm.roleA._id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(roleToPatchPayload(newA)) }),
-        fetch(`/api/admin/roles/${swapConfirm.roleB._id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(roleToPatchPayload(newB)) }),
-      ]);
-    } else {
-      const newRoles = computeMemberSwap(roles, swapConfirm.source, swapConfirm.target);
-      const ids = [...new Set([swapConfirm.source.roleId, swapConfirm.target.roleId])];
-      await Promise.all(ids.map(id => {
-        const role = newRoles.find(r => r._id === id)!;
-        return fetch(`/api/admin/roles/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(roleToPatchPayload(role)) });
-      }));
+    try {
+      let responses: Response[];
+      if (swapConfirm.kind === "card") {
+        const [newA, newB] = swapCardTeams(swapConfirm.roleA, swapConfirm.roleB);
+        responses = await Promise.all([
+          fetch(`/api/admin/roles/${swapConfirm.roleA._id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(roleToPatchPayload(newA)) }),
+          fetch(`/api/admin/roles/${swapConfirm.roleB._id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(roleToPatchPayload(newB)) }),
+        ]);
+      } else {
+        const newRoles = computeMemberSwap(roles, swapConfirm.source, swapConfirm.target);
+        const ids = [...new Set([swapConfirm.source.roleId, swapConfirm.target.roleId])];
+        responses = await Promise.all(ids.map(id => {
+          const role = newRoles.find(r => r._id === id)!;
+          return fetch(`/api/admin/roles/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(roleToPatchPayload(role)) });
+        }));
+      }
+      // Refresh to reflect the true saved state, then report honestly — a partial
+      // or failed swap must not claim success.
+      setSwapConfirm(null);
+      setSwapSource(null);
+      fetchData();
+      showToast(responses.every(r => r.ok) ? "Intercambio realizado." : "Error al intercambiar.");
+    } catch {
+      showToast("Error de conexión.");
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
-    setSwapConfirm(null);
-    setSwapSource(null);
-    fetchData();
-    showToast("Intercambio realizado.");
   }
 
   function exitSwapMode() { setSwapMode(false); setSwapSource(null); setSwapConfirm(null); }
@@ -1093,24 +1116,34 @@ export default function ServicesPanel() {
       new Date(r.date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short" });
     if (!confirm(`¿Copiar ${count} instrumento(s) de ${fmt(source)} a ${fmt(target)}? Reemplazará los instrumentos del destino.`)) return;
     setSubmitting(true);
-    await fetch(`/api/admin/roles/${target._id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(roleToPatchPayload({ ...target, instruments: source.instruments })),
-    });
-    setSubmitting(false);
-    setCopySource(null);
-    fetchData();
-    showToast("Instrumentos copiados.");
+    try {
+      const res = await fetch(`/api/admin/roles/${target._id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(roleToPatchPayload({ ...target, instruments: source.instruments })),
+      });
+      setCopySource(null);
+      fetchData();
+      showToast(res.ok ? "Instrumentos copiados." : "Error al copiar.");
+    } catch {
+      showToast("Error de conexión.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   // ── Publish ───────────────────────────────────────────────────────────────
 
   async function handlePublish(ids: string[], published: boolean) {
-    const res = await fetch("/api/admin/roles/publish", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids, published }),
-    });
-    if (res.ok) fetchData();
+    try {
+      const res = await fetch("/api/admin/roles/publish", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, published }),
+      });
+      if (res.ok) fetchData();
+      else showToast("Error al publicar.");
+    } catch {
+      showToast("Error de conexión.");
+    }
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
