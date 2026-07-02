@@ -27,7 +27,7 @@ export async function PATCH(
 
   const patch: Record<string, unknown> = {};
   if (body.member_name?.trim()) patch.member_name = body.member_name.trim();
-  if (body.alias !== undefined) patch.alias = body.alias.trim();
+  if (typeof body.alias === "string") patch.alias = body.alias.trim();
   if (body.email?.trim()) patch.email = body.email.trim().toLowerCase();
   if (body.role) patch.role = body.role;
   if (Array.isArray(body.memberType)) patch.memberType = body.memberType;
