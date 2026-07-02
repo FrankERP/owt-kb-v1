@@ -24,8 +24,17 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json() as { alias?: string; email?: string };
   const patch: Record<string, unknown> = {};
-  if (body.alias !== undefined) patch.alias = body.alias.trim();
-  if (body.email?.trim()) patch.email = body.email.trim().toLowerCase();
+  // Guard against a non-string alias (null/number) so .trim() can't throw a 500.
+  if (typeof body.alias === "string") patch.alias = body.alias.trim();
+  if (typeof body.email === "string" && body.email.trim()) {
+    const email = body.email.trim().toLowerCase();
+    // Reject malformed addresses so we never store an email that would silently
+    // break the assignment-email pipeline.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json({ error: "Correo electrónico inválido." }, { status: 400 });
+    }
+    patch.email = email;
+  }
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
