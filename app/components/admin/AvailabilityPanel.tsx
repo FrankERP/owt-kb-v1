@@ -217,29 +217,41 @@ export default function AvailabilityPanel() {
                     .sort()
                     .slice(0, 6);
                   const noteMap = new Map((m.unavailabilityNotes ?? []).map(n => [n.date, n.note]));
+                  const datesWithNotes = futureDates.filter(d => noteMap.get(d)?.trim());
                   return (
-                    <div key={m._id} className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-amber-500/20 bg-amber-500/5">
-                      <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-                      <span className="font-body text-sm font-semibold min-w-[100px]">{dn(m)}</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {futureDates.map(d => {
-                          const note = noteMap.get(d);
-                          const isConflict = conflicts.some(c => c.member._id === m._id && c.role.date === d);
-                          return (
-                            <span
-                              key={d}
-                              title={note ?? undefined}
-                              className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full ${
-                                isConflict
-                                  ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                                  : "bg-amber-500/15 text-amber-400 border border-amber-500/25"
-                              }`}
-                            >
-                              {fmtDate(d)}{note ? " ✎" : ""}
-                            </span>
-                          );
-                        })}
+                    <div key={m._id} className="flex flex-col gap-1.5 px-4 py-2.5 rounded-xl border border-amber-500/20 bg-amber-500/5">
+                      <div className="flex items-center gap-3">
+                        <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                        <span className="font-body text-sm font-semibold min-w-[100px]">{dn(m)}</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {futureDates.map(d => {
+                            const note = noteMap.get(d);
+                            const isConflict = conflicts.some(c => c.member._id === m._id && c.role.date === d);
+                            return (
+                              <span
+                                key={d}
+                                className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full ${
+                                  isConflict
+                                    ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                                    : "bg-amber-500/15 text-amber-400 border border-amber-500/25"
+                                }`}
+                              >
+                                {fmtDate(d)}{note ? " ✎" : ""}
+                              </span>
+                            );
+                          })}
+                        </div>
                       </div>
+                      {datesWithNotes.length > 0 && (
+                        <div className="pl-5 space-y-0.5">
+                          {datesWithNotes.map(d => (
+                            <p key={d} className="font-body text-[11px] italic text-gray-500 leading-snug">
+                              <span className="not-italic font-label uppercase tracking-widest text-amber-400/80">{fmtDate(d)}:</span>{" "}
+                              "{noteMap.get(d)}"
+                            </p>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
