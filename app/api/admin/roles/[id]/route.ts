@@ -6,6 +6,8 @@ import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { addedAssignees } from "@/app/utils/notifyTargets";
 import { sendPush } from "@/app/utils/push";
 import { sendAssignmentEmails } from "@/app/utils/assignmentEmail";
+import { revalidateServiceViews } from "@/app/utils/revalidate";
+import { revalidatePath } from "next/cache";
 
 function allAssignees(b: { leads?: string[]; bgvs?: string[]; chorus?: string[]; instruments?: { personId: string }[]; foh?: { personId: string }[] }): string[] {
   return [
@@ -99,6 +101,8 @@ export async function PATCH(
     });
   }
 
+  revalidateServiceViews();
+  revalidatePath("/me");
   return NextResponse.json(doc);
 }
 
@@ -117,5 +121,7 @@ export async function DELETE(
 
   const { id } = await params;
   await writeClient.delete(id);
+  revalidateServiceViews();
+  revalidatePath("/me");
   return NextResponse.json({ ok: true });
 }
