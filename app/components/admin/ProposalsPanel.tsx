@@ -250,16 +250,22 @@ export default function ProposalsPanel() {
     action: "approve" | "request_changes",
     notes?: string
   ) => {
-    const res = await fetch(`/api/admin/proposals/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, adminNotes: notes }),
-    });
-    if (res.ok) {
-      showToast(action === "approve" ? "Setlist publicado" : "Cambios solicitados");
-      await load();
-    } else {
-      showToast("Error al procesar", false);
+    try {
+      const res = await fetch(`/api/admin/proposals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, adminNotes: notes }),
+      });
+      if (res.ok) {
+        showToast(action === "approve" ? "Setlist publicado" : "Cambios solicitados");
+        await load();
+      } else {
+        showToast("Error al procesar", false);
+      }
+    } catch {
+      // Never reject: the caller (ProposalCard) resets its submitting flag after
+      // this resolves, so a thrown network error must not strand the button.
+      showToast("Error de conexión", false);
     }
   };
 

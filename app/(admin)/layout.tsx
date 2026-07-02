@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Provider } from "../utils/Provider";
 import CmsNavbar from "../components/CmsNavbar";
 import { Orbitron } from "next/font/google";
@@ -5,9 +6,9 @@ import "./globals.css";
 
 const titleFont = Orbitron({ weight: "900", subsets: ["latin"] });
 
-export const metadata = {
+export const metadata: Metadata = {
 	title: "OWT Content Studio",
-	description: "Generated with Next.js",
+	description: "Panel de administración del equipo de alabanza Oasis.",
 };
 
 export default function RootLayout({
@@ -16,7 +17,7 @@ export default function RootLayout({
 	children: React.ReactNode;
 }) {
 	return (
-		<html lang="en" suppressHydrationWarning>
+		<html lang="es" suppressHydrationWarning>
 			<body
 				className={`${titleFont.className} h-full bg-[#C8D8EB] text-[#003572] dark:bg-[#010b17] dark:text-[#71c2dd] dark:selection:bg-teal-600`}
 			>

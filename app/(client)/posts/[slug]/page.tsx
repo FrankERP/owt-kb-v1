@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Post } from "@/app/utils/interface";
 import { groupBySections } from "@/app/utils/lyrics";
 import { client } from "@/sanity/lib/client";
@@ -14,6 +15,21 @@ import SongAudioSection from "@/app/components/SongAudioSection";
 
 interface Params {
   params: Promise<{ slug: string }>;
+}
+
+// Per-song page title/description so browser tabs, bookmarks and shared links
+// show the song name instead of the generic site title.
+export async function generateMetadata({ params }: Params): Promise<Metadata> {
+  const { slug } = await params;
+  const post = await client.fetch<{ title?: string; author?: string } | null>(
+    `*[_type == "post" && slug.current == $slug][0]{ title, author }`,
+    { slug }
+  );
+  if (!post?.title) return { title: "Canción — Oasis Worship Team" };
+  return {
+    title: `${post.title} — Oasis Worship Team`,
+    description: post.author ? `${post.title} · ${post.author}` : post.title,
+  };
 }
 
 async function getPost(slug: string) {
@@ -191,7 +207,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Letra / Body */}
         {hasLyrics && (
-          <section id="letra">
+          <section id="letra" className="scroll-mt-28 lg:scroll-mt-36">
             <SectionHeader>Letra</SectionHeader>
             {hasInlineChords ? (
               <ChordChart charts={post.chords!} />
@@ -209,7 +225,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Audio */}
         {hasAudio && (
-          <section id="audio">
+          <section id="audio" className="scroll-mt-28 lg:scroll-mt-36">
             <SectionHeader>Audio</SectionHeader>
             <SongAudioSection
               tracks={post.audioTracks!}
@@ -221,7 +237,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Tutoriales */}
         {hasTutorials && (
-          <section id="tutoriales">
+          <section id="tutoriales" className="scroll-mt-28 lg:scroll-mt-36">
             <SectionHeader>Tutoriales</SectionHeader>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {post.tutorials2!.map((tutorial, i) => (
@@ -256,7 +272,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Reference Links */}
         {hasRefLinks && (
-          <section id="referencia">
+          <section id="referencia" className="scroll-mt-28 lg:scroll-mt-36">
             <SectionHeader>Versión de referencia</SectionHeader>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
               {(post.musicalReferenceUrl || (post.referenceLinks?.[0]?.url)) && (
@@ -291,7 +307,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Historial */}
         {hasHistory && (
-          <section id="historial">
+          <section id="historial" className="scroll-mt-28 lg:scroll-mt-36">
             <SectionHeader>Última vez tocada</SectionHeader>
             <div className="flex flex-col gap-4 max-w-xl mx-auto">
               {history.map((entry, i) => (

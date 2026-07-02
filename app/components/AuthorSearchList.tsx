@@ -50,8 +50,22 @@ export default function AuthorSearchList({ authors }: { authors: Author[] }) {
               </button>
             ))}
           </div>
-          <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar..."
-            className="font-label px-3 py-1.5 rounded-lg border border-[#003572]/20 dark:border-[#00bfff]/15 bg-transparent focus:outline-none focus:border-[#00bfff] text-sm placeholder:text-gray-600 transition-colors w-36 sm:w-48" />
+          <div className="relative">
+            <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar..."
+              className="font-label pl-3 pr-8 py-1.5 rounded-lg border border-[#003572]/20 dark:border-[#00bfff]/15 bg-transparent focus:outline-none focus:border-[#00bfff] text-sm placeholder:text-gray-600 transition-colors w-36 sm:w-48" />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Limpiar búsqueda"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-500 hover:text-[#00bfff] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00bfff]/50 transition-colors"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

@@ -15,7 +15,7 @@ interface Props {
 }
 
 export default function SongAudioSection({ tracks, songTitle, songSlug }: Props) {
-  const { playTrack, player } = usePlayer();
+  const { playTrack, togglePlay, player } = usePlayer();
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -45,7 +45,7 @@ export default function SongAudioSection({ tracks, songTitle, songSlug }: Props)
               )}
             </div>
             <button
-              onClick={() => playTrack(audioTrack)}
+              onClick={() => (isCurrent ? togglePlay() : playTrack(audioTrack))}
               className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
                 isCurrent
                   ? "border-[#00bfff]/50 bg-[#00bfff]/15 text-[#00bfff]"
