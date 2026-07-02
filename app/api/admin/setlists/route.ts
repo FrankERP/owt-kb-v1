@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { revalidateServiceViews } from "@/app/utils/revalidate";
-import { setlistRecipientIds } from "@/app/utils/notifyTargets";
+import { setlistRecipientIds, assignedMemberRefsQuery } from "@/app/utils/notifyTargets";
 import { sendPush } from "@/app/utils/push";
 
 function key() {
@@ -173,11 +173,9 @@ export async function PUT(req: NextRequest) {
       const members = await serverClient.fetch<{ _id: string; setlist?: "all" | "assigned" | "off" }[]>(
         `*[_type == "teamMembers"]{ _id, "setlist": notifPrefs.setlist }`
       );
+      const roleFilter = `_type in ["sunday_role","saturday_role","special_role"] && (week == $week || date == $week)`;
       const assigned = await serverClient.fetch<string[]>(
-        `array::unique([
-          ...*[_type in ["sunday_role","saturday_role","special_role"] && (week == $week || date == $week)].Lead[]._ref,
-          ...*[_type in ["sunday_role","saturday_role","special_role"] && (week == $week || date == $week)].instruments[].person._ref
-        ][defined(@)])`,
+        assignedMemberRefsQuery(roleFilter),
         { week }
       );
       void sendPush(setlistRecipientIds(members, assigned), "setlist", {

@@ -22,7 +22,16 @@ const PostComponent = ({ post }: Props) => {
   return (
     <div
       onClick={() => openSheet(post._id)}
-      className="group relative flex flex-col gap-2.5 p-4 lg:p-5 rounded-xl border border-[#003572]/25 dark:border-[#00bfff]/15 hover:border-[#003572]/50 dark:hover:border-[#00bfff]/40 hover:shadow-lg hover:shadow-[#00bfff]/10 cursor-pointer transition-all duration-200"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openSheet(post._id);
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Ver ${post.title}`}
+      className="group relative flex flex-col gap-2.5 p-4 lg:p-5 rounded-xl border border-[#003572]/25 dark:border-[#00bfff]/15 hover:border-[#003572]/50 dark:hover:border-[#00bfff]/40 hover:shadow-lg hover:shadow-[#00bfff]/10 cursor-pointer transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00bfff]/60"
     >
       {/* New badge / hover eye — absolute, top-right */}
       <span className={`absolute top-4 right-4 pointer-events-none transition-opacity duration-150 ${fresh ? "group-hover:opacity-0" : "opacity-0 group-hover:opacity-100"}`}>

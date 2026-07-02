@@ -36,10 +36,14 @@ export async function PATCH(req: NextRequest) {
   const valid = body.unavailableDates.filter(d => ISO_RE.test(d));
   const validSet = new Set(valid);
 
-  // Validate notes: must reference a valid date, have a non-empty note string
-  const validNotes = (body.unavailabilityNotes ?? []).filter(
-    n => ISO_RE.test(n.date) && validSet.has(n.date) && typeof n.note === "string" && n.note.trim()
-  ).map(n => ({ date: n.date, note: n.note.trim() }));
+  // Validate notes: must reference a valid date, have a non-empty note string,
+  // and be unique per date. Each item gets a _key (required by Sanity for
+  // object array items); the date is unique per note so it makes a stable key.
+  const seenDates = new Set<string>();
+  const validNotes = (body.unavailabilityNotes ?? [])
+    .filter(n => ISO_RE.test(n.date) && validSet.has(n.date) && typeof n.note === "string" && n.note.trim())
+    .filter(n => (seenDates.has(n.date) ? false : (seenDates.add(n.date), true)))
+    .map(n => ({ _key: n.date, date: n.date, note: n.note.trim() }));
 
   const doc = await writeClient
     .patch(session.user.sanityId)
