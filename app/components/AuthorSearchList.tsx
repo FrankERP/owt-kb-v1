@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { Author } from "../utils/interface";
+import { normalizeText } from "../utils/normalizeText";
 import Link from "next/link";
 
 type SortMode = "popular" | "alpha";
@@ -17,8 +18,9 @@ export default function AuthorSearchList({ authors }: { authors: Author[] }) {
   );
 
   const grid = useMemo(() => {
+    const nq = normalizeText(query);
     const base = isSearching
-      ? authors.filter((a) => a.name.toLowerCase().includes(query.toLowerCase()))
+      ? authors.filter((a) => normalizeText(a.name).includes(nq))
       : authors;
     return [...base].sort((a, b) =>
       sort === "alpha" ? a.name.localeCompare(b.name) : (b.postCount ?? 0) - (a.postCount ?? 0)
