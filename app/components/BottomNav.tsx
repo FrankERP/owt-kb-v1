@@ -36,8 +36,12 @@ export default function BottomNav() {
         />
       )}
 
-      {/* More sheet — slides up from above the bar */}
+      {/* More sheet — slides up from above the bar. `inert` when closed so its
+          controls leave the tab order and the accessibility tree (they stay in
+          the DOM only to animate). */}
       <div
+        id="bottom-nav-more"
+        inert={!moreOpen}
         className={`fixed inset-x-0 bottom-16 z-50 lg:hidden transition-all duration-300 ease-out ${
           moreOpen ? "translate-y-0 opacity-100 pointer-events-auto" : "translate-y-4 opacity-0 pointer-events-none"
         }`}
@@ -92,16 +96,19 @@ export default function BottomNav() {
       </div>
 
       {/* Bottom bar */}
-      <nav className="fixed bottom-0 inset-x-0 z-50 lg:hidden bg-[#010b17]/90 backdrop-blur-sm border-t border-[#00bfff]/15"
+      <nav aria-label="Navegación principal" className="fixed bottom-0 inset-x-0 z-50 lg:hidden bg-[#010b17]/90 backdrop-blur-sm border-t border-[#00bfff]/15"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
         <div className="flex items-stretch h-16 max-w-7xl mx-auto">
-          {tabs.map(tab => (
+          {tabs.map(tab => {
+            const active = isActive(tab.href);
+            return (
             <Link
               key={tab.href}
               href={tab.href}
               onClick={() => setMoreOpen(false)}
+              aria-current={active ? "page" : undefined}
               className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${
-                isActive(tab.href)
+                active
                   ? "text-[#00bfff]"
                   : "text-gray-500 hover:text-gray-300"
               }`}
@@ -109,9 +116,13 @@ export default function BottomNav() {
               {tab.icon}
               <span className="font-label text-[9px] uppercase tracking-widest">{tab.label}</span>
             </Link>
-          ))}
+            );
+          })}
           <button
             onClick={() => setMoreOpen(v => !v)}
+            aria-haspopup="menu"
+            aria-expanded={moreOpen}
+            aria-controls="bottom-nav-more"
             className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${
               moreOpen ? "text-[#00bfff]" : "text-gray-500 hover:text-gray-300"
             }`}
