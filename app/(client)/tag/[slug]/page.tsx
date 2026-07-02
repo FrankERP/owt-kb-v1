@@ -26,6 +26,10 @@ async function getPostsByTag(tag: string) {
   return await client.fetch(query, { tagSlug: tag });
 }
 
+async function getTagName(slug: string) {
+  return client.fetch<string | null>(`*[_type=="tag" && slug.current==$slug][0].name`, { slug });
+}
+
 export const revalidate = 60;
 
 interface Params {
@@ -34,11 +38,15 @@ interface Params {
 
 const page = async ({ params }: Params) => {
   const { slug } = await params;
-  const posts: Array<Post> = await getPostsByTag(slug);
+  const [posts, name]: [Array<Post>, string | null] = await Promise.all([
+    getPostsByTag(slug),
+    getTagName(slug),
+  ]);
+  const displayName = name ?? slug;
 
   return (
     <div>
-      <Navbar title={`#${slug}`} tags schedule />
+      <Navbar title={`#${displayName}`} tags schedule />
 
       {/* Tag hero */}
       <div className="relative overflow-hidden border-b border-[#003572]/15 dark:border-[#00bfff]/10">
@@ -48,7 +56,7 @@ const page = async ({ params }: Params) => {
         </div>
         <div className="relative mx-auto max-w-7xl px-6 py-10 flex flex-col items-center gap-2 text-center">
           <p className="font-display text-4xl sm:text-5xl text-[#00bfff] capitalize leading-none">
-            #{slug}
+            #{displayName}
           </p>
           <p className="font-label text-xs uppercase tracking-widest text-gray-500">
             {posts.length} {posts.length === 1 ? "canción" : "canciones"}
