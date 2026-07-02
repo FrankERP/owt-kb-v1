@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { redirect } from "next/navigation";
@@ -11,6 +12,11 @@ import TextSizeControl from "@/app/components/TextSizeControl";
 import AvailabilityCalendar from "@/app/components/AvailabilityCalendar";
 import AddToCalendarButton from "@/app/components/AddToCalendarButton";
 import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
+
+export const metadata: Metadata = {
+  title: "Mi perfil — Oasis Worship Team",
+  description: "Tus próximos servicios, disponibilidad y ajustes de perfil.",
+};
 
 export const revalidate = 60;
 
@@ -67,6 +73,10 @@ export default async function MePage() {
         "sundays": *[_type == "sunday_role" && week >= $today && week <= $limit && published != false && ${memberFilter}] | order(week asc) {
           _id, week,
           "isLead": $id in Lead[]._ref,
+          "isBGV": $id in BGVs[]._ref,
+          "isChorus": $id in Chorus[]._ref,
+          "myInstrument": instruments[person._ref == $id][0].instrument,
+          "myFohRole": foh_team[person._ref == $id][0].role,
           Lead[]-> { member_name, alias },
           instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
           foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
@@ -85,6 +95,10 @@ export default async function MePage() {
         "saturdays": *[_type == "saturday_role" && week >= $today && week <= $limit && published != false && ${memberFilter}] | order(week asc) {
           _id, week,
           "isLead": $id in Lead[]._ref,
+          "isBGV": $id in BGVs[]._ref,
+          "isChorus": $id in Chorus[]._ref,
+          "myInstrument": instruments[person._ref == $id][0].instrument,
+          "myFohRole": foh_team[person._ref == $id][0].role,
           Lead[]-> { member_name, alias },
           instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
           foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
@@ -103,6 +117,10 @@ export default async function MePage() {
         "specials": *[_type == "special_role" && date >= $today && date <= $limit && published != false && ${memberFilter}] | order(date asc) {
           _id, date, service_name,
           "isLead": $id in Lead[]._ref,
+          "isBGV": $id in BGVs[]._ref,
+          "isChorus": $id in Chorus[]._ref,
+          "myInstrument": instruments[person._ref == $id][0].instrument,
+          "myFohRole": foh_team[person._ref == $id][0].role,
           Lead[]-> { member_name, alias },
           instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
           foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
@@ -146,6 +164,10 @@ export default async function MePage() {
     date?: string;
     service_name?: string;
     isLead?: boolean;
+    isBGV?: boolean;
+    isChorus?: boolean;
+    myInstrument?: string;
+    myFohRole?: string;
     Lead?: Array<{ member_name: string; alias?: string }>;
     instruments?: Array<{ instrument: string; person: string }>;
     foh_team?: Array<{ role: string; person: string }>;
@@ -163,12 +185,26 @@ export default async function MePage() {
 
   const firstName = name?.split(" ")[0] ?? "Miembro";
 
-  const calendarServices = allAssignments.map(({ dateKey, day, doc }) => ({
-    uid: doc._id,
-    date: dateKey,
-    title: `${day} · Oasis Worship`,
-    description: doc.isLead ? "Eres líder de este servicio." : undefined,
-  }));
+  // The member's specific seat(s) for a service, for the calendar event body.
+  function myRoleLabel(doc: RoleDoc): string {
+    const roles: string[] = [];
+    if (doc.isLead) roles.push("Lead");
+    if (doc.myInstrument) roles.push(doc.myInstrument);
+    if (doc.myFohRole) roles.push(`FOH: ${doc.myFohRole}`);
+    if (doc.isBGV) roles.push("BGV");
+    if (doc.isChorus) roles.push("Coro");
+    return roles.join(" · ");
+  }
+
+  const calendarServices = allAssignments.map(({ dateKey, day, doc }) => {
+    const role = myRoleLabel(doc);
+    return {
+      uid: doc._id,
+      date: dateKey,
+      title: role ? `${day} · Oasis Worship (${role})` : `${day} · Oasis Worship`,
+      description: role ? `Tu rol: ${role}` : undefined,
+    };
+  });
 
   function renderProposalCta(doc: RoleDoc) {
     if (!doc.isLead) return null;

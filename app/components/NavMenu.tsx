@@ -92,7 +92,13 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
       <button
         onClick={() => setOpen((v) => !v)}
         className="relative flex items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00bfff]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#010b17] group"
-        aria-label="Menu"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={
+          notifCount > 0
+            ? `Menú de usuario, ${notifCount} ${notifCount === 1 ? "notificación" : "notificaciones"}`
+            : "Menú de usuario"
+        }
       >
         {user.image ? (
           <Image
@@ -111,7 +117,7 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
           </div>
         )}
         {notifCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-red-500 border-2 border-[#C8D8EB] dark:border-[#010b17] flex items-center justify-center">
+          <span aria-hidden className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-red-500 border-2 border-[#C8D8EB] dark:border-[#010b17] flex items-center justify-center">
             <span className="font-label text-[8px] text-white leading-none">{notifCount > 9 ? "9+" : notifCount}</span>
           </span>
         )}

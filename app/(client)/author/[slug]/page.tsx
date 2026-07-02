@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Navbar from "@/app/components/Navbar";
 import SongSearchList from "@/app/components/SongSearchList";
 import { Post } from "@/app/utils/interface";
@@ -18,6 +19,15 @@ async function getAuthorName(slug: string) {
 }
 
 export const revalidate = 60;
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const name = (await getAuthorName(slug)) ?? slug;
+  return {
+    title: `${name} — Oasis Worship Team`,
+    description: `Canciones de ${name}.`,
+  };
+}
 
 interface Params { params: Promise<{ slug: string }>; }
 

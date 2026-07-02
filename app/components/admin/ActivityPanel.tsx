@@ -33,6 +33,16 @@ function daysSince(iso: string | null): number | null {
   return Math.floor((now() - new Date(iso).getTime()) / 86_400_000);
 }
 
+// Calendar-day difference (local), so "Hoy"/"Ayer" reflect the actual date
+// rather than elapsed hours — an 11pm login viewed at 6am is "Ayer", not "Hoy".
+function calendarDaysAgo(iso: string): number {
+  const then = new Date(iso);
+  const thenMid = new Date(then.getFullYear(), then.getMonth(), then.getDate());
+  const n = new Date();
+  const nowMid = new Date(n.getFullYear(), n.getMonth(), n.getDate());
+  return Math.round((nowMid.getTime() - thenMid.getTime()) / 86_400_000);
+}
+
 function activityStatus(lastActive: string | null): { color: string; label: string } {
   const days = daysSince(lastActive);
   if (days === null)  return { color: "bg-gray-700",      label: "Sin actividad" };
@@ -42,10 +52,10 @@ function activityStatus(lastActive: string | null): { color: string; label: stri
 }
 
 function formatDate(iso: string) {
-  const days = daysSince(iso);
+  const days = calendarDaysAgo(iso);
   if (days === 0) return "Hoy";
   if (days === 1) return "Ayer";
-  if (days !== null && days <= 6) return `Hace ${days} días`;
+  if (days >= 2 && days <= 6) return `Hace ${days} días`;
   return new Date(iso).toLocaleDateString("es-ES", {
     year: "numeric", month: "short", day: "numeric",
   });

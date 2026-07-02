@@ -430,40 +430,55 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
 
   const handleAdd = async (data: { member_name: string; alias: string; email: string; role: OWTRole; memberType: string[]; notifEmail?: boolean }) => {
     setSubmitting(true);
-    const res = await fetch("/api/admin/members", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    setSubmitting(false);
-    if (res.ok) { setModal(null); fetchMembers(); showToast("Miembro agregado."); }
-    else showToast("Error al agregar miembro.");
+    try {
+      const res = await fetch("/api/admin/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) { setModal(null); fetchMembers(); showToast("Miembro agregado."); }
+      else showToast("Error al agregar miembro.");
+    } catch {
+      showToast("Error de conexión.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleEdit = async (data: { member_name: string; alias: string; email: string; role: OWTRole; memberType: string[]; notifEmail?: boolean }) => {
     if (modal?.type !== "edit") return;
     setSubmitting(true);
-    const res = await fetch(`/api/admin/members/${modal.member._id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    setSubmitting(false);
-    if (res.ok) { setModal(null); fetchMembers(); showToast("Miembro actualizado."); }
-    else showToast("Error al actualizar.");
+    try {
+      const res = await fetch(`/api/admin/members/${modal.member._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) { setModal(null); fetchMembers(); showToast("Miembro actualizado."); }
+      else showToast("Error al actualizar.");
+    } catch {
+      showToast("Error de conexión.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handlePassword = async (password: string) => {
     if (modal?.type !== "password") return;
     setSubmitting(true);
-    const res = await fetch("/api/admin/set-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sanityMemberId: modal.member._id, password }),
-    });
-    setSubmitting(false);
-    if (res.ok) { setModal(null); fetchMembers(); showToast("Contraseña establecida."); }
-    else showToast("Error al establecer contraseña.");
+    try {
+      const res = await fetch("/api/admin/set-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sanityMemberId: modal.member._id, password }),
+      });
+      if (res.ok) { setModal(null); fetchMembers(); showToast("Contraseña establecida."); }
+      else showToast("Error al establecer contraseña.");
+    } catch {
+      showToast("Error de conexión.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handlePhotoClick = (memberId: string) => {
@@ -497,10 +512,15 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
   const handleDelete = async () => {
     if (modal?.type !== "delete") return;
     setSubmitting(true);
-    const res = await fetch(`/api/admin/members/${modal.member._id}`, { method: "DELETE" });
-    setSubmitting(false);
-    if (res.ok) { setModal(null); fetchMembers(); showToast("Miembro eliminado."); }
-    else showToast("Error al eliminar.");
+    try {
+      const res = await fetch(`/api/admin/members/${modal.member._id}`, { method: "DELETE" });
+      if (res.ok) { setModal(null); fetchMembers(); showToast("Miembro eliminado."); }
+      else showToast("Error al eliminar.");
+    } catch {
+      showToast("Error de conexión.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (tab === "services") return (

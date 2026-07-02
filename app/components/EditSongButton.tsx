@@ -167,18 +167,23 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const res = await fetch(`/api/content/posts/${post._id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(buildPayload(form)),
-    });
-    setSaving(false);
-    if (res.ok) {
-      setOpen(false);
-      showToast("Canción actualizada.");
-      router.refresh();
-    } else {
-      showToast("Error al guardar.");
+    try {
+      const res = await fetch(`/api/content/posts/${post._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload(form)),
+      });
+      if (res.ok) {
+        setOpen(false);
+        showToast("Canción actualizada.");
+        router.refresh();
+      } else {
+        showToast("Error al guardar.");
+      }
+    } catch {
+      showToast("Error de conexión.");
+    } finally {
+      setSaving(false);
     }
   };
 
