@@ -55,6 +55,7 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
   const [searchResults, setSearchResults] = useState<SongResult[]>([]);
   const [loading, setLoading]           = useState(true);
   const [saving, setSaving]             = useState(false);
+  const [saveError, setSaveError]       = useState<string | null>(null);
   const [addKey, setAddKey]             = useState("");
   const [draggingIdx, setDraggingIdx]   = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx]   = useState<number | null>(null);
@@ -192,16 +193,25 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
 
   async function save() {
     setSaving(true);
-    await fetch("/api/admin/setlists", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        week, type, roleId,
-        songs: entries.map(e => ({ songId: e.song._id, play_key: e.play_key, medley_tag: e.medley_tag })),
-      }),
-    });
-    setSaving(false);
-    onClose();
+    setSaveError(null);
+    try {
+      const res = await fetch("/api/admin/setlists", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          week, type, roleId,
+          songs: entries.map(e => ({ songId: e.song._id, play_key: e.play_key, medley_tag: e.medley_tag })),
+        }),
+      });
+      // Only close on success — otherwise keep the editor open so the admin's
+      // edits aren't silently discarded on a failed/rejected save.
+      if (!res.ok) { setSaveError("No se pudo guardar el setlist. Intenta de nuevo."); return; }
+      onClose();
+    } catch {
+      setSaveError("Error de conexión. Intenta de nuevo.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (loading) {
@@ -346,6 +356,9 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
       </div>
 
       {/* Footer */}
+      {saveError && (
+        <p className="text-red-400 font-label text-[11px] uppercase tracking-widest text-center -mb-1">{saveError}</p>
+      )}
       <div className="flex gap-3 sticky bottom-0 bg-[#C8D8EB] dark:bg-[#0a1929] py-2">
         <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
           Cancelar
