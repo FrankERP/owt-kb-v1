@@ -26,7 +26,7 @@ async function getProposalsForService(currentLeadId: string, roleId: string) {
       "isOwn": lead._ref == $currentLeadId,
       "leadName": coalesce(lead->alias, lead->member_name),
       songs[] {
-        _key, play_key,
+        _key, play_key, medley_tag,
         "song_id": song._ref,
         "title": song->title,
         "author": song->author,
