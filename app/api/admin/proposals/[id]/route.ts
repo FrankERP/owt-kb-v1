@@ -111,6 +111,29 @@ export async function PATCH(
       reviewed_at: now,
     }).commit();
 
+    // Supersede other outstanding proposals for the SAME service: the setlist is
+    // now decided, so any competing draft/pending/changes_requested proposals for
+    // this date+type (or special ref) would linger as stale duplicates.
+    try {
+      let staleIds: string[] = [];
+      if (type === "special" && refId) {
+        staleIds = await serverClient.fetch<string[]>(
+          `*[_type == "setlistProposal" && _id != $id && status != "approved" && service_ref._ref == $refId]._id`,
+          { id, refId }
+        );
+      } else if ((type === "sunday" || type === "saturday") && date) {
+        staleIds = await serverClient.fetch<string[]>(
+          `*[_type == "setlistProposal" && _id != $id && status != "approved" && service_type == $type && service_date == $date]._id`,
+          { id, type, date }
+        );
+      }
+      for (const staleId of staleIds) {
+        await writeClient.delete(staleId);
+      }
+    } catch (err) {
+      console.error("[proposals] superseded-proposal cleanup failed:", err);
+    }
+
     try {
       const leadId = await serverClient.fetch<string | null>(`*[_id == $id][0].lead._ref`, { id });
       if (leadId) {
