@@ -35,15 +35,25 @@ const NOTE_INDEX: Record<string, number> = {
   B: 11, Cb: 11,
 };
 
-function transposeChord(chord: string, semitones: number): string {
-  if (semitones === 0) return chord;
-  const m = chord.match(/^([A-G][b#]?)(.*)/);
-  if (!m) return chord;
+// Transpose a single note token (root + trailing quality/extensions).
+function transposeToken(token: string, semitones: number): string {
+  const m = token.match(/^([A-G][b#]?)(.*)/);
+  if (!m) return token;
   const [, root, quality] = m;
   const idx = NOTE_INDEX[root];
-  if (idx === undefined) return chord;
+  if (idx === undefined) return token;
   const newIdx = ((idx + semitones) % 12 + 12) % 12;
   return DISPLAY_NOTES[newIdx] + quality;
+}
+
+export function transposeChord(chord: string, semitones: number): string {
+  if (semitones === 0) return chord;
+  // Transpose each side of a slash chord independently (e.g. "G/B" -> "A/C#")
+  // so the bass note moves with the root instead of being left behind.
+  return chord
+    .split("/")
+    .map((part) => transposeToken(part, semitones))
+    .join("/");
 }
 
 function rootIndex(key: string): number {

@@ -1,17 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { client } from "@/sanity/lib/client";
-import { pickPracticeVideoUrl } from "@/app/utils/practiceVideo";
+import { pickPracticeVideoUrl, extractYouTubeId } from "@/app/utils/practiceVideo";
 
 // Builds an ad-hoc YouTube playlist URL from a setlist's song videos, so members
 // can practice the whole set in one tap. Uses YouTube's no-auth watch_videos URL.
-const YT_RE = /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/;
-
-function ytId(url?: string): string | null {
-  if (!url) return null;
-  const m = url.match(YT_RE);
-  return m ? m[1] : null;
-}
 
 export async function POST(req: NextRequest) {
   const session = await requireActiveSession();
@@ -39,7 +32,7 @@ export async function POST(req: NextRequest) {
     const s = byId.get(id);
     if (!s) continue;
     const url = pickPracticeVideoUrl(s, pickMode);
-    const vid = ytId(url ?? undefined);
+    const vid = extractYouTubeId(url);
     if (vid && !videoIds.includes(vid)) videoIds.push(vid);
   }
 

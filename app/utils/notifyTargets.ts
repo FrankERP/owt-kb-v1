@@ -1,5 +1,28 @@
 export type SetlistPref = "all" | "assigned" | "off";
 
+// Every seat type on the role schemas (sunday_role / saturday_role /
+// special_role) that references a teamMember. Keep in sync with those schemas.
+// Two array-of-reference seats expose `_ref` directly; the object seats nest it
+// under `person`.
+const ASSIGNED_SEAT_PATHS = [
+  "Lead[]._ref",
+  "BGVs[]._ref",
+  "Chorus[]._ref",
+  "instruments[].person._ref",
+  "foh_team[].person._ref",
+] as const;
+
+/**
+ * Build a GROQ expression returning the unique teamMember ids assigned to any
+ * seat in role docs matching `roleFilter`. `roleFilter` is a trusted, code-owned
+ * predicate (it may reference bound params like $day/$week); never pass user
+ * input into it. Centralised so every notification path covers the same seats.
+ */
+export function assignedMemberRefsQuery(roleFilter: string): string {
+  const spreads = ASSIGNED_SEAT_PATHS.map((p) => `...*[${roleFilter}].${p}`).join(",\n    ");
+  return `array::unique([\n    ${spreads}\n  ][defined(@)])`;
+}
+
 /** Member ids present in `next` but not `prev`. */
 export function addedAssignees(prev: string[], next: string[]): string[] {
   const prevSet = new Set(prev);

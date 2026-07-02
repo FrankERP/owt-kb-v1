@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { textToBody } from "@/app/utils/lyrics";
+import { revalidateSongViews } from "@/app/utils/revalidate";
 
 function rng() { return Math.random().toString(36).slice(2, 9); }
 
@@ -104,5 +105,6 @@ export async function POST(req: NextRequest) {
     publishDate: new Date().toISOString(),
   });
 
+  revalidateSongViews();
   return NextResponse.json(doc, { status: 201 });
 }

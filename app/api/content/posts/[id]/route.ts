@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { textToBody } from "@/app/utils/lyrics";
+import { revalidateSongViews } from "@/app/utils/revalidate";
 
 function rng() { return Math.random().toString(36).slice(2, 9); }
 
@@ -90,6 +91,7 @@ export async function PATCH(
   }
 
   const doc = await writeClient.patch(id).set(patch).commit();
+  revalidateSongViews();
   return NextResponse.json(doc);
 }
 
@@ -108,5 +110,6 @@ export async function DELETE(
 
   const { id } = await params;
   await writeClient.delete(id);
+  revalidateSongViews();
   return NextResponse.json({ ok: true });
 }
