@@ -102,36 +102,51 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
 
   const handleAdd = async (form: FormState) => {
     setSubmitting(true);
-    const res = await fetch("/api/content/posts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(buildPayload(form)),
-    });
-    setSubmitting(false);
-    if (res.ok) { setModal(null); fetchAll(); showToast("Canción creada."); }
-    else showToast("Error al crear canción.");
+    try {
+      const res = await fetch("/api/content/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload(form)),
+      });
+      if (res.ok) { setModal(null); fetchAll(); showToast("Canción creada."); }
+      else showToast("Error al crear canción.");
+    } catch {
+      showToast("Error de conexión.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleEdit = async (form: FormState) => {
     if (modal?.type !== "edit") return;
     setSubmitting(true);
-    const res = await fetch(`/api/content/posts/${modal.song._id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(buildPayload(form)),
-    });
-    setSubmitting(false);
-    if (res.ok) { setModal(null); fetchAll(); showToast("Canción actualizada."); }
-    else showToast("Error al actualizar.");
+    try {
+      const res = await fetch(`/api/content/posts/${modal.song._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload(form)),
+      });
+      if (res.ok) { setModal(null); fetchAll(); showToast("Canción actualizada."); }
+      else showToast("Error al actualizar.");
+    } catch {
+      showToast("Error de conexión.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleDelete = async () => {
     if (modal?.type !== "delete") return;
     setSubmitting(true);
-    const res = await fetch(`/api/content/posts/${modal.song._id}`, { method: "DELETE" });
-    setSubmitting(false);
-    if (res.ok) { setModal(null); fetchAll(); showToast("Canción eliminada."); }
-    else showToast("Error al eliminar.");
+    try {
+      const res = await fetch(`/api/content/posts/${modal.song._id}`, { method: "DELETE" });
+      if (res.ok) { setModal(null); fetchAll(); showToast("Canción eliminada."); }
+      else showToast("Error al eliminar.");
+    } catch {
+      showToast("Error de conexión.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const filtered = songs.filter((s) =>
