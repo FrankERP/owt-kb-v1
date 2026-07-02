@@ -1,5 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { addedAssignees, setlistRecipientIds, tomorrowDateStr } from "../notifyTargets";
+import { addedAssignees, setlistRecipientIds, tomorrowDateStr, assignedMemberRefsQuery } from "../notifyTargets";
+
+describe("assignedMemberRefsQuery", () => {
+  const q = assignedMemberRefsQuery("_type == 'x' && week == $w");
+  it("covers every teamMember-referencing seat type", () => {
+    expect(q).toContain("Lead[]._ref");
+    expect(q).toContain("BGVs[]._ref");
+    expect(q).toContain("Chorus[]._ref");
+    expect(q).toContain("instruments[].person._ref");
+    expect(q).toContain("foh_team[].person._ref");
+  });
+  it("embeds the supplied role filter and dedupes / drops undefined", () => {
+    expect(q).toContain("_type == 'x' && week == $w");
+    expect(q).toContain("array::unique(");
+    expect(q).toContain("[defined(@)]");
+  });
+});
 
 describe("addedAssignees", () => {
   it("returns ids present in next but not prev", () => {

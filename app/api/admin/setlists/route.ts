@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { revalidateServiceViews } from "@/app/utils/revalidate";
-import { setlistRecipientIds } from "@/app/utils/notifyTargets";
+import { setlistRecipientIds, assignedMemberRefsQuery } from "@/app/utils/notifyTargets";
 import { sendPush } from "@/app/utils/push";
 
 function key() {
@@ -175,13 +175,7 @@ export async function PUT(req: NextRequest) {
       );
       const roleFilter = `_type in ["sunday_role","saturday_role","special_role"] && (week == $week || date == $week)`;
       const assigned = await serverClient.fetch<string[]>(
-        `array::unique([
-          ...*[${roleFilter}].Lead[]._ref,
-          ...*[${roleFilter}].BGVs[]._ref,
-          ...*[${roleFilter}].Chorus[]._ref,
-          ...*[${roleFilter}].instruments[].person._ref,
-          ...*[${roleFilter}].foh_team[].person._ref
-        ][defined(@)])`,
+        assignedMemberRefsQuery(roleFilter),
         { week }
       );
       void sendPush(setlistRecipientIds(members, assigned), "setlist", {
