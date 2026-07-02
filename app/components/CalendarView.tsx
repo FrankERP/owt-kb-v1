@@ -77,7 +77,10 @@ function getWeekends(activeDays: Record<string, ActiveDay[]>) {
 // ─── Root component ───────────────────────────────────────────────────────────
 
 export default function CalendarView({ activeDays }: Props) {
-  const todayStr = new Date().toLocaleDateString("sv"); // browser local date → YYYY-MM-DD
+  // Pin "today" to Mexico City time so the highlight matches the server-fetched
+  // schedule data (which is keyed to that timezone); otherwise a user in another
+  // timezone near midnight sees the marker on the wrong day.
+  const todayStr = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
   const [view, setView] = useState<"calendar" | "list">("calendar");
   const [selected, setSelected] = useState<string | null>(null);
 
