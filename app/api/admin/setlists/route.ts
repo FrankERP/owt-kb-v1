@@ -173,10 +173,14 @@ export async function PUT(req: NextRequest) {
       const members = await serverClient.fetch<{ _id: string; setlist?: "all" | "assigned" | "off" }[]>(
         `*[_type == "teamMembers"]{ _id, "setlist": notifPrefs.setlist }`
       );
+      const roleFilter = `_type in ["sunday_role","saturday_role","special_role"] && (week == $week || date == $week)`;
       const assigned = await serverClient.fetch<string[]>(
         `array::unique([
-          ...*[_type in ["sunday_role","saturday_role","special_role"] && (week == $week || date == $week)].Lead[]._ref,
-          ...*[_type in ["sunday_role","saturday_role","special_role"] && (week == $week || date == $week)].instruments[].person._ref
+          ...*[${roleFilter}].Lead[]._ref,
+          ...*[${roleFilter}].BGVs[]._ref,
+          ...*[${roleFilter}].Chorus[]._ref,
+          ...*[${roleFilter}].instruments[].person._ref,
+          ...*[${roleFilter}].foh_team[].person._ref
         ][defined(@)])`,
         { week }
       );
