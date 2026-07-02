@@ -11,6 +11,7 @@ interface ProposalSong {
   title: string;
   author: string;
   key: string;
+  medley_tag?: string;
 }
 
 interface Proposal {
@@ -110,18 +111,29 @@ function ProposalCard({
         {proposal.songs.length === 0 && (
           <p className="font-body text-sm text-gray-500 italic">Sin canciones</p>
         )}
-        {proposal.songs.map((song, i) => (
-          <div key={song._key} className="flex items-center gap-3">
-            <span className="font-label text-xs text-gray-500 w-4 text-right shrink-0">{i + 1}</span>
-            <div className="flex-1 min-w-0">
-              <span className="font-body text-sm font-semibold truncate">{song.title}</span>
-              <span className="font-body text-xs text-gray-400 ml-2 truncate">{song.author}</span>
+        {proposal.songs.map((song, i) => {
+          const nextSong = proposal.songs[i + 1];
+          const linkedNext = !!song.medley_tag && !!nextSong?.medley_tag && song.medley_tag === nextSong.medley_tag;
+          const linkedPrev = i > 0 && !!song.medley_tag && proposal.songs[i - 1].medley_tag === song.medley_tag;
+          return (
+            <div key={song._key}>
+              <div className={`flex items-center gap-3 ${song.medley_tag ? "pl-2 border-l-2 border-[#00bfff]/40" : ""}`}>
+                <span className="font-label text-xs text-gray-500 w-4 text-right shrink-0">{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <span className="font-body text-sm font-semibold truncate">{song.title}</span>
+                  <span className="font-body text-xs text-gray-400 ml-2 truncate">{song.author}</span>
+                </div>
+                {linkedPrev && (
+                  <span className="font-label text-[8px] uppercase tracking-widest text-[#00bfff]/60 shrink-0">medley</span>
+                )}
+                <span className="font-label text-xs px-2 py-0.5 rounded-full border border-[#00bfff]/20 text-[#00bfff] shrink-0">
+                  {song.play_key}
+                </span>
+              </div>
+              {linkedNext && <div className="h-1" />}
             </div>
-            <span className="font-label text-xs px-2 py-0.5 rounded-full border border-[#00bfff]/20 text-[#00bfff] shrink-0">
-              {song.play_key}
-            </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Lead notes */}

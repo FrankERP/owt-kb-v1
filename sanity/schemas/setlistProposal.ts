@@ -59,6 +59,13 @@ export const setlistProposal = defineType({
               title: "Key to play",
               type: "string",
             },
+            {
+              name: "medley_tag",
+              title: "Medley / Mashup",
+              type: "string",
+              hidden: true,
+              description: "Songs sharing the same tag are shown as a grouped medley. Managed by the proposal editor.",
+            },
           ],
           preview: {
             select: {

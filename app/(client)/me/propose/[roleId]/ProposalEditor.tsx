@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { ProposalStatus } from "@/app/utils/interface";
+import { normalizeMedleyTags } from "@/app/utils/medley";
+import { ChainLinkIcon } from "@/app/components/ChainLinkIcon";
+
+const uid = () => Math.random().toString(36).slice(2, 9);
 
 interface SongResult {
   _id: string;
@@ -17,6 +21,7 @@ interface ProposalSong {
   author: string;
   key: string;
   play_key: string;
+  medley_tag?: string;
 }
 
 interface ExistingProposal {
@@ -30,6 +35,7 @@ interface ExistingProposal {
     author: string;
     key: string;
     play_key: string;
+    medley_tag?: string;
   }>;
 }
 
@@ -54,6 +60,7 @@ interface CoLeadProposal {
     author: string;
     key: string;
     play_key: string;
+    medley_tag?: string;
   }>;
 }
 
@@ -113,6 +120,7 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
       author: s.author,
       key: s.key,
       play_key: s.play_key || s.key,
+      medley_tag: s.medley_tag,
     }));
   });
 
@@ -136,7 +144,8 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
       const next = [...prev];
       const [item] = next.splice(from, 1);
       next.splice(targetIdx, 0, item);
-      return next;
+      // Reordering can break a medley apart or interleave two — re-derive tags.
+      return normalizeMedleyTags(next, uid);
     });
     dragIdx.current = null;
     setDraggingIdx(null);
@@ -150,6 +159,46 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
       const next = [...prev];
       const [item] = next.splice(from, 1);
       next.splice(to, 0, item);
+      return normalizeMedleyTags(next, uid);
+    });
+  };
+
+  // Precondition: idxB === idxA + 1 (the toggle sits between consecutive rows).
+  const toggleMedleyLink = (idxA: number, idxB: number) => {
+    setSongs(prev => {
+      const next = prev.map(e => ({ ...e }));
+      const a = next[idxA];
+      const b = next[idxB];
+      if (a.medley_tag && b.medley_tag && a.medley_tag === b.medley_tag) {
+        // Already linked — split at this boundary.
+        const tag = a.medley_tag;
+        const group = next.reduce<number[]>((acc, e, i) => e.medley_tag === tag ? [...acc, i] : acc, []);
+        const splitPos = group.indexOf(idxB);
+        const left = group.slice(0, splitPos);
+        const right = group.slice(splitPos);
+        if (left.length < 2) left.forEach(i => { next[i].medley_tag = undefined; });
+        if (right.length >= 2) {
+          const t = uid();
+          right.forEach(i => { next[i].medley_tag = t; });
+        } else {
+          right.forEach(i => { next[i].medley_tag = undefined; });
+        }
+      } else {
+        // Link them — merge groups or create a new tag.
+        const aTag = a.medley_tag;
+        const bTag = b.medley_tag;
+        if (aTag && bTag) {
+          next.forEach(e => { if (e.medley_tag === bTag) e.medley_tag = aTag; });
+        } else if (aTag) {
+          b.medley_tag = aTag;
+        } else if (bTag) {
+          a.medley_tag = bTag;
+        } else {
+          const t = uid();
+          a.medley_tag = t;
+          b.medley_tag = t;
+        }
+      }
       return next;
     });
   };
@@ -226,7 +275,8 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
     setSearchQuery("");
   };
 
-  const removeSong = (idx: number) => setSongs(prev => prev.filter((_, i) => i !== idx));
+  // Removing a song can orphan its medley partner — re-normalize tags.
+  const removeSong = (idx: number) => setSongs(prev => normalizeMedleyTags(prev.filter((_, i) => i !== idx), uid));
 
   const setPlayKey = (idx: number, play_key: string) => {
     setSongs(prev => prev.map((s, i) => i === idx ? { ...s, play_key } : s));
@@ -243,7 +293,7 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
           roleId: roleDoc._id,
           serviceType: roleDoc.service_type,
           serviceDate: roleDoc.service_date,
-          songs: songs.map(s => ({ songId: s.songId, play_key: s.play_key })),
+          songs: songs.map(s => ({ songId: s.songId, play_key: s.play_key, medley_tag: s.medley_tag })),
           leadNotes,
           status: submitStatus,
         }),
@@ -314,18 +364,25 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
 
           {coLeadProposal.songs && coLeadProposal.songs.length > 0 ? (
             <div className="space-y-1.5">
-              {coLeadProposal.songs.map((s, i) => (
-                <div key={s.song_id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#00bfff]/5">
+              {coLeadProposal.songs.map((s, i) => {
+                const prev = coLeadProposal.songs![i - 1];
+                const linkedPrev = i > 0 && !!s.medley_tag && prev?.medley_tag === s.medley_tag;
+                return (
+                <div key={s.song_id} className={`flex items-center gap-3 px-3 py-2 rounded-lg bg-[#00bfff]/5 ${s.medley_tag ? "border-l-2 border-[#00bfff]/40" : ""}`}>
                   <span className="font-label text-[10px] text-gray-500 w-4 text-center shrink-0">{i + 1}</span>
                   <div className="flex-1 min-w-0">
                     <p className="font-body text-sm truncate">{s.title}</p>
                     <p className="font-body text-xs text-gray-500 truncate">{s.author}</p>
                   </div>
+                  {linkedPrev && (
+                    <span className="font-label text-[8px] uppercase tracking-widest text-[#00bfff]/60 shrink-0">medley</span>
+                  )}
                   <span className="font-label text-[10px] px-2 py-0.5 rounded-full border border-[#00bfff]/20 text-[#00bfff]/70 shrink-0">
                     {s.play_key}
                   </span>
                 </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <p className="font-body text-xs text-gray-500">Sin canciones todavía.</p>
@@ -361,19 +418,27 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
           </div>
         )}
 
-        {songs.map((song, idx) => (
+        {songs.length > 0 && (
+        <div>
+        {songs.map((song, idx) => {
+          const nextSong = songs[idx + 1];
+          const linked = !!song.medley_tag && !!nextSong?.medley_tag && song.medley_tag === nextSong.medley_tag;
+          const inMedley = !!song.medley_tag;
+          return (
+          <Fragment key={song.songId}>
           <div
-            key={song.songId}
             draggable={!isApproved}
             onDragStart={() => onDragStart(idx)}
             onDragOver={e => onDragOver(e, idx)}
             onDrop={() => onDrop(idx)}
             onDragEnd={onDragEnd}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${idx > 0 ? "mt-1.5" : ""} ${
               dragOverIdx === idx && dragIdx.current !== idx
                 ? "border-[#00bfff]/60 bg-[#00bfff]/10 scale-[1.01]"
                 : draggingIdx === idx
                 ? "opacity-30"
+                : inMedley
+                ? "border-[#00bfff]/30 bg-[#00bfff]/[0.07]"
                 : "border-[#003572]/15 dark:border-[#00bfff]/10 bg-[#003572]/5 dark:bg-[#00bfff]/5"
             } ${!isApproved ? "cursor-grab active:cursor-grabbing" : ""}`}
           >
@@ -476,7 +541,41 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
               </button>
             )}
           </div>
-        ))}
+
+          {/* Medley link toggle between consecutive songs */}
+          {idx < songs.length - 1 && !isApproved && (
+            <div className="-my-0.5 flex items-center justify-center relative z-10">
+              <button
+                type="button"
+                onClick={() => toggleMedleyLink(idx, idx + 1)}
+                title={linked ? "Desagrupar medley" : "Agrupar en medley"}
+                aria-label={linked ? "Desagrupar medley" : "Agrupar en medley"}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all ${
+                  linked
+                    ? "border-[#00bfff]/30 bg-[#010b17] text-[#00bfff]/60"
+                    : "border-dashed border-gray-700/40 bg-[#010b17] text-gray-600/50 hover:border-[#00bfff]/30 hover:text-[#00bfff]/50"
+                }`}
+              >
+                <ChainLinkIcon strokeWidth={linked ? 2.5 : 1.5} />
+                {linked && <span className="font-label text-[8px] uppercase tracking-widest ml-0.5">medley</span>}
+              </button>
+            </div>
+          )}
+
+          {/* Static medley indicator when approved (read-only) */}
+          {idx < songs.length - 1 && isApproved && linked && (
+            <div className="-my-0.5 flex items-center justify-center relative z-10">
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full border border-[#00bfff]/30 bg-[#010b17] text-[#00bfff]/60">
+                <ChainLinkIcon strokeWidth={2.5} />
+                <span className="font-label text-[8px] uppercase tracking-widest ml-0.5">medley</span>
+              </span>
+            </div>
+          )}
+          </Fragment>
+          );
+        })}
+        </div>
+        )}
 
         {/* Song search */}
         {!isApproved && (

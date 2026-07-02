@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json() as {
     roleId: string;
-    songs: Array<{ songId: string; play_key: string }>;
+    songs: Array<{ songId: string; play_key: string; medley_tag?: string }>;
     leadNotes?: string;
     status: "draft" | "pending";
   };
@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
     _type: "proposal_song" as const,
     _key: rkey(),
     play_key: s.play_key,
+    ...(s.medley_tag ? { medley_tag: s.medley_tag } : {}),
     song: { _type: "reference" as const, _ref: s.songId },
   }));
 

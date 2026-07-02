@@ -33,7 +33,7 @@ export async function PATCH(
       _id, service_type, service_date, status,
       "service_ref_id": service_ref._ref,
       songs[] {
-        _key, play_key, "song_id": song._ref
+        _key, play_key, medley_tag, "song_id": song._ref
       }
     }`,
     { id }
@@ -68,10 +68,11 @@ export async function PATCH(
 
   if (body.action === "approve") {
     // Write the setlist to the appropriate Sanity document
-    const songDocs = (proposal.songs ?? []).map((s: { _key: string; play_key: string; song_id: string }) => ({
+    const songDocs = (proposal.songs ?? []).map((s: { _key: string; play_key: string; medley_tag?: string; song_id: string }) => ({
       _type: "setlist_song" as const,
       _key: rkey(),
       play_key: s.play_key,
+      ...(s.medley_tag ? { medley_tag: s.medley_tag } : {}),
       song: { _type: "reference" as const, _ref: s.song_id },
     }));
 

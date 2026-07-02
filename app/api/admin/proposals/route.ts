@@ -28,6 +28,7 @@ export async function GET() {
       songs[] {
         _key,
         play_key,
+        medley_tag,
         "song_id": song._ref,
         "title": song->title,
         "author": song->author,
