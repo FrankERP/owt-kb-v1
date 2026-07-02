@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { redirect } from "next/navigation";
@@ -11,6 +12,11 @@ import TextSizeControl from "@/app/components/TextSizeControl";
 import AvailabilityCalendar from "@/app/components/AvailabilityCalendar";
 import AddToCalendarButton from "@/app/components/AddToCalendarButton";
 import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
+
+export const metadata: Metadata = {
+  title: "Mi perfil — Oasis Worship Team",
+  description: "Tus próximos servicios, disponibilidad y ajustes de perfil.",
+};
 
 export const revalidate = 60;
 

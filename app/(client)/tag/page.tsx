@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import Navbar from "@/app/components/Navbar";
 import TagSearchList from "@/app/components/TagSearchList";
 import { Tag } from "@/app/utils/interface";
 import { client } from "@/sanity/lib/client";
+
+export const metadata: Metadata = {
+  title: "Etiquetas — Oasis Worship Team",
+  description: "Explora las canciones por etiqueta y tipo.",
+};
 
 async function getAllTags() {
   const query = `

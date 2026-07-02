@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { client } from "@/sanity/lib/client";
 import Navbar from "@/app/components/Navbar";
 import CalendarView, { ActiveDay } from "@/app/components/CalendarView";
 import { SundayRole, SaturdayRole, Setlist, SpecialRole, SetlistSong } from "@/app/utils/interface";
+
+export const metadata: Metadata = {
+  title: "Calendario — Oasis Worship Team",
+  description: "Próximos servicios y asignaciones del equipo de alabanza Oasis.",
+};
 
 export const revalidate = 60;
 
