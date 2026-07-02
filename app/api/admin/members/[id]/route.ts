@@ -25,12 +25,20 @@ export async function PATCH(
     notifEmail?: boolean;
   };
 
+  const VALID_ROLES = ["super-admin", "admin", "content-editor", "member"];
+  const VALID_MEMBER_TYPES = ["voz", "instrumento", "foh", "sunday_lead", "saturday_lead", "support"];
+
+  if (body.role !== undefined && !VALID_ROLES.includes(body.role)) {
+    return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+  }
+
   const patch: Record<string, unknown> = {};
   if (body.member_name?.trim()) patch.member_name = body.member_name.trim();
   if (typeof body.alias === "string") patch.alias = body.alias.trim();
   if (body.email?.trim()) patch.email = body.email.trim().toLowerCase();
   if (body.role) patch.role = body.role;
-  if (Array.isArray(body.memberType)) patch.memberType = body.memberType;
+  // Keep only recognised member types (drops unknown values rather than storing them).
+  if (Array.isArray(body.memberType)) patch.memberType = body.memberType.filter(t => VALID_MEMBER_TYPES.includes(t));
 
   if (Object.keys(patch).length === 0 && typeof body.notifEmail !== "boolean") {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
