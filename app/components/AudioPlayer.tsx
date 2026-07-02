@@ -73,12 +73,29 @@ export default function AudioPlayer() {
               {fmtTime(currentTime)}
             </span>
             <div
-              role="progressbar"
-              aria-valuenow={Math.round(progress * 100)}
-              className="flex-1 h-1.5 bg-[#003572]/60 rounded-full cursor-pointer group relative"
+              role="slider"
+              tabIndex={0}
+              aria-label="Barra de progreso"
+              aria-valuemin={0}
+              aria-valuemax={Math.round(duration)}
+              aria-valuenow={Math.round(currentTime)}
+              aria-valuetext={fmtTime(currentTime)}
+              className="flex-1 h-1.5 bg-[#003572]/60 rounded-full cursor-pointer group relative focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00bfff]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a1929]"
               onClick={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect();
                 seek((e.clientX - rect.left) / rect.width);
+              }}
+              onKeyDown={(e) => {
+                if (!duration) return;
+                let t: number | null = null;
+                if (e.key === "ArrowRight") t = Math.min(duration, currentTime + 5);
+                else if (e.key === "ArrowLeft") t = Math.max(0, currentTime - 5);
+                else if (e.key === "Home") t = 0;
+                else if (e.key === "End") t = duration;
+                if (t !== null) {
+                  e.preventDefault();
+                  seek(t / duration);
+                }
               }}
             >
               <div
