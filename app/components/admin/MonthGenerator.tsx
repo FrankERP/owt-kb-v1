@@ -1051,6 +1051,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
   const [swapSel, setSwapSel]     = useState<string | null>(null);
   const [viewMode, setViewMode]   = useState<"edit" | "view">("edit");
   const [pushing, setPushing]     = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
   const [swapToast, setSwapToast] = useState<string | null>(null);
   const [useSolver, setUseSolver] = useState(false);
   const [solving, setSolving]     = useState(false);
@@ -1311,22 +1312,44 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
     const toCreate = drafts.filter(d => !d.skipped && !d.exists);
     if (!toCreate.length) return;
     setPushing(true);
-    for (const d of toCreate) {
-      await fetch("/api/admin/roles", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          _type: d._type, date: d.date,
-          leads: d.leads, bgvs: d.bgvs, chorus: d.chorus,
-          instruments: d.instruments.filter(s => s.instrument && s.personId),
-          foh: d.foh.filter(s => s.role && s.personId),
-          published: publish,
-        }),
-      });
+    setPushError(null);
+    let failed = 0;
+    const created = new Set<string>();
+    try {
+      for (const d of toCreate) {
+        try {
+          const res = await fetch("/api/admin/roles", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              _type: d._type, date: d.date,
+              leads: d.leads, bgvs: d.bgvs, chorus: d.chorus,
+              instruments: d.instruments.filter(s => s.instrument && s.personId),
+              foh: d.foh.filter(s => s.role && s.personId),
+              published: publish,
+            }),
+          });
+          if (res.ok) created.add(d.localId);
+          else failed++;
+        } catch {
+          failed++;
+        }
+      }
+    } finally {
+      setPushing(false);
     }
-    setPushing(false);
+    // Mark the ones that succeeded as existing so a retry only re-attempts the
+    // failures (never re-POSTs an already-created service).
+    if (created.size) setDrafts(prev => prev.map(d => created.has(d.localId) ? { ...d, exists: true } : d));
+    // Refresh so the list reflects whatever actually got created.
     onCreated();
-    onClose();
+    if (failed === 0) {
+      onClose();
+    } else {
+      // Keep the dialog open and report the partial failure instead of closing
+      // as if the whole month was created successfully.
+      setPushError(`No se pudieron crear ${failed} de ${toCreate.length} servicios. Intenta de nuevo.`);
+    }
   }
 
   const toCreate = drafts.filter(d => !d.skipped && !d.exists);
@@ -1508,6 +1531,10 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
                       bgvs={p.bgvs} chorus={p.chorus} instruments={p.instruments} fohTeam={p.fohTeam} />;
           })}
         </div>
+      )}
+
+      {pushError && (
+        <p className="font-label text-[11px] uppercase tracking-widest text-red-400 text-center bg-red-500/10 rounded-lg py-1.5">{pushError}</p>
       )}
 
       <div className="flex gap-3">
