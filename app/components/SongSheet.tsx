@@ -80,7 +80,11 @@ export default function SongSheet() {
       <div className="fixed inset-0 z-[55] bg-black/60 backdrop-blur-sm" onClick={closeSheet} />
 
       {/* Sheet — bottom drawer on mobile, centered modal on lg+ */}
-      <div className="fixed inset-x-0 bottom-0 z-[60] max-h-[92svh] rounded-t-2xl bg-[#0a1929] border-t border-[#00bfff]/20 flex flex-col overflow-hidden lg:inset-auto lg:left-1/2 lg:-translate-x-1/2 lg:bottom-auto lg:top-1/2 lg:-translate-y-1/2 lg:w-full lg:max-w-2xl lg:rounded-2xl lg:border lg:border-[#00bfff]/20 lg:shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={sheet?.title ? `Canción: ${sheet.title}` : "Detalle de canción"}
+        className="fixed inset-x-0 bottom-0 z-[60] max-h-[92svh] rounded-t-2xl bg-[#0a1929] border-t border-[#00bfff]/20 flex flex-col overflow-hidden lg:inset-auto lg:left-1/2 lg:-translate-x-1/2 lg:bottom-auto lg:top-1/2 lg:-translate-y-1/2 lg:w-full lg:max-w-2xl lg:rounded-2xl lg:border lg:border-[#00bfff]/20 lg:shadow-2xl">
 
         {/* Drag handle (mobile only) */}
         <div className="flex justify-center pt-3 pb-1 lg:hidden shrink-0">
