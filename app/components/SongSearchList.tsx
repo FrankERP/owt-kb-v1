@@ -1,15 +1,16 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import Fuse from "fuse.js";
+import Fuse, { IFuseOptions } from "fuse.js";
 import { Post } from "../utils/interface";
+import { normalizeText } from "../utils/normalizeText";
 import PostComponent from "./PostComponent";
 
 interface Props {
   posts: Post[];
 }
 
-const fuseOptions = {
+const fuseOptions: IFuseOptions<Post> = {
   keys: [
     { name: "title", weight: 3 },
     { name: "author", weight: 1 },
@@ -20,6 +21,12 @@ const fuseOptions = {
   minMatchCharLength: 2,
   shouldSort: true,
   includeScore: true,
+  // Index accent-folded values so "adoracion" matches "Adoración".
+  getFn: (obj, path) => {
+    const key = Array.isArray(path) ? path[0] : path;
+    const val = (obj as unknown as Record<string, unknown>)[key];
+    return typeof val === "string" ? normalizeText(val) : "";
+  },
 };
 
 export default function SongSearchList({ posts }: Props) {
@@ -31,20 +38,20 @@ export default function SongSearchList({ posts }: Props) {
     const q = query.trim();
     if (!q) return posts;
 
-    const ql = q.toLowerCase();
+    const ql = normalizeText(q);
 
     if (q.length <= 2) {
-      // Exact substring match, prefix-first
+      // Exact substring match, prefix-first (accent-insensitive)
       return posts
         .filter(
           (p) =>
-            p.title?.toLowerCase().includes(ql) ||
-            p.author?.toLowerCase().includes(ql) ||
-            p.key?.toLowerCase() === ql
+            normalizeText(p.title).includes(ql) ||
+            normalizeText(p.author).includes(ql) ||
+            normalizeText(p.key) === ql
         )
         .sort((a, b) => {
-          const aTitle = a.title?.toLowerCase() ?? "";
-          const bTitle = b.title?.toLowerCase() ?? "";
+          const aTitle = normalizeText(a.title);
+          const bTitle = normalizeText(b.title);
           const aStarts = aTitle.startsWith(ql);
           const bStarts = bTitle.startsWith(ql);
           if (aStarts !== bStarts) return aStarts ? -1 : 1;
@@ -52,12 +59,12 @@ export default function SongSearchList({ posts }: Props) {
         });
     }
 
-    // Fuzzy search for 3+ characters
+    // Fuzzy search for 3+ characters (query + index are accent-folded)
     return fuse
-      .search(q)
+      .search(ql)
       .sort((a, b) => {
-        const aTitle = a.item.title?.toLowerCase() ?? "";
-        const bTitle = b.item.title?.toLowerCase() ?? "";
+        const aTitle = normalizeText(a.item.title);
+        const bTitle = normalizeText(b.item.title);
         const rank = (title: string) =>
           title.startsWith(ql) ? 0 : title.includes(ql) ? 1 : 2;
         const diff = rank(aTitle) - rank(bTitle);

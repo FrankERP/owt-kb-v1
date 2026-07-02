@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { Tag } from "../utils/interface";
+import { normalizeText } from "../utils/normalizeText";
 import Link from "next/link";
 
 type SortMode = "popular" | "alpha";
@@ -67,8 +68,9 @@ export default function TagSearchList({ tags }: { tags: Tag[] }) {
   // Tags to show in the main grid (pinned ones excluded when not searching)
   const gridTags = useMemo(() => {
     const pinnedSlugs = new Set(PINNED.map((p) => p.slug));
+    const nq = normalizeText(query);
     const base = isSearching
-      ? tags.filter((t) => t.name.toLowerCase().includes(query.toLowerCase()))
+      ? tags.filter((t) => normalizeText(t.name).includes(nq))
       : tags.filter((t) => !pinnedSlugs.has(t.slug.current));
 
     return [...base].sort((a, b) => {
