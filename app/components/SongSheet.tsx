@@ -39,7 +39,7 @@ const bodyComponents = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SongSheet() {
-  const { sheet, sheetLoading, sheetError, sheetPlayKey, closeSheet, openSheet, playTrack, player } = usePlayer();
+  const { sheet, sheetLoading, sheetError, sheetPlayKey, closeSheet, openSheet, playTrack, togglePlay, player } = usePlayer();
   const isOpen = !!(sheet || sheetLoading || sheetError);
 
   // Which history week (if any) has its full setlist popover open.
@@ -181,7 +181,8 @@ export default function SongSheet() {
                     return (
                       <button
                         key={i}
-                        onClick={() => playTrack(audioTrack)}
+                        onClick={() => (isCurrent ? togglePlay() : playTrack(audioTrack))}
+                        aria-label={`${isCurrent && player.isPlaying ? "Pausar" : "Reproducir"} ${track.title}`}
                         className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors text-left ${
                           isCurrent
                             ? "border-[#00bfff]/50 bg-[#00bfff]/10"
@@ -191,7 +192,7 @@ export default function SongSheet() {
                         <span className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
                           isCurrent ? "bg-[#00bfff] text-[#010b17]" : "bg-[#003572]/30 text-[#00bfff]"
                         }`}>
-                          <PlayIcon />
+                          {isCurrent && player.isPlaying ? <PauseIcon /> : <PlayIcon />}
                         </span>
                         <div className="min-w-0">
                           <p className="font-body text-sm font-semibold truncate">{track.title}</p>
@@ -199,9 +200,6 @@ export default function SongSheet() {
                             <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">{track.tone}</p>
                           )}
                         </div>
-                        {isCurrent && player.isPlaying && (
-                          <span className="ml-auto text-[#00bfff] text-xs">▶</span>
-                        )}
                       </button>
                     );
                   })}
@@ -435,6 +433,14 @@ function PlayIcon() {
   return (
     <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
       <polygon points="5 3 19 12 5 21 5 3" />
+    </svg>
+  );
+}
+
+function PauseIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+      <rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" />
     </svg>
   );
 }
