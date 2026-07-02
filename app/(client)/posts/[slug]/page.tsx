@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Post } from "@/app/utils/interface";
 import { groupBySections } from "@/app/utils/lyrics";
 import { client } from "@/sanity/lib/client";
@@ -14,6 +15,21 @@ import SongAudioSection from "@/app/components/SongAudioSection";
 
 interface Params {
   params: Promise<{ slug: string }>;
+}
+
+// Per-song page title/description so browser tabs, bookmarks and shared links
+// show the song name instead of the generic site title.
+export async function generateMetadata({ params }: Params): Promise<Metadata> {
+  const { slug } = await params;
+  const post = await client.fetch<{ title?: string; author?: string } | null>(
+    `*[_type == "post" && slug.current == $slug][0]{ title, author }`,
+    { slug }
+  );
+  if (!post?.title) return { title: "Canción — Oasis Worship Team" };
+  return {
+    title: `${post.title} — Oasis Worship Team`,
+    description: post.author ? `${post.title} · ${post.author}` : post.title,
+  };
 }
 
 async function getPost(slug: string) {
