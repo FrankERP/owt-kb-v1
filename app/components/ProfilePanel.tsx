@@ -113,18 +113,23 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
 
   const handleSaveProfile = async () => {
     setSavingProfile(true);
-    const res = await fetch("/api/me", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ alias, email }),
-    });
-    setSavingProfile(false);
-    if (res.ok) {
-      setMember((m) => ({ ...m, alias: alias.trim() || undefined, email }));
-      showToast("Perfil actualizado.");
-    } else {
-      const { error } = await res.json().catch(() => ({ error: "Error al guardar." }));
-      showToast(error, false);
+    try {
+      const res = await fetch("/api/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alias, email }),
+      });
+      if (res.ok) {
+        setMember((m) => ({ ...m, alias: alias.trim() || undefined, email }));
+        showToast("Perfil actualizado.");
+      } else {
+        const { error } = await res.json().catch(() => ({ error: "Error al guardar." }));
+        showToast(error, false);
+      }
+    } catch {
+      showToast("Error de conexión.", false);
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -135,15 +140,20 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
     setUploadingPhoto(true);
     const fd = new FormData();
     fd.append("photo", file);
-    const res = await fetch("/api/me/photo", { method: "POST", body: fd });
-    setUploadingPhoto(false);
-    if (res.ok) {
-      const { photoUrl } = await res.json();
-      setMember((m) => ({ ...m, photoUrl }));
-      showToast("Foto actualizada.");
-    } else {
-      const { error } = await res.json().catch(() => ({ error: "Error al subir la foto." }));
-      showToast(error, false);
+    try {
+      const res = await fetch("/api/me/photo", { method: "POST", body: fd });
+      if (res.ok) {
+        const { photoUrl } = await res.json();
+        setMember((m) => ({ ...m, photoUrl }));
+        showToast("Foto actualizada.");
+      } else {
+        const { error } = await res.json().catch(() => ({ error: "Error al subir la foto." }));
+        showToast(error, false);
+      }
+    } catch {
+      showToast("Error de conexión.", false);
+    } finally {
+      setUploadingPhoto(false);
     }
   };
 
@@ -152,19 +162,24 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
     if (newPw.length < 8) { setPwError("Mínimo 8 caracteres."); return; }
     if (newPw !== confirmPw) { setPwError("Las contraseñas no coinciden."); return; }
     setSavingPw(true);
-    const res = await fetch("/api/me/password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ currentPassword: currentPw || undefined, newPassword: newPw }),
-    });
-    setSavingPw(false);
-    if (res.ok) {
-      setCurrentPw(""); setNewPw(""); setConfirmPw("");
-      setMember((m) => ({ ...m, hasPassword: true }));
-      showToast("Contraseña actualizada.");
-    } else {
-      const { error } = await res.json().catch(() => ({ error: "Error al actualizar contraseña." }));
-      setPwError(error);
+    try {
+      const res = await fetch("/api/me/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: currentPw || undefined, newPassword: newPw }),
+      });
+      if (res.ok) {
+        setCurrentPw(""); setNewPw(""); setConfirmPw("");
+        setMember((m) => ({ ...m, hasPassword: true }));
+        showToast("Contraseña actualizada.");
+      } else {
+        const { error } = await res.json().catch(() => ({ error: "Error al actualizar contraseña." }));
+        setPwError(error);
+      }
+    } catch {
+      setPwError("Error de conexión.");
+    } finally {
+      setSavingPw(false);
     }
   };
 
@@ -172,17 +187,23 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
     const next = !emailPref;
     setEmailPref(next);            // optimistic
     setSavingEmailPref(true);
-    const res = await fetch("/api/me/notif-prefs", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: next }),
-    });
-    setSavingEmailPref(false);
-    if (res.ok) {
-      showToast(next ? "Recibirás correos de asignación." : "Ya no recibirás correos de asignación.");
-    } else {
-      setEmailPref(!next);         // revert on failure
+    try {
+      const res = await fetch("/api/me/notif-prefs", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: next }),
+      });
+      if (res.ok) {
+        showToast(next ? "Recibirás correos de asignación." : "Ya no recibirás correos de asignación.");
+      } else {
+        setEmailPref(!next);         // revert on failure
+        showToast("Error al guardar la preferencia.", false);
+      }
+    } catch {
+      setEmailPref(!next);           // revert on network error too
       showToast("Error al guardar la preferencia.", false);
+    } finally {
+      setSavingEmailPref(false);
     }
   };
 
