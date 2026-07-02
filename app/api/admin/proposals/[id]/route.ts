@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { sendPush } from "@/app/utils/push";
+import { revalidateServiceViews } from "@/app/utils/revalidate";
 
 function rkey() {
   return Math.random().toString(36).slice(2, 9);
@@ -147,6 +148,10 @@ export async function PATCH(
     } catch (err) {
       console.error("[push] notify failed:", err);
     }
+
+    // The approved proposal just wrote the real setlist — refresh the cached
+    // home/schedule/song pages so it shows without waiting for ISR expiry.
+    revalidateServiceViews();
 
     return NextResponse.json({ ok: true, status: "approved" });
   }
