@@ -22,6 +22,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "name required" }, { status: 400 });
   }
   const slug = slugifyAuthor(name.trim());
+  // Idempotent by slug: return the existing author instead of creating a
+  // duplicate (or slug-colliding) doc that would fragment the taxonomy.
+  const existing = await serverClient.fetch(
+    `*[_type == "author" && slug.current == $slug][0]{ _id, name, slug }`,
+    { slug }
+  );
+  if (existing) return NextResponse.json(existing);
+
   const author = await writeClient.create({
     _type: "author",
     name: name.trim(),
