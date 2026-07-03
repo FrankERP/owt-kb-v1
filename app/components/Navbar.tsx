@@ -15,7 +15,7 @@ interface Props {
 // are resolved client-side in NavMenu.
 const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Props) => {
   return (
-    <nav className="sticky top-0 z-50 border-b border-[#003572]/20 dark:border-[#00bfff]/20 bg-[#C8D8EB]/80 dark:bg-[#010b17]/80 backdrop-blur-sm pt-[env(safe-area-inset-top)]">
+    <nav aria-label="Navegación superior" className="sticky top-0 z-50 border-b border-[#003572]/20 dark:border-[#00bfff]/20 bg-[#C8D8EB]/80 dark:bg-[#010b17]/80 backdrop-blur-sm pt-[env(safe-area-inset-top)]">
       <div className="mx-auto max-w-7xl h-14 lg:h-20 transition-[height] duration-300 flex items-center gap-4 ps-[max(1.5rem,env(safe-area-inset-left))] pe-[max(1.5rem,env(safe-area-inset-right))]">
 
         {/* Logo */}
