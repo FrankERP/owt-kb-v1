@@ -12,6 +12,7 @@ import TextSizeControl from "@/app/components/TextSizeControl";
 import AvailabilityCalendar from "@/app/components/AvailabilityCalendar";
 import AddToCalendarButton from "@/app/components/AddToCalendarButton";
 import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
+import { selectCoLeadProposals } from "@/app/utils/coLeadProposals";
 
 export const metadata: Metadata = {
   title: "Mi perfil — Oasis Worship Team",
@@ -34,6 +35,14 @@ const STATUS_STYLE: Record<ProposalStatus, string> = {
   pending: "border-yellow-500/40 text-yellow-400 hover:border-yellow-400",
   approved: "border-green-500/40 text-green-400 cursor-default",
   changes_requested: "border-red-500/40 text-red-400 hover:border-red-300",
+};
+
+// What a co-lead's proposal reads as on my card. Approved is intentionally
+// absent — once approved the setlist is decided and already renders in the card.
+const CO_LEAD_LABEL: Partial<Record<ProposalStatus, string>> = {
+  draft: "está preparando una propuesta",
+  pending: "envió una propuesta",
+  changes_requested: "tiene una propuesta en revisión",
 };
 
 export default async function MePage() {
@@ -137,8 +146,16 @@ export default async function MePage() {
       { today, limit, id: sanityId }
     ),
     serverClient.fetch(
-      `*[_type == "setlistProposal" && lead._ref == $id && service_date >= $today] {
-        _id, status, admin_notes, "service_ref": service_ref._ref
+      // Superset of "my proposals": also pull proposals authored by a co-lead on
+      // any service I lead, so /me can show a persistent "Ana envió una propuesta"
+      // cue — the passive counterpart to the submission push. The `lead._ref == $id`
+      // disjunct preserves my own proposals even if I was later removed as a lead.
+      `*[_type == "setlistProposal" && service_date >= $today &&
+         (lead._ref == $id || $id in service_ref->Lead[]._ref)] {
+        _id, status, admin_notes,
+        "service_ref": service_ref._ref,
+        "leadId": lead._ref,
+        "leadName": coalesce(lead->alias, lead->member_name)
       }`,
       { id: sanityId, today }
     ),
@@ -152,11 +169,19 @@ export default async function MePage() {
     ),
   ]);
 
-  // Map roleId → proposal
-  const proposalMap = new Map<string, { _id: string; status: ProposalStatus; admin_notes?: string }>(
-    (proposals as Array<{ _id: string; status: ProposalStatus; admin_notes?: string; service_ref: string }>)
-      .map(p => [p.service_ref, { _id: p._id, status: p.status, admin_notes: p.admin_notes }])
-  );
+  // Split the proposals into "mine" (drives my own CTA) and "co-leads'" (drives
+  // the awareness cue). Keyed by service_ref (= role doc _id) either way.
+  const rawProposals = proposals as Array<{
+    _id: string; status: ProposalStatus; admin_notes?: string;
+    service_ref: string; leadId: string; leadName?: string;
+  }>;
+  const proposalMap = new Map<string, { _id: string; status: ProposalStatus; admin_notes?: string }>();
+  for (const p of rawProposals) {
+    if (p.leadId === sanityId) {
+      proposalMap.set(p.service_ref, { _id: p._id, status: p.status, admin_notes: p.admin_notes });
+    }
+  }
+  const coLeadMap = selectCoLeadProposals(rawProposals, sanityId);
 
   type RoleDoc = {
     _id: string;
@@ -206,8 +231,32 @@ export default async function MePage() {
     };
   });
 
-  function renderProposalCta(doc: RoleDoc) {
-    if (!doc.isLead) return null;
+  // A persistent, in-context cue that a co-lead has a proposal in flight for a
+  // service we share — so a lead finds out without depending on the push. Links
+  // straight into the shared service so they can view it.
+  function renderCoLeadCue(doc: RoleDoc) {
+    const coLead = coLeadMap.get(doc._id);
+    const phrase = coLead && CO_LEAD_LABEL[coLead.status];
+    if (!coLead || !phrase) return null;
+    return (
+      <Link
+        href={`/me/propose/${doc._id}`}
+        className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg border border-[#00bfff]/25 bg-[#00bfff]/5 hover:bg-[#00bfff]/10 transition-colors"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#00bfff] shrink-0">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+        <span className="font-body text-xs text-[#00bfff] flex-1 min-w-0 truncate">
+          <strong>{coLead.leadName}</strong> {phrase}
+        </span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#00bfff] shrink-0">
+          <path d="M5 12h14M12 5l7 7-7 7" />
+        </svg>
+      </Link>
+    );
+  }
+
+  function renderOwnProposalCta(doc: RoleDoc) {
     const proposal = proposalMap.get(doc._id);
 
     if (!proposal) {
@@ -245,6 +294,16 @@ export default async function MePage() {
           <path d="M5 12h14M12 5l7 7-7 7" />
         </svg>
       </Link>
+    );
+  }
+
+  function renderProposalCta(doc: RoleDoc) {
+    if (!doc.isLead) return null;
+    return (
+      <>
+        {renderCoLeadCue(doc)}
+        {renderOwnProposalCta(doc)}
+      </>
     );
   }
 
