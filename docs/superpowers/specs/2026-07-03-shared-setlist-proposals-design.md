@@ -1,14 +1,14 @@
 # Shared setlist proposals (co-leads build one setlist together) — design
 
 Date: 2026-07-03
-Status: **Approved (design)** — signed off on adversarial review round 4 after
-rounds 1–3 each surfaced a real blocking defect (r1: create-race, phasing,
-`admin_notes` exposure; r2: migration ranking must NOT reuse the surfacing
-ranking — inverse for `approved`; r3: mandatory approved-doc write-guard +
-post-approval re-open lifecycle; r4: APPROVED, 3 non-blocking refinements folded
-in). **One product decision remains open for the user (Q4: admin-mediated re-open
-vs. terminal-by-design)** — the recommended default is admin-mediated re-open; the
-§2 write-guard is required either way. Ready to implement once Q4 is answered.
+Status: **Approved (design) — ready to implement.** Signed off on adversarial
+review round 4 after rounds 1–3 each surfaced a real blocking defect (r1:
+create-race, phasing, `admin_notes` exposure; r2: migration ranking must NOT
+reuse the surfacing ranking — inverse for `approved`; r3: mandatory approved-doc
+write-guard + post-approval re-open lifecycle; r4: APPROVED, 3 non-blocking
+refinements folded in). **Q4 resolved by the user (2026-07-03): admin-mediated
+re-open** (§5a) — leads cannot self-serve un-approve; the §2 write-guard stands.
+No open questions remain.
 
 ## Problem
 
@@ -292,10 +292,10 @@ silent re-editability.**
 - This keeps the invariant "only the admin approval path writes the real setlist,
   and the proposal can only diverge from it through a tracked transition."
 
-If the user prefers **terminal-by-design** (no re-open at all; post-approval
-changes happen by the admin editing the setlist directly, outside the proposal
-flow), that's simpler — drop the `reopen` action. Flagged in Open Questions;
-either way the **write-guard in §2 is required**.
+**Decided (user, 2026-07-03):** admin-mediated re-open, as above — the `reopen`
+action is in scope. (The rejected alternative was terminal-by-design: no re-open,
+post-approval changes made by the admin editing the setlist directly. The §2
+write-guard is required under either.)
 
 ### 6. Migration (`scripts/migrate-shared-proposals.mjs`, dry-run + `--apply`)
 
@@ -410,12 +410,10 @@ corrected here: they are one atomic release.
    submit? Assumed **fully symmetric** (true "together").
 3. **Notes.** Single shared `lead_notes` (assumed) vs. per-contributor notes
    (rejected as scope creep) — confirm.
-4. **Post-approval: re-open vs. terminal.** §5a defaults to an **admin-mediated
-   `reopen`** (`approved → changes_requested`) and no lead self-serve un-approve.
-   Confirm this is right, or choose terminal-by-design (no re-open; admin edits
-   the setlist directly). The §2 write-guard is required regardless. This is the
-   one decision that changes user-visible behaviour vs. today — worth a direct
-   yes/no from the user before building.
+4. **Post-approval: re-open vs. terminal.** ✅ **Resolved (user, 2026-07-03):
+   admin-mediated `reopen`** (`approved → changes_requested`), no lead self-serve
+   un-approve. §5a is the implementation; the `reopen` admin action is in scope
+   (Phase 4). The §2 write-guard is required regardless.
 
 ## Risks
 
