@@ -24,11 +24,15 @@ interface ProposalSong {
   medley_tag?: string;
 }
 
-interface ExistingProposal {
+// The single shared proposal for the service (one doc all leads co-edit).
+interface SharedProposal {
   _id: string;
+  _rev: string;
   status: ProposalStatus;
   lead_notes?: string;
   admin_notes?: string;
+  createdById?: string;
+  contributors?: Array<{ id: string; name: string }>;
   songs?: Array<{
     song_id: string;
     title: string;
@@ -49,25 +53,10 @@ interface RoleDoc {
   service_date: string;
 }
 
-interface CoLeadProposal {
-  _id: string;
-  status: ProposalStatus;
-  leadName: string;
-  lead_notes?: string;
-  songs?: Array<{
-    song_id: string;
-    title: string;
-    author: string;
-    key: string;
-    play_key: string;
-    medley_tag?: string;
-  }>;
-}
-
 interface Props {
   roleDoc: RoleDoc;
-  existingProposal: ExistingProposal | null;
-  coLeadProposal: CoLeadProposal | null;
+  proposal: SharedProposal | null;
+  currentUserId: string;
 }
 
 // ─── Key options ─────────────────────────────────────────────────────────────
@@ -109,12 +98,12 @@ function capitalize(s: string) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ProposalEditor({ roleDoc, existingProposal, coLeadProposal }: Props) {
+export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Props) {
   const router = useRouter();
 
   const [songs, setSongs] = useState<ProposalSong[]>(() => {
-    if (!existingProposal?.songs?.length) return [];
-    return existingProposal.songs.map(s => ({
+    if (!proposal?.songs?.length) return [];
+    return proposal.songs.map(s => ({
       songId: s.song_id,
       title: s.title,
       author: s.author,
@@ -124,11 +113,25 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
     }));
   });
 
-  const [leadNotes, setLeadNotes] = useState(existingProposal?.lead_notes ?? "");
-  const [status, setStatus]       = useState<ProposalStatus>(existingProposal?.status ?? "draft");
+  const [leadNotes, setLeadNotes] = useState(proposal?.lead_notes ?? "");
+  const [status, setStatus]       = useState<ProposalStatus>(proposal?.status ?? "draft");
   const [saving, setSaving]       = useState(false);
   const [toast, setToast]         = useState<{ msg: string; ok: boolean } | null>(null);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [staleReload, setStaleReload] = useState(false);
+
+  // The doc revision for optimistic concurrency. MUST track the live prop (not a
+  // one-time initializer): after a 409 the reload banner calls router.refresh(),
+  // which re-runs the server component and delivers a fresh _rev — we re-seed
+  // from it here so the next save carries the current revision, not a stale one.
+  const [rev, setRev] = useState<string | null>(proposal?._rev ?? null);
+  useEffect(() => { setRev(proposal?._rev ?? null); }, [proposal?._rev]);
+
+  // Other leads who have edited this shared proposal (exclude me).
+  const otherContributors = (proposal?.contributors ?? [])
+    .filter(c => c.id && c.id !== currentUserId)
+    .map(c => c.name)
+    .filter(Boolean);
 
   // Drag-and-drop
   const dragIdx    = useRef<number | null>(null);
@@ -296,12 +299,21 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
           songs: songs.map(s => ({ songId: s.songId, play_key: s.play_key, medley_tag: s.medley_tag })),
           leadNotes,
           status: submitStatus,
+          rev,
         }),
       });
 
+      // 409 = someone else changed the shared proposal since we loaded it (or it
+      // was approved). Do NOT clear the editor — surface a non-destructive reload
+      // banner so the lead can copy anything unsaved before reloading.
+      if (res.status === 409) {
+        setStaleReload(true);
+        return;
+      }
       if (!res.ok) throw new Error();
-      const data: { status: ProposalStatus } = await res.json();
+      const data: { status: ProposalStatus; _rev?: string | null } = await res.json();
       setStatus(data.status);
+      if (data._rev) setRev(data._rev);
       showToast(submitStatus === "pending" ? "Propuesta enviada" : "Borrador guardado");
       router.refresh();
     } catch {
@@ -347,61 +359,40 @@ export default function ProposalEditor({ roleDoc, existingProposal, coLeadPropos
         </div>
       </div>
 
-      {/* Co-lead draft panel */}
-      {coLeadProposal && (
-        <div className="border-l-2 border-[#00bfff]/40 pl-4 space-y-3">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <UserIcon />
-              <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/70">
-                Borrador de {coLeadProposal.leadName}
-              </p>
-            </div>
-            <span className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full ${STATUS_STYLE[coLeadProposal.status]}`}>
-              {STATUS_LABEL[coLeadProposal.status]}
-            </span>
-          </div>
+      {/* Shared-proposal contributors — this is ONE setlist all leads co-edit */}
+      {otherContributors.length > 0 && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-[#00bfff]/5">
+          <UserIcon />
+          <p className="font-body text-xs text-[#00bfff]">
+            Propuesta compartida · editada también por {otherContributors.join(", ")}
+          </p>
+        </div>
+      )}
 
-          {coLeadProposal.songs && coLeadProposal.songs.length > 0 ? (
-            <div className="space-y-1.5">
-              {coLeadProposal.songs.map((s, i) => {
-                const prev = coLeadProposal.songs![i - 1];
-                const linkedPrev = i > 0 && !!s.medley_tag && prev?.medley_tag === s.medley_tag;
-                return (
-                <div key={s.song_id} className={`flex items-center gap-3 px-3 py-2 rounded-lg bg-[#00bfff]/5 ${s.medley_tag ? "border-l-2 border-[#00bfff]/40" : ""}`}>
-                  <span className="font-label text-[10px] text-gray-500 w-4 text-center shrink-0">{i + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-body text-sm truncate">{s.title}</p>
-                    <p className="font-body text-xs text-gray-500 truncate">{s.author}</p>
-                  </div>
-                  {linkedPrev && (
-                    <span className="font-label text-[8px] uppercase tracking-widest text-[#00bfff]/60 shrink-0">medley</span>
-                  )}
-                  <span className="font-label text-[10px] px-2 py-0.5 rounded-full border border-[#00bfff]/20 text-[#00bfff]/70 shrink-0">
-                    {s.play_key}
-                  </span>
-                </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="font-body text-xs text-gray-500">Sin canciones todavía.</p>
-          )}
-
-          {coLeadProposal.lead_notes && (
-            <div className="pt-1 border-t border-[#00bfff]/10">
-              <p className="font-label text-[10px] uppercase tracking-widest text-gray-600 mb-1">Notas</p>
-              <p className="font-body text-xs text-gray-400 whitespace-pre-wrap">{coLeadProposal.lead_notes}</p>
-            </div>
-          )}
+      {/* Stale-reload banner (409: a co-lead changed the shared proposal, or it
+          was approved). Non-destructive — the editor keeps the lead's unsaved work. */}
+      {staleReload && (
+        <div className="rounded-xl border border-yellow-500/40 bg-yellow-500/10 p-4 space-y-2">
+          <p className="font-label text-xs uppercase tracking-widest text-yellow-400">Propuesta actualizada</p>
+          <p className="font-body text-sm text-yellow-200/90">
+            Otro líder actualizó esta propuesta compartida (o ya fue aprobada). Recarga para ver
+            los cambios antes de volver a guardar.
+          </p>
+          <button
+            type="button"
+            onClick={() => { setStaleReload(false); router.refresh(); }}
+            className="mt-1 py-2 px-4 rounded-lg border border-yellow-500/40 font-label text-xs uppercase tracking-widest text-yellow-300 hover:bg-yellow-500/10 transition-colors"
+          >
+            Recargar
+          </button>
         </div>
       )}
 
       {/* Admin notes banner (changes requested) */}
-      {status === "changes_requested" && existingProposal?.admin_notes && (
+      {status === "changes_requested" && proposal?.admin_notes && (
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 space-y-1">
           <p className="font-label text-xs uppercase tracking-widest text-red-400">Comentarios del admin</p>
-          <p className="font-body text-sm text-red-300 whitespace-pre-wrap">{existingProposal.admin_notes}</p>
+          <p className="font-body text-sm text-red-300 whitespace-pre-wrap">{proposal.admin_notes}</p>
         </div>
       )}
 
