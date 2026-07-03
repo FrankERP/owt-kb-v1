@@ -32,6 +32,7 @@ export default function SectionNav({ sections }: { sections: Section[] }) {
           <a
             key={s.id}
             href={`#${s.id}`}
+            aria-current={active === s.id ? "location" : undefined}
             className={`font-label text-xs uppercase tracking-widest px-4 py-3 border-b-2 transition-colors whitespace-nowrap shrink-0 ${
               active === s.id
                 ? "border-[#00bfff] text-[#00bfff]"
