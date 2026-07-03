@@ -93,6 +93,8 @@ function SignInForm() {
           <input
             type="email"
             placeholder="Email"
+            aria-label="Correo electrónico"
+            autoComplete="username"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -101,6 +103,8 @@ function SignInForm() {
           <input
             type="password"
             placeholder="Contraseña"
+            aria-label="Contraseña"
+            autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
