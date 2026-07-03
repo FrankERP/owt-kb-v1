@@ -14,13 +14,16 @@ const SERVICE_LABEL: Record<ServiceType, string> = {
 };
 
 export function getAllowlist(): string[] {
-  return (process.env.EMAIL_ALLOWLIST ?? "chikipuas@gmail.com")
+  // Default is the whole team ("*"): the Resend test-mode era that needed a
+  // Frank-only gate is over (SMTP via contacto@oasis.mx is live). Set
+  // EMAIL_ALLOWLIST to a comma-separated list to narrow delivery again.
+  return (process.env.EMAIL_ALLOWLIST ?? "*")
     .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 }
 
 // Whether a recipient may be emailed. `EMAIL_ALLOWLIST="*"` opens it to every
 // member with a valid email (whole team); otherwise only listed addresses.
-// Default (env unset) is Frank-only.
+// Default (env unset) is the whole team; per-member opt-out still applies.
 export function isEmailAllowed(email: string | undefined, allow: string[] = getAllowlist()): boolean {
   if (!email) return false;
   return allow.includes("*") || allow.includes(email);

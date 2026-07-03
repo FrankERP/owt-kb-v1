@@ -7,7 +7,23 @@ vi.mock("../email", () => ({ sendEmail: (...a: unknown[]) => sendEmailMock(...a)
 const fetchMock = vi.fn();
 vi.mock("@/sanity/lib/serverClient", () => ({ serverClient: { fetch: (...a: unknown[]) => fetchMock(...a) } }));
 
-import { rolesForMember, buildAssignmentEmail, sendAssignmentEmails, sendAssignmentEmailsBatch } from "../assignmentEmail";
+import { rolesForMember, buildAssignmentEmail, sendAssignmentEmails, sendAssignmentEmailsBatch, getAllowlist, isEmailAllowed } from "../assignmentEmail";
+
+describe("getAllowlist default", () => {
+  afterEach(() => { delete process.env.EMAIL_ALLOWLIST; });
+
+  it("defaults to the whole team ('*') when EMAIL_ALLOWLIST is unset", () => {
+    delete process.env.EMAIL_ALLOWLIST;
+    expect(getAllowlist()).toEqual(["*"]);
+    expect(isEmailAllowed("anyone@team.com")).toBe(true);
+  });
+
+  it("narrows delivery when EMAIL_ALLOWLIST lists addresses", () => {
+    process.env.EMAIL_ALLOWLIST = "frank@x.com";
+    expect(isEmailAllowed("frank@x.com")).toBe(true);
+    expect(isEmailAllowed("gaby@x.com")).toBe(false);
+  });
+});
 
 const body = {
   leads: ["m1"], bgvs: ["m2"], chorus: [],
