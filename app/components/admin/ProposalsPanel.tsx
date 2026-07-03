@@ -120,8 +120,10 @@ function ProposalCard({
               <div className={`flex items-center gap-3 ${song.medley_tag ? "pl-2 border-l-2 border-[#00bfff]/40" : ""}`}>
                 <span className="font-label text-xs text-gray-500 w-4 text-right shrink-0">{i + 1}</span>
                 <div className="flex-1 min-w-0">
-                  <span className="font-body text-sm font-semibold truncate">{song.title}</span>
-                  <span className="font-body text-xs text-gray-400 ml-2 truncate">{song.author}</span>
+                  <p className="font-body text-sm font-semibold truncate">{song.title}</p>
+                  {song.author && (
+                    <p className="font-body text-xs text-gray-400 truncate">{song.author}</p>
+                  )}
                 </div>
                 {linkedPrev && (
                   <span className="font-label text-[8px] uppercase tracking-widest text-[#00bfff]/60 shrink-0">medley</span>
