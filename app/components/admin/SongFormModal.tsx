@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { bodyToLyrics } from "@/app/utils/lyrics";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -91,13 +91,25 @@ export function Modal({
   children: React.ReactNode;
   zClass?: string;
 }) {
+  // Close on Escape, like the song sheet — standard modal-dialog behavior.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
     <div className={`fixed inset-0 ${zClass} flex items-start justify-center pt-4 px-4 pb-4`}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-2xl bg-[#C8D8EB] dark:bg-[#0a1929] border border-[#003572]/20 dark:border-[#00bfff]/20 rounded-xl shadow-2xl flex flex-col max-h-[calc(100vh-2rem)]">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="relative z-10 w-full max-w-2xl bg-[#C8D8EB] dark:bg-[#0a1929] border border-[#003572]/20 dark:border-[#00bfff]/20 rounded-xl shadow-2xl flex flex-col max-h-[calc(100vh-2rem)]"
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#003572]/15 dark:border-[#00bfff]/10 shrink-0">
           <h2 className="font-display text-lg uppercase tracking-wide">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-[#00bfff] transition-colors text-xl leading-none">×</button>
+          <button onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-[#00bfff] transition-colors text-xl leading-none">×</button>
         </div>
         <div className="overflow-y-auto overflow-x-hidden p-6 space-y-5 flex-1">{children}</div>
       </div>
