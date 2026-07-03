@@ -33,3 +33,20 @@ export function mergeContributor(
   }
   return out;
 }
+
+export interface NamedContributor {
+  id: string;
+  name: string;
+}
+
+// Label for co-contributors OTHER than me, e.g. "con Ana, Beto". Empty string
+// when I'm the only contributor (or there are none) — callers hide the hint.
+export function describeContributors(
+  contributors: NamedContributor[] | undefined,
+  myId: string,
+): string {
+  const others = (contributors ?? [])
+    .filter((c) => c.id && c.id !== myId && c.name)
+    .map((c) => c.name);
+  return others.length ? `con ${others.join(", ")}` : "";
+}

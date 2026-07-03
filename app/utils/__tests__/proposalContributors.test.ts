@@ -1,6 +1,6 @@
 // app/utils/__tests__/proposalContributors.test.ts
 import { describe, it, expect } from "vitest";
-import { mergeContributor } from "../proposalContributors";
+import { mergeContributor, describeContributors } from "../proposalContributors";
 
 let n = 0;
 const key = () => `k${n++}`;
@@ -47,5 +47,26 @@ describe("mergeContributor", () => {
       expect(c.person._type).toBe("reference");
       expect(typeof c._key).toBe("string");
     }
+  });
+});
+
+describe("describeContributors", () => {
+  it("returns empty when I'm the only contributor", () => {
+    expect(describeContributors([{ id: "me", name: "Yo" }], "me")).toBe("");
+  });
+
+  it("returns empty for no contributors", () => {
+    expect(describeContributors(undefined, "me")).toBe("");
+    expect(describeContributors([], "me")).toBe("");
+  });
+
+  it("lists co-contributors other than me", () => {
+    const c = [{ id: "me", name: "Yo" }, { id: "ana", name: "Ana" }, { id: "beto", name: "Beto" }];
+    expect(describeContributors(c, "me")).toBe("con Ana, Beto");
+  });
+
+  it("ignores entries missing a name or id", () => {
+    const c = [{ id: "ana", name: "" }, { id: "", name: "Ghost" }, { id: "beto", name: "Beto" }];
+    expect(describeContributors(c, "me")).toBe("con Beto");
   });
 });
