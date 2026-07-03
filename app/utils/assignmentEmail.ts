@@ -50,7 +50,7 @@ export function rolesForMember(id: string, b: ServiceBody): string[] {
   return roles;
 }
 
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
 }
@@ -61,7 +61,7 @@ function escapeHtml(s: string): string {
 // NEXTAUTH_URL (covers localhost in dev), else "" (relative, last resort).
 // This app uses Auth.js URL auto-detection, so NEXTAUTH_URL may be unset in
 // production — VERCEL_PROJECT_PRODUCTION_URL is always present on Vercel.
-function appBaseUrl(): string {
+export function appBaseUrl(): string {
   const explicit = process.env.NEXTAUTH_URL?.trim();
   if (explicit && !explicit.includes("localhost")) return explicit.replace(/\/$/, "");
   const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
