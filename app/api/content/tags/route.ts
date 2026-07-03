@@ -26,6 +26,14 @@ export async function POST(req: NextRequest) {
 
   const slug = name.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
+  // Idempotent by slug: return the existing tag instead of creating a duplicate
+  // (or slug-colliding) doc that would fragment the taxonomy.
+  const existing = await serverClient.fetch(
+    `*[_type == "tag" && slug.current == $slug][0]{ _id, name, slug }`,
+    { slug }
+  );
+  if (existing) return NextResponse.json(existing);
+
   const tag = await writeClient.create({
     _type: "tag",
     name: name.trim(),
