@@ -65,11 +65,11 @@ export async function GET() {
       "chorus": Chorus[]->{_id, member_name, alias},
       "instruments": instruments[]{instrument, "person": person->{_id, member_name, alias}},
       "foh": foh_team[]{role, "person": person->{_id, member_name, alias}},
-      "songs": select(
+      "songs": coalesce(select(
         _type == "sunday_role"   => *[_type == "featuredSongs"  && week == ^.week][0].${SETLIST_SONGS},
         _type == "saturday_role" => *[_type == "saturdarSongs"  && week == ^.week][0].${SETLIST_SONGS},
         ${SETLIST_SONGS}
-      )
+      ), [])
     }
   `);
 
