@@ -24,8 +24,11 @@ interface Proposal {
   lead_notes?: string;
   admin_notes?: string;
   submitted_at?: string;
+  contributors?: Array<{ id: string; name: string }>;
   songs: ProposalSong[];
 }
+
+type ProposalAction = "approve" | "request_changes" | "reopen";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -69,11 +72,17 @@ function ProposalCard({
   onAction,
 }: {
   proposal: Proposal;
-  onAction: (id: string, action: "approve" | "request_changes", notes?: string) => Promise<void>;
+  onAction: (id: string, action: ProposalAction, notes?: string) => Promise<void>;
 }) {
   const [requestingChanges, setRequestingChanges] = useState(false);
+  const [reopening, setReopening] = useState(false);
   const [adminNotes, setAdminNotes] = useState(proposal.admin_notes ?? "");
   const [submitting, setSubmitting] = useState(false);
+
+  // Co-leads who edited the shared proposal, besides the creator shown above.
+  const coContributors = (proposal.contributors ?? [])
+    .filter(c => c.id && c.id !== proposal.lead_id && c.name)
+    .map(c => c.name);
 
   const handleApprove = async () => {
     setSubmitting(true);
@@ -89,6 +98,13 @@ function ProposalCard({
     setRequestingChanges(false);
   };
 
+  const handleReopen = async () => {
+    setSubmitting(true);
+    await onAction(proposal._id, "reopen", adminNotes.trim() || undefined);
+    setSubmitting(false);
+    setReopening(false);
+  };
+
   const inputCls = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors placeholder:text-gray-600";
 
   return (
@@ -99,7 +115,12 @@ function ProposalCard({
           <p className="font-display text-base font-semibold">
             {SERVICE_LABEL[proposal.service_type]} · {capitalize(formatDate(proposal.service_date))}
           </p>
-          <p className="font-body text-sm text-[#00bfff]">{proposal.lead_name}</p>
+          <p className="font-body text-sm text-[#00bfff]">
+            {proposal.lead_name}
+            {coContributors.length > 0 && (
+              <span className="text-gray-400"> · con {coContributors.join(", ")}</span>
+            )}
+          </p>
         </div>
         <span className={`font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full shrink-0 ${STATUS_STYLE[proposal.status]}`}>
           {STATUS_LABEL[proposal.status]}
@@ -204,13 +225,50 @@ function ProposalCard({
       )}
 
       {proposal.status === "approved" && (
-        <div className="px-4 pb-4">
+        <div className="px-4 pb-4 space-y-3">
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-green-500/20 bg-green-500/5">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-400 shrink-0">
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
             </svg>
             <p className="font-label text-[10px] uppercase tracking-widest text-green-400">Setlist publicado</p>
           </div>
+
+          {/* Re-open for revision. Sends the shared proposal back to
+              changes_requested; the live setlist stays until re-approval. */}
+          {reopening ? (
+            <div className="space-y-2">
+              <textarea
+                autoFocus
+                className={`${inputCls} resize-none`}
+                rows={3}
+                placeholder="¿Qué debe ajustarse? (opcional)"
+                value={adminNotes}
+                onChange={e => setAdminNotes(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setReopening(false)}
+                  className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleReopen}
+                  disabled={submitting}
+                  className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+                >
+                  {submitting ? "Reabriendo…" : "Reabrir"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setReopening(true)}
+              className="w-full py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest text-gray-400 hover:border-[#00bfff] hover:text-[#00bfff] transition-colors"
+            >
+              Reabrir para ajustes
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -247,9 +305,15 @@ export default function ProposalsPanel() {
 
   useEffect(() => { load(); }, [load]);
 
+  const ACTION_TOAST: Record<ProposalAction, string> = {
+    approve: "Setlist publicado",
+    request_changes: "Cambios solicitados",
+    reopen: "Propuesta reabierta",
+  };
+
   const handleAction = async (
     id: string,
-    action: "approve" | "request_changes",
+    action: ProposalAction,
     notes?: string
   ) => {
     try {
@@ -259,7 +323,7 @@ export default function ProposalsPanel() {
         body: JSON.stringify({ action, adminNotes: notes }),
       });
       if (res.ok) {
-        showToast(action === "approve" ? "Setlist publicado" : "Cambios solicitados");
+        showToast(ACTION_TOAST[action]);
         await load();
       } else {
         showToast("Error al procesar", false);

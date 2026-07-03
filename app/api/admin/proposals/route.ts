@@ -25,6 +25,7 @@ export async function GET() {
       "service_ref": service_ref._ref,
       "lead_name": coalesce(lead->alias, lead->member_name),
       "lead_id": lead->_id,
+      "contributors": contributors[]{ "id": person->_id, "name": coalesce(person->alias, person->member_name) },
       songs[] {
         _key,
         play_key,
