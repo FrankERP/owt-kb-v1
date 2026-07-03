@@ -8,6 +8,17 @@ function rkey() {
   return Math.random().toString(36).slice(2, 9);
 }
 
+// Everyone who should hear a review outcome on a shared proposal: the creator
+// plus every contributor, deduped. (GROQ `in` already dedupes on send, but we
+// dedupe here too so the set is clean.)
+async function reviewRecipients(id: string): Promise<string[]> {
+  const doc = await serverClient.fetch<{ lead?: string | null; contributors?: (string | null)[] }>(
+    `*[_id == $id][0]{ "lead": lead._ref, "contributors": contributors[].person._ref }`,
+    { id }
+  );
+  return [...new Set([doc?.lead, ...(doc?.contributors ?? [])].filter(Boolean))] as string[];
+}
+
 // PATCH /api/admin/proposals/[id]
 // Body: { action: "approve" | "request_changes", adminNotes?: string }
 export async function PATCH(
@@ -25,7 +36,7 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json() as {
-    action: "approve" | "request_changes";
+    action: "approve" | "request_changes" | "reopen";
     adminNotes?: string;
   };
 
@@ -53,11 +64,39 @@ export async function PATCH(
       reviewed_at: now,
     }).commit();
     try {
-      const leadId = await serverClient.fetch<string | null>(`*[_id == $id][0].lead._ref`, { id });
-      if (leadId) {
-        void sendPush([leadId], "proposals", {
+      const recipients = await reviewRecipients(id);
+      if (recipients.length) {
+        void sendPush(recipients, "proposals", {
           title: "Cambios solicitados",
-          body: "Revisaron tu propuesta y pidieron cambios.",
+          body: "Revisaron la propuesta y pidieron cambios.",
+          path: "/me",
+        });
+      }
+    } catch (err) {
+      console.error("[push] notify failed:", err);
+    }
+    return NextResponse.json({ ok: true, status: "changes_requested" });
+  }
+
+  // Re-open an approved setlist for revision (admin-only). Sets the shared doc
+  // back to changes_requested; the live setlist doc is left intact until the
+  // revised proposal is re-approved. This is the ONLY way an approved proposal
+  // becomes editable again (leads cannot self-serve un-approve).
+  if (body.action === "reopen") {
+    if (proposal.status !== "approved") {
+      return NextResponse.json({ error: "Only an approved proposal can be re-opened" }, { status: 409 });
+    }
+    await writeClient.patch(id).set({
+      status: "changes_requested",
+      admin_notes: body.adminNotes ?? "",
+      reviewed_at: now,
+    }).commit();
+    try {
+      const recipients = await reviewRecipients(id);
+      if (recipients.length) {
+        void sendPush(recipients, "proposals", {
+          title: "Propuesta reabierta",
+          body: "Un admin reabrió el setlist para ajustes.",
           path: "/me",
         });
       }
@@ -137,11 +176,11 @@ export async function PATCH(
     }
 
     try {
-      const leadId = await serverClient.fetch<string | null>(`*[_id == $id][0].lead._ref`, { id });
-      if (leadId) {
-        void sendPush([leadId], "proposals", {
+      const recipients = await reviewRecipients(id);
+      if (recipients.length) {
+        void sendPush(recipients, "proposals", {
           title: "Propuesta aprobada",
-          body: "Tu propuesta fue aprobada.",
+          body: "La propuesta de setlist fue aprobada.",
           path: "/me",
         });
       }
