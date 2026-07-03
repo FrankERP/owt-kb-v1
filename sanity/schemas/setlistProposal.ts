@@ -35,9 +35,52 @@ export const setlistProposal = defineType({
     },
     {
       name: "lead",
-      title: "Lead",
+      title: "Lead (creator)",
+      description: "Who created this shared proposal. Every Lead on the service co-edits the same doc; see contributors.",
       type: "reference",
       to: [{ type: "teamMembers" }],
+    },
+    {
+      name: "contributors",
+      title: "Contributors",
+      description: "Every Lead who has saved an edit to this shared proposal.",
+      type: "array",
+      of: [
+        {
+          type: "object",
+          name: "contributor",
+          fields: [
+            { name: "person", title: "Person", type: "reference", to: [{ type: "teamMembers" }] },
+          ],
+          preview: {
+            select: { alias: "person.alias", name: "person.member_name" },
+            prepare(sel: { alias?: string; name?: string }) {
+              return { title: sel.alias || sel.name || "—" };
+            },
+          },
+        },
+      ],
+    },
+    {
+      name: "submitted_by",
+      title: "Submitted by",
+      description: "Who last moved this proposal to “pending” for review.",
+      type: "reference",
+      to: [{ type: "teamMembers" }],
+      readOnly: true,
+    },
+    {
+      name: "last_edited_by",
+      title: "Last edited by",
+      type: "reference",
+      to: [{ type: "teamMembers" }],
+      readOnly: true,
+    },
+    {
+      name: "last_edited_at",
+      title: "Last edited",
+      type: "datetime",
+      readOnly: true,
     },
     {
       name: "songs",
