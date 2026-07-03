@@ -19,12 +19,13 @@ async function getRoleDoc(roleId: string, leadId: string) {
   return doc ?? null;
 }
 
-async function getProposalsForService(currentLeadId: string, roleId: string) {
-  const all = await serverClient.fetch(
-    `*[_type == "setlistProposal" && service_ref._ref == $roleId] {
-      _id, status, lead_notes, admin_notes,
-      "isOwn": lead._ref == $currentLeadId,
-      "leadName": coalesce(lead->alias, lead->member_name),
+// The ONE shared proposal for this service (matches legacy random-id docs too).
+async function getSharedProposal(roleId: string) {
+  return serverClient.fetch(
+    `*[_type == "setlistProposal" && service_ref._ref == $roleId] | order(_createdAt asc)[0] {
+      _id, _rev, status, lead_notes, admin_notes,
+      "createdById": lead->_id,
+      "contributors": contributors[]{ "id": person->_id, "name": coalesce(person->alias, person->member_name) },
       songs[] {
         _key, play_key, medley_tag,
         "song_id": song._ref,
@@ -33,11 +34,8 @@ async function getProposalsForService(currentLeadId: string, roleId: string) {
         "key": song->key
       }
     }`,
-    { currentLeadId, roleId }
+    { roleId }
   );
-  const myProposal    = (all as any[]).find(p => p.isOwn)  ?? null;
-  const coLeadProposal = (all as any[]).find(p => !p.isOwn) ?? null;
-  return { myProposal, coLeadProposal };
 }
 
 export default async function ProposePage({
@@ -54,7 +52,7 @@ export default async function ProposePage({
   const roleDoc = await getRoleDoc(roleId, leadId);
   if (!roleDoc) notFound();
 
-  const { myProposal, coLeadProposal } = await getProposalsForService(leadId, roleId);
+  const shared = await getSharedProposal(roleId);
 
   const serviceType: ServiceType =
     roleDoc._type === "sunday_role" ? "sunday" :
@@ -76,8 +74,8 @@ export default async function ProposePage({
             service_type: serviceType,
             service_date: serviceDate,
           }}
-          existingProposal={myProposal ?? null}
-          coLeadProposal={coLeadProposal ?? null}
+          proposal={shared ?? null}
+          currentUserId={leadId}
         />
       </div>
     </div>
