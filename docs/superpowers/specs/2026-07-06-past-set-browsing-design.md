@@ -53,9 +53,11 @@ URL via `Link`/router navigation (no client fetch, no local data state).
 - **Siguiente ›** — `?m=(anchorMonth + 1)`. No special-casing of the current
   month (see the no-clear-on-current rule above); it always links to a real
   month browse. Shown in both modes.
-- **Month label** — the anchored month, Spanish, e.g. "julio 2026". In the
-  default (no-param) view the label still reads the current month but the view is
-  the rolling window; a subtle "próximos" hint distinguishes it.
+- **Month label** — the anchored month, Spanish. **Reuse the existing
+  `MONTH_NAMES` constant in `CalendarView` for consistency** ("Julio 2026"), not
+  an `es-ES` locale formatter (which yields "julio de 2026"). In the default
+  (no-param) view the label reads the current month but the view is the rolling
+  window; a subtle "próximos" hint distinguishes it.
 - **Month jump** — a themed control (native `<input type="month">` or a compact
   dropdown) → `?m=<selected>` for any month, current included.
 - **Hoy** — clears the param (→ `/schedule`, the live rolling view); shown only
@@ -89,20 +91,27 @@ To avoid the two empty states double-rendering (the page-level check at
 `page.tsx:132` **and** `CalendarView`'s list-view check both fire on no data),
 consolidate to a single empty state. Simplest: drop the page-level check and let
 `CalendarView` own the empty state for both grid and list, passed the mode/label
-so it reads correctly. The nav bar stays active on empty so the user can keep
-paging.
+so it reads correctly. **Note the grid view currently has *no* empty state**
+(`CalendarView.tsx:155-169` renders the month grid unconditionally) — only the
+list view does (`:174`). So this isn't just moving the list's empty state: add a
+grid empty state too. Placement: render the empty message **in place of** the
+grid/list body (not above a rendered-but-empty grid), keeping the nav bar and
+view toggle visible so the user can keep paging.
 
 ## Data / query changes
 
-`SCHEDULE_QUERY` is reused as-is, parameterized on bounds:
+`SCHEDULE_QUERY` is reused **verbatim** — the query text and its existing
+parameter names (`$today`, `$limit`, `$weekStart`) do **not** change; only the
+values bound to them change. Do **not** introduce `$from`/`$to` params.
 
-- Default mode passes `$today`/`$limit` (= today + 95d) and `$weekStart` exactly
-  as today.
-- Browse mode passes `$from` = `YYYY-MM-01`, `$limit`/`$to` = last day of the
-  month, and `$weekStart` = `$from`.
+- Default mode: `$today` = local today, `$limit` = today + 95d, `$weekStart` =
+  today (exactly as now).
+- Browse mode: `$today` = `YYYY-MM-01` (month start), `$limit` = last day of the
+  month, `$weekStart` = `YYYY-MM-01`.
 - `week`-keyed types (`featuredSongs`, `saturdarSongs`, `sunday_role`,
-  `saturday_role`) and the `date`-keyed `special_role` are already both handled
-  by the query; only the bound values change.
+  `saturday_role`) use `$today`/`$limit`; the `date`-keyed `special_role` uses
+  `$weekStart`/`$limit` — all already in the query. `published != false` stays on
+  the three member-facing role clauses. Only the bound values change.
 
 `revalidate = 60` is unchanged.
 
