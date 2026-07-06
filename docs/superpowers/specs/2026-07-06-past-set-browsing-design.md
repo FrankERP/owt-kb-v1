@@ -129,16 +129,19 @@ All month math is pinned to America/Mexico_City:
 
 ## Modules / components
 
-- **`app/utils/scheduleMonths.ts`** (new, pure, unit-tested):
+- **`app/utils/scheduleMonths.ts`** (new, pure, unit-tested, fully deterministic
+  — no clock/`Date.now`, no React/Sanity imports):
   - `parseMonthParam(raw): string | null` — validates `YYYY-MM` (real month
     01–12); returns null on anything malformed.
-  - `currentMonth(): string` — TZ-pinned current `YYYY-MM`.
-  - `isCurrentMonth(ym): boolean`.
   - `addMonths(ym, n): string`.
   - `monthBounds(ym): { from: string; to: string }` — first/last day ISO.
-  - Optional `prevHref`/`nextHref`/`jumpHref` helpers returning `?m=` targets so
-    link construction is pure and testable. (No "clears on current month" logic —
-    only **Hoy** clears the param, which is a static `/schedule` link.)
+  - `monthLabel(ym): string` — e.g. "Julio 2026", from the shared
+    `MONTH_NAMES_ES` array (also consumed by `CalendarView`'s month grid).
+  - `scheduleHref(ym: string | null): string` — `?m=` target, or `/schedule`
+    when null. (No "clears on current month" logic — only **Hoy** passes null;
+    the current-month "anchor" for the nav is derived from `CalendarView`'s
+    existing `todayStr`, so no separate `currentMonth()`/`isCurrentMonth()`
+    helper is needed.)
 - **`app/(client)/schedule/page.tsx`**: read+validate `searchParams.m`, pick
   default vs browse bounds, fetch, pass `viewMonth` (undefined in default mode)
   to `CalendarView`. **Next 16 async `searchParams`:** the prop is typed
