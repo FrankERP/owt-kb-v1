@@ -29,30 +29,38 @@ server component using ISR — past data is immutable, so caching is ideal.
 | URL | View | Data window |
 |-----|------|-------------|
 | `/schedule` (no param) | **Default** — unchanged | today → today + 95 days (rolling), specials from week start |
-| `/schedule?m=YYYY-MM` | **Browse** — single month | first day → last day of that month |
+| `/schedule?m=YYYY-MM` | **Browse** — single month (any month, incl. current) | first day → last day of that month |
 
-**Invariant rule:** *the current month is always the default view.* Navigating
-or jumping to the current month clears the param (→ `/schedule`), returning the
-user to the live 95-day rolling view. Any month other than the current one is a
-single-month browse. This keeps one canonical URL for "now" and preserves the
-exact current default behavior and its cache entry.
+**No-param = the live landing view.** `/schedule` with no param is the default
+95-day rolling view, unchanged, and remains the canonical "home" URL and cache
+entry. **The param is fully independent of it:** `?m=YYYY-MM` browses that whole
+month with full-month bounds — and this is true *including the current month*.
+Browsing the current month therefore shows the **entire** current month from day
+1, so current-month services that are already in the past (dated before today,
+which the default `week >= today` window excludes) are reachable. The **Hoy**
+button clears the param to return to the live rolling view. There is
+deliberately **no** "current month clears the param" rule — paging or jumping to
+the current month lands on `?m=<current-month>` (a real full-month browse), which
+is what makes early-this-month past sets visible.
 
 ### Navigation bar (in `CalendarView`)
 
 Rendered above the existing grid, in both modes. State is driven entirely by the
-URL via `Link`/router navigation (no client fetch, no local data state):
+URL via `Link`/router navigation (no client fetch, no local data state).
+`anchorMonth` = `m` when present, else the current month (America/Mexico_City):
 
-- **‹ Anterior** — anchor − 1 month → `?m=`
-- **Siguiente ›** — anchor + 1 month; if that equals the current month, links to
-  `/schedule` (clears param). Present in browse mode; in the default view it is
-  hidden/disabled (already at the leading edge).
-- **Month label** — the anchored month (`currentMonth` when no param), Spanish,
-  e.g. "julio 2026".
+- **‹ Anterior** — `?m=(anchorMonth − 1)`.
+- **Siguiente ›** — `?m=(anchorMonth + 1)`. No special-casing of the current
+  month (see the no-clear-on-current rule above); it always links to a real
+  month browse. Shown in both modes.
+- **Month label** — the anchored month, Spanish, e.g. "julio 2026". In the
+  default (no-param) view the label still reads the current month but the view is
+  the rolling window; a subtle "próximos" hint distinguishes it.
 - **Month jump** — a themed control (native `<input type="month">` or a compact
-  dropdown) to jump to any month. Selecting the current month clears the param.
-- **Hoy** — clears the param; shown only while browsing.
+  dropdown) → `?m=<selected>` for any month, current included.
+- **Hoy** — clears the param (→ `/schedule`, the live rolling view); shown only
+  while browsing (`m` present).
 
-`anchorMonth` = `m` when present, else the current month (America/Mexico_City).
 The existing **Calendario / Lista** toggle and today-highlight are preserved.
 
 ### What each set shows
@@ -64,10 +72,25 @@ older backfilled weeks, which have `featuredSongs`/`saturdarSongs` setlists but
 no role docs. `DayCard` already tolerates missing team, so no change is needed
 there. `published != false` filtering is preserved on member-facing reads.
 
-### Empty months
+### Empty months & mode-aware copy
 
-A month with no services shows a friendly Spanish empty state; the nav bar stays
-active so the user can keep paging.
+Three existing hardcoded strings assume the "upcoming" framing and are wrong in
+browse mode — all must become mode-aware:
+
+- `schedule/page.tsx:130` — `<h2>Próximos fines de semana</h2>` → in browse mode,
+  the browsed month label (e.g. "Julio 2026").
+- `schedule/page.tsx:132-134` — empty state "No hay roles asignados para los
+  próximos tres meses." → generic/month-aware (e.g. "No hay servicios en
+  <mes>.").
+- `CalendarView.tsx:174-176` — list-view empty state, same string → same
+  treatment.
+
+To avoid the two empty states double-rendering (the page-level check at
+`page.tsx:132` **and** `CalendarView`'s list-view check both fire on no data),
+consolidate to a single empty state. Simplest: drop the page-level check and let
+`CalendarView` own the empty state for both grid and list, passed the mode/label
+so it reads correctly. The nav bar stays active on empty so the user can keep
+paging.
 
 ## Data / query changes
 
@@ -104,31 +127,60 @@ All month math is pinned to America/Mexico_City:
   - `isCurrentMonth(ym): boolean`.
   - `addMonths(ym, n): string`.
   - `monthBounds(ym): { from: string; to: string }` — first/last day ISO.
-  - Optional `prevHref`/`nextHref`/`jumpHref` helpers so link targets (including
-    the "current month clears the param" rule) are pure and testable.
-- **`app/(client)/schedule/page.tsx`**: read+validate `searchParams.m` (await —
-  Next 16 async searchParams), pick default vs browse bounds, fetch, pass
-  `viewMonth` (undefined in default mode) to `CalendarView`.
-- **`app/components/CalendarView.tsx`**: accept `viewMonth?: string`; when set,
-  render the single anchored month (grid + list) instead of the 3-month roll;
-  render the nav bar in both modes; keep the existing toggle and highlight.
+  - Optional `prevHref`/`nextHref`/`jumpHref` helpers returning `?m=` targets so
+    link construction is pure and testable. (No "clears on current month" logic —
+    only **Hoy** clears the param, which is a static `/schedule` link.)
+- **`app/(client)/schedule/page.tsx`**: read+validate `searchParams.m`, pick
+  default vs browse bounds, fetch, pass `viewMonth` (undefined in default mode)
+  to `CalendarView`. **Next 16 async `searchParams`:** the prop is typed
+  `searchParams: Promise<{ m?: string }>` and must be `await`ed. There is no
+  existing server-component precedent in this repo (the only `searchParams` use,
+  `auth/signin/page.tsx:10`, is a client `useSearchParams`), so confirm the shape
+  explicitly and lean on `npx tsc --noEmit` to catch a mistyped signature.
+- **`app/components/CalendarView.tsx`**: accept `viewMonth?: string`. This is
+  **more than a passthrough prop** — the two views compute their months
+  differently and must be handled separately:
+  - **Grid view**: today the month list is hardcoded as `[0,1,2]` offsets from
+    `todayStr` (`CalendarView.tsx:95-99`). Rewrite: when `viewMonth` is set,
+    `months = [that single month]`; else keep the `[0,1,2]`-from-today roll. The
+    per-cell today-dot (`:319`, `dateStr === todayStr`) is untouched and simply
+    never matches in a non-current browsed month.
+  - **List view**: `getWeekends(activeDays)` (`:49-75`) already renders whatever
+    data it is given, grouped by **Sunday-anchored** week key (`:57-59`,
+    `daysToSun`). In browse mode it is passed only the month's services, so no
+    grid-month rewrite is needed there — **but** a weekend that straddles the
+    month boundary splits: a browsed month's trailing **Saturday** whose Sunday
+    falls in the next month renders as a lone card, and a leading **Sunday**
+    whose Saturday was in the prior month likewise renders alone. **This is
+    accepted, intentional behavior** — each card is a real service dated within
+    the browsed month; its weekend partner shows when you page to the adjacent
+    month. We deliberately do **not** widen the query bounds to keep pairs
+    together (added complexity for a cosmetic edge). The plan must not treat
+    these lone cards as a bug.
+  - Render the nav bar in both modes; own the (mode-aware) empty state; keep the
+    existing Calendario/Lista toggle.
 
 ## Edge cases
 
 - Invalid / malformed `m` → treated as no param (default view).
-- `m` = current month → redirect/normalize to `/schedule` (canonical) — or
-  simply render default; links never produce this URL.
-- Months with no data → empty state, nav still works.
+- `m` = current month → a real full-month browse of the current month (shows the
+  whole month including already-past services this month). **Not** normalized to
+  `/schedule`. `/schedule` (no param) remains the separate live rolling view,
+  reached via **Hoy**.
+- Weekend straddling a month boundary → lone Sat or Sun card in the browsed
+  month (see List view above). Intended, not a bug.
+- Months with no data → single mode-aware empty state, nav still works.
 - Far past/future → bounded only by data; nav never dead-ends.
-- Grid/List toggle and today-dot behave the same; today-dot only appears in
-  months containing today.
+- Grid/List toggle behave the same; today-dot only appears in the month
+  containing today (so never in a non-current browsed month).
 
 ## Testing
 
 - Unit tests (vitest) for every `scheduleMonths.ts` helper: param
   parse/validate (valid, out-of-range month, garbage, empty), `addMonths` across
-  year boundaries, `monthBounds` incl. February/leap and 30/31-day months,
-  `isCurrentMonth`, and the href helpers' "clear param on current month" rule.
+  year boundaries (Jan→Dec, Dec→Jan), `monthBounds` incl. February/leap and
+  30/31-day months, `isCurrentMonth`, and the `prevHref`/`nextHref`/`jumpHref`
+  target construction.
 - `npx tsc --noEmit` and `npm test` must pass before claiming done.
 
 ## Rollout
