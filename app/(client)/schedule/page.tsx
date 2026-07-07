@@ -3,7 +3,7 @@ import { client } from "@/sanity/lib/client";
 import Navbar from "@/app/components/Navbar";
 import CalendarView, { ActiveDay } from "@/app/components/CalendarView";
 import { SundayRole, SaturdayRole, Setlist, SpecialRole, SetlistSong } from "@/app/utils/interface";
-import { parseMonthParam, monthBounds, monthLabel } from "@/app/utils/scheduleMonths";
+import { parseMonthParam, monthRangeLabel, windowBounds, WINDOW_MONTHS } from "@/app/utils/scheduleMonths";
 
 export const metadata: Metadata = {
   title: "Calendario — Oasis Worship Team",
@@ -53,9 +53,10 @@ async function getScheduleData(viewMonth: string | null) {
   let weekStart: string;
 
   if (viewMonth) {
-    // Browse mode: the whole selected month (day 1 → last day), incl. the
-    // current month, so already-past services this month are reachable.
-    const { from, to } = monthBounds(viewMonth);
+    // Browse mode: a WINDOW_MONTHS window starting at the selected month
+    // (day 1 of the anchor → last day of the final month), incl. the current
+    // month, so already-past services this month are reachable.
+    const { from, to } = windowBounds(viewMonth, WINDOW_MONTHS);
     today = from;
     limit = to;
     weekStart = from;
@@ -147,7 +148,7 @@ export default async function SchedulePage({
       <Navbar title="Calendario" tags schedule />
       <div className="mx-auto max-w-4xl px-6 pt-10 pb-16">
         <h2 className="font-display text-center text-2xl md:text-3xl font-bold mb-10">
-          {viewMonth ? monthLabel(viewMonth) : "Próximos fines de semana"}
+          {viewMonth ? monthRangeLabel(viewMonth, WINDOW_MONTHS) : "Próximos fines de semana"}
         </h2>
         <CalendarView activeDays={activeDays} viewMonth={viewMonth} />
       </div>
