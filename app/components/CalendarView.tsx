@@ -5,7 +5,7 @@ import { DayCard } from "./DayCard";
 import { Setlist } from "../utils/interface";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MONTH_NAMES_ES, addMonths, monthLabel, scheduleHref } from "../utils/scheduleMonths";
+import { MONTH_NAMES_ES, addMonths, monthRangeLabel, scheduleHref, windowMonths, WINDOW_MONTHS } from "../utils/scheduleMonths";
 
 export type ActiveDay = {
   day: string; // "Sábado" | "Domingo" | any special service name
@@ -97,7 +97,10 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
 
   const [todayYear, todayMonth] = todayStr.split("-").map(Number);
   const months = viewMonth
-    ? [{ year: Number(viewMonth.slice(0, 4)), month: Number(viewMonth.slice(5, 7)) - 1 }]
+    ? windowMonths(viewMonth, WINDOW_MONTHS).map((ym) => ({
+        year: Number(ym.slice(0, 4)),
+        month: Number(ym.slice(5, 7)) - 1,
+      }))
     : [0, 1, 2].map((offset) => {
         const d = new Date(todayYear, todayMonth - 1 + offset, 1);
         return { year: d.getFullYear(), month: d.getMonth() };
@@ -105,7 +108,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
 
   const isEmpty = Object.keys(activeDays).length === 0;
   const emptyMessage = viewMonth
-    ? `No hay servicios en ${monthLabel(viewMonth)}.`
+    ? `No hay servicios en ${monthRangeLabel(viewMonth, WINDOW_MONTHS)}.`
     : "No hay servicios próximos.";
 
   const selectedEntries = selected ? (activeDays[selected] ?? []) : [];
@@ -116,21 +119,21 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
       {/* Month navigation */}
       <div className="flex items-center justify-center gap-4 mb-4">
         <Link
-          href={scheduleHref(addMonths(anchorMonth, -1))}
-          aria-label="Mes anterior"
+          href={scheduleHref(addMonths(anchorMonth, -WINDOW_MONTHS))}
+          aria-label="Meses anteriores"
           className="px-3 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest text-gray-400 hover:text-[#C8D8EB] hover:border-[#00bfff]/40 transition-colors"
         >
           ‹ Anterior
         </Link>
-        <div className="text-center min-w-[9rem]">
-          <p className="font-display text-base font-bold uppercase">{monthLabel(anchorMonth)}</p>
+        <div className="text-center min-w-[13rem]">
+          <p className="font-display text-base font-bold uppercase">{monthRangeLabel(anchorMonth, WINDOW_MONTHS)}</p>
           {!viewMonth && (
             <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">Próximos</p>
           )}
         </div>
         <Link
-          href={scheduleHref(addMonths(anchorMonth, 1))}
-          aria-label="Mes siguiente"
+          href={scheduleHref(addMonths(anchorMonth, WINDOW_MONTHS))}
+          aria-label="Meses siguientes"
           className="px-3 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest text-gray-400 hover:text-[#C8D8EB] hover:border-[#00bfff]/40 transition-colors"
         >
           Siguiente ›
@@ -211,7 +214,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
 
       {/* Calendar view */}
       {!isEmpty && view === "calendar" && (
-        <div className={viewMonth ? "max-w-sm mx-auto" : "grid grid-cols-1 md:grid-cols-3 gap-10"}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
           {months.map(({ year, month }) => (
             <MonthGrid
               key={`${year}-${month}`}

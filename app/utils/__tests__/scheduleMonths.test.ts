@@ -4,7 +4,11 @@ import {
   addMonths,
   monthBounds,
   monthLabel,
+  monthRangeLabel,
   scheduleHref,
+  windowBounds,
+  windowMonths,
+  WINDOW_MONTHS,
 } from "@/app/utils/scheduleMonths";
 
 describe("parseMonthParam", () => {
@@ -22,6 +26,13 @@ describe("parseMonthParam", () => {
     expect(parseMonthParam("")).toBeNull();
     expect(parseMonthParam(undefined)).toBeNull();
     expect(parseMonthParam(null)).toBeNull();
+  });
+  it("rejects implausible years and accepts the bound edges", () => {
+    expect(parseMonthParam("1999-05")).toBeNull();
+    expect(parseMonthParam("2101-05")).toBeNull();
+    expect(parseMonthParam("0000-05")).toBeNull();
+    expect(parseMonthParam("2000-01")).toBe("2000-01");
+    expect(parseMonthParam("2100-12")).toBe("2100-12");
   });
 });
 
@@ -57,5 +68,35 @@ describe("scheduleHref", () => {
   it("builds browse and default targets", () => {
     expect(scheduleHref("2026-07")).toBe("/schedule?m=2026-07");
     expect(scheduleHref(null)).toBe("/schedule");
+  });
+});
+
+describe("WINDOW_MONTHS", () => {
+  it("is a 3-month window", () => {
+    expect(WINDOW_MONTHS).toBe(3);
+  });
+});
+
+describe("windowMonths", () => {
+  it("lists count consecutive months from the anchor, crossing years", () => {
+    expect(windowMonths("2026-07", 3)).toEqual(["2026-07", "2026-08", "2026-09"]);
+    expect(windowMonths("2026-11", 3)).toEqual(["2026-11", "2026-12", "2027-01"]);
+    expect(windowMonths("2026-07", 1)).toEqual(["2026-07"]);
+  });
+});
+
+describe("windowBounds", () => {
+  it("spans from the anchor's first day to the last day of the final month", () => {
+    expect(windowBounds("2026-07", 3)).toEqual({ from: "2026-07-01", to: "2026-09-30" });
+    expect(windowBounds("2026-11", 3)).toEqual({ from: "2026-11-01", to: "2027-01-31" });
+    expect(windowBounds("2026-12", 3)).toEqual({ from: "2026-12-01", to: "2027-02-28" });
+  });
+});
+
+describe("monthRangeLabel", () => {
+  it("collapses a single month, shares the year within one, and spans years", () => {
+    expect(monthRangeLabel("2026-07", 1)).toBe("Julio 2026");
+    expect(monthRangeLabel("2026-07", 3)).toBe("Julio – Septiembre 2026");
+    expect(monthRangeLabel("2026-11", 3)).toBe("Noviembre 2026 – Enero 2027");
   });
 });
