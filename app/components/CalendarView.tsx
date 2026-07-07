@@ -3,6 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { DayCard } from "./DayCard";
 import { Setlist } from "../utils/interface";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { MONTH_NAMES_ES, addMonths, monthLabel, scheduleHref } from "../utils/scheduleMonths";
 
 export type ActiveDay = {
   day: string; // "Sábado" | "Domingo" | any special service name
@@ -17,14 +20,11 @@ export type ActiveDay = {
 
 interface Props {
   activeDays: Record<string, ActiveDay[]>;
+  viewMonth?: string | null; // "YYYY-MM" in browse mode; undefined/null = default rolling view
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const MONTH_NAMES = [
-  "Enero","Febrero","Marzo","Abril","Mayo","Junio",
-  "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre",
-];
 const DAY_HEADERS = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
 
 function toDateStr(year: number, month: number, day: number) {
@@ -76,7 +76,7 @@ function getWeekends(activeDays: Record<string, ActiveDay[]>) {
 
 // ─── Root component ───────────────────────────────────────────────────────────
 
-export default function CalendarView({ activeDays }: Props) {
+export default function CalendarView({ activeDays, viewMonth }: Props) {
   // Pin "today" to Mexico City time so the highlight matches the server-fetched
   // schedule data (which is keyed to that timezone); otherwise a user in another
   // timezone near midnight sees the marker on the wrong day.
@@ -92,17 +92,70 @@ export default function CalendarView({ activeDays }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [dismiss]);
 
+  const router = useRouter();
+  const anchorMonth = viewMonth ?? todayStr.slice(0, 7);
+
   const [todayYear, todayMonth] = todayStr.split("-").map(Number);
-  const months = [0, 1, 2].map((offset) => {
-    const d = new Date(todayYear, todayMonth - 1 + offset, 1);
-    return { year: d.getFullYear(), month: d.getMonth() };
-  });
+  const months = viewMonth
+    ? [{ year: Number(viewMonth.slice(0, 4)), month: Number(viewMonth.slice(5, 7)) - 1 }]
+    : [0, 1, 2].map((offset) => {
+        const d = new Date(todayYear, todayMonth - 1 + offset, 1);
+        return { year: d.getFullYear(), month: d.getMonth() };
+      });
+
+  const isEmpty = Object.keys(activeDays).length === 0;
+  const emptyMessage = viewMonth
+    ? `No hay servicios en ${monthLabel(viewMonth)}.`
+    : "No hay servicios próximos.";
 
   const selectedEntries = selected ? (activeDays[selected] ?? []) : [];
   const weekends = getWeekends(activeDays);
 
   return (
     <>
+      {/* Month navigation */}
+      <div className="flex items-center justify-center gap-4 mb-4">
+        <Link
+          href={scheduleHref(addMonths(anchorMonth, -1))}
+          aria-label="Mes anterior"
+          className="px-3 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest text-gray-400 hover:text-[#C8D8EB] hover:border-[#00bfff]/40 transition-colors"
+        >
+          ‹ Anterior
+        </Link>
+        <div className="text-center min-w-[9rem]">
+          <p className="font-display text-base font-bold uppercase">{monthLabel(anchorMonth)}</p>
+          {!viewMonth && (
+            <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">Próximos</p>
+          )}
+        </div>
+        <Link
+          href={scheduleHref(addMonths(anchorMonth, 1))}
+          aria-label="Mes siguiente"
+          className="px-3 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest text-gray-400 hover:text-[#C8D8EB] hover:border-[#00bfff]/40 transition-colors"
+        >
+          Siguiente ›
+        </Link>
+      </div>
+      <div className="flex items-center justify-center gap-3 mb-8">
+        <label className="flex items-center gap-2">
+          <span className="sr-only">Ir al mes</span>
+          <input
+            type="month"
+            value={anchorMonth}
+            onChange={(e) => { if (e.target.value) router.push(scheduleHref(e.target.value)); }}
+            className="bg-transparent border border-[#003572]/30 dark:border-[#00bfff]/20 rounded-lg px-3 py-1.5 font-label text-xs text-[#C8D8EB] [color-scheme:dark]"
+          />
+        </label>
+        {viewMonth && (
+          <Link
+            href="/schedule"
+            className="px-4 py-1.5 rounded-lg border border-[#00bfff]/40 font-label text-xs uppercase tracking-widest text-[#00bfff] hover:bg-[#003572]/40 transition-colors"
+          >
+            Hoy
+          </Link>
+        )}
+      </div>
+
       {/* View toggle */}
       <div className="flex justify-center mb-8">
         <div className="flex rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 overflow-hidden">
@@ -151,9 +204,14 @@ export default function CalendarView({ activeDays }: Props) {
         </div>
       )}
 
+      {/* Empty state (owns both grid and list) */}
+      {isEmpty && (
+        <p className="text-center font-label text-sm text-gray-400 py-20">{emptyMessage}</p>
+      )}
+
       {/* Calendar view */}
-      {view === "calendar" && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+      {!isEmpty && view === "calendar" && (
+        <div className={viewMonth ? "max-w-sm mx-auto" : "grid grid-cols-1 md:grid-cols-3 gap-10"}>
           {months.map(({ year, month }) => (
             <MonthGrid
               key={`${year}-${month}`}
@@ -169,13 +227,8 @@ export default function CalendarView({ activeDays }: Props) {
       )}
 
       {/* List view */}
-      {view === "list" && (
+      {!isEmpty && view === "list" && (
         <div className="space-y-14">
-          {weekends.length === 0 && (
-            <p className="text-center font-label text-sm text-gray-400 py-20">
-              No hay roles asignados para los próximos tres meses.
-            </p>
-          )}
           {weekends.map(([sundayKey, { sat, satDate, sun, sunDate, specials }]) => {
             const label = new Date(sundayKey + "T12:00:00").toLocaleDateString("es-ES", {
               month: "long", day: "numeric",
@@ -301,7 +354,7 @@ function MonthGrid({
   return (
     <div>
       <h3 className="font-display text-base md:text-lg font-bold uppercase text-center mb-4 tracking-wide">
-        {MONTH_NAMES[month]} {year}
+        {MONTH_NAMES_ES[month]} {year}
       </h3>
       <div className="grid grid-cols-7 gap-1">
         {DAY_HEADERS.map((h) => (
