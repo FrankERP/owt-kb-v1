@@ -3,6 +3,7 @@ import { client } from "@/sanity/lib/client";
 import Navbar from "@/app/components/Navbar";
 import CalendarView, { ActiveDay } from "@/app/components/CalendarView";
 import { SundayRole, SaturdayRole, Setlist, SpecialRole, SetlistSong } from "@/app/utils/interface";
+import { parseMonthParam, monthBounds, monthLabel } from "@/app/utils/scheduleMonths";
 
 export const metadata: Metadata = {
   title: "Calendario — Oasis Worship Team",
@@ -46,13 +47,27 @@ const SCHEDULE_QUERY = `{
   }
 }`;
 
-async function getScheduleData() {
-  const today = localToday();
-  const [y, m, d] = today.split("-").map(Number);
-  const limit = new Date(Date.UTC(y, m - 1, d + 95)).toISOString().slice(0, 10);
-  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-  const daysToMon = dow === 0 ? -6 : 1 - dow;
-  const weekStart = new Date(Date.UTC(y, m - 1, d + daysToMon)).toISOString().slice(0, 10);
+async function getScheduleData(viewMonth: string | null) {
+  let today: string;
+  let limit: string;
+  let weekStart: string;
+
+  if (viewMonth) {
+    // Browse mode: the whole selected month (day 1 → last day), incl. the
+    // current month, so already-past services this month are reachable.
+    const { from, to } = monthBounds(viewMonth);
+    today = from;
+    limit = to;
+    weekStart = from;
+  } else {
+    // Default mode: rolling today → +95 days (unchanged).
+    today = localToday();
+    const [y, m, d] = today.split("-").map(Number);
+    limit = new Date(Date.UTC(y, m - 1, d + 95)).toISOString().slice(0, 10);
+    const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+    const daysToMon = dow === 0 ? -6 : 1 - dow;
+    weekStart = new Date(Date.UTC(y, m - 1, d + daysToMon)).toISOString().slice(0, 10);
+  }
 
   return client.fetch<{
     sundays: SundayRole[];
@@ -65,8 +80,13 @@ async function getScheduleData() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function SchedulePage() {
-  const { sundays, saturdays, sunSetlists, satSetlists, specials } = await getScheduleData();
+export default async function SchedulePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ m?: string }>;
+}) {
+  const viewMonth = parseMonthParam((await searchParams).m);
+  const { sundays, saturdays, sunSetlists, satSetlists, specials } = await getScheduleData(viewMonth);
 
   const sunSetlistMap = new Map(sunSetlists.map((s) => [s.week.slice(0, 10), s]));
   const satSetlistMap = new Map(satSetlists.map((s) => [s.week.slice(0, 10), s]));
@@ -127,14 +147,9 @@ export default async function SchedulePage() {
       <Navbar title="Calendario" tags schedule />
       <div className="mx-auto max-w-4xl px-6 pt-10 pb-16">
         <h2 className="font-display text-center text-2xl md:text-3xl font-bold mb-10">
-          Próximos fines de semana
+          {viewMonth ? monthLabel(viewMonth) : "Próximos fines de semana"}
         </h2>
-        {Object.keys(activeDays).length === 0 && (
-          <p className="text-center font-label text-sm text-gray-400 py-20">
-            No hay roles asignados para los próximos tres meses.
-          </p>
-        )}
-        <CalendarView activeDays={activeDays} />
+        <CalendarView activeDays={activeDays} viewMonth={viewMonth} />
       </div>
     </div>
   );
