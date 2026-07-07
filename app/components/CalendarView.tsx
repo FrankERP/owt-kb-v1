@@ -183,7 +183,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
       </div>
 
       {/* Legend */}
-      {view === "calendar" && (
+      {!isEmpty && view === "calendar" && (
         <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mb-8">
           {([
             ["#00bfff", "Domingo"],
