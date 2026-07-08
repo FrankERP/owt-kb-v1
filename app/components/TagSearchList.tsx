@@ -49,7 +49,7 @@ const PINNED: Array<{
   },
 ];
 
-export default function TagSearchList({ tags }: { tags: Tag[] }) {
+export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; totalSongs: number }) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortMode>("popular");
 
@@ -57,11 +57,6 @@ export default function TagSearchList({ tags }: { tags: Tag[] }) {
 
   const maxCount = useMemo(
     () => Math.max(1, ...tags.map((t) => t.postCount ?? 0)),
-    [tags]
-  );
-
-  const totalSongs = useMemo(
-    () => tags.reduce((sum, t) => sum + (t.postCount ?? 0), 0),
     [tags]
   );
 
