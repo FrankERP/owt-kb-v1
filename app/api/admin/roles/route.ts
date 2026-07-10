@@ -103,6 +103,12 @@ export async function POST(req: NextRequest) {
   if (!body._type || !body.date) {
     return NextResponse.json({ error: "_type and date required" }, { status: 400 });
   }
+  // Whitelist the service doc types this route may create — never trust an
+  // arbitrary caller-supplied _type into writeClient.create().
+  const ALLOWED_TYPES = ["sunday_role", "saturday_role", "special_role"] as const;
+  if (!(ALLOWED_TYPES as readonly string[]).includes(body._type)) {
+    return NextResponse.json({ error: "invalid _type" }, { status: 400 });
+  }
 
   const dateField = body._type === "special_role" ? "date" : "week";
 

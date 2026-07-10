@@ -2,6 +2,9 @@ import { defineConfig } from "vitest/config";
 import { resolve } from "node:path";
 
 export default defineConfig({
-  test: { environment: "node", include: ["app/**/*.test.ts", "app/**/*.test.mjs", "scripts/**/*.test.mjs"], passWithNoTests: true },
+  // Include tsx and scripts .test.ts too, so those files can't be silently
+  // skipped (a false-green trap). Note: environment is "node" — a .test.tsx that
+  // needs a DOM must set up jsdom itself.
+  test: { environment: "node", include: ["app/**/*.test.{ts,tsx,mjs}", "scripts/**/*.test.{ts,mjs}"], passWithNoTests: true },
   resolve: { alias: { "@": resolve(__dirname, ".") } },
 });
