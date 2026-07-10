@@ -1171,6 +1171,19 @@ def build_schedule_view(result: SolveResult, weeks: int, sat_weeks: Sequence[int
 
 # ─── Shared callable interface ────────────────────────────────────────────────
 
+# Solver budget knobs are caller-supplied. Clamp them to safe ceilings so an
+# (authenticated) request cannot pin the Cloud Run container to its 120s timeout
+# or thrash it with an excessive worker count. Legitimate callers send small
+# values (defaults 5s / 1 worker / 40s), so these ceilings never clip real use.
+_SOLVER_MAX_TIME_CEIL = 30
+_SOLVER_WORKERS_CEIL = 8
+_SOLVER_TOTAL_BUDGET_CEIL = 110
+
+
+def _clamp(value: int, lo: int, hi: int) -> int:
+    return max(lo, min(hi, value))
+
+
 def solve_from_dict(data: Dict) -> Dict:
     """
     Run the solver from a plain dict (used by GCF handler, API routes, etc.).
@@ -1186,9 +1199,15 @@ def solve_from_dict(data: Dict) -> Dict:
             dsl_restrictions=list(data.get("dsl_rules", [])),
             history=list(data.get("history", [])),
             seed=data.get("seed"),
-            solver_max_time_seconds=int(data.get("solver_max_time_seconds", 5)),
-            solver_num_search_workers=int(data.get("solver_num_search_workers", 1)),
-            solver_total_budget_seconds=int(data.get("solver_total_budget_seconds", 40)),
+            solver_max_time_seconds=_clamp(
+                int(data.get("solver_max_time_seconds", 5)), 1, _SOLVER_MAX_TIME_CEIL
+            ),
+            solver_num_search_workers=_clamp(
+                int(data.get("solver_num_search_workers", 1)), 1, _SOLVER_WORKERS_CEIL
+            ),
+            solver_total_budget_seconds=_clamp(
+                int(data.get("solver_total_budget_seconds", 40)), 1, _SOLVER_TOTAL_BUDGET_CEIL
+            ),
             discourage_consecutive_role_repeats=bool(
                 data.get("discourage_consecutive", True)
             ),

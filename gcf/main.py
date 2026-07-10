@@ -6,7 +6,7 @@ Deployment (from project root):
 
 Environment variables (set via --set-env-vars or Cloud Console):
     OWT_SOLVER_API_KEY   — shared secret; Vercel sends it as X-Api-Key header.
-                           Leave unset to disable key checks (not recommended).
+                           REQUIRED: if unset, the endpoint fails closed (503).
 """
 
 import json
@@ -36,8 +36,14 @@ def solve(request):
         return (json.dumps({"ok": False, "error": "Method not allowed"}), 405,
                 {"Content-Type": "application/json"})
 
-    # API key guard
-    if _API_KEY and request.headers.get("X-Api-Key") != _API_KEY:
+    # API key guard — FAIL CLOSED. This function is deployed publicly invokable
+    # (allUsers), so the shared secret is the only barrier to a CPU-heavy solve.
+    # If the key is unset (e.g. Secret Manager binding removed or rotated to
+    # empty), reject everything rather than silently running unauthenticated.
+    if not _API_KEY:
+        return (json.dumps({"ok": False, "error": "Server misconfigured: API key unset"}),
+                503, {"Content-Type": "application/json"})
+    if request.headers.get("X-Api-Key") != _API_KEY:
         return (json.dumps({"ok": False, "error": "Unauthorized"}), 401,
                 {"Content-Type": "application/json"})
 
@@ -47,6 +53,13 @@ def solve(request):
         return (json.dumps({"ok": False, "error": "Invalid JSON body"}), 400,
                 {"Content-Type": "application/json"})
 
-    result = solve_from_dict(data)
+    # Never let an unexpected solver error escape as an opaque 500 with a stack
+    # trace; solve_from_dict already maps Value/RuntimeError to {"ok": False},
+    # this catches anything else (KeyError, TypeError from malformed input, …).
+    try:
+        result = solve_from_dict(data)
+    except Exception:
+        return (json.dumps({"ok": False, "error": "Solver failed"}), 500,
+                {"Content-Type": "application/json"})
     status = 200 if result.get("ok") else 422
     return (json.dumps(result), status, {"Content-Type": "application/json"})
