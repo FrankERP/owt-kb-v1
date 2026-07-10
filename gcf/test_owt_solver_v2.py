@@ -219,5 +219,43 @@ class TestDefaultConfigRegression(unittest.TestCase):
         self.assertEqual(len(result.assignments) > 0, True)
 
 
+class TestSolverBudgetClamping(unittest.TestCase):
+    """Caller-supplied solver budgets are clamped to safe ceilings (DoS guard)."""
+
+    def test_clamp_helper(self):
+        from owt_solver_v2 import _clamp
+        self.assertEqual(_clamp(5, 1, 30), 5)      # within range unchanged
+        self.assertEqual(_clamp(0, 1, 30), 1)      # below floor -> floor
+        self.assertEqual(_clamp(-3, 1, 110), 1)    # negative -> floor
+        self.assertEqual(_clamp(1000, 1, 8), 8)    # above ceiling -> ceiling
+
+    def test_solve_from_dict_clamps_extreme_budgets(self):
+        import owt_solver_v2 as mod
+        captured = {}
+        orig = mod.solve_schedule
+
+        def spy(config):
+            captured["config"] = config
+            return orig(config)
+
+        data = make_config()
+        data.update({  # hostile values a malicious caller might send
+            "solver_max_time_seconds": 999,
+            "solver_num_search_workers": 1000,
+            "solver_total_budget_seconds": 9999,
+        })
+        mod.solve_schedule = spy
+        try:
+            res = solve_from_dict(data)
+        finally:
+            mod.solve_schedule = orig
+
+        cfg = captured["config"]
+        self.assertEqual(cfg.solver_max_time_seconds, 30)      # ceil
+        self.assertEqual(cfg.solver_num_search_workers, 8)     # ceil
+        self.assertEqual(cfg.solver_total_budget_seconds, 110) # ceil
+        self.assertTrue(res.get("ok"))  # still solves fine with clamped budgets
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
