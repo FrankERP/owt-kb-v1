@@ -51,6 +51,20 @@ export async function PATCH(
     }
   }
 
+  // Ownership/type guard: this is the song-content editor endpoint, so the
+  // target MUST be a `post`. Without this, a manager (incl. content-editor)
+  // could PATCH any doc by _id — overwriting a teamMembers / role /
+  // setlistProposal doc's title/author/body/tags.
+  const target = await writeClient.fetch<{ _type: string } | null>(
+    `*[_id == $id][0]{ _type }`, { id }
+  );
+  if (!target) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (target._type !== "post") {
+    return NextResponse.json({ error: "Not a song" }, { status: 400 });
+  }
+
   const patch: Record<string, unknown> = {};
   if (body.title?.trim())  patch.title  = body.title.trim();
   if (body.authorIds != null) {

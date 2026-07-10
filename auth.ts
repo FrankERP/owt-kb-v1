@@ -4,7 +4,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { serverClient, writeClient } from "./sanity/lib/serverClient";
 import { verifyGoogleIdToken } from "@/app/utils/googleIdToken";
-import { isMemberActive } from "@/app/utils/memberAccess";
+import { isMemberActive, getMemberAccess } from "@/app/utils/memberAccess";
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
@@ -215,18 +215,29 @@ export const authOptions: NextAuthOptions = {
         } catch { /* non-fatal */ }
       }
 
-      // Revocation: on token refresh, drop the session if the (effective) member
-      // was disabled/removed. During impersonation, also require the REAL admin to
-      // still be active, so a disabled super-admin can't keep operating as a target.
+      // Revocation + role refresh: on every token refresh, re-read the live
+      // member doc (30s TTL, single fetch shared with the revocation check).
+      // Drop the session if the (effective) member — or, during impersonation,
+      // the REAL admin — was disabled/removed. Then overwrite the token role
+      // with the CURRENT role, so a demotion/promotion takes effect within the
+      // TTL instead of persisting for the 7-day token lifetime.
       const effectiveId = token.sanityId;
       const realAdminId = token.__realAdmin?.sanityId;
+      const eff = effectiveId ? await getMemberAccess(effectiveId) : null;
+      const real = realAdminId ? await getMemberAccess(realAdminId) : null;
       if (
-        (effectiveId && !(await isMemberActive(effectiveId))) ||
-        (realAdminId && !(await isMemberActive(realAdminId)))
+        (effectiveId && !eff?.active) ||
+        (realAdminId && !real?.active)
       ) {
         // Returning a token without sanityId makes proxy.ts + guards treat it as unauthenticated.
         return { ...token, sanityId: undefined, role: undefined };
       }
+
+      // Effective identity carries its own (or the impersonated target's) live
+      // role; keep the real admin's snapshot role fresh too so that stopping
+      // impersonation restores their CURRENT role, not a stale one.
+      if (eff) token.role = (eff.role ?? "member") as OWTRole;
+      if (real && token.__realAdmin) token.__realAdmin.role = (real.role ?? "member") as OWTRole;
 
       return token;
     },
