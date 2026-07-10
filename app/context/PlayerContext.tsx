@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useRef, useCallback, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useRef, useCallback, useMemo, useEffect, ReactNode } from "react";
 
 export interface AudioTrack {
   url: string;
@@ -139,8 +139,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setSheetPlayKey(null);
   }, []);
 
+  // Memoize the context value so a new identity is produced only when actual
+  // player/sheet state changes — not on every provider render. Without this,
+  // every consumer (all ~140 song cards) re-renders on any parent render. The
+  // callbacks are already stable (useCallback), so only the state values matter.
+  const value = useMemo(
+    () => ({ player, playTrack, togglePlay, closePlayer, seek, getAudio, sheet, sheetLoading, sheetError, sheetPlayKey, openSheet, closeSheet }),
+    [player, playTrack, togglePlay, closePlayer, seek, getAudio, sheet, sheetLoading, sheetError, sheetPlayKey, openSheet, closeSheet],
+  );
+
   return (
-    <PlayerContext.Provider value={{ player, playTrack, togglePlay, closePlayer, seek, getAudio, sheet, sheetLoading, sheetError, sheetPlayKey, openSheet, closeSheet }}>
+    <PlayerContext.Provider value={value}>
       {children}
     </PlayerContext.Provider>
   );

@@ -15,7 +15,10 @@ function isNew(createdAt?: string) {
   return Date.now() - new Date(createdAt).getTime() < NEW_DAYS * 86400_000;
 }
 
-const PostComponent = ({ post }: Props) => {
+// Memoized: the song grid renders ~140 of these. With a stable player-context
+// value (see PlayerContext useMemo), memoizing here means a card only re-renders
+// when its own `post` prop changes, not on every player interaction.
+const PostComponent = React.memo(({ post }: Props) => {
   const { openSheet } = usePlayer();
   const fresh = isNew(post._createdAt);
 
@@ -93,7 +96,8 @@ const PostComponent = ({ post }: Props) => {
       )}
     </div>
   );
-};
+});
+PostComponent.displayName = "PostComponent";
 
 function EyeIcon() {
   return (
