@@ -9,17 +9,19 @@
 #   bash scripts/deploy-solver-gcf.sh
 #
 # Required env vars (set before running):
-#   GCP_PROJECT        — your Google Cloud project ID
-#   OWT_SOLVER_API_KEY — secret shared with Vercel (any random string)
+#   GCP_PROJECT — your Google Cloud project ID
+#
+# The API key is read from Secret Manager (secret: owt-solver-api-key), matching
+# the CI deploy (cloudbuild.yaml). It is NEVER passed on the command line — that
+# would leak it into `ps`/shell history/Cloud Build logs and reintroduce the
+# plaintext-vs-secret env-var collision that CI has to clean up.
 #
 # After deploying, copy the printed URL into your Vercel environment:
-#   OWT_SOLVER_URL  = <printed URL>
-#   OWT_SOLVER_API_KEY = <same key used here>
+#   OWT_SOLVER_URL = <printed URL>   (OWT_SOLVER_API_KEY = the Secret Manager value)
 
 set -euo pipefail
 
 : "${GCP_PROJECT:?Set GCP_PROJECT to your Google Cloud project ID}"
-: "${OWT_SOLVER_API_KEY:?Set OWT_SOLVER_API_KEY to a random secret string}"
 
 REGION="us-central1"
 FUNCTION_NAME="owt-solver"
@@ -41,7 +43,7 @@ gcloud functions deploy "$FUNCTION_NAME" \
   --entry-point=solve \
   --memory="$MEMORY" \
   --timeout="$TIMEOUT" \
-  --set-env-vars="OWT_SOLVER_API_KEY=$OWT_SOLVER_API_KEY"
+  --set-secrets="OWT_SOLVER_API_KEY=owt-solver-api-key:latest"
 
 echo ""
 echo "✓ Deployed. Function URL:"
@@ -55,6 +57,6 @@ gcloud functions describe "$FUNCTION_NAME" \
        --format="value(httpsTrigger.url)"
 
 echo ""
-echo "Add these to your Vercel environment variables:"
-echo "  OWT_SOLVER_URL      = <URL above>"
-echo "  OWT_SOLVER_API_KEY  = $OWT_SOLVER_API_KEY"
+echo "Add to your Vercel environment variables:"
+echo "  OWT_SOLVER_URL     = <URL above>"
+echo "  OWT_SOLVER_API_KEY = <the owt-solver-api-key Secret Manager value>"

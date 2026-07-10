@@ -19,9 +19,9 @@ describe("normalizeText", () => {
     expect(normalizeText("Corazón")).toBe("corazon");
   });
 
-  it("preserves ñ as a distinct letter (only combining marks are stripped)", () => {
-    // ñ is a precomposed letter; NFD splits it but we only strip combining
-    // marks, so the base "n" remains and the tilde is removed.
+  it("folds ñ to n (accent-insensitive: 'niño' matches 'nino')", () => {
+    // NFD splits the precomposed ñ into "n" + combining tilde; we strip the
+    // combining mark, so ñ folds to a bare "n" — intended for search matching.
     expect(normalizeText("Niño")).toBe("nino");
   });
 
