@@ -109,6 +109,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
               <button
                 key={mode}
                 onClick={() => setSort(mode)}
+                aria-pressed={sort === mode}
                 className={`px-3 py-1.5 font-label text-[10px] uppercase tracking-widest transition-colors duration-150
                   ${i > 0 ? "border-l border-[#003572]/20 dark:border-[#00bfff]/15" : ""}
                   ${sort === mode
