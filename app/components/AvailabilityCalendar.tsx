@@ -405,6 +405,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
               <button
                 type="button"
                 onClick={() => setPopover(null)}
+                aria-label="Cerrar"
                 className="text-gray-400 hover:text-gray-300 transition-colors shrink-0 -mt-0.5"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
