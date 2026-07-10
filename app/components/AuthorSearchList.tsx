@@ -43,6 +43,7 @@ export default function AuthorSearchList({ authors, totalSongs }: { authors: Aut
           <div className="flex rounded-lg border border-[#003572]/20 dark:border-[#00bfff]/15 overflow-hidden">
             {(["popular", "alpha"] as SortMode[]).map((mode, i) => (
               <button key={mode} onClick={() => setSort(mode)}
+                aria-pressed={sort === mode}
                 className={`px-3 py-1.5 font-label text-[10px] uppercase tracking-widest transition-colors duration-150 ${i > 0 ? "border-l border-[#003572]/20 dark:border-[#00bfff]/15" : ""} ${sort === mode ? "bg-[#00bfff]/15 text-[#00bfff]" : "text-gray-500 hover:text-gray-300 hover:bg-[#00bfff]/5"}`}>
                 {mode === "popular" ? "Popular" : "A–Z"}
               </button>
