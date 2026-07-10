@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
+import { revalidateServiceViews } from "@/app/utils/revalidate";
+import { revalidatePath } from "next/cache";
 
 export async function GET() {
   const session = await requireActiveSession();
@@ -41,5 +43,8 @@ export async function PATCH(req: NextRequest) {
   }
 
   const doc = await writeClient.patch(session.user.sanityId).set(patch).commit();
+  // A changed alias surfaces on ISR schedule/home/me views.
+  revalidateServiceViews();
+  revalidatePath("/me");
   return NextResponse.json(doc);
 }
