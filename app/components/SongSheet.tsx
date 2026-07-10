@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PortableText } from "next-sanity";
 import { usePlayer, AudioTrack, SongHistoryEntry } from "@/app/context/PlayerContext";
+import { useFocusTrap } from "@/app/utils/useFocusTrap";
 import ChordChart from "./ChordChart";
 import { groupBySections } from "@/app/utils/lyrics";
 
@@ -45,6 +46,9 @@ export default function SongSheet() {
   // Which history week (if any) has its full setlist popover open.
   const [openSetIdx, setOpenSetIdx] = useState<number | null>(null);
 
+  // Move focus into the sheet, trap it, and restore to the trigger on close.
+  const sheetRef = useFocusTrap<HTMLDivElement>(isOpen);
+
   // Reset the setlist popover whenever a different song is loaded into the sheet.
   useEffect(() => { setOpenSetIdx(null); }, [sheet?._id]);
 
@@ -81,10 +85,12 @@ export default function SongSheet() {
 
       {/* Sheet — bottom drawer on mobile, centered modal on lg+ */}
       <div
+        ref={sheetRef}
         role="dialog"
         aria-modal="true"
         aria-label={sheet?.title ? `Canción: ${sheet.title}` : "Detalle de canción"}
-        className="fixed inset-x-0 bottom-0 z-[60] max-h-[92svh] rounded-t-2xl bg-[#0a1929] border-t border-[#00bfff]/20 flex flex-col overflow-hidden lg:inset-auto lg:left-1/2 lg:-translate-x-1/2 lg:bottom-auto lg:top-1/2 lg:-translate-y-1/2 lg:w-full lg:max-w-2xl lg:rounded-2xl lg:border lg:border-[#00bfff]/20 lg:shadow-2xl">
+        tabIndex={-1}
+        className="fixed inset-x-0 bottom-0 z-[60] max-h-[92svh] rounded-t-2xl bg-[#0a1929] border-t border-[#00bfff]/20 flex flex-col overflow-hidden focus:outline-none lg:inset-auto lg:left-1/2 lg:-translate-x-1/2 lg:bottom-auto lg:top-1/2 lg:-translate-y-1/2 lg:w-full lg:max-w-2xl lg:rounded-2xl lg:border lg:border-[#00bfff]/20 lg:shadow-2xl">
 
         {/* Drag handle (mobile only) */}
         <div className="flex justify-center pt-3 pb-1 lg:hidden shrink-0">
