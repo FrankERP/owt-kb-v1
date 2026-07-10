@@ -3,6 +3,7 @@ import { Setlist, SetlistSong, SpecialRole } from "../utils/interface";
 import Navbar from "../components/Navbar";
 import SongSearchList from "../components/SongSearchList";
 import { DayCard } from "../components/DayCard";
+import { publishedSetlist } from "../utils/draftGating";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -80,7 +81,15 @@ export default async function Home() {
 
   const { sunSongs, satSongs, sunRole, satRole, specials } = weekend;
 
-  const hasSaturday = !!(satSongs?.songs?.length || satRole);
+  // Draft-gating: only surface a weekend setlist when its role is published
+  // (the role queries above already filter `published != false`). Otherwise a
+  // draft service would leak its song list to members before publication.
+  const sunSetlist = publishedSetlist(sunRole, sunSongs);
+  const satSetlist = publishedSetlist(satRole, satSongs);
+
+  // A Saturday service is only surfaced when it has a published role — a draft
+  // Saturday (role filtered out) must not appear at all, setlist or otherwise.
+  const hasSaturday = !!satRole;
   const hasSpecials = specials.length > 0;
   const totalCards = (hasSaturday ? 1 : 0) + 1 + specials.length;
 
@@ -119,7 +128,7 @@ export default async function Home() {
             <DayCard
               day="Sábado"
               date={satSongs?.week ?? satRole?.week}
-              setlist={satSongs}
+              setlist={satSetlist}
               leads={satRole?.Lead?.map((m) => m.alias || m.member_name) ?? []}
               instruments={satRole?.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
               fohTeam={satRole?.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
@@ -131,7 +140,7 @@ export default async function Home() {
           <DayCard
             day="Domingo"
             date={sunSongs?.week ?? sunRole?.week}
-            setlist={sunSongs}
+            setlist={sunSetlist}
             leads={sunRole?.Lead?.map((m) => m.alias || m.member_name) ?? []}
             instruments={sunRole?.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
             fohTeam={sunRole?.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
