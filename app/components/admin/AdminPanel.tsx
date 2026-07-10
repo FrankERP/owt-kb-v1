@@ -375,37 +375,37 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
     router.refresh();
   };
 
+  // Category filter — independent of the search query.
+  const categoryFiltered = useMemo(() => {
+    if (!filterValue) return members;
+    return filterKey === "type"
+      ? members.filter((m) => m.memberType?.includes(filterValue))
+      : members.filter((m) => m.role === filterValue);
+  }, [members, filterKey, filterValue]);
+
+  // Build the Fuse index only when the filtered set changes — NOT on every
+  // keystroke. Typing then just re-runs .search() against the existing index.
+  const fuse = useMemo(
+    () => new Fuse(categoryFiltered, {
+      keys: [
+        { name: "alias",       weight: 0.5 },
+        { name: "member_name", weight: 0.4 },
+        { name: "email",       weight: 0.1 },
+      ],
+      threshold: 0.4,
+    }),
+    [categoryFiltered],
+  );
+
   const filteredMembers = useMemo(() => {
-    // 1. Category filter
-    let list = members;
-    if (filterValue) {
-      if (filterKey === "type") {
-        list = list.filter((m) => m.memberType?.includes(filterValue));
-      } else {
-        list = list.filter((m) => m.role === filterValue);
-      }
-    }
-
-    // 2. Fuzzy text search within filtered set
-    if (query.trim()) {
-      const fuse = new Fuse(list, {
-        keys: [
-          { name: "alias",       weight: 0.5 },
-          { name: "member_name", weight: 0.4 },
-          { name: "email",       weight: 0.1 },
-        ],
-        threshold: 0.4,
-      });
-      list = fuse.search(query).map((r) => r.item);
-    }
-
-    // 3. Sort A→Z / Z→A by display name (alias preferred)
+    const list = query.trim() ? fuse.search(query).map((r) => r.item) : categoryFiltered;
+    // Sort A→Z / Z→A by display name (alias preferred)
     return [...list].sort((a, b) => {
       const na = (a.alias?.trim() || a.member_name).toLocaleLowerCase("es");
       const nb = (b.alias?.trim() || b.member_name).toLocaleLowerCase("es");
       return sortDir === "asc" ? na.localeCompare(nb, "es") : nb.localeCompare(na, "es");
     });
-  }, [members, filterKey, filterValue, query, sortDir]);
+  }, [categoryFiltered, fuse, query, sortDir]);
 
   const showToast = (msg: string) => {
     setToast(msg);
