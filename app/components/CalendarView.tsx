@@ -6,6 +6,7 @@ import { Setlist } from "../utils/interface";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MONTH_NAMES_ES, addMonths, monthRangeLabel, scheduleHref, windowMonths, WINDOW_MONTHS } from "../utils/scheduleMonths";
+import { useFocusTrap } from "../utils/useFocusTrap";
 
 export type ActiveDay = {
   day: string; // "Sábado" | "Domingo" | any special service name
@@ -112,6 +113,8 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
     : "No hay servicios próximos.";
 
   const selectedEntries = selected ? (activeDays[selected] ?? []) : [];
+  // Dialog focus management for the day-detail modal (Escape is handled above).
+  const modalRef = useFocusTrap<HTMLDivElement>(selectedEntries.length > 0);
   const weekends = getWeekends(activeDays);
 
   return (
@@ -164,6 +167,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
         <div className="flex rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 overflow-hidden">
           <button
             onClick={() => setView("calendar")}
+            aria-pressed={view === "calendar"}
             className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
               view === "calendar"
                 ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#C8D8EB]"
@@ -174,6 +178,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
           </button>
           <button
             onClick={() => setView("list")}
+            aria-pressed={view === "list"}
             className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors border-l border-[#003572]/30 dark:border-[#00bfff]/20 ${
               view === "list"
                 ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#C8D8EB]"
@@ -304,7 +309,12 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
           onClick={dismiss}
         >
           <div
-            className="w-full max-w-md max-h-[88vh] overflow-y-auto rounded-xl scrollbar-hide space-y-4"
+            ref={modalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Detalle del día"
+            tabIndex={-1}
+            className="w-full max-w-md max-h-[88vh] overflow-y-auto rounded-xl scrollbar-hide space-y-4 focus:outline-none"
             onClick={(e) => e.stopPropagation()}
           >
             {selectedEntries.map((d, i) => (
