@@ -7,15 +7,13 @@ import Link from "next/link";
 
 type SortMode = "popular" | "alpha";
 
-export default function AuthorSearchList({ authors }: { authors: Author[] }) {
+export default function AuthorSearchList({ authors, totalSongs }: { authors: Author[]; totalSongs: number }) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortMode>("popular");
   const isSearching = query.trim().length > 0;
 
-  const totalSongs = useMemo(
-    () => authors.reduce((sum, a) => sum + (a.postCount ?? 0), 0),
-    [authors]
-  );
+  // totalSongs is the distinct catalog size (server-computed) — NOT the sum of
+  // per-author postCounts, which double-counts every multi-author song.
 
   const grid = useMemo(() => {
     const nq = normalizeText(query);
