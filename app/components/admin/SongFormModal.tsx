@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useId } from "react";
 import { bodyToLyrics } from "@/app/utils/lyrics";
+import { useFocusTrap } from "@/app/utils/useFocusTrap";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -98,14 +99,19 @@ export function Modal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // Move focus into the dialog, trap it, and restore on close.
+  const dialogRef = useFocusTrap<HTMLDivElement>(true);
+
   return (
     <div className={`fixed inset-0 ${zClass} flex items-start justify-center pt-4 px-4 pb-4`}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative z-10 w-full max-w-2xl bg-[#C8D8EB] dark:bg-[#0a1929] border border-[#003572]/20 dark:border-[#00bfff]/20 rounded-xl shadow-2xl flex flex-col max-h-[calc(100vh-2rem)]"
+        tabIndex={-1}
+        className="relative z-10 w-full max-w-2xl bg-[#C8D8EB] dark:bg-[#0a1929] border border-[#003572]/20 dark:border-[#00bfff]/20 rounded-xl shadow-2xl flex flex-col max-h-[calc(100vh-2rem)] focus:outline-none"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#003572]/15 dark:border-[#00bfff]/10 shrink-0">
           <h2 className="font-display text-lg uppercase tracking-wide">{title}</h2>
@@ -146,6 +152,8 @@ export function SongForm({
   const [authorSearch, setAuthorSearch]   = useState("");
   const [creatingAuthor, setCreatingAuthor] = useState(false);
   const lyricsRef                         = useRef<HTMLTextAreaElement>(null);
+  const ids = useId();
+  const fid = (name: string) => `${ids}-${name}`;
 
   const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -233,14 +241,15 @@ export function SongForm({
     <form onSubmit={(e) => { e.preventDefault(); onSubmit(form); }} className="space-y-5">
       {/* Title */}
       <div className="space-y-1">
-        <label className="font-label text-xs uppercase tracking-widest text-gray-500">Título *</label>
-        <input className={inputCls} value={form.title} onChange={set("title")} required placeholder="Nombre de la canción" />
+        <label htmlFor={fid("title")} className="font-label text-xs uppercase tracking-widest text-gray-500">Título *</label>
+        <input id={fid("title")} className={inputCls} value={form.title} onChange={set("title")} required placeholder="Nombre de la canción" />
       </div>
 
       {/* Artista (multi-select) */}
       <div className="space-y-2">
-        <label className="font-label text-xs uppercase tracking-widest text-gray-500">Artista</label>
+        <label htmlFor={fid("artist")} className="font-label text-xs uppercase tracking-widest text-gray-500">Artista</label>
         <input
+          id={fid("artist")}
           className={inputCls}
           value={authorSearch}
           onChange={(e) => setAuthorSearch(e.target.value)}
@@ -303,22 +312,22 @@ export function SongForm({
       {/* Key + BPM + Time Sig */}
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1">
-          <label className="font-label text-xs uppercase tracking-widest text-gray-500">Tonalidad</label>
-          <input className={inputCls} value={form.key} onChange={set("key")} placeholder="Ej: C, Am" />
+          <label htmlFor={fid("key")} className="font-label text-xs uppercase tracking-widest text-gray-500">Tonalidad</label>
+          <input id={fid("key")} className={inputCls} value={form.key} onChange={set("key")} placeholder="Ej: C, Am" />
         </div>
         <div className="space-y-1">
-          <label className="font-label text-xs uppercase tracking-widest text-gray-500">BPM</label>
-          <input className={inputCls} type="number" value={form.bpm} onChange={set("bpm")} placeholder="120" />
+          <label htmlFor={fid("bpm")} className="font-label text-xs uppercase tracking-widest text-gray-500">BPM</label>
+          <input id={fid("bpm")} className={inputCls} type="number" value={form.bpm} onChange={set("bpm")} placeholder="120" />
         </div>
         <div className="space-y-1">
-          <label className="font-label text-xs uppercase tracking-widest text-gray-500">Comp.</label>
-          <input className={inputCls} value={form.timeSig} onChange={set("timeSig")} placeholder="4/4" />
+          <label htmlFor={fid("timesig")} className="font-label text-xs uppercase tracking-widest text-gray-500">Comp.</label>
+          <input id={fid("timesig")} className={inputCls} value={form.timeSig} onChange={set("timeSig")} placeholder="4/4" />
         </div>
       </div>
 
       {/* Lyrics */}
       <div className="space-y-0">
-        <label className="font-label text-xs uppercase tracking-widest text-gray-500 block mb-1">Letra</label>
+        <label htmlFor={fid("lyrics")} className="font-label text-xs uppercase tracking-widest text-gray-500 block mb-1">Letra</label>
         <div className="flex items-center gap-1 flex-wrap px-2 py-1.5 rounded-t-lg border border-[#00bfff]/20 border-b-0 bg-[#003572]/5 dark:bg-[#00bfff]/5">
           {SECTION_LABELS.map((label) => (
             <button
@@ -352,6 +361,7 @@ export function SongForm({
           </button>
         </div>
         <textarea
+          id={fid("lyrics")}
           ref={lyricsRef}
           className="w-full px-3 py-2 rounded-b-lg border border-[#00bfff]/20 bg-transparent font-mono text-xs leading-relaxed resize-none focus:outline-none focus:border-[#00bfff] transition-colors"
           rows={14}

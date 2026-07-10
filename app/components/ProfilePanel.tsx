@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useId } from "react";
+import { useFocusTrap } from "@/app/utils/useFocusTrap";
 
 interface MemberProfile {
   _id: string;
@@ -70,6 +71,17 @@ function Avatar({
 export default function ProfilePanel({ initialMember }: { initialMember: MemberProfile }) {
   const [member, setMember]   = useState(initialMember);
   const [open, setOpen]       = useState(false);
+  // Dialog a11y: trap focus while open + restore on close; stable ids for labels.
+  const panelRef = useFocusTrap<HTMLDivElement>(open);
+  const ids = useId();
+  const fid = (name: string) => `${ids}-${name}`;
+  // Escape closes the drawer.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
   const [toast, setToast]     = useState<{ msg: string; ok: boolean } | null>(null);
 
   // Identity form
@@ -241,7 +253,15 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
       />
 
       {/* Panel */}
-      <div className={`fixed top-0 right-0 z-50 h-full w-full max-w-md flex flex-col bg-[#C8D8EB] dark:bg-[#0a1929] border-l border-[#003572]/20 dark:border-[#00bfff]/20 shadow-2xl transition-transform duration-300 ${open ? "translate-x-0" : "translate-x-full"}`}>
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Editar perfil"
+        tabIndex={-1}
+        inert={!open}
+        className={`fixed top-0 right-0 z-50 h-full w-full max-w-md flex flex-col bg-[#C8D8EB] dark:bg-[#0a1929] border-l border-[#003572]/20 dark:border-[#00bfff]/20 shadow-2xl transition-transform duration-300 focus:outline-none ${open ? "translate-x-0" : "translate-x-full"}`}
+      >
 
         {/* Drawer header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-[#003572]/15 dark:border-[#00bfff]/10 shrink-0">
@@ -260,6 +280,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
           </div>
           <button
             onClick={() => setOpen(false)}
+            aria-label="Cerrar"
             className="text-gray-400 hover:text-[#00bfff] transition-colors text-2xl leading-none ml-4 shrink-0"
           >
             ×
@@ -275,8 +296,9 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
             <h3 className="font-label text-[10px] uppercase tracking-widest text-gray-500">Identidad</h3>
             <div className="space-y-3">
               <div className="space-y-1">
-                <label className="font-label text-xs uppercase tracking-widest text-gray-500">Alias</label>
+                <label htmlFor={fid("alias")} className="font-label text-xs uppercase tracking-widest text-gray-500">Alias</label>
                 <input
+                  id={fid("alias")}
                   className={inputCls}
                   value={alias}
                   onChange={(e) => setAlias(e.target.value)}
@@ -284,8 +306,9 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
                 />
               </div>
               <div className="space-y-1">
-                <label className="font-label text-xs uppercase tracking-widest text-gray-500">Email</label>
+                <label htmlFor={fid("email")} className="font-label text-xs uppercase tracking-widest text-gray-500">Email</label>
                 <input
+                  id={fid("email")}
                   className={inputCls}
                   type="email"
                   value={email}
@@ -319,17 +342,17 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
             <div className="space-y-3">
               {member.hasPassword && (
                 <div className="space-y-1">
-                  <label className="font-label text-xs uppercase tracking-widest text-gray-500">Contraseña actual</label>
-                  <input className={inputCls} type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} placeholder="••••••••" />
+                  <label htmlFor={fid("current-pw")} className="font-label text-xs uppercase tracking-widest text-gray-500">Contraseña actual</label>
+                  <input id={fid("current-pw")} autoComplete="current-password" className={inputCls} type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} placeholder="••••••••" />
                 </div>
               )}
               <div className="space-y-1">
-                <label className="font-label text-xs uppercase tracking-widest text-gray-500">Nueva contraseña</label>
-                <input className={inputCls} type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="Mín. 8 caracteres" />
+                <label htmlFor={fid("new-pw")} className="font-label text-xs uppercase tracking-widest text-gray-500">Nueva contraseña</label>
+                <input id={fid("new-pw")} autoComplete="new-password" className={inputCls} type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="Mín. 8 caracteres" />
               </div>
               <div className="space-y-1">
-                <label className="font-label text-xs uppercase tracking-widest text-gray-500">Confirmar contraseña</label>
-                <input className={inputCls} type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="Repetir contraseña" />
+                <label htmlFor={fid("confirm-pw")} className="font-label text-xs uppercase tracking-widest text-gray-500">Confirmar contraseña</label>
+                <input id={fid("confirm-pw")} autoComplete="new-password" className={inputCls} type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="Repetir contraseña" />
               </div>
             </div>
             <button
