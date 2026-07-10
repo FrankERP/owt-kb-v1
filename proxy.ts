@@ -31,7 +31,14 @@ export default withAuth(
 export const config = {
   // Protect everything except: auth pages, NextAuth API, and static assets.
   // Studio is now included — it requires login + admin role (checked above).
+  //
+  // NOTE: Next.js requires this matcher to be a statically-analyzable string
+  // literal (an imported constant is ignored at build time), so it is inlined
+  // here. It MUST stay byte-for-byte equal to MIDDLEWARE_MATCHER in
+  // app/utils/routeMatcher.ts, which carries the tested exclusion logic and a
+  // sync guard (routeMatcher.test.ts). Each excluded prefix is anchored with
+  // `(?:/|$)` so `/author` is not mistaken for a public `/auth` route.
   matcher: [
-    "/((?!auth|api/auth|_next/static|_next/image|favicon\\.ico|LogoOasis\\.png).*)",
+    "/((?!auth(?:/|$)|api/auth(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$).*)",
   ],
 };
