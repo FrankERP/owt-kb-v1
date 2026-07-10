@@ -5,6 +5,8 @@ import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { sendPush } from "@/app/utils/push";
 import { sendAssignmentEmails } from "@/app/utils/assignmentEmail";
+import { revalidateServiceViews } from "@/app/utils/revalidate";
+import { revalidatePath } from "next/cache";
 
 function allAssignees(b: { leads?: string[]; bgvs?: string[]; chorus?: string[]; instruments?: { personId: string }[]; foh?: { personId: string }[] }): string[] {
   return [
@@ -115,6 +117,12 @@ export async function POST(req: NextRequest) {
     foh_team:    toFohSlots(body.foh ?? []),
     published:   body.published === true,   // default false = draft
   });
+
+  // ISR invalidation: a newly created service must appear on the schedule/home
+  // and /me views immediately, mirroring the sibling PATCH handler. Drafts still
+  // revalidate — they surface in the admin (Editar) views.
+  revalidateServiceViews();
+  revalidatePath("/me");
 
   const added = allAssignees(body); // brand-new doc → everyone is "added"
   if (body.published === true) {

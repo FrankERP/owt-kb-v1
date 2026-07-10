@@ -24,6 +24,7 @@ function localToday(): string {
 
 const SETLIST_FRAGMENT = `songs[]{
   play_key,
+  medley_tag,
   "title": song->title, "slug": song->slug, "_id": song->_id,
   "author": song->author, "timeSig": song->timeSig, "bpm": song->bpm, "key": song->key
 }, week`;
@@ -42,7 +43,7 @@ const SCHEDULE_QUERY = `{
   "satSetlists": *[_type == "saturdarSongs" && week >= $today && week <= $limit] | order(week asc)  { ${SETLIST_FRAGMENT} },
   "specials":    *[_type == "special_role"  && date >= $weekStart && date <= $limit && published != false] | order(date asc) {
     _id, date, service_name,
-    songs[]{ play_key, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "key": song->key },
+    songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "key": song->key },
     ${ROLE_FIELDS}
   }
 }`;
