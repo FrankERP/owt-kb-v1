@@ -68,8 +68,15 @@ async function getPost(slug: string) {
 }
 
 async function getSongHistory(songId: string) {
+  // "Última vez tocada" must reflect PAST plays only. Bound to week < today
+  // (America/Mexico_City): a future or this-week setlist has not been played
+  // yet — without this bound it would show as the last play with a future date,
+  // and an upcoming/draft service would leak its paired-song list to members.
+  // (A week bound, not a published-role join: most historical setlists predate
+  // role docs, so a role join would erase legitimate play history.)
+  const today = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
   const query = `
-    *[_type in ["featuredSongs", "saturdarSongs"] && references($songId)] | order(week desc)[0..2] {
+    *[_type in ["featuredSongs", "saturdarSongs"] && references($songId) && week < $today] | order(week desc)[0..2] {
       week,
       _type,
       "play_key": songs[song._ref == $songId][0].play_key,
@@ -79,7 +86,7 @@ async function getSongHistory(songId: string) {
         play_key,
       },
     }`;
-  return await client.fetch(query, { songId });
+  return await client.fetch(query, { songId, today });
 }
 
 export const revalidate = 3600;
