@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
+import { revalidateServiceViews } from "@/app/utils/revalidate";
+import { revalidatePath } from "next/cache";
 
 export async function PATCH(
   req: NextRequest,
@@ -49,6 +51,9 @@ export async function PATCH(
     mutation = mutation.setIfMissing({ notifPrefs: {} }).set({ "notifPrefs.email": body.notifEmail });
   }
   const doc = await mutation.commit();
+  // A renamed member's name/alias surfaces on ISR schedule/home/me views.
+  revalidateServiceViews();
+  revalidatePath("/me");
   return NextResponse.json(doc);
 }
 
@@ -67,5 +72,7 @@ export async function DELETE(
 
   const { id } = await params;
   await writeClient.delete(id);
+  revalidateServiceViews();
+  revalidatePath("/me");
   return NextResponse.json({ ok: true });
 }

@@ -8,6 +8,12 @@ function rkey() {
   return Math.random().toString(36).slice(2, 9);
 }
 
+// A Sanity ifRevisionId mismatch surfaces as a ClientError with statusCode 409.
+function isConflict(e: unknown): boolean {
+  const err = e as { statusCode?: number; response?: { statusCode?: number } };
+  return err?.statusCode === 409 || err?.response?.statusCode === 409;
+}
+
 // Everyone who should hear a review outcome on a shared proposal: the creator
 // plus every contributor, deduped. (GROQ `in` already dedupes on send, but we
 // dedupe here too so the set is clean.)
@@ -42,7 +48,7 @@ export async function PATCH(
 
   const proposal = await serverClient.fetch(
     `*[_type == "setlistProposal" && _id == $id][0] {
-      _id, service_type, service_date, status,
+      _id, _rev, service_type, service_date, status,
       "service_ref_id": service_ref._ref,
       songs[] {
         _key, play_key, medley_tag, "song_id": song._ref
@@ -107,7 +113,40 @@ export async function PATCH(
   }
 
   if (body.action === "approve") {
-    // Write the setlist to the appropriate Sanity document
+    const type: string = proposal.service_type;
+    const date: string = proposal.service_date;
+    const refId: string = proposal.service_ref_id;
+
+    // Validate the target BEFORE claiming, so we never mark a proposal approved
+    // that we then can't publish.
+    const targetOk =
+      (type === "sunday" && date) || (type === "saturday" && date) || (type === "special" && refId);
+    if (!targetOk) {
+      return NextResponse.json({ error: "Cannot determine service target" }, { status: 400 });
+    }
+
+    // Claim the proposal FIRST, guarded by the revision we read. If a concurrent
+    // lead edit landed since our read, the revision won't match → 409, and we
+    // abort BEFORE writing the setlist from a now-stale songs snapshot (the lead
+    // edit path allows edits until status === "approved"). This closes the
+    // read-then-write lost-update window between the fetch above and this write.
+    try {
+      await writeClient.patch(id).ifRevisionId(proposal._rev).set({
+        status: "approved",
+        reviewed_at: now,
+      }).commit();
+    } catch (err) {
+      if (isConflict(err)) {
+        return NextResponse.json(
+          { error: "La propuesta cambió mientras la revisabas. Recárgala y vuelve a revisar." },
+          { status: 409 },
+        );
+      }
+      throw err;
+    }
+
+    // proposal.songs is now guaranteed current: no edit landed between the fetch
+    // and the revision-guarded claim above.
     const songDocs = (proposal.songs ?? []).map((s: { _key: string; play_key: string; medley_tag?: string; song_id: string }) => ({
       _type: "setlist_song" as const,
       _key: rkey(),
@@ -115,10 +154,6 @@ export async function PATCH(
       ...(s.medley_tag ? { medley_tag: s.medley_tag } : {}),
       song: { _type: "reference" as const, _ref: s.song_id },
     }));
-
-    const type: string = proposal.service_type;
-    const date: string = proposal.service_date;
-    const refId: string = proposal.service_ref_id;
 
     if (type === "sunday" && date) {
       const existing = await serverClient.fetch(
@@ -142,15 +177,7 @@ export async function PATCH(
       }
     } else if (type === "special" && refId) {
       await writeClient.patch(refId).set({ songs: songDocs }).commit();
-    } else {
-      return NextResponse.json({ error: "Cannot determine service target" }, { status: 400 });
     }
-
-    // Mark proposal approved
-    await writeClient.patch(id).set({
-      status: "approved",
-      reviewed_at: now,
-    }).commit();
 
     // Supersede other outstanding proposals for the SAME service: the setlist is
     // now decided, so any competing draft/pending/changes_requested proposals for

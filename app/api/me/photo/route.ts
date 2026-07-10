@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
+import { revalidateServiceViews } from "@/app/utils/revalidate";
+import { revalidatePath } from "next/cache";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -51,6 +53,10 @@ export async function POST(req: NextRequest) {
     .patch(session.user.sanityId)
     .set({ profilePhoto: { _type: "image", asset: { _type: "reference", _ref: asset._id } } })
     .commit();
+
+  // Avatar surfaces on ISR schedule/home/me views.
+  revalidateServiceViews();
+  revalidatePath("/me");
 
   return NextResponse.json({ photoUrl: asset.url });
 }
