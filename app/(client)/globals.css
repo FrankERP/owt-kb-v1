@@ -23,6 +23,8 @@
 @layer base {
   body {
     @apply font-body;
+    /* Suppress the default gray tap-flash on the iOS/Capacitor wrap. */
+    -webkit-tap-highlight-color: transparent;
   }
 
   h1, h2, h3, h4, h5, h6 {

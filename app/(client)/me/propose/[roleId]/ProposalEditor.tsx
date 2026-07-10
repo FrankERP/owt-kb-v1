@@ -250,8 +250,13 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
       setSearching(true);
       try {
         const res = await fetch(`/api/me/songs?q=${encodeURIComponent(q)}`);
-        const data: SongResult[] = await res.json();
-        setSearchResults(data);
+        // Guard against a non-array body (e.g. a 401/500 { error } object): storing
+        // it and calling .map() on render would white-screen the editor and lose
+        // the in-progress setlist. Fall back to an empty result set instead.
+        const data: unknown = res.ok ? await res.json() : null;
+        setSearchResults(Array.isArray(data) ? (data as SongResult[]) : []);
+      } catch {
+        setSearchResults([]);
       } finally {
         setSearching(false);
       }

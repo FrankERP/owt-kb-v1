@@ -45,7 +45,10 @@ export default function AudioPlayer() {
   const { track, isPlaying } = player;
 
   return (
-    <div className="fixed bottom-0 inset-x-0 z-40 bg-[#0a1929]/95 backdrop-blur-md border-t border-[#00bfff]/20 shadow-lg">
+    <div
+      className="fixed bottom-0 inset-x-0 z-40 bg-[#0a1929]/95 backdrop-blur-md border-t border-[#00bfff]/20 shadow-lg"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
 
         {/* Play / Pause */}
