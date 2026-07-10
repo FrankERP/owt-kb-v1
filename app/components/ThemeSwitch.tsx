@@ -15,7 +15,8 @@ const ThemeSwitch = () => {
 
   return (
     <button
-      aria-label="Toggle theme"
+      aria-label={isDark ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
+      aria-pressed={isDark}
       onClick={() => setTheme(isDark ? "light" : "dark")}
       className="text-gray-500 dark:text-gray-400 hover:text-[#00bfff] dark:hover:text-[#00bfff] transition-colors"
     >
