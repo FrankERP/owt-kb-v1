@@ -117,6 +117,19 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
     });
   }
 
+  // Keyboard-accessible reorder (drag is mouse/touch only). Moves the row at
+  // idx by one position; re-derives medley tags like handleDrop.
+  function move(idx: number, dir: -1 | 1) {
+    setEntries(prev => {
+      const to = idx + dir;
+      if (to < 0 || to >= prev.length) return prev;
+      const next = [...prev];
+      const [item] = next.splice(idx, 1);
+      next.splice(to, 0, item);
+      return normalizeMedleyTags(next, uid2);
+    });
+  }
+
   // Precondition: idxA and idxB are adjacent (idxB === idxA + 1). The only caller
   // is the toggle button rendered between consecutive rows, which guarantees this.
   function toggleMedleyLink(idxA: number, idxB: number) {
@@ -253,8 +266,25 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
                       : "border-[#00bfff]/10 bg-[#001830]/30"
                   }`}
                 >
-                  <div className="cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 shrink-0 transition-colors">
+                  <div className="cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 shrink-0 transition-colors" aria-hidden="true">
                     <GripIcon />
+                  </div>
+                  {/* Keyboard-accessible reorder alternative to drag-and-drop */}
+                  <div className="flex flex-col shrink-0 -my-1">
+                    <button
+                      type="button"
+                      onClick={() => move(idx, -1)}
+                      disabled={idx === 0}
+                      aria-label={`Subir ${e.song.title}`}
+                      className="text-gray-600 hover:text-[#00bfff] disabled:opacity-25 disabled:hover:text-gray-600 leading-none text-[10px] transition-colors"
+                    >▲</button>
+                    <button
+                      type="button"
+                      onClick={() => move(idx, 1)}
+                      disabled={idx === entries.length - 1}
+                      aria-label={`Bajar ${e.song.title}`}
+                      className="text-gray-600 hover:text-[#00bfff] disabled:opacity-25 disabled:hover:text-gray-600 leading-none text-[10px] transition-colors"
+                    >▼</button>
                   </div>
                   <span className="font-label text-[10px] text-gray-600 shrink-0 w-4 text-center tabular-nums">{idx + 1}</span>
                   <div className="flex-1 min-w-0">
@@ -271,7 +301,7 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
                     value={e.play_key}
                     onChange={ev => setEntries(prev => prev.map(x => x.localId === e.localId ? { ...x, play_key: ev.target.value } : x))}
                   />
-                  <button type="button" onClick={() => remove(e.localId)} className="text-gray-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none">×</button>
+                  <button type="button" onClick={() => remove(e.localId)} aria-label={`Quitar ${e.song.title}`} className="text-gray-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none">×</button>
                 </div>
                 {idx < entries.length - 1 && (
                   <div className="-my-0.5 flex items-center justify-center relative z-10">
