@@ -386,7 +386,7 @@ const myPortableTextComponents = {
   types: {
     image: ({ value }: any) => (
       <Image
-        src={urlFor(value).url()}
+        src={urlFor(value).width(1400).fit("max").auto("format").url()}
         alt="Post"
         width={700}
         height={700}
