@@ -9,6 +9,19 @@ const titleFont = Orbitron({ weight: "900", subsets: ["latin"] });
 export const metadata: Metadata = {
 	title: "OWT Content Studio",
 	description: "Panel de administración del equipo de alabanza Oasis.",
+	manifest: "/manifest.webmanifest",
+	icons: {
+		icon: [
+			{ url: "/favicon.ico", sizes: "any" },
+			{ url: "/icons/icon-192.png", type: "image/png", sizes: "192x192" },
+		],
+		apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+	},
+	appleWebApp: {
+		capable: true,
+		title: "Backstage",
+		statusBarStyle: "black-translucent",
+	},
 };
 
 export default function RootLayout({

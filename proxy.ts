@@ -39,6 +39,6 @@ export const config = {
   // sync guard (routeMatcher.test.ts). Each excluded prefix is anchored with
   // `(?:/|$)` so `/author` is not mistaken for a public `/auth` route.
   matcher: [
-    "/((?!auth(?:/|$)|api/auth(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$).*)",
+    "/((?!auth(?:/|$)|api/auth(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$|icons(?:/|$)|manifest\\.webmanifest$).*)",
   ],
 };

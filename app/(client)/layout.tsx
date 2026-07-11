@@ -28,6 +28,19 @@ const labelFont = Jura({
 export const metadata: Metadata = {
   title: "Oasis Worship Team",
   description: "Knowledge base for the Oasis Worship Team — songs, setlists, and role assignments.",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icons/icon-192.png", type: "image/png", sizes: "192x192" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Backstage",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 // `viewportFit: "cover"` lets the page extend under the iOS notch/Dynamic Island and
