@@ -19,6 +19,7 @@ export async function GET() {
       service_date,
       status,
       lead_notes,
+      team_notes,
       admin_notes,
       submitted_at,
       reviewed_at,

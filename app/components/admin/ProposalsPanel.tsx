@@ -22,6 +22,7 @@ interface Proposal {
   lead_name: string;
   lead_id: string;
   lead_notes?: string;
+  team_notes?: string;
   admin_notes?: string;
   submitted_at?: string;
   contributors?: Array<{ id: string; name: string }>;
@@ -159,10 +160,20 @@ function ProposalCard({
         })}
       </div>
 
-      {/* Lead notes */}
+      {/* Team message */}
+      {proposal.team_notes && (
+        <div className="px-4 pb-3">
+          <div className="p-3 rounded-lg border border-[#00bfff]/20 bg-[#00bfff]/5">
+            <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff] mb-1">Mensaje para el equipo</p>
+            <p className="font-body text-sm text-gray-300 whitespace-pre-wrap">{proposal.team_notes}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Private lead notes */}
       {proposal.lead_notes && (
         <div className="px-4 pb-3">
-          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Notas del líder</p>
+          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Notas privadas para revisión</p>
           <p className="font-body text-sm text-gray-300 whitespace-pre-wrap">{proposal.lead_notes}</p>
         </div>
       )}

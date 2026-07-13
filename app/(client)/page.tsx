@@ -38,7 +38,7 @@ const SETLIST_FIELDS = `songs[]{
   medley_tag,
   "title": song->title, "slug": song->slug, "_id": song->_id,
   "author": song->author, "timeSig": song->timeSig, "bpm": song->bpm, "key": song->key
-}, week`;
+}, week, team_notes`;
 
 const ROLE_FIELDS = `week,
   Lead[]->{ member_name, alias },
@@ -54,7 +54,7 @@ const WEEKEND_QUERY = `{
   "sunRole":  *[_type == "sunday_role"    && week == $sun && published != false][0] { ${ROLE_FIELDS} },
   "satRole":  *[_type == "saturday_role"  && week == $sat && published != false][0] { ${ROLE_FIELDS} },
   "specials": *[_type == "special_role"   && date >= $today && date <= $sun && published != false] | order(date asc) {
-    _id, date, service_name,
+    _id, date, service_name, team_notes,
     songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "key": song->key },
     ${ROLE_FIELDS}
   }
@@ -115,7 +115,7 @@ export default async function Home() {
               key={sp._id}
               day={sp.service_name || "Servicio Especial"}
               date={sp.date}
-              setlist={sp.songs?.length ? { songs: sp.songs as SetlistSong[], week: sp.date } : undefined}
+              setlist={sp.songs?.length ? { songs: sp.songs as SetlistSong[], week: sp.date, team_notes: sp.team_notes } : undefined}
               leads={sp.Lead?.map((m) => m.alias || m.member_name) ?? []}
               instruments={sp.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
               fohTeam={sp.foh_team?.map((s) => ({ label: s.role, person: s.person }))}

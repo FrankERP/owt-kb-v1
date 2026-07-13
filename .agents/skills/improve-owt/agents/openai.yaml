@@ -1,0 +1,4 @@
+interface:
+  display_name: "Improve OWT"
+  short_description: "Ship one verified high-value OWT improvement"
+  default_prompt: "Use $improve-owt to make exactly one verified high-value improvement to the OWT app."
