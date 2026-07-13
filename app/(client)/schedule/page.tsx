@@ -27,7 +27,7 @@ const SETLIST_FRAGMENT = `songs[]{
   medley_tag,
   "title": song->title, "slug": song->slug, "_id": song->_id,
   "author": song->author, "timeSig": song->timeSig, "bpm": song->bpm, "key": song->key
-}, week`;
+}, week, team_notes`;
 
 const ROLE_FIELDS = `_id, week,
   Lead[]->{ member_name, alias },
@@ -42,7 +42,7 @@ const SCHEDULE_QUERY = `{
   "sunSetlists": *[_type == "featuredSongs" && week >= $today && week <= $limit] | order(week asc)  { ${SETLIST_FRAGMENT} },
   "satSetlists": *[_type == "saturdarSongs" && week >= $today && week <= $limit] | order(week asc)  { ${SETLIST_FRAGMENT} },
   "specials":    *[_type == "special_role"  && date >= $weekStart && date <= $limit && published != false] | order(date asc) {
-    _id, date, service_name,
+    _id, date, service_name, team_notes,
     songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "key": song->key },
     ${ROLE_FIELDS}
   }
@@ -130,7 +130,7 @@ export default async function SchedulePage({
   specials.forEach((sp) => {
     const dateStr = sp.date.slice(0, 10);
     const setlist = sp.songs?.length
-      ? ({ songs: sp.songs as SetlistSong[], week: sp.date } satisfies Setlist)
+      ? ({ songs: sp.songs as SetlistSong[], week: sp.date, team_notes: sp.team_notes } satisfies Setlist)
       : undefined;
     push(dateStr, {
       day: sp.service_name || "Servicio Especial",

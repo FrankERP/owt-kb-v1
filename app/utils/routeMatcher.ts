@@ -6,7 +6,7 @@
 // like `(?!auth…)` also matches `/author`, silently leaving that route (and any
 // future `/auth*` route) unauthenticated. See the audit login-gate-bypass fix.
 export const MIDDLEWARE_MATCHER =
-  "/((?!auth(?:/|$)|api/auth(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$).*)";
+  "/((?!auth(?:/|$)|api/auth(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$|icons(?:/|$)|manifest\\.webmanifest$).*)";
 
 // Mirrors Next.js matcher semantics (full-path match) so the exclusion logic
 // can be unit-tested without importing the middleware runtime.

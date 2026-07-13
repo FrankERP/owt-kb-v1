@@ -91,6 +91,7 @@ export default async function MePage() {
               "author": song->author, "key": song->key,
             },
             week,
+            team_notes,
           }
         },
         "saturdays": *[_type == "saturday_role" && week >= $today && week <= $limit && published != false && ${memberFilter}] | order(week asc) {
@@ -113,10 +114,11 @@ export default async function MePage() {
               "author": song->author, "key": song->key,
             },
             week,
+            team_notes,
           }
         },
         "specials": *[_type == "special_role" && date >= $today && date <= $limit && published != false && ${memberFilter}] | order(date asc) {
-          _id, date, service_name,
+          _id, date, service_name, team_notes,
           "isLead": $id in Lead[]._ref,
           "isBGV": $id in BGVs[]._ref,
           "isChorus": $id in Chorus[]._ref,
@@ -190,6 +192,7 @@ export default async function MePage() {
     Chorus?: Array<{ member_name: string; alias?: string }>;
     setlist?: Setlist;
     songs?: SetlistSong[];
+    team_notes?: string;
   };
 
   const allAssignments: Array<{ dateKey: string; day: string; doc: RoleDoc }> = [
@@ -315,7 +318,7 @@ export default async function MePage() {
               {/* Hero: next assignment */}
               {(() => {
                 const { day, doc } = allAssignments[0];
-                const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: doc.date ?? "" } : undefined);
+                const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: doc.date ?? "", team_notes: doc.team_notes } : undefined);
                 return (
                   <div>
                     <NextServiceHero
@@ -341,7 +344,7 @@ export default async function MePage() {
                   </h2>
                   <div className="space-y-6">
                     {allAssignments.slice(1).map(({ day, doc }) => {
-                      const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: doc.date ?? "" } : undefined);
+                      const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: doc.date ?? "", team_notes: doc.team_notes } : undefined);
                       return (
                         <div key={doc._id}>
                           <DayCard

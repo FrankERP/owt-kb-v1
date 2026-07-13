@@ -30,6 +30,7 @@ interface SharedProposal {
   _rev: string;
   status: ProposalStatus;
   lead_notes?: string;
+  team_notes?: string;
   admin_notes?: string;
   createdById?: string;
   contributors?: Array<{ id: string; name: string }>;
@@ -114,6 +115,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
   });
 
   const [leadNotes, setLeadNotes] = useState(proposal?.lead_notes ?? "");
+  const [teamNotes, setTeamNotes] = useState(proposal?.team_notes ?? "");
   const [status, setStatus]       = useState<ProposalStatus>(proposal?.status ?? "draft");
   const [saving, setSaving]       = useState(false);
   const [toast, setToast]         = useState<{ msg: string; ok: boolean } | null>(null);
@@ -303,6 +305,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
           serviceDate: roleDoc.service_date,
           songs: songs.map(s => ({ songId: s.songId, play_key: s.play_key, medley_tag: s.medley_tag })),
           leadNotes,
+          teamNotes,
           status: submitStatus,
           rev,
         }),
@@ -631,25 +634,50 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
         )}
       </div>
 
-      {/* Lead notes */}
+      {/* Team message */}
       {!isApproved && (
         <div className="space-y-2">
           <label className="font-label text-xs uppercase tracking-widest text-gray-500">
-            Notas para revisión <span className="normal-case tracking-normal text-gray-600">(opcional)</span>
+            Mensaje para el equipo <span className="normal-case tracking-normal text-gray-600">(opcional)</span>
           </label>
           <textarea
             className={`${inputCls} resize-none`}
             rows={3}
-            placeholder="Contexto, temas del mensaje, peticiones especiales…"
+            placeholder="Comparte un versículo, una reflexión o algo que quieras decirle al equipo…"
+            value={teamNotes}
+            onChange={e => setTeamNotes(e.target.value)}
+          />
+          <p className="font-body text-xs text-gray-600">Se mostrará al equipo cuando se apruebe la propuesta.</p>
+        </div>
+      )}
+
+      {/* Private review notes */}
+      {!isApproved && (
+        <div className="space-y-2">
+          <label className="font-label text-xs uppercase tracking-widest text-gray-500">
+            Notas privadas para revisión <span className="normal-case tracking-normal text-gray-600">(opcional)</span>
+          </label>
+          <textarea
+            className={`${inputCls} resize-none`}
+            rows={3}
+            placeholder="Contexto o peticiones especiales solo para los admins…"
             value={leadNotes}
             onChange={e => setLeadNotes(e.target.value)}
           />
+          <p className="font-body text-xs text-gray-600">Solo las verán los admins que revisan la propuesta.</p>
+        </div>
+      )}
+
+      {isApproved && teamNotes && (
+        <div className="space-y-1">
+          <p className="font-label text-xs uppercase tracking-widest text-[#00bfff]">Mensaje para el equipo</p>
+          <p className="font-body text-sm text-gray-300 whitespace-pre-wrap">{teamNotes}</p>
         </div>
       )}
 
       {isApproved && leadNotes && (
         <div className="space-y-1">
-          <p className="font-label text-xs uppercase tracking-widest text-gray-500">Tus notas</p>
+          <p className="font-label text-xs uppercase tracking-widest text-gray-500">Tus notas privadas para revisión</p>
           <p className="font-body text-sm text-gray-300 whitespace-pre-wrap">{leadNotes}</p>
         </div>
       )}
