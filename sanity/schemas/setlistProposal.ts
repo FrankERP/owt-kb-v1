@@ -148,6 +148,13 @@ export const setlistProposal = defineType({
       rows: 3,
     },
     {
+      name: "team_notes",
+      title: "Mensaje para el equipo",
+      description: "Se publica para todo el equipo cuando se aprueba la propuesta.",
+      type: "text",
+      rows: 3,
+    },
+    {
       name: "admin_notes",
       title: "Notas del admin",
       type: "text",

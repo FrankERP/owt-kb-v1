@@ -23,7 +23,7 @@ async function getRoleDoc(roleId: string, leadId: string) {
 async function getSharedProposal(roleId: string) {
   return serverClient.fetch(
     `*[_type == "setlistProposal" && service_ref._ref == $roleId] | order(_createdAt asc)[0] {
-      _id, _rev, status, lead_notes, admin_notes,
+      _id, _rev, status, lead_notes, team_notes, admin_notes,
       "createdById": lead->_id,
       "contributors": contributors[]{ "id": person->_id, "name": coalesce(person->alias, person->member_name) },
       songs[] {

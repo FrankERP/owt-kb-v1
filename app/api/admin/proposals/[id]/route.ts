@@ -48,7 +48,7 @@ export async function PATCH(
 
   const proposal = await serverClient.fetch(
     `*[_type == "setlistProposal" && _id == $id][0] {
-      _id, _rev, service_type, service_date, status,
+      _id, _rev, service_type, service_date, status, team_notes,
       "service_ref_id": service_ref._ref,
       songs[] {
         _key, play_key, medley_tag, "song_id": song._ref
@@ -161,9 +161,9 @@ export async function PATCH(
         { week: date }
       );
       if (existing) {
-        await writeClient.patch(existing).set({ songs: songDocs }).commit();
+        await writeClient.patch(existing).set({ songs: songDocs, team_notes: proposal.team_notes ?? "" }).commit();
       } else {
-        await writeClient.create({ _type: "featuredSongs", week: date, songs: songDocs });
+        await writeClient.create({ _type: "featuredSongs", week: date, songs: songDocs, team_notes: proposal.team_notes ?? "" });
       }
     } else if (type === "saturday" && date) {
       const existing = await serverClient.fetch(
@@ -171,12 +171,12 @@ export async function PATCH(
         { week: date }
       );
       if (existing) {
-        await writeClient.patch(existing).set({ songs: songDocs }).commit();
+        await writeClient.patch(existing).set({ songs: songDocs, team_notes: proposal.team_notes ?? "" }).commit();
       } else {
-        await writeClient.create({ _type: "saturdarSongs", week: date, songs: songDocs });
+        await writeClient.create({ _type: "saturdarSongs", week: date, songs: songDocs, team_notes: proposal.team_notes ?? "" });
       }
     } else if (type === "special" && refId) {
-      await writeClient.patch(refId).set({ songs: songDocs }).commit();
+      await writeClient.patch(refId).set({ songs: songDocs, team_notes: proposal.team_notes ?? "" }).commit();
     }
 
     // Supersede other outstanding proposals for the SAME service: the setlist is
