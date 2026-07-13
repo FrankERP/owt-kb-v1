@@ -62,11 +62,13 @@ export interface SetlistSong {
 export interface Setlist {
   songs: Array<SetlistSong>;
   week: string;
+  team_notes?: string;
 }
 
 export interface featuredSongs {
   songs: Array<SetlistSong>;
   week: string;
+  team_notes?: string;
 }
 
 export interface TeamMember {
@@ -88,6 +90,7 @@ export interface SpecialRole {
   date: string;
   service_name: string;
   songs?: Array<SetlistSong>;
+  team_notes?: string;
   Lead?: Array<TeamMember>;
   instruments?: Array<{ instrument: string; person: string }>;
   foh_team?: Array<{ role: string; person: string }>;
@@ -113,6 +116,7 @@ export interface SetlistProposal {
   service_date: string;
   status: ProposalStatus;
   lead_notes?: string;
+  team_notes?: string;
   admin_notes?: string;
   submitted_at?: string;
   reviewed_at?: string;

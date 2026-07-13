@@ -23,7 +23,7 @@ export async function GET() {
 
   const proposals = await serverClient.fetch(
     `*[_type == "setlistProposal" && $id in service_ref->Lead[]._ref] | order(service_date asc) {
-      _id, service_type, service_date, status, lead_notes, admin_notes, submitted_at, reviewed_at,
+      _id, service_type, service_date, status, lead_notes, team_notes, admin_notes, submitted_at, reviewed_at,
       "service_ref": service_ref._ref
     }`,
     { id: session.user.sanityId }
@@ -33,7 +33,7 @@ export async function GET() {
 }
 
 // POST /api/me/proposals — create or update the ONE shared proposal for a service.
-// Body: { roleId, songs:[{songId, play_key, medley_tag?}], leadNotes, status, rev? }
+// Body: { roleId, songs:[{songId, play_key, medley_tag?}], leadNotes, teamNotes, status, rev? }
 export async function POST(req: NextRequest) {
   const session = await requireActiveSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -42,11 +42,12 @@ export async function POST(req: NextRequest) {
     roleId: string;
     songs: Array<{ songId: string; play_key: string; medley_tag?: string }>;
     leadNotes?: string;
+    teamNotes?: string;
     status: "draft" | "pending";
     rev?: string | null;
   };
 
-  const { roleId, songs, leadNotes, status, rev } = body;
+  const { roleId, songs, leadNotes, teamNotes, status, rev } = body;
   if (!roleId) {
     return NextResponse.json({ error: "roleId required" }, { status: 400 });
   }
@@ -121,6 +122,7 @@ export async function POST(req: NextRequest) {
         songs: songDocs,
         status,
         lead_notes: leadNotes ?? "",
+        team_notes: teamNotes ?? "",
         ...(status === "pending" ? { submitted_at: now, submitted_by: { _type: "reference", _ref: leadId } } : {}),
       });
       if (status === "pending") {
@@ -154,6 +156,7 @@ export async function POST(req: NextRequest) {
         songs: songDocs,
         status,
         lead_notes: leadNotes ?? "",
+        team_notes: teamNotes ?? "",
         contributors: nextContributors,
         last_edited_by: { _type: "reference", _ref: leadId },
         last_edited_at: now,

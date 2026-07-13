@@ -43,6 +43,12 @@ export const featuredSongs = {
       type: 'date',
       description: 'Week this selection is valid for',
     },
+    {
+      name: 'team_notes',
+      title: 'Mensaje para el equipo',
+      type: 'text',
+      rows: 3,
+    },
   ],
   preview: {
 		select: {

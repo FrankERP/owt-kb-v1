@@ -112,6 +112,13 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
         </div>
 
         <div className="p-4 md:p-5 space-y-4">
+          {setlist?.team_notes && (
+            <section className="rounded-lg border px-4 py-3" style={{ borderColor: `${t.accentHex}35`, background: `${t.accentHex}0d` }}>
+              <p className={`font-label text-[10px] uppercase tracking-widest ${t.accentMuted} mb-1`}>Mensaje para el equipo</p>
+              <p className="font-body text-sm text-[#C8D8EB]/90 whitespace-pre-wrap">{setlist.team_notes}</p>
+            </section>
+          )}
+
           {/* Setlist */}
           {hasSetlist && (
             <section>
@@ -372,4 +379,3 @@ function PencilIcon() {
     </svg>
   );
 }
-

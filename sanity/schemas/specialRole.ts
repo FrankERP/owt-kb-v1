@@ -52,6 +52,12 @@ export const specialRole = {
       of: [{ type: 'reference', to: [{ type: 'teamMembers' }] }],
     },
     {
+      name: 'team_notes',
+      title: 'Mensaje para el equipo',
+      type: 'text',
+      rows: 3,
+    },
+    {
       name: 'instruments',
       title: 'Instruments',
       type: 'array',
