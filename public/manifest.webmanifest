@@ -3,6 +3,7 @@
   "short_name": "Backstage",
   "description": "Cancionero, listas de servicio y asignaciones del equipo de alabanza Oasis.",
   "lang": "es",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -10,25 +11,25 @@
   "theme_color": "#010b17",
   "icons": [
     {
-      "src": "/icons/icon-192.png",
+      "src": "/icons/backstage-v2-192.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/icons/backstage-v2-512.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-192-maskable.png",
+      "src": "/icons/backstage-v2-192-maskable.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "maskable"
     },
     {
-      "src": "/icons/icon-512-maskable.png",
+      "src": "/icons/backstage-v2-512-maskable.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "maskable"
