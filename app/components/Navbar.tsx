@@ -14,7 +14,7 @@ interface Props {
 // renders it can still be statically/ISR rendered. Session + notification badge
 // are resolved client-side in NavMenu.
 const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Props) => {
-  const hasLongMobileTitle = title.length > 5;
+  const showMobileWordmark = title === "OWT";
 
   return (
     <nav aria-label="Navegación superior" className="brand-navbar sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
@@ -29,7 +29,7 @@ const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Pro
             height={64}
             className="brand-lockup-mark h-12 w-12 rounded-[14px] lg:h-16 lg:w-16 lg:rounded-[18px]"
           />
-          <div className={`leading-none ${hasLongMobileTitle ? "hidden sm:block" : ""}`}>
+          <div className={`leading-none ${showMobileWordmark ? "" : "hidden sm:block"}`}>
             <p className="font-display text-base sm:text-lg lg:text-2xl uppercase tracking-[0.12em] text-brand-frost">
               Backstage
             </p>
