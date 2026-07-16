@@ -9,6 +9,16 @@ const config: Config = {
 	darkMode: "class",
 	theme: {
 		extend: {
+			colors: {
+				brand: {
+					blackout: "rgb(var(--brand-blackout) / <alpha-value>)",
+					console: "rgb(var(--brand-console) / <alpha-value>)",
+					deck: "rgb(var(--brand-deck) / <alpha-value>)",
+					beam: "rgb(var(--brand-beam) / <alpha-value>)",
+					frost: "rgb(var(--brand-frost) / <alpha-value>)",
+					steel: "rgb(var(--brand-steel) / <alpha-value>)",
+				},
+			},
 			fontFamily: {
 				display: ["var(--font-display)", "sans-serif"],
 				body:    ["var(--font-body)",    "sans-serif"],

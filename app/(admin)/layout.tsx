@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import { Provider } from "../utils/Provider";
 import CmsNavbar from "../components/CmsNavbar";
-import { Orbitron } from "next/font/google";
 import "./globals.css";
-
-const titleFont = Orbitron({ weight: "900", subsets: ["latin"] });
+import "../brand.css";
+import { bodyFont, displayFont, labelFont } from "../brandFonts";
 
 export const metadata: Metadata = {
 	title: "OWT Content Studio",
@@ -34,12 +33,16 @@ export default function RootLayout({
 	children: React.ReactNode;
 }) {
 	return (
-		<html lang="es" suppressHydrationWarning>
+		<html
+			lang="es"
+			suppressHydrationWarning
+			className={`${displayFont.variable} ${bodyFont.variable} ${labelFont.variable}`}
+		>
 			<body
-				className={`${titleFont.className} h-full bg-[#C8D8EB] text-[#003572] dark:bg-[#010b17] dark:text-[#71c2dd] dark:selection:bg-teal-600`}
+				className="brand-atmosphere min-h-screen bg-brand-blackout font-body text-brand-frost selection:bg-brand-beam/35"
 			>
 				<Provider>
-					<div className="pt-2 mt-10">
+					<div className="pt-2">
 						<CmsNavbar/>
 					</div>
 					<main className="mx-auto max-w-full px-6">{children}</main>

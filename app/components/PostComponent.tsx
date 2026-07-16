@@ -34,34 +34,34 @@ const PostComponent = React.memo(({ post }: Props) => {
       role="button"
       tabIndex={0}
       aria-label={`Ver ${post.title}`}
-      className="group relative flex flex-col gap-2.5 p-4 lg:p-5 rounded-xl border border-[#003572]/25 dark:border-[#00bfff]/15 hover:border-[#003572]/50 dark:hover:border-[#00bfff]/40 hover:shadow-lg hover:shadow-[#00bfff]/10 cursor-pointer transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00bfff]/60"
+      className="brand-facet-panel group relative flex flex-col gap-2.5 p-4 lg:p-5 rounded-[var(--brand-radius-panel)] border border-brand-steel/15 bg-brand-console/35 hover:border-brand-beam/40 hover:bg-brand-deck/50 hover:shadow-lg hover:shadow-brand-beam/10 cursor-pointer transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-beam/60"
     >
       {/* New badge / hover eye — absolute, top-right */}
       <span className={`absolute top-4 right-4 pointer-events-none transition-opacity duration-150 ${fresh ? "group-hover:opacity-0" : "opacity-0 group-hover:opacity-100"}`}>
         {fresh ? (
-          <span className="font-label text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#00bfff]/15 text-[#00bfff] border border-[#00bfff]/30">
+          <span className="font-label text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-brand-beam/15 text-brand-beam border border-brand-beam/30">
             Nuevo
           </span>
         ) : (
-          <span className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/60 flex items-center gap-1">
+          <span className="font-label text-[10px] uppercase tracking-widest text-brand-beam/70 flex items-center gap-1">
             <EyeIcon /> Ver
           </span>
         )}
       </span>
       {fresh && (
-        <span className="absolute top-4 right-4 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 font-label text-[10px] uppercase tracking-widest text-[#00bfff]/60 flex items-center gap-1">
+        <span className="absolute top-4 right-4 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 font-label text-[10px] uppercase tracking-widest text-brand-beam/70 flex items-center gap-1">
           <EyeIcon /> Ver
         </span>
       )}
 
       {/* Title */}
-      <h2 className={`font-display text-base lg:text-lg font-bold leading-snug line-clamp-2 ${fresh ? "pr-14" : ""}`}>
+      <h2 className={`font-display text-base lg:text-lg font-semibold leading-snug text-brand-frost line-clamp-2 ${fresh ? "pr-14" : ""}`}>
         {post.title}
       </h2>
 
       {/* Author */}
       {post.author && (
-        <p className="font-body text-sm text-gray-500 dark:text-gray-500 truncate -mt-1">
+        <p className="font-body text-sm text-brand-steel/75 truncate -mt-1">
           {post.author}
         </p>
       )}
@@ -70,7 +70,7 @@ const PostComponent = React.memo(({ post }: Props) => {
       {(post.key || post.bpm || post.timeSig) && (
         <div className="flex items-center gap-2 flex-wrap">
           {post.key && (
-            <span className="font-label text-xs px-2.5 py-0.5 rounded-full border border-[#00bfff]/40 text-[#00bfff]">
+            <span className="font-label text-xs px-2.5 py-0.5 rounded-full border border-brand-beam/40 text-brand-beam">
               {post.key}
             </span>
           )}
@@ -86,7 +86,7 @@ const PostComponent = React.memo(({ post }: Props) => {
 
       {/* Tags */}
       {post.tags?.length > 0 && (
-        <div className="flex flex-wrap gap-x-2 gap-y-0.5 pt-1 border-t border-[#003572]/10 dark:border-[#00bfff]/10">
+        <div className="flex flex-wrap gap-x-2 gap-y-0.5 pt-1 border-t border-brand-steel/10">
           {post.tags.map((tag) => (
             <span key={tag._id} className="font-label text-[10px] text-gray-500 dark:text-gray-400 lowercase">
               #{tag.name}

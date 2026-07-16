@@ -1,0 +1,108 @@
+:root {
+  color-scheme: dark;
+  --brand-blackout: 1 11 23;
+  --brand-console: 7 22 36;
+  --brand-deck: 13 34 52;
+  --brand-beam: 18 200 244;
+  --brand-frost: 215 231 246;
+  --brand-steel: 127 148 168;
+  --brand-radius-panel: 16px;
+  --brand-radius-control: 10px;
+  --brand-duration-fast: 150ms;
+  --brand-duration-reveal: 210ms;
+}
+
+.brand-atmosphere {
+  background-color: rgb(var(--brand-blackout));
+  background-image:
+    radial-gradient(ellipse 54rem 40rem at 8% 26%, rgb(var(--brand-beam) / 0.11), transparent 70%),
+    radial-gradient(circle at 78% -10%, rgb(var(--brand-beam) / 0.2), transparent 38rem),
+    radial-gradient(ellipse 62rem 44rem at 56% 110%, rgb(var(--brand-beam) / 0.095), transparent 72%),
+    linear-gradient(122deg, transparent 0 45%, rgb(var(--brand-beam) / 0.035) 45.15%, rgb(var(--brand-beam) / 0.075) 56%, rgb(var(--brand-beam) / 0.025) 68%, transparent 77%),
+    linear-gradient(64deg, transparent 0 67%, rgb(var(--brand-beam) / 0.04) 75%, transparent 88%),
+    linear-gradient(180deg, rgb(var(--brand-deck) / 0.24), rgb(var(--brand-blackout) / 0.08) 52%, rgb(var(--brand-console) / 0.32));
+  background-repeat: no-repeat;
+}
+
+@media (min-width: 768px) {
+  .brand-atmosphere {
+    background-attachment: fixed;
+  }
+}
+
+.brand-navbar {
+  isolation: isolate;
+}
+
+.brand-navbar::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0 auto 0 50%;
+  width: 100dvw;
+  content: "";
+  pointer-events: none;
+  border-bottom: 1px solid rgb(var(--brand-beam) / 0.15);
+  background: rgb(var(--brand-blackout) / 0.86);
+  box-shadow: 0 10px 40px rgb(var(--brand-blackout) / 0.28);
+  backdrop-filter: blur(12px);
+  transform: translateX(-50%);
+}
+
+.brand-facet-panel {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.brand-facet-panel::before {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 0;
+  width: 5.5rem;
+  height: 3px;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgb(var(--brand-beam) / 0.9));
+  clip-path: polygon(28% 0, 100% 0, 100% 100%, 0 100%);
+}
+
+.brand-stage-hero {
+  position: relative;
+  isolation: isolate;
+}
+
+.brand-stage-hero::before {
+  position: absolute;
+  z-index: -1;
+  inset: -2rem 0 auto 36%;
+  height: 10rem;
+  content: "";
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(118deg, transparent 6%, rgb(var(--brand-beam) / 0.13) 48%, transparent 82%);
+  filter: blur(2px);
+  transform: translate3d(1rem, -0.5rem, 0);
+  animation: brand-beam-reveal var(--brand-duration-reveal) ease-out forwards;
+}
+
+.brand-lockup-mark {
+  box-shadow:
+    inset 0 0 0 1px rgb(var(--brand-frost) / 0.12),
+    0 0 24px rgb(var(--brand-beam) / 0.1);
+}
+
+@keyframes brand-beam-reveal {
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-stage-hero::before {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+}

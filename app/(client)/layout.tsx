@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { Advent_Pro, Urbanist, Jura } from "next/font/google";
 import "./globals.css";
+import "../brand.css";
+import { bodyFont, displayFont, labelFont } from "../brandFonts";
 import { Provider } from "../utils/Provider";
 import ActivityPing from "../components/ActivityPing";
 import ImpersonationBanner from "../components/ImpersonationBanner";
@@ -8,22 +9,6 @@ import AudioPlayer from "../components/AudioPlayer";
 import SongSheet from "../components/SongSheet";
 import NativeAuthBootstrap from "../components/NativeAuthBootstrap";
 import TextScaleBootstrap from "../components/TextScaleBootstrap";
-
-const displayFont = Advent_Pro({
-  weight: "600",
-  subsets: ["latin"],
-  variable: "--font-display",
-});
-const bodyFont = Urbanist({
-  subsets: ["latin"],
-  weight: ["400", "600", "800"],
-  variable: "--font-body",
-});
-const labelFont = Jura({
-  weight: "600",
-  subsets: ["latin"],
-  variable: "--font-label",
-});
 
 export const metadata: Metadata = {
   title: "Oasis Worship Team",
@@ -63,15 +48,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" suppressHydrationWarning>
+    <html
+      lang="es"
+      suppressHydrationWarning
+      className={`${displayFont.variable} ${bodyFont.variable} ${labelFont.variable}`}
+    >
       <body
         className={`
-          ${displayFont.variable} ${bodyFont.variable} ${labelFont.variable}
-          font-body
+          brand-atmosphere font-body
           min-h-screen
-          bg-[#C8D8EB] text-[#003572]
-          dark:bg-[#010b17] dark:text-[#C8D8EB]
-          dark:selection:bg-teal-600
+          bg-brand-blackout text-brand-frost
+          selection:bg-brand-beam/35 selection:text-brand-frost
         `}
       >
         <Provider>

@@ -23,13 +23,13 @@ export interface DayCardProps {
 }
 
 const SUNDAY_THEME = {
-  border:       "border-[#003572] dark:border-[#00bfff]",
-  shadow:       "shadow-[#00bfff]/20",
-  headerBg:     "bg-[#003572] dark:bg-[#001f3f]",
-  headerBorder: "border-[#002249] dark:border-[#00bfff]",
-  accent:       "text-[#00bfff]",
-  accentMuted:  "text-[#00bfff]/70",
-  accentHex:    "#00bfff",
+  border:       "border-brand-beam/45",
+  shadow:       "shadow-brand-beam/10",
+  headerBg:     "bg-brand-deck/80",
+  headerBorder: "border-brand-beam/25",
+  accent:       "text-brand-beam",
+  accentMuted:  "text-brand-beam/70",
+  accentHex:    "#12c8f4",
 };
 
 const SATURDAY_THEME = {
@@ -89,7 +89,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
 
   return (
     <>
-      <div className={`border ${t.border} rounded-xl overflow-hidden shadow-md ${t.shadow}`}>
+      <div className={`brand-facet-panel border ${t.border} rounded-[var(--brand-radius-panel)] overflow-hidden bg-brand-console/55 shadow-lg ${t.shadow}`}>
         {/* Header */}
         <div className={`${t.headerBg} px-5 py-4 border-b ${t.headerBorder}`}>
           <div className="flex items-start justify-between gap-3">

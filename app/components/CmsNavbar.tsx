@@ -1,34 +1,30 @@
 import React from "react";
 import Link from "next/link";
-import { Orbitron } from "next/font/google";
-import { HomeIconDark, HomeIconLight } from "./icons";
-import exp from "constants";
 import Image from "next/image";
-import Header from "./Header";
-import ThemeSwitch from "./ThemeSwitch";
-
-const font = Orbitron({ weight: "900", subsets: ["latin"] });
 
 const CmsNavbar = () => {
 	return (
-		<div className="mx-auto max-w-full px-6 mb-10 mt-5">
-			<div className="grid grid-cols-4 mt-4 justify-items-center ">
-				<Link className="basis-1/4 justify-self-start self-center" href="/">
-					{/*<div className={`${font.className} text-5xl dark:text-[#C8D8EB]`}>
-						Oasis Worship Team
-					</div> */}
-					<Image src="/LogoOasis.png" alt="Oasis Worship Team" width={100} height= {100} className={`${font.className}`}></Image>
-				</Link>
-				<div className="mx-20 self-center basis-1/2 col-start-2 col-span-2 pt-10 text-sm" >
-				<div className={`${font.className} text-2xl`}>
-						Content Studio
+		<header className="border-b border-brand-beam/15 bg-brand-blackout/85 backdrop-blur-md">
+			<div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-6 px-6">
+				<Link className="flex min-w-0 items-center gap-2.5" href="/" aria-label="Volver a Backstage">
+					<Image
+						src="/icons/backstage-v2-192.png"
+						alt=""
+						width={40}
+						height={40}
+						className="brand-lockup-mark h-10 w-10 rounded-[12px]"
+					/>
+					<div className="min-w-0 leading-none">
+						<p className="font-display text-base uppercase tracking-[0.12em] text-brand-frost">Backstage</p>
+						<p className="mt-1 font-label text-[8px] uppercase tracking-[0.2em] text-brand-steel">Oasis Worship Team</p>
 					</div>
-				</div>
-				<div className="basis-1/4 justify-self-end col-start-4 self-center pb-10">
-					<ThemeSwitch />
+				</Link>
+				<div className="text-right">
+					<p className="font-label text-[9px] uppercase tracking-[0.2em] text-brand-beam">Administración</p>
+					<p className="mt-1 font-display text-base uppercase tracking-[0.08em] text-brand-frost">Content Studio</p>
 				</div>
 			</div>
-		</div>
+		</header>
 	);
 };
 
