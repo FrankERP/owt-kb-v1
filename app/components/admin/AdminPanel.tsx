@@ -62,10 +62,10 @@ const ROLE_LABEL: Record<OWTRole, string> = {
 
 // ─── Shared input style ────────────────────────────────────────────────────────
 const inputCls =
-  "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
+  "brand-search-console w-full px-3 py-2.5 bg-transparent font-body text-sm focus:outline-none transition-colors";
 
 const selectCls =
-  "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-[#010b17] dark:bg-[#010b17] font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
+  "brand-search-console w-full px-3 py-2.5 bg-[#010b17] font-body text-sm focus:outline-none transition-colors";
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 function Avatar({
@@ -139,8 +139,8 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:px-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-md bg-[#C8D8EB] dark:bg-[#0a1929] border border-[#003572]/20 dark:border-[#00bfff]/20 rounded-t-2xl sm:rounded-xl shadow-2xl max-h-[90svh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#003572]/10 dark:border-[#00bfff]/10 shrink-0">
+      <div className="brand-facet-panel brand-surface relative z-10 flex max-h-[90svh] w-full max-w-md flex-col rounded-t-2xl border-brand-beam/20 shadow-2xl sm:rounded-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-brand-beam/10 bg-brand-deck/30 px-6 py-5">
           <h2 className="font-display text-lg uppercase tracking-wide">{title}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-[#00bfff] transition-colors text-xl leading-none">×</button>
         </div>
@@ -327,15 +327,15 @@ function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) =>
   return (
     <div className="relative">
       <div className="overflow-x-auto -mx-2 px-2 pb-1">
-        <div className="flex gap-1 p-1 rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 w-max min-w-full">
+        <div className="brand-admin-tabs flex min-w-full w-max gap-1 rounded-xl p-1.5">
           {visible.map(({ id, label }) => (
             <button
               key={id}
               onClick={() => onChange(id)}
               className={`font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${
                 active === id
-                  ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#C8D8EB] dark:text-[#00bfff]"
-                  : "text-gray-500 hover:text-[#00bfff]"
+                  ? "bg-brand-beam/15 text-brand-beam shadow-[inset_0_0_0_1px_rgb(var(--brand-beam)/0.15)]"
+                  : "text-brand-steel/60 hover:bg-brand-beam/[0.04] hover:text-brand-frost"
               }`}
             >
               {label}
@@ -524,42 +524,44 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
   };
 
   if (tab === "services") return (
-    <div className="space-y-6">
+    <div className="brand-admin-workspace space-y-6">
       <TabBar active={tab} onChange={setTab} role={role} />
-      <ServicesPanel />
+      <div className="brand-surface rounded-2xl p-4 sm:p-6"><ServicesPanel /></div>
     </div>
   );
 
   if (tab === "proposals") return (
-    <div className="space-y-6">
+    <div className="brand-admin-workspace space-y-6">
       <TabBar active={tab} onChange={setTab} role={role} />
-      <ProposalsPanel />
+      <div className="brand-surface rounded-2xl p-4 sm:p-6"><ProposalsPanel /></div>
     </div>
   );
 
   if (tab === "availability") return (
-    <div className="space-y-6">
+    <div className="brand-admin-workspace space-y-6">
       <TabBar active={tab} onChange={setTab} role={role} />
-      <AvailabilityPanel />
+      <div className="brand-surface rounded-2xl p-4 sm:p-6"><AvailabilityPanel /></div>
     </div>
   );
 
   if (tab === "activity") return (
-    <div className="space-y-6">
+    <div className="brand-admin-workspace space-y-6">
       <TabBar active={tab} onChange={setTab} role={role} />
-      <ActivityPanel />
+      <div className="brand-surface rounded-2xl p-4 sm:p-6"><ActivityPanel /></div>
     </div>
   );
 
   if (tab === "content") return (
-    <div className="space-y-6">
+    <div className="brand-admin-workspace space-y-6">
       <TabBar active={tab} onChange={setTab} role={role} />
-      <ContentPanel canDelete={role === "super-admin" || role === "admin"} />
+      <div className="brand-surface rounded-2xl p-4 sm:p-6">
+        <ContentPanel canDelete={role === "super-admin" || role === "admin"} />
+      </div>
     </div>
   );
 
   return (
-    <div className="space-y-6">
+    <div className="brand-admin-workspace space-y-6">
       <TabBar active={tab} onChange={setTab} role={role} />
 
       {/* Header */}
@@ -577,7 +579,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
         </div>
         <button
           onClick={() => setModal({ type: "add" })}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors"
+          className="flex items-center gap-2 rounded-lg border border-brand-beam/30 bg-brand-beam/15 px-4 py-2.5 font-label text-xs uppercase tracking-widest text-brand-beam transition-colors hover:bg-brand-beam/25"
         >
           <span className="text-base leading-none">+</span>
           Agregar
@@ -589,15 +591,15 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
         {/* Row 1: filter key + filter value + sort direction */}
         <div className="flex gap-2 flex-wrap">
           {/* Filter by: type | role */}
-          <div className="flex rounded-lg border border-[#00bfff]/20 overflow-hidden shrink-0">
+          <div className="brand-search-console flex shrink-0 overflow-hidden">
             {(["type", "role"] as FilterKey[]).map((k) => (
               <button
                 key={k}
                 onClick={() => { setFilterKey(k); setFilterValue(""); }}
                 className={`px-3 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
                   filterKey === k
-                    ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#00bfff]"
-                    : "text-gray-500 hover:text-[#00bfff]"
+                    ? "bg-brand-beam/15 text-brand-beam"
+                    : "text-brand-steel/60 hover:text-brand-beam"
                 }`}
               >
                 {k === "type" ? "Tipo" : "Rol"}
@@ -609,7 +611,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
           <select
             value={filterValue}
             onChange={(e) => setFilterValue(e.target.value)}
-            className="flex-1 min-w-[120px] px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-[#010b17] font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors text-gray-300"
+            className="brand-search-console min-w-[120px] flex-1 bg-[#010b17] px-3 py-2 font-body text-sm text-brand-frost/80 focus:outline-none"
           >
             <option value="">{filterKey === "type" ? "Todos los tipos" : "Todos los roles"}</option>
             {filterKey === "type"
@@ -626,15 +628,15 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
           </select>
 
           {/* Sort direction */}
-          <div className="flex rounded-lg border border-[#00bfff]/20 overflow-hidden shrink-0">
+          <div className="brand-search-console flex shrink-0 overflow-hidden">
             {(["asc", "desc"] as SortDir[]).map((d) => (
               <button
                 key={d}
                 onClick={() => setSortDir(d)}
                 className={`px-3 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
                   sortDir === d
-                    ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#00bfff]"
-                    : "text-gray-500 hover:text-[#00bfff]"
+                    ? "bg-brand-beam/15 text-brand-beam"
+                    : "text-brand-steel/60 hover:text-brand-beam"
                 }`}
               >
                 {d === "asc" ? "A→Z" : "Z→A"}
@@ -644,7 +646,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
         </div>
 
         {/* Row 2: search */}
-        <div className="relative">
+        <div className="brand-search-console relative">
           <svg
             className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
             width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -653,7 +655,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
           <input
-            className="w-full pl-9 pr-8 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors placeholder:text-gray-600"
+            className="w-full bg-transparent py-2.5 pl-9 pr-8 font-body text-sm placeholder:text-brand-steel/40 focus:outline-none"
             placeholder="Buscar por nombre, alias o email…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -696,7 +698,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
           {filteredMembers.map((m) => (
             <div
               key={m._id}
-              className="flex items-center gap-4 px-4 py-3 rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 bg-[#003572]/5 dark:bg-[#00bfff]/5 hover:border-[#003572]/30 dark:hover:border-[#00bfff]/20 transition-colors group"
+              className="brand-member-row group flex items-center gap-4 rounded-xl px-4 py-3 transition-all"
             >
               <Avatar
                 name={m.alias?.trim() || m.member_name}
@@ -738,7 +740,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
               />
 
               {/* Actions */}
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                 {role === "super-admin" && (
                   <ActionBtn title="Ver como este miembro" onClick={() => handleImpersonate(m._id)}>
                     <MaskIcon />

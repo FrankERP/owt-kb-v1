@@ -100,12 +100,10 @@ export async function generateStaticParams() {
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-4 mb-8">
-      <div className="flex-1 h-px bg-[#003572]/20 dark:bg-[#00bfff]/10" />
-      <h2 className="font-display text-lg font-bold uppercase tracking-widest shrink-0">
+    <div className="brand-section-heading mb-8 border-b border-brand-steel/10 pb-4">
+      <h2 className="font-display text-2xl font-semibold text-brand-frost md:text-3xl">
         {children}
       </h2>
-      <div className="flex-1 h-px bg-[#003572]/20 dark:bg-[#00bfff]/10" />
     </div>
   );
 }
@@ -148,18 +146,18 @@ const Page = async ({ params }: Params) => {
       <Navbar title={post?.title} author={post?.author} tags schedule />
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <div className="relative bg-[#001f3f] dark:bg-[#00162e] border-b border-[#003572] dark:border-[#00bfff]/15">
+      <div className="brand-song-hero">
         {/* Edit control — inline, top-right (self-gates to editors); avoids a floating FAB over the lyrics */}
         <div className="absolute top-4 right-4 z-10">
           <EditSongButton post={post} inline />
         </div>
-        <div className="max-w-7xl mx-auto px-6 pt-10 pb-12 flex flex-col items-center text-center">
+        <div className="relative mx-auto flex max-w-7xl flex-col items-center px-6 pb-14 pt-12 text-center sm:pb-16 sm:pt-16">
 
           {post?.tags && post.tags.length > 0 && (
-            <div className="flex flex-wrap justify-center gap-3 mb-5">
+            <div className="mb-6 flex flex-wrap justify-center gap-2">
               {post.tags.map((tag) => (
                 <Link key={tag._id} href={`/tag/${tag.slug.current}`}>
-                  <span className="font-label text-xs uppercase tracking-widest text-[#00bfff]/60 hover:text-[#00bfff] transition-colors">
+                  <span className="rounded-md border border-brand-beam/15 bg-brand-beam/[0.055] px-2.5 py-1.5 font-label text-[9px] lowercase tracking-wider text-brand-beam/70 transition-colors hover:border-brand-beam/35 hover:text-brand-beam">
                     #{tag.name}
                   </span>
                 </Link>
@@ -167,12 +165,12 @@ const Page = async ({ params }: Params) => {
             </div>
           )}
 
-          <h1 className="font-display text-xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-white leading-tight mb-2 text-balance break-words">
+          <h1 className="max-w-4xl text-balance break-words font-display text-3xl font-semibold leading-[0.98] text-brand-frost sm:text-5xl lg:text-6xl">
             {post?.title}
           </h1>
 
           {post?.authors && post.authors.length > 0 ? (
-            <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 mb-8">
+            <div className="mb-9 mt-4 flex flex-wrap justify-center gap-x-2 gap-y-1">
               {post.authors.map((a, i) => (
                 <span key={a._id} className="font-body text-lg text-[#C8D8EB]/60">
                   <Link href={`/author/${a.slug.current}`} className="hover:text-[#00bfff] transition-colors">
@@ -183,22 +181,22 @@ const Page = async ({ params }: Params) => {
               ))}
             </div>
           ) : post?.author ? (
-            <p className="font-body text-lg text-[#C8D8EB]/60 mb-8">{post.author}</p>
+            <p className="mb-9 mt-4 font-body text-lg text-brand-steel/70">{post.author}</p>
           ) : null}
 
-          <div className="flex flex-wrap justify-center gap-3">
+          <div className="flex flex-wrap justify-center gap-2.5">
             {post?.key && (
-              <span className="font-label text-sm px-3 py-1 rounded-full border border-[#00bfff]/40 text-[#00bfff]">
+              <span className="brand-key-dial px-3 font-display text-sm">
                 {post.key}
               </span>
             )}
             {post?.bpm && (
-              <span className="font-label text-sm px-3 py-1 rounded-full border border-[#C8D8EB]/20 text-[#C8D8EB]/60">
+              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[10px] uppercase tracking-widest text-brand-steel/70">
                 {post.bpm} BPM
               </span>
             )}
             {post?.timeSig && (
-              <span className="font-label text-sm px-3 py-1 rounded-full border border-[#C8D8EB]/20 text-[#C8D8EB]/60">
+              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[10px] uppercase tracking-widest text-brand-steel/70">
                 {post.timeSig}
               </span>
             )}
@@ -250,7 +248,7 @@ const Page = async ({ params }: Params) => {
               {post.tutorials2!.map((tutorial, i) => (
                 <div
                   key={i}
-                  className="rounded-xl border border-[#003572]/25 dark:border-[#00bfff]/15 overflow-hidden"
+                  className="brand-surface overflow-hidden rounded-2xl"
                 >
                   <div className="aspect-video">
                     <iframe
@@ -285,7 +283,7 @@ const Page = async ({ params }: Params) => {
               {(post.musicalReferenceUrl || (post.referenceLinks?.[0]?.url)) && (
                 <a href={post.musicalReferenceUrl || post.referenceLinks![0].url}
                   target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-4 p-4 rounded-xl border border-[#003572]/25 dark:border-[#00bfff]/15 hover:border-[#00bfff]/50 hover:bg-[#00bfff]/5 transition-colors group">
+                  className="brand-library-module brand-surface-interactive group flex items-center gap-4 p-4">
                   <span className="flex items-center justify-center w-11 h-11 rounded-full bg-[#00bfff]/12 text-[#00bfff] shrink-0">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg>
                   </span>
@@ -298,7 +296,7 @@ const Page = async ({ params }: Params) => {
               {post.lyricsVideoUrl && (
                 <a href={post.lyricsVideoUrl}
                   target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-4 p-4 rounded-xl border border-[#003572]/25 dark:border-[#00bfff]/15 hover:border-[#00bfff]/50 hover:bg-[#00bfff]/5 transition-colors group">
+                  className="brand-library-module brand-surface-interactive group flex items-center gap-4 p-4">
                   <span className="flex items-center justify-center w-11 h-11 rounded-full bg-[#00bfff]/12 text-[#00bfff] shrink-0">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="22" /></svg>
                   </span>
@@ -320,7 +318,7 @@ const Page = async ({ params }: Params) => {
               {history.map((entry, i) => (
                 <div
                   key={i}
-                  className="rounded-xl border border-[#003572]/25 dark:border-[#00bfff]/15 overflow-hidden"
+                  className="brand-surface overflow-hidden rounded-2xl"
                 >
                   {/* Header row: day + date + key */}
                   <div className="flex items-center justify-between px-5 py-3 bg-[#003572]/10 dark:bg-[#00bfff]/5 border-b border-[#003572]/15 dark:border-[#00bfff]/10">

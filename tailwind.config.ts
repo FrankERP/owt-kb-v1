@@ -15,6 +15,7 @@ const config: Config = {
 					console: "rgb(var(--brand-console) / <alpha-value>)",
 					deck: "rgb(var(--brand-deck) / <alpha-value>)",
 					beam: "rgb(var(--brand-beam) / <alpha-value>)",
+					signal: "rgb(var(--brand-signal) / <alpha-value>)",
 					frost: "rgb(var(--brand-frost) / <alpha-value>)",
 					steel: "rgb(var(--brand-steel) / <alpha-value>)",
 				},
