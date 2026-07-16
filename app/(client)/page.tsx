@@ -105,11 +105,12 @@ export default async function Home() {
     <div>
       <Navbar title="OWT" tags schedule />
 
-      <div className="mx-auto max-w-7xl px-6 pt-10 mb-12">
-        <h2 className="font-display text-center text-2xl md:text-3xl font-bold mb-6">
-          Esta semana
-        </h2>
-        <div className={`grid grid-cols-1 gap-6 ${totalCards > 1 ? "md:grid-cols-2" : "max-w-xl mx-auto"}`}>
+      <div className="mx-auto mb-16 max-w-7xl px-6 pt-12">
+        <div className="brand-section-heading mb-7">
+          <p className="font-label text-[9px] uppercase tracking-[0.24em] text-brand-beam">Programación</p>
+          <h2 className="mt-1 font-display text-3xl font-semibold text-brand-frost md:text-4xl">Esta semana</h2>
+        </div>
+        <div className={`grid grid-cols-1 gap-6 ${totalCards > 1 ? "md:grid-cols-2" : "mx-auto max-w-3xl"}`}>
           {hasSpecials && specials.map((sp) => (
             <DayCard
               key={sp._id}
@@ -151,10 +152,16 @@ export default async function Home() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl px-6 pt-10">
-        <h2 className="font-display uppercase flex justify-center text-2xl md:text-3xl font-bold mb-4">
-          Todas las canciones
-        </h2>
+      <div className="mx-auto max-w-7xl px-6 pt-8">
+        <div className="mb-7 flex items-end justify-between gap-4 border-b border-brand-steel/10 pb-5">
+          <div className="brand-section-heading">
+            <p className="font-label text-[9px] uppercase tracking-[0.24em] text-brand-beam">Biblioteca</p>
+            <h2 className="mt-1 font-display text-3xl font-semibold text-brand-frost md:text-4xl">Todas las canciones</h2>
+          </div>
+          <p className="hidden font-label text-[10px] uppercase tracking-widest text-brand-steel/45 sm:block">
+            {posts?.length ?? 0} títulos
+          </p>
+        </div>
       </div>
       <SongSearchList posts={posts ?? []} />
     </div>

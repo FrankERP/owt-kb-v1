@@ -34,61 +34,43 @@ const PostComponent = React.memo(({ post }: Props) => {
       role="button"
       tabIndex={0}
       aria-label={`Ver ${post.title}`}
-      className="brand-facet-panel group relative flex flex-col gap-2.5 p-4 lg:p-5 rounded-[var(--brand-radius-panel)] border border-brand-steel/15 bg-brand-console/35 hover:border-brand-beam/40 hover:bg-brand-deck/50 hover:shadow-lg hover:shadow-brand-beam/10 cursor-pointer transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-beam/60"
+      className="brand-library-module brand-surface-interactive group relative flex cursor-pointer flex-col gap-4 p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-beam/60 lg:p-5"
     >
-      {/* New badge / hover eye — absolute, top-right */}
-      <span className={`absolute top-4 right-4 pointer-events-none transition-opacity duration-150 ${fresh ? "group-hover:opacity-0" : "opacity-0 group-hover:opacity-100"}`}>
-        {fresh ? (
-          <span className="font-label text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-brand-beam/15 text-brand-beam border border-brand-beam/30">
-            Nuevo
-          </span>
-        ) : (
-          <span className="font-label text-[10px] uppercase tracking-widest text-brand-beam/70 flex items-center gap-1">
-            <EyeIcon /> Ver
-          </span>
-        )}
-      </span>
-      {fresh && (
-        <span className="absolute top-4 right-4 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 font-label text-[10px] uppercase tracking-widest text-brand-beam/70 flex items-center gap-1">
-          <EyeIcon /> Ver
+      <div className="flex items-start gap-3">
+        <span className="brand-key-dial shrink-0 font-display text-sm uppercase">
+          {post.key || "—"}
         </span>
-      )}
-
-      {/* Title */}
-      <h2 className={`font-display text-base lg:text-lg font-semibold leading-snug text-brand-frost line-clamp-2 ${fresh ? "pr-14" : ""}`}>
-        {post.title}
-      </h2>
-
-      {/* Author */}
-      {post.author && (
-        <p className="font-body text-sm text-brand-steel/75 truncate -mt-1">
-          {post.author}
-        </p>
-      )}
-
-      {/* Key · BPM · TimeSig */}
-      {(post.key || post.bpm || post.timeSig) && (
-        <div className="flex items-center gap-2 flex-wrap">
-          {post.key && (
-            <span className="font-label text-xs px-2.5 py-0.5 rounded-full border border-brand-beam/40 text-brand-beam">
-              {post.key}
-            </span>
+        <div className="min-w-0 flex-1 pt-0.5">
+          <p className="mb-1 font-label text-[9px] uppercase tracking-[0.2em] text-brand-steel/55">
+            Repertorio
+          </p>
+          <h2 className="line-clamp-2 font-display text-base font-semibold leading-snug text-brand-frost transition-colors group-hover:text-brand-beam lg:text-lg">
+            {post.title}
+          </h2>
+          {post.author && (
+            <p className="mt-1 truncate font-body text-sm text-brand-steel/70">
+              {post.author}
+            </p>
           )}
-          {post.bpm && (
-            <span className="font-label text-xs text-gray-500">{post.bpm} BPM</span>
-          )}
-          {post.bpm && post.timeSig && <span className="text-gray-700 text-xs">·</span>}
-          {post.timeSig && (
-            <span className="font-label text-xs text-gray-500">{post.timeSig}</span>
-          )}
+        </div>
+        <span className={`pointer-events-none mt-1 flex shrink-0 items-center gap-1 font-label text-[9px] uppercase tracking-widest transition-colors ${fresh ? "text-brand-beam" : "text-brand-steel/40 group-hover:text-brand-beam/80"}`}>
+          {fresh ? "Nuevo" : <><EyeIcon /> Ver</>}
+        </span>
+      </div>
+
+      {(post.bpm || post.timeSig) && (
+        <div className="flex items-center gap-3 border-t border-brand-steel/10 pt-3 font-label text-[10px] uppercase tracking-widest text-brand-steel/55">
+          {post.bpm && <span>{post.bpm} BPM</span>}
+          {post.bpm && post.timeSig && <span className="h-3 w-px bg-brand-steel/15" />}
+          {post.timeSig && <span>{post.timeSig}</span>}
         </div>
       )}
 
       {/* Tags */}
       {post.tags?.length > 0 && (
-        <div className="flex flex-wrap gap-x-2 gap-y-0.5 pt-1 border-t border-brand-steel/10">
+        <div className={`flex flex-wrap gap-1.5 ${post.bpm || post.timeSig ? "" : "border-t border-brand-steel/10 pt-3"}`}>
           {post.tags.map((tag) => (
-            <span key={tag._id} className="font-label text-[10px] text-gray-500 dark:text-gray-400 lowercase">
+            <span key={tag._id} className="rounded-md border border-brand-steel/10 bg-brand-blackout/30 px-2 py-1 font-label text-[9px] lowercase text-brand-steel/60 transition-colors group-hover:border-brand-beam/15 group-hover:text-brand-steel/85">
               #{tag.name}
             </span>
           ))}

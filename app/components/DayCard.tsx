@@ -89,29 +89,39 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
 
   return (
     <>
-      <div className={`brand-facet-panel border ${t.border} rounded-[var(--brand-radius-panel)] overflow-hidden bg-brand-console/55 shadow-lg ${t.shadow}`}>
+      <div className={`brand-facet-panel brand-surface overflow-hidden rounded-[var(--brand-radius-panel)] border ${t.border} shadow-xl ${t.shadow}`}>
         {/* Header */}
-        <div className={`${t.headerBg} px-5 py-4 border-b ${t.headerBorder}`}>
-          <div className="flex items-start justify-between gap-3">
-            <h3 className="font-display text-xl md:text-2xl lg:text-3xl font-bold uppercase text-[#C8D8EB]">
-              {day}
-            </h3>
-            {isNext && (
-              <span className="font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full bg-white/15 text-[#C8D8EB] border border-white/20 shrink-0 mt-1">
-                Próximo
-              </span>
-            )}
+        <div className={`${t.headerBg} border-b px-5 py-5 ${t.headerBorder}`}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className={`mb-1 font-label text-[9px] uppercase tracking-[0.24em] ${t.accentMuted}`}>Servicio</p>
+              <h3 className="font-display text-2xl font-bold uppercase leading-none text-brand-frost md:text-3xl lg:text-4xl">
+                {day}
+              </h3>
+              {date && (
+                <p className="mt-2 truncate font-body text-xs capitalize text-brand-frost/55 md:text-sm">
+                  {new Date(date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-ES", {
+                    weekday: "long", year: "numeric", month: "long", day: "numeric",
+                  })}
+                </p>
+              )}
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              {date && (
+                <span className="rounded-lg border border-brand-frost/10 bg-brand-blackout/35 px-3 py-2 text-center font-label text-[10px] uppercase tracking-[0.15em] text-brand-frost/70 shadow-inner">
+                  {shortDate}
+                </span>
+              )}
+              {isNext && (
+                <span className="rounded-full border border-brand-signal/35 bg-brand-signal/10 px-2.5 py-1 font-label text-[9px] uppercase tracking-widest text-brand-signal">
+                  Próximo
+                </span>
+              )}
+            </div>
           </div>
-          {date && (
-            <p className="text-xs md:text-sm lg:text-base text-[#C8D8EB]/60 capitalize mt-0.5">
-              {new Date(date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-ES", {
-                weekday: "long", year: "numeric", month: "long", day: "numeric",
-              })}
-            </p>
-          )}
         </div>
 
-        <div className="p-4 md:p-5 space-y-4">
+        <div className="space-y-5 p-5 md:p-6">
           {setlist?.team_notes && (
             <section className="rounded-lg border px-4 py-3" style={{ borderColor: `${t.accentHex}35`, background: `${t.accentHex}0d` }}>
               <p className={`font-label text-[10px] uppercase tracking-widest ${t.accentMuted} mb-1`}>Mensaje para el equipo</p>
@@ -139,7 +149,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                   )}
                 </div>
               </div>
-              <ol>
+              <ol className="divide-y divide-brand-steel/[0.06]">
                 {runs.map((run) => {
                   // Single-song medley groups render as plain singles
                   if (run.kind === "single" || (run.kind === "medley" && run.songs.length === 1)) {
@@ -148,11 +158,11 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                       <li key={song._id}>
                         <button
                           onClick={() => openSheet(song._id, song.play_key || undefined)}
-                          className="w-full flex items-center gap-3 px-2 py-2 -mx-2 rounded-lg text-left hover:bg-white/5 group transition-colors cursor-pointer"
+                          className="group -mx-2 flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-brand-beam/[0.055]"
                         >
                           <span className="font-label text-xs text-gray-400 w-4 shrink-0 text-right tabular-nums">{n}</span>
                           <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
-                            <span className="font-body text-sm md:text-base font-semibold truncate group-hover:text-[#00bfff] transition-colors">{song.title}</span>
+                            <span className="truncate font-body text-sm font-semibold transition-colors group-hover:text-brand-beam md:text-base">{song.title}</span>
                             {song.author && <span className="text-gray-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
@@ -186,11 +196,11 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                           )}
                           <button
                             onClick={() => openSheet(song._id, song.play_key || undefined)}
-                            className="w-full flex items-center gap-3 px-2 py-1.5 -mx-2 rounded-lg text-left hover:bg-white/5 group transition-colors cursor-pointer"
+                            className="group -mx-2 flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-brand-beam/[0.055]"
                           >
                             <span className="font-label text-xs text-gray-400 w-4 shrink-0 text-right tabular-nums">{n}</span>
                             <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
-                              <span className="font-body text-sm md:text-base font-semibold truncate group-hover:text-[#00bfff] transition-colors">{song.title}</span>
+                              <span className="truncate font-body text-sm font-semibold transition-colors group-hover:text-brand-beam md:text-base">{song.title}</span>
                               {song.author && <span className="text-gray-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
@@ -211,7 +221,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
 
           {/* Team */}
           {hasRole && (
-            <section className={hasSetlist ? "border-t border-gray-200 dark:border-gray-800 pt-5" : ""}>
+            <section className={hasSetlist ? "border-t border-brand-steel/12 pt-5" : ""}>
               <h4 className="font-label text-xs md:text-sm lg:text-base uppercase tracking-widest text-[#C8D8EB]/70 dark:text-[#C8D8EB]/50 mb-3">
                 Equipo
               </h4>

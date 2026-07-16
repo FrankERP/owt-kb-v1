@@ -85,26 +85,26 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
   );
 
   return (
-    <div className="mx-auto max-w-7xl px-6 pt-8 pb-20 space-y-10">
+    <div className="mx-auto max-w-7xl space-y-12 px-6 pb-20 pt-12">
 
       {/* ── Stats + Controls ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+      <div className="flex flex-col gap-5 border-b border-brand-steel/10 pb-7 sm:flex-row sm:items-center">
         {/* Stats */}
         <div className="flex items-baseline gap-4 flex-1">
           <div className="flex items-baseline gap-1.5">
-            <span className="font-display text-3xl text-[#00bfff]">{tags.length}</span>
-            <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">etiquetas</span>
+            <span className="font-display text-4xl text-brand-beam">{tags.length}</span>
+            <span className="font-label text-[9px] uppercase tracking-[0.2em] text-brand-steel/55">etiquetas</span>
           </div>
           <span className="text-gray-700 text-sm">·</span>
           <div className="flex items-baseline gap-1.5">
-            <span className="font-display text-3xl text-[#00bfff]">{totalSongs}</span>
-            <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">canciones</span>
+            <span className="font-display text-4xl text-brand-frost">{totalSongs}</span>
+            <span className="font-label text-[9px] uppercase tracking-[0.2em] text-brand-steel/55">canciones</span>
           </div>
         </div>
 
         {/* Sort + Search */}
         <div className="flex items-center gap-2 shrink-0">
-          <div className="flex rounded-lg border border-[#003572]/20 dark:border-[#00bfff]/15 overflow-hidden">
+          <div className="brand-search-console flex overflow-hidden">
             {(["popular", "alpha"] as SortMode[]).map((mode, i) => (
               <button
                 key={mode}
@@ -113,21 +113,21 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
                 className={`px-3 py-1.5 font-label text-[10px] uppercase tracking-widest transition-colors duration-150
                   ${i > 0 ? "border-l border-[#003572]/20 dark:border-[#00bfff]/15" : ""}
                   ${sort === mode
-                    ? "bg-[#00bfff]/15 text-[#00bfff]"
-                    : "text-gray-500 hover:text-gray-300 hover:bg-[#00bfff]/5"
+                    ? "bg-brand-beam/15 text-brand-beam"
+                    : "text-brand-steel/60 hover:bg-brand-beam/5 hover:text-brand-frost"
                   }`}
               >
                 {mode === "popular" ? "Popular" : "A–Z"}
               </button>
             ))}
           </div>
-          <div className="relative">
+          <div className="brand-search-console relative">
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar..."
-              className="font-label pl-8 pr-8 py-1.5 rounded-lg border border-[#003572]/20 dark:border-[#00bfff]/15 bg-transparent focus:outline-none focus:border-[#00bfff] text-sm placeholder:text-gray-600 transition-colors w-36 sm:w-48"
+              className="w-36 bg-transparent py-2 pl-8 pr-8 font-label text-sm text-brand-frost placeholder:text-brand-steel/45 focus:outline-none sm:w-48"
             />
             <svg
               className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none"
@@ -163,7 +163,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
               const pct = Math.round((count / maxCount) * 100);
               return (
                 <Link key={slug} href={`/tag/${slug}`}>
-                  <div className="relative group overflow-hidden rounded-xl border border-[#003572]/25 dark:border-[#00bfff]/15 p-5 hover:border-[#003572]/60 dark:hover:border-[#00bfff]/50 hover:shadow-xl hover:shadow-[#00bfff]/15 transition-all duration-300 cursor-pointer">
+                    <div className="brand-facet-panel brand-surface brand-surface-interactive group relative cursor-pointer overflow-hidden rounded-2xl p-6">
                     {/* Ambient glow */}
                     <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-[#00bfff]/[0.05] to-transparent pointer-events-none rounded-xl" />
                     {/* Progress bar */}
@@ -173,7 +173,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
                     />
                     <div className="relative flex items-start justify-between gap-3">
                       <div className="space-y-1.5">
-                        <h3 className="font-display text-xl capitalize leading-tight group-hover:text-[#00bfff] transition-colors duration-200">
+                        <h3 className="font-display text-2xl capitalize leading-tight text-brand-frost transition-colors duration-200 group-hover:text-brand-beam">
                           {label}
                         </h3>
                         <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">
@@ -185,7 +185,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
                           </p>
                         )}
                       </div>
-                      <span className="text-[#00bfff]/40 group-hover:text-[#00bfff]/70 transition-colors duration-200 shrink-0 mt-0.5">
+                      <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-brand-beam/15 bg-brand-beam/[0.055] text-brand-beam/50 transition-colors duration-200 group-hover:border-brand-beam/30 group-hover:text-brand-beam">
                         {icon}
                       </span>
                     </div>
@@ -208,12 +208,12 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
               const pct = Math.round(((tag.postCount ?? 0) / maxCount) * 100);
               return (
                 <Link key={tag._id} href={`/tag/${tag.slug.current}`}>
-                  <div className="relative group overflow-hidden rounded-xl border border-[#003572]/20 dark:border-[#00bfff]/10 p-4 hover:border-[#003572]/50 dark:hover:border-[#00bfff]/40 hover:shadow-lg hover:shadow-[#00bfff]/10 transition-all duration-200 cursor-pointer">
+                  <div className="brand-library-module brand-surface-interactive group relative cursor-pointer overflow-hidden p-4">
                     <div
                       className="absolute bottom-0 left-0 h-[2px] bg-gradient-to-r from-[#00bfff]/50 to-[#003572]/30 group-hover:from-[#00bfff]/80 transition-colors duration-200"
                       style={{ width: `${Math.max(pct, 8)}%` }}
                     />
-                    <h3 className="font-display text-sm capitalize mb-1 group-hover:text-[#00bfff] transition-colors duration-200 leading-snug">
+                    <h3 className="mb-1 font-display text-sm capitalize leading-snug text-brand-frost transition-colors duration-200 group-hover:text-brand-beam">
                       #{tag.name}
                     </h3>
                     <p className="font-label text-[10px] uppercase tracking-widest text-gray-600">

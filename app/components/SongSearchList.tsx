@@ -76,22 +76,35 @@ export default function SongSearchList({ posts }: Props) {
 
   return (
     <div className="mx-auto max-w-7xl px-6">
-      <div className="flex flex-col items-center gap-1.5 mb-6">
-        <div className="relative w-full max-w-md">
+      <div className="mb-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="brand-section-heading">
+          <p className="font-label text-[9px] uppercase tracking-[0.22em] text-brand-beam/75">Índice musical</p>
+          <p className="mt-1 font-body text-sm text-brand-steel/65">
+            {query.trim() ? `${filtered.length} resultados` : `${posts.length} canciones disponibles`}
+          </p>
+        </div>
+        <div className="brand-search-console relative w-full sm:max-w-md">
+          <svg
+            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-beam/55"
+            width="15" height="15" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar por título, autor o tonalidad..."
             aria-label="Buscar canciones"
-            className="font-label w-full pl-4 pr-10 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/30 bg-transparent focus:outline-none focus:ring-2 focus:ring-[#00bfff]/50 text-sm lg:text-base placeholder:text-gray-400"
+            className="w-full bg-transparent py-3 pl-10 pr-10 font-label text-sm text-brand-frost placeholder:text-brand-steel/45 focus:outline-none"
           />
           {query && (
             <button
               type="button"
               onClick={() => setQuery("")}
               aria-label="Limpiar búsqueda"
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-gray-400 hover:text-[#00bfff] focus:outline-none focus:ring-2 focus:ring-[#00bfff]/50 transition-colors"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-brand-steel/60 transition-colors hover:text-brand-beam focus:outline-none focus:ring-2 focus:ring-brand-beam/50"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -99,13 +112,8 @@ export default function SongSearchList({ posts }: Props) {
             </button>
           )}
         </div>
-        {query.trim() && (
-          <p className="font-label text-[11px] uppercase tracking-widest text-gray-400">
-            {filtered.length} {filtered.length === 1 ? "canción" : "canciones"}
-          </p>
-        )}
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 lg:gap-4 xl:grid-cols-4">
         {filtered.length > 0 ? (
           filtered.map((post) => <PostComponent key={post._id} post={post} />)
         ) : (

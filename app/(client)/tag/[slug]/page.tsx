@@ -59,16 +59,13 @@ const page = async ({ params }: Params) => {
       <Navbar title={`#${displayName}`} tags schedule />
 
       {/* Tag hero */}
-      <div className="relative overflow-hidden border-b border-[#003572]/15 dark:border-[#00bfff]/10">
-        {/* Ambient glow */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-32 bg-[#00bfff]/10 rounded-full blur-3xl" />
-        </div>
-        <div className="relative mx-auto max-w-7xl px-6 py-10 flex flex-col items-center gap-2 text-center">
-          <p className="font-display text-4xl sm:text-5xl text-[#00bfff] capitalize leading-none">
+      <div className="brand-song-hero">
+        <div className="relative mx-auto flex max-w-7xl flex-col items-center gap-3 px-6 py-12 text-center sm:py-16">
+          <p className="font-label text-[9px] uppercase tracking-[0.26em] text-brand-steel/60">Colección</p>
+          <p className="font-display text-4xl capitalize leading-none text-brand-beam sm:text-6xl">
             #{displayName}
           </p>
-          <p className="font-label text-xs uppercase tracking-widest text-gray-500">
+          <p className="rounded-full border border-brand-steel/15 bg-brand-blackout/30 px-3 py-1.5 font-label text-[9px] uppercase tracking-widest text-brand-steel/65">
             {posts.length} {posts.length === 1 ? "canción" : "canciones"}
           </p>
         </div>

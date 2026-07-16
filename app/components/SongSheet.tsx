@@ -91,7 +91,7 @@ export default function SongSheet() {
         aria-label={sheet?.title ? `Canción: ${sheet.title}` : "Detalle de canción"}
         tabIndex={-1}
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-        className="fixed inset-x-0 bottom-0 z-[60] max-h-[92svh] rounded-t-2xl bg-[#0a1929] border-t border-[#00bfff]/20 flex flex-col overflow-hidden focus:outline-none lg:inset-auto lg:left-1/2 lg:-translate-x-1/2 lg:bottom-auto lg:top-1/2 lg:-translate-y-1/2 lg:w-full lg:max-w-2xl lg:rounded-2xl lg:border lg:border-[#00bfff]/20 lg:shadow-2xl">
+        className="brand-facet-panel brand-surface fixed inset-x-0 bottom-0 z-[60] flex max-h-[92svh] flex-col overflow-hidden rounded-t-2xl border-t border-brand-beam/25 focus:outline-none lg:inset-auto lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:w-full lg:max-w-2xl lg:-translate-x-1/2 lg:-translate-y-1/2 lg:rounded-2xl lg:border lg:border-brand-beam/20 lg:shadow-2xl">
 
         {/* Drag handle (mobile only) */}
         <div className="flex justify-center pt-3 pb-1 lg:hidden shrink-0">
@@ -99,7 +99,7 @@ export default function SongSheet() {
         </div>
 
         {/* Header */}
-        <div className="flex items-start justify-between px-5 py-4 border-b border-[#00bfff]/10 shrink-0">
+        <div className="flex shrink-0 items-start justify-between border-b border-brand-beam/10 bg-brand-deck/35 px-5 py-5">
           <div className="flex-1 min-w-0 pr-3">
             {sheetLoading ? (
               <div className="space-y-2">
@@ -108,7 +108,8 @@ export default function SongSheet() {
               </div>
             ) : sheet ? (
               <>
-                <h2 className="font-display text-xl leading-snug">{sheet.title}</h2>
+                <p className="mb-1 font-label text-[9px] uppercase tracking-[0.22em] text-brand-beam/70">Canción</p>
+                <h2 className="font-display text-2xl leading-snug text-brand-frost">{sheet.title}</h2>
                 {sheet.author && (
                   <p className="font-body text-sm text-gray-400 mt-0.5">{sheet.author}</p>
                 )}
@@ -139,7 +140,7 @@ export default function SongSheet() {
               {/* Key / BPM / timeSig pills */}
               <div className="flex flex-wrap gap-2">
                 {sheet.key && (
-                  <span className="font-label text-sm px-3 py-1 rounded-full border border-[#00bfff]/40 text-[#00bfff]">
+                  <span className="brand-key-dial px-3 font-display text-sm">
                     {sheet.key}
                   </span>
                 )}
@@ -190,7 +191,7 @@ export default function SongSheet() {
                         key={i}
                         onClick={() => (isCurrent ? togglePlay() : playTrack(audioTrack))}
                         aria-label={`${isCurrent && player.isPlaying ? "Pausar" : "Reproducir"} ${track.title}`}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors text-left ${
+                        className={`brand-library-module w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${
                           isCurrent
                             ? "border-[#00bfff]/50 bg-[#00bfff]/10"
                             : "border-[#003572]/30 hover:border-[#00bfff]/30 hover:bg-[#00bfff]/5"
@@ -223,7 +224,7 @@ export default function SongSheet() {
                       href={pdf.chordsURL}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[#003572]/30 hover:border-[#00bfff]/30 hover:bg-[#00bfff]/5 transition-colors"
+                      className="brand-library-module brand-surface-interactive flex items-center gap-3 px-4 py-3"
                     >
                       <span className="w-7 h-7 rounded-full bg-[#003572]/30 text-[#00bfff] flex items-center justify-center shrink-0">
                         <PDFIcon />
@@ -314,7 +315,7 @@ export default function SongSheet() {
               <Link
                 href={`/posts/${sheet.slug}`}
                 onClick={closeSheet}
-                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-[#003572]/25 hover:border-[#00bfff]/30 font-label text-xs uppercase tracking-widest text-gray-400 hover:text-[#00bfff] transition-colors"
+                className="brand-search-console flex w-full items-center justify-center gap-2 py-3 font-label text-xs uppercase tracking-widest text-brand-steel/70 transition-colors hover:border-brand-beam/35 hover:text-brand-beam"
               >
                 Ver página completa ↗
               </Link>
