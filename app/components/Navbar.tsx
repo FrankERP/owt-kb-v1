@@ -38,7 +38,7 @@ const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Pro
         </Link>
 
         {/* Centered title */}
-        <div className="flex-1 min-w-0 flex flex-col items-center justify-center overflow-hidden pointer-events-none sm:absolute sm:left-1/2 sm:top-1/2 sm:w-1/3 sm:-translate-x-1/2 sm:-translate-y-1/2">
+        <div className="pointer-events-none absolute left-1/2 top-1/2 flex w-1/3 min-w-0 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center overflow-hidden">
           <p className="font-display text-xs sm:text-lg lg:text-xl uppercase tracking-[0.1em] text-brand-frost truncate w-full text-center">
             {title}
           </p>
@@ -50,7 +50,7 @@ const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Pro
         </div>
 
         {/* Right: single avatar/menu */}
-        <div className="shrink-0 sm:ml-auto">
+        <div className="ml-auto shrink-0">
           <NavMenu
             showSchedule={schedule}
             showTags={tags}
