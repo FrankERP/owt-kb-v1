@@ -13,6 +13,7 @@ interface SongResult {
   title: string;
   author: string;
   key: string;
+  previous_keys: string[];
 }
 
 interface ProposalSong {
@@ -21,6 +22,7 @@ interface ProposalSong {
   author: string;
   key: string;
   play_key: string;
+  previous_keys?: string[];
   medley_tag?: string;
 }
 
@@ -280,6 +282,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
       author: song.author,
       key: song.key,
       play_key: song.key,
+      previous_keys: song.previous_keys,
     }]);
     setShowSearch(false);
     setSearchQuery("");
@@ -483,6 +486,11 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
             <div className="flex-1 min-w-0">
               <p className="font-body text-sm font-semibold truncate">{song.title}</p>
               <p className="font-body text-xs text-gray-400 truncate">{song.author}</p>
+              {!!song.previous_keys?.length && (
+                <p className="font-body text-[11px] text-gray-500 mt-0.5">
+                  Tonos anteriores: <span className="text-[#00bfff]/80">{song.previous_keys.join(" · ")}</span>
+                </p>
+              )}
             </div>
 
             {/* Custom key picker */}
@@ -621,6 +629,11 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
                         <div className="flex-1 min-w-0">
                           <p className="font-body text-sm font-semibold truncate">{song.title}</p>
                           <p className="font-body text-xs text-gray-400 truncate">{song.author}</p>
+                          <p className="font-body text-[11px] text-gray-500 mt-0.5">
+                            {song.previous_keys.length > 0
+                              ? <>Tonos anteriores: <span className="text-[#00bfff]/80">{song.previous_keys.join(" · ")}</span></>
+                              : "Sin historial previo"}
+                          </p>
                         </div>
                         <span className="font-label text-xs text-gray-500 shrink-0">{song.key}</span>
                         {already && <span className="font-label text-[10px] text-gray-500">En lista</span>}
