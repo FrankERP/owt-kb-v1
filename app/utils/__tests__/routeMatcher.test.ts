@@ -31,7 +31,7 @@ describe("auth middleware route matcher", () => {
   });
 
   it("leaves static assets public", () => {
-    for (const p of ["/_next/static/chunks/main.js", "/_next/image", "/favicon.ico", "/LogoOasis.png", "/icons/icon-192.png", "/manifest.webmanifest"]) {
+    for (const p of ["/_next/static/chunks/main.js", "/_next/image", "/favicon.ico", "/LogoOasis.png", "/icons/backstage-v2-192.png", "/manifest.webmanifest"]) {
       expect(middlewareRuns(p)).toBe(false);
     }
   });
