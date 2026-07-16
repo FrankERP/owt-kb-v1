@@ -27,10 +27,13 @@ export default function NextServiceHero(props: NextServiceHeroProps) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-display text-2xl md:text-3xl font-bold">Tu próximo servicio</h2>
+      <div className="flex items-end justify-between gap-4 mb-5">
+        <div>
+          <p className="font-label text-[10px] uppercase tracking-[0.22em] text-brand-beam mb-1">Próximo</p>
+          <h2 className="font-display text-3xl md:text-4xl font-semibold leading-none text-brand-frost">Tu próximo servicio</h2>
+        </div>
         {countdownText && (
-          <span className="font-label text-xs uppercase tracking-widest px-3 py-1.5 rounded-full bg-[#00bfff]/10 text-[#00bfff] border border-[#00bfff]/30 shrink-0">
+          <span className="font-label text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-full bg-brand-beam/10 text-brand-beam border border-brand-beam/30 shrink-0">
             {countdownText}
           </span>
         )}

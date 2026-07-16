@@ -48,79 +48,93 @@ function SignInForm() {
   const errorMsg = credError ?? (urlError ? "Error al iniciar sesión. Intenta de nuevo." : null);
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-sm space-y-8">
+    <div className="min-h-screen flex items-center justify-center px-5 py-10 sm:py-14">
+      <div className="w-full max-w-md">
 
-        {/* Logo + title */}
-        <div className="flex flex-col items-center gap-4">
-          <Image src="/LogoOasis.png" alt="Oasis Worship Team" width={64} height={64} />
-          <h1 className="font-display text-2xl uppercase tracking-wide text-center">
-            Oasis Worship Team
+        {/* Backstage identity */}
+        <div className="brand-stage-hero mb-7 flex flex-col items-center text-center">
+          <Image
+            src="/icons/backstage-v2-192.png"
+            alt=""
+            width={88}
+            height={88}
+            priority
+            className="brand-lockup-mark h-[88px] w-[88px] rounded-[24px]"
+          />
+          <h1 className="mt-5 font-display text-3xl uppercase tracking-[0.16em] text-brand-frost">
+            Backstage
           </h1>
-          <p className="font-label text-xs uppercase tracking-widest text-gray-500">
-            Iniciar sesión
+          <p className="mt-1 font-label text-[10px] uppercase tracking-[0.24em] text-brand-steel">
+            Oasis Worship Team
           </p>
         </div>
 
-        {/* Error */}
-        {errorMsg && (
-          <p className="text-sm text-red-400 text-center bg-red-900/20 border border-red-800 rounded-lg px-4 py-3">
-            {errorMsg}
-          </p>
-        )}
+        <section className="brand-facet-panel rounded-[var(--brand-radius-panel)] border border-brand-steel/20 bg-brand-console/75 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.28)] backdrop-blur-sm sm:p-6">
+          <div className="mb-5">
+            <h2 className="font-label text-[10px] uppercase tracking-[0.22em] text-brand-beam">Acceso del equipo</h2>
+            <p className="mt-1 font-body text-sm text-brand-steel">Inicia sesión para ver tus servicios y canciones.</p>
+          </div>
 
-        {/* SSO buttons */}
-        <div className="space-y-3">
-          <button
-            onClick={handleGoogle}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg border border-[#00bfff]/30 bg-[#00bfff]/5 hover:bg-[#00bfff]/10 transition-colors font-label text-xs uppercase tracking-widest disabled:opacity-50"
-          >
-            <GoogleIcon />
-            Continuar con Google
-          </button>
-        </div>
+          {/* Error */}
+          {errorMsg && (
+            <p className="mb-4 text-sm text-red-300 bg-red-950/35 border border-red-500/30 rounded-[var(--brand-radius-control)] px-4 py-3">
+              {errorMsg}
+            </p>
+          )}
 
-        {/* Divider */}
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-gray-700" />
-          <span className="font-label text-xs uppercase tracking-widest text-gray-500">o</span>
-          <div className="flex-1 h-px bg-gray-700" />
-        </div>
+          {/* SSO buttons */}
+          <div className="space-y-3">
+            <button
+              onClick={handleGoogle}
+              disabled={loading}
+              className="w-full min-h-11 flex items-center justify-center gap-3 px-4 py-3 rounded-[var(--brand-radius-control)] border border-brand-beam/35 bg-brand-beam/[0.06] hover:bg-brand-beam/10 transition-colors font-label text-xs uppercase tracking-widest disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-beam/70"
+            >
+              <GoogleIcon />
+              Continuar con Google
+            </button>
+          </div>
 
-        {/* Credentials */}
-        <form onSubmit={handleCredentials} className="space-y-3">
-          <input
-            type="email"
-            placeholder="Email"
-            aria-label="Correo electrónico"
-            autoComplete="username"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="w-full px-4 py-3 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors"
-          />
-          <input
-            type="password"
-            placeholder="Contraseña"
-            aria-label="Contraseña"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="w-full px-4 py-3 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors"
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 rounded-lg bg-[#003572] hover:bg-[#003572]/80 dark:bg-[#00bfff]/20 dark:hover:bg-[#00bfff]/30 transition-colors font-label text-xs uppercase tracking-widest disabled:opacity-50"
-          >
-            {loading ? "Iniciando..." : "Iniciar sesión"}
-          </button>
-          <p className="font-body text-xs text-gray-500 text-center pt-1">
-            ¿Olvidaste tu contraseña? Pídele a un administrador que la restablezca.
-          </p>
-        </form>
+          {/* Divider */}
+          <div className="my-5 flex items-center gap-3">
+            <div className="flex-1 h-px bg-brand-steel/20" />
+            <span className="font-label text-[10px] uppercase tracking-widest text-brand-steel">o</span>
+            <div className="flex-1 h-px bg-brand-steel/20" />
+          </div>
+
+          {/* Credentials */}
+          <form onSubmit={handleCredentials} className="space-y-3">
+            <input
+              type="email"
+              placeholder="Email"
+              aria-label="Correo electrónico"
+              autoComplete="username"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full min-h-11 px-4 py-3 rounded-[var(--brand-radius-control)] border border-brand-steel/25 bg-brand-blackout/35 font-body text-sm text-brand-frost placeholder:text-brand-steel/70 focus:outline-none focus:border-brand-beam focus:ring-1 focus:ring-brand-beam/40 transition-colors"
+            />
+            <input
+              type="password"
+              placeholder="Contraseña"
+              aria-label="Contraseña"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full min-h-11 px-4 py-3 rounded-[var(--brand-radius-control)] border border-brand-steel/25 bg-brand-blackout/35 font-body text-sm text-brand-frost placeholder:text-brand-steel/70 focus:outline-none focus:border-brand-beam focus:ring-1 focus:ring-brand-beam/40 transition-colors"
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full min-h-11 py-3 rounded-[var(--brand-radius-control)] bg-brand-beam/20 hover:bg-brand-beam/30 border border-brand-beam/30 transition-colors font-label text-xs uppercase tracking-widest disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-beam/70"
+            >
+              {loading ? "Iniciando..." : "Iniciar sesión"}
+            </button>
+            <p className="font-body text-xs text-brand-steel text-center pt-1">
+              ¿Olvidaste tu contraseña? Pídele a un administrador que la restablezca.
+            </p>
+          </form>
+        </section>
 
       </div>
     </div>
@@ -147,4 +161,3 @@ function GoogleIcon() {
     </svg>
   );
 }
-
