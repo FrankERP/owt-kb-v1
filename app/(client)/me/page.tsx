@@ -41,7 +41,7 @@ export default async function MePage() {
   const session = await requireActiveSession();
   if (!session) redirect("/auth/signin?callbackUrl=/me");
 
-  const { sanityId, name } = session.user;
+  const { sanityId } = session.user;
 
   const member = await serverClient.fetch(
     `*[_type == "teamMembers" && _id == $id][0] {
@@ -201,7 +201,7 @@ export default async function MePage() {
     ...data.specials.map((d: RoleDoc) => ({ dateKey: d.date!, day: d.service_name || "Servicio Especial", doc: d })),
   ].sort((a, b) => a.dateKey.localeCompare(b.dateKey));
 
-  const firstName = name?.split(" ")[0] ?? "Miembro";
+  const navbarTitle = member?.alias?.trim() || "Mi perfil";
 
   // The member's specific seat(s) for a service, for the calendar event body.
   function myRoleLabel(doc: RoleDoc): string {
@@ -290,7 +290,7 @@ export default async function MePage() {
 
   return (
     <div>
-      <Navbar title={firstName} schedule tags />
+      <Navbar title={navbarTitle} schedule tags />
       <div className="mx-auto max-w-4xl px-6 pt-10 pb-16 space-y-12">
 
         {/* Upcoming services */}
