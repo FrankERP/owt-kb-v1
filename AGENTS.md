@@ -31,6 +31,10 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
 - Never use automatic `--yes` linking through `vercel`, `vercel deploy`, or
   `vercel curl`.
 - Preview branch/domain: `preview` → `dev-owt-backstage.vercel.app`.
+- The stable dev domain is owned **exclusively** by the `preview` branch. Never
+  point it at or deploy it directly from a feature/development branch. To update
+  dev: merge the intended development branch into `preview`, push `preview`,
+  then verify that Vercel deployed the `preview` commit to the stable dev domain.
 
 ## Don't-break-these invariants
 - **Timezone = America/Mexico_City.** Service dates are Sanity `date`
