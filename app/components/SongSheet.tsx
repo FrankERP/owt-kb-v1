@@ -91,7 +91,7 @@ export default function SongSheet() {
         aria-label={sheet?.title ? `Canción: ${sheet.title}` : "Detalle de canción"}
         tabIndex={-1}
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-        className="brand-facet-panel brand-surface fixed inset-x-0 bottom-0 z-[60] flex max-h-[92svh] flex-col overflow-hidden rounded-t-2xl border-t border-brand-beam/25 focus:outline-none lg:inset-auto lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:w-full lg:max-w-2xl lg:-translate-x-1/2 lg:-translate-y-1/2 lg:rounded-2xl lg:border lg:border-brand-beam/20 lg:shadow-2xl">
+        className="brand-facet-panel brand-surface !fixed inset-x-0 bottom-0 z-[60] flex max-h-[92svh] flex-col overflow-hidden rounded-t-2xl border-t border-brand-beam/25 focus:outline-none lg:inset-auto lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:w-full lg:max-w-2xl lg:-translate-x-1/2 lg:-translate-y-1/2 lg:rounded-2xl lg:border lg:border-brand-beam/20 lg:shadow-2xl">
 
         {/* Drag handle (mobile only) */}
         <div className="flex justify-center pt-3 pb-1 lg:hidden shrink-0">
