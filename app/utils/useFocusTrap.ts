@@ -36,7 +36,7 @@ export function useFocusTrap<T extends HTMLElement>(active: boolean) {
       );
 
     // Move focus into the dialog.
-    (focusables()[0] ?? container).focus();
+    (focusables()[0] ?? container).focus({ preventScroll: true });
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Tab") return;
@@ -45,7 +45,7 @@ export function useFocusTrap<T extends HTMLElement>(active: boolean) {
       const target = trapTabTarget(items.length, activeIndex, e.shiftKey);
       if (target !== null) {
         e.preventDefault();
-        items[target]?.focus();
+        items[target]?.focus({ preventScroll: true });
       }
     };
 
@@ -53,7 +53,7 @@ export function useFocusTrap<T extends HTMLElement>(active: boolean) {
     return () => {
       document.removeEventListener("keydown", onKeyDown, true);
       // Restore focus to whatever opened the dialog.
-      prevFocused?.focus?.();
+      prevFocused?.focus?.({ preventScroll: true });
     };
   }, [active]);
 
