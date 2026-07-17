@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/react";
 import { useFocusTrap } from "../useFocusTrap";
 
@@ -44,6 +44,15 @@ describe("useFocusTrap (jsdom)", () => {
 
     rerender(<Dialog active={true} />);
     expect(document.activeElement).toBe(getByTestId("first"));
+  });
+
+  it("moves focus without scrolling the page", () => {
+    const focusSpy = vi.spyOn(HTMLElement.prototype, "focus");
+
+    render(<Dialog active={true} />);
+
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    focusSpy.mockRestore();
   });
 
   it("wraps Tab from the last focusable to the first", () => {
