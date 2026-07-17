@@ -19,6 +19,19 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   (one-off scripts in `scripts/`, guarded by `--apply`, run with
   `node --env-file=.env.local scripts/<name>.mjs`). Diagnosing ≠ consent to write.
 
+## Vercel safety
+- Canonical project: `frank-rochas-projects/owt-backstage`
+  (`prj_elS88VGezKpy18wizFN1ffoy8cJ5`). Never create or automatically select
+  another Vercel project for this repository.
+- Before any Vercel command that may link, deploy, alias, or mutate remote
+  state, verify `.vercel/project.json` matches that name and ID.
+- If the link is missing or incorrect, run:
+  `vercel link --yes --project owt-backstage --scope frank-rochas-projects`
+  and verify the resulting project ID before continuing.
+- Never use automatic `--yes` linking through `vercel`, `vercel deploy`, or
+  `vercel curl`.
+- Preview branch/domain: `preview` → `dev-owt-backstage.vercel.app`.
+
 ## Don't-break-these invariants
 - **Timezone = America/Mexico_City.** Service dates are Sanity `date`
   (`YYYY-MM-DD`). Render pinned to local noon: `new Date(iso.slice(0,10)+"T12:00:00")`
