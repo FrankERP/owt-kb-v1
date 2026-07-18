@@ -44,9 +44,10 @@ interface PlayerContextValue {
   player: PlayerState;
   playTrack: (track: AudioTrack) => void;
   togglePlay: () => void;
-  closePlayer: () => void;
+  closePlayer: (fallback?: HTMLElement | null) => void;
   seek: (fraction: number) => void;
   getAudio: () => HTMLAudioElement | null;
+  audioReady: boolean;
   sheet: SongSheetData | null;
   sheetLoading: boolean;
   sheetError: boolean;
@@ -65,7 +66,10 @@ export function usePlayer() {
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioOriginRef = useRef<HTMLElement | null>(null);
+  const sheetRequestRef = useRef<{ id: number; controller: AbortController | null }>({ id: 0, controller: null });
   const [player, setPlayer] = useState<PlayerState>({ track: null, isPlaying: false });
+  const [audioReady, setAudioReady] = useState(false);
   const [sheet, setSheet] = useState<SongSheetData | null>(null);
   const [sheetLoading, setSheetLoading] = useState(false);
   const [sheetError, setSheetError] = useState(false);
@@ -74,11 +78,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const el = new Audio();
     audioRef.current = el;
+    setAudioReady(true);
     const onEnd = () => setPlayer(p => ({ ...p, isPlaying: false }));
     el.addEventListener("ended", onEnd);
     return () => {
       el.removeEventListener("ended", onEnd);
       el.pause();
+      setAudioReady(false);
+      audioRef.current = null;
     };
   }, []);
 
@@ -87,6 +94,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const playTrack = useCallback((track: AudioTrack) => {
     const el = audioRef.current;
     if (!el) return;
+    audioOriginRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     el.src = track.url;
     el.play().catch(() => {});
     setPlayer({ track, isPlaying: true });
@@ -104,10 +112,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   }, [player.track, player.isPlaying]);
 
-  const closePlayer = useCallback(() => {
+  const closePlayer = useCallback((fallback?: HTMLElement | null) => {
     const el = audioRef.current;
     if (el) { el.pause(); el.src = ""; }
     setPlayer({ track: null, isPlaying: false });
+    const origin = audioOriginRef.current;
+    audioOriginRef.current = null;
+    const target =
+      focusableTarget(origin) ??
+      focusableTarget(fallback) ??
+      focusableTarget(document.querySelector<HTMLElement>("main[data-route-main]"));
+    target?.focus?.({ preventScroll: true });
   }, []);
 
   const seek = useCallback((fraction: number) => {
@@ -117,22 +132,33 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const openSheet = useCallback(async (songId: string, playKey?: string) => {
+    sheetRequestRef.current.controller?.abort();
+    const controller = new AbortController();
+    const id = sheetRequestRef.current.id + 1;
+    sheetRequestRef.current = { id, controller };
     setSheet(null);
     setSheetError(false);
     setSheetLoading(true);
     setSheetPlayKey(playKey ?? null);
     try {
-      const res = await fetch(`/api/song/${encodeURIComponent(songId)}`);
+      const res = await fetch(`/api/song/${encodeURIComponent(songId)}`, { signal: controller.signal });
+      if (sheetRequestRef.current.id !== id) return;
       if (res.ok) setSheet(await res.json());
       else setSheetError(true);
-    } catch {
+    } catch (error) {
+      if (controller.signal.aborted || sheetRequestRef.current.id !== id) return;
       setSheetError(true);
     } finally {
-      setSheetLoading(false);
+      if (sheetRequestRef.current.id === id) {
+        setSheetLoading(false);
+        sheetRequestRef.current.controller = null;
+      }
     }
   }, []);
 
   const closeSheet = useCallback(() => {
+    sheetRequestRef.current.controller?.abort();
+    sheetRequestRef.current = { id: sheetRequestRef.current.id + 1, controller: null };
     setSheet(null);
     setSheetLoading(false);
     setSheetError(false);
@@ -144,8 +170,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // every consumer (all ~140 song cards) re-renders on any parent render. The
   // callbacks are already stable (useCallback), so only the state values matter.
   const value = useMemo(
-    () => ({ player, playTrack, togglePlay, closePlayer, seek, getAudio, sheet, sheetLoading, sheetError, sheetPlayKey, openSheet, closeSheet }),
-    [player, playTrack, togglePlay, closePlayer, seek, getAudio, sheet, sheetLoading, sheetError, sheetPlayKey, openSheet, closeSheet],
+    () => ({ player, playTrack, togglePlay, closePlayer, seek, getAudio, audioReady, sheet, sheetLoading, sheetError, sheetPlayKey, openSheet, closeSheet }),
+    [player, playTrack, togglePlay, closePlayer, seek, getAudio, audioReady, sheet, sheetLoading, sheetError, sheetPlayKey, openSheet, closeSheet],
   );
 
   return (
@@ -153,4 +179,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       {children}
     </PlayerContext.Provider>
   );
+}
+
+function focusableTarget(target: HTMLElement | null | undefined) {
+  if (!target || !target.isConnected) return null;
+  if (target.hasAttribute("disabled") || target.getAttribute("aria-disabled") === "true") return null;
+  return target;
 }
