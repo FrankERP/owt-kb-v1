@@ -324,6 +324,7 @@ export default async function MePage() {
                     <NextServiceHero
                       day={day}
                       date={doc.week ?? doc.date}
+                      roleId={day !== "Domingo" && day !== "Sábado" ? doc._id : undefined}
                       setlist={setlist}
                       leads={doc.Lead?.map((m) => m.alias || m.member_name)}
                       instruments={doc.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
@@ -350,6 +351,7 @@ export default async function MePage() {
                           <DayCard
                             day={day}
                             date={doc.week ?? doc.date}
+                            roleId={day !== "Domingo" && day !== "Sábado" ? doc._id : undefined}
                             setlist={setlist}
                             leads={doc.Lead?.map((m) => m.alias || m.member_name)}
                             instruments={doc.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}

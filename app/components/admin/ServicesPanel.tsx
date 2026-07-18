@@ -6,6 +6,8 @@ import { buildRuns } from "../../utils/medley";
 import { ChainLinkIcon } from "../ChainLinkIcon";
 import { ParticipationSidebar } from "@/app/components/admin/ParticipationSidebar";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
+import CueDialog from "../ui/CueDialog";
+import CueDialogStatus from "../ui/CueDialogStatus";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -377,18 +379,26 @@ function ServiceForm({ initial, members, onSubmit, onClose, loading }: {
 
 // ─── Modal wrapper ────────────────────────────────────────────────────────────
 
-function Modal({ title, onClose, wide, children }: { title: string; onClose: () => void; wide?: boolean; children: React.ReactNode }) {
+function Modal({
+  title,
+  onClose,
+  wide,
+  status,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  wide?: boolean;
+  status?: string | null;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative z-10 w-full ${wide ? "max-w-2xl" : "max-w-lg"} bg-[#C8D8EB] dark:bg-[#0a1929] border border-[#003572]/20 dark:border-[#00bfff]/20 rounded-xl shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto`}>
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg uppercase tracking-wide">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-[#00bfff] transition-colors text-xl leading-none">×</button>
-        </div>
+    <CueDialog open title={title} label={title} mode="sheet" size={wide ? "lg" : "sm"} onDismiss={onClose}>
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
+        {status && <CueDialogStatus tone="error">{status}</CueDialogStatus>}
         {children}
       </div>
-    </div>
+    </CueDialog>
   );
 }
 
@@ -974,6 +984,7 @@ export default function ServicesPanel() {
   // Edit / delete modal
   type EditModal = { type: "add" } | { type: "edit"; role: ServiceRole } | { type: "delete"; role: ServiceRole } | null;
   const [editModal, setEditModal] = useState<EditModal>(null);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Month generator
   const [showGenerator, setShowGenerator] = useState(false);
@@ -992,6 +1003,16 @@ export default function ServicesPanel() {
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
+  const openEditModal = (next: Exclude<EditModal, null>) => {
+    setEditError(null);
+    setEditModal(next);
+  };
+
+  const closeEditModal = () => {
+    setEditError(null);
+    setEditModal(null);
+  };
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     const [r, m] = await Promise.all([fetch("/api/admin/roles"), fetch("/api/admin/members")]);
@@ -1008,10 +1029,10 @@ export default function ServicesPanel() {
     setSubmitting(true);
     try {
       const res = await fetch("/api/admin/roles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-      if (res.ok) { setEditModal(null); fetchData(); showToast("Servicio creado."); }
-      else showToast("Error al crear.");
+      if (res.ok) { closeEditModal(); fetchData(); showToast("Servicio creado."); }
+      else setEditError("Error al crear.");
     } catch {
-      showToast("Error de conexión.");
+      setEditError("Error de conexión.");
     } finally {
       setSubmitting(false);
     }
@@ -1022,10 +1043,10 @@ export default function ServicesPanel() {
     setSubmitting(true);
     try {
       const res = await fetch(`/api/admin/roles/${editModal.role._id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-      if (res.ok) { setEditModal(null); fetchData(); showToast("Actualizado."); }
-      else showToast("Error al actualizar.");
+      if (res.ok) { closeEditModal(); fetchData(); showToast("Actualizado."); }
+      else setEditError("Error al actualizar.");
     } catch {
-      showToast("Error de conexión.");
+      setEditError("Error de conexión.");
     } finally {
       setSubmitting(false);
     }
@@ -1036,10 +1057,10 @@ export default function ServicesPanel() {
     setSubmitting(true);
     try {
       const res = await fetch(`/api/admin/roles/${editModal.role._id}`, { method: "DELETE" });
-      if (res.ok) { setEditModal(null); fetchData(); showToast("Eliminado."); }
-      else showToast("Error al eliminar.");
+      if (res.ok) { closeEditModal(); fetchData(); showToast("Eliminado."); }
+      else setEditError("Error al eliminar.");
     } catch {
-      showToast("Error de conexión.");
+      setEditError("Error de conexión.");
     } finally {
       setSubmitting(false);
     }
@@ -1249,7 +1270,7 @@ export default function ServicesPanel() {
             📅 Generar mes
           </button>
           {!swapMode && !copyMode && (
-            <button onClick={() => setEditModal({ type: "add" })} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors">
+            <button onClick={() => openEditModal({ type: "add" })} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors">
               <span className="text-base leading-none">+</span> Nuevo
             </button>
           )}
@@ -1364,8 +1385,8 @@ export default function ServicesPanel() {
               role={role}
               conflictIds={roleConflicts.get(role._id) ?? EMPTY_SET}
               conflictNotes={roleConflictNotes.get(role._id)}
-              onEdit={() => setEditModal({ type: "edit", role })}
-              onDelete={() => setEditModal({ type: "delete", role })}
+              onEdit={() => openEditModal({ type: "edit", role })}
+              onDelete={() => openEditModal({ type: "delete", role })}
               onSetlist={() => setSetlistRole(role)}
               onPublish={handlePublish}
               swapMode={swapMode}
@@ -1392,20 +1413,20 @@ export default function ServicesPanel() {
 
       {/* ── Modals ── */}
       {editModal?.type === "add" && (
-        <Modal title="Nuevo servicio" onClose={() => setEditModal(null)}>
-          <ServiceForm members={members} onSubmit={handleAdd} onClose={() => setEditModal(null)} loading={submitting} />
+        <Modal title="Nuevo servicio" onClose={closeEditModal} status={editError}>
+          <ServiceForm members={members} onSubmit={handleAdd} onClose={closeEditModal} loading={submitting} />
         </Modal>
       )}
       {editModal?.type === "edit" && (
-        <Modal title="Editar servicio" onClose={() => setEditModal(null)}>
-          <ServiceForm initial={editModal.role} members={members} onSubmit={handleEdit} onClose={() => setEditModal(null)} loading={submitting} />
+        <Modal title="Editar servicio" onClose={closeEditModal} status={editError}>
+          <ServiceForm initial={editModal.role} members={members} onSubmit={handleEdit} onClose={closeEditModal} loading={submitting} />
         </Modal>
       )}
       {editModal?.type === "delete" && (
-        <Modal title="Eliminar servicio" onClose={() => setEditModal(null)}>
+        <Modal title="Eliminar servicio" onClose={closeEditModal} status={editError}>
           <p className="font-body text-sm text-gray-400">¿Eliminar el servicio del <span className="text-red-400 font-semibold">{formatDate(editModal.role.date)}</span>? Esta acción no se puede deshacer.</p>
           <div className="flex gap-3">
-            <button onClick={() => setEditModal(null)} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">Cancelar</button>
+            <button onClick={closeEditModal} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">Cancelar</button>
             <button onClick={handleDelete} disabled={submitting} className="flex-1 py-2 rounded-lg bg-red-800/60 hover:bg-red-700/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{submitting ? "Eliminando..." : "Eliminar"}</button>
           </div>
         </Modal>
@@ -1429,7 +1450,8 @@ export default function ServicesPanel() {
               week={week}
               type={type}
               roleId={type === "special" ? r._id : undefined}
-              onClose={() => { setSetlistRole(null); fetchData(); showToast("Setlist guardado."); }}
+              onClose={() => setSetlistRole(null)}
+              onSaved={() => { setSetlistRole(null); fetchData(); showToast("Setlist guardado."); }}
             />
           </Modal>
         );

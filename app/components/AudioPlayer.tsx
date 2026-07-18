@@ -5,7 +5,7 @@ import { usePlayer } from "@/app/context/PlayerContext";
 import AudioTransport from "./AudioTransport";
 
 export default function AudioPlayer() {
-  const { player, togglePlay, closePlayer, seek, getAudio, audioReady } = usePlayer();
+  const { player, togglePlay, closePlayer, seek, getAudio, audioReady, sheet, sheetLoading, sheetError } = usePlayer();
   const [progress, setProgress]     = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration]     = useState(0);
@@ -35,7 +35,7 @@ export default function AudioPlayer() {
     if (!player.track) { setProgress(0); setCurrentTime(0); setDuration(0); }
   }, [player.track]);
 
-  if (!player.track) return null;
+  if (!player.track || sheet || sheetLoading || sheetError) return null;
 
   const { track, isPlaying } = player;
 
