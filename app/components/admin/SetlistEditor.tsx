@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef, Fragment } from "react";
-import { Modal, SongForm, SongTag, FormState, buildPayload } from "./SongFormModal";
+import { SongForm, SongTag, FormState, buildPayload } from "./SongFormModal";
 import { normalizeMedleyTags } from "../../utils/medley";
 import { ChainLinkIcon } from "../ChainLinkIcon";
+import CueDialog from "../ui/CueDialog";
+import CueDialogStatus from "../ui/CueDialogStatus";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,17 +45,19 @@ function GripIcon() {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function SetlistEditor({ week, type, roleId, onClose }: {
+export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
   week: string;
   type: "sunday" | "saturday" | "special";
   roleId?: string;
   onClose: () => void;
+  onSaved?: () => void;
 }) {
   const [entries, setEntries]           = useState<SetlistEntry[]>([]);
   const [recentSongs, setRecentSongs]   = useState<Record<string, string>>({});
   const [searchQ, setSearchQ]           = useState("");
   const [searchResults, setSearchResults] = useState<SongResult[]>([]);
   const [loading, setLoading]           = useState(true);
+  const [loadError, setLoadError]       = useState<string | null>(null);
   const [saving, setSaving]             = useState(false);
   const [saveError, setSaveError]       = useState<string | null>(null);
   const [addKey, setAddKey]             = useState("");
@@ -62,27 +66,36 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
   const [allTags, setAllTags]           = useState<SongTag[]>([]);
   const [createOpen, setCreateOpen]     = useState(false);
   const [createSaving, setCreateSaving] = useState(false);
+  const [createError, setCreateError]   = useState<string | null>(null);
   const dragSrc     = useRef<number | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    let alive = true;
     async function load() {
       setLoading(true);
+      setLoadError(null);
       const params = new URLSearchParams({ type, week });
       if (roleId) params.set("roleId", roleId);
-      const [setlistRes, tagsRes] = await Promise.all([
-        fetch(`/api/admin/setlists?${params}`),
-        fetch("/api/content/tags"),
-      ]);
-      if (setlistRes.ok) {
+      try {
+        const [setlistRes, tagsRes] = await Promise.all([
+          fetch(`/api/admin/setlists?${params}`),
+          fetch("/api/content/tags"),
+        ]);
+        if (!alive) return;
+        if (!setlistRes.ok) throw new Error("setlist");
         const data = await setlistRes.json() as { songs: Array<{ play_key: string; medley_tag?: string; song: SongResult }>; recentSongs: Record<string, string> };
         setEntries((data.songs ?? []).map(s => ({ localId: uid2(), play_key: s.play_key, medley_tag: s.medley_tag, song: s.song })));
         setRecentSongs(data.recentSongs ?? {});
+        if (tagsRes.ok) setAllTags(await tagsRes.json());
+      } catch {
+        if (alive) setLoadError("No se pudo cargar el setlist. Intenta de nuevo.");
+      } finally {
+        if (alive) setLoading(false);
       }
-      if (tagsRes.ok) setAllTags(await tagsRes.json());
-      setLoading(false);
     }
     load();
+    return () => { alive = false; };
   }, [week, type, roleId]);
 
   useEffect(() => {
@@ -174,34 +187,46 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
 
   async function handleCreateSong(form: FormState) {
     setCreateSaving(true);
-    const res = await fetch("/api/content/posts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(buildPayload(form)),
-    });
-    setCreateSaving(false);
-    if (!res.ok) return;
-    const doc = await res.json();
-    addSong({
-      _id:    doc._id,
-      title:  doc.title,
-      author: doc.author ?? "",
-      key:    doc.key ?? "",
-      slug:   doc.slug?.current ?? "",
-    });
-    setCreateOpen(false);
+    setCreateError(null);
+    try {
+      const res = await fetch("/api/content/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload(form)),
+      });
+      if (!res.ok) throw new Error();
+      const doc = await res.json();
+      addSong({
+        _id:    doc._id,
+        title:  doc.title,
+        author: doc.author ?? "",
+        key:    doc.key ?? "",
+        slug:   doc.slug?.current ?? "",
+      });
+      setCreateOpen(false);
+    } catch {
+      setCreateError("No se pudo crear la canción.");
+    } finally {
+      setCreateSaving(false);
+    }
   }
 
   async function handleCreateTag(name: string): Promise<SongTag | null> {
-    const res = await fetch("/api/content/tags", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    if (!res.ok) return null;
-    const tag = await res.json();
-    setAllTags(prev => [...prev, tag].sort((a, b) => a.name.localeCompare(b.name)));
-    return tag;
+    try {
+      const res = await fetch("/api/content/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error();
+      const tag = await res.json();
+      setAllTags(prev => [...prev, tag].sort((a, b) => a.name.localeCompare(b.name)));
+      setCreateError(null);
+      return tag;
+    } catch {
+      setCreateError("No se pudo crear el tag.");
+      return null;
+    }
   }
 
   async function save() {
@@ -219,7 +244,8 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
       // Only close on success — otherwise keep the editor open so the admin's
       // edits aren't silently discarded on a failed/rejected save.
       if (!res.ok) { setSaveError("No se pudo guardar el setlist. Intenta de nuevo."); return; }
-      onClose();
+      if (onSaved) onSaved();
+      else onClose();
     } catch {
       setSaveError("Error de conexión. Intenta de nuevo.");
     } finally {
@@ -229,6 +255,17 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
 
   if (loading) {
     return <div className="flex justify-center py-8"><span className="font-label text-xs uppercase tracking-widest text-gray-500 animate-pulse">Cargando...</span></div>;
+  }
+
+  if (loadError) {
+    return (
+      <div className="space-y-4">
+        <CueDialogStatus tone="error">{loadError}</CueDialogStatus>
+        <button type="button" onClick={onClose} className="w-full rounded-lg border border-[#00bfff]/20 py-2 font-label text-xs uppercase tracking-widest text-gray-400 transition-colors hover:border-[#00bfff] hover:text-[#00bfff]">
+          Cerrar
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -400,20 +437,26 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
 
       {/* Create song modal (nested above the ServicesPanel modal) */}
       {createOpen && (
-        <Modal
+        <CueDialog
+          open
           title="Nueva canción"
-          onClose={() => setCreateOpen(false)}
-          zClass="z-[60]"
+          label="Nueva canción"
+          mode="sheet"
+          size="lg"
+          onDismiss={() => { setCreateError(null); setCreateOpen(false); }}
         >
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
+          {createError && <CueDialogStatus tone="error">{createError}</CueDialogStatus>}
           <SongForm
             initial={{ title: searchQ }}
             allTags={allTags}
             onSubmit={handleCreateSong}
-            onClose={() => setCreateOpen(false)}
+            onClose={() => { setCreateError(null); setCreateOpen(false); }}
             loading={createSaving}
             canCreateTag={handleCreateTag}
           />
-        </Modal>
+          </div>
+        </CueDialog>
       )}
     </div>
   );

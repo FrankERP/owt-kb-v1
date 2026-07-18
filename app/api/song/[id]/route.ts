@@ -7,6 +7,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
+  const today = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
 
   const [song, history] = await Promise.all([
     serverClient.fetch(
@@ -24,7 +25,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     // Last 5 times this song was played (Sun/Sat setlists), with the key it was
     // played in and who led that week (joined from the matching role doc).
     serverClient.fetch(
-      `*[_type in ["featuredSongs", "saturdarSongs"] && references($id)] | order(week desc)[0..4] {
+      `*[_type in ["featuredSongs", "saturdarSongs"] && references($id) && week < $today] | order(week desc)[0..4] {
         week,
         _type,
         "play_key": songs[song._ref == $id][0].play_key,
@@ -43,7 +44,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
           play_key
         }
       }`,
-      { id }
+      { id, today }
     ),
   ]);
 

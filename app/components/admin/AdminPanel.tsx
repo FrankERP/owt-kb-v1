@@ -9,6 +9,8 @@ import ActivityPanel from "./ActivityPanel";
 import ContentPanel from "./ContentPanel";
 import AvailabilityPanel from "./AvailabilityPanel";
 import ProposalsPanel from "./ProposalsPanel";
+import CueDialog from "../ui/CueDialog";
+import CueDialogStatus from "../ui/CueDialogStatus";
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
@@ -135,20 +137,24 @@ function Avatar({
 }
 
 // ─── Modal wrapper ────────────────────────────────────────────────────────────
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function Modal({
+  title,
+  onClose,
+  status,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  status?: string | null;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:px-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="brand-facet-panel brand-surface relative z-10 flex max-h-[90svh] w-full max-w-md flex-col rounded-t-2xl border-brand-beam/20 shadow-2xl sm:rounded-2xl">
-        <div className="flex shrink-0 items-center justify-between border-b border-brand-beam/10 bg-brand-deck/30 px-6 py-5">
-          <h2 className="font-display text-lg uppercase tracking-wide">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-[#00bfff] transition-colors text-xl leading-none">×</button>
-        </div>
-        <div className="overflow-y-auto p-6 space-y-5 flex-1">
-          {children}
-        </div>
+    <CueDialog open title={title} label={title} mode="sheet" size="sm" onDismiss={onClose}>
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
+        {status && <CueDialogStatus tone="error">{status}</CueDialogStatus>}
+        {children}
       </div>
-    </div>
+    </CueDialog>
   );
 }
 
@@ -359,6 +365,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
   const [modal, setModal]       = useState<ModalState>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast]       = useState<string | null>(null);
   const [query, setQuery]           = useState("");
@@ -412,6 +419,16 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
     setTimeout(() => setToast(null), 3000);
   };
 
+  const openModal = (next: Exclude<ModalState, null>) => {
+    setModalError(null);
+    setModal(next);
+  };
+
+  const closeModal = () => {
+    setModalError(null);
+    setModal(null);
+  };
+
   const fetchMembers = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -436,10 +453,10 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (res.ok) { setModal(null); fetchMembers(); showToast("Miembro agregado."); }
-      else showToast("Error al agregar miembro.");
+      if (res.ok) { setModal(null); setModalError(null); fetchMembers(); showToast("Miembro agregado."); }
+      else setModalError("Error al agregar miembro.");
     } catch {
-      showToast("Error de conexión.");
+      setModalError("Error de conexión.");
     } finally {
       setSubmitting(false);
     }
@@ -454,10 +471,10 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (res.ok) { setModal(null); fetchMembers(); showToast("Miembro actualizado."); }
-      else showToast("Error al actualizar.");
+      if (res.ok) { setModal(null); setModalError(null); fetchMembers(); showToast("Miembro actualizado."); }
+      else setModalError("Error al actualizar.");
     } catch {
-      showToast("Error de conexión.");
+      setModalError("Error de conexión.");
     } finally {
       setSubmitting(false);
     }
@@ -472,10 +489,10 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sanityMemberId: modal.member._id, password }),
       });
-      if (res.ok) { setModal(null); fetchMembers(); showToast("Contraseña establecida."); }
-      else showToast("Error al establecer contraseña.");
+      if (res.ok) { setModal(null); setModalError(null); fetchMembers(); showToast("Contraseña establecida."); }
+      else setModalError("Error al establecer contraseña.");
     } catch {
-      showToast("Error de conexión.");
+      setModalError("Error de conexión.");
     } finally {
       setSubmitting(false);
     }
@@ -514,10 +531,10 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
     setSubmitting(true);
     try {
       const res = await fetch(`/api/admin/members/${modal.member._id}`, { method: "DELETE" });
-      if (res.ok) { setModal(null); fetchMembers(); showToast("Miembro eliminado."); }
-      else showToast("Error al eliminar.");
+      if (res.ok) { setModal(null); setModalError(null); fetchMembers(); showToast("Miembro eliminado."); }
+      else setModalError("Error al eliminar.");
     } catch {
-      showToast("Error de conexión.");
+      setModalError("Error de conexión.");
     } finally {
       setSubmitting(false);
     }
@@ -578,7 +595,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
           )}
         </div>
         <button
-          onClick={() => setModal({ type: "add" })}
+          onClick={() => openModal({ type: "add" })}
           className="flex items-center gap-2 rounded-lg border border-brand-beam/30 bg-brand-beam/15 px-4 py-2.5 font-label text-xs uppercase tracking-widest text-brand-beam transition-colors hover:bg-brand-beam/25"
         >
           <span className="text-base leading-none">+</span>
@@ -746,13 +763,13 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
                     <MaskIcon />
                   </ActionBtn>
                 )}
-                <ActionBtn title="Editar" onClick={() => setModal({ type: "edit", member: m })}>
+                <ActionBtn title="Editar" onClick={() => openModal({ type: "edit", member: m })}>
                   <PencilIcon />
                 </ActionBtn>
-                <ActionBtn title="Contraseña" onClick={() => setModal({ type: "password", member: m })}>
+                <ActionBtn title="Contraseña" onClick={() => openModal({ type: "password", member: m })}>
                   <KeyIcon />
                 </ActionBtn>
-                <ActionBtn title="Eliminar" onClick={() => setModal({ type: "delete", member: m })} danger>
+                <ActionBtn title="Eliminar" onClick={() => openModal({ type: "delete", member: m })} danger>
                   <TrashIcon />
                 </ActionBtn>
               </div>
@@ -787,30 +804,30 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
 
       {/* ── Modals ── */}
       {modal?.type === "add" && (
-        <Modal title="Agregar miembro" onClose={() => setModal(null)}>
-          <MemberForm onSubmit={handleAdd} onClose={() => setModal(null)} loading={submitting} />
+        <Modal title="Agregar miembro" onClose={closeModal} status={modalError}>
+          <MemberForm onSubmit={handleAdd} onClose={closeModal} loading={submitting} />
         </Modal>
       )}
 
       {modal?.type === "edit" && (
-        <Modal title="Editar miembro" onClose={() => setModal(null)}>
-          <MemberForm initial={modal.member} onSubmit={handleEdit} onClose={() => setModal(null)} loading={submitting} />
+        <Modal title="Editar miembro" onClose={closeModal} status={modalError}>
+          <MemberForm initial={modal.member} onSubmit={handleEdit} onClose={closeModal} loading={submitting} />
         </Modal>
       )}
 
       {modal?.type === "password" && (
-        <Modal title="Establecer contraseña" onClose={() => setModal(null)}>
-          <PasswordForm member={modal.member} onSubmit={handlePassword} onClose={() => setModal(null)} loading={submitting} />
+        <Modal title="Establecer contraseña" onClose={closeModal} status={modalError}>
+          <PasswordForm member={modal.member} onSubmit={handlePassword} onClose={closeModal} loading={submitting} />
         </Modal>
       )}
 
       {modal?.type === "delete" && (
-        <Modal title="Eliminar miembro" onClose={() => setModal(null)}>
+        <Modal title="Eliminar miembro" onClose={closeModal} status={modalError}>
           <p className="font-body text-sm text-gray-400">
             ¿Eliminar a <span className="text-red-400 font-semibold">{modal.member.member_name}</span>? Esta acción no se puede deshacer.
           </p>
           <div className="flex gap-3 pt-1">
-            <button onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
+            <button onClick={closeModal} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
               Cancelar
             </button>
             <button onClick={handleDelete} disabled={submitting} className="flex-1 py-2 rounded-lg bg-red-800/60 hover:bg-red-700/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
