@@ -28,6 +28,7 @@ export default function SongAudioSection({ tracks, songTitle, songSlug }: Props)
           songSlug,
         };
         const isCurrent = player.track?.url === track.audioFileURL;
+        const trackName = `${track.title || "Audio"} ${i + 1}`;
 
         return (
           <div
@@ -46,6 +47,7 @@ export default function SongAudioSection({ tracks, songTitle, songSlug }: Props)
             </div>
             <button
               onClick={() => (isCurrent ? togglePlay() : playTrack(audioTrack))}
+              aria-label={`${isCurrent && player.isPlaying ? "Pausar" : "Reproducir"} ${trackName}`}
               className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
                 isCurrent
                   ? "border-[#00bfff]/50 bg-[#00bfff]/15 text-[#00bfff]"
@@ -58,6 +60,7 @@ export default function SongAudioSection({ tracks, songTitle, songSlug }: Props)
             <a
               href={track.audioFileURL}
               download={`${songTitle} — ${track.title}.mp3`}
+              aria-label={`Descargar ${trackName}`}
               className="block text-center font-label text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 hover:text-[#00bfff] dark:hover:text-[#00bfff] transition-colors"
             >
               Descargar ↓
