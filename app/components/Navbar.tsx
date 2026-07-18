@@ -31,7 +31,7 @@ const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Pro
             <p className="font-display text-base sm:text-lg lg:text-2xl uppercase tracking-[0.12em] text-brand-frost">
               Backstage
             </p>
-            <p className="mt-1 hidden font-label text-[8px] uppercase tracking-[0.22em] text-brand-steel sm:block lg:text-[10px]">
+            <p className="mt-1 hidden font-label text-[10px] uppercase tracking-[0.22em] text-brand-steel sm:block lg:text-[11px]">
               Oasis Worship Team
             </p>
           </div>
@@ -39,11 +39,11 @@ const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Pro
 
         {/* Centered title */}
         <div className="pointer-events-none absolute left-1/2 top-1/2 flex w-1/3 min-w-0 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center overflow-hidden">
-          <p className="font-display text-xs sm:text-lg lg:text-xl uppercase tracking-[0.1em] text-brand-frost truncate w-full text-center">
+          <p className="font-display text-sm sm:text-lg lg:text-xl uppercase tracking-[0.1em] text-brand-frost truncate w-full text-center">
             {title}
           </p>
           {author && (
-            <p className="font-label text-[9px] lg:text-[10px] text-brand-steel uppercase tracking-widest truncate w-full text-center">
+            <p className="font-label text-[10px] lg:text-[11px] text-brand-steel uppercase tracking-widest truncate w-full text-center">
               {author}
             </p>
           )}

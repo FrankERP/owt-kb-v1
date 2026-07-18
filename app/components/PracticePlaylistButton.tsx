@@ -131,7 +131,7 @@ export default function PracticePlaylistButton({ songIds, accent }: { songIds: s
         aria-disabled={pending ? "true" : undefined}
         title="Practicar el set en YouTube"
         style={{ color: accent, borderColor: `${accent}55`, background: `${accent}14` }}
-        className="flex items-center gap-1.5 px-2 py-1 rounded-full border font-label text-[10px] uppercase tracking-widest transition-opacity hover:opacity-80 aria-disabled:opacity-50"
+        className="flex items-center gap-1.5 px-2 py-1 rounded-full border font-label text-[11px] uppercase tracking-widest transition-opacity hover:opacity-80 aria-disabled:opacity-50"
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
@@ -152,18 +152,18 @@ export default function PracticePlaylistButton({ songIds, accent }: { songIds: s
           <button type="button" onClick={() => void go("musica")}
             className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-[#00bfff]/10 transition-colors border-b border-[#00bfff]/10">
             <span className="font-label text-sm text-white">🎵 Música</span>
-            <span className="font-body text-[11px] text-[#C8D8EB]/60">referencia musical</span>
+            <span className="font-body text-xs text-[#C8D8EB]/60">referencia musical</span>
           </button>
           <button type="button" onClick={() => void go("letras")}
             className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-[#00bfff]/10 transition-colors">
             <span className="font-label text-sm text-white">🎤 Letras</span>
-            <span className="font-body text-[11px] text-[#C8D8EB]/60">letra en español</span>
+            <span className="font-body text-xs text-[#C8D8EB]/60">letra en español</span>
           </button>
         </div>
       )}
 
       {(state === "blocked" || state === "error" || state === "empty") && (
-        <p role="status" className="absolute right-0 mt-1 w-48 text-right font-body text-[11px] text-[#C8D8EB]/70">
+        <p role="status" className="absolute right-0 mt-1 w-48 text-right font-body text-xs text-[#C8D8EB]/70">
           {state === "blocked"
             ? "Tu navegador bloqueó la ventana."
             : state === "empty"

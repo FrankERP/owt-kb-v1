@@ -15,20 +15,20 @@ import { groupBySections } from "@/app/utils/lyrics";
 const bodyComponents = {
   block: {
     normal: ({ children }: any) => (
-      <p className="font-body text-sm leading-snug">{children}</p>
+      <p className="font-body text-base leading-relaxed">{children}</p>
     ),
     h1: ({ children }: any) => (
-      <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/70 mt-4 mb-0.5 first:mt-0">
+      <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]/70 mt-4 mb-0.5 first:mt-0">
         {children}
       </p>
     ),
     h2: ({ children }: any) => (
-      <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/70 mt-4 mb-0.5 first:mt-0">
+      <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]/70 mt-4 mb-0.5 first:mt-0">
         {children}
       </p>
     ),
     h3: ({ children }: any) => (
-      <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/70 mt-4 mb-0.5 first:mt-0">
+      <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]/70 mt-4 mb-0.5 first:mt-0">
         {children}
       </p>
     ),
@@ -128,8 +128,8 @@ export default function SongSheet() {
               </div>
             ) : sheet ? (
               <>
-                <p className="mb-1 font-label text-[9px] uppercase tracking-[0.22em] text-brand-beam/70">Canción</p>
-                <h2 className="font-display text-2xl leading-snug text-brand-frost">{sheet.title}</h2>
+                <p className="mb-1 font-label text-[10px] uppercase tracking-[0.22em] text-brand-beam/70">Canción</p>
+                <h2 className="font-display text-3xl leading-snug text-brand-frost">{sheet.title}</h2>
                 {sheet.author && (
                   <p className="font-body text-sm text-gray-400 mt-0.5">{sheet.author}</p>
                 )}
@@ -198,7 +198,7 @@ export default function SongSheet() {
               {/* Audio tracks */}
               {hasAudio && (
                 <div className="space-y-2 pt-1">
-                  <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">Audio</p>
+                  <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">Audio</p>
                   {sheet.audioTracks!.filter(t => t.audioFileURL).map((track, i) => {
                     const audioTrack: AudioTrack = {
                       url: track.audioFileURL,
@@ -227,7 +227,7 @@ export default function SongSheet() {
                         <div className="min-w-0">
                           <p className="font-body text-sm font-semibold truncate">{track.title}</p>
                           {track.tone && (
-                            <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">{track.tone}</p>
+                            <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">{track.tone}</p>
                           )}
                         </div>
                       </button>
@@ -257,7 +257,7 @@ export default function SongSheet() {
               {/* Chord PDFs */}
               {hasPDFs && (
                 <div className="space-y-2 pt-1">
-                  <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">PDFs</p>
+                  <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">PDFs</p>
                   {sheet.chordsPDF!.map((pdf, i) => (
                     <a
                       key={i}
@@ -272,7 +272,7 @@ export default function SongSheet() {
                       <span className="font-body text-sm flex-1">
                         {pdf.title}{pdf.key ? ` — ${pdf.key}` : ""}
                       </span>
-                      <span className="font-label text-[10px] text-gray-500 shrink-0">↗</span>
+                      <span className="font-label text-[11px] text-gray-500 shrink-0">↗</span>
                     </a>
                   ))}
                 </div>
@@ -281,7 +281,7 @@ export default function SongSheet() {
               {/* Historial — last 5 times played: key + who led */}
               {hasHistory && (
                 <div className="space-y-2 pt-1">
-                  <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">
+                  <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">
                     Últimas veces tocada
                   </p>
                   <ul className="space-y-2">
@@ -300,7 +300,7 @@ export default function SongSheet() {
                           >
                             {/* Date + service */}
                             <div className="min-w-0 shrink-0">
-                              <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 leading-none mb-1">
+                              <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 leading-none mb-1">
                                 {entry._type === "featuredSongs" ? "Domingo" : "Sábado"}
                               </p>
                               <p className="font-body text-xs text-gray-300 leading-none whitespace-nowrap">
@@ -320,7 +320,7 @@ export default function SongSheet() {
                                         className="w-5 h-5 rounded-full object-cover border border-[#00bfff]/25 shrink-0"
                                       />
                                     ) : (
-                                      <span className="w-5 h-5 rounded-full bg-[#003572]/50 text-[#00bfff] flex items-center justify-center text-[9px] font-semibold shrink-0">
+                                      <span className="w-5 h-5 rounded-full bg-[#003572]/50 text-[#00bfff] flex items-center justify-center text-[10px] font-semibold shrink-0">
                                         {(lead.name ?? "?").charAt(0).toUpperCase()}
                                       </span>
                                     )}
@@ -412,7 +412,7 @@ function SetlistPopover({
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#00bfff]/10 bg-[#00bfff]/[0.04]">
           <div>
-            <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-0.5">
+            <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-0.5">
               {entry._type === "featuredSongs" ? "Domingo" : "Sábado"} · Set completo
             </p>
             <p className="font-body text-sm font-semibold text-gray-200">
@@ -442,14 +442,14 @@ function SetlistPopover({
                     isCurrent ? "bg-[#00bfff]/[0.06] cursor-default" : "hover:bg-[#00bfff]/[0.06]"
                   }`}
                 >
-                  <span className={`font-label text-[10px] w-4 shrink-0 ${isCurrent ? "text-[#00bfff]" : "text-gray-600"}`}>
+                  <span className={`font-label text-[11px] w-4 shrink-0 ${isCurrent ? "text-[#00bfff]" : "text-gray-600"}`}>
                     {i + 1}
                   </span>
                   <span className={`font-body text-sm flex-1 truncate ${isCurrent ? "text-[#00bfff] font-semibold" : "text-gray-200"}`}>
                     {song.title ?? "—"}
                   </span>
                   {song.play_key && (
-                    <span className="font-label text-[11px] px-2 py-0.5 rounded-full border border-[#00bfff]/30 text-[#00bfff]/80 shrink-0">
+                    <span className="font-label text-xs px-2 py-0.5 rounded-full border border-[#00bfff]/30 text-[#00bfff]/80 shrink-0">
                       {song.play_key}
                     </span>
                   )}

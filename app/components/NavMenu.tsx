@@ -123,7 +123,7 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
         )}
         {notifCount > 0 && (
           <span aria-hidden className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-red-500 border-2 border-[#C8D8EB] dark:border-[#010b17] flex items-center justify-center">
-            <span className="font-label text-[8px] text-white leading-none">{notifCount > 9 ? "9+" : notifCount}</span>
+            <span className="font-label text-[10px] text-white leading-none">{notifCount > 9 ? "9+" : notifCount}</span>
           </span>
         )}
       </button>

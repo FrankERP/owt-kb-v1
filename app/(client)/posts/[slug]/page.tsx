@@ -157,7 +157,7 @@ const Page = async ({ params }: Params) => {
             <div className="mb-6 flex flex-wrap justify-center gap-2">
               {post.tags.map((tag) => (
                 <Link key={tag._id} href={`/tag/${tag.slug.current}`}>
-                  <span className="rounded-md border border-brand-beam/15 bg-brand-beam/[0.055] px-2.5 py-1.5 font-label text-[9px] lowercase tracking-wider text-brand-beam/70 transition-colors hover:border-brand-beam/35 hover:text-brand-beam">
+                  <span className="rounded-md border border-brand-beam/15 bg-brand-beam/[0.055] px-2.5 py-1.5 font-label text-[10px] lowercase tracking-wider text-brand-beam/70 transition-colors hover:border-brand-beam/35 hover:text-brand-beam">
                     #{tag.name}
                   </span>
                 </Link>
@@ -191,12 +191,12 @@ const Page = async ({ params }: Params) => {
               </span>
             )}
             {post?.bpm && (
-              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[10px] uppercase tracking-widest text-brand-steel/70">
+              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[11px] uppercase tracking-widest text-brand-steel/70">
                 {post.bpm} BPM
               </span>
             )}
             {post?.timeSig && (
-              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[10px] uppercase tracking-widest text-brand-steel/70">
+              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[11px] uppercase tracking-widest text-brand-steel/70">
                 {post.timeSig}
               </span>
             )}
@@ -325,7 +325,7 @@ const Page = async ({ params }: Params) => {
                   {/* Header row: day + date + key */}
                   <div className="flex items-center justify-between px-5 py-3 bg-[#003572]/10 dark:bg-[#00bfff]/5 border-b border-[#003572]/15 dark:border-[#00bfff]/10">
                     <div>
-                      <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-0.5">
+                      <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-0.5">
                         {entry._type === "featuredSongs" ? "Domingo" : "Sábado"}
                       </p>
                       <p className="font-body text-sm md:text-base font-semibold">

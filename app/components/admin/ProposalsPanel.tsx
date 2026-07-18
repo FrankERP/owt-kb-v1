@@ -123,7 +123,7 @@ function ProposalCard({
             )}
           </p>
         </div>
-        <span className={`font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full shrink-0 ${STATUS_STYLE[proposal.status]}`}>
+        <span className={`font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full shrink-0 ${STATUS_STYLE[proposal.status]}`}>
           {STATUS_LABEL[proposal.status]}
         </span>
       </div>
@@ -148,7 +148,7 @@ function ProposalCard({
                   )}
                 </div>
                 {linkedPrev && (
-                  <span className="font-label text-[8px] uppercase tracking-widest text-[#00bfff]/60 shrink-0">medley</span>
+                  <span className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/60 shrink-0">medley</span>
                 )}
                 <span className="font-label text-xs px-2 py-0.5 rounded-full border border-[#00bfff]/20 text-[#00bfff] shrink-0">
                   {song.play_key}
@@ -164,7 +164,7 @@ function ProposalCard({
       {proposal.team_notes && (
         <div className="px-4 pb-3">
           <div className="p-3 rounded-lg border border-[#00bfff]/20 bg-[#00bfff]/5">
-            <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff] mb-1">Mensaje para el equipo</p>
+            <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff] mb-1">Mensaje para el equipo</p>
             <p className="font-body text-sm text-gray-300 whitespace-pre-wrap">{proposal.team_notes}</p>
           </div>
         </div>
@@ -173,7 +173,7 @@ function ProposalCard({
       {/* Private lead notes */}
       {proposal.lead_notes && (
         <div className="px-4 pb-3">
-          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Notas privadas para revisión</p>
+          <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 mb-1">Notas privadas para revisión</p>
           <p className="font-body text-sm text-gray-300 whitespace-pre-wrap">{proposal.lead_notes}</p>
         </div>
       )}
@@ -181,7 +181,7 @@ function ProposalCard({
       {/* Previous admin notes (when showing changes_requested) */}
       {proposal.status === "changes_requested" && proposal.admin_notes && !requestingChanges && (
         <div className="px-4 pb-3">
-          <p className="font-label text-[10px] uppercase tracking-widest text-red-400 mb-1">Tus comentarios anteriores</p>
+          <p className="font-label text-[11px] uppercase tracking-widest text-red-400 mb-1">Tus comentarios anteriores</p>
           <p className="font-body text-sm text-red-300 whitespace-pre-wrap">{proposal.admin_notes}</p>
         </div>
       )}
@@ -241,7 +241,7 @@ function ProposalCard({
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-400 shrink-0">
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
             </svg>
-            <p className="font-label text-[10px] uppercase tracking-widest text-green-400">Setlist publicado</p>
+            <p className="font-label text-[11px] uppercase tracking-widest text-green-400">Setlist publicado</p>
           </div>
 
           {/* Re-open for revision. Sends the shared proposal back to
@@ -381,7 +381,7 @@ export default function ProposalsPanel() {
           >
             {label}
             {id === "pending" && pendingCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-yellow-500 text-black font-bold text-[9px] flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-yellow-500 text-black font-bold text-[10px] flex items-center justify-center">
                 {pendingCount}
               </span>
             )}

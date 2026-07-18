@@ -264,11 +264,11 @@ export function SongForm({
                 return (
                   <div key={author._id} className="flex items-center gap-3 px-3 py-2 hover:bg-[#00bfff]/5 transition-colors">
                     <button type="button" onClick={() => toggleAuthor(author._id)} className="flex-1 flex items-center gap-2 text-left">
-                      <span className={`font-label text-[10px] uppercase tracking-widest ${active ? "text-[#00bfff]" : "text-gray-400"}`}>
+                      <span className={`font-label text-[11px] uppercase tracking-widest ${active ? "text-[#00bfff]" : "text-gray-400"}`}>
                         {author.name}
                       </span>
                     </button>
-                    {active && <span className="font-label text-[9px] text-[#00bfff] shrink-0">✓</span>}
+                    {active && <span className="font-label text-[10px] text-[#00bfff] shrink-0">✓</span>}
                   </div>
                 );
               })}
@@ -279,7 +279,7 @@ export function SongForm({
                 disabled={creatingAuthor}
                 className="w-full flex items-center gap-3 px-3 py-2.5 text-left disabled:opacity-50"
               >
-                <span className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]">
+                <span className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">
                   {creatingAuthor ? "Creando..." : "+ Crear"}
                 </span>
                 <span className="font-body text-xs text-gray-400 truncate">"{authorSearch}"</span>
@@ -295,7 +295,7 @@ export function SongForm({
                   key={author._id}
                   type="button"
                   onClick={() => toggleAuthor(author._id)}
-                  className={`font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
+                  className={`font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
                     active
                       ? "border-[#00bfff] bg-[#00bfff]/15 text-[#00bfff]"
                       : "border-[#00bfff]/20 text-gray-500 hover:border-[#00bfff]/50"
@@ -335,7 +335,7 @@ export function SongForm({
               type="button"
               onPointerDown={(e) => e.preventDefault()}
               onClick={() => insertLabel(label)}
-              className="font-label text-[9px] uppercase tracking-widest px-2 py-1 rounded border border-[#003572]/20 dark:border-[#00bfff]/15 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff]/40 transition-colors whitespace-nowrap"
+              className="font-label text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-[#003572]/20 dark:border-[#00bfff]/15 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff]/40 transition-colors whitespace-nowrap"
             >
               {label}
             </button>
@@ -370,7 +370,7 @@ export function SongForm({
           placeholder={"# Verso 1\n[Am]Ante Ti [F]Postrado estoy\n[C]aquí me rindo\n\n# Coro\nLínea 1\nLínea 2"}
           spellCheck={false}
         />
-        <p className="font-label text-[10px] text-gray-600 uppercase tracking-wide mt-1">
+        <p className="font-label text-[11px] text-gray-600 uppercase tracking-wide mt-1">
           # Sección · [Acorde]palabra · **negrita** · *cursiva*
         </p>
       </div>
@@ -382,7 +382,7 @@ export function SongForm({
           <button
             type="button"
             onClick={addRefLink}
-            className="font-label text-[10px] uppercase tracking-widest text-[#00bfff] hover:text-[#00bfff]/70 transition-colors"
+            className="font-label text-[11px] uppercase tracking-widest text-[#00bfff] hover:text-[#00bfff]/70 transition-colors"
           >
             + Agregar
           </button>
@@ -434,11 +434,11 @@ export function SongForm({
                 return (
                   <div key={tag._id} className="flex items-center gap-3 px-3 py-2 hover:bg-[#00bfff]/5 transition-colors">
                     <button type="button" onClick={() => toggleTag(tag._id)} className="flex-1 flex items-center gap-2 text-left">
-                      <span className={`font-label text-[10px] uppercase tracking-widest ${active ? "text-[#00bfff]" : "text-gray-400"}`}>
+                      <span className={`font-label text-[11px] uppercase tracking-widest ${active ? "text-[#00bfff]" : "text-gray-400"}`}>
                         #{tag.name}
                       </span>
                     </button>
-                    {active && <span className="font-label text-[9px] text-[#00bfff] shrink-0">✓</span>}
+                    {active && <span className="font-label text-[10px] text-[#00bfff] shrink-0">✓</span>}
                   </div>
                 );
               })}
@@ -449,7 +449,7 @@ export function SongForm({
                 disabled={creatingTag}
                 className="w-full flex items-center gap-3 px-3 py-2.5 text-left disabled:opacity-50"
               >
-                <span className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]">
+                <span className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">
                   {creatingTag ? "Creando..." : "+ Crear"}
                 </span>
                 <span className="font-body text-xs text-gray-400 truncate">"{tagSearch}"</span>
@@ -465,7 +465,7 @@ export function SongForm({
                   key={tag._id}
                   type="button"
                   onClick={() => toggleTag(tag._id)}
-                  className={`font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
+                  className={`font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
                     active
                       ? "border-[#00bfff] bg-[#00bfff]/15 text-[#00bfff]"
                       : "border-[#00bfff]/20 text-gray-500 hover:border-[#00bfff]/50"

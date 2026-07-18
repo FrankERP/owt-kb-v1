@@ -184,7 +184,7 @@ function MemberMultiSelect({ label, members, selected, onChange, filterType }: {
           </label>
         ))}
       </div>
-      {selected.length > 0 && <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]">{selected.length} seleccionado{selected.length > 1 ? "s" : ""}</p>}
+      {selected.length > 0 && <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">{selected.length} seleccionado{selected.length > 1 ? "s" : ""}</p>}
     </div>
   );
 }
@@ -344,7 +344,7 @@ function ServiceForm({ initial, members, onSubmit, onClose, loading }: {
       {/* Availability warning — replaces action buttons when conflicts are found */}
       {pendingData ? (
         <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-3 space-y-3 sticky bottom-0 bg-[#C8D8EB] dark:bg-[#0a1929]">
-          <p className="font-label text-[10px] uppercase tracking-widest text-orange-400">No disponibles el {fmtServiceDate}</p>
+          <p className="font-label text-[11px] uppercase tracking-widest text-orange-400">No disponibles el {fmtServiceDate}</p>
           <p className="font-body text-sm text-gray-300">
             <span className="text-orange-300">{unavailableNames.join(", ")}</span>
             {unavailableNames.length === 1 ? " ha" : " han"} marcado este día como no disponible.
@@ -411,7 +411,7 @@ function MemberChip({ name, isSource, isTarget, onClick }: {
     <button
       type="button"
       onClick={onClick}
-      className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full border transition-all ${
+      className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full border transition-all ${
         isSource ? "bg-[#00bfff]/30 text-[#00bfff] border-[#00bfff] ring-1 ring-[#00bfff]/50 scale-105" :
         isTarget ? "bg-[#00bfff]/10 text-[#00bfff] border-[#00bfff]/50 animate-pulse" :
         onClick   ? "bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-400 border-[#003572]/20 dark:border-[#00bfff]/20 hover:bg-[#00bfff]/20 hover:text-[#00bfff] hover:border-[#00bfff]/40 cursor-pointer" :
@@ -554,12 +554,12 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
             })}
           </p>
           {role.published === false && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-label uppercase tracking-widest bg-amber-500/15 text-amber-400 border border-amber-500/30">
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-label uppercase tracking-widest bg-amber-500/15 text-amber-400 border border-amber-500/30">
               Borrador
             </span>
           )}
           {hasConflict && (
-            <span className="inline-flex items-center gap-1 mt-1.5 font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-red-500/25 text-red-200 border border-red-400/60">
+            <span className="inline-flex items-center gap-1 mt-1.5 font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-red-500/25 text-red-200 border border-red-400/60">
               ⚠ Conflicto de disponibilidad
             </span>
           )}
@@ -581,7 +581,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
           </button>
         ) : copyMode ? (
           isCopySource ? (
-            <span className="mt-0.5 px-2.5 py-1.5 rounded-lg font-label text-[10px] uppercase tracking-widest bg-white/20 text-white border border-white/40 shrink-0">
+            <span className="mt-0.5 px-2.5 py-1.5 rounded-lg font-label text-[11px] uppercase tracking-widest bg-white/20 text-white border border-white/40 shrink-0">
               Origen
             </span>
           ) : (
@@ -645,7 +645,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
                           {entry.play_key || entry.song.key}
                         </span>
                         {entry.play_key && entry.song.key && entry.play_key !== entry.song.key && (
-                          <span className="font-label text-[10px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800/60 text-gray-500 leading-tight">
+                          <span className="font-label text-[11px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800/60 text-gray-500 leading-tight">
                             orig. {entry.song.key}
                           </span>
                         )}
@@ -669,13 +669,13 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
                     />
                     <div className="flex items-center gap-1 mb-1">
                       <ChainLinkIcon color={hex} opacity={0.7} />
-                      <span className="font-label text-[8px] uppercase tracking-[0.18em]" style={{ color: `${hex}99` }}>Medley</span>
+                      <span className="font-label text-[10px] uppercase tracking-[0.18em]" style={{ color: `${hex}99` }}>Medley</span>
                     </div>
                     <div className="space-y-1.5">
                       {run.songs.map(({ song, n }, si) => (
                         <div key={song.song._id}>
                           {si > 0 && (
-                            <span className="block w-5 text-center font-label text-[10px] leading-none -my-0.5" style={{ color: `${hex}70` }}>+</span>
+                            <span className="block w-5 text-center font-label text-[11px] leading-none -my-0.5" style={{ color: `${hex}70` }}>+</span>
                           )}
                           {renderRow(song, n)}
                         </div>
@@ -730,7 +730,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
         {/* Availability conflicts — reasons shown as text (works without hover, e.g. on mobile) */}
         {hasConflict && !swapMode && conflictReasons.length > 0 && (
           <section className="rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2.5">
-            <p className="font-label text-[10px] uppercase tracking-widest text-red-400 mb-1">No disponible</p>
+            <p className="font-label text-[11px] uppercase tracking-widest text-red-400 mb-1">No disponible</p>
             <ul className="space-y-0.5">
               {conflictReasons.map((c, i) => (
                 <li key={i} className="font-body text-xs text-gray-300">
@@ -750,7 +750,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
             {([ ["leads", leads, "Líderes"], ["bgvs", bgvs, "BGVs"], ["chorus", chorus, "Coro"] ] as const).map(([section, arr, lbl]) => (
               arr.length > 0 && (
                 <div key={section} className="flex items-start gap-2 flex-wrap">
-                  <span className="font-label text-[9px] uppercase tracking-widest text-gray-600 pt-0.5 shrink-0 w-12">{lbl}</span>
+                  <span className="font-label text-[10px] uppercase tracking-widest text-gray-600 pt-0.5 shrink-0 w-12">{lbl}</span>
                   <div className="flex flex-wrap gap-1">
                     {arr.map((m, i) => (
                       <MemberChip
@@ -768,7 +768,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
             {([ ["instruments", instrs, "Instr."], ["foh", foh, "FOH"] ] as const).map(([section, arr, lbl]) => (
               arr.length > 0 && (
                 <div key={section} className="flex items-start gap-2 flex-wrap">
-                  <span className="font-label text-[9px] uppercase tracking-widest text-gray-600 pt-0.5 shrink-0 w-12">{lbl}</span>
+                  <span className="font-label text-[10px] uppercase tracking-widest text-gray-600 pt-0.5 shrink-0 w-12">{lbl}</span>
                   <div className="flex flex-wrap gap-1">
                     {arr.map((s, i) => s.person && (
                       <MemberChip
@@ -808,7 +808,7 @@ function VocalCol({ label, entries }: { label: string; entries: { name: string; 
   if (!entries.length) return <div />;
   return (
     <div>
-      <p className="font-label text-[10px] uppercase tracking-widest text-gray-400 mb-0.5">{label}</p>
+      <p className="font-label text-[11px] uppercase tracking-widest text-gray-400 mb-0.5">{label}</p>
       <p className="font-body text-sm leading-snug">
         {entries.map((e, i) => (
           <span key={i}>
@@ -860,7 +860,7 @@ function AvailabilityWarning({ lines }: { lines: string[] }) {
   if (lines.length === 0) return null;
   return (
     <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2.5 space-y-1">
-      <p className="font-label text-[10px] uppercase tracking-widest text-orange-400">No disponibles</p>
+      <p className="font-label text-[11px] uppercase tracking-widest text-orange-400">No disponibles</p>
       {lines.map((l, i) => <p key={i} className="font-body text-xs text-gray-400">{l}</p>)}
     </div>
   );
@@ -907,9 +907,9 @@ function SwapConfirmModal({ confirm, onConfirm, onClose, loading, members }: {
           {[roleA, roleB].map((role, idx) => (
             <div key={role._id} className="rounded-lg border border-[#00bfff]/20 p-3 space-y-1.5">
               <div className="flex items-center gap-2">
-                <span className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full ${SERVICE_BADGE[role._type]}`}>{SERVICE_LABEL[role._type]}</span>
-                {idx === 0 && <span className="font-label text-[10px] text-[#00bfff]">→ Recibe equipo B</span>}
-                {idx === 1 && <span className="font-label text-[10px] text-[#00bfff]">→ Recibe equipo A</span>}
+                <span className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full ${SERVICE_BADGE[role._type]}`}>{SERVICE_LABEL[role._type]}</span>
+                {idx === 0 && <span className="font-label text-[11px] text-[#00bfff]">→ Recibe equipo B</span>}
+                {idx === 1 && <span className="font-label text-[11px] text-[#00bfff]">→ Recibe equipo A</span>}
               </div>
               <p className="font-body text-sm font-semibold">{formatDate(role.date)}</p>
               {(role.leads ?? []).length > 0 && <p className="font-body text-xs text-gray-500">Líder: {(role.leads ?? []).map(m => dn(m)).join(", ")}</p>}
@@ -951,14 +951,14 @@ function SwapConfirmModal({ confirm, onConfirm, onClose, loading, members }: {
       <div className="flex items-center gap-3">
         <div className="flex-1 text-center rounded-lg border border-[#00bfff]/20 p-3 space-y-1">
           <p className="font-body text-sm font-semibold">{srcName}</p>
-          <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]">{srcLabel}</p>
-          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">{formatDate(sourceRole.date)}</p>
+          <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">{srcLabel}</p>
+          <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">{formatDate(sourceRole.date)}</p>
         </div>
         <span className="text-2xl text-gray-500 shrink-0">⇄</span>
         <div className="flex-1 text-center rounded-lg border border-[#00bfff]/20 p-3 space-y-1">
           <p className="font-body text-sm font-semibold">{tgtName}</p>
-          <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]">{tgtLabel}</p>
-          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">{formatDate(targetRole.date)}</p>
+          <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">{tgtLabel}</p>
+          <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">{formatDate(targetRole.date)}</p>
         </div>
       </div>
       <AvailabilityWarning lines={warnLines} />
@@ -1281,7 +1281,7 @@ export default function ServicesPanel() {
       {!loading && allMonths.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-label text-[10px] uppercase tracking-widest text-gray-600 shrink-0">Mes:</span>
+            <span className="font-label text-[11px] uppercase tracking-widest text-gray-600 shrink-0">Mes:</span>
             <MonthPill label="Próximos" selected={selectedMonths.size === 0} onClick={() => setSelectedMonths(new Set())} />
             {futureMonths.map(ym => (
               <MonthPill key={ym} label={fmtYM(ym)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} />
@@ -1290,7 +1290,7 @@ export default function ServicesPanel() {
               <button
                 type="button"
                 onClick={() => setShowPastMonths(v => !v)}
-                className="font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full border border-[#00bfff]/10 text-gray-600 hover:border-[#00bfff]/25 hover:text-gray-400 transition-colors flex items-center gap-1"
+                className="font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border border-[#00bfff]/10 text-gray-600 hover:border-[#00bfff]/25 hover:text-gray-400 transition-colors flex items-center gap-1"
               >
                 Roles previos
                 <span className={`transition-transform ${showPastMonths ? "rotate-180" : ""}`}>▾</span>
@@ -1340,7 +1340,7 @@ export default function ServicesPanel() {
             </p>
           </div>
           {swapSource && (
-            <button onClick={() => setSwapSource(null)} className="font-label text-[10px] uppercase tracking-widest text-gray-500 hover:text-red-400 transition-colors ml-4 shrink-0">
+            <button onClick={() => setSwapSource(null)} className="font-label text-[11px] uppercase tracking-widest text-gray-500 hover:text-red-400 transition-colors ml-4 shrink-0">
               Cancelar selección
             </button>
           )}
@@ -1361,7 +1361,7 @@ export default function ServicesPanel() {
                 Copiando los instrumentos de <span className="text-gray-300 capitalize">{srcLabel}</span>. Haz clic en «Pegar aquí» en el día destino (reemplaza sus instrumentos).
               </p>
             </div>
-            <button onClick={() => setCopySource(null)} className="font-label text-[10px] uppercase tracking-widest text-gray-500 hover:text-red-400 transition-colors ml-4 shrink-0">
+            <button onClick={() => setCopySource(null)} className="font-label text-[11px] uppercase tracking-widest text-gray-500 hover:text-red-400 transition-colors ml-4 shrink-0">
               Cancelar
             </button>
           </div>
@@ -1463,7 +1463,7 @@ export default function ServicesPanel() {
 // ─── Tiny helpers ─────────────────────────────────────────────────────────────
 
 function Pill({ children }: { children: React.ReactNode }) {
-  return <span className="font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-500 whitespace-nowrap">{children}</span>;
+  return <span className="font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-500 whitespace-nowrap">{children}</span>;
 }
 
 function fmtYM(ym: string) {
@@ -1475,7 +1475,7 @@ function MonthPill({ label, selected, onClick, past }: { label: string; selected
     <button
       type="button"
       onClick={onClick}
-      className={`font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
+      className={`font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
         selected
           ? "border-[#00bfff]/60 bg-[#00bfff]/15 text-[#00bfff]"
           : past

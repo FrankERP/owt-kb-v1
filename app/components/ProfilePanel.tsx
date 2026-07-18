@@ -225,12 +225,12 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
           {member.alias?.trim() && (
             <p className="font-body text-xs text-[#00bfff]/60 truncate">{member.member_name}</p>
           )}
-          <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mt-0.5">{member.role}</p>
+          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mt-0.5">{member.role}</p>
         </div>
         <button
           ref={triggerRef}
           onClick={() => setOpen(true)}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#00bfff]/20 font-label text-[10px] uppercase tracking-widest text-gray-400 hover:border-[#00bfff] hover:text-[#00bfff] transition-colors"
+          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#00bfff]/20 font-label text-[11px] uppercase tracking-widest text-gray-400 hover:border-[#00bfff] hover:text-[#00bfff] transition-colors"
         >
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -260,7 +260,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
             />
             <div className="min-w-0">
               <p className="font-body text-xs text-[#00bfff]/60 truncate">{displayName}</p>
-              <p className="font-label text-[9px] uppercase tracking-widest text-gray-500">{member.role}</p>
+              <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">{member.role}</p>
             </div>
           </div>
 
@@ -270,7 +270,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
           <div className="space-y-8">
           {/* Identity */}
           <section className="space-y-4">
-            <h3 className="font-label text-[10px] uppercase tracking-widest text-gray-500">Identidad</h3>
+            <h3 className="font-label text-[11px] uppercase tracking-widest text-gray-500">Identidad</h3>
             <div className="space-y-3">
               <div className="space-y-1">
                 <label htmlFor={fid("alias")} className="font-label text-xs uppercase tracking-widest text-gray-500">Alias</label>
@@ -306,7 +306,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
           {/* Password */}
           <section className="space-y-4 border-t border-[#003572]/10 dark:border-[#00bfff]/10 pt-6">
             <div>
-              <h3 className="font-label text-[10px] uppercase tracking-widest text-gray-500">Contraseña</h3>
+              <h3 className="font-label text-[11px] uppercase tracking-widest text-gray-500">Contraseña</h3>
               <p className="font-body text-xs text-gray-500 mt-1">
                 {member.hasPassword
                   ? "Actualiza tu contraseña de acceso por email."
@@ -343,7 +343,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
 
           {/* Notifications */}
           <section className="space-y-4 border-t border-[#003572]/10 dark:border-[#00bfff]/10 pt-6">
-            <h3 className="font-label text-[10px] uppercase tracking-widest text-gray-500">Notificaciones</h3>
+            <h3 className="font-label text-[11px] uppercase tracking-widest text-gray-500">Notificaciones</h3>
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
                 <p className="font-body text-sm">Recibir asignaciones por correo</p>
