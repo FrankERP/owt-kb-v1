@@ -127,7 +127,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
         <div className="text-center min-w-[13rem]">
           <p className="font-display text-base font-bold uppercase">{monthRangeLabel(anchorMonth, WINDOW_MONTHS)}</p>
           {!viewMonth && (
-            <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">Próximos</p>
+            <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">Próximos</p>
           )}
         </div>
         <Link
@@ -196,14 +196,14 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
           ] as const).map(([color, label]) => (
             <span key={label} className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-[4px] border" style={{ borderColor: `${color}80`, background: `${color}33` }} />
-              <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">{label}</span>
+              <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">{label}</span>
             </span>
           ))}
           <span className="flex items-center gap-1.5">
             <span className="relative w-3 h-3 rounded-[4px] border border-[#00bfff]/50 bg-[#003572]/50">
               <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-[#00bfff]" />
             </span>
-            <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">Varios servicios</span>
+            <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">Varios servicios</span>
           </span>
         </div>
       )}
@@ -248,7 +248,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
                   <div className="flex-1 h-px bg-[#003572]/20 dark:bg-[#00bfff]/10" />
                   <div className="text-center shrink-0">
                     <p className="font-display text-base md:text-lg font-bold uppercase">{label}</p>
-                    <p className="font-label text-[10px] md:text-xs uppercase tracking-widest text-gray-500">{monthYear}</p>
+                    <p className="font-label text-[11px] md:text-xs uppercase tracking-widest text-gray-500">{monthYear}</p>
                   </div>
                   <div className="flex-1 h-px bg-[#003572]/20 dark:bg-[#00bfff]/10" />
                 </div>
@@ -360,7 +360,7 @@ function MonthGrid({
       </h3>
       <div className="grid grid-cols-7 gap-1">
         {DAY_HEADERS.map((h) => (
-          <div key={h} className="font-label text-[10px] uppercase tracking-widest text-gray-500 text-center pb-2">
+          <div key={h} className="font-label text-[11px] uppercase tracking-widest text-gray-500 text-center pb-2">
             {h}
           </div>
         ))}

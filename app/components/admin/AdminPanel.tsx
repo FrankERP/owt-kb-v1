@@ -95,7 +95,7 @@ function Avatar({
         <img src={photoUrl} alt={name} className="w-full h-full object-cover" />
       ) : (
         <div className="w-full h-full bg-[#003572] dark:bg-[#00bfff]/10 flex items-center justify-center">
-          <span className="font-label text-[11px] text-[#00bfff]">{initials}</span>
+          <span className="font-label text-xs text-[#00bfff]">{initials}</span>
         </div>
       )}
       {onClick && (
@@ -738,7 +738,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
                 <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                   <p className="font-body text-sm text-[#C8D8EB]/50 dark:text-[#C8D8EB]/35 truncate">{m.email}</p>
                   {(m.memberType ?? []).map(t => (
-                    <span key={t} className="font-label text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-400 border border-[#003572]/15 dark:border-[#00bfff]/15">
+                    <span key={t} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-400 border border-[#003572]/15 dark:border-[#00bfff]/15">
                       {TYPE_LABEL[t] ?? t}
                     </span>
                   ))}
@@ -746,7 +746,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
               </div>
 
               {/* Role badge */}
-              <span className={`hidden sm:inline-flex font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full ${ROLE_BADGE[m.role ?? "member"]}`}>
+              <span className={`hidden sm:inline-flex font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full ${ROLE_BADGE[m.role ?? "member"]}`}>
                 {ROLE_LABEL[m.role ?? "member"]}
               </span>
 
@@ -780,7 +780,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
 
       {/* Legend */}
       {!loading && members.length > 0 && (
-        <p className="font-label text-[10px] uppercase tracking-widest text-gray-600 flex items-center gap-2">
+        <p className="font-label text-[11px] uppercase tracking-widest text-gray-600 flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Con contraseña
           <span className="w-2 h-2 rounded-full bg-gray-600 inline-block ml-2" /> Solo SSO
         </p>

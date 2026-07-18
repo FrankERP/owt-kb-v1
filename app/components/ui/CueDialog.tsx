@@ -137,7 +137,7 @@ export default function CueDialog({
         {title && (
           <div className="flex shrink-0 items-start justify-between gap-4 border-b border-brand-beam/10 bg-brand-deck/35 px-5 py-5 sm:px-6">
             <div className="min-w-0">
-              <p className="mb-1 font-label text-[9px] uppercase tracking-[0.24em] text-brand-beam/70">Cue</p>
+              <p className="mb-1 font-label text-[10px] uppercase tracking-[0.24em] text-brand-beam/70">Cue</p>
               <h2 id={titleId} className="font-display text-2xl leading-tight text-brand-frost">
                 {title}
               </h2>

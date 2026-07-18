@@ -107,7 +107,7 @@ export default async function Home() {
 
       <div className="mx-auto mb-16 max-w-7xl px-6 pt-12">
         <div className="brand-section-heading mb-7">
-          <p className="font-label text-[9px] uppercase tracking-[0.24em] text-brand-beam">Programación</p>
+          <p className="font-label text-[10px] uppercase tracking-[0.24em] text-brand-beam">Programación</p>
           <h2 className="mt-1 font-display text-3xl font-semibold text-brand-frost md:text-4xl">Esta semana</h2>
         </div>
         <div className={`grid grid-cols-1 gap-6 ${totalCards > 1 ? "md:grid-cols-2" : "mx-auto max-w-3xl"}`}>
@@ -156,10 +156,10 @@ export default async function Home() {
       <div className="mx-auto max-w-7xl px-6 pt-8">
         <div className="mb-7 flex items-end justify-between gap-4 border-b border-brand-steel/10 pb-5">
           <div className="brand-section-heading">
-            <p className="font-label text-[9px] uppercase tracking-[0.24em] text-brand-beam">Biblioteca</p>
+            <p className="font-label text-[10px] uppercase tracking-[0.24em] text-brand-beam">Biblioteca</p>
             <h2 className="mt-1 font-display text-3xl font-semibold text-brand-frost md:text-4xl">Todas las canciones</h2>
           </div>
-          <p className="hidden font-label text-[10px] uppercase tracking-widest text-brand-steel/45 sm:block">
+          <p className="hidden font-label text-[11px] uppercase tracking-widest text-brand-steel/45 sm:block">
             {posts?.length ?? 0} títulos
           </p>
         </div>

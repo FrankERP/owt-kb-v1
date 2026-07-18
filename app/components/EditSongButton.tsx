@@ -262,7 +262,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
                   Artistas
                 </label>
                 {authorState === "error" && (
-                  <button type="button" onClick={loadAuthors} className="font-label text-[10px] uppercase tracking-widest text-brand-beam">
+                  <button type="button" onClick={loadAuthors} className="font-label text-[11px] uppercase tracking-widest text-brand-beam">
                     Reintentar
                   </button>
                 )}
@@ -279,7 +279,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
                       type="button"
                       onClick={() => toggleAuthor(author._id)}
                       aria-pressed={active}
-                      className={`rounded-full border px-2.5 py-1 font-label text-[10px] uppercase tracking-widest transition-colors ${
+                      className={`rounded-full border px-2.5 py-1 font-label text-[11px] uppercase tracking-widest transition-colors ${
                         active ? "border-[#00bfff] bg-[#00bfff]/15 text-[#00bfff]" : "border-[#00bfff]/20 text-gray-500 hover:border-[#00bfff]/50"
                       }`}
                     >
@@ -307,7 +307,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
               <div role="toolbar" aria-label="Secciones y formato de letra" className="flex flex-wrap items-center gap-1 rounded-t-lg border border-[#00bfff]/20 border-b-0 bg-[#00bfff]/5 px-2 py-1.5">
                 {SECTION_LABELS.map((label) => (
                   <button key={label} type="button" onPointerDown={(e) => e.preventDefault()} onClick={() => insertLabel(label)}
-                    className="whitespace-nowrap rounded border border-[#00bfff]/15 px-2 py-1 font-label text-[9px] uppercase tracking-widest text-gray-500 transition-colors hover:border-[#00bfff]/40 hover:text-[#00bfff]">
+                    className="whitespace-nowrap rounded border border-[#00bfff]/15 px-2 py-1 font-label text-[10px] uppercase tracking-widest text-gray-500 transition-colors hover:border-[#00bfff]/40 hover:text-[#00bfff]">
                     {label}
                   </button>
                 ))}
@@ -331,7 +331,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
                 placeholder={"# Verso 1\n[Am]Ante Ti [F]Postrado estoy\n\n# Coro\nLínea 1"}
                 spellCheck={false}
               />
-              <p className="mt-1 font-label text-[10px] uppercase tracking-wide text-gray-600"># Sección · [Acorde]palabra · **negrita** · *cursiva*</p>
+              <p className="mt-1 font-label text-[11px] uppercase tracking-wide text-gray-600"># Sección · [Acorde]palabra · **negrita** · *cursiva*</p>
             </div>
 
             <RepeatRows
@@ -385,7 +385,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
                   Tags
                 </label>
                 {tagState === "error" && (
-                  <button type="button" onClick={loadTags} className="font-label text-[10px] uppercase tracking-widest text-brand-beam">
+                  <button type="button" onClick={loadTags} className="font-label text-[11px] uppercase tracking-widest text-brand-beam">
                     Reintentar
                   </button>
                 )}
@@ -402,7 +402,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
                       type="button"
                       onClick={() => toggleTag(tag._id)}
                       aria-pressed={active}
-                      className={`rounded-full border px-2.5 py-1 font-label text-[10px] uppercase tracking-widest transition-colors ${
+                      className={`rounded-full border px-2.5 py-1 font-label text-[11px] uppercase tracking-widest transition-colors ${
                         active ? "border-[#00bfff] bg-[#00bfff]/15 text-[#00bfff]" : "border-[#00bfff]/20 text-gray-500 hover:border-[#00bfff]/50"
                       }`}
                     >
@@ -476,7 +476,7 @@ function RepeatRows({
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <p className="font-label text-xs uppercase tracking-widest text-brand-steel">{title}</p>
-        <button type="button" onClick={onAdd} className="font-label text-[10px] uppercase tracking-widest text-[#00bfff] transition-colors hover:text-[#00bfff]/70">
+        <button type="button" onClick={onAdd} className="font-label text-[11px] uppercase tracking-widest text-[#00bfff] transition-colors hover:text-[#00bfff]/70">
           {addLabel}
         </button>
       </div>
@@ -485,8 +485,8 @@ function RepeatRows({
       ) : (
         <div className="overflow-hidden rounded-lg border border-[#00bfff]/15">
           <div className="grid grid-cols-[1fr_2fr_2rem] gap-3 border-b border-[#00bfff]/10 bg-[#00bfff]/5 px-3 py-1.5">
-            <span className="font-label text-[9px] uppercase tracking-widest text-gray-500">{firstHeader}</span>
-            <span className="font-label text-[9px] uppercase tracking-widest text-gray-500">{secondHeader}</span>
+            <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">{firstHeader}</span>
+            <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">{secondHeader}</span>
           </div>
           {rows.map((row, i) => (
             <div key={row.key} className={`group grid grid-cols-[1fr_2fr_2rem] items-center gap-3 px-3 py-2 transition-colors hover:bg-[#00bfff]/5 ${i > 0 ? "border-t border-[#00bfff]/10" : ""}`}>

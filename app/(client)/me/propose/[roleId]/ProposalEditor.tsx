@@ -487,7 +487,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
               <p className="font-body text-sm font-semibold truncate">{song.title}</p>
               <p className="font-body text-xs text-gray-400 truncate">{song.author}</p>
               {!!song.previous_keys?.length && (
-                <p className="font-body text-[11px] text-gray-500 mt-0.5">
+                <p className="font-body text-xs text-gray-500 mt-0.5">
                   Tonos anteriores: <span className="text-[#00bfff]/80">{song.previous_keys.join(" · ")}</span>
                 </p>
               )}
@@ -515,7 +515,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
                           key={k}
                           type="button"
                           onClick={() => setPlayKey(idx, k)}
-                          className={`font-label text-[10px] px-1.5 py-1.5 rounded-lg transition-colors ${
+                          className={`font-label text-[11px] px-1.5 py-1.5 rounded-lg transition-colors ${
                             k === song.play_key
                               ? "bg-[#00bfff]/20 text-[#00bfff]"
                               : "text-gray-400 hover:bg-[#00bfff]/10 hover:text-[#00bfff]"
@@ -564,7 +564,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
                 }`}
               >
                 <ChainLinkIcon strokeWidth={linked ? 2.5 : 1.5} />
-                {linked && <span className="font-label text-[8px] uppercase tracking-widest ml-0.5">medley</span>}
+                {linked && <span className="font-label text-[10px] uppercase tracking-widest ml-0.5">medley</span>}
               </button>
             </div>
           )}
@@ -574,7 +574,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
             <div className="-my-0.5 flex items-center justify-center relative z-10">
               <span className="flex items-center gap-1 px-2 py-0.5 rounded-full border border-[#00bfff]/30 bg-[#010b17] text-[#00bfff]/60">
                 <ChainLinkIcon strokeWidth={2.5} />
-                <span className="font-label text-[8px] uppercase tracking-widest ml-0.5">medley</span>
+                <span className="font-label text-[10px] uppercase tracking-widest ml-0.5">medley</span>
               </span>
             </div>
           )}
@@ -629,14 +629,14 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
                         <div className="flex-1 min-w-0">
                           <p className="font-body text-sm font-semibold truncate">{song.title}</p>
                           <p className="font-body text-xs text-gray-400 truncate">{song.author}</p>
-                          <p className="font-body text-[11px] text-gray-500 mt-0.5">
+                          <p className="font-body text-xs text-gray-500 mt-0.5">
                             {song.previous_keys.length > 0
                               ? <>Tonos anteriores: <span className="text-[#00bfff]/80">{song.previous_keys.join(" · ")}</span></>
                               : "Sin historial previo"}
                           </p>
                         </div>
                         <span className="font-label text-xs text-gray-500 shrink-0">{song.key}</span>
-                        {already && <span className="font-label text-[10px] text-gray-500">En lista</span>}
+                        {already && <span className="font-label text-[11px] text-gray-500">En lista</span>}
                       </button>
                     );
                   })}
@@ -744,7 +744,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
             <ul className="space-y-1 border border-[#00bfff]/10 rounded-xl p-3 bg-[#003572]/10">
               {songs.map((s, i) => (
                 <li key={s.songId} className="flex items-center gap-2">
-                  <span className="font-label text-[10px] text-gray-600 w-4 text-right tabular-nums">{i + 1}</span>
+                  <span className="font-label text-[11px] text-gray-600 w-4 text-right tabular-nums">{i + 1}</span>
                   <span className="font-body text-sm truncate flex-1">{s.title}</span>
                   <span className="font-label text-xs text-[#00bfff] shrink-0">{s.play_key}</span>
                 </li>

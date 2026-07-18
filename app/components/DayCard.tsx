@@ -95,7 +95,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
         <div className={`${t.headerBg} border-b px-5 py-5 ${t.headerBorder}`}>
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className={`mb-1 font-label text-[9px] uppercase tracking-[0.24em] ${t.accentMuted}`}>Servicio</p>
+              <p className={`mb-1 font-label text-[10px] uppercase tracking-[0.24em] ${t.accentMuted}`}>Servicio</p>
               <h3 className="font-display text-2xl font-bold uppercase leading-none text-brand-frost md:text-3xl lg:text-4xl">
                 {day}
               </h3>
@@ -109,12 +109,12 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
             </div>
             <div className="flex shrink-0 flex-col items-end gap-2">
               {date && (
-                <span className="rounded-lg border border-brand-frost/10 bg-brand-blackout/35 px-3 py-2 text-center font-label text-[10px] uppercase tracking-[0.15em] text-brand-frost/70 shadow-inner">
+                <span className="rounded-lg border border-brand-frost/10 bg-brand-blackout/35 px-3 py-2 text-center font-label text-[11px] uppercase tracking-[0.15em] text-brand-frost/70 shadow-inner">
                   {shortDate}
                 </span>
               )}
               {isNext && (
-                <span className="rounded-full border border-brand-signal/35 bg-brand-signal/10 px-2.5 py-1 font-label text-[9px] uppercase tracking-widest text-brand-signal">
+                <span className="rounded-full border border-brand-signal/35 bg-brand-signal/10 px-2.5 py-1 font-label text-[10px] uppercase tracking-widest text-brand-signal">
                   Próximo
                 </span>
               )}
@@ -125,7 +125,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
         <div className="space-y-5 p-5 md:p-6">
           {setlist?.team_notes && (
             <section className="rounded-lg border px-4 py-3" style={{ borderColor: `${t.accentHex}35`, background: `${t.accentHex}0d` }}>
-              <p className={`font-label text-[10px] uppercase tracking-widest ${t.accentMuted} mb-1`}>Mensaje para el equipo</p>
+              <p className={`font-label text-[11px] uppercase tracking-widest ${t.accentMuted} mb-1`}>Mensaje para el equipo</p>
               <p className="font-body text-sm text-[#C8D8EB]/90 whitespace-pre-wrap">{setlist.team_notes}</p>
             </section>
           )}
@@ -142,7 +142,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                   {canEdit && date && (
                     <button
                       onClick={() => setEditSetlist(true)}
-                      className="flex items-center gap-1 font-label text-[10px] uppercase tracking-widest text-gray-500 hover:text-[#00bfff] transition-colors"
+                      className="flex items-center gap-1 font-label text-[11px] uppercase tracking-widest text-gray-500 hover:text-[#00bfff] transition-colors"
                     >
                       <PencilIcon />
                       Editar
@@ -163,12 +163,12 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                         >
                           <span className="font-label text-xs text-gray-400 w-4 shrink-0 text-right tabular-nums">{n}</span>
                           <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
-                            <span className="truncate font-body text-sm font-semibold transition-colors group-hover:text-brand-beam md:text-base">{song.title}</span>
+                            <span className="truncate font-body text-base font-semibold transition-colors group-hover:text-brand-beam md:text-lg">{song.title}</span>
                             {song.author && <span className="text-gray-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
                             {song.play_key && song.key && song.play_key !== song.key && (
-                              <span className="font-label text-[10px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800/50 text-gray-500 leading-tight">orig. {song.key}</span>
+                              <span className="font-label text-[11px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800/50 text-gray-500 leading-tight">orig. {song.key}</span>
                             )}
                             <span className={`font-label text-xs font-semibold ${t.accent}`}>{song.play_key || song.key}</span>
                           </div>
@@ -188,12 +188,12 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                       {/* MEDLEY label */}
                       <div className="flex items-center gap-1 pl-2 -ml-2 mb-0.5">
                         <ChainLinkIcon color={t.accentHex} opacity={0.65} />
-                        <span className="font-label text-[9px] uppercase tracking-[0.18em]" style={{ color: `${t.accentHex}99` }}>Medley</span>
+                        <span className="font-label text-[10px] uppercase tracking-[0.18em]" style={{ color: `${t.accentHex}99` }}>Medley</span>
                       </div>
                       {run.songs.map(({ song, n }, si) => (
                         <div key={song._id}>
                           {si > 0 && (
-                            <span className="block w-4 text-center font-label text-[10px] leading-none -my-0.5" style={{ color: `${t.accentHex}70` }}>+</span>
+                            <span className="block w-4 text-center font-label text-[11px] leading-none -my-0.5" style={{ color: `${t.accentHex}70` }}>+</span>
                           )}
                           <button
                             onClick={() => openSheet(song._id, song.play_key || undefined)}
@@ -201,12 +201,12 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                           >
                             <span className="font-label text-xs text-gray-400 w-4 shrink-0 text-right tabular-nums">{n}</span>
                             <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
-                              <span className="truncate font-body text-sm font-semibold transition-colors group-hover:text-brand-beam md:text-base">{song.title}</span>
+                              <span className="truncate font-body text-base font-semibold transition-colors group-hover:text-brand-beam md:text-lg">{song.title}</span>
                               {song.author && <span className="text-gray-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
                               {song.play_key && song.key && song.play_key !== song.key && (
-                                <span className="font-label text-[10px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800/50 text-gray-500 leading-tight">orig. {song.key}</span>
+                                <span className="font-label text-[11px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800/50 text-gray-500 leading-tight">orig. {song.key}</span>
                               )}
                               <span className={`font-label text-xs font-semibold ${t.accent}`}>{song.play_key || song.key}</span>
                             </div>

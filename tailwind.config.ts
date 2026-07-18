@@ -25,6 +25,11 @@ const config: Config = {
 				body:    ["var(--font-body)",    "sans-serif"],
 				label:   ["var(--font-label)",   "sans-serif"],
 			},
+			fontSize: {
+				xs:   ["0.8125rem", { lineHeight: "1.2rem" }],
+				sm:   ["0.9375rem", { lineHeight: "1.45rem" }],
+				base: ["1.0625rem", { lineHeight: "1.65rem" }],
+			},
 			scrollSnapType: {
 				x: "x mandatory",
 			},

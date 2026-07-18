@@ -240,7 +240,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
                     <span className="font-body text-xs text-gray-500 truncate">{song.author}</span>
                   )}
                   {(song.tags ?? []).map((tag) => (
-                    <span key={tag._id} className="font-label text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-400 border border-[#003572]/15 dark:border-[#00bfff]/15">
+                    <span key={tag._id} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-400 border border-[#003572]/15 dark:border-[#00bfff]/15">
                       #{tag.name}
                     </span>
                   ))}

@@ -66,7 +66,7 @@ export default function BottomNav() {
             )}
             <div className="min-w-0">
               <p className="font-body text-sm font-semibold truncate">{session.user.name}</p>
-              <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 truncate">
+              <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 truncate">
                 {session.user.email}
               </p>
             </div>
@@ -114,7 +114,7 @@ export default function BottomNav() {
               }`}
             >
               {tab.icon}
-              <span className="font-label text-[9px] uppercase tracking-widest">{tab.label}</span>
+              <span className="font-label text-[10px] uppercase tracking-widest">{tab.label}</span>
             </Link>
             );
           })}
@@ -128,7 +128,7 @@ export default function BottomNav() {
             }`}
           >
             <MoreIcon />
-            <span className="font-label text-[9px] uppercase tracking-widest">Más</span>
+            <span className="font-label text-[10px] uppercase tracking-widest">Más</span>
           </button>
         </div>
       </nav>
