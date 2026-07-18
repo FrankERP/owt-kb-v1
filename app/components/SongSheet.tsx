@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { PortableText } from "next-sanity";
 import { usePlayer, AudioTrack, SongHistoryEntry } from "@/app/context/PlayerContext";
-import { useFocusTrap } from "@/app/utils/useFocusTrap";
+import AudioTransport from "./AudioTransport";
 import ChordChart from "./ChordChart";
+import CueDialog from "./ui/CueDialog";
 import { groupBySections } from "@/app/utils/lyrics";
 
 // ─── Portable-text renderer for the sheet (no prose class, tight spacing) ─────
@@ -40,34 +42,60 @@ const bodyComponents = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SongSheet() {
-  const { sheet, sheetLoading, sheetError, sheetPlayKey, closeSheet, openSheet, playTrack, togglePlay, player } = usePlayer();
+  const {
+    sheet,
+    sheetLoading,
+    sheetError,
+    sheetPlayKey,
+    closeSheet,
+    openSheet,
+    playTrack,
+    togglePlay,
+    closePlayer,
+    seek,
+    getAudio,
+    audioReady,
+    player,
+  } = usePlayer();
   const isOpen = !!(sheet || sheetLoading || sheetError);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const [progress, setProgress] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
 
   // Which history week (if any) has its full setlist popover open.
   const [openSetIdx, setOpenSetIdx] = useState<number | null>(null);
-
-  // Move focus into the sheet, trap it, and restore to the trigger on close.
-  const sheetRef = useFocusTrap<HTMLDivElement>(isOpen);
 
   // Reset the setlist popover whenever a different song is loaded into the sheet.
   useEffect(() => { setOpenSetIdx(null); }, [sheet?._id]);
 
   useEffect(() => {
-    if (!isOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      // Escape closes the setlist popover first, then the sheet itself.
-      if (openSetIdx !== null) setOpenSetIdx(null);
-      else closeSheet();
+    if (!audioReady) return;
+    const el = getAudio();
+    if (!el) return;
+    const onTime = () => {
+      if (el.duration) {
+        setProgress(el.currentTime / el.duration);
+        setCurrentTime(el.currentTime);
+        setDuration(el.duration);
+      }
     };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [isOpen, closeSheet, openSetIdx]);
+    const onMeta = () => setDuration(el.duration || 0);
+    el.addEventListener("timeupdate", onTime);
+    el.addEventListener("loadedmetadata", onMeta);
+    return () => {
+      el.removeEventListener("timeupdate", onTime);
+      el.removeEventListener("loadedmetadata", onMeta);
+    };
+  }, [audioReady, getAudio]);
 
   useEffect(() => {
-    document.body.style.overflow = isOpen ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
-  }, [isOpen]);
+    if (!player.track) {
+      setProgress(0);
+      setCurrentTime(0);
+      setDuration(0);
+    }
+  }, [player.track]);
 
   if (!isOpen) return null;
 
@@ -77,26 +105,18 @@ export default function SongSheet() {
   const hasPDFs     = (sheet?.chordsPDF?.length ?? 0) > 0;
   const hasHistory  = (sheet?.history?.length ?? 0) > 0;
   const hasContent  = hasChords || hasBody;
+  const sheetTrack = sheet && player.track?.songSlug === sheet.slug ? player.track : null;
 
   return (
     <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-[55] bg-black/60 backdrop-blur-sm" onClick={closeSheet} />
-
-      {/* Sheet — bottom drawer on mobile, centered modal on lg+ */}
-      <div
-        ref={sheetRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={sheet?.title ? `Canción: ${sheet.title}` : "Detalle de canción"}
-        tabIndex={-1}
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-        className="brand-facet-panel brand-surface !fixed inset-x-0 bottom-0 z-[60] flex max-h-[92svh] flex-col overflow-hidden rounded-t-2xl border-t border-brand-beam/25 focus:outline-none lg:inset-auto lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:w-full lg:max-w-2xl lg:-translate-x-1/2 lg:-translate-y-1/2 lg:rounded-2xl lg:border lg:border-brand-beam/20 lg:shadow-2xl">
-
-        {/* Drag handle (mobile only) */}
-        <div className="flex justify-center pt-3 pb-1 lg:hidden shrink-0">
-          <div className="w-12 h-1.5 rounded-full bg-[#00bfff]/25" />
-        </div>
+      <CueDialog
+        open={isOpen}
+        label={sheet?.title ? `Canción: ${sheet.title}` : "Detalle de canción"}
+        mode="sheet"
+        size="lg"
+        fallbackFocusRef={closeButtonRef}
+        onDismiss={closeSheet}
+      >
 
         {/* Header */}
         <div className="flex shrink-0 items-start justify-between border-b border-brand-beam/10 bg-brand-deck/35 px-5 py-5">
@@ -119,6 +139,8 @@ export default function SongSheet() {
             )}
           </div>
           <button
+            ref={closeButtonRef}
+            type="button"
             onClick={closeSheet}
             className="p-2 -mr-2 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-white/5 transition-colors shrink-0"
             aria-label="Cerrar"
@@ -211,6 +233,24 @@ export default function SongSheet() {
                       </button>
                     );
                   })}
+                </div>
+              )}
+
+              {sheetTrack && (
+                <div
+                  className="sticky bottom-0 -mx-5 border-t border-brand-beam/10 bg-brand-blackout/95 backdrop-blur-md"
+                  style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+                >
+                  <AudioTransport
+                    track={sheetTrack}
+                    isPlaying={player.isPlaying}
+                    currentTime={currentTime}
+                    duration={duration}
+                    progress={progress}
+                    onToggle={togglePlay}
+                    onSeek={seek}
+                    onClose={() => closePlayer(closeButtonRef.current)}
+                  />
                 </div>
               )}
 
@@ -335,13 +375,14 @@ export default function SongSheet() {
             </div>
           ) : null}
         </div>
-      </div>
+      </CueDialog>
 
       {/* Setlist popover — the whole set for a chosen history week */}
       {openSetIdx !== null && sheet?.history?.[openSetIdx] && (
         <SetlistPopover
           entry={sheet.history[openSetIdx]}
           currentSongId={sheet._id}
+          fallbackFocusRef={closeButtonRef}
           onClose={() => setOpenSetIdx(null)}
           onPick={(songId, playKey) => { setOpenSetIdx(null); openSheet(songId, playKey); }}
         />
@@ -355,25 +396,19 @@ export default function SongSheet() {
 function SetlistPopover({
   entry,
   currentSongId,
+  fallbackFocusRef,
   onClose,
   onPick,
 }: {
   entry: SongHistoryEntry;
   currentSongId: string;
+  fallbackFocusRef: React.RefObject<HTMLButtonElement | null>;
   onClose: () => void;
   onPick: (songId: string, playKey?: string) => void;
 }) {
   return (
-    <>
-      {/* Dim layer above the sheet */}
-      <div className="fixed inset-0 z-[65] bg-black/50" onClick={onClose} />
-
-      {/* Floating card */}
-      <div
-        className="fixed left-1/2 top-1/2 z-[70] w-[min(20rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-[#0a1929] border border-[#00bfff]/25 shadow-2xl overflow-hidden"
-        role="dialog"
-        aria-label="Set completo"
-      >
+    <CueDialog open title="Set completo" label="Set completo" size="sm" fallbackFocusRef={fallbackFocusRef} onDismiss={onClose}>
+      <div>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#00bfff]/10 bg-[#00bfff]/[0.04]">
           <div>
@@ -424,7 +459,7 @@ function SetlistPopover({
           })}
         </ol>
       </div>
-    </>
+    </CueDialog>
   );
 }
 

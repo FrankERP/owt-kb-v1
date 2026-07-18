@@ -116,6 +116,7 @@ export default async function Home() {
               key={sp._id}
               day={sp.service_name || "Servicio Especial"}
               date={sp.date}
+              roleId={sp._id}
               setlist={sp.songs?.length ? { songs: sp.songs as SetlistSong[], week: sp.date, team_notes: sp.team_notes } : undefined}
               leads={sp.Lead?.map((m) => m.alias || m.member_name) ?? []}
               instruments={sp.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}

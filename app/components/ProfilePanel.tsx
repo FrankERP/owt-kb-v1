@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useId } from "react";
-import { useFocusTrap } from "@/app/utils/useFocusTrap";
+import CueDialog from "./ui/CueDialog";
+import CueDialogStatus from "./ui/CueDialogStatus";
 
 interface MemberProfile {
   _id: string;
@@ -71,18 +72,11 @@ function Avatar({
 export default function ProfilePanel({ initialMember }: { initialMember: MemberProfile }) {
   const [member, setMember]   = useState(initialMember);
   const [open, setOpen]       = useState(false);
-  // Dialog a11y: trap focus while open + restore on close; stable ids for labels.
-  const panelRef = useFocusTrap<HTMLDivElement>(open);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const ids = useId();
   const fid = (name: string) => `${ids}-${name}`;
-  // Escape closes the drawer.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
   const [toast, setToast]     = useState<{ msg: string; ok: boolean } | null>(null);
+  const [panelStatus, setPanelStatus] = useState<{ tone: "error" | "pending"; message: string } | null>(null);
 
   // Identity form
   const [alias, setAlias]     = useState(initialMember.alias ?? "");
@@ -112,12 +106,6 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
     setEmailPref(initialMember.notifPrefs?.email !== false);
   }, [initialMember]);
 
-  // Lock body scroll while drawer is open
-  useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
-  }, [open]);
-
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 3500);
@@ -125,6 +113,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
 
   const handleSaveProfile = async () => {
     setSavingProfile(true);
+    setPanelStatus({ tone: "pending", message: "Guardando perfil…" });
     try {
       const res = await fetch("/api/me", {
         method: "PATCH",
@@ -133,13 +122,14 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
       });
       if (res.ok) {
         setMember((m) => ({ ...m, alias: alias.trim() || undefined, email }));
+        setPanelStatus(null);
         showToast("Perfil actualizado.");
       } else {
         const { error } = await res.json().catch(() => ({ error: "Error al guardar." }));
-        showToast(error, false);
+        setPanelStatus({ tone: "error", message: error });
       }
     } catch {
-      showToast("Error de conexión.", false);
+      setPanelStatus({ tone: "error", message: "Error de conexión." });
     } finally {
       setSavingProfile(false);
     }
@@ -150,6 +140,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
     if (!file) return;
     e.target.value = "";
     setUploadingPhoto(true);
+    setPanelStatus({ tone: "pending", message: "Subiendo foto…" });
     const fd = new FormData();
     fd.append("photo", file);
     try {
@@ -157,13 +148,14 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
       if (res.ok) {
         const { photoUrl } = await res.json();
         setMember((m) => ({ ...m, photoUrl }));
+        setPanelStatus(null);
         showToast("Foto actualizada.");
       } else {
         const { error } = await res.json().catch(() => ({ error: "Error al subir la foto." }));
-        showToast(error, false);
+        setPanelStatus({ tone: "error", message: error });
       }
     } catch {
-      showToast("Error de conexión.", false);
+      setPanelStatus({ tone: "error", message: "Error de conexión." });
     } finally {
       setUploadingPhoto(false);
     }
@@ -199,6 +191,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
     const next = !emailPref;
     setEmailPref(next);            // optimistic
     setSavingEmailPref(true);
+    setPanelStatus({ tone: "pending", message: "Guardando preferencia…" });
     try {
       const res = await fetch("/api/me/notif-prefs", {
         method: "PATCH",
@@ -206,14 +199,15 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
         body: JSON.stringify({ email: next }),
       });
       if (res.ok) {
+        setPanelStatus(null);
         showToast(next ? "Recibirás correos de asignación." : "Ya no recibirás correos de asignación.");
       } else {
         setEmailPref(!next);         // revert on failure
-        showToast("Error al guardar la preferencia.", false);
+        setPanelStatus({ tone: "error", message: "Error al guardar la preferencia." });
       }
     } catch {
       setEmailPref(!next);           // revert on network error too
-      showToast("Error al guardar la preferencia.", false);
+      setPanelStatus({ tone: "error", message: "Error al guardar la preferencia." });
     } finally {
       setSavingEmailPref(false);
     }
@@ -234,6 +228,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
           <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mt-0.5">{member.role}</p>
         </div>
         <button
+          ref={triggerRef}
           onClick={() => setOpen(true)}
           className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#00bfff]/20 font-label text-[10px] uppercase tracking-widest text-gray-400 hover:border-[#00bfff] hover:text-[#00bfff] transition-colors"
         >
@@ -245,27 +240,17 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
         </button>
       </div>
 
-      {/* ── Drawer ───────────────────────────────────────────────────────── */}
-      {/* Backdrop */}
-      <div
-        onClick={() => setOpen(false)}
-        className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
-      />
-
-      {/* Panel */}
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Editar perfil"
-        tabIndex={-1}
-        inert={!open}
-        className={`fixed top-0 right-0 z-50 h-full w-full max-w-md flex flex-col bg-[#C8D8EB] dark:bg-[#0a1929] border-l border-[#003572]/20 dark:border-[#00bfff]/20 shadow-2xl transition-transform duration-300 focus:outline-none ${open ? "translate-x-0" : "translate-x-full"}`}
+      <CueDialog
+        open={open}
+        title="Editar perfil"
+        label="Editar perfil"
+        restoreFocusRef={triggerRef}
+        mode="sheet"
+        size="sm"
+        onDismiss={() => setOpen(false)}
       >
-
-        {/* Drawer header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-[#003572]/15 dark:border-[#00bfff]/10 shrink-0">
-          <div className="flex items-center gap-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+          <div className="mb-6 flex items-center gap-4">
             <Avatar
               name={displayName}
               photoUrl={member.photoUrl}
@@ -274,23 +259,15 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
               uploading={uploadingPhoto}
             />
             <div className="min-w-0">
-              <h2 className="font-display text-lg uppercase tracking-wide">Editar perfil</h2>
               <p className="font-body text-xs text-[#00bfff]/60 truncate">{displayName}</p>
+              <p className="font-label text-[9px] uppercase tracking-widest text-gray-500">{member.role}</p>
             </div>
           </div>
-          <button
-            onClick={() => setOpen(false)}
-            aria-label="Cerrar"
-            className="text-gray-400 hover:text-[#00bfff] transition-colors text-2xl leading-none ml-4 shrink-0"
-          >
-            ×
-          </button>
-        </div>
-        <input ref={photoInputRef} type="file" accept="image/*" className="sr-only" onChange={handlePhotoChange} />
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8">
+          <input ref={photoInputRef} type="file" accept="image/*" className="sr-only" onChange={handlePhotoChange} />
+          {panelStatus && <div className="mb-6"><CueDialogStatus tone={panelStatus.tone}>{panelStatus.message}</CueDialogStatus></div>}
 
+          <div className="space-y-8">
           {/* Identity */}
           <section className="space-y-4">
             <h3 className="font-label text-[10px] uppercase tracking-widest text-gray-500">Identidad</h3>
@@ -385,8 +362,9 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
               </button>
             </div>
           </section>
+          </div>
         </div>
-      </div>
+      </CueDialog>
 
       {/* Toast */}
       {toast && (
