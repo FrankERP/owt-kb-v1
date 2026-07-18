@@ -228,7 +228,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
       {/* Recurring pattern */}
       {recurOpen && (
         <div className="rounded-xl border border-[#00bfff]/20 bg-[#00bfff]/[0.04] p-4 space-y-3">
-          <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/70">
+          <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]/70">
             Marcar un día recurrente como no disponible
           </p>
           <div className="flex flex-wrap items-center gap-2">
@@ -263,26 +263,26 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
               Quitar serie
             </button>
           </div>
-          <p className="font-body text-[11px] text-gray-500">
+          <p className="font-body text-xs text-gray-500">
             <span className="text-gray-400">Marcar</span> agrega o <span className="text-gray-400">Quitar serie</span> borra ese día durante los próximos 12 meses. Puedes ajustar días sueltos después; recuerda <span className="text-gray-400">Guardar</span>.
           </p>
         </div>
       )}
 
       {upcomingCount > 0 && (
-        <p className="font-label text-[10px] uppercase tracking-widest text-orange-400">
+        <p className="font-label text-[11px] uppercase tracking-widest text-orange-400">
           {upcomingCount} fecha{upcomingCount !== 1 ? "s" : ""} marcada{upcomingCount !== 1 ? "s" : ""} como no disponible
         </p>
       )}
 
       {dirty && !saving && (
-        <p className="font-label text-[10px] uppercase tracking-widest text-amber-400">
+        <p className="font-label text-[11px] uppercase tracking-widest text-amber-400">
           Cambios sin guardar
         </p>
       )}
 
       {saveError && (
-        <p className="font-label text-[10px] uppercase tracking-widest text-red-400">
+        <p className="font-label text-[11px] uppercase tracking-widest text-red-400">
           No se pudo guardar — {saveError}
         </p>
       )}
@@ -293,12 +293,12 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
           type="button"
           onClick={() => setPage(p => p - 1)}
           disabled={!canPrev}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#003572]/40 font-label text-[10px] uppercase tracking-widest text-gray-500 hover:border-[#00bfff]/40 hover:text-[#00bfff] disabled:opacity-20 disabled:cursor-default transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#003572]/40 font-label text-[11px] uppercase tracking-widest text-gray-500 hover:border-[#00bfff]/40 hover:text-[#00bfff] disabled:opacity-20 disabled:cursor-default transition-colors"
         >
           <ChevronLeft /> Anterior
         </button>
 
-        <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">
+        <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">
           {rangeLabel}
         </span>
 
@@ -306,7 +306,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
           type="button"
           onClick={() => setPage(p => p + 1)}
           disabled={!canNext}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#003572]/40 font-label text-[10px] uppercase tracking-widest text-gray-500 hover:border-[#00bfff]/40 hover:text-[#00bfff] disabled:opacity-20 disabled:cursor-default transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#003572]/40 font-label text-[11px] uppercase tracking-widest text-gray-500 hover:border-[#00bfff]/40 hover:text-[#00bfff] disabled:opacity-20 disabled:cursor-default transition-colors"
         >
           Siguiente <ChevronRight />
         </button>
@@ -318,12 +318,12 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
           const cells = buildCalendar(year, month);
           return (
             <div key={`${year}-${month}`} className="rounded-xl border border-[#00bfff]/15 bg-[#00bfff]/[0.04] p-3">
-              <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/70 mb-2 text-center">
+              <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]/70 mb-2 text-center">
                 {MONTHS_ES[month - 1]} {year}
               </p>
               <div className="grid grid-cols-7 gap-0.5 mb-1">
                 {DAYS_ES.map(d => (
-                  <div key={d} className="font-label text-[9px] uppercase tracking-widest text-gray-400 text-center py-0.5">
+                  <div key={d} className="font-label text-[10px] uppercase tracking-widest text-gray-400 text-center py-0.5">
                     {d}
                   </div>
                 ))}
@@ -399,7 +399,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
           >
             {/* Date label + close */}
             <div className="flex items-start justify-between gap-2">
-              <p className="font-label text-[10px] uppercase tracking-widest text-orange-400/80 leading-tight capitalize">
+              <p className="font-label text-[11px] uppercase tracking-widest text-orange-400/80 leading-tight capitalize">
                 {fmtDayLabel(popover.iso)}
               </p>
               <button
@@ -438,7 +438,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
             <button
               type="button"
               onClick={() => removeDate(popover.iso)}
-              className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-red-500/20 font-label text-[10px] uppercase tracking-widest text-red-400/70 hover:border-red-500/40 hover:text-red-400 transition-colors"
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-red-500/20 font-label text-[11px] uppercase tracking-widest text-red-400/70 hover:border-red-500/40 hover:text-red-400 transition-colors"
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />

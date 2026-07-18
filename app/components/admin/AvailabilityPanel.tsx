@@ -191,10 +191,10 @@ export default function AvailabilityPanel() {
                           <span className="font-body text-sm text-gray-400"> como no disponible</span>
                         </div>
                         {note && (
-                          <p className="font-body text-[11px] italic text-gray-500 mt-0.5">"{note}"</p>
+                          <p className="font-body text-xs italic text-gray-500 mt-0.5">"{note}"</p>
                         )}
                       </div>
-                      <span className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full shrink-0 mt-0.5 ${SERVICE_COLOR[role._type]}`}>
+                      <span className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full shrink-0 mt-0.5 ${SERVICE_COLOR[role._type]}`}>
                         {role.service_name || SERVICE_LABEL[role._type]}
                       </span>
                     </div>
@@ -230,7 +230,7 @@ export default function AvailabilityPanel() {
                             return (
                               <span
                                 key={d}
-                                className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full ${
+                                className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full ${
                                   isConflict
                                     ? "bg-red-500/20 text-red-400 border border-red-500/30"
                                     : "bg-amber-500/15 text-amber-400 border border-amber-500/25"
@@ -245,7 +245,7 @@ export default function AvailabilityPanel() {
                       {datesWithNotes.length > 0 && (
                         <div className="pl-5 space-y-0.5">
                           {datesWithNotes.map(d => (
-                            <p key={d} className="font-body text-[11px] italic text-gray-500 leading-snug">
+                            <p key={d} className="font-body text-xs italic text-gray-500 leading-snug">
                               <span className="not-italic font-label uppercase tracking-widest text-amber-400/80">{fmtDate(d)}:</span>{" "}
                               "{noteMap.get(d)}"
                             </p>
@@ -270,15 +270,15 @@ export default function AvailabilityPanel() {
             <table className="w-full text-left border-separate border-spacing-0">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-10 bg-[#C8D8EB] dark:bg-[#010b17] pr-3 pb-2 font-label text-[10px] uppercase tracking-widest text-gray-500 min-w-[100px]">
+                  <th className="sticky left-0 z-10 bg-[#C8D8EB] dark:bg-[#010b17] pr-3 pb-2 font-label text-[11px] uppercase tracking-widest text-gray-500 min-w-[100px]">
                     Miembro
                   </th>
                   {upcoming.map(role => (
                     <th key={role._id} className="pb-2 px-1 text-center min-w-[52px]">
-                      <div className={`rounded-md px-1 py-1 font-label text-[9px] uppercase tracking-widest ${SERVICE_COLOR[role._type]}`}>
+                      <div className={`rounded-md px-1 py-1 font-label text-[10px] uppercase tracking-widest ${SERVICE_COLOR[role._type]}`}>
                         {SERVICE_LABEL[role._type]}
                       </div>
-                      <div className="font-label text-[9px] uppercase tracking-widest text-gray-500 mt-0.5">
+                      <div className="font-label text-[10px] uppercase tracking-widest text-gray-500 mt-0.5">
                         {fmtDate(role.date)}
                       </div>
                     </th>
@@ -318,7 +318,7 @@ export default function AvailabilityPanel() {
             ] as const).map(([, color, label]) => (
               <div key={label} className="flex items-center gap-1.5">
                 <span className={`w-3 h-3 rounded-sm ${color}`} />
-                <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">{label}</span>
+                <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">{label}</span>
               </div>
             ))}
           </div>

@@ -2,14 +2,14 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  Modal,
   SongForm,
   SongTag,
   FormState,
-  blankForm,
   songToForm,
   buildPayload,
 } from "./SongFormModal";
+import CueDialog from "../ui/CueDialog";
+import CueDialogStatus from "../ui/CueDialogStatus";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,6 +45,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
   const [error, setError]     = useState<string | null>(null);
   const [search, setSearch]   = useState("");
   const [modal, setModal]     = useState<ModalState>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast]     = useState<string | null>(null);
 
@@ -77,27 +78,39 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const handleCreateTag = async (name: string): Promise<SongTag | null> => {
-    const res = await fetch("/api/content/tags", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    if (!res.ok) return null;
-    const tag = await res.json();
-    setTags((prev) => [...prev, tag].sort((a, b) => a.name.localeCompare(b.name)));
-    return tag;
+    try {
+      const res = await fetch("/api/content/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error();
+      const tag = await res.json();
+      setTags((prev) => [...prev, tag].sort((a, b) => a.name.localeCompare(b.name)));
+      setModalError(null);
+      return tag;
+    } catch {
+      setModalError("No se pudo crear el tag.");
+      return null;
+    }
   };
 
   const handleCreateAuthor = async (name: string): Promise<SongTag | null> => {
-    const res = await fetch("/api/content/authors", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    if (!res.ok) return null;
-    const author = await res.json();
-    setAuthors((prev) => [...prev, author].sort((a, b) => a.name.localeCompare(b.name)));
-    return author;
+    try {
+      const res = await fetch("/api/content/authors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error();
+      const author = await res.json();
+      setAuthors((prev) => [...prev, author].sort((a, b) => a.name.localeCompare(b.name)));
+      setModalError(null);
+      return author;
+    } catch {
+      setModalError("No se pudo crear el artista.");
+      return null;
+    }
   };
 
   const handleAdd = async (form: FormState) => {
@@ -108,10 +121,10 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(buildPayload(form)),
       });
-      if (res.ok) { setModal(null); fetchAll(); showToast("Canción creada."); }
-      else showToast("Error al crear canción.");
+      if (res.ok) { setModal(null); setModalError(null); fetchAll(); showToast("Canción creada."); }
+      else setModalError("Error al crear canción.");
     } catch {
-      showToast("Error de conexión.");
+      setModalError("Error de conexión.");
     } finally {
       setSubmitting(false);
     }
@@ -126,10 +139,10 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(buildPayload(form)),
       });
-      if (res.ok) { setModal(null); fetchAll(); showToast("Canción actualizada."); }
-      else showToast("Error al actualizar.");
+      if (res.ok) { setModal(null); setModalError(null); fetchAll(); showToast("Canción actualizada."); }
+      else setModalError("Error al actualizar.");
     } catch {
-      showToast("Error de conexión.");
+      setModalError("Error de conexión.");
     } finally {
       setSubmitting(false);
     }
@@ -140,10 +153,10 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
     setSubmitting(true);
     try {
       const res = await fetch(`/api/content/posts/${modal.song._id}`, { method: "DELETE" });
-      if (res.ok) { setModal(null); fetchAll(); showToast("Canción eliminada."); }
-      else showToast("Error al eliminar.");
+      if (res.ok) { setModal(null); setModalError(null); fetchAll(); showToast("Canción eliminada."); }
+      else setModalError("Error al eliminar.");
     } catch {
-      showToast("Error de conexión.");
+      setModalError("Error de conexión.");
     } finally {
       setSubmitting(false);
     }
@@ -170,7 +183,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
           )}
         </div>
         <button
-          onClick={() => setModal({ type: "add" })}
+          onClick={() => { setModalError(null); setModal({ type: "add" }); }}
           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors"
         >
           <span className="text-base leading-none">+</span>
@@ -227,7 +240,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
                     <span className="font-body text-xs text-gray-500 truncate">{song.author}</span>
                   )}
                   {(song.tags ?? []).map((tag) => (
-                    <span key={tag._id} className="font-label text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-400 border border-[#003572]/15 dark:border-[#00bfff]/15">
+                    <span key={tag._id} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-400 border border-[#003572]/15 dark:border-[#00bfff]/15">
                       #{tag.name}
                     </span>
                   ))}
@@ -243,11 +256,11 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
 
               {/* Actions */}
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ActionBtn title="Editar" onClick={() => setModal({ type: "edit", song })}>
+                <ActionBtn title="Editar" onClick={() => { setModalError(null); setModal({ type: "edit", song }); }}>
                   <PencilIcon />
                 </ActionBtn>
                 {canDelete && (
-                  <ActionBtn title="Eliminar" onClick={() => setModal({ type: "delete", song })} danger>
+                  <ActionBtn title="Eliminar" onClick={() => { setModalError(null); setModal({ type: "delete", song }); }} danger>
                     <TrashIcon />
                   </ActionBtn>
                 )}
@@ -266,37 +279,47 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
 
       {/* ── Modals ── */}
       {(modal?.type === "add" || modal?.type === "edit") && (
-        <Modal
+        <CueDialog
+          open
           title={modal.type === "add" ? "Nueva canción" : "Editar canción"}
-          onClose={() => setModal(null)}
+          label={modal.type === "add" ? "Nueva canción" : "Editar canción"}
+          mode="sheet"
+          size="lg"
+          onDismiss={() => { setModalError(null); setModal(null); }}
         >
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
+          {modalError && <CueDialogStatus tone="error">{modalError}</CueDialogStatus>}
           <SongForm
             initial={modal.type === "edit" ? songToFormInitial(modal.song) : undefined}
             allTags={tags}
             allAuthors={authors}
             onSubmit={modal.type === "add" ? handleAdd : handleEdit}
-            onClose={() => setModal(null)}
+            onClose={() => { setModalError(null); setModal(null); }}
             loading={submitting}
             canCreateTag={handleCreateTag}
             canCreateAuthor={handleCreateAuthor}
           />
-        </Modal>
+          </div>
+        </CueDialog>
       )}
 
       {modal?.type === "delete" && (
-        <Modal title="Eliminar canción" onClose={() => setModal(null)}>
+        <CueDialog open title="Eliminar canción" label="Eliminar canción" mode="sheet" size="sm" onDismiss={() => { setModalError(null); setModal(null); }}>
+          <div className="space-y-5 p-6">
+          {modalError && <CueDialogStatus tone="error">{modalError}</CueDialogStatus>}
           <p className="font-body text-sm text-gray-400">
             ¿Eliminar <span className="text-red-400 font-semibold">{modal.song.title}</span>? Esta acción no se puede deshacer.
           </p>
           <div className="flex gap-3 pt-1">
-            <button onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
+            <button onClick={() => { setModalError(null); setModal(null); }} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
               Cancelar
             </button>
             <button onClick={handleDelete} disabled={submitting} className="flex-1 py-2 rounded-lg bg-red-800/60 hover:bg-red-700/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
               {submitting ? "Eliminando..." : "Eliminar"}
             </button>
           </div>
-        </Modal>
+          </div>
+        </CueDialog>
       )}
     </div>
   );

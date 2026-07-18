@@ -16,11 +16,11 @@ const CmsNavbar = () => {
 					/>
 					<div className="min-w-0 leading-none">
 						<p className="font-display text-base uppercase tracking-[0.12em] text-brand-frost">Backstage</p>
-						<p className="mt-1 font-label text-[8px] uppercase tracking-[0.2em] text-brand-steel">Oasis Worship Team</p>
+						<p className="mt-1 font-label text-[10px] uppercase tracking-[0.2em] text-brand-steel">Oasis Worship Team</p>
 					</div>
 				</Link>
 				<div className="text-right">
-					<p className="font-label text-[9px] uppercase tracking-[0.2em] text-brand-beam">Administración</p>
+					<p className="font-label text-[10px] uppercase tracking-[0.2em] text-brand-beam">Administración</p>
 					<p className="mt-1 font-display text-base uppercase tracking-[0.08em] text-brand-frost">Content Studio</p>
 				</div>
 			</div>

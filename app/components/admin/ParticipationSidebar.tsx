@@ -32,7 +32,7 @@ export function ParticipationSidebar({ roles, monthLabel }: { roles: Participant
       <div className="flex items-center justify-between mb-1 gap-2">
         <div>
           <p className="font-label text-xs uppercase tracking-widest text-[#003572] dark:text-[#00bfff]">Participaciones</p>
-          <p className="text-[11px] text-gray-500">{monthLabel}</p>
+          <p className="text-xs text-gray-500">{monthLabel}</p>
         </div>
         <select value={view} onChange={e => setView(e.target.value as View)}
           className="text-xs bg-transparent border border-[#00bfff]/20 rounded-lg px-2 py-1">
@@ -43,7 +43,7 @@ export function ParticipationSidebar({ roles, monthLabel }: { roles: Participant
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 py-2 border-b border-[#00bfff]/15 mb-1">
         {legend.map(([l, c]) => (
-          <span key={l} className="text-[11px] text-gray-500 inline-flex items-center gap-1">
+          <span key={l} className="text-xs text-gray-500 inline-flex items-center gap-1">
             <span style={{ width: 9, height: 9, borderRadius: 2, background: c, display: "inline-block" }} />{l}
           </span>
         ))}
@@ -73,7 +73,7 @@ function Row({ r, max, view }: { r: MemberParticipation; max: number; view: View
     <div className="flex items-center gap-2.5 py-1.5 border-b border-[#00bfff]/10">
       <div className="flex-1 min-w-0">
         <div className="text-[13px] font-medium text-[#003572] dark:text-[#C8D8EB] truncate">{r.name}</div>
-        <div className="text-[11px] text-gray-500">
+        <div className="text-xs text-gray-500">
           {view === "voces"
             ? <>Líder {r.sunLead}·{r.satLead}  ·  BGV {r.sunBGV}·{r.satBGV}  ·  Coro {r.coro}</>
             : <>Instrumentos {r.instrWeeks} sem  ·  FOH {r.fohWeeks} sem</>}

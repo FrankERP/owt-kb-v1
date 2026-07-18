@@ -6,7 +6,7 @@ import { Setlist } from "../utils/interface";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MONTH_NAMES_ES, addMonths, monthRangeLabel, scheduleHref, windowMonths, WINDOW_MONTHS } from "../utils/scheduleMonths";
-import { useFocusTrap } from "../utils/useFocusTrap";
+import CueDialog from "./ui/CueDialog";
 
 export type ActiveDay = {
   day: string; // "Sábado" | "Domingo" | any special service name
@@ -17,6 +17,7 @@ export type ActiveDay = {
   fohTeam?: Array<{ label: string; person: string }>;
   bgvs?: Array<{ member_name: string; alias?: string }>;
   chorus?: Array<{ member_name: string; alias?: string }>;
+  roleId?: string;
 };
 
 interface Props {
@@ -61,7 +62,10 @@ function getWeekends(activeDays: Record<string, ActiveDay[]>) {
 
     entries.forEach((data) => {
       const prev = getOrCreate(sunKey);
-      if (data.day === "Domingo") {
+      if (data.roleId) {
+        prev.specials.push({ dateStr, data });
+        map.set(sunKey, prev);
+      } else if (data.day === "Domingo") {
         map.set(sunKey, { ...prev, sun: data, sunDate: dateStr });
       } else if (data.day === "Sábado") {
         map.set(sunKey, { ...prev, sat: data, satDate: dateStr });
@@ -87,12 +91,6 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
 
   const dismiss = useCallback(() => setSelected(null), []);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") dismiss(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [dismiss]);
-
   const router = useRouter();
   const anchorMonth = viewMonth ?? todayStr.slice(0, 7);
 
@@ -113,8 +111,6 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
     : "No hay servicios próximos.";
 
   const selectedEntries = selected ? (activeDays[selected] ?? []) : [];
-  // Dialog focus management for the day-detail modal (Escape is handled above).
-  const modalRef = useFocusTrap<HTMLDivElement>(selectedEntries.length > 0);
   const weekends = getWeekends(activeDays);
 
   return (
@@ -131,7 +127,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
         <div className="text-center min-w-[13rem]">
           <p className="font-display text-base font-bold uppercase">{monthRangeLabel(anchorMonth, WINDOW_MONTHS)}</p>
           {!viewMonth && (
-            <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">Próximos</p>
+            <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">Próximos</p>
           )}
         </div>
         <Link
@@ -200,14 +196,14 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
           ] as const).map(([color, label]) => (
             <span key={label} className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-[4px] border" style={{ borderColor: `${color}80`, background: `${color}33` }} />
-              <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">{label}</span>
+              <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">{label}</span>
             </span>
           ))}
           <span className="flex items-center gap-1.5">
             <span className="relative w-3 h-3 rounded-[4px] border border-[#00bfff]/50 bg-[#003572]/50">
               <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-[#00bfff]" />
             </span>
-            <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">Varios servicios</span>
+            <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">Varios servicios</span>
           </span>
         </div>
       )}
@@ -252,7 +248,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
                   <div className="flex-1 h-px bg-[#003572]/20 dark:bg-[#00bfff]/10" />
                   <div className="text-center shrink-0">
                     <p className="font-display text-base md:text-lg font-bold uppercase">{label}</p>
-                    <p className="font-label text-[10px] md:text-xs uppercase tracking-widest text-gray-500">{monthYear}</p>
+                    <p className="font-label text-[11px] md:text-xs uppercase tracking-widest text-gray-500">{monthYear}</p>
                   </div>
                   <div className="flex-1 h-px bg-[#003572]/20 dark:bg-[#00bfff]/10" />
                 </div>
@@ -269,6 +265,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
                       fohTeam={data.fohTeam}
                       bgvs={data.bgvs}
                       chorus={data.chorus}
+                      roleId={data.roleId}
                     />
                   ))}
                   {sat && satDate && (
@@ -281,6 +278,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
                       fohTeam={sat.fohTeam}
                       bgvs={sat.bgvs}
                       chorus={sat.chorus}
+                      roleId={sat.roleId}
                     />
                   )}
                   {sun && sunDate && (
@@ -293,6 +291,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
                       fohTeam={sun.fohTeam}
                       bgvs={sun.bgvs}
                       chorus={sun.chorus}
+                      roleId={sun.roleId}
                     />
                   )}
                 </div>
@@ -304,19 +303,8 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
 
       {/* Modal (calendar view) */}
       {selectedEntries.length > 0 && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-overlay-in"
-          onClick={dismiss}
-        >
-          <div
-            ref={modalRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Detalle del día"
-            tabIndex={-1}
-            className="w-full max-w-md max-h-[88vh] overflow-y-auto rounded-xl scrollbar-hide space-y-4 focus:outline-none"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <CueDialog open title="Detalle del día" label="Detalle del día" mode="sheet" size="md" onDismiss={dismiss}>
+          <div className="max-h-[78svh] space-y-4 overflow-y-auto p-4 scrollbar-hide">
             {selectedEntries.map((d, i) => (
               <DayCard
                 key={i}
@@ -328,6 +316,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
                 fohTeam={d.fohTeam}
                 bgvs={d.bgvs}
                 chorus={d.chorus}
+                roleId={d.roleId}
               />
             ))}
             <button
@@ -337,7 +326,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
               Cerrar
             </button>
           </div>
-        </div>
+        </CueDialog>
       )}
     </>
   );
@@ -371,7 +360,7 @@ function MonthGrid({
       </h3>
       <div className="grid grid-cols-7 gap-1">
         {DAY_HEADERS.map((h) => (
-          <div key={h} className="font-label text-[10px] uppercase tracking-widest text-gray-500 text-center pb-2">
+          <div key={h} className="font-label text-[11px] uppercase tracking-widest text-gray-500 text-center pb-2">
             {h}
           </div>
         ))}
@@ -385,8 +374,8 @@ function MonthGrid({
           const isToday = dateStr === todayStr;
 
           // Determine color priority: special > sat > sun
-          const hasSat = entries?.some(e => e.day === "Sábado");
-          const hasSpecial = entries?.some(e => e.day !== "Sábado" && e.day !== "Domingo");
+          const hasSat = entries?.some(e => !e.roleId && e.day === "Sábado");
+          const hasSpecial = entries?.some(e => e.roleId || (e.day !== "Sábado" && e.day !== "Domingo"));
           const hasMultiple = entries && entries.length > 1;
 
           // Pick display color: if mixed, purple takes priority to signal "multiple"

@@ -64,14 +64,14 @@ function SignInForm() {
           <h1 className="mt-5 font-display text-3xl uppercase tracking-[0.16em] text-brand-frost">
             Backstage
           </h1>
-          <p className="mt-1 font-label text-[10px] uppercase tracking-[0.24em] text-brand-steel">
+          <p className="mt-1 font-label text-[11px] uppercase tracking-[0.24em] text-brand-steel">
             Oasis Worship Team
           </p>
         </div>
 
         <section className="brand-facet-panel rounded-[var(--brand-radius-panel)] border border-brand-steel/20 bg-brand-console/75 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.28)] backdrop-blur-sm sm:p-6">
           <div className="mb-5">
-            <h2 className="font-label text-[10px] uppercase tracking-[0.22em] text-brand-beam">Acceso del equipo</h2>
+            <h2 className="font-label text-[11px] uppercase tracking-[0.22em] text-brand-beam">Acceso del equipo</h2>
             <p className="mt-1 font-body text-sm text-brand-steel">Inicia sesión para ver tus servicios y canciones.</p>
           </div>
 
@@ -97,7 +97,7 @@ function SignInForm() {
           {/* Divider */}
           <div className="my-5 flex items-center gap-3">
             <div className="flex-1 h-px bg-brand-steel/20" />
-            <span className="font-label text-[10px] uppercase tracking-widest text-brand-steel">o</span>
+            <span className="font-label text-[11px] uppercase tracking-widest text-brand-steel">o</span>
             <div className="flex-1 h-px bg-brand-steel/20" />
           </div>
 

@@ -282,7 +282,7 @@ function MemberCheckboxes({ label, members, selected, onChange }: {
     onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]);
   return (
     <div>
-      <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">{label}</p>
+      <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 mb-1">{label}</p>
       <div className="max-h-24 overflow-y-auto rounded border border-[#00bfff]/10 divide-y divide-[#00bfff]/5">
         {members.map(m => (
           <label key={m._id} className={`flex items-center gap-2 px-2 py-1 cursor-pointer text-xs transition-colors ${selected.includes(m._id) ? "bg-[#00bfff]/10" : "hover:bg-[#00bfff]/5"}`}>
@@ -302,7 +302,7 @@ function SlotEditor2({ label, nameKey, slots, members, onChange }: {
 }) {
   return (
     <div>
-      <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">{label}</p>
+      <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 mb-1">{label}</p>
       <div className="space-y-1">
         {slots.map(s => (
           <div key={s.id} className="flex gap-1.5">
@@ -314,7 +314,7 @@ function SlotEditor2({ label, nameKey, slots, members, onChange }: {
             <button type="button" onClick={() => onChange(slots.filter(x => x.id !== s.id))} className="text-gray-500 hover:text-red-400 transition-colors px-1 text-sm">×</button>
           </div>
         ))}
-        <button type="button" onClick={() => onChange([...slots, { id: uid(), [nameKey]: "", personId: "" }])} className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/50 hover:text-[#00bfff] transition-colors">
+        <button type="button" onClick={() => onChange([...slots, { id: uid(), [nameKey]: "", personId: "" }])} className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]/50 hover:text-[#00bfff] transition-colors">
           + {nameKey === "instrument" ? "Instrumento" : "Rol"}
         </button>
       </div>
@@ -342,10 +342,10 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">{label}</p>
+        <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">{label}</p>
         <button
           type="button" onClick={onSelectAll}
-          className="font-label text-[9px] uppercase tracking-widest text-[#00bfff]/60 hover:text-[#00bfff] transition-colors"
+          className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/60 hover:text-[#00bfff] transition-colors"
         >
           {allSelected ? "Ninguno" : "Todos"}
         </button>
@@ -364,7 +364,7 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
         ))}
       </div>
       {config[field].length > 0 && (
-        <p className="font-label text-[9px] uppercase tracking-widest text-[#00bfff] mt-0.5">
+        <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff] mt-0.5">
           {config[field].length} seleccionado{config[field].length !== 1 ? "s" : ""}
         </p>
       )}
@@ -378,30 +378,30 @@ function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDele
   return (
     <div className="rounded-lg border border-[#00bfff]/10 bg-[#001830]/40 px-3 py-2 flex items-start gap-2">
       <div className="flex-1 min-w-0 space-y-1">
-        <span className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/80 font-semibold">{r.person}</span>
+        <span className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]/80 font-semibold">{r.person}</span>
         <div className="flex flex-wrap gap-1">
           {r.excludedPatterns.map(p => (
-            <span key={p} className="font-label text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30">
+            <span key={p} className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30">
               !{p}
             </span>
           ))}
           {r.weekExclusions.map(we => (
-            <span key={we.id} className="font-label text-[9px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/30">
+            <span key={we.id} className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/30">
               sem.{we.week} {we.pattern}
             </span>
           ))}
           {r.caps.map(cap => (
-            <span key={cap.id} className="font-label text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30">
+            <span key={cap.id} className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30">
               {cap.pattern} {cap.op} {cap.relative ? `sem−${cap.relOffset}` : cap.value}
             </span>
           ))}
           {r.fairness === "exempt" && (
-            <span className="font-label text-[9px] px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30">
+            <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30">
               fairness_exempt
             </span>
           )}
           {r.fairness === "slack" && (
-            <span className="font-label text-[9px] px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30">
+            <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30">
               slack {r.fairnessSlack}
             </span>
           )}
@@ -416,7 +416,7 @@ function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDele
 function ConflictCard({ r, onDelete, onEdit }: { r: ConflictRule; onDelete: () => void; onEdit: () => void }) {
   return (
     <div className="rounded-lg border border-[#00bfff]/10 bg-[#001830]/40 px-3 py-2 flex items-center gap-2">
-      <span className="font-label text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30 shrink-0">≠</span>
+      <span className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30 shrink-0">≠</span>
       <span className="font-body text-xs flex-1">
         <span className="text-gray-200">{r.personA}</span>
         <span className="text-gray-500 mx-1">≠</span>
@@ -433,7 +433,7 @@ function ConflictCard({ r, onDelete, onEdit }: { r: ConflictRule; onDelete: () =
 function PresenceCard({ r, onDelete, onEdit }: { r: PresenceRule; onDelete: () => void; onEdit: () => void }) {
   return (
     <div className="rounded-lg border border-[#00bfff]/10 bg-[#001830]/40 px-3 py-2 flex items-center gap-2">
-      <span className="font-label text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/30 shrink-0">≥1</span>
+      <span className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/30 shrink-0">≥1</span>
       <span className="font-body text-xs flex-1">
         <span className="text-gray-200">{r.persons.join(", ")}</span>
         <span className="text-gray-500 mx-1">en</span>
@@ -479,7 +479,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
     <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 space-y-3">
       {/* Person */}
       <div>
-        <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1">Persona</p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Persona</p>
         <select className={rbSel} value={person} onChange={e => setPerson(e.target.value)}>
           {names.map(n => <option key={n} value={n}>{n}</option>)}
         </select>
@@ -487,12 +487,12 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
 
       {/* Exclusion pattern pills */}
       <div>
-        <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1.5">Excluir de</p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1.5">Excluir de</p>
         <div className="flex flex-wrap gap-1.5">
           {EXCL_PATTERNS.map(pat => (
             <button
               key={pat} type="button" onClick={() => toggleExcl(pat)}
-              className={`font-label text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full border transition-colors ${
+              className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full border transition-colors ${
                 excl.includes(pat)
                   ? "bg-red-500/20 text-red-400 border-red-500/40"
                   : "text-gray-500 border-[#00bfff]/15 hover:border-red-500/30 hover:text-red-400"
@@ -503,13 +503,13 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
           ))}
         </div>
         {excl.length > 0 && (
-          <p className="font-label text-[9px] text-red-400/70 mt-1">{excl.join(" · ")}</p>
+          <p className="font-label text-[10px] text-red-400/70 mt-1">{excl.join(" · ")}</p>
         )}
       </div>
 
       {/* Fairness */}
       <div>
-        <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1">Fairness</p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Fairness</p>
         <div className="flex items-center gap-3 flex-wrap">
           {(["none", "exempt", "slack"] as const).map(f => (
             <label key={f} className="flex items-center gap-1.5 cursor-pointer">
@@ -532,7 +532,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
 
       {/* Week exclusions */}
       <div>
-        <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1">Semanas excluidas</p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Semanas excluidas</p>
         <div className="space-y-1">
           {weekEx.map(we => (
             <div key={we.id} className="flex gap-1.5 items-center">
@@ -557,7 +557,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
         <button
           type="button"
           onClick={() => setWeekEx(ws => [...ws, { id: uid(), week: 1, pattern: "*.*" }])}
-          className="font-label text-[9px] uppercase tracking-widest text-[#00bfff]/60 hover:text-[#00bfff] transition-colors mt-1"
+          className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/60 hover:text-[#00bfff] transition-colors mt-1"
         >
           + Semana
         </button>
@@ -565,7 +565,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
 
       {/* Caps */}
       <div>
-        <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1">Caps</p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Caps</p>
         <div className="space-y-1">
           {caps.map(cap => (
             <div key={cap.id} className="flex gap-1.5 items-center">
@@ -587,7 +587,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
               </select>
               {cap.relative ? (
                 <div className="flex items-center gap-0.5 flex-none">
-                  <span className="font-label text-[9px] text-[#00bfff]/70">sem−</span>
+                  <span className="font-label text-[10px] text-[#00bfff]/70">sem−</span>
                   <input
                     type="number" min={0} max={4}
                     className={`${rbIn} w-8 text-center`}
@@ -607,7 +607,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
                 type="button"
                 title={cap.relative ? "Cambiar a número fijo" : "Relativo al nº de semanas"}
                 onClick={() => setCaps(cs => cs.map(x => x.id === cap.id ? { ...x, relative: !x.relative } : x))}
-                className={`font-label text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded flex-none border transition-colors ${
+                className={`font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded flex-none border transition-colors ${
                   cap.relative
                     ? "border-[#00bfff]/40 bg-[#00bfff]/10 text-[#00bfff]"
                     : "border-[#00bfff]/15 text-gray-600 hover:text-[#00bfff]"
@@ -620,7 +620,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
         <button
           type="button"
           onClick={() => setCaps(cs => [...cs, { id: uid(), pattern: "Sun.*", op: "<=", value: 2, relative: false, relOffset: 2 }])}
-          className="font-label text-[9px] uppercase tracking-widest text-[#00bfff]/60 hover:text-[#00bfff] transition-colors mt-1"
+          className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/60 hover:text-[#00bfff] transition-colors mt-1"
         >
           + Cap
         </button>
@@ -628,10 +628,10 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
 
       {/* Actions */}
       <div className="flex gap-2 pt-1">
-        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[10px] uppercase tracking-widest border border-[#00bfff]/20 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff] transition-colors">
+        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-[#00bfff]/20 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff] transition-colors">
           Cancelar
         </button>
-        <button type="button" onClick={handleAdd} disabled={!canAdd} className="flex-1 py-1 rounded font-label text-[10px] uppercase tracking-widest bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors disabled:opacity-40">
+        <button type="button" onClick={handleAdd} disabled={!canAdd} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors disabled:opacity-40">
           {initialValues ? "Guardar cambios" : "Agregar restricción"}
         </button>
       </div>
@@ -656,32 +656,32 @@ function ConflictForm({ members, onAdd, onCancel, initialValues }: {
     <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3 space-y-2">
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1">Persona A</p>
+          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Persona A</p>
           <select className={rbSel} value={personA} onChange={e => setPersonA(e.target.value)}>
             {names.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         </div>
         <div>
-          <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1">Persona B</p>
+          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Persona B</p>
           <select className={rbSel} value={personB} onChange={e => setPersonB(e.target.value)}>
             {names.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         </div>
       </div>
       <div>
-        <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1">Patrón — no pueden coincidir en</p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Patrón — no pueden coincidir en</p>
         <select className={rbSel} value={pattern} onChange={e => setPattern(e.target.value)}>
           {PATTERNS.map(p => <option key={p.value} value={p.value}>{p.label} ({p.value})</option>)}
         </select>
       </div>
       {personA === personB && personA && (
-        <p className="font-label text-[9px] text-red-400">Selecciona dos personas distintas</p>
+        <p className="font-label text-[10px] text-red-400">Selecciona dos personas distintas</p>
       )}
       <div className="flex gap-2 pt-1">
-        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[10px] uppercase tracking-widest border border-[#00bfff]/20 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff] transition-colors">
+        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-[#00bfff]/20 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff] transition-colors">
           Cancelar
         </button>
-        <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: initialValues?.id ?? uid(), personA, personB, pattern })} className="flex-1 py-1 rounded font-label text-[10px] uppercase tracking-widest bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 transition-colors disabled:opacity-40">
+        <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: initialValues?.id ?? uid(), personA, personB, pattern })} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 transition-colors disabled:opacity-40">
           {initialValues ? "Guardar cambios" : "Agregar conflicto"}
         </button>
       </div>
@@ -703,7 +703,7 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
   return (
     <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-3 space-y-2">
       <div>
-        <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1">Al menos uno de (mín. 2)</p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Al menos uno de (mín. 2)</p>
         <div className="max-h-28 overflow-y-auto rounded border border-[#00bfff]/10 divide-y divide-[#00bfff]/5">
           {members.map(m => {
             const name    = dn(m);
@@ -720,20 +720,20 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
           })}
         </div>
         {selected.length > 0 && (
-          <p className="font-label text-[9px] text-green-400 mt-0.5">{selected.join(", ")}</p>
+          <p className="font-label text-[10px] text-green-400 mt-0.5">{selected.join(", ")}</p>
         )}
       </div>
       <div>
-        <p className="font-label text-[9px] uppercase tracking-widest text-gray-500 mb-1">Debe aparecer en</p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Debe aparecer en</p>
         <select className={rbSel} value={pattern} onChange={e => setPattern(e.target.value)}>
           {PATTERNS.map(p => <option key={p.value} value={p.value}>{p.label} ({p.value})</option>)}
         </select>
       </div>
       <div className="flex gap-2 pt-1">
-        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[10px] uppercase tracking-widest border border-[#00bfff]/20 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff] transition-colors">
+        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-[#00bfff]/20 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff] transition-colors">
           Cancelar
         </button>
-        <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: initialValues?.id ?? uid(), persons: selected, pattern })} className="flex-1 py-1 rounded font-label text-[10px] uppercase tracking-widest bg-green-500/20 hover:bg-green-500/30 text-green-400 transition-colors disabled:opacity-40">
+        <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: initialValues?.id ?? uid(), persons: selected, pattern })} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest bg-green-500/20 hover:bg-green-500/30 text-green-400 transition-colors disabled:opacity-40">
           {initialValues ? "Guardar cambios" : "Agregar presencia"}
         </button>
       </div>
@@ -775,7 +775,7 @@ function RuleBuilder({ config, onChange, members }: {
 
   return (
     <div className="space-y-2">
-      <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">
+      <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">
         Reglas{total > 0 ? ` (${total})` : ""}
       </p>
 
@@ -847,19 +847,19 @@ function RuleBuilder({ config, onChange, members }: {
         <div className="flex gap-2 pt-1 flex-wrap">
           <button
             type="button" onClick={() => setAdding("restriction")}
-            className="font-label text-[9px] uppercase tracking-widest px-2 py-1 rounded-full border border-red-500/30 text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            className="font-label text-[10px] uppercase tracking-widest px-2 py-1 rounded-full border border-red-500/30 text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-colors"
           >
             + Persona
           </button>
           <button
             type="button" onClick={() => setAdding("conflict")}
-            className="font-label text-[9px] uppercase tracking-widest px-2 py-1 rounded-full border border-purple-500/30 text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/10 transition-colors"
+            className="font-label text-[10px] uppercase tracking-widest px-2 py-1 rounded-full border border-purple-500/30 text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/10 transition-colors"
           >
             ≠ Conflicto
           </button>
           <button
             type="button" onClick={() => setAdding("presence")}
-            className="font-label text-[9px] uppercase tracking-widest px-2 py-1 rounded-full border border-green-500/30 text-green-400/70 hover:text-green-400 hover:bg-green-500/10 transition-colors"
+            className="font-label text-[10px] uppercase tracking-widest px-2 py-1 rounded-full border border-green-500/30 text-green-400/70 hover:text-green-400 hover:bg-green-500/10 transition-colors"
           >
             ≥1 Presencia
           </button>
@@ -895,23 +895,23 @@ function DraftCardEditor({ draft, members, onChange, onToggleSkip, swapSelected,
       <div className="flex items-center gap-3 px-4 py-3">
         <div className="shrink-0 text-center min-w-[36px]">
           <p className="font-display text-lg leading-none">{new Date(draft.date + "T12:00:00").getDate()}</p>
-          <p className="font-label text-[9px] uppercase tracking-widest text-gray-500">
+          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">
             {new Date(draft.date + "T12:00:00").toLocaleDateString("es-MX", { month: "short" })}
           </p>
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full ${badgeCls}`}>
+            <span className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full ${badgeCls}`}>
               {isSun ? "Domingo" : "Sábado"}
             </span>
             {draft.exists && (
-              <span className="font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-500 border border-yellow-500/30">
+              <span className="font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-500 border border-yellow-500/30">
                 Ya existe
               </span>
             )}
           </div>
-          <p className="font-label text-[10px] uppercase tracking-widest text-gray-600 mt-0.5">
+          <p className="font-label text-[11px] uppercase tracking-widest text-gray-600 mt-0.5">
             {total > 0 ? `${total} asignado${total !== 1 ? "s" : ""}` : "Sin asignar"}
           </p>
         </div>
@@ -924,7 +924,7 @@ function DraftCardEditor({ draft, members, onChange, onToggleSkip, swapSelected,
           )}
           {!draft.exists && (
             <button type="button" onClick={onToggleSkip}
-              className={`px-2 py-1 rounded font-label text-[10px] uppercase tracking-widest transition-colors ${draft.skipped ? "text-[#00bfff] hover:bg-[#00bfff]/10" : "text-gray-500 hover:text-red-400 hover:bg-red-500/10"}`}
+              className={`px-2 py-1 rounded font-label text-[11px] uppercase tracking-widest transition-colors ${draft.skipped ? "text-[#00bfff] hover:bg-[#00bfff]/10" : "text-gray-500 hover:text-red-400 hover:bg-red-500/10"}`}
             >{draft.skipped ? "+ Incluir" : "Omitir"}</button>
           )}
           {!draft.skipped && (
@@ -981,7 +981,7 @@ function SolverConfigPanel({ members, config, onChange, history, onRemoveHistory
 
   return (
     <div className="space-y-3 p-3 rounded-xl border border-[#00bfff]/20 bg-[#00bfff]/5">
-      <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]">Configuración del Solver</p>
+      <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">Configuración del Solver</p>
 
       <div className="grid grid-cols-3 gap-3">
         <MemberPool
@@ -1015,13 +1015,13 @@ function SolverConfigPanel({ members, config, onChange, history, onRemoveHistory
       {/* Solver history indicator */}
       {history.length > 0 && (
         <div>
-          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">
+          <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 mb-1">
             Historial ({history.length})
             <span className="ml-1 text-[#00bfff]/50 normal-case">— últimas {Math.min(history.length, 3)} ejecuciones usadas</span>
           </p>
           <div className="flex flex-wrap gap-1.5">
             {[...history].reverse().map(h => (
-              <span key={h.key} className="flex items-center gap-1 font-label text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full border border-[#00bfff]/20 bg-[#00bfff]/5 text-[#00bfff]/70">
+              <span key={h.key} className="flex items-center gap-1 font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full border border-[#00bfff]/20 bg-[#00bfff]/5 text-[#00bfff]/70">
                 {MONTHS[h.month - 1].slice(0, 3)} {h.year}
                 <button
                   type="button"
@@ -1386,7 +1386,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
             {getDates(year, month, 6).map(date => {
               const active = activeSatDates.includes(date);
               return (
-                <label key={date} className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[9px] cursor-pointer transition-colors font-label uppercase tracking-widest ${
+                <label key={date} className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] cursor-pointer transition-colors font-label uppercase tracking-widest ${
                   active
                     ? "border-yellow-400/50 bg-yellow-400/10 text-yellow-400"
                     : "border-[#00bfff]/15 text-gray-500 hover:border-yellow-400/30 hover:text-yellow-400/60"
@@ -1444,7 +1444,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {swapSel && <span className="font-label text-[10px] uppercase tracking-widest text-[#00bfff] animate-pulse">Selecciona otro ⇄</span>}
+          {swapSel && <span className="font-label text-[11px] uppercase tracking-widest text-[#00bfff] animate-pulse">Selecciona otro ⇄</span>}
           <button type="button" onClick={() => { setStep("config"); setSwapSel(null); }} className="font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] transition-colors">
             ← Volver
           </button>
@@ -1467,7 +1467,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
       </div>
 
       {swapToast && (
-        <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff] text-center bg-[#00bfff]/10 rounded-lg py-1.5">{swapToast}</p>
+        <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff] text-center bg-[#00bfff]/10 rounded-lg py-1.5">{swapToast}</p>
       )}
 
       {unavailabilityNotices.length > 0 && (() => {
@@ -1479,7 +1479,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
         }
         return (
           <div className="rounded-lg border border-orange-500/25 bg-orange-500/10 px-3 py-2.5 space-y-1.5">
-            <p className="font-label text-[10px] uppercase tracking-widest text-orange-400">
+            <p className="font-label text-[11px] uppercase tracking-widest text-orange-400">
               No disponibles este mes
             </p>
             {Array.from(byPerson.entries()).map(([name, items]) => (
@@ -1495,7 +1495,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
 
       {unfilledSeats.length > 0 && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 space-y-1.5">
-          <p className="font-label text-[10px] uppercase tracking-widest text-amber-400">
+          <p className="font-label text-[11px] uppercase tracking-widest text-amber-400">
             Lugares sin cubrir (faltó gente)
           </p>
           {summarizeUnfilledSeats(unfilledSeats).map(s => (
@@ -1505,7 +1505,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
               {s.labels.join(", ")}
             </p>
           ))}
-          <p className="font-body text-[11px] text-gray-500 italic">
+          <p className="font-body text-xs text-gray-500 italic">
             El líder siempre se asigna; primero queda vacío el coro, luego BGV.
           </p>
         </div>
@@ -1534,7 +1534,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
       )}
 
       {pushError && (
-        <p className="font-label text-[11px] uppercase tracking-widest text-red-400 text-center bg-red-500/10 rounded-lg py-1.5">{pushError}</p>
+        <p className="font-label text-xs uppercase tracking-widest text-red-400 text-center bg-red-500/10 rounded-lg py-1.5">{pushError}</p>
       )}
 
       <div className="flex gap-3">

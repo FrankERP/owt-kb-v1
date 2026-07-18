@@ -229,7 +229,7 @@ export default async function MePage() {
   function contributorHint(hint: string) {
     if (!hint) return null;
     return (
-      <p className="mt-2 flex items-center gap-1.5 font-body text-[11px] text-[#00bfff]/80">
+      <p className="mt-2 flex items-center gap-1.5 font-body text-xs text-[#00bfff]/80">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
         </svg>
@@ -324,6 +324,7 @@ export default async function MePage() {
                     <NextServiceHero
                       day={day}
                       date={doc.week ?? doc.date}
+                      roleId={day !== "Domingo" && day !== "Sábado" ? doc._id : undefined}
                       setlist={setlist}
                       leads={doc.Lead?.map((m) => m.alias || m.member_name)}
                       instruments={doc.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
@@ -350,6 +351,7 @@ export default async function MePage() {
                           <DayCard
                             day={day}
                             date={doc.week ?? doc.date}
+                            roleId={day !== "Domingo" && day !== "Sábado" ? doc._id : undefined}
                             setlist={setlist}
                             leads={doc.Lead?.map((m) => m.alias || m.member_name)}
                             instruments={doc.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}

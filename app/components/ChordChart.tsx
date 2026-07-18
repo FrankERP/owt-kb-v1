@@ -144,7 +144,10 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
           {charts.map((c, i) => (
             <button
               key={i}
+              type="button"
               onClick={() => handleTabChange(i)}
+              aria-label={`${c.key || `Tonalidad ${i + 1}`} · versión ${i + 1} de ${charts.length}`}
+              aria-pressed={i === activeIdx}
               className={`font-label text-xs uppercase tracking-widest px-4 py-1.5 rounded-full border transition-colors ${
                 i === activeIdx
                   ? "border-[#00bfff] bg-[#00bfff]/15 text-[#00bfff]"
@@ -171,10 +174,11 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
                 return (
                   <button
                     key={note}
+                    type="button"
                     onClick={() => handleKeyBtn(i)}
                     aria-label={`Tonalidad ${note}${isNativeNote ? " (original)" : ""}`}
                     aria-pressed={isActive}
-                    className={`relative font-label text-[11px] uppercase tracking-wide px-2.5 py-1 rounded border transition-colors min-w-[2rem] text-center ${
+                    className={`relative font-label text-xs uppercase tracking-wide px-2.5 py-1 rounded border transition-colors min-w-[2rem] text-center ${
                       isActive
                         ? "border-[#00bfff] bg-[#00bfff] text-[#001f3f] font-bold"
                         : isNative
@@ -196,7 +200,7 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
           {capo && (
             <div className="flex items-center gap-2">
               <span
-                className="inline-flex items-center gap-1.5 font-label text-[11px] uppercase tracking-wide px-2.5 py-1 rounded-full border border-[#00bfff]/30 text-[#00bfff]/90"
+                className="inline-flex items-center gap-1.5 font-label text-xs uppercase tracking-wide px-2.5 py-1 rounded-full border border-[#00bfff]/30 text-[#00bfff]/90"
                 title="Posición de capo para tocar con acordes abiertos en la tonalidad seleccionada"
               >
                 <CapoIcon />
@@ -210,7 +214,9 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
           {/* Chord toggle */}
           <div className="flex items-center gap-2">
             <button
+              type="button"
               role="switch"
+              aria-label="Mostrar acordes"
               aria-checked={showChords}
               onClick={() => setShowChords((v) => !v)}
               className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
@@ -246,7 +252,7 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
               return (
                 <p
                   key={li}
-                  className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]/70 mt-5 mb-1 first:mt-0"
+                  className="font-label text-xs uppercase tracking-widest text-[#00bfff]/70 mt-5 mb-1 first:mt-0"
                 >
                   {line.slice(2)}
                 </p>

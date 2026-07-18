@@ -93,12 +93,12 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
         <div className="flex items-baseline gap-4 flex-1">
           <div className="flex items-baseline gap-1.5">
             <span className="font-display text-4xl text-brand-beam">{tags.length}</span>
-            <span className="font-label text-[9px] uppercase tracking-[0.2em] text-brand-steel/55">etiquetas</span>
+            <span className="font-label text-[10px] uppercase tracking-[0.2em] text-brand-steel/55">etiquetas</span>
           </div>
           <span className="text-gray-700 text-sm">·</span>
           <div className="flex items-baseline gap-1.5">
             <span className="font-display text-4xl text-brand-frost">{totalSongs}</span>
-            <span className="font-label text-[9px] uppercase tracking-[0.2em] text-brand-steel/55">canciones</span>
+            <span className="font-label text-[10px] uppercase tracking-[0.2em] text-brand-steel/55">canciones</span>
           </div>
         </div>
 
@@ -110,7 +110,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
                 key={mode}
                 onClick={() => setSort(mode)}
                 aria-pressed={sort === mode}
-                className={`px-3 py-1.5 font-label text-[10px] uppercase tracking-widest transition-colors duration-150
+                className={`px-3 py-1.5 font-label text-[11px] uppercase tracking-widest transition-colors duration-150
                   ${i > 0 ? "border-l border-[#003572]/20 dark:border-[#00bfff]/15" : ""}
                   ${sort === mode
                     ? "bg-brand-beam/15 text-brand-beam"
@@ -156,7 +156,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
       {/* ── Pinned quick-access (hidden while searching) ── */}
       {!isSearching && (
         <div className="space-y-3">
-          <p className="font-label text-[10px] uppercase tracking-widest text-gray-600">Tipo de canción</p>
+          <p className="font-label text-[11px] uppercase tracking-widest text-gray-600">Tipo de canción</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {pinnedResolved.map(({ slug, label, hint, icon, tag }) => {
               const count = tag?.postCount ?? 0;
@@ -176,11 +176,11 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
                         <h3 className="font-display text-2xl capitalize leading-tight text-brand-frost transition-colors duration-200 group-hover:text-brand-beam">
                           {label}
                         </h3>
-                        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">
+                        <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">
                           {hint}
                         </p>
                         {tag && (
-                          <p className="font-label text-[10px] text-gray-600">
+                          <p className="font-label text-[11px] text-gray-600">
                             {count} {count === 1 ? "canción" : "canciones"}
                           </p>
                         )}
@@ -200,7 +200,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
       {/* ── All remaining tags ── */}
       {gridTags.length > 0 && (
         <div className="space-y-3">
-          <p className="font-label text-[10px] uppercase tracking-widest text-gray-600">
+          <p className="font-label text-[11px] uppercase tracking-widest text-gray-600">
             {isSearching ? "Resultados" : "Todas las etiquetas"}
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
@@ -216,7 +216,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
                     <h3 className="mb-1 font-display text-sm capitalize leading-snug text-brand-frost transition-colors duration-200 group-hover:text-brand-beam">
                       #{tag.name}
                     </h3>
-                    <p className="font-label text-[10px] uppercase tracking-widest text-gray-600">
+                    <p className="font-label text-[11px] uppercase tracking-widest text-gray-600">
                       {tag.postCount ?? 0}{" "}
                       {(tag.postCount ?? 0) === 1 ? "canción" : "canciones"}
                     </p>
