@@ -6,6 +6,8 @@ import { buildRuns } from "../../utils/medley";
 import { ChainLinkIcon } from "../ChainLinkIcon";
 import { ParticipationSidebar } from "@/app/components/admin/ParticipationSidebar";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
+import CueDialog from "../ui/CueDialog";
+import CueDialogStatus from "../ui/CueDialogStatus";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -182,7 +184,7 @@ function MemberMultiSelect({ label, members, selected, onChange, filterType }: {
           </label>
         ))}
       </div>
-      {selected.length > 0 && <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]">{selected.length} seleccionado{selected.length > 1 ? "s" : ""}</p>}
+      {selected.length > 0 && <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">{selected.length} seleccionado{selected.length > 1 ? "s" : ""}</p>}
     </div>
   );
 }
@@ -342,7 +344,7 @@ function ServiceForm({ initial, members, onSubmit, onClose, loading }: {
       {/* Availability warning — replaces action buttons when conflicts are found */}
       {pendingData ? (
         <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-3 space-y-3 sticky bottom-0 bg-[#C8D8EB] dark:bg-[#0a1929]">
-          <p className="font-label text-[10px] uppercase tracking-widest text-orange-400">No disponibles el {fmtServiceDate}</p>
+          <p className="font-label text-[11px] uppercase tracking-widest text-orange-400">No disponibles el {fmtServiceDate}</p>
           <p className="font-body text-sm text-gray-300">
             <span className="text-orange-300">{unavailableNames.join(", ")}</span>
             {unavailableNames.length === 1 ? " ha" : " han"} marcado este día como no disponible.
@@ -377,18 +379,26 @@ function ServiceForm({ initial, members, onSubmit, onClose, loading }: {
 
 // ─── Modal wrapper ────────────────────────────────────────────────────────────
 
-function Modal({ title, onClose, wide, children }: { title: string; onClose: () => void; wide?: boolean; children: React.ReactNode }) {
+function Modal({
+  title,
+  onClose,
+  wide,
+  status,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  wide?: boolean;
+  status?: string | null;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative z-10 w-full ${wide ? "max-w-2xl" : "max-w-lg"} bg-[#C8D8EB] dark:bg-[#0a1929] border border-[#003572]/20 dark:border-[#00bfff]/20 rounded-xl shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto`}>
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg uppercase tracking-wide">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-[#00bfff] transition-colors text-xl leading-none">×</button>
-        </div>
+    <CueDialog open title={title} label={title} mode="sheet" size={wide ? "lg" : "sm"} onDismiss={onClose}>
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
+        {status && <CueDialogStatus tone="error">{status}</CueDialogStatus>}
         {children}
       </div>
-    </div>
+    </CueDialog>
   );
 }
 
@@ -401,7 +411,7 @@ function MemberChip({ name, isSource, isTarget, onClick }: {
     <button
       type="button"
       onClick={onClick}
-      className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full border transition-all ${
+      className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full border transition-all ${
         isSource ? "bg-[#00bfff]/30 text-[#00bfff] border-[#00bfff] ring-1 ring-[#00bfff]/50 scale-105" :
         isTarget ? "bg-[#00bfff]/10 text-[#00bfff] border-[#00bfff]/50 animate-pulse" :
         onClick   ? "bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-400 border-[#003572]/20 dark:border-[#00bfff]/20 hover:bg-[#00bfff]/20 hover:text-[#00bfff] hover:border-[#00bfff]/40 cursor-pointer" :
@@ -544,12 +554,12 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
             })}
           </p>
           {role.published === false && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-label uppercase tracking-widest bg-amber-500/15 text-amber-400 border border-amber-500/30">
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-label uppercase tracking-widest bg-amber-500/15 text-amber-400 border border-amber-500/30">
               Borrador
             </span>
           )}
           {hasConflict && (
-            <span className="inline-flex items-center gap-1 mt-1.5 font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-red-500/25 text-red-200 border border-red-400/60">
+            <span className="inline-flex items-center gap-1 mt-1.5 font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-red-500/25 text-red-200 border border-red-400/60">
               ⚠ Conflicto de disponibilidad
             </span>
           )}
@@ -571,7 +581,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
           </button>
         ) : copyMode ? (
           isCopySource ? (
-            <span className="mt-0.5 px-2.5 py-1.5 rounded-lg font-label text-[10px] uppercase tracking-widest bg-white/20 text-white border border-white/40 shrink-0">
+            <span className="mt-0.5 px-2.5 py-1.5 rounded-lg font-label text-[11px] uppercase tracking-widest bg-white/20 text-white border border-white/40 shrink-0">
               Origen
             </span>
           ) : (
@@ -635,7 +645,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
                           {entry.play_key || entry.song.key}
                         </span>
                         {entry.play_key && entry.song.key && entry.play_key !== entry.song.key && (
-                          <span className="font-label text-[10px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800/60 text-gray-500 leading-tight">
+                          <span className="font-label text-[11px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800/60 text-gray-500 leading-tight">
                             orig. {entry.song.key}
                           </span>
                         )}
@@ -659,13 +669,13 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
                     />
                     <div className="flex items-center gap-1 mb-1">
                       <ChainLinkIcon color={hex} opacity={0.7} />
-                      <span className="font-label text-[8px] uppercase tracking-[0.18em]" style={{ color: `${hex}99` }}>Medley</span>
+                      <span className="font-label text-[10px] uppercase tracking-[0.18em]" style={{ color: `${hex}99` }}>Medley</span>
                     </div>
                     <div className="space-y-1.5">
                       {run.songs.map(({ song, n }, si) => (
                         <div key={song.song._id}>
                           {si > 0 && (
-                            <span className="block w-5 text-center font-label text-[10px] leading-none -my-0.5" style={{ color: `${hex}70` }}>+</span>
+                            <span className="block w-5 text-center font-label text-[11px] leading-none -my-0.5" style={{ color: `${hex}70` }}>+</span>
                           )}
                           {renderRow(song, n)}
                         </div>
@@ -720,7 +730,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
         {/* Availability conflicts — reasons shown as text (works without hover, e.g. on mobile) */}
         {hasConflict && !swapMode && conflictReasons.length > 0 && (
           <section className="rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2.5">
-            <p className="font-label text-[10px] uppercase tracking-widest text-red-400 mb-1">No disponible</p>
+            <p className="font-label text-[11px] uppercase tracking-widest text-red-400 mb-1">No disponible</p>
             <ul className="space-y-0.5">
               {conflictReasons.map((c, i) => (
                 <li key={i} className="font-body text-xs text-gray-300">
@@ -740,7 +750,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
             {([ ["leads", leads, "Líderes"], ["bgvs", bgvs, "BGVs"], ["chorus", chorus, "Coro"] ] as const).map(([section, arr, lbl]) => (
               arr.length > 0 && (
                 <div key={section} className="flex items-start gap-2 flex-wrap">
-                  <span className="font-label text-[9px] uppercase tracking-widest text-gray-600 pt-0.5 shrink-0 w-12">{lbl}</span>
+                  <span className="font-label text-[10px] uppercase tracking-widest text-gray-600 pt-0.5 shrink-0 w-12">{lbl}</span>
                   <div className="flex flex-wrap gap-1">
                     {arr.map((m, i) => (
                       <MemberChip
@@ -758,7 +768,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
             {([ ["instruments", instrs, "Instr."], ["foh", foh, "FOH"] ] as const).map(([section, arr, lbl]) => (
               arr.length > 0 && (
                 <div key={section} className="flex items-start gap-2 flex-wrap">
-                  <span className="font-label text-[9px] uppercase tracking-widest text-gray-600 pt-0.5 shrink-0 w-12">{lbl}</span>
+                  <span className="font-label text-[10px] uppercase tracking-widest text-gray-600 pt-0.5 shrink-0 w-12">{lbl}</span>
                   <div className="flex flex-wrap gap-1">
                     {arr.map((s, i) => s.person && (
                       <MemberChip
@@ -798,7 +808,7 @@ function VocalCol({ label, entries }: { label: string; entries: { name: string; 
   if (!entries.length) return <div />;
   return (
     <div>
-      <p className="font-label text-[10px] uppercase tracking-widest text-gray-400 mb-0.5">{label}</p>
+      <p className="font-label text-[11px] uppercase tracking-widest text-gray-400 mb-0.5">{label}</p>
       <p className="font-body text-sm leading-snug">
         {entries.map((e, i) => (
           <span key={i}>
@@ -850,7 +860,7 @@ function AvailabilityWarning({ lines }: { lines: string[] }) {
   if (lines.length === 0) return null;
   return (
     <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2.5 space-y-1">
-      <p className="font-label text-[10px] uppercase tracking-widest text-orange-400">No disponibles</p>
+      <p className="font-label text-[11px] uppercase tracking-widest text-orange-400">No disponibles</p>
       {lines.map((l, i) => <p key={i} className="font-body text-xs text-gray-400">{l}</p>)}
     </div>
   );
@@ -897,9 +907,9 @@ function SwapConfirmModal({ confirm, onConfirm, onClose, loading, members }: {
           {[roleA, roleB].map((role, idx) => (
             <div key={role._id} className="rounded-lg border border-[#00bfff]/20 p-3 space-y-1.5">
               <div className="flex items-center gap-2">
-                <span className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full ${SERVICE_BADGE[role._type]}`}>{SERVICE_LABEL[role._type]}</span>
-                {idx === 0 && <span className="font-label text-[10px] text-[#00bfff]">→ Recibe equipo B</span>}
-                {idx === 1 && <span className="font-label text-[10px] text-[#00bfff]">→ Recibe equipo A</span>}
+                <span className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full ${SERVICE_BADGE[role._type]}`}>{SERVICE_LABEL[role._type]}</span>
+                {idx === 0 && <span className="font-label text-[11px] text-[#00bfff]">→ Recibe equipo B</span>}
+                {idx === 1 && <span className="font-label text-[11px] text-[#00bfff]">→ Recibe equipo A</span>}
               </div>
               <p className="font-body text-sm font-semibold">{formatDate(role.date)}</p>
               {(role.leads ?? []).length > 0 && <p className="font-body text-xs text-gray-500">Líder: {(role.leads ?? []).map(m => dn(m)).join(", ")}</p>}
@@ -941,14 +951,14 @@ function SwapConfirmModal({ confirm, onConfirm, onClose, loading, members }: {
       <div className="flex items-center gap-3">
         <div className="flex-1 text-center rounded-lg border border-[#00bfff]/20 p-3 space-y-1">
           <p className="font-body text-sm font-semibold">{srcName}</p>
-          <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]">{srcLabel}</p>
-          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">{formatDate(sourceRole.date)}</p>
+          <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">{srcLabel}</p>
+          <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">{formatDate(sourceRole.date)}</p>
         </div>
         <span className="text-2xl text-gray-500 shrink-0">⇄</span>
         <div className="flex-1 text-center rounded-lg border border-[#00bfff]/20 p-3 space-y-1">
           <p className="font-body text-sm font-semibold">{tgtName}</p>
-          <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]">{tgtLabel}</p>
-          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">{formatDate(targetRole.date)}</p>
+          <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">{tgtLabel}</p>
+          <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">{formatDate(targetRole.date)}</p>
         </div>
       </div>
       <AvailabilityWarning lines={warnLines} />
@@ -974,6 +984,7 @@ export default function ServicesPanel() {
   // Edit / delete modal
   type EditModal = { type: "add" } | { type: "edit"; role: ServiceRole } | { type: "delete"; role: ServiceRole } | null;
   const [editModal, setEditModal] = useState<EditModal>(null);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Month generator
   const [showGenerator, setShowGenerator] = useState(false);
@@ -992,6 +1003,16 @@ export default function ServicesPanel() {
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
+  const openEditModal = (next: Exclude<EditModal, null>) => {
+    setEditError(null);
+    setEditModal(next);
+  };
+
+  const closeEditModal = () => {
+    setEditError(null);
+    setEditModal(null);
+  };
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     const [r, m] = await Promise.all([fetch("/api/admin/roles"), fetch("/api/admin/members")]);
@@ -1008,10 +1029,10 @@ export default function ServicesPanel() {
     setSubmitting(true);
     try {
       const res = await fetch("/api/admin/roles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-      if (res.ok) { setEditModal(null); fetchData(); showToast("Servicio creado."); }
-      else showToast("Error al crear.");
+      if (res.ok) { closeEditModal(); fetchData(); showToast("Servicio creado."); }
+      else setEditError("Error al crear.");
     } catch {
-      showToast("Error de conexión.");
+      setEditError("Error de conexión.");
     } finally {
       setSubmitting(false);
     }
@@ -1022,10 +1043,10 @@ export default function ServicesPanel() {
     setSubmitting(true);
     try {
       const res = await fetch(`/api/admin/roles/${editModal.role._id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-      if (res.ok) { setEditModal(null); fetchData(); showToast("Actualizado."); }
-      else showToast("Error al actualizar.");
+      if (res.ok) { closeEditModal(); fetchData(); showToast("Actualizado."); }
+      else setEditError("Error al actualizar.");
     } catch {
-      showToast("Error de conexión.");
+      setEditError("Error de conexión.");
     } finally {
       setSubmitting(false);
     }
@@ -1036,10 +1057,10 @@ export default function ServicesPanel() {
     setSubmitting(true);
     try {
       const res = await fetch(`/api/admin/roles/${editModal.role._id}`, { method: "DELETE" });
-      if (res.ok) { setEditModal(null); fetchData(); showToast("Eliminado."); }
-      else showToast("Error al eliminar.");
+      if (res.ok) { closeEditModal(); fetchData(); showToast("Eliminado."); }
+      else setEditError("Error al eliminar.");
     } catch {
-      showToast("Error de conexión.");
+      setEditError("Error de conexión.");
     } finally {
       setSubmitting(false);
     }
@@ -1249,7 +1270,7 @@ export default function ServicesPanel() {
             📅 Generar mes
           </button>
           {!swapMode && !copyMode && (
-            <button onClick={() => setEditModal({ type: "add" })} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors">
+            <button onClick={() => openEditModal({ type: "add" })} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors">
               <span className="text-base leading-none">+</span> Nuevo
             </button>
           )}
@@ -1260,7 +1281,7 @@ export default function ServicesPanel() {
       {!loading && allMonths.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-label text-[10px] uppercase tracking-widest text-gray-600 shrink-0">Mes:</span>
+            <span className="font-label text-[11px] uppercase tracking-widest text-gray-600 shrink-0">Mes:</span>
             <MonthPill label="Próximos" selected={selectedMonths.size === 0} onClick={() => setSelectedMonths(new Set())} />
             {futureMonths.map(ym => (
               <MonthPill key={ym} label={fmtYM(ym)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} />
@@ -1269,7 +1290,7 @@ export default function ServicesPanel() {
               <button
                 type="button"
                 onClick={() => setShowPastMonths(v => !v)}
-                className="font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full border border-[#00bfff]/10 text-gray-600 hover:border-[#00bfff]/25 hover:text-gray-400 transition-colors flex items-center gap-1"
+                className="font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border border-[#00bfff]/10 text-gray-600 hover:border-[#00bfff]/25 hover:text-gray-400 transition-colors flex items-center gap-1"
               >
                 Roles previos
                 <span className={`transition-transform ${showPastMonths ? "rotate-180" : ""}`}>▾</span>
@@ -1319,7 +1340,7 @@ export default function ServicesPanel() {
             </p>
           </div>
           {swapSource && (
-            <button onClick={() => setSwapSource(null)} className="font-label text-[10px] uppercase tracking-widest text-gray-500 hover:text-red-400 transition-colors ml-4 shrink-0">
+            <button onClick={() => setSwapSource(null)} className="font-label text-[11px] uppercase tracking-widest text-gray-500 hover:text-red-400 transition-colors ml-4 shrink-0">
               Cancelar selección
             </button>
           )}
@@ -1340,7 +1361,7 @@ export default function ServicesPanel() {
                 Copiando los instrumentos de <span className="text-gray-300 capitalize">{srcLabel}</span>. Haz clic en «Pegar aquí» en el día destino (reemplaza sus instrumentos).
               </p>
             </div>
-            <button onClick={() => setCopySource(null)} className="font-label text-[10px] uppercase tracking-widest text-gray-500 hover:text-red-400 transition-colors ml-4 shrink-0">
+            <button onClick={() => setCopySource(null)} className="font-label text-[11px] uppercase tracking-widest text-gray-500 hover:text-red-400 transition-colors ml-4 shrink-0">
               Cancelar
             </button>
           </div>
@@ -1364,8 +1385,8 @@ export default function ServicesPanel() {
               role={role}
               conflictIds={roleConflicts.get(role._id) ?? EMPTY_SET}
               conflictNotes={roleConflictNotes.get(role._id)}
-              onEdit={() => setEditModal({ type: "edit", role })}
-              onDelete={() => setEditModal({ type: "delete", role })}
+              onEdit={() => openEditModal({ type: "edit", role })}
+              onDelete={() => openEditModal({ type: "delete", role })}
               onSetlist={() => setSetlistRole(role)}
               onPublish={handlePublish}
               swapMode={swapMode}
@@ -1392,20 +1413,20 @@ export default function ServicesPanel() {
 
       {/* ── Modals ── */}
       {editModal?.type === "add" && (
-        <Modal title="Nuevo servicio" onClose={() => setEditModal(null)}>
-          <ServiceForm members={members} onSubmit={handleAdd} onClose={() => setEditModal(null)} loading={submitting} />
+        <Modal title="Nuevo servicio" onClose={closeEditModal} status={editError}>
+          <ServiceForm members={members} onSubmit={handleAdd} onClose={closeEditModal} loading={submitting} />
         </Modal>
       )}
       {editModal?.type === "edit" && (
-        <Modal title="Editar servicio" onClose={() => setEditModal(null)}>
-          <ServiceForm initial={editModal.role} members={members} onSubmit={handleEdit} onClose={() => setEditModal(null)} loading={submitting} />
+        <Modal title="Editar servicio" onClose={closeEditModal} status={editError}>
+          <ServiceForm initial={editModal.role} members={members} onSubmit={handleEdit} onClose={closeEditModal} loading={submitting} />
         </Modal>
       )}
       {editModal?.type === "delete" && (
-        <Modal title="Eliminar servicio" onClose={() => setEditModal(null)}>
+        <Modal title="Eliminar servicio" onClose={closeEditModal} status={editError}>
           <p className="font-body text-sm text-gray-400">¿Eliminar el servicio del <span className="text-red-400 font-semibold">{formatDate(editModal.role.date)}</span>? Esta acción no se puede deshacer.</p>
           <div className="flex gap-3">
-            <button onClick={() => setEditModal(null)} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">Cancelar</button>
+            <button onClick={closeEditModal} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">Cancelar</button>
             <button onClick={handleDelete} disabled={submitting} className="flex-1 py-2 rounded-lg bg-red-800/60 hover:bg-red-700/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{submitting ? "Eliminando..." : "Eliminar"}</button>
           </div>
         </Modal>
@@ -1429,7 +1450,8 @@ export default function ServicesPanel() {
               week={week}
               type={type}
               roleId={type === "special" ? r._id : undefined}
-              onClose={() => { setSetlistRole(null); fetchData(); showToast("Setlist guardado."); }}
+              onClose={() => setSetlistRole(null)}
+              onSaved={() => { setSetlistRole(null); fetchData(); showToast("Setlist guardado."); }}
             />
           </Modal>
         );
@@ -1441,7 +1463,7 @@ export default function ServicesPanel() {
 // ─── Tiny helpers ─────────────────────────────────────────────────────────────
 
 function Pill({ children }: { children: React.ReactNode }) {
-  return <span className="font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-500 whitespace-nowrap">{children}</span>;
+  return <span className="font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-500 whitespace-nowrap">{children}</span>;
 }
 
 function fmtYM(ym: string) {
@@ -1453,7 +1475,7 @@ function MonthPill({ label, selected, onClick, past }: { label: string; selected
     <button
       type="button"
       onClick={onClick}
-      className={`font-label text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
+      className={`font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
         selected
           ? "border-[#00bfff]/60 bg-[#00bfff]/15 text-[#00bfff]"
           : past

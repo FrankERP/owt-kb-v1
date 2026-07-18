@@ -41,7 +41,7 @@ const PostComponent = React.memo(({ post }: Props) => {
           {post.key || "—"}
         </span>
         <div className="min-w-0 flex-1 pt-0.5">
-          <p className="mb-1 font-label text-[9px] uppercase tracking-[0.2em] text-brand-steel/55">
+          <p className="mb-1 font-label text-[10px] uppercase tracking-[0.2em] text-brand-steel/55">
             Repertorio
           </p>
           <h2 className="line-clamp-2 font-display text-base font-semibold leading-snug text-brand-frost transition-colors group-hover:text-brand-beam lg:text-lg">
@@ -53,13 +53,13 @@ const PostComponent = React.memo(({ post }: Props) => {
             </p>
           )}
         </div>
-        <span className={`pointer-events-none mt-1 flex shrink-0 items-center gap-1 font-label text-[9px] uppercase tracking-widest transition-colors ${fresh ? "text-brand-beam" : "text-brand-steel/40 group-hover:text-brand-beam/80"}`}>
+        <span className={`pointer-events-none mt-1 flex shrink-0 items-center gap-1 font-label text-[10px] uppercase tracking-widest transition-colors ${fresh ? "text-brand-beam" : "text-brand-steel/40 group-hover:text-brand-beam/80"}`}>
           {fresh ? "Nuevo" : <><EyeIcon /> Ver</>}
         </span>
       </div>
 
       {(post.bpm || post.timeSig) && (
-        <div className="flex items-center gap-3 border-t border-brand-steel/10 pt-3 font-label text-[10px] uppercase tracking-widest text-brand-steel/55">
+        <div className="flex items-center gap-3 border-t border-brand-steel/10 pt-3 font-label text-[11px] uppercase tracking-widest text-brand-steel/55">
           {post.bpm && <span>{post.bpm} BPM</span>}
           {post.bpm && post.timeSig && <span className="h-3 w-px bg-brand-steel/15" />}
           {post.timeSig && <span>{post.timeSig}</span>}
@@ -70,7 +70,7 @@ const PostComponent = React.memo(({ post }: Props) => {
       {post.tags?.length > 0 && (
         <div className={`flex flex-wrap gap-1.5 ${post.bpm || post.timeSig ? "" : "border-t border-brand-steel/10 pt-3"}`}>
           {post.tags.map((tag) => (
-            <span key={tag._id} className="rounded-md border border-brand-steel/10 bg-brand-blackout/30 px-2 py-1 font-label text-[9px] lowercase text-brand-steel/60 transition-colors group-hover:border-brand-beam/15 group-hover:text-brand-steel/85">
+            <span key={tag._id} className="rounded-md border border-brand-steel/10 bg-brand-blackout/30 px-2 py-1 font-label text-[10px] lowercase text-brand-steel/60 transition-colors group-hover:border-brand-beam/15 group-hover:text-brand-steel/85">
               #{tag.name}
             </span>
           ))}

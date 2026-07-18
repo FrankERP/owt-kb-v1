@@ -31,12 +31,12 @@ export default function AuthorSearchList({ authors, totalSongs }: { authors: Aut
         <div className="flex items-baseline gap-4 flex-1">
           <div className="flex items-baseline gap-1.5">
             <span className="font-display text-3xl text-[#00bfff]">{authors.length}</span>
-            <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">artistas</span>
+            <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">artistas</span>
           </div>
           <span className="text-gray-700 text-sm">·</span>
           <div className="flex items-baseline gap-1.5">
             <span className="font-display text-3xl text-[#00bfff]">{totalSongs}</span>
-            <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">canciones</span>
+            <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">canciones</span>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -44,7 +44,7 @@ export default function AuthorSearchList({ authors, totalSongs }: { authors: Aut
             {(["popular", "alpha"] as SortMode[]).map((mode, i) => (
               <button key={mode} onClick={() => setSort(mode)}
                 aria-pressed={sort === mode}
-                className={`px-3 py-1.5 font-label text-[10px] uppercase tracking-widest transition-colors duration-150 ${i > 0 ? "border-l border-[#003572]/20 dark:border-[#00bfff]/15" : ""} ${sort === mode ? "bg-[#00bfff]/15 text-[#00bfff]" : "text-gray-500 hover:text-gray-300 hover:bg-[#00bfff]/5"}`}>
+                className={`px-3 py-1.5 font-label text-[11px] uppercase tracking-widest transition-colors duration-150 ${i > 0 ? "border-l border-[#003572]/20 dark:border-[#00bfff]/15" : ""} ${sort === mode ? "bg-[#00bfff]/15 text-[#00bfff]" : "text-gray-500 hover:text-gray-300 hover:bg-[#00bfff]/5"}`}>
                 {mode === "popular" ? "Popular" : "A–Z"}
               </button>
             ))}
@@ -76,7 +76,7 @@ export default function AuthorSearchList({ authors, totalSongs }: { authors: Aut
                 <h3 className="font-display text-sm mb-1 group-hover:text-[#00bfff] transition-colors duration-200 leading-snug">
                   {a.name}
                 </h3>
-                <p className="font-label text-[10px] uppercase tracking-widest text-gray-600">
+                <p className="font-label text-[11px] uppercase tracking-widest text-gray-600">
                   {a.postCount ?? 0} {(a.postCount ?? 0) === 1 ? "canción" : "canciones"}
                 </p>
               </div>

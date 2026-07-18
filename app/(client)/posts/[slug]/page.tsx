@@ -134,10 +134,10 @@ const Page = async ({ params }: Params) => {
   const hasRefLinks   = hasMusicalRef || hasLyricsVid || (post?.referenceLinks?.length ?? 0) > 0;
 
   const sections = [
-    { id: "letra",      label: "Letra",        show: hasLyrics },
     { id: "audio",      label: "Audio",        show: hasAudio },
     { id: "tutoriales", label: "Tutoriales",   show: hasTutorials },
     { id: "referencia", label: "Referencia",   show: hasRefLinks },
+    { id: "letra",      label: "Letra",        show: hasLyrics },
     { id: "historial",  label: "Historial",    show: hasHistory },
   ].filter((s) => s.show);
 
@@ -157,7 +157,7 @@ const Page = async ({ params }: Params) => {
             <div className="mb-6 flex flex-wrap justify-center gap-2">
               {post.tags.map((tag) => (
                 <Link key={tag._id} href={`/tag/${tag.slug.current}`}>
-                  <span className="rounded-md border border-brand-beam/15 bg-brand-beam/[0.055] px-2.5 py-1.5 font-label text-[9px] lowercase tracking-wider text-brand-beam/70 transition-colors hover:border-brand-beam/35 hover:text-brand-beam">
+                  <span className="rounded-md border border-brand-beam/15 bg-brand-beam/[0.055] px-2.5 py-1.5 font-label text-[10px] lowercase tracking-wider text-brand-beam/70 transition-colors hover:border-brand-beam/35 hover:text-brand-beam">
                     #{tag.name}
                   </span>
                 </Link>
@@ -191,12 +191,12 @@ const Page = async ({ params }: Params) => {
               </span>
             )}
             {post?.bpm && (
-              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[10px] uppercase tracking-widest text-brand-steel/70">
+              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[11px] uppercase tracking-widest text-brand-steel/70">
                 {post.bpm} BPM
               </span>
             )}
             {post?.timeSig && (
-              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[10px] uppercase tracking-widest text-brand-steel/70">
+              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[11px] uppercase tracking-widest text-brand-steel/70">
                 {post.timeSig}
               </span>
             )}
@@ -209,24 +209,6 @@ const Page = async ({ params }: Params) => {
 
       {/* ── Content ──────────────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-6 py-12 space-y-20">
-
-        {/* Letra / Body */}
-        {hasLyrics && (
-          <section id="letra" className="scroll-mt-28 lg:scroll-mt-36">
-            <SectionHeader>Letra</SectionHeader>
-            {hasInlineChords ? (
-              <ChordChart charts={post.chords!} />
-            ) : (
-              <div className="prose prose-sm sm:prose dark:prose-invert prose-p:leading-relaxed prose-p:!mt-0 prose-p:!mb-0 prose-headings:font-display prose-headings:uppercase prose-headings:!mt-6 prose-headings:!mb-1 columns-1 sm:columns-2 gap-10 max-w-4xl mx-auto">
-                {groupBySections(post.body).map((group, i) => (
-                  <div key={i} className="break-inside-avoid">
-                    <PortableText value={group} components={myPortableTextComponents} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        )}
 
         {/* Audio */}
         {hasAudio && (
@@ -310,6 +292,26 @@ const Page = async ({ params }: Params) => {
           </section>
         )}
 
+        {/* Letra / Body */}
+        {hasLyrics && (
+          <section id="letra" className="scroll-mt-28 lg:scroll-mt-36">
+            <SectionHeader>Letra</SectionHeader>
+            <div className="brand-facet-panel">
+              {hasInlineChords ? (
+                <ChordChart charts={post.chords!} />
+              ) : (
+                <div className="prose prose-sm sm:prose dark:prose-invert prose-p:leading-relaxed prose-p:!mt-0 prose-p:!mb-0 prose-headings:font-display prose-headings:uppercase prose-headings:!mt-6 prose-headings:!mb-1 columns-1 sm:columns-2 gap-10 max-w-4xl mx-auto">
+                  {groupBySections(post.body).map((group, i) => (
+                    <div key={i} className="break-inside-avoid">
+                      <PortableText value={group} components={myPortableTextComponents} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
         {/* Historial */}
         {hasHistory && (
           <section id="historial" className="scroll-mt-28 lg:scroll-mt-36">
@@ -323,7 +325,7 @@ const Page = async ({ params }: Params) => {
                   {/* Header row: day + date + key */}
                   <div className="flex items-center justify-between px-5 py-3 bg-[#003572]/10 dark:bg-[#00bfff]/5 border-b border-[#003572]/15 dark:border-[#00bfff]/10">
                     <div>
-                      <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-0.5">
+                      <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-0.5">
                         {entry._type === "featuredSongs" ? "Domingo" : "Sábado"}
                       </p>
                       <p className="font-body text-sm md:text-base font-semibold">

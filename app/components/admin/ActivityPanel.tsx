@@ -72,7 +72,7 @@ function Avatar({ name }: { name: string }) {
   const initials = name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
   return (
     <div className="w-9 h-9 rounded-full bg-[#003572] dark:bg-[#00bfff]/10 flex items-center justify-center shrink-0">
-      <span className="font-label text-[11px] text-[#00bfff]">{initials}</span>
+      <span className="font-label text-xs text-[#00bfff]">{initials}</span>
     </div>
   );
 }
@@ -84,7 +84,7 @@ function ProviderBadge({ provider }: { provider: string }) {
     azure:       "bg-blue-500/15 text-blue-400 border-blue-500/30",
   };
   return (
-    <span className={`font-label text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${colors[provider] ?? "bg-gray-500/15 text-gray-400 border-gray-500/30"}`}>
+    <span className={`font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${colors[provider] ?? "bg-gray-500/15 text-gray-400 border-gray-500/30"}`}>
       {PROVIDER_LABEL[provider] ?? provider}
     </span>
   );
@@ -136,7 +136,7 @@ export default function ActivityPanel() {
               <span className={`w-2 h-2 rounded-full shrink-0 ${stat.dot}`} />
               <p className="font-display text-2xl leading-none">{stat.value}</p>
             </div>
-            <p className="font-label text-[9px] uppercase tracking-widest text-gray-500">{stat.label}</p>
+            <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">{stat.label}</p>
           </div>
         ))}
       </div>
@@ -157,10 +157,10 @@ export default function ActivityPanel() {
                   <div className="flex items-baseline gap-2 flex-wrap">
                     <span className="font-body text-sm font-semibold">{m.member_name}</span>
                     {m.alias?.trim() && (
-                      <span className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/60">&ldquo;{m.alias}&rdquo;</span>
+                      <span className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]/60">&ldquo;{m.alias}&rdquo;</span>
                     )}
                   </div>
-                  <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mt-0.5">
+                  <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 mt-0.5">
                     {m.lastActive
                       ? `Última actividad: ${formatDate(m.lastActive)}`
                       : "Sin actividad registrada"}
@@ -170,7 +170,7 @@ export default function ActivityPanel() {
                 {/* Status dot + label */}
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className={`w-2 h-2 rounded-full ${status.color}`} />
-                  <span className="font-label text-[9px] uppercase tracking-widest text-gray-500 hidden sm:inline">
+                  <span className="font-label text-[10px] uppercase tracking-widest text-gray-500 hidden sm:inline">
                     {status.label}
                   </span>
                 </div>
@@ -193,13 +193,13 @@ export default function ActivityPanel() {
                   {/* Last seen vs last login */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="font-label text-[9px] uppercase tracking-widest text-gray-600 mb-0.5">Última visita</p>
+                      <p className="font-label text-[10px] uppercase tracking-widest text-gray-600 mb-0.5">Última visita</p>
                       <p className="font-body text-xs">
                         {m.lastSeen ? formatDateTime(m.lastSeen) : "—"}
                       </p>
                     </div>
                     <div>
-                      <p className="font-label text-[9px] uppercase tracking-widest text-gray-600 mb-0.5">Último inicio de sesión</p>
+                      <p className="font-label text-[10px] uppercase tracking-widest text-gray-600 mb-0.5">Último inicio de sesión</p>
                       <p className="font-body text-xs">
                         {m.lastLogin ? formatDateTime(m.lastLogin) : "—"}
                       </p>
@@ -209,7 +209,7 @@ export default function ActivityPanel() {
                   {/* Login history */}
                   {m.events.length > 0 && (
                     <div>
-                      <p className="font-label text-[9px] uppercase tracking-widest text-gray-600 mb-1.5">
+                      <p className="font-label text-[10px] uppercase tracking-widest text-gray-600 mb-1.5">
                         Historial de accesos ({m.loginCount})
                       </p>
                       <div className="space-y-1">

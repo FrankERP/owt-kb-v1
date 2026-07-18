@@ -78,7 +78,7 @@ export default function SongSearchList({ posts }: Props) {
     <div className="mx-auto max-w-7xl px-6">
       <div className="mb-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="brand-section-heading">
-          <p className="font-label text-[9px] uppercase tracking-[0.22em] text-brand-beam/75">Índice musical</p>
+          <p className="font-label text-[10px] uppercase tracking-[0.22em] text-brand-beam/75">Índice musical</p>
           <p className="mt-1 font-body text-sm text-brand-steel/65">
             {query.trim() ? `${filtered.length} resultados` : `${posts.length} canciones disponibles`}
           </p>

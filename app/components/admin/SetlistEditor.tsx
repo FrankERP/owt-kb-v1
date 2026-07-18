@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef, Fragment } from "react";
-import { Modal, SongForm, SongTag, FormState, buildPayload } from "./SongFormModal";
+import { SongForm, SongTag, FormState, buildPayload } from "./SongFormModal";
 import { normalizeMedleyTags } from "../../utils/medley";
 import { ChainLinkIcon } from "../ChainLinkIcon";
+import CueDialog from "../ui/CueDialog";
+import CueDialogStatus from "../ui/CueDialogStatus";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,7 +27,7 @@ function RepeatBadge({ lastUsed }: { lastUsed: string }) {
     ? "bg-red-500/20 text-red-400 border-red-500/30"
     : "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
   return (
-    <span className={`font-label text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${cls}`}>
+    <span className={`font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${cls}`}>
       {weeks <= 0 ? "esta sem." : `hace ${weeks} sem.`}
     </span>
   );
@@ -43,17 +45,19 @@ function GripIcon() {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function SetlistEditor({ week, type, roleId, onClose }: {
+export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
   week: string;
   type: "sunday" | "saturday" | "special";
   roleId?: string;
   onClose: () => void;
+  onSaved?: () => void;
 }) {
   const [entries, setEntries]           = useState<SetlistEntry[]>([]);
   const [recentSongs, setRecentSongs]   = useState<Record<string, string>>({});
   const [searchQ, setSearchQ]           = useState("");
   const [searchResults, setSearchResults] = useState<SongResult[]>([]);
   const [loading, setLoading]           = useState(true);
+  const [loadError, setLoadError]       = useState<string | null>(null);
   const [saving, setSaving]             = useState(false);
   const [saveError, setSaveError]       = useState<string | null>(null);
   const [addKey, setAddKey]             = useState("");
@@ -62,27 +66,36 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
   const [allTags, setAllTags]           = useState<SongTag[]>([]);
   const [createOpen, setCreateOpen]     = useState(false);
   const [createSaving, setCreateSaving] = useState(false);
+  const [createError, setCreateError]   = useState<string | null>(null);
   const dragSrc     = useRef<number | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    let alive = true;
     async function load() {
       setLoading(true);
+      setLoadError(null);
       const params = new URLSearchParams({ type, week });
       if (roleId) params.set("roleId", roleId);
-      const [setlistRes, tagsRes] = await Promise.all([
-        fetch(`/api/admin/setlists?${params}`),
-        fetch("/api/content/tags"),
-      ]);
-      if (setlistRes.ok) {
+      try {
+        const [setlistRes, tagsRes] = await Promise.all([
+          fetch(`/api/admin/setlists?${params}`),
+          fetch("/api/content/tags"),
+        ]);
+        if (!alive) return;
+        if (!setlistRes.ok) throw new Error("setlist");
         const data = await setlistRes.json() as { songs: Array<{ play_key: string; medley_tag?: string; song: SongResult }>; recentSongs: Record<string, string> };
         setEntries((data.songs ?? []).map(s => ({ localId: uid2(), play_key: s.play_key, medley_tag: s.medley_tag, song: s.song })));
         setRecentSongs(data.recentSongs ?? {});
+        if (tagsRes.ok) setAllTags(await tagsRes.json());
+      } catch {
+        if (alive) setLoadError("No se pudo cargar el setlist. Intenta de nuevo.");
+      } finally {
+        if (alive) setLoading(false);
       }
-      if (tagsRes.ok) setAllTags(await tagsRes.json());
-      setLoading(false);
     }
     load();
+    return () => { alive = false; };
   }, [week, type, roleId]);
 
   useEffect(() => {
@@ -174,34 +187,46 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
 
   async function handleCreateSong(form: FormState) {
     setCreateSaving(true);
-    const res = await fetch("/api/content/posts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(buildPayload(form)),
-    });
-    setCreateSaving(false);
-    if (!res.ok) return;
-    const doc = await res.json();
-    addSong({
-      _id:    doc._id,
-      title:  doc.title,
-      author: doc.author ?? "",
-      key:    doc.key ?? "",
-      slug:   doc.slug?.current ?? "",
-    });
-    setCreateOpen(false);
+    setCreateError(null);
+    try {
+      const res = await fetch("/api/content/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload(form)),
+      });
+      if (!res.ok) throw new Error();
+      const doc = await res.json();
+      addSong({
+        _id:    doc._id,
+        title:  doc.title,
+        author: doc.author ?? "",
+        key:    doc.key ?? "",
+        slug:   doc.slug?.current ?? "",
+      });
+      setCreateOpen(false);
+    } catch {
+      setCreateError("No se pudo crear la canción.");
+    } finally {
+      setCreateSaving(false);
+    }
   }
 
   async function handleCreateTag(name: string): Promise<SongTag | null> {
-    const res = await fetch("/api/content/tags", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    if (!res.ok) return null;
-    const tag = await res.json();
-    setAllTags(prev => [...prev, tag].sort((a, b) => a.name.localeCompare(b.name)));
-    return tag;
+    try {
+      const res = await fetch("/api/content/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error();
+      const tag = await res.json();
+      setAllTags(prev => [...prev, tag].sort((a, b) => a.name.localeCompare(b.name)));
+      setCreateError(null);
+      return tag;
+    } catch {
+      setCreateError("No se pudo crear el tag.");
+      return null;
+    }
   }
 
   async function save() {
@@ -219,7 +244,8 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
       // Only close on success — otherwise keep the editor open so the admin's
       // edits aren't silently discarded on a failed/rejected save.
       if (!res.ok) { setSaveError("No se pudo guardar el setlist. Intenta de nuevo."); return; }
-      onClose();
+      if (onSaved) onSaved();
+      else onClose();
     } catch {
       setSaveError("Error de conexión. Intenta de nuevo.");
     } finally {
@@ -231,11 +257,22 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
     return <div className="flex justify-center py-8"><span className="font-label text-xs uppercase tracking-widest text-gray-500 animate-pulse">Cargando...</span></div>;
   }
 
+  if (loadError) {
+    return (
+      <div className="space-y-4">
+        <CueDialogStatus tone="error">{loadError}</CueDialogStatus>
+        <button type="button" onClick={onClose} className="w-full rounded-lg border border-[#00bfff]/20 py-2 font-label text-xs uppercase tracking-widest text-gray-400 transition-colors hover:border-[#00bfff] hover:text-[#00bfff]">
+          Cerrar
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Current setlist */}
       <div>
-        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-2">
+        <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 mb-2">
           Setlist ({entries.length})
         </p>
         {entries.length === 0 && (
@@ -276,22 +313,22 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
                       onClick={() => move(idx, -1)}
                       disabled={idx === 0}
                       aria-label={`Subir ${e.song.title}`}
-                      className="text-gray-600 hover:text-[#00bfff] disabled:opacity-25 disabled:hover:text-gray-600 leading-none text-[10px] transition-colors"
+                      className="text-gray-600 hover:text-[#00bfff] disabled:opacity-25 disabled:hover:text-gray-600 leading-none text-[11px] transition-colors"
                     >▲</button>
                     <button
                       type="button"
                       onClick={() => move(idx, 1)}
                       disabled={idx === entries.length - 1}
                       aria-label={`Bajar ${e.song.title}`}
-                      className="text-gray-600 hover:text-[#00bfff] disabled:opacity-25 disabled:hover:text-gray-600 leading-none text-[10px] transition-colors"
+                      className="text-gray-600 hover:text-[#00bfff] disabled:opacity-25 disabled:hover:text-gray-600 leading-none text-[11px] transition-colors"
                     >▼</button>
                   </div>
-                  <span className="font-label text-[10px] text-gray-600 shrink-0 w-4 text-center tabular-nums">{idx + 1}</span>
+                  <span className="font-label text-[11px] text-gray-600 shrink-0 w-4 text-center tabular-nums">{idx + 1}</span>
                   <div className="flex-1 min-w-0">
                     <p className="font-body text-xs truncate">{e.song.title}</p>
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                      <span className="font-label text-[9px] text-gray-600">{e.song.author}</span>
-                      {e.song.key && <span className="font-label text-[9px] text-gray-600">· {e.song.key}</span>}
+                      <span className="font-label text-[10px] text-gray-600">{e.song.author}</span>
+                      {e.song.key && <span className="font-label text-[10px] text-gray-600">· {e.song.key}</span>}
                       {lastUsed && <RepeatBadge lastUsed={lastUsed} />}
                     </div>
                   </div>
@@ -316,7 +353,7 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
                       }`}
                     >
                       <ChainLinkIcon strokeWidth={linked ? 2.5 : 1.5} />
-                      {linked && <span className="font-label text-[8px] uppercase tracking-widest ml-0.5">medley</span>}
+                      {linked && <span className="font-label text-[10px] uppercase tracking-widest ml-0.5">medley</span>}
                     </button>
                   </div>
                 )}
@@ -328,7 +365,7 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
 
       {/* Search & add */}
       <div className="border-t border-[#00bfff]/10 pt-3 space-y-2">
-        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">Agregar canción</p>
+        <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">Agregar canción</p>
         <div className="flex gap-2">
           <input
             className="flex-1 px-3 py-1.5 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors placeholder-gray-600"
@@ -353,8 +390,8 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
                   <div className="flex-1 min-w-0">
                     <p className="font-body text-xs truncate">{song.title}</p>
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                      <span className="font-label text-[9px] text-gray-600">{song.author}</span>
-                      {song.key && <span className="font-label text-[9px] text-gray-600">· {song.key}</span>}
+                      <span className="font-label text-[10px] text-gray-600">{song.author}</span>
+                      {song.key && <span className="font-label text-[10px] text-gray-600">· {song.key}</span>}
                       {lastUsed && <RepeatBadge lastUsed={lastUsed} />}
                     </div>
                   </div>
@@ -362,7 +399,7 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
                     type="button"
                     disabled={alreadyAdded}
                     onClick={() => addSong(song)}
-                    className="font-label text-[9px] uppercase tracking-widest px-2 py-1 rounded-full border border-[#00bfff]/30 text-[#00bfff]/70 hover:text-[#00bfff] hover:border-[#00bfff] disabled:opacity-30 disabled:cursor-default transition-colors shrink-0"
+                    className="font-label text-[10px] uppercase tracking-widest px-2 py-1 rounded-full border border-[#00bfff]/30 text-[#00bfff]/70 hover:text-[#00bfff] hover:border-[#00bfff] disabled:opacity-30 disabled:cursor-default transition-colors shrink-0"
                   >
                     {alreadyAdded ? "Ya está" : "+ Añadir"}
                   </button>
@@ -377,7 +414,7 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
             onClick={() => setCreateOpen(true)}
             className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-[#00bfff]/5 transition-colors text-left"
           >
-            <span className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]">+ Crear</span>
+            <span className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">+ Crear</span>
             {searchQ.trim()
               ? <span className="font-body text-xs text-gray-400 truncate">"{searchQ}"</span>
               : <span className="font-body text-xs text-gray-400">nueva canción</span>}
@@ -387,7 +424,7 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
 
       {/* Footer */}
       {saveError && (
-        <p className="text-red-400 font-label text-[11px] uppercase tracking-widest text-center -mb-1">{saveError}</p>
+        <p className="text-red-400 font-label text-xs uppercase tracking-widest text-center -mb-1">{saveError}</p>
       )}
       <div className="flex gap-3 sticky bottom-0 bg-[#C8D8EB] dark:bg-[#0a1929] py-2">
         <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
@@ -400,20 +437,26 @@ export function SetlistEditor({ week, type, roleId, onClose }: {
 
       {/* Create song modal (nested above the ServicesPanel modal) */}
       {createOpen && (
-        <Modal
+        <CueDialog
+          open
           title="Nueva canción"
-          onClose={() => setCreateOpen(false)}
-          zClass="z-[60]"
+          label="Nueva canción"
+          mode="sheet"
+          size="lg"
+          onDismiss={() => { setCreateError(null); setCreateOpen(false); }}
         >
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
+          {createError && <CueDialogStatus tone="error">{createError}</CueDialogStatus>}
           <SongForm
             initial={{ title: searchQ }}
             allTags={allTags}
             onSubmit={handleCreateSong}
-            onClose={() => setCreateOpen(false)}
+            onClose={() => { setCreateError(null); setCreateOpen(false); }}
             loading={createSaving}
             canCreateTag={handleCreateTag}
           />
-        </Modal>
+          </div>
+        </CueDialog>
       )}
     </div>
   );
