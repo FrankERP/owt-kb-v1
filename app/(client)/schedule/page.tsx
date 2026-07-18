@@ -135,6 +135,7 @@ export default async function SchedulePage({
     push(dateStr, {
       day: sp.service_name || "Servicio Especial",
       date: sp.date,
+      roleId: sp._id,
       leads: sp.Lead?.map((m) => m.alias || m.member_name) ?? [],
       setlist,
       instruments: sp.instruments?.map((s) => ({ label: s.instrument, person: s.person })),

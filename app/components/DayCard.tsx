@@ -8,6 +8,7 @@ import PracticePlaylistButton from "./PracticePlaylistButton";
 import { usePlayer } from "@/app/context/PlayerContext";
 import { useSession } from "next-auth/react";
 import { SetlistEditor } from "./admin/SetlistEditor";
+import CueDialog from "./ui/CueDialog";
 
 export interface DayCardProps {
   day: string;
@@ -75,10 +76,10 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
 
   if (!hasSetlist && !hasRole) return null;
 
-  const t = day === "Sábado" ? SATURDAY_THEME : day === "Domingo" ? SUNDAY_THEME : SPECIAL_THEME;
+  const t = roleId ? SPECIAL_THEME : day === "Sábado" ? SATURDAY_THEME : day === "Domingo" ? SUNDAY_THEME : SPECIAL_THEME;
   const canEdit = ["super-admin", "admin"].includes(session?.user?.role as string);
   const setlistType: "sunday" | "saturday" | "special" =
-    day === "Sábado" ? "saturday" : day === "Domingo" ? "sunday" : "special";
+    roleId ? "special" : day === "Sábado" ? "saturday" : day === "Domingo" ? "sunday" : "special";
 
   const shortDate = date
     ? new Date(date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })
@@ -261,25 +262,24 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
 
       {/* Setlist editor modal */}
       {editSetlist && date && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-4 px-4 pb-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setEditSetlist(false)} />
-          <div className="relative z-10 w-full max-w-xl bg-[#C8D8EB] dark:bg-[#0a1929] border border-[#003572]/20 dark:border-[#00bfff]/20 rounded-xl shadow-2xl flex flex-col max-h-[calc(100vh-2rem)]">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#003572]/15 dark:border-[#00bfff]/10 shrink-0">
-              <h2 className="font-display text-lg uppercase tracking-wide">
-                Setlist — {day} {shortDate}
-              </h2>
-              <button onClick={() => setEditSetlist(false)} className="text-gray-400 hover:text-[#00bfff] transition-colors text-xl leading-none">×</button>
-            </div>
-            <div className="overflow-y-auto overflow-x-hidden p-6 flex-1">
+        <CueDialog
+          open
+          title={`Setlist - ${day} ${shortDate}`}
+          label={`Setlist - ${day} ${shortDate}`}
+          mode="sheet"
+          size="lg"
+          onDismiss={() => setEditSetlist(false)}
+        >
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-6">
               <SetlistEditor
                 week={date.slice(0, 10)}
                 type={setlistType}
                 roleId={roleId}
                 onClose={() => setEditSetlist(false)}
+                onSaved={() => setEditSetlist(false)}
               />
             </div>
-          </div>
-        </div>
+        </CueDialog>
       )}
     </>
   );

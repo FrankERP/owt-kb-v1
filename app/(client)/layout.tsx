@@ -64,7 +64,9 @@ export default function RootLayout({
         <Provider>
           <ImpersonationBanner />
           <ActivityPing />
-          <main className="mx-auto max-w-7xl pb-0">{children}</main>
+          <main data-route-main="" tabIndex={-1} className="mx-auto max-w-7xl pb-0 focus:outline-none">
+            {children}
+          </main>
           <NativeAuthBootstrap />
           <TextScaleBootstrap />
           <AudioPlayer />

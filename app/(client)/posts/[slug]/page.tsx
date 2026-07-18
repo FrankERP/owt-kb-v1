@@ -134,10 +134,10 @@ const Page = async ({ params }: Params) => {
   const hasRefLinks   = hasMusicalRef || hasLyricsVid || (post?.referenceLinks?.length ?? 0) > 0;
 
   const sections = [
-    { id: "letra",      label: "Letra",        show: hasLyrics },
     { id: "audio",      label: "Audio",        show: hasAudio },
     { id: "tutoriales", label: "Tutoriales",   show: hasTutorials },
     { id: "referencia", label: "Referencia",   show: hasRefLinks },
+    { id: "letra",      label: "Letra",        show: hasLyrics },
     { id: "historial",  label: "Historial",    show: hasHistory },
   ].filter((s) => s.show);
 
@@ -209,24 +209,6 @@ const Page = async ({ params }: Params) => {
 
       {/* ── Content ──────────────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-6 py-12 space-y-20">
-
-        {/* Letra / Body */}
-        {hasLyrics && (
-          <section id="letra" className="scroll-mt-28 lg:scroll-mt-36">
-            <SectionHeader>Letra</SectionHeader>
-            {hasInlineChords ? (
-              <ChordChart charts={post.chords!} />
-            ) : (
-              <div className="prose prose-sm sm:prose dark:prose-invert prose-p:leading-relaxed prose-p:!mt-0 prose-p:!mb-0 prose-headings:font-display prose-headings:uppercase prose-headings:!mt-6 prose-headings:!mb-1 columns-1 sm:columns-2 gap-10 max-w-4xl mx-auto">
-                {groupBySections(post.body).map((group, i) => (
-                  <div key={i} className="break-inside-avoid">
-                    <PortableText value={group} components={myPortableTextComponents} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        )}
 
         {/* Audio */}
         {hasAudio && (
@@ -305,6 +287,26 @@ const Page = async ({ params }: Params) => {
                     <span className="block font-body text-xs text-[#C8D8EB]/60 dark:text-[#C8D8EB]/50">Letra en español</span>
                   </span>
                 </a>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* Letra / Body */}
+        {hasLyrics && (
+          <section id="letra" className="scroll-mt-28 lg:scroll-mt-36">
+            <SectionHeader>Letra</SectionHeader>
+            <div className="brand-facet-panel">
+              {hasInlineChords ? (
+                <ChordChart charts={post.chords!} />
+              ) : (
+                <div className="prose prose-sm sm:prose dark:prose-invert prose-p:leading-relaxed prose-p:!mt-0 prose-p:!mb-0 prose-headings:font-display prose-headings:uppercase prose-headings:!mt-6 prose-headings:!mb-1 columns-1 sm:columns-2 gap-10 max-w-4xl mx-auto">
+                  {groupBySections(post.body).map((group, i) => (
+                    <div key={i} className="break-inside-avoid">
+                      <PortableText value={group} components={myPortableTextComponents} />
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </section>
