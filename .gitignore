@@ -39,6 +39,10 @@ next-env.d.ts
 scripts/.sa-creds.json
 .ux-shots/
 
+# Service Readiness A3 verification backups (pre-mutation snapshots of the
+# isolated verification dataset). Local/CI artifacts only — never tracked.
+.sr-verification-backups/
+
 # Local-only leftover one-off scripts (not part of the app)
 scripts/create-service-account.mjs
 scripts/sa-roster.mjs
