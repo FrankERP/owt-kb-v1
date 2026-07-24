@@ -31,6 +31,8 @@ import {
   FEASIBILITY_CHECKS,
   assertNoPartialState,
   checkInventory,
+  conflictSummary,
+  isMutationConflict,
   orderedChecks,
   scratchIds,
 } from "./lib/sr-feasibility-checks.mjs";
@@ -65,6 +67,7 @@ for (const check of ordered) {
   console.log(`      A2 §9: ${check.planRef}`);
   if (check.induces) console.log(`      induces: ${check.induces}`);
   if (row.dependsOn.length) console.log(`      after:   ${row.dependsOn.join(", ")}`);
+  if (row.setup.length) console.log(`      setup writes (baselined before the guarded transaction): ${row.setup.join(", ")}`);
   console.log(`      re-query after act (${check.requery.length}):`);
   for (const id of check.requery) console.log(`        · ${id}`);
   if (check.scratch.length) console.log(`      creates: ${check.scratch.join(", ")}`);
@@ -119,6 +122,15 @@ class CheckAssertionError extends Error {
   }
 }
 
+/**
+ * Per-check mutable state the driver owns. A check reaches it only through
+ * `ctx`, never directly.
+ *   requery   the ids of the running check
+ *   baseline  the snapshot `ctx.baseline()` captured, or null
+ *   evidence  the Content Lake conflicts observed inside `act`
+ */
+const runState = { requery: [], baseline: null, evidence: [] };
+
 const ctx = {
   client,
   now: () => new Date().toISOString(),
@@ -130,11 +142,36 @@ const ctx = {
   assert(condition, message) {
     if (!condition) throw new CheckAssertionError(message);
   },
-  /** Resolves when `promise` rejects; throws when it unexpectedly succeeds. */
+  /**
+   * Re-snapshot the re-queried ids as the comparison baseline.
+   *
+   * A check that must legitimately WRITE before it can induce its conflict (the
+   * mid-flight dependency, the first create before a retry, the approval before
+   * its replay) calls this once its setup has committed and immediately before
+   * the guarded transaction. Without it the baseline would predate the setup,
+   * and a deliberate setup write would be misreported as partial state left
+   * behind by the rejected transaction.
+   */
+  async baseline() {
+    runState.baseline = await snapshotByIds(client, runState.requery);
+    return runState.baseline;
+  },
+  /**
+   * Resolves when `promise` is refused BY A CONTENT LAKE MUTATION CONFLICT.
+   * Throws when it unexpectedly succeeds, and equally when it fails for any
+   * other reason — an auth error or a dropped connection is not a guard firing
+   * and must never be counted as one.
+   */
   async expectRejected(promise, message) {
     try {
       await promise;
-    } catch {
+    } catch (err) {
+      if (!isMutationConflict(err)) {
+        throw new CheckAssertionError(
+          `Rejected, but NOT by a Content Lake mutation conflict (${message}): ${err.message}`,
+        );
+      }
+      runState.evidence.push(conflictSummary(err));
       return;
     }
     throw new CheckAssertionError(`Expected rejection: ${message}`);
@@ -142,6 +179,14 @@ const ctx = {
   assertExactlyOneFulfilled(results, message) {
     const won = results.filter((r) => r.status === "fulfilled").length;
     if (won !== 1) throw new CheckAssertionError(`${message} (got ${won} winners)`);
+    for (const loser of results.filter((r) => r.status === "rejected")) {
+      if (!isMutationConflict(loser.reason)) {
+        throw new CheckAssertionError(
+          `${message} — a loser failed for a non-conflict reason: ${loser.reason?.message ?? loser.reason}`,
+        );
+      }
+      runState.evidence.push(conflictSummary(loser.reason));
+    }
   },
   /** Read-only dependency probes, by explicit date / role id. */
   dependenciesForDate: (date) =>
@@ -160,7 +205,11 @@ try {
     // Every check re-proves lease ownership before it touches anything.
     await lease.assertOwned();
 
-    const before = await snapshotByIds(client, check.requery);
+    runState.requery = check.requery;
+    runState.baseline = null;
+    runState.evidence = [];
+
+    const preAct = await snapshotByIds(client, check.requery);
     let outcome;
     let error = null;
     try {
@@ -177,32 +226,62 @@ try {
     }
     const after = await snapshotByIds(client, check.requery);
 
+    const setup = check.setup ?? [];
+    if (setup.length && runState.baseline === null) {
+      // A check that writes before it induces its conflict MUST re-baseline, or
+      // its own setup writes would be scored as partial state.
+      results.push({
+        id: check.id,
+        status: "FAIL",
+        detail: `harness error: declares ${setup.length} setup id(s) but never called ctx.baseline()${error ? ` (act rejected: ${error.message})` : ""}`,
+      });
+      exitCode = 1;
+      continue;
+    }
+    // The comparison baseline is the state the GUARDED transaction actually saw.
+    const before = runState.baseline ?? preAct;
+
     if (outcome !== check.expects) {
       results.push({
         id: check.id,
         status: "FAIL",
-        detail: `expected ${check.expects} but the transaction ${outcome}ed${error ? `: ${error.message}` : ""}`,
+        detail: `expected act to ${check.expects} but it ${outcome}ed${error ? `: ${error.message}` : ""}`,
       });
       exitCode = 1;
       continue;
     }
 
-    if (check.expects === "reject") {
-      // The core proof: after an induced conflict, every involved document is
-      // byte-identical, `_rev` included — no partial business state.
-      const verdict = assertNoPartialState({ before, after });
+    if (outcome === "reject") {
+      if (!isMutationConflict(error)) {
+        results.push({
+          id: check.id,
+          status: "FAIL",
+          detail: `rejected, but NOT by a Content Lake mutation conflict: ${error.message}`,
+        });
+        exitCode = 1;
+        continue;
+      }
+      runState.evidence.push(conflictSummary(error));
+    }
+
+    // The core proof. `assertNoPartialState` (every re-queried document
+    // byte-identical, `_rev` included) is the default for a rejecting check; a
+    // check whose conflict has a legitimate winner declares its own `verify`.
+    const verify = check.verify ?? (check.expects === "reject" ? assertNoPartialState : null);
+    if (verify) {
+      const verdict = verify({ before, after });
       if (!verdict.ok) {
         results.push({
           id: check.id,
           status: "FAIL",
-          detail: `partial state after rejection: ${verdict.failures.map((f) => `${f.code}@${f.id}`).join(", ")}`,
+          detail: `after-state proof failed: ${verdict.failures.map((f) => `${f.code}@${f.id}`).join(", ")}`,
         });
         exitCode = 1;
         continue;
       }
     }
 
-    results.push({ id: check.id, status: "PASS", detail: null });
+    results.push({ id: check.id, status: "PASS", detail: null, evidence: runState.evidence.filter(Boolean) });
   }
 } catch (err) {
   console.error(`\n  HARNESS FAILED: ${err.message}`);
@@ -224,7 +303,10 @@ try {
 
 console.log("\n  Results:");
 for (const r of results) {
-  console.log(`    ${r.status === "PASS" ? "✓" : "✗"} ${r.id}${r.detail ? ` — ${r.detail}` : ""}`);
+  // Rejections print the exact conflict the Content Lake returned, so a PASS
+  // carries its own evidence rather than just a tick.
+  const evidence = r.evidence?.length ? `  [${r.evidence.join("; ")}]` : "";
+  console.log(`    ${r.status === "PASS" ? "✓" : "✗"} ${r.id}${r.detail ? ` — ${r.detail}` : ""}${evidence}`);
 }
 const passed = results.filter((r) => r.status === "PASS").length;
 console.log(`\n  ${passed}/${ordered.length} feasibility checks passed.\n`);
