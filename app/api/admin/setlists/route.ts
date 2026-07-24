@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
-import { operationalClient } from "@/sanity/lib/operationalClient";
+import { operationalClient, rawIntegrityClient } from "@/sanity/lib/operationalClient";
 import { revalidateServiceViews } from "@/app/utils/revalidate";
 import { setlistRecipientIds, assignedMemberRefsQuery } from "@/app/utils/notifyTargets";
 import { sendPush } from "@/app/utils/push";
+import { isValidServiceDate } from "@/app/utils/serviceReadModel";
+import { pickUnique } from "@/app/utils/serviceReadSelect";
+import {
+  editorRecentSetlistsQuery,
+  editorSpecialRoleQuery,
+  editorWeekendSetlistQuery,
+  rawRoleDraftForBaseQuery,
+  rawSetlistDraftsForWeekQuery,
+} from "@/app/utils/serviceReadQueries";
+import { buildSetlistRead, type CanonicalSetlistRecord } from "@/app/utils/setlistReadContract";
 
 function key() {
   return Math.random().toString(36).slice(2, 9);
@@ -16,17 +26,41 @@ function nWeeksAgo(n: number): string {
   return d.toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
 }
 
-const SONG_PROJECTION = `{
-  _id, title, author, key, "slug": slug.current
-}`;
+const SERVICE_KINDS = ["sunday", "saturday", "special"] as const;
+type ServiceKind = (typeof SERVICE_KINDS)[number];
 
-const SETLIST_SONGS_PROJECTION = `songs[] {
-  play_key,
-  medley_tag,
-  "song": song-> ${SONG_PROJECTION}
-}`;
+interface EditorSetlistDoc {
+  _id?: string;
+  _rev?: string;
+  _type?: string;
+  date?: string;
+  hasSongs?: boolean;
+  songs?: unknown;
+}
+
+function draftIdsOf(rows: unknown): string[] {
+  if (!Array.isArray(rows)) return [];
+  const out: string[] = [];
+  for (const row of rows) {
+    const id = (row as { _id?: unknown } | null)?._id;
+    if (typeof id === "string" && id) out.push(id);
+  }
+  return out;
+}
+
+/** Editor-projected songs; an absent stored field is an empty list, not malformed content. */
+function songsOf(doc: EditorSetlistDoc): unknown {
+  if (doc.hasSongs === false) return [];
+  return doc.songs ?? [];
+}
 
 // ── GET /api/admin/setlists?week=YYYY-MM-DD&type=sunday|saturday|special&roleId=ID
+// Additive canonical read contract (A1 §4): the pre-existing `setlistId`,
+// `songs` and `recentSongs` fields are preserved on every success branch, plus
+// an explicit `targetState`. Request identity is validated BEFORE any target is
+// queried, so a malformed/mismatched request is a 400 and never `targetState:
+// "none"`. Ambiguity (duplicate / draft overlay / malformed record) is an
+// explicit non-editable state, never an arbitrary `[0]` pick.
 export async function GET(req: NextRequest) {
   const session = await requireActiveManager();
   if (!session) {
@@ -38,65 +72,130 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = req.nextUrl;
-  const week   = searchParams.get("week");
-  const type   = searchParams.get("type") as "sunday" | "saturday" | "special" | null;
+  const week = searchParams.get("week");
+  const rawType = searchParams.get("type");
   const roleId = searchParams.get("roleId");
 
-  if (!type) {
-    return NextResponse.json({ error: "type is required" }, { status: 400 });
+  // ── 1. Request identity validation (before any target read) ───────────────
+  if (!rawType || !(SERVICE_KINDS as readonly string[]).includes(rawType)) {
+    return NextResponse.json(
+      { error: "type must be one of sunday, saturday, special", code: "invalid_type" },
+      { status: 400 },
+    );
+  }
+  const type = rawType as ServiceKind;
+
+  if (!isValidServiceDate(week)) {
+    return NextResponse.json(
+      { error: "week must be a valid YYYY-MM-DD service date", code: "invalid_service_date" },
+      { status: 400 },
+    );
+  }
+  const serviceDate: string = week;
+
+  if (type === "special" && !roleId) {
+    return NextResponse.json(
+      { error: "roleId is required for a special service", code: "missing_role_id" },
+      { status: 400 },
+    );
   }
 
-  // Build recentSongs map (past 8 weeks, both sunday and saturday setlists)
-  const cutoff = nWeeksAgo(8);
-  const recentRaw = await operationalClient.fetch(
-    `{
-      "sunday":   *[_type == "featuredSongs"  && week >= $cutoff] { week, ${SETLIST_SONGS_PROJECTION} },
-      "saturday": *[_type == "saturdarSongs"  && week >= $cutoff] { week, ${SETLIST_SONGS_PROJECTION} },
-      "special":  *[_type == "special_role"   && date >= $cutoff && defined(songs)] { "week": date, ${SETLIST_SONGS_PROJECTION} }
-    }`,
-    { cutoff }
-  );
-
-  // Build map songId → most recent ISO date used (excluding the current week to avoid self-warning)
-  const recentSongs: Record<string, string> = {};
-  const excludeWeek = week ?? "";
-  for (const list of [...recentRaw.sunday, ...recentRaw.saturday, ...recentRaw.special]) {
-    if (list.week === excludeWeek) continue;
-    for (const entry of (list.songs ?? [])) {
-      if (!entry?.song?._id) continue;
-      const prev = recentSongs[entry.song._id];
-      if (!prev || list.week > prev) recentSongs[entry.song._id] = list.week;
+  try {
+    // For a special service the role document IS the setlist target, so
+    // resolving it both validates request identity and carries the content.
+    let specialRole: EditorSetlistDoc | null = null;
+    if (type === "special" && roleId) {
+      const roleQ = editorSpecialRoleQuery(roleId);
+      const rows = await operationalClient.fetch<EditorSetlistDoc[]>(roleQ.query, roleQ.params);
+      specialRole = pickUnique(rows);
+      if (!specialRole || specialRole._type !== "special_role") {
+        return NextResponse.json(
+          {
+            error: "roleId must resolve to exactly one canonical special_role",
+            code: "special_role_unresolved",
+          },
+          { status: 400 },
+        );
+      }
+      if (!isValidServiceDate(specialRole.date) || specialRole.date !== serviceDate) {
+        return NextResponse.json(
+          {
+            error: "roleId does not match the requested service date",
+            code: "special_role_date_mismatch",
+          },
+          { status: 400 },
+        );
+      }
     }
+
+    // ── 2. Repeat-song history (past 8 weeks, all three service kinds) ───────
+    const recentQ = editorRecentSetlistsQuery(nWeeksAgo(8));
+    const setlistType = type === "sunday" ? "featuredSongs" : "saturdarSongs";
+
+    let recentRaw: Record<string, { week?: string; songs?: unknown }[]>;
+    let records: CanonicalSetlistRecord[];
+    let draftIds: string[];
+
+    if (type === "special" && specialRole) {
+      const draftQ = rawRoleDraftForBaseQuery(specialRole._id ?? "");
+      const [recent, drafts] = await Promise.all([
+        operationalClient.fetch<Record<string, { week?: string; songs?: unknown }[]>>(
+          recentQ.query,
+          recentQ.params,
+        ),
+        rawIntegrityClient.fetch<unknown[]>(draftQ.query, draftQ.params),
+      ]);
+      recentRaw = recent;
+      draftIds = draftIdsOf(drafts);
+      // A special role with no stored `songs` field is zero setlist targets.
+      records =
+        specialRole.hasSongs === false
+          ? []
+          : [{ id: specialRole._id ?? "", rev: specialRole._rev ?? "", songs: songsOf(specialRole) }];
+    } else {
+      const setlistQ = editorWeekendSetlistQuery(setlistType, serviceDate);
+      const draftQ = rawSetlistDraftsForWeekQuery(setlistType, serviceDate);
+      const [recent, canonical, drafts] = await Promise.all([
+        operationalClient.fetch<Record<string, { week?: string; songs?: unknown }[]>>(
+          recentQ.query,
+          recentQ.params,
+        ),
+        operationalClient.fetch<EditorSetlistDoc[]>(setlistQ.query, setlistQ.params),
+        rawIntegrityClient.fetch<unknown[]>(draftQ.query, draftQ.params),
+      ]);
+      recentRaw = recent;
+      draftIds = draftIdsOf(drafts);
+      records = (canonical ?? []).map((doc) => ({
+        id: doc._id ?? "",
+        rev: doc._rev ?? "",
+        songs: songsOf(doc),
+      }));
+    }
+
+    // Map songId → most recent past use, excluding this service's own date so a
+    // setlist never warns about itself.
+    const recentSongs: Record<string, string> = {};
+    const lists = [
+      ...(recentRaw?.sunday ?? []),
+      ...(recentRaw?.saturday ?? []),
+      ...(recentRaw?.special ?? []),
+    ];
+    for (const list of lists) {
+      if (!list || list.week === serviceDate || typeof list.week !== "string") continue;
+      const entries = Array.isArray(list.songs) ? list.songs : [];
+      for (const entry of entries as { song?: { _id?: string } }[]) {
+        const id = entry?.song?._id;
+        if (!id) continue;
+        const prev = recentSongs[id];
+        if (!prev || list.week > prev) recentSongs[id] = list.week;
+      }
+    }
+
+    return NextResponse.json(buildSetlistRead(records, draftIds, recentSongs));
+  } catch (err) {
+    console.error("[admin/setlists] canonical read failed:", err);
+    return NextResponse.json({ error: "Setlist read failed" }, { status: 500 });
   }
-
-  // Fetch the actual setlist for this service
-  let setlistId: string | null = null;
-  let songs: unknown[] = [];
-
-  if (type === "sunday" && week) {
-    const doc = await operationalClient.fetch(
-      `*[_type == "featuredSongs" && week == $week][0] { _id, ${SETLIST_SONGS_PROJECTION} }`,
-      { week }
-    );
-    setlistId = doc?._id ?? null;
-    songs     = doc?.songs ?? [];
-  } else if (type === "saturday" && week) {
-    const doc = await operationalClient.fetch(
-      `*[_type == "saturdarSongs" && week == $week][0] { _id, ${SETLIST_SONGS_PROJECTION} }`,
-      { week }
-    );
-    setlistId = doc?._id ?? null;
-    songs     = doc?.songs ?? [];
-  } else if (type === "special" && roleId) {
-    const doc = await operationalClient.fetch(
-      `*[_type == "special_role" && _id == $id][0] { _id, ${SETLIST_SONGS_PROJECTION} }`,
-      { id: roleId }
-    );
-    setlistId = doc?._id ?? null;
-    songs     = doc?.songs ?? [];
-  }
-
-  return NextResponse.json({ setlistId, songs, recentSongs });
 }
 
 // ── PUT /api/admin/setlists

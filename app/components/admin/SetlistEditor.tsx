@@ -6,6 +6,7 @@ import { normalizeMedleyTags } from "../../utils/medley";
 import { ChainLinkIcon } from "../ChainLinkIcon";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
+import { canEditSetlistResponse, SETLIST_READ_ISSUE_COPY } from "../../utils/setlistReadContract";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -83,13 +84,29 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
           fetch("/api/content/tags"),
         ]);
         if (!alive) return;
-        if (!setlistRes.ok) throw new Error("setlist");
-        const data = await setlistRes.json() as { songs: Array<{ play_key: string; medley_tag?: string; song: SongResult }>; recentSongs: Record<string, string> };
-        setEntries((data.songs ?? []).map(s => ({ localId: uid2(), play_key: s.play_key, medley_tag: s.medley_tag, song: s.song })));
-        setRecentSongs(data.recentSongs ?? {});
+        if (!setlistRes.ok) {
+          setLoadError(SETLIST_READ_ISSUE_COPY.http);
+          return;
+        }
+        // Fail closed: only a canonical `none` target or a singleton with
+        // empty/incomplete/ready content opens editable state. A duplicate,
+        // draft conflict, invalid target/content or malformed payload must never
+        // render as an ordinary empty setlist the admin could overwrite.
+        const decision = canEditSetlistResponse(await setlistRes.json());
+        if (!alive) return;
+        if (!decision.editable) {
+          setLoadError(SETLIST_READ_ISSUE_COPY[decision.issue]);
+          return;
+        }
+        const data = decision.read as unknown as {
+          songs: Array<{ play_key: string; medley_tag?: string; song: SongResult }>;
+          recentSongs: Record<string, string>;
+        };
+        setEntries(data.songs.map(s => ({ localId: uid2(), play_key: s.play_key, medley_tag: s.medley_tag, song: s.song })));
+        setRecentSongs(data.recentSongs);
         if (tagsRes.ok) setAllTags(await tagsRes.json());
       } catch {
-        if (alive) setLoadError("No se pudo cargar el setlist. Intenta de nuevo.");
+        if (alive) setLoadError(SETLIST_READ_ISSUE_COPY.http);
       } finally {
         if (alive) setLoading(false);
       }
