@@ -306,10 +306,9 @@ Audit and guard or retire these executable writers:
 - `scripts/import-setlist-history.mjs`
 - `scripts/cleanup-superseded-proposals.mjs`
 - `scripts/migrate-shared-proposals.mjs`
-- `scripts/sa-roster.mjs`
 - `scripts/unpublish-july-2026.mjs`
 
-Documentation-only retirement is insufficient; a script that cannot use the shared invariant must fail before any production write.
+Documentation-only retirement is insufficient; a script that cannot use the shared invariant must fail before any production write. Gitignored local developer tooling (e.g. `scripts/sa-roster.mjs`) is outside this committed-writer scope; the operator retires or guards it manually, and it is never an A1 read-audit allowlist entry.
 
 ## 9. Isolated-dataset feasibility gate
 

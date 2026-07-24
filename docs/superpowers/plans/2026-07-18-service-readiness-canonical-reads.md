@@ -59,7 +59,7 @@ Add `app/utils/serviceReadQueries.ts`:
 - canonical member projection
 - no untrusted GROQ interpolation
 
-Add an audit test that inventories runtime query sites touching a protected type and fails when a new direct protected-type read bypasses the operational helper without an explicit allowlisted A2 writer-local reason. Detection covers both literal `_type` queries and generic `_id`/reference queries whose projection or call-site contract reads protected documents, so helpers cannot evade the audit merely by omitting a type literal. The allowlist names file, method, and removal owner; it is not a blanket file exemption.
+Add an audit test that inventories runtime query sites touching a protected type and fails when a new direct protected-type read bypasses the operational helper without an explicit allowlisted A2 writer-local reason. Detection covers both literal `_type` queries and generic `_id`/reference queries whose projection or call-site contract reads protected documents, so helpers cannot evade the audit merely by omitting a type literal. The allowlist names file, method, and removal owner; it is not a blanket file exemption. The audit scans only git-tracked runtime and script query sites; gitignored local developer tooling (e.g. UX-review helpers such as `scripts/sa-roster.mjs`) is outside the committed-code contract, is never an allowlist entry, and is never asserted to exist.
 
 ## 2. Pure validation and grouping model
 
@@ -175,10 +175,13 @@ Explicit A2 handoff allowlist:
 - `scripts/import-schedule.ts` — create-if-missing and patch `sunday_role`/`saturday_role` assignment arrays
 - `scripts/import-setlist-history.mjs` — query existing `featuredSongs`/`saturdarSongs`, then create missing history documents
 - `scripts/migrate-shared-proposals.mjs` — query `setlistProposal`, patch the retained shared proposal, and delete loser documents
-- `scripts/sa-roster.mjs` — query role documents and patch `Lead`/`BGVs`/`Chorus` roster arrays in its `assign`/`clear` operations
 - `scripts/unpublish-july-2026.mjs` — query July role documents and patch `published: false`
 
 The audit represents each exclusion as an exact file plus method/operation entry and rejects any unlisted protected read or writer, including a newly added script; directory or glob exemptions such as `scripts/**` are forbidden. A2 owns removal or canonical-read migration of every entry above and removes each allowlist entry in the same change that migrates or retires its writer.
+
+### Defensive type-rejection guard exclusion
+
+A write-path handler outside the Service Readiness writer set may fetch only a target's `_type` — never projecting or consuming protected content — solely to reject a protected document. Exactly one such site exists: the `PATCH` in `app/api/content/posts/[id]/route.ts`, which guards the song-content editor so a manager cannot overwrite a `sunday_role`/`saturday_role`/`special_role`/`setlistProposal`/`teamMembers` document by id. The audit records it as an exact file-plus-method defensive-guard exclusion, kept separate from the A2 writer allowlist and not owned by A2. It persists until the song editor is independently refactored, so A1's completion gate treats it as an allowed remaining protected read alongside the A2 mutation-local entries; A2 never removes it. A new generic-`_id` read that projects or consumes protected fields is not covered by this narrow exclusion and still fails the audit.
 
 ## 4. Admin setlist GET contract
 
@@ -277,8 +280,8 @@ Required coverage:
 - editor failure/malformed states never become editable empty state
 - summary record-level issue preservation and source-failure isolation
 - integrity summary authorization denies member and content-editor roles while allowing admin and super-admin
-- read-audit allowlist is exact by file and operation, contains only A2-owned mutation reads/writers, rejects new unlisted scripts, and contains no directory/glob exemption
-- read-audit fixtures prove both literal protected-type queries and generic `_id` protected-role reads are detected
+- read-audit allowlist is exact by file and operation, contains only A2-owned mutation reads/writers plus the single documented defensive type-rejection guard, rejects new unlisted scripts, ignores gitignored local tooling, and contains no directory/glob exemption
+- read-audit fixtures prove both literal protected-type queries and generic `_id` protected-role reads are detected, and that the `posts/[id]` `_type`-only rejection guard is recognized as its documented exclusion while a protected-field generic `_id` read still fails the audit
 
 ## Implementation order
 
@@ -314,6 +317,6 @@ A1 is complete when:
 - the three read domains expose independent integrity summaries
 - setlist GET exposes an observed state and preserves `recentSongs`
 - the editor cannot mistake bad data or a failed request for an empty setlist
-- the only remaining direct protected reads are exact, documented A2 mutation-local allowlist entries
+- the only remaining direct protected reads are exact, documented A2 mutation-local allowlist entries or the single documented defensive type-rejection guard (`posts/[id]` PATCH)
 
 A1 does not claim writer safety, uniqueness enforcement, locks, revision-guarded writes, proposal approval safety, cleanup tooling, Studio protection, publish-ready transactions, isolated mutating deployment checks, preview promotion, or completion of the full Service Readiness program.
