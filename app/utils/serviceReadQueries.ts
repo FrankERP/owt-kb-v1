@@ -82,6 +82,56 @@ export function canonicalRoleByIdQuery(id: string): BoundQuery {
   };
 }
 
+// ── Admin setlist editor reads (§4) ─────────────────────────────────────────
+// The editor needs the dereferenced song document to render a row, but the pure
+// content-state validator needs the stored `_key` / raw `_ref`. Project both:
+// `songRef` is the stored reference id and `song` its canonical resolution, so a
+// dangling reference is visible as `songRef` present + `song` null (invalid
+// content) instead of silently rendering as an empty row. `hasSongs` separates
+// "field absent" (no setlist target yet) from "empty array" (an empty setlist).
+
+const EDITOR_SONG_PROJECTION = `{ _id, title, author, key, "slug": slug.current }`;
+
+export const EDITOR_SETLIST_SONGS_PROJECTION = `"hasSongs": defined(songs), songs[] {
+  _key,
+  play_key,
+  medley_tag,
+  "songRef": song._ref,
+  "song": song-> ${EDITOR_SONG_PROJECTION}
+}`;
+
+/** Canonical weekend setlist group for one target — returned as an array, never `[0]`. */
+export function editorWeekendSetlistQuery(setlistType: string, week: string): BoundQuery {
+  return {
+    query: `*[_type == $setlistType && week == $week] { _id, _rev, _type, week, ${EDITOR_SETLIST_SONGS_PROJECTION} }`,
+    params: { setlistType, week },
+  };
+}
+
+/**
+ * Canonical `special_role` group for one role id. A special service stores its
+ * songs on the role document itself, so this both validates the request identity
+ * (type + `date`) and carries the setlist content.
+ */
+export function editorSpecialRoleQuery(roleId: string): BoundQuery {
+  return {
+    query: `*[_type == "special_role" && _id == $id] { _id, _rev, _type, date, ${EDITOR_SETLIST_SONGS_PROJECTION} }`,
+    params: { id: roleId },
+  };
+}
+
+/** Recent play history (past N weeks) across all three service kinds, for repeat warnings. */
+export function editorRecentSetlistsQuery(cutoff: string): BoundQuery {
+  return {
+    query: `{
+      "sunday":   *[_type == "featuredSongs" && week >= $cutoff] { week, ${EDITOR_SETLIST_SONGS_PROJECTION} },
+      "saturday": *[_type == "saturdarSongs" && week >= $cutoff] { week, ${EDITOR_SETLIST_SONGS_PROJECTION} },
+      "special":  *[_type == "special_role"  && date >= $cutoff && defined(songs)] { "week": date, ${EDITOR_SETLIST_SONGS_PROJECTION} }
+    }`,
+    params: { cutoff },
+  };
+}
+
 // ── Raw-draft inventory (raw perspective, drafts.* only) ─────────────────────
 
 export function rawRoleDraftsQuery(): BoundQuery {
@@ -102,6 +152,16 @@ export function rawProposalDraftsQuery(): BoundQuery {
   return {
     query: `*[_type == "setlistProposal" && ${DRAFTS_ONLY}] ${PROPOSAL_PROJECTION}`,
     params: {},
+  };
+}
+
+// The raw `drafts.*` setlist overlay(s) relevant to one weekend setlist target.
+// Scoped by the target's own week so a draft-only setlist for that week is also
+// evidence (zero live targets plus a blocking integrity issue).
+export function rawSetlistDraftsForWeekQuery(setlistType: string, week: string): BoundQuery {
+  return {
+    query: `*[_type == $setlistType && ${DRAFTS_ONLY} && week == $week]{ _id }`,
+    params: { setlistType, week },
   };
 }
 
