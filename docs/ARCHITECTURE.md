@@ -161,11 +161,19 @@ revalidate helper in [`app/utils/revalidate.ts`](../app/utils/revalidate.ts) (or
 - `revalidateServiceViews()` → `/`, `/schedule`, `/posts/[slug]` (setlist/team/service changes).
 - `revalidateSongViews()` → `/`, `/posts/[slug]`, `/tag`, `/tag/[slug]` (song content changes).
 
-**Three Sanity clients** back this (`client` in [`sanity/lib/client.ts`](../sanity/lib/client.ts);
-`serverClient` + `writeClient` both in [`sanity/lib/serverClient.ts`](../sanity/lib/serverClient.ts)):
+**Five Sanity clients** back this (`client` in [`sanity/lib/client.ts`](../sanity/lib/client.ts);
+`serverClient` + `writeClient` in [`sanity/lib/serverClient.ts`](../sanity/lib/serverClient.ts);
+`operationalClient` + `rawIntegrityClient` in
+[`sanity/lib/operationalClient.ts`](../sanity/lib/operationalClient.ts)):
 - `client` — anonymous, `useCdn: false` (regenerated ISR pages must read live, not stale CDN).
 - `serverClient` — read token, used in server components & auth callbacks.
 - `writeClient` — write token, used only in admin API routes.
+- `operationalClient` — `perspective: "published"`, `useCdn: false`, `server-only`. **The only
+  runtime read source for the six protected service types.** → §8.
+- `rawIntegrityClient` — `perspective: "raw"`, tokened, `server-only`. Inventories `drafts.*`
+  as integrity *evidence* only; never a runtime content source. → §8.
+
+The first three set **no** `perspective`, which is exactly why §8 exists.
 
 ---
 
@@ -218,7 +226,102 @@ five. Reuse it for any "who serves this service?" query — never hand-roll seat
 
 ---
 
-## 8. Notifications pipeline
+## 8. Canonical operational reads
+
+The **six protected stored types** — `sunday_role`, `saturday_role`, `special_role`,
+`featuredSongs`, `saturdarSongs` (the deliberate typo — never renamed), `setlistProposal` —
+are read through one contract. Everything below exists because of a single Sanity default.
+
+### Published vs raw perspective
+
+[`sanity/lib/operationalClient.ts`](../sanity/lib/operationalClient.ts) exports two clients:
+
+- **`operationalClient`** — `perspective: "published"`, `useCdn: false`, `server-only`. The
+  **only** runtime source for the protected types. The read token is optional; when present it
+  widens document access, never the perspective.
+- **`rawIntegrityClient`** — `perspective: "raw"`, tokened, `server-only`. Exists **solely to
+  inventory `drafts.*` documents as integrity evidence** (duplicate / dangling / draft-conflicted
+  state). It is never a runtime content source.
+
+**Why this matters:** the pre-existing `sanity/lib/client.ts` sets no `perspective`, and the
+default perspective for this repo's `apiVersion` (`2024-07-23`, i.e. pre-`2025-02-19`) is
+**`raw`** — so unpublished Studio drafts were previously overlaid onto member-facing reads.
+Setting the perspective explicitly is the whole point.
+
+### Canonical ≠ member-visible
+
+Two **different** gates that must never be conflated:
+
+| Gate | Meaning |
+|------|---------|
+| **canonical** | a non-`drafts.*` document from the **published perspective**, regardless of the app's `published` field value |
+| **member-visible** | canonical **and** passing the app-level `published != false` draft gate |
+
+**Canonical counts, duplicate detection, and target grouping never use the app-level gate.**
+Publish state is reported alongside, not folded in. (The app-level gate itself is unchanged —
+see [DATA_MODEL](DATA_MODEL.md#draftpublish-gating).)
+
+### Fail-closed reads
+
+Three pure, I/O-free modules carry the rules, so they are exhaustively unit-testable:
+
+- [`app/utils/serviceReadQueries.ts`](../app/utils/serviceReadQueries.ts) — bound GROQ
+  (`{query, params}`) for the canonical projections and the `drafts.*`-scoped raw inventory.
+- [`app/utils/serviceReadModel.ts`](../app/utils/serviceReadModel.ts) — role validity across the
+  five seat paths, target keys, `setlistContentState` (`empty|incomplete|ready|invalid`, where
+  malformed or dangling is **`invalid`, not `incomplete`**), proposal validation + the dual
+  indexes, `resolveMembers` (dangling-ref detection), `publicTargetState` (`draft_conflict`).
+- [`app/utils/serviceReadSelect.ts`](../app/utils/serviceReadSelect.ts) — selection helpers that
+  refuse to guess: `pickUnique` (a duplicate target yields **nothing**, never an arbitrary `[0]`),
+  `indexUniqueByKey`, `canonicalizePlayHistory`, `serviceDayKey` (a malformed stored date returns
+  `null` and the row is dropped as an integrity issue instead of crashing a date `.slice()`).
+
+### The protected-read audit rule
+
+[`app/utils/protectedReadAudit.ts`](../app/utils/protectedReadAudit.ts) plus its test scan every
+**git-tracked** query site for reads/writes of the six protected types and **fail** on any that
+bypasses the operational client without an exact `file + operation` exemption. Detection covers:
+
+1. quoted type literals (`_type == "sunday_role"`, `_type in [...]`);
+2. generic `_id` / `references()` queries whose **projection consumes protected fields**;
+3. **mutation** operations whose region names a protected type.
+
+There are **no directory or glob exemptions** — every entry names one file and one operation, and
+gitignored local tooling is out of scope (never listed, never asserted to exist).
+
+**A2 writer exclusions (12)** — mutation-local reads/writers A1 deliberately left in place; A2
+removes each entry in the same change that migrates or retires its writer:
+
+| File | Operation |
+|------|-----------|
+| `app/api/admin/roles/[id]/route.ts` | `PATCH` |
+| `app/api/admin/roles/publish/route.ts` | `POST` |
+| `app/api/admin/roles/route.ts` | `POST` |
+| `app/api/admin/setlists/route.ts` | `PUT` |
+| `app/api/admin/proposals/[id]/route.ts` | `module`, `PATCH` |
+| `app/api/me/proposals/route.ts` | `POST` |
+| `scripts/cleanup-superseded-proposals.mjs` | `module` |
+| `scripts/import-schedule.ts` | `module` |
+| `scripts/import-setlist-history.mjs` | `module` |
+| `scripts/migrate-shared-proposals.mjs` | `module` |
+| `scripts/unpublish-july-2026.mjs` | `module` |
+
+**Separately — and never removed by A2** — one defensive **type-rejection guard**:
+`app/api/content/posts/[id]/route.ts` **PATCH**, which reads only `{ _type }` to reject
+overwriting a protected document through the song editor. It lives in its own registry
+(`DEFENSIVE_TYPE_REJECTION_GUARDS`), disjoint from the A2 allowlist; a generic `_id` read that
+projects protected *fields* is not covered by it and still fails the audit.
+
+### Integrity surface
+
+Three read-only admin summaries expose the resulting state —
+`GET /api/admin/service-integrity/roles|setlists|proposals`. The three domains load
+independently, one malformed record never fails a domain, and a read failure is a **500**, never
+an empty "clean" result. → [API_REFERENCE](API_REFERENCE.md#service-integrity-read-only).
+
+---
+
+## 9. Notifications pipeline
 
 Publishing or editing a service, and submitting/approving a proposal, fan out notifications.
 **All notification paths are best-effort** (wrapped in try/catch, log-only) — a failed notify
@@ -239,6 +342,10 @@ flowchart LR
 - **Email:** SMTP preferred (`contacto@oasis.mx`), Resend fallback; gated by `EMAIL_ALLOWLIST`
   (default `"*"` = whole team) and the per-member `notifPrefs.email` opt-out.
 - **Opt-out is permissive by default:** an unset pref means opted-in.
+- **`notifyProposalSubmitted` is fail-closed on identity:** it resolves the service role through
+  the canonical contract (§8) and sends **nothing at all** when that identity is missing,
+  ambiguous (duplicate), structurally invalid, or draft-conflicted — a co-lead fan-out is never
+  read off an untrusted or draft-overlaid role.
 
 See [API_REFERENCE.md](API_REFERENCE.md) for which endpoints fire what, and
 [UTILITIES_AND_COMPONENTS.md](UTILITIES_AND_COMPONENTS.md) for `push.ts`, `assignmentEmail.ts`,
@@ -246,7 +353,7 @@ See [API_REFERENCE.md](API_REFERENCE.md) for which endpoints fire what, and
 
 ---
 
-## 9. Repository map
+## 10. Repository map
 
 ```
 owt-kb-v1/
@@ -262,13 +369,13 @@ owt-kb-v1/
 │  │  ├─ layout.tsx, globals.css, loading.tsx, error.tsx
 │  ├─ (admin)/               # separate route group for embedded Sanity Studio
 │  │  └─ studio/[[...tool]]/ # /studio
-│  ├─ api/                   # 31 route handlers (see API_REFERENCE.md)
+│  ├─ api/                   # 34 route handlers (see API_REFERENCE.md)
 │  ├─ components/            # 41 components (31 top-level + 10 admin panels)
 │  ├─ context/               # PlayerContext (the single global context)
-│  └─ utils/                 # reusable helpers (27 .ts + .mjs/.tsx) + __tests__
+│  └─ utils/                 # reusable helpers (37 .ts/.tsx/.mjs) + __tests__
 ├─ sanity/                   # schema + client setup
 │  ├─ schema.ts, env.ts
-│  ├─ lib/{client,serverClient,image}.ts
+│  ├─ lib/{client,serverClient,operationalClient,image}.ts
 │  └─ schemas/*.ts           # 11 registered types + deprecated/unregistered
 ├─ gcf/                      # Python OR-Tools solver (owt-solver Cloud Function)
 ├─ scripts/                  # one-off migrations, imports, ops (guarded by --apply)
@@ -285,7 +392,7 @@ owt-kb-v1/
 
 ---
 
-## 10. Timezone & dates
+## 11. Timezone & dates
 
 **Timezone is `America/Mexico_City`. This is a correctness invariant, not a preference.**
 
@@ -306,7 +413,7 @@ There is no single "dateUtils" module — the convention is applied inline every
 
 ---
 
-## 11. The load-bearing invariants (do not break)
+## 12. The load-bearing invariants (do not break)
 
 These are the things that look like bugs but aren't, or that silently corrupt data if ignored.
 Condensed here; each is expanded in the linked doc.
@@ -314,31 +421,35 @@ Condensed here; each is expanded in the linked doc.
 1. **`saturdarSongs` is a deliberate misspelling of "Saturday Songs."** GROQ across the app
    filters `_type == "saturdarSongs"`. Renaming it orphans all Saturday setlist data. Sunday's
    setlist type is `featuredSongs`. → [DATA_MODEL](DATA_MODEL.md)
-2. **Timezone = America/Mexico_City; local-noon rendering.** → §10.
+2. **Timezone = America/Mexico_City; local-noon rendering.** → §11.
 3. **Five member-referencing seats.** Use `assignedMemberRefsQuery()`. → §7.
 4. **Member-facing reads filter `published != false`** (missing = grandfathered published;
-   explicit `false` = draft). Setlists gate through `publishedSetlist()`. → [DATA_MODEL](DATA_MODEL.md#draftpublish-gating)
-5. **Sanity array-of-object writes need a unique `_key` per item** (and the right `_type` for
+   explicit `false` = draft). Setlists gate through `publishedSetlist()`. This is the
+   *member-visible* gate — **not** the same as *canonical*. → [DATA_MODEL](DATA_MODEL.md#draftpublish-gating), §8
+5. **The six protected types are read only through `operationalClient`** (published
+   perspective). `rawIntegrityClient` is draft *evidence*, never content. A static audit fails
+   any new bypass without an exact `file + operation` exemption. → §8
+6. **Sanity array-of-object writes need a unique `_key` per item** (and the right `_type` for
    object slots: `setlist_song`, `proposal_song`, `instrument_slot`, `foh_slot`, `contributor`;
    reference-array items use `_type: "reference"`). Note `proposal_song` — proposal songs are
    **not** `setlist_song`.
-6. **Mutating routes must revalidate** their ISR pages. → §5.
-7. **Client mutation handlers** must wrap `fetch` in try/catch/finally, check `res.ok`, reset
+7. **Mutating routes must revalidate** their ISR pages. → §5.
+8. **Client mutation handlers** must wrap `fetch` in try/catch/finally, check `res.ok`, reset
    the loading flag, and never close-as-success on failure. (This is audited — keep it so.)
-8. **Impersonation is super-admin-only, enforced server-side in `auth.ts`'s `jwt` callback.**
+9. **Impersonation is super-admin-only, enforced server-side in `auth.ts`'s `jwt` callback.**
    Never move that check client-side. → [AUTH_AND_SECURITY](AUTH_AND_SECURITY.md#impersonation)
-9. **`proxy.ts` matcher must stay byte-for-byte equal to `MIDDLEWARE_MATCHER`** in
-   `app/utils/routeMatcher.ts` (a test enforces this). Each excluded prefix is anchored with
-   `(?:/|$)` so `/author` isn't mistaken for the public `/auth` route.
-10. **GROQ string interpolation is allowed in exactly two audited places** (the trusted
+10. **`proxy.ts` matcher must stay byte-for-byte equal to `MIDDLEWARE_MATCHER`** in
+    `app/utils/routeMatcher.ts` (a test enforces this). Each excluded prefix is anchored with
+    `(?:/|$)` so `/author` isn't mistaken for the public `/auth` route.
+11. **GROQ string interpolation is allowed in exactly two audited places** (the trusted
     `roleFilter` in `assignedMemberRefsQuery`, and opaque FCM tokens in `push.ts`). Everywhere
     else, use bound `$params`.
-11. **Production Sanity writes require explicit user consent.** Diagnosing ≠ consent. Data
+12. **Production Sanity writes require explicit user consent.** Diagnosing ≠ consent. Data
     scripts dry-run by default and only write with `--apply`. → [DEVELOPMENT](DEVELOPMENT.md#data-scripts)
 
 ---
 
-## 12. Known landmines & deferred work
+## 13. Known landmines & deferred work
 
 Don't rediscover these as "bugs":
 
@@ -353,7 +464,7 @@ Don't rediscover these as "bugs":
 
 ---
 
-## 13. Continuous improvement loop
+## 14. Continuous improvement loop
 
 The repo ships a `/improve` command ([`.claude/commands/improve.md`](../.claude/commands/improve.md))
 designed to run on `/loop /improve`: it performs **one verified improvement per run** with a

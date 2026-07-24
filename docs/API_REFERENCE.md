@@ -1,8 +1,15 @@
 # API Reference — `app/api/`
 
-31 route handlers (`route.ts` files). Most talk to Sanity through `serverClient` (read) /
+34 route handlers (`route.ts` files). Most talk to Sanity through `serverClient` (read) /
 `writeClient` (write). Exceptions: `/api/practice-playlist` uses the CDN `client`, and
 `/api/admin/solve` touches no Sanity at all (it calls the external solver / spawns a subprocess).
+
+**Reads of the six protected service types** (`sunday_role`, `saturday_role`, `special_role`,
+`featuredSongs`, `saturdarSongs`, `setlistProposal`) go through **`operationalClient`**
+(published perspective) — `rawIntegrityClient` (raw) only inventories `drafts.*` as evidence.
+A static audit fails any route that bypasses this without an exact `file + operation` exemption;
+the remaining exemptions are the mutation-local writer reads listed in
+[ARCHITECTURE §8](ARCHITECTURE.md#8-canonical-operational-reads).
 
 ## Authorization primitives
 
@@ -23,7 +30,9 @@ is blocked). Roles: `super-admin` > `admin` > `content-editor` > `member`. Many 
 - `revalidateSongViews()` → `/`, `/posts/[slug]`, `/tag`, `/tag/[slug]`.
 - `sendPush(memberIds, category, payload)` — FCM, category-gated by `notifPrefs`.
 - `sendAssignmentEmails(...)` / `sendAssignmentEmailsBatch(...)` — allowlist + opt-out gated.
-- `notifyProposalSubmitted(...)` — push/email fan-out for proposals.
+- `notifyProposalSubmitted(...)` — push/email fan-out for proposals. **Fail-closed on identity:**
+  it resolves the role through the canonical contract and sends **nothing at all** when that
+  identity is missing, ambiguous (duplicate), structurally invalid, or draft-conflicted.
 
 > **Convention for new mutating routes:** validate → check auth → write → **revalidate the
 > affected ISR pages** → fire best-effort notifications (never let a notify failure fail the
@@ -107,6 +116,26 @@ super-admin-only impersonation and live role/revocation refresh. Full detail in
 | `/api/admin/proposals` | GET | List all `setlistProposal` docs. |
 | `/api/admin/proposals/[id]` | PATCH | `{action: "approve"\|"request_changes"\|"reopen", adminNotes?}`. **approve** claims via `ifRevisionId` (409 on concurrent lead edit), writes the real setlist, **deletes superseded competing proposals**, pushes, `revalidateServiceViews()`. **reopen** only from `approved` (409 else). All push `proposals`. |
 
+### Service integrity (read-only)
+
+Three GET summaries over the canonical read contract. Each calls `requireActiveManager()` and
+then rejects `content-editor` (**admin + super-admin only**, 403) — the same boundary as the
+other service-admin routes, not an access expansion. All three are pure reads: no writes, no
+revalidation, no notifications. Canonical data comes from `operationalClient`, `drafts.*`
+evidence from `rawIntegrityClient`; assembly is the pure builders in
+[`app/utils/serviceReadSummary.ts`](../app/utils/serviceReadSummary.ts).
+
+| Route | Reports |
+|-------|---------|
+| `GET /api/admin/service-integrity/roles` | `targets[]` keyed by canonical target (`<type>:<week>`, or a `special_role` id): `canonicalCount` / `canonicalIds` / `canonicalState`, `publicState` (`draft_conflict` when a `drafts.*` overlay exists), `memberVisibleCount`, `draftIds`, and per-record `{id, rev, type, serviceDate, published, assignedRefs, members, danglingRefs}` — refs collected across **all five seat paths** and resolved against canonical members. `recordIssues[]` carries `invalid_role` (with its validation issue tags) and `draft_only` records. |
+| `GET /api/admin/service-integrity/setlists` | Same target shape for `featuredSongs` / `saturdarSongs` **plus** `special_role` documents that carry `songs`: `contentState` (`empty\|incomplete\|ready\|invalid`; `invalid` for an ambiguous/duplicate target), `songCount`, `songKeys`, `invalidEntries`, `draftIds`, `records[]`, and `recordIssues[]` (`invalid_setlist` / `draft_only`). |
+| `GET /api/admin/service-integrity/proposals` | Per-proposal `records[]` (`status`, `serviceRef`, `targetKey`, `contentState`, `valid`, `issues`, and the resolved `referencedRole`), plus grouping conflicts through **both** indexes — `serviceRefConflicts[]` and `targetKeyConflicts[]` — `recordIssues[]`, and `draftIds[]`. |
+
+**Contract:** the three domains load **independently**; **one malformed record never fails a
+domain** (it becomes a record issue); and a **read failure is a domain error — `500`, never an
+empty "clean" result**. `memberVisibleCount` appears on roles only — setlist documents carry no
+`published` flag (see [DATA_MODEL](DATA_MODEL.md#draftpublish-gating)).
+
 ### Members — mostly **super-admin only**
 | Route | Methods | Auth | Notes |
 |-------|---------|------|-------|
@@ -144,6 +173,10 @@ super-admin-only impersonation and live role/revocation refresh. Full detail in
   Mutating routes that deliberately skip it (none touch a cached public page): member POST,
   member photo, set-password, `me/proposals` POST, `activity/ping`, and self-service
   availability/notif-prefs/password/push-token.
+- **Canonical reads fail closed:** an ambiguous (duplicate) or draft-conflicted service target
+  yields **no** data rather than an arbitrary `[0]` pick — `/api/admin/setlists` GET reports it
+  as a non-editable `targetState`, `/api/song/[id]` and `/api/me/songs` drop it from play
+  history, and `notifyProposalSubmitted` sends nothing.
 - **Push categories:** `assignments`, `setlist`, `proposals`, `reminders` — each gated by
   `notifPrefs` inside `sendPush`.
 - **`app/api/__tests__/proposalTeamNotes.test.ts`** is a test, not a route.
