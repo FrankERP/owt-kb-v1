@@ -72,6 +72,16 @@ export function canonicalMembersByIdsQuery(ids: string[]): BoundQuery {
   };
 }
 
+// Resolve every canonical role sharing one base `_id` (published perspective, so
+// `drafts.*` are excluded). Returned as an array — the caller fails closed unless
+// exactly one groupable role resolves, never selecting an arbitrary `[0]`.
+export function canonicalRoleByIdQuery(id: string): BoundQuery {
+  return {
+    query: `*[_type in $roleTypes && _id == $id] ${ROLE_PROJECTION}`,
+    params: { roleTypes: [...ROLE_TYPES], id },
+  };
+}
+
 // ── Raw-draft inventory (raw perspective, drafts.* only) ─────────────────────
 
 export function rawRoleDraftsQuery(): BoundQuery {
@@ -92,5 +102,15 @@ export function rawProposalDraftsQuery(): BoundQuery {
   return {
     query: `*[_type == "setlistProposal" && ${DRAFTS_ONLY}] ${PROPOSAL_PROJECTION}`,
     params: {},
+  };
+}
+
+// The raw `drafts.` overlay(s) for one role base id, used to detect a
+// draft-conflicted role identity (a published base plus a draft overlay is one
+// canonical target plus a blocking integrity issue — never a live read source).
+export function rawRoleDraftForBaseQuery(baseId: string): BoundQuery {
+  return {
+    query: `*[_type in $roleTypes && ${DRAFTS_ONLY} && _id == $draftId]{ _id }`,
+    params: { roleTypes: [...ROLE_TYPES], draftId: `drafts.${baseId}` },
   };
 }

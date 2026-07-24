@@ -10,7 +10,10 @@
 //                               emails), so it's inert in dev.
 // Every step is best-effort and swallowed: a failed notification must never fail
 // the proposal write that triggered it.
-import { serverClient } from "@/sanity/lib/serverClient";
+import { operationalClient, rawIntegrityClient } from "@/sanity/lib/operationalClient";
+import { canonicalRoleByIdQuery, rawRoleDraftForBaseQuery } from "./serviceReadQueries";
+import { validateRole } from "./serviceReadModel";
+import { canonicalLeadRefs, pickUnique } from "./serviceReadSelect";
 import { sendPush } from "./push";
 import { sendEmail } from "./email";
 import { getAllowlist, isEmailAllowed, wantsEmail, appBaseUrl, escapeHtml } from "./assignmentEmail";
@@ -43,7 +46,7 @@ async function emailAdmins(
 ): Promise<void> {
   if (!adminIds.length) return;
   const allow = getAllowlist();
-  const admins = await serverClient.fetch<{ _id: string; email?: string; emailPref?: boolean | null }[]>(
+  const admins = await operationalClient.fetch<{ _id: string; email?: string; emailPref?: boolean | null }[]>(
     `*[_type == "teamMembers" && _id in $ids]{ _id, email, "emailPref": notifPrefs.email }`,
     { ids: adminIds },
   );
@@ -72,20 +75,35 @@ export async function notifyProposalSubmitted(opts: {
 }): Promise<void> {
   const { leadId, roleId, serviceType, serviceDate } = opts;
   try {
-    const data = await serverClient.fetch<{
+    // Resolve the service role through the canonical (published-perspective)
+    // contract, never `raw`/`[0]`. Fail closed — send NOTHING — when the role
+    // identity is missing, ambiguous, structurally invalid, or draft-conflicted
+    // (a published base plus a `drafts.` overlay), so a notification can never
+    // fan out to co-leads read off an untrusted or overlaid role.
+    const roleQ = canonicalRoleByIdQuery(roleId);
+    const draftQ = rawRoleDraftForBaseQuery(roleId);
+    const [canonicalRoles, rawRoleDrafts] = await Promise.all([
+      operationalClient.fetch<unknown[]>(roleQ.query, roleQ.params),
+      rawIntegrityClient.fetch<unknown[]>(draftQ.query, draftQ.params),
+    ]);
+
+    const role = pickUnique(canonicalRoles); // none/duplicate -> null (fail closed)
+    if (!role) return;
+    if (!validateRole(role).groupable) return; // invalid identity -> fail closed
+    if (Array.isArray(rawRoleDrafts) && rawRoleDrafts.length > 0) return; // draft conflict
+
+    const data = await operationalClient.fetch<{
       admins: string[] | null;
-      coLeads: string[] | null;
       lead: { alias?: string; member_name?: string } | null;
     }>(
       `{
         "admins": *[_type == "teamMembers" && role in ["super-admin","admin"]]._id,
-        "coLeads": *[_id == $roleId][0].Lead[]._ref,
-        "lead": *[_id == $leadId][0]{ alias, member_name }
+        "lead": *[_type == "teamMembers" && _id == $leadId][0]{ alias, member_name }
       }`,
-      { roleId, leadId },
+      { leadId },
     );
     const admins = data.admins ?? [];
-    const coLeads = (data.coLeads ?? []).filter((id) => id && id !== leadId);
+    const coLeads = canonicalLeadRefs(role).filter((id) => id && id !== leadId);
     const leadName = data.lead?.alias || data.lead?.member_name || "Un líder";
 
     // 1) Admins — push

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { serverClient } from "@/sanity/lib/serverClient";
+import { operationalClient } from "@/sanity/lib/operationalClient";
 import { sendPush } from "@/app/utils/push";
 import { tomorrowDateStr, assignedMemberRefsQuery } from "@/app/utils/notifyTargets";
 
@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
 
   const day = tomorrowDateStr("America/Mexico_City");
   const roleFilter = `_type in ["sunday_role","saturday_role","special_role"] && (week == $day || date == $day) && published != false`;
-  const assigned = await serverClient.fetch<string[]>(
+  const assigned = await operationalClient.fetch<string[]>(
     assignedMemberRefsQuery(roleFilter),
     { day }
   );

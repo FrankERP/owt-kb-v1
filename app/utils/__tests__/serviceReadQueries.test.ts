@@ -5,9 +5,11 @@ import {
   ROLE_PROJECTION,
   canonicalMembersByIdsQuery,
   canonicalProposalsQuery,
+  canonicalRoleByIdQuery,
   canonicalRolesQuery,
   canonicalSetlistsQuery,
   rawProposalDraftsQuery,
+  rawRoleDraftForBaseQuery,
   rawRoleDraftsQuery,
   rawSetlistDraftsQuery,
 } from "@/app/utils/serviceReadQueries";
@@ -47,6 +49,22 @@ describe("canonical query builders", () => {
     expect(canonicalProposalsQuery().query).toContain('_type == "setlistProposal"');
   });
 
+  it("role-by-id binds the id and role types, returns an array (no [0])", () => {
+    const q = canonicalRoleByIdQuery("role-9");
+    expect(q.params.id).toBe("role-9");
+    expect(q.params.roleTypes).toEqual([...ROLE_TYPES]);
+    expect(q.query).toContain("$id");
+    expect(q.query).toContain("$roleTypes");
+    expect(q.query).not.toContain("[0]");
+  });
+
+  it("raw role draft-for-base binds the drafts. overlay id", () => {
+    const q = rawRoleDraftForBaseQuery("role-9");
+    expect(q.params.draftId).toBe("drafts.role-9");
+    expect(q.query).toContain('path("drafts.**")');
+    expect(q.query).toContain("$draftId");
+  });
+
   it("members-by-ids binds the id list as a parameter", () => {
     const q = canonicalMembersByIdsQuery(["m1", "m2"]);
     expect(q.params.ids).toEqual(["m1", "m2"]);
@@ -60,7 +78,9 @@ describe("canonical query builders", () => {
       canonicalSetlistsQuery(),
       canonicalProposalsQuery(),
       canonicalMembersByIdsQuery(["x"]),
+      canonicalRoleByIdQuery("x"),
       rawRoleDraftsQuery(),
+      rawRoleDraftForBaseQuery("x"),
       rawSetlistDraftsQuery(),
       rawProposalDraftsQuery(),
     ];

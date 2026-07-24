@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { client } from "@/sanity/lib/client";
+import { operationalClient } from "@/sanity/lib/operationalClient";
 import Navbar from "@/app/components/Navbar";
 import CalendarView, { ActiveDay } from "@/app/components/CalendarView";
 import { SundayRole, SaturdayRole, Setlist, SpecialRole, SetlistSong } from "@/app/utils/interface";
 import { parseMonthParam, monthRangeLabel, windowBounds, WINDOW_MONTHS } from "@/app/utils/scheduleMonths";
+import { indexUniqueByKey, serviceDayKey } from "@/app/utils/serviceReadSelect";
 
 export const metadata: Metadata = {
   title: "Calendario — Oasis Worship Team",
@@ -71,7 +72,10 @@ async function getScheduleData(viewMonth: string | null) {
     weekStart = new Date(Date.UTC(y, m - 1, d + daysToMon)).toISOString().slice(0, 10);
   }
 
-  return client.fetch<{
+  // Canonical (published-perspective) client: a `drafts.*` overlay is never a
+  // live calendar entry. Application draft gating (`published != false`) stays in
+  // the role filters above — it is a separate, member-visibility concern.
+  return operationalClient.fetch<{
     sundays: SundayRole[];
     saturdays: SaturdayRole[];
     sunSetlists: Setlist[];
@@ -90,8 +94,14 @@ export default async function SchedulePage({
   const viewMonth = parseMonthParam((await searchParams).m);
   const { sundays, saturdays, sunSetlists, satSetlists, specials } = await getScheduleData(viewMonth);
 
-  const sunSetlistMap = new Map(sunSetlists.map((s) => [s.week.slice(0, 10), s]));
-  const satSetlistMap = new Map(satSetlists.map((s) => [s.week.slice(0, 10), s]));
+  // Fail closed on an ambiguous weekend target. A duplicate canonical role or
+  // setlist for the same week yields NO entry for that week rather than a
+  // last-write-wins pick, and a malformed/missing date drops the record instead
+  // of crashing `.slice()` or the calendar's date math.
+  const sunSetlistMap = indexUniqueByKey(sunSetlists, (s) => serviceDayKey(s.week));
+  const satSetlistMap = indexUniqueByKey(satSetlists, (s) => serviceDayKey(s.week));
+  const sundayMap = indexUniqueByKey(sundays, (r) => serviceDayKey(r.week));
+  const saturdayMap = indexUniqueByKey(saturdays, (r) => serviceDayKey(r.week));
 
   const activeDays: Record<string, ActiveDay[]> = {};
 
@@ -99,11 +109,10 @@ export default async function SchedulePage({
     activeDays[dateStr] = [...(activeDays[dateStr] ?? []), entry];
   };
 
-  sundays.forEach((sun) => {
-    const dateStr = sun.week.slice(0, 10);
+  sundayMap.forEach((sun, dateStr) => {
     push(dateStr, {
       day: "Domingo",
-      date: sun.week,
+      date: dateStr,
       leads: sun.Lead?.map((m) => m.alias || m.member_name) ?? [],
       setlist: sunSetlistMap.get(dateStr),
       instruments: sun.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
@@ -113,11 +122,10 @@ export default async function SchedulePage({
     });
   });
 
-  saturdays.forEach((sat) => {
-    const dateStr = sat.week.slice(0, 10);
+  saturdayMap.forEach((sat, dateStr) => {
     push(dateStr, {
       day: "Sábado",
-      date: sat.week,
+      date: dateStr,
       leads: sat.Lead?.map((m) => m.alias || m.member_name) ?? [],
       setlist: satSetlistMap.get(dateStr),
       instruments: sat.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
@@ -127,14 +135,17 @@ export default async function SchedulePage({
     });
   });
 
-  specials.forEach((sp) => {
-    const dateStr = sp.date.slice(0, 10);
+  // A special service is its own target (keyed by role id), so two specials may
+  // legitimately share a date; only a malformed date drops the record.
+  (Array.isArray(specials) ? specials : []).forEach((sp) => {
+    const dateStr = serviceDayKey(sp.date);
+    if (!dateStr) return;
     const setlist = sp.songs?.length
-      ? ({ songs: sp.songs as SetlistSong[], week: sp.date, team_notes: sp.team_notes } satisfies Setlist)
+      ? ({ songs: sp.songs as SetlistSong[], week: dateStr, team_notes: sp.team_notes } satisfies Setlist)
       : undefined;
     push(dateStr, {
       day: sp.service_name || "Servicio Especial",
-      date: sp.date,
+      date: dateStr,
       roleId: sp._id,
       leads: sp.Lead?.map((m) => m.alias || m.member_name) ?? [],
       setlist,

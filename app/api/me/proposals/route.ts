@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
+import { operationalClient } from "@/sanity/lib/operationalClient";
 import { notifyProposalSubmitted } from "@/app/utils/proposalNotify";
 import { mergeContributor, type StoredContributor } from "@/app/utils/proposalContributors";
 
@@ -21,7 +22,9 @@ export async function GET() {
   const session = await requireActiveSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const proposals = await serverClient.fetch(
+  // GET reads through the canonical (published-perspective) client so a
+  // `drafts.*` proposal/role overlay can never surface in a member's list.
+  const proposals = await operationalClient.fetch(
     `*[_type == "setlistProposal" && $id in service_ref->Lead[]._ref] | order(service_date asc) {
       _id, service_type, service_date, status, lead_notes, team_notes, admin_notes, submitted_at, reviewed_at,
       "service_ref": service_ref._ref

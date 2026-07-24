@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
+import { operationalClient } from "@/sanity/lib/operationalClient";
 import { revalidateServiceViews } from "@/app/utils/revalidate";
 import { setlistRecipientIds, assignedMemberRefsQuery } from "@/app/utils/notifyTargets";
 import { sendPush } from "@/app/utils/push";
@@ -47,7 +48,7 @@ export async function GET(req: NextRequest) {
 
   // Build recentSongs map (past 8 weeks, both sunday and saturday setlists)
   const cutoff = nWeeksAgo(8);
-  const recentRaw = await serverClient.fetch(
+  const recentRaw = await operationalClient.fetch(
     `{
       "sunday":   *[_type == "featuredSongs"  && week >= $cutoff] { week, ${SETLIST_SONGS_PROJECTION} },
       "saturday": *[_type == "saturdarSongs"  && week >= $cutoff] { week, ${SETLIST_SONGS_PROJECTION} },
@@ -73,21 +74,21 @@ export async function GET(req: NextRequest) {
   let songs: unknown[] = [];
 
   if (type === "sunday" && week) {
-    const doc = await serverClient.fetch(
+    const doc = await operationalClient.fetch(
       `*[_type == "featuredSongs" && week == $week][0] { _id, ${SETLIST_SONGS_PROJECTION} }`,
       { week }
     );
     setlistId = doc?._id ?? null;
     songs     = doc?.songs ?? [];
   } else if (type === "saturday" && week) {
-    const doc = await serverClient.fetch(
+    const doc = await operationalClient.fetch(
       `*[_type == "saturdarSongs" && week == $week][0] { _id, ${SETLIST_SONGS_PROJECTION} }`,
       { week }
     );
     setlistId = doc?._id ?? null;
     songs     = doc?.songs ?? [];
   } else if (type === "special" && roleId) {
-    const doc = await serverClient.fetch(
+    const doc = await operationalClient.fetch(
       `*[_type == "special_role" && _id == $id][0] { _id, ${SETLIST_SONGS_PROJECTION} }`,
       { id: roleId }
     );
