@@ -175,6 +175,143 @@ export function setlistContentState(
   return hasBlankPlayKey ? "incomplete" : "ready";
 }
 
+// ── Proposal validation and grouping ────────────────────────────────────────
+
+export const PROPOSAL_STATUSES = [
+  "draft",
+  "pending",
+  "changes_requested",
+  "approved",
+] as const;
+
+export const SERVICE_KINDS = ["sunday", "saturday", "special"] as const;
+
+export interface ProposalValidation {
+  /** True only when the proposal groups cleanly (fields + resolved-role agreement). */
+  valid: boolean;
+  /** Issue tags: identity | service_type | service_ref | date | status | role_unresolved | role_not_groupable | role_type_mismatch | date_mismatch. */
+  issues: string[];
+  serviceRef: string | null;
+  targetKey: string | null;
+  /** Content state, validated independently of grouping validity. */
+  contentState: SetlistContentState;
+  createdAt: string | null;
+  status: string | null;
+}
+
+/**
+ * Validate a proposal for grouping. `canonicalRole` is the role resolved from
+ * `service_ref` through the canonical client (or null when it does not resolve
+ * to a live published role). Content validity is reported separately and does
+ * not gate grouping validity.
+ */
+export function validateProposal(
+  proposal: unknown,
+  canonicalRole: unknown | null,
+): ProposalValidation {
+  const issues: string[] = [];
+  const doc = isObj(proposal) ? proposal : {};
+
+  if (!nonEmptyString(doc._id) || !nonEmptyString(doc._rev)) issues.push("identity");
+
+  const serviceType = doc.service_type;
+  const typeKnown = (SERVICE_KINDS as readonly unknown[]).includes(serviceType);
+  if (!typeKnown) issues.push("service_type");
+
+  const serviceRef = nonEmptyString(doc.service_ref) ? doc.service_ref : null;
+  if (!serviceRef) issues.push("service_ref");
+
+  const serviceDate = isValidServiceDate(doc.service_date) ? doc.service_date : null;
+  if (!serviceDate) issues.push("date");
+
+  if (!(PROPOSAL_STATUSES as readonly unknown[]).includes(doc.status)) issues.push("status");
+
+  if (canonicalRole == null) {
+    issues.push("role_unresolved");
+  } else {
+    const rv = validateRole(canonicalRole);
+    if (!rv.groupable) {
+      issues.push("role_not_groupable");
+    } else {
+      const roleType = (canonicalRole as Record<string, unknown>)._type;
+      const expected =
+        serviceType === "sunday"
+          ? "sunday_role"
+          : serviceType === "saturday"
+            ? "saturday_role"
+            : serviceType === "special"
+              ? "special_role"
+              : null;
+      if (expected && roleType !== expected) issues.push("role_type_mismatch");
+      if (serviceDate && rv.serviceDate && serviceDate !== rv.serviceDate) issues.push("date_mismatch");
+    }
+  }
+
+  const targetKey =
+    typeKnown && serviceDate && serviceRef
+      ? proposalTargetKey(serviceType as string, serviceDate, serviceRef)
+      : null;
+
+  return {
+    valid: issues.length === 0,
+    issues,
+    serviceRef,
+    targetKey,
+    contentState: setlistContentState(doc.songs),
+    createdAt: nonEmptyString(doc._createdAt) ? doc._createdAt : null,
+    status: typeof doc.status === "string" ? doc.status : null,
+  };
+}
+
+const PROPOSAL_STATUS_ORDER: Record<string, number> = {
+  pending: 0,
+  changes_requested: 1,
+  draft: 2,
+  approved: 3,
+};
+
+/**
+ * Deterministic display order when a grouping still needs one presentable
+ * record: pending, changes_requested, draft, approved, then oldest `_createdAt`.
+ * Never a substitute for validated grouping.
+ */
+export function orderProposals<T extends { status: string | null; createdAt: string | null }>(
+  list: T[],
+): T[] {
+  return [...list].sort((a, b) => {
+    const sa = PROPOSAL_STATUS_ORDER[a.status ?? ""] ?? 99;
+    const sb = PROPOSAL_STATUS_ORDER[b.status ?? ""] ?? 99;
+    if (sa !== sb) return sa - sb;
+    const ca = a.createdAt ?? "";
+    const cb = b.createdAt ?? "";
+    return ca < cb ? -1 : ca > cb ? 1 : 0;
+  });
+}
+
+export interface ProposalIndexes {
+  byServiceRef: Map<string, ProposalValidation[]>;
+  byTargetKey: Map<string, ProposalValidation[]>;
+}
+
+/**
+ * Build both proposal indexes from validated records. Only valid proposals are
+ * candidates; invalid/dangling/mismatched records are issues, never index
+ * entries. A key mapping to more than one record is a grouping conflict.
+ */
+export function indexProposals(validated: ProposalValidation[]): ProposalIndexes {
+  const byServiceRef = new Map<string, ProposalValidation[]>();
+  const byTargetKey = new Map<string, ProposalValidation[]>();
+  for (const p of validated) {
+    if (!p.valid || !p.serviceRef || !p.targetKey) continue;
+    (byServiceRef.get(p.serviceRef) ?? byServiceRef.set(p.serviceRef, []).get(p.serviceRef)!).push(p);
+    (byTargetKey.get(p.targetKey) ?? byTargetKey.set(p.targetKey, []).get(p.targetKey)!).push(p);
+  }
+  for (const m of [byServiceRef, byTargetKey]) {
+    for (const [k, v] of m) m.set(k, orderProposals(v));
+  }
+  return { byServiceRef, byTargetKey };
+}
+
 export interface RoleValidation {
   /** True only when the role is structurally clean and can enter target grouping. */
   groupable: boolean;
