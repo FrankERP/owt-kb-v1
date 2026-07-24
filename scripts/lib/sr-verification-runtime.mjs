@@ -19,6 +19,7 @@ import {
   backupFileName,
   buildBackupEnvelope,
   buildLeaseDocument,
+  leaseReplaceFields,
   buildMarkerDocument,
   evaluateLeaseClaim,
   evaluateLeaseOwnership,
@@ -189,10 +190,12 @@ export class DatasetLease {
       // `create` is the atomic acquire: a concurrent winner makes this throw.
       await this.client.create(doc);
     } else {
-      const { _id, ...fields } = doc;
+      // Replacing an expired lease in place. `_type` is immutable per document
+      // id, so it is never sent — the claim stays revision-guarded via
+      // `ifRevisionId`, and ownership is decided by `owner`/expiry, not `_type`.
       await this.client
         .transaction()
-        .patch(_id, (p) => p.ifRevisionId(decision.requiredRev).set(fields))
+        .patch(LEASE_DOC_ID, (p) => p.ifRevisionId(decision.requiredRev).set(leaseReplaceFields(doc)))
         .commit();
     }
 
