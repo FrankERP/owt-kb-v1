@@ -36,10 +36,10 @@ Approval of one plan does not approve another. Any edit resets only the affected
 ## Current status
 
 - The product decision remains confirmed: routine service date changes/deletions are blocked when setlist or proposal dependencies exist; resolution requires an explicit guarded cleanup/migration workflow.
-- A1: cold-approved `2/2` on SHA-256 `307edd8f1cb1de9d478fa8db7fe2604484de0164687c2627e75186761687e608`.
-- A2: cold-approved `2/2` on SHA-256 `5c6330100d0d304a22dcdc93d1ba99ffe0d80d4d2cce021d277f087c6ec8d7d7`.
+- A1: previously cold-approved `2/2` on SHA-256 `307edd8f1cb1de9d478fa8db7fe2604484de0164687c2627e75186761687e608`; **amended 2026-07-24** (dropped the gitignored `scripts/sa-roster.mjs` allowlist entry + scoped the read-audit to git-tracked sites; classified the `posts/[id]` defensive type-rejection guard). Prior streak reset; implementing against the amended text.
+- A2: previously cold-approved `2/2` on SHA-256 `5c6330100d0d304a22dcdc93d1ba99ffe0d80d4d2cce021d277f087c6ec8d7d7`; **amended 2026-07-24** (removed `scripts/sa-roster.mjs` from the executable-writer list, mirroring the A1 change). Prior streak reset.
 - A3: cold-approved `2/2` on SHA-256 `ebce154b1b625bb98af5af932013f6769f8bc3d1d4a4abadf0af18328ec5b301`.
 - Plan B: cold-approved `2/2` on SHA-256 `dec718ca1becb7db5d59d926e3887b42f4b81b487b341a3600d5dbf4a1141fbc`.
-- Implementation: not started.
+- Implementation: A1 in progress on branch `service-readiness` (off `main`). Codex's parallel effort is retired; its implementation remains only as reference on `codex/service-readiness-a2-foundation`.
 
 Any byte change to an approved plan invalidates only that plan's recorded streak unless the change alters a cross-plan contract.
