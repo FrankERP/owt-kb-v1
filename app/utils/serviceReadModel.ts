@@ -135,6 +135,46 @@ function validateSeat(arr: unknown, kind: SeatKind, outRefs: string[]): boolean 
   return true;
 }
 
+// ── Setlist grouping and content state ──────────────────────────────────────
+
+export type CanonicalGroupState = "none" | "single" | "duplicate" | "invalid";
+
+/** Canonical target cardinality: 0 -> none, 1 -> single, >1 -> duplicate. */
+export function canonicalGroupState(canonicalCount: number): CanonicalGroupState {
+  if (canonicalCount <= 0) return "none";
+  if (canonicalCount === 1) return "single";
+  return "duplicate";
+}
+
+export type SetlistContentState = "empty" | "incomplete" | "ready" | "invalid";
+
+/**
+ * Content state of a single canonical setlist's `songs` array. Malformed
+ * structure, missing/duplicate `_key`, or a missing/dangling song reference is
+ * `invalid` — never ordinary `incomplete`. `resolvesSong` reports whether a
+ * referenced song id resolves to a canonical post (defaults to trusting the
+ * ref, for callers that validate resolution separately).
+ */
+export function setlistContentState(
+  songs: unknown,
+  resolvesSong: (songId: string) => boolean = () => true,
+): SetlistContentState {
+  if (!Array.isArray(songs)) return "invalid";
+  if (songs.length === 0) return "empty";
+
+  const keys = new Set<string>();
+  let hasBlankPlayKey = false;
+  for (const item of songs) {
+    if (!isObj(item)) return "invalid";
+    if (!nonEmptyString(item._key) || keys.has(item._key)) return "invalid";
+    keys.add(item._key);
+    const song = item.song;
+    if (!isObj(song) || !nonEmptyString(song._ref) || !resolvesSong(song._ref)) return "invalid";
+    if (!nonEmptyString(item.play_key)) hasBlankPlayKey = true;
+  }
+  return hasBlankPlayKey ? "incomplete" : "ready";
+}
+
 export interface RoleValidation {
   /** True only when the role is structurally clean and can enter target grouping. */
   groupable: boolean;
