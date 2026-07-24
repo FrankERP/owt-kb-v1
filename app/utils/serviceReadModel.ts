@@ -175,6 +175,60 @@ export function setlistContentState(
   return hasBlankPlayKey ? "incomplete" : "ready";
 }
 
+// ── Member resolution and raw-draft identity ────────────────────────────────
+
+/** The canonical member projection shared by assignment/availability resolution. */
+export interface CanonicalMember {
+  _id: string;
+  _rev: string;
+  member_name?: string;
+  alias?: string;
+  unavailableDates?: string[];
+  unavailabilityNotes?: string;
+}
+
+/**
+ * Map a raw document id to its canonical identity by stripping a single
+ * `drafts.` prefix, so an overlay is associated with its published base before
+ * any target grouping. A non-draft id is returned unchanged.
+ */
+export function normalizeBaseId(id: string): string {
+  return id.startsWith("drafts.") ? id.slice("drafts.".length) : id;
+}
+
+/**
+ * Resolve assignment refs against canonical members. Unique refs with no
+ * canonical member are `dangling` — never dropped and never treated as empty.
+ */
+export function resolveMembers(
+  refs: string[],
+  membersById: Map<string, CanonicalMember>,
+): { members: CanonicalMember[]; danglingRefs: string[] } {
+  const members: CanonicalMember[] = [];
+  const danglingRefs: string[] = [];
+  const seen = new Set<string>();
+  for (const ref of refs) {
+    if (!ref || seen.has(ref)) continue;
+    seen.add(ref);
+    const member = membersById.get(ref);
+    if (member) members.push(member);
+    else danglingRefs.push(ref);
+  }
+  return { members, danglingRefs };
+}
+
+/**
+ * Public/admin target state: `draft_conflict` whenever any relevant raw draft
+ * exists for the target; otherwise it mirrors the canonical state. Application
+ * draft gating is never used here.
+ */
+export function publicTargetState(
+  canonicalState: CanonicalGroupState,
+  draftIds: string[],
+): CanonicalGroupState | "draft_conflict" {
+  return draftIds.length > 0 ? "draft_conflict" : canonicalState;
+}
+
 // ── Proposal validation and grouping ────────────────────────────────────────
 
 export const PROPOSAL_STATUSES = [
