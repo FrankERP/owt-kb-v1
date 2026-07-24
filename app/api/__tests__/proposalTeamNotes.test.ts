@@ -1,6 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
+// The routes under test now pull in the canonical read client, which is
+// `import "server-only"` guarded; neutralize the marker and stub the client so
+// this POST/PATCH-focused suite keeps exercising the writer paths only.
+vi.mock("server-only", () => ({}));
+const operationalFetchMock = vi.fn();
+vi.mock("@/sanity/lib/operationalClient", () => ({
+  operationalClient: { fetch: (...args: unknown[]) => operationalFetchMock(...args) },
+  rawIntegrityClient: { fetch: vi.fn() },
+}));
+
 const requireActiveSessionMock = vi.fn();
 const requireActiveManagerMock = vi.fn();
 vi.mock("@/app/utils/authGuards", () => ({

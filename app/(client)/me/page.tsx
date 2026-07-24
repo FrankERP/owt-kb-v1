@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { redirect } from "next/navigation";
-import { client } from "@/sanity/lib/client";
 import { serverClient } from "@/sanity/lib/serverClient";
+import { operationalClient } from "@/sanity/lib/operationalClient";
 import Navbar from "@/app/components/Navbar";
 import { DayCard } from "@/app/components/DayCard";
 import NextServiceHero from "@/app/components/NextServiceHero";
@@ -13,6 +13,8 @@ import AvailabilityCalendar from "@/app/components/AvailabilityCalendar";
 import AddToCalendarButton from "@/app/components/AddToCalendarButton";
 import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
 import { describeContributors } from "@/app/utils/proposalContributors";
+import { pickUnique, serviceDayKey } from "@/app/utils/serviceReadSelect";
+import { orderProposals } from "@/app/utils/serviceReadModel";
 
 export const metadata: Metadata = {
   title: "Mi perfil — Oasis Worship Team",
@@ -68,8 +70,14 @@ export default async function MePage() {
   const calendarLimit = new Date(Date.now() + 365 * 86400 * 1000)
     .toLocaleDateString("sv", { timeZone: TZ });
 
+  // All three reads below touch protected service types, so they go through the
+  // canonical (published-perspective) client — a `drafts.*` overlay is never a
+  // member's assignment, proposal, or calendar date. The member's OWN profile
+  // read above stays on `serverClient`: it needs the read token and `teamMembers`
+  // is not a protected service type. Weekend setlists are fetched as arrays and
+  // collapsed with `pickUnique` below, never `[0]`.
   const [data, proposals, serviceDates] = await Promise.all([
-    client.fetch(
+    operationalClient.fetch(
       `{
         "sundays": *[_type == "sunday_role" && week >= $today && week <= $limit && published != false && ${memberFilter}] | order(week asc) {
           _id, week,
@@ -83,7 +91,7 @@ export default async function MePage() {
           foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
           BGVs[]-> { member_name, alias },
           Chorus[]-> { member_name, alias },
-          "setlist": *[_type == "featuredSongs" && week == ^.week][0] {
+          "setlistCandidates": *[_type == "featuredSongs" && week == ^.week] {
             songs[] {
               play_key,
               medley_tag,
@@ -106,7 +114,7 @@ export default async function MePage() {
           foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
           BGVs[]-> { member_name, alias },
           Chorus[]-> { member_name, alias },
-          "setlist": *[_type == "saturdarSongs" && week == ^.week][0] {
+          "setlistCandidates": *[_type == "saturdarSongs" && week == ^.week] {
             songs[] {
               play_key,
               medley_tag,
@@ -139,19 +147,21 @@ export default async function MePage() {
       }`,
       { today, limit, id: sanityId }
     ),
-    serverClient.fetch(
+    operationalClient.fetch(
       // One shared proposal per service I lead. Contributors drive the "compartida
       // · con Ana" hint so a lead sees, where they already look, that a co-lead is
-      // in the shared setlist too.
+      // in the shared setlist too. `_createdAt` is projected so a stray duplicate
+      // resolves deterministically (see `proposalMap` below) instead of by
+      // whichever row happened to arrive last.
       `*[_type == "setlistProposal" && service_date >= $today &&
          $id in service_ref->Lead[]._ref] {
-        _id, status, admin_notes,
+        _id, _createdAt, status, admin_notes,
         "service_ref": service_ref._ref,
         "contributors": contributors[]{ "id": person->_id, "name": coalesce(person->alias, person->member_name) }
       }`,
       { id: sanityId, today }
     ),
-    client.fetch<string[]>(
+    operationalClient.fetch<string[]>(
       `[
         ...*[_type == "sunday_role"   && week >= $today && week <= $limit && published != false].week,
         ...*[_type == "saturday_role" && week >= $today && week <= $limit && published != false].week,
@@ -162,16 +172,31 @@ export default async function MePage() {
   ]);
 
   // One shared proposal per service, keyed by service_ref (= role doc _id). No
-  // author filter — the shared doc may have been created by any co-lead.
-  const rawProposals = proposals as Array<{
-    _id: string; status: ProposalStatus; admin_notes?: string;
+  // author filter — the shared doc may have been created by any co-lead. If a
+  // stray duplicate ever exists for one service, resolve it by the canonical
+  // display order (pending, changes_requested, draft, approved, then oldest
+  // `_createdAt`) instead of last-write-wins, so the CTA a lead sees is stable
+  // across renders.
+  const rawProposals = (Array.isArray(proposals) ? proposals : []) as Array<{
+    _id: string; _createdAt?: string; status: ProposalStatus; admin_notes?: string;
     service_ref: string; contributors?: Array<{ id: string; name: string }>;
   }>;
-  const proposalMap = new Map<string, { _id: string; status: ProposalStatus; admin_notes?: string; hint: string }>();
+  const proposalsByService = new Map<string, typeof rawProposals>();
   for (const p of rawProposals) {
-    proposalMap.set(p.service_ref, {
-      _id: p._id, status: p.status, admin_notes: p.admin_notes,
-      hint: describeContributors(p.contributors, sanityId),
+    if (!p?.service_ref) continue;
+    const list = proposalsByService.get(p.service_ref);
+    if (list) list.push(p);
+    else proposalsByService.set(p.service_ref, [p]);
+  }
+  const proposalMap = new Map<string, { _id: string; status: ProposalStatus; admin_notes?: string; hint: string }>();
+  for (const [serviceRef, list] of proposalsByService) {
+    const [winner] = orderProposals(
+      list.map((p) => ({ ...p, createdAt: p._createdAt ?? null })),
+    );
+    if (!winner) continue;
+    proposalMap.set(serviceRef, {
+      _id: winner._id, status: winner.status, admin_notes: winner.admin_notes,
+      hint: describeContributors(winner.contributors, sanityId),
     });
   }
 
@@ -191,15 +216,40 @@ export default async function MePage() {
     BGVs?: Array<{ member_name: string; alias?: string }>;
     Chorus?: Array<{ member_name: string; alias?: string }>;
     setlist?: Setlist;
+    setlistCandidates?: Setlist[];
     songs?: SetlistSong[];
     team_notes?: string;
   };
 
+  // Fail closed on an ambiguous weekend setlist target: a duplicate canonical
+  // `featuredSongs`/`saturdarSongs` for the same week yields no setlist on the
+  // card rather than an arbitrary `[0]`.
+  const withSetlist = (d: RoleDoc): RoleDoc => ({
+    ...d,
+    setlist: pickUnique(d.setlistCandidates) ?? undefined,
+  });
+
+  // A malformed/missing service date can neither be sorted nor rendered, so the
+  // record is dropped here instead of throwing on `localeCompare` or date math.
+  const asAssignment = (dateValue: unknown, day: string, doc: RoleDoc) => {
+    const dateKey = serviceDayKey(dateValue);
+    return dateKey ? { dateKey, day, doc } : null;
+  };
+
+  const roleDocs = (v: unknown): RoleDoc[] => (Array.isArray(v) ? (v as RoleDoc[]) : []);
+
   const allAssignments: Array<{ dateKey: string; day: string; doc: RoleDoc }> = [
-    ...data.sundays.map((d: RoleDoc) => ({ dateKey: d.week!, day: "Domingo", doc: d })),
-    ...data.saturdays.map((d: RoleDoc) => ({ dateKey: d.week!, day: "Sábado", doc: d })),
-    ...data.specials.map((d: RoleDoc) => ({ dateKey: d.date!, day: d.service_name || "Servicio Especial", doc: d })),
-  ].sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+    ...roleDocs(data?.sundays).map((d) => asAssignment(d.week, "Domingo", withSetlist(d))),
+    ...roleDocs(data?.saturdays).map((d) => asAssignment(d.week, "Sábado", withSetlist(d))),
+    ...roleDocs(data?.specials).map((d) => asAssignment(d.date, d.service_name || "Servicio Especial", d)),
+  ]
+    .filter((a): a is { dateKey: string; day: string; doc: RoleDoc } => a !== null)
+    .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+
+  // Only well-formed calendar days reach the availability calendar's date math.
+  const calendarServiceDates = (Array.isArray(serviceDates) ? serviceDates : [])
+    .map((d) => serviceDayKey(d))
+    .filter((d): d is string => d !== null);
 
   const navbarTitle = member?.alias?.trim() || "Mi perfil";
 
@@ -317,13 +367,13 @@ export default async function MePage() {
 
               {/* Hero: next assignment */}
               {(() => {
-                const { day, doc } = allAssignments[0];
-                const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: doc.date ?? "", team_notes: doc.team_notes } : undefined);
+                const { day, doc, dateKey } = allAssignments[0];
+                const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: dateKey, team_notes: doc.team_notes } : undefined);
                 return (
                   <div>
                     <NextServiceHero
                       day={day}
-                      date={doc.week ?? doc.date}
+                      date={dateKey}
                       roleId={day !== "Domingo" && day !== "Sábado" ? doc._id : undefined}
                       setlist={setlist}
                       leads={doc.Lead?.map((m) => m.alias || m.member_name)}
@@ -344,13 +394,13 @@ export default async function MePage() {
                     Próximos servicios
                   </h2>
                   <div className="space-y-6">
-                    {allAssignments.slice(1).map(({ day, doc }) => {
-                      const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: doc.date ?? "", team_notes: doc.team_notes } : undefined);
+                    {allAssignments.slice(1).map(({ day, doc, dateKey }) => {
+                      const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: dateKey, team_notes: doc.team_notes } : undefined);
                       return (
                         <div key={doc._id}>
                           <DayCard
                             day={day}
-                            date={doc.week ?? doc.date}
+                            date={dateKey}
                             roleId={day !== "Domingo" && day !== "Sábado" ? doc._id : undefined}
                             setlist={setlist}
                             leads={doc.Lead?.map((m) => m.alias || m.member_name)}
@@ -375,7 +425,7 @@ export default async function MePage() {
           <AvailabilityCalendar
             initialDates={member.unavailableDates ?? []}
             initialNotes={member.unavailabilityNotes ?? []}
-            serviceDates={serviceDates ?? []}
+            serviceDates={calendarServiceDates}
           />
         )}
 

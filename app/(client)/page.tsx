@@ -1,9 +1,11 @@
 import { client } from "@/sanity/lib/client";
+import { operationalClient } from "@/sanity/lib/operationalClient";
 import { Setlist, SetlistSong, SpecialRole } from "../utils/interface";
 import Navbar from "../components/Navbar";
 import SongSearchList from "../components/SongSearchList";
 import { DayCard } from "../components/DayCard";
 import { publishedSetlist } from "../utils/draftGating";
+import { pickUnique } from "../utils/serviceReadSelect";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -47,12 +49,16 @@ const ROLE_FIELDS = `week,
   BGVs[]->{ member_name, alias },
   Chorus[]->{ member_name, alias }`;
 
-// One combined GROQ fetch for all weekend data — GROQ params prevent query cache misses
+// One combined GROQ fetch for all weekend data — GROQ params prevent query cache
+// misses. Weekend single-target keys return arrays (no `[0]`); the page picks a
+// unique canonical target in JS and fails closed on an ambiguous duplicate,
+// rather than leaking an arbitrary `[0]`. Read through the published perspective
+// so `drafts.*` overlays never surface to members.
 const WEEKEND_QUERY = `{
-  "sunSongs": *[_type == "featuredSongs"  && week == $sun][0] { ${SETLIST_FIELDS} },
-  "satSongs": *[_type == "saturdarSongs"  && week == $sat][0] { ${SETLIST_FIELDS} },
-  "sunRole":  *[_type == "sunday_role"    && week == $sun && published != false][0] { ${ROLE_FIELDS} },
-  "satRole":  *[_type == "saturday_role"  && week == $sat && published != false][0] { ${ROLE_FIELDS} },
+  "sunSongs": *[_type == "featuredSongs"  && week == $sun] { ${SETLIST_FIELDS} },
+  "satSongs": *[_type == "saturdarSongs"  && week == $sat] { ${SETLIST_FIELDS} },
+  "sunRole":  *[_type == "sunday_role"    && week == $sun && published != false] { ${ROLE_FIELDS} },
+  "satRole":  *[_type == "saturday_role"  && week == $sat && published != false] { ${ROLE_FIELDS} },
   "specials": *[_type == "special_role"   && date >= $today && date <= $sun && published != false] | order(date asc) {
     _id, date, service_name, team_notes,
     songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "key": song->key },
@@ -68,18 +74,33 @@ export default async function Home() {
   const { sat, sun } = getThisWeekend();
   const today = localToday();
 
+  type WeekendRole = {
+    week: string;
+    Lead: { member_name: string; alias?: string }[];
+    instruments: { instrument: string; person: string }[];
+    foh_team: { role: string; person: string }[];
+    BGVs: { member_name: string; alias?: string }[];
+    Chorus: { member_name: string; alias?: string }[];
+  };
+
   const [posts, weekend] = await Promise.all([
     client.fetch(POSTS_QUERY),
-    client.fetch<{
-      sunSongs: Setlist | null;
-      satSongs: Setlist | null;
-      sunRole: { week: string; Lead: { member_name: string; alias?: string }[]; instruments: { instrument: string; person: string }[]; foh_team: { role: string; person: string }[]; BGVs: { member_name: string; alias?: string }[]; Chorus: { member_name: string; alias?: string }[] } | null;
-      satRole: { week: string; Lead: { member_name: string; alias?: string }[]; instruments: { instrument: string; person: string }[]; foh_team: { role: string; person: string }[]; BGVs: { member_name: string; alias?: string }[]; Chorus: { member_name: string; alias?: string }[] } | null;
+    operationalClient.fetch<{
+      sunSongs: Setlist[];
+      satSongs: Setlist[];
+      sunRole: WeekendRole[];
+      satRole: WeekendRole[];
       specials: SpecialRole[];
     }>(WEEKEND_QUERY, { sun, sat, today }),
   ]);
 
-  const { sunSongs, satSongs, sunRole, satRole, specials } = weekend;
+  // Fail closed on an ambiguous weekend target: a duplicate canonical document
+  // yields null (nothing rendered) rather than an arbitrary `[0]`.
+  const sunSongs = pickUnique(weekend.sunSongs);
+  const satSongs = pickUnique(weekend.satSongs);
+  const sunRole = pickUnique(weekend.sunRole);
+  const satRole = pickUnique(weekend.satRole);
+  const specials = Array.isArray(weekend.specials) ? weekend.specials : [];
 
   // Draft-gating: only surface a weekend setlist when its role is published
   // (the role queries above already filter `published != false`). Otherwise a

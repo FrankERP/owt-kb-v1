@@ -2,6 +2,12 @@ import type { Metadata } from "next";
 import { Post } from "@/app/utils/interface";
 import { groupBySections } from "@/app/utils/lyrics";
 import { client } from "@/sanity/lib/client";
+import { operationalClient } from "@/sanity/lib/operationalClient";
+import {
+  canonicalizePlayHistory,
+  playHistoryTargetKey,
+  serviceDayKey,
+} from "@/app/utils/serviceReadSelect";
 import Link from "next/link";
 import { PortableText } from "next-sanity";
 import Image from "next/image";
@@ -67,7 +73,14 @@ async function getPost(slug: string) {
   return await client.fetch(query, { slug });
 }
 
-async function getSongHistory(songId: string) {
+interface SongHistoryEntry {
+  week: string;
+  _type: string;
+  play_key?: string;
+  pairedSongs: Array<{ title: string; slug: { current: string }; play_key?: string }>;
+}
+
+async function getSongHistory(songId: string): Promise<SongHistoryEntry[]> {
   // "Última vez tocada" must reflect PAST plays only. Bound to week < today
   // (America/Mexico_City): a future or this-week setlist has not been played
   // yet — without this bound it would show as the last play with a future date,
@@ -75,8 +88,12 @@ async function getSongHistory(songId: string) {
   // (A week bound, not a published-role join: most historical setlists predate
   // role docs, so a role join would erase legitimate play history.)
   const today = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
+  // Canonical (published-perspective) client so a `drafts.*` setlist overlay
+  // never counts as a play. Over-fetch, then canonicalize by target: a duplicate
+  // week (ambiguous target) contributes NO rows rather than a false or
+  // double-counted play, and only then take the three most recent.
   const query = `
-    *[_type in ["featuredSongs", "saturdarSongs"] && references($songId) && week < $today] | order(week desc)[0..2] {
+    *[_type in ["featuredSongs", "saturdarSongs"] && references($songId) && week < $today] | order(week desc)[0..19] {
       week,
       _type,
       "play_key": songs[song._ref == $songId][0].play_key,
@@ -86,7 +103,18 @@ async function getSongHistory(songId: string) {
         play_key,
       },
     }`;
-  return await client.fetch(query, { songId, today });
+  const rows = await operationalClient.fetch<SongHistoryEntry[]>(query, { songId, today });
+  return canonicalizePlayHistory(rows, playHistoryTargetKey)
+    .filter((entry) => serviceDayKey(entry.week) !== null)
+    .slice(0, 3)
+    .map((entry) => ({
+      ...entry,
+      // A dangling song reference projects null title/slug — drop it instead of
+      // crashing on `song.slug.current` while rendering the paired list.
+      pairedSongs: (Array.isArray(entry.pairedSongs) ? entry.pairedSongs : []).filter(
+        (song) => !!song?.slug?.current && !!song?.title,
+      ),
+    }));
 }
 
 export const revalidate = 3600;
@@ -116,12 +144,7 @@ const Page = async ({ params }: Params) => {
 
   if (!post) notFound();
 
-  const history: Array<{
-    week: string;
-    _type: string;
-    play_key?: string;
-    pairedSongs: Array<{ title: string; slug: { current: string }; play_key?: string }>;
-  }> = await getSongHistory(post._id);
+  const history = await getSongHistory(post._id);
 
   const hasAudio        = (post?.audioTracks?.length ?? 0) > 0;
   const hasInlineChords = (post?.chords?.length ?? 0) > 0;

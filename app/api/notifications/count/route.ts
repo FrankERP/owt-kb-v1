@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireActiveSession } from "@/app/utils/authGuards";
-import { serverClient } from "@/sanity/lib/serverClient";
+import { operationalClient } from "@/sanity/lib/operationalClient";
 
 // Notification badge count for the current user. Fetched client-side by NavMenu
 // after paint so it never blocks page rendering / static caching.
@@ -16,12 +16,12 @@ export async function GET() {
 
   let count = 0;
   if (isAdmin) {
-    count = await serverClient.fetch<number>(
+    count = await operationalClient.fetch<number>(
       `count(*[_type == "setlistProposal" && status == "pending"])`,
       {}
     );
   } else if (isLead) {
-    count = await serverClient.fetch<number>(
+    count = await operationalClient.fetch<number>(
       `count(*[_type == "setlistProposal" && lead._ref == $id && status == "changes_requested"])`,
       { id: session.user.sanityId }
     );

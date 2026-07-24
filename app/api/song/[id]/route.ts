@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { serverClient } from "@/sanity/lib/serverClient";
+import { operationalClient } from "@/sanity/lib/operationalClient";
+import { canonicalizePlayHistory, playHistoryTargetKey } from "@/app/utils/serviceReadSelect";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireActiveSession();
@@ -9,7 +11,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const today = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
 
-  const [song, history] = await Promise.all([
+  const [song, historyRaw] = await Promise.all([
     serverClient.fetch(
       `*[_type == "post" && _id == $id][0] {
         _id, _createdAt, title, author, key, bpm, timeSig,
@@ -22,10 +24,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       }`,
       { id }
     ),
-    // Last 5 times this song was played (Sun/Sat setlists), with the key it was
-    // played in and who led that week (joined from the matching role doc).
-    serverClient.fetch(
-      `*[_type in ["featuredSongs", "saturdarSongs"] && references($id) && week < $today] | order(week desc)[0..4] {
+    // Recent times this song was played (Sun/Sat setlists), with the key it was
+    // played in and who led that week (joined from the matching role doc). Read
+    // through the canonical (published-perspective) client so a `drafts.*`
+    // overlay never counts as a play; over-fetch then canonicalize by target so
+    // an ambiguous (duplicate-week) setlist contributes no false play history.
+    operationalClient.fetch<unknown[]>(
+      `*[_type in ["featuredSongs", "saturdarSongs"] && references($id) && week < $today] | order(week desc)[0..19] {
         week,
         _type,
         "play_key": songs[song._ref == $id][0].play_key,
@@ -49,5 +54,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   ]);
 
   if (!song) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const history = canonicalizePlayHistory(historyRaw, playHistoryTargetKey).slice(0, 5);
   return NextResponse.json({ ...song, history });
 }

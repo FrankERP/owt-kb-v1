@@ -2,7 +2,8 @@ import { NextRequest, NextResponse, after } from "next/server";
 
 export const maxDuration = 60;
 import { requireActiveManager } from "@/app/utils/authGuards";
-import { serverClient, writeClient } from "@/sanity/lib/serverClient";
+import { writeClient } from "@/sanity/lib/serverClient";
+import { operationalClient } from "@/sanity/lib/operationalClient";
 import { sendPush } from "@/app/utils/push";
 import { sendAssignmentEmails } from "@/app/utils/assignmentEmail";
 import { revalidateServiceViews } from "@/app/utils/revalidate";
@@ -57,7 +58,7 @@ export async function GET() {
   const SONG_PROJ = `{ _id, title, author, key, "slug": slug.current }`;
   const SETLIST_SONGS = `songs[]{ play_key, medley_tag, "song": song->${SONG_PROJ} }`;
 
-  const roles = await serverClient.fetch(`
+  const roles = await operationalClient.fetch(`
     *[_type in ["sunday_role", "saturday_role", "special_role"]]
     | order(coalesce(week, date) asc) {
       _id, _type, service_name, published,

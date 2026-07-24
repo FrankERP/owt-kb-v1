@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
-import { serverClient } from "@/sanity/lib/serverClient";
+import { operationalClient } from "@/sanity/lib/operationalClient";
 
 export async function GET() {
   const session = await requireActiveManager();
@@ -12,7 +12,7 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const proposals = await serverClient.fetch(`
+  const proposals = await operationalClient.fetch(`
     *[_type == "setlistProposal"] | order(service_date asc) {
       _id,
       service_type,
