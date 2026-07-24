@@ -242,6 +242,69 @@ The `published` boolean lives on **role docs only** (`sunday_role`/`saturday_rol
   `false → published` transition triggers notifications.
 - **New docs default to draft:** `/api/admin/roles` sets `published: body.published === true`.
 
+### Canonical vs member-visible — two different gates
+
+The `published` field above is an **application** flag. Sanity's own draft mechanism
+(`drafts.*` documents, created by Studio edits) is a **separate** layer. Never conflate them:
+
+| Term | Definition |
+|------|------------|
+| **canonical** | a non-`drafts.*` document, as returned by the **published perspective** — *regardless of the app's `published` field value* |
+| **member-visible** | canonical **and** passing the app-level `published != false` gate above |
+
+So a service saved as an app-level draft (`published: false`) is still **canonical**: it exists
+once, at one target, and counts as one. **Canonical counts, duplicate detection, and target
+grouping never apply the app-level gate** — publish state is reported alongside
+(`memberVisibleCount`), never folded in.
+
+Why the distinction had to be made explicit: `sanity/lib/client.ts` sets no `perspective`, and
+the default for this repo's `apiVersion` (`2024-07-23`, pre-`2025-02-19`) is **`raw`** — so
+`drafts.*` overlays previously leaked into member-facing reads. See
+[Sanity client setup](#sanity-client-setup) and
+[ARCHITECTURE §8](ARCHITECTURE.md#8-canonical-operational-reads).
+
+---
+
+## Canonical target keys & content state
+
+The pure, I/O-free rules that turn stored documents into a trustworthy read live in
+[`app/utils/serviceReadModel.ts`](../app/utils/serviceReadModel.ts) (validation/grouping) and
+[`app/utils/serviceReadSelect.ts`](../app/utils/serviceReadSelect.ts) (selection). They encode
+the role/setlist split described above.
+
+**Target keys** — what "the same service" means when documents are paired by `week`, not by ref:
+
+| Kind | Key |
+|------|-----|
+| `sunday_role` / `saturday_role` | `<type>:<week>` |
+| `special_role` | its own `_id` (it *is* the target) |
+| Sunday / Saturday setlist | `featuredSongs:<week>` / `saturdarSongs:<week>` |
+| `special_role` songs | the role `_id` (songs are embedded) |
+| Proposal | `sunday:<date>` / `saturday:<date>` / `special:<service_ref>` |
+
+Cardinality at a target is `none` (0) / `single` (1) / `duplicate` (>1); a relevant `drafts.*`
+overlay makes the public-facing state **`draft_conflict`**.
+
+**`setlistContentState(songs)`** → `empty` / `incomplete` / `ready` / `invalid`:
+- `empty` — zero songs; `incomplete` — a well-formed row with a blank `play_key`;
+- `ready` — every row well-formed, resolvable, and carrying a `play_key`;
+- **`invalid`** — malformed structure, missing/duplicate `_key`, or a missing/**dangling** song
+  reference. Malformed data is **`invalid`, never ordinary `incomplete`.**
+
+**Role validity** is checked across all five seat paths (§ above): each seat must be an array of
+well-formed items with unique `_key`s and the right `_type` (`reference` / `instrument_slot` /
+`foh_slot`) — a missing or non-array seat is invalid, an empty array is valid-with-zero.
+`resolveMembers()` then reports refs with no canonical `teamMembers` document as **dangling**
+(never dropped, never treated as empty). Proposals are validated the same way and indexed twice
+(by `service_ref` and by target key), so a grouping conflict is visible in either dimension.
+
+**Selection fails closed.** `pickUnique()` returns the document only when the canonical group
+holds exactly one — a duplicate target yields **nothing**, never an arbitrary `[0]`.
+`indexUniqueByKey()` omits any key claimed twice; `canonicalizePlayHistory()` contributes no
+rows for an ambiguous target (so play history is never double-counted); `serviceDayKey()`
+returns `null` for a malformed stored date so the row is dropped as an integrity issue instead
+of reaching `.slice()` / `new Date()` / a `localeCompare` sort.
+
 ---
 
 ## Medley grouping
@@ -268,8 +331,24 @@ The clients live in [`sanity/lib/`](../sanity/lib/):
 - **`serverClient.ts`** — `serverClient` (read token `SANITY_API_READ_TOKEN`, for server
   components + auth callbacks) and `writeClient` (write token `SANITY_WRITE_TOKEN`, admin
   mutations only). Both `useCdn: false`.
+- **`operationalClient.ts`** — `server-only`. Two explicitly-perspectived clients:
+  - **`operationalClient`** (`perspective: "published"`, `useCdn: false`) — the **only** runtime
+    read source for the six protected types (`sunday_role`, `saturday_role`, `special_role`,
+    `featuredSongs`, `saturdarSongs`, `setlistProposal`). The read token is optional: it widens
+    document access, never the perspective.
+  - **`rawIntegrityClient`** (`perspective: "raw"`, tokened) — exists **solely to inventory
+    `drafts.*` documents as integrity evidence**; never a runtime content source. Its queries
+    are scoped with `_id in path("drafts.**")`.
 - **`image.ts`** — `@sanity/image-url`. `urlFor(source)` and `urlForImage(source)` (the latter
   adds `.auto('format').fit('max')`).
+
+> **Perspective is the load-bearing setting.** `client.ts` / `serverClient.ts` set **no**
+> `perspective`, and the default for `apiVersion` `2024-07-23` (pre-`2025-02-19`) is **`raw`** —
+> unpublished Studio drafts were overlaid onto member reads. That is why the protected types now
+> read through `operationalClient` only, and why a static audit
+> ([`app/utils/protectedReadAudit.ts`](../app/utils/protectedReadAudit.ts)) fails any new query
+> site that bypasses it without an exact `file + operation` exemption.
+> → [ARCHITECTURE §8](ARCHITECTURE.md#8-canonical-operational-reads).
 
 ## GROQ conventions
 
@@ -278,9 +357,15 @@ often with per-file reusable fragments (`SONG_PROJ`, `SETLIST_SONGS`, `ROLE_FIEL
 Rules of thumb:
 - Always use bound `$params`; never interpolate user input (the only two audited exceptions are
   the trusted `roleFilter` and opaque FCM tokens).
-- Member-facing reads: filter `published != false`.
+- **Protected types read through `operationalClient`**, ideally via the bound query builders in
+  [`app/utils/serviceReadQueries.ts`](../app/utils/serviceReadQueries.ts) (they return
+  `{ query, params }` and share the canonical projections). A `serviceReadQueries` helper
+  executed by a *non*-canonical client is exactly the bypass the audit catches.
+- Member-facing reads: filter `published != false` (the *member-visible* gate — canonical
+  grouping and counts must not use it).
 - "Who serves?": reuse `assignedMemberRefsQuery()`.
-- Recent plays / song history: `*[_type in ["featuredSongs","saturdarSongs"] && references($id)] | order(week desc)`.
+- Recent plays / song history: `*[_type in ["featuredSongs","saturdarSongs"] && references($id)] | order(week desc)`,
+  then collapse with `canonicalizePlayHistory()` so a duplicate target can't double-count a play.
 
 ## Studio
 
