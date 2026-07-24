@@ -142,6 +142,37 @@ function specialPayload(date, overrides = {}) {
 }
 
 /* ------------------------------------------------------------------ *
+ * Content Lake conflict classification (pure)
+ * ------------------------------------------------------------------ */
+
+/**
+ * True only for a Content Lake MUTATION conflict — the refusal this gate is
+ * allowed to count as proof that a guard fired. An auth failure, a network
+ * error or a schema complaint is NOT a guard firing, and must never be
+ * mistaken for one.
+ *
+ * Observed shape (isolated dataset, 2026-07-24): HTTP 409 with
+ * `{error: {type: "mutationError", items: [{error: {type: "documentAlreadyExistsError" |
+ * "documentRevisionIDDoesNotMatchError", ...}}]}}`.
+ */
+export function isMutationConflict(err) {
+  if (!err || typeof err !== "object") return false;
+  if (err.statusCode !== 409) return false;
+  const type = err.details?.type;
+  return type === undefined || type === "mutationError";
+}
+
+/** One-line evidence string for a rejection, e.g. `409 documentAlreadyExistsError@srv.x`. */
+export function conflictSummary(err) {
+  if (!err || typeof err !== "object") return null;
+  const item = err.details?.items?.[0]?.error;
+  const status = err.statusCode ?? "?";
+  if (!item) return `${status} ${err.details?.type ?? err.name ?? "error"}`;
+  const target = item.id ? `@${item.id}` : "";
+  return `${status} ${item.type ?? "mutationError"}${target}`;
+}
+
+/* ------------------------------------------------------------------ *
  * Shared act helpers — every one goes through `ctx`, which the driver owns.
  * ------------------------------------------------------------------ */
 
@@ -165,11 +196,30 @@ function createRoleTransaction(ctx, { roleId, requestId, payload, lockGeneration
  *   id        stable machine name
  *   title     one line, human
  *   planRef   the A2 §9 bullet it discharges
- *   expects   "commit" | "reject" — the required Content Lake outcome
+ *   expects   "commit" | "reject" — what `act(ctx)`'s OWN promise must do, not a
+ *             claim about how many transactions ran. A check that induces
+ *             several rejections in a row, or a race where exactly one writer
+ *             must win, asserts those rejections INSIDE `act` (via
+ *             `ctx.expectRejected` / `ctx.assertExactlyOneFulfilled`) and
+ *             therefore resolves: it declares `expects: "commit"` plus an
+ *             explicit `verify`, so the after-state is still proven.
  *   involves  documents whose state the check depends on
- *   induces   the conflict this check forces (null for a plain commit shape)
+ *   induces   the conflict this check forces (null for a plain commit shape).
+ *             Any check that induces something MUST either reject outright or
+ *             carry a `verify` — otherwise the conflict would go unproven.
  *   requery   ids re-read AFTER the act, to prove no partial business state
+ *   setup     ids the check's OWN setup writes legitimately create before the
+ *             induced conflict is attempted. A check with a non-empty `setup`
+ *             MUST call `await ctx.baseline()` once its setup has committed and
+ *             immediately before the guarded transaction, so the comparison
+ *             baseline is the state the guarded transaction actually saw.
+ *             Without that, a deliberate setup write is misread as partial
+ *             state left behind by the rejected transaction. Every setup id is
+ *             also re-queried, so the guarded transaction still cannot touch it
+ *             unnoticed.
  *   scratch   ids this check creates and the driver must clean up
+ *   verify    optional pure after-state proof, `({before, after}) => {ok, failures}`.
+ *             Defaults to `assertNoPartialState` for every `expects: "reject"` check.
  *   act(ctx)  builds + commits the transaction; resolves on commit, rejects on refusal
  */
 export const FEASIBILITY_CHECKS = Object.freeze([
@@ -230,10 +280,18 @@ export const FEASIBILITY_CHECKS = Object.freeze([
       mirrorReceiptId("srv-scratch-saturdayA"),
       mirrorRoleTargetLockId(`saturday_role:${SCRATCH_DATES.saturdayA}`),
     ],
+    setup: [
+      S("saturdayA.role"),
+      mirrorReceiptId("srv-scratch-saturdayA"),
+      mirrorRoleTargetLockId(`saturday_role:${SCRATCH_DATES.saturdayA}`),
+    ],
+    verify: assertNoPartialState,
     requery: [
       S("saturdayA.role"),
       mirrorReceiptId("srv-scratch-saturdayA"),
       mirrorRoleTargetLockId(`saturday_role:${SCRATCH_DATES.saturdayA}`),
+      // The role the refused retry would have created, so its absence is proven.
+      S("saturdayA.roleReplay"),
     ],
     act: async (ctx) => {
       await createRoleTransaction(ctx, {
@@ -241,6 +299,8 @@ export const FEASIBILITY_CHECKS = Object.freeze([
         requestId: "srv-scratch-saturdayA",
         payload: saturdayPayload(SCRATCH_DATES.saturdayA),
       }).commit();
+      // The first create is this check's setup; the retry is what is guarded.
+      await ctx.baseline();
       await ctx.expectRejected(
         createRoleTransaction(ctx, {
           roleId: S("saturdayA.roleReplay"),
@@ -259,13 +319,16 @@ export const FEASIBILITY_CHECKS = Object.freeze([
     induces: "the retry inside the check must be rejected",
     involves: ["special_role", "roleCreationReceipt"],
     scratch: [S("special.role"), mirrorReceiptId("srv-scratch-special")],
-    requery: [S("special.role"), mirrorReceiptId("srv-scratch-special")],
+    setup: [S("special.role"), mirrorReceiptId("srv-scratch-special")],
+    verify: assertNoPartialState,
+    requery: [S("special.role"), mirrorReceiptId("srv-scratch-special"), S("special.roleReplay")],
     act: async (ctx) => {
       await createRoleTransaction(ctx, {
         roleId: S("special.role"),
         requestId: "srv-scratch-special",
         payload: specialPayload(SCRATCH_DATES.special),
       }).commit();
+      await ctx.baseline();
       await ctx.expectRejected(
         createRoleTransaction(ctx, {
           roleId: S("special.roleReplay"),
@@ -280,7 +343,10 @@ export const FEASIBILITY_CHECKS = Object.freeze([
     id: "same_key_different_payload_conflict",
     title: "Same request id with a different date / target / role type is refused",
     planRef: "same-key/different-payload conflicts across dates, targets, role types (incl. special)",
-    expects: "reject",
+    // Three separate transactions must each be refused, so `act` asserts every
+    // rejection itself and resolves; `verify` still demands an unchanged world.
+    expects: "commit",
+    verify: assertNoPartialState,
     induces: "replayed request id carrying a different canonical fingerprint",
     involves: ["roleCreationReceipt", "role", "roleTargetLock"],
     scratch: [],
@@ -314,7 +380,20 @@ export const FEASIBILITY_CHECKS = Object.freeze([
     id: "receipt_and_target_race",
     title: "Two concurrent creates race on the receipt id and on the weekend target lock",
     planRef: "receipt/target races",
-    expects: "reject",
+    // A race has a legitimate winner, so neither "act rejects" nor
+    // "nothing changed" is the right proof: exactly one racer's whole triple
+    // must exist and the loser must have written nothing.
+    expects: "commit",
+    verify: ({ before, after }) =>
+      verifyRaceOutcome({
+        before,
+        after,
+        groups: [
+          { role: S("race.roleA"), receipt: mirrorReceiptId("srv-scratch-raceA") },
+          { role: S("race.roleB"), receipt: mirrorReceiptId("srv-scratch-raceB") },
+        ],
+        lockId: mirrorRoleTargetLockId(`sunday_role:${SCRATCH_DATES.sundayC}`),
+      }),
     induces: "simultaneous commits for one request id and one weekend target",
     involves: ["role", "roleCreationReceipt", "roleTargetLock"],
     scratch: [
@@ -533,19 +612,25 @@ export const FEASIBILITY_CHECKS = Object.freeze([
     induces: "a setlist created on the destination date after the move was planned",
     involves: ["role", "featuredSongs"],
     scratch: [S("move.setlist")],
+    // The mid-flight setlist IS the induced conflict: creating it is deliberate
+    // setup that must commit, so the baseline is taken after it.
+    setup: [S("move.setlist")],
     requery: ["srv.role.sunday.draft", S("move.setlist")],
     act: async (ctx) => {
       const role = await ctx.getDocument("srv.role.sunday.draft");
       // The dependency appears between the operator's read and the commit.
-      await ctx.client
-        .createIfNotExists({
-          _id: S("move.setlist"),
-          _type: "featuredSongs",
-          week: FIXTURE_DATES.sundayLegacy,
-          songs: [],
-        });
+      // `create`, not `createIfNotExists`: the id must genuinely be absent, or
+      // the dependency was pre-existing and nothing was induced.
+      await ctx.client.create({
+        _id: S("move.setlist"),
+        _type: "featuredSongs",
+        week: FIXTURE_DATES.sundayLegacy,
+        songs: [],
+      });
       const deps = await ctx.dependenciesForDate(FIXTURE_DATES.sundayLegacy);
-      ctx.assert(deps.length > 0, "destination date must now report a dependency");
+      ctx.assert(deps.includes(S("move.setlist")), "destination date must now report the dependency just created");
+      // Setup has committed; everything after this point is the guarded move.
+      await ctx.baseline();
       // The guarded move must refuse: proven here by an intentionally stale
       // revision precondition standing in for the writer's refusal.
       await ctx.client
@@ -562,10 +647,11 @@ export const FEASIBILITY_CHECKS = Object.freeze([
     induces: "a proposal created for the role after the delete was planned",
     involves: ["role", "setlistProposal"],
     scratch: [S("delete.proposal")],
+    setup: [S("delete.proposal")],
     requery: ["srv.role.saturday.draft", S("delete.proposal")],
     act: async (ctx) => {
       const role = await ctx.getDocument("srv.role.saturday.draft");
-      await ctx.client.createIfNotExists({
+      await ctx.client.create({
         _id: S("delete.proposal"),
         _type: "setlistProposal",
         service_type: "saturday",
@@ -575,7 +661,9 @@ export const FEASIBILITY_CHECKS = Object.freeze([
         songs: [],
       });
       const deps = await ctx.dependenciesForRole(role._id);
-      ctx.assert(deps.length > 0, "role must now report a dependent proposal");
+      ctx.assert(deps.includes(S("delete.proposal")), "role must now report the dependent proposal just created");
+      // Setup has committed; everything after this point is the guarded delete.
+      await ctx.baseline();
       await ctx.client
         .transaction()
         .patch(role._id, (p) => p.ifRevisionId("stale-revision-that-never-existed").set({ published: true }))
@@ -664,14 +752,18 @@ export const FEASIBILITY_CHECKS = Object.freeze([
     induces: "a setlist created for the target between observation and commit",
     involves: ["featuredSongs"],
     scratch: [S("observedNone.setlist")],
+    // The setlist that appears at the target between observation and commit is
+    // this check's setup write, not partial state from the refused create.
+    setup: [S("observedNone.setlist")],
     requery: [S("observedNone.setlist")],
     act: async (ctx) => {
-      await ctx.client.createIfNotExists({
+      await ctx.client.create({
         _id: S("observedNone.setlist"),
         _type: "featuredSongs",
         week: "2026-10-25",
         songs: [],
       });
+      await ctx.baseline();
       // "I observed none" is expressed as `create`, which fails if one exists.
       await ctx.client
         .transaction()
@@ -683,7 +775,10 @@ export const FEASIBILITY_CHECKS = Object.freeze([
     id: "proposal_first_create_conflict",
     title: "Two first-create attempts for one service: exactly one wins",
     planRef: "proposal first-create conflict",
-    expects: "reject",
+    // One winner is required, so `act` resolves after asserting the loser's
+    // refusal; `verify` proves exactly one document came out of the race.
+    expects: "commit",
+    verify: ({ before, after }) => verifySoleCreation({ before, after, id: S("proposal.firstCreate") }),
     induces: "concurrent shared-proposal creation for the same service",
     involves: ["setlistProposal"],
     scratch: [S("proposal.firstCreate")],
@@ -730,6 +825,9 @@ export const FEASIBILITY_CHECKS = Object.freeze([
     induces: "a replayed approval whose receipt already exists",
     involves: ["setlistProposal", "featuredSongs", "approvalReceipt"],
     scratch: [S("approval.setlist"), S("approval.receipt")],
+    // The approval itself must commit; only the replay is guarded.
+    setup: [S("approval.setlist"), S("approval.receipt")],
+    verify: assertNoPartialState,
     requery: ["srv.proposal.pending", S("approval.setlist"), S("approval.receipt")],
     act: async (ctx) => {
       const proposal = await ctx.getDocument("srv.proposal.pending");
@@ -747,6 +845,9 @@ export const FEASIBILITY_CHECKS = Object.freeze([
         .createOrReplace(setlist)
         .patch(proposal._id, (p) => p.ifRevisionId(proposal._rev).set({ status: "approved", reviewed_at: now }))
         .commit();
+      // Baseline the approved world, so the replay is proven to change nothing —
+      // including the proposal's revision.
+      await ctx.baseline();
       const again = await ctx.getDocument(proposal._id);
       await ctx.expectRejected(
         ctx.client
@@ -799,6 +900,7 @@ export function checkInventory(checks = FEASIBILITY_CHECKS) {
     induces: c.induces,
     involves: c.involves,
     dependsOn: c.dependsOn ?? [],
+    setup: c.setup ?? [],
     requeryCount: c.requery.length,
     scratchCount: c.scratch.length,
   }));
@@ -858,6 +960,71 @@ export function assertNoPartialState({ before, after }) {
     if (JSON.stringify(b) !== JSON.stringify(a)) failures.push({ code: "document_mutated", id });
   }
 
+  return { ok: failures.length === 0, failures };
+}
+
+/**
+ * The after-state proof for a RACE, where "nothing changed" is the wrong
+ * assertion: exactly one racer legitimately wins.
+ *
+ * Demands that the whole set started absent, that exactly ONE group is present,
+ * that the winner's group is complete and internally consistent, that every
+ * loser wrote nothing at all, and that the contended lock ended up claimed by
+ * the winner.
+ */
+export function verifyRaceOutcome({ before, after, groups, lockId }) {
+  const failures = [];
+  const at = (map, id) => (map ?? {})[id] ?? null;
+
+  for (const g of groups) {
+    for (const id of [g.role, g.receipt]) {
+      if (at(before, id) !== null) failures.push({ code: "race_baseline_not_absent", id });
+    }
+  }
+  if (lockId && at(before, lockId) !== null) failures.push({ code: "race_baseline_not_absent", id: lockId });
+
+  const winners = groups.filter((g) => at(after, g.role) !== null || at(after, g.receipt) !== null);
+  if (winners.length !== 1) {
+    failures.push({ code: "race_winner_count", id: `${winners.length} of ${groups.length}` });
+    return { ok: false, failures };
+  }
+
+  const [winner] = winners;
+  const role = at(after, winner.role);
+  const receipt = at(after, winner.receipt);
+  if (!role) failures.push({ code: "winner_role_missing", id: winner.role });
+  if (!receipt) failures.push({ code: "winner_receipt_missing", id: winner.receipt });
+  if (receipt && receipt.roleId !== winner.role) {
+    failures.push({ code: "winner_receipt_points_elsewhere", id: winner.receipt });
+  }
+
+  for (const loser of groups.filter((g) => g !== winner)) {
+    for (const id of [loser.role, loser.receipt]) {
+      if (at(after, id) !== null) failures.push({ code: "loser_wrote_partial_state", id });
+    }
+  }
+
+  if (lockId) {
+    const lock = at(after, lockId);
+    if (!lock) failures.push({ code: "contended_lock_missing", id: lockId });
+    else if (lock.state !== "claimed" || lock.roleId !== winner.role) {
+      failures.push({ code: "lock_not_claimed_by_winner", id: lockId });
+    }
+  }
+
+  return { ok: failures.length === 0, failures };
+}
+
+/**
+ * The after-state proof for two racers creating the SAME id: the document must
+ * have been absent before and must exist exactly once after. There is no
+ * "unchanged" state to assert, and no second id a loser could have written.
+ */
+export function verifySoleCreation({ before, after, id }) {
+  const failures = [];
+  if (((before ?? {})[id] ?? null) !== null) failures.push({ code: "race_baseline_not_absent", id });
+  const doc = (after ?? {})[id] ?? null;
+  if (doc === null) failures.push({ code: "sole_creation_missing", id });
   return { ok: failures.length === 0, failures };
 }
 

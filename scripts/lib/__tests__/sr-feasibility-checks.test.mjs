@@ -12,11 +12,15 @@ import {
   assertNoPartialState,
   checkInventory,
   claimedLockDocumentFor,
+  conflictSummary,
+  isMutationConflict,
   isScratchId,
   orderedChecks,
   receiptDocumentFor,
   roleDocumentFromPayload,
   scratchIds,
+  verifyRaceOutcome,
+  verifySoleCreation,
 } from "../sr-feasibility-checks.mjs";
 
 import { fixtureIds, mirrorPayloadFingerprint, mirrorReceiptId } from "../sr-verification.mjs";
@@ -76,6 +80,41 @@ describe("A2 §9 coverage — every required transaction shape is a named check"
     for (const c of FEASIBILITY_CHECKS.filter((x) => x.expects === "reject")) {
       expect(c.induces).toBeTruthy();
       expect(c.requery.length).toBeGreaterThan(0);
+    }
+  });
+
+  // The regression this guards: a check that asserts its rejections INSIDE
+  // `act` resolves, so it must declare `expects: "commit"`. Without a `verify`
+  // the driver would then skip the after-state proof entirely and the induced
+  // conflict would go unproven while the check still printed a tick.
+  it("proves the after-state of every check that induces a conflict", () => {
+    for (const c of FEASIBILITY_CHECKS.filter((x) => x.induces)) {
+      const proven = c.expects === "reject" || typeof c.verify === "function";
+      expect(proven, `${c.id} induces a conflict but declares no after-state proof`).toBe(true);
+    }
+  });
+
+  // The other regression: a check whose own setup must commit before the
+  // conflict can be induced has to re-baseline, and its setup ids have to be
+  // re-queried, or the setup write is scored as partial state (or goes unwatched).
+  it("re-queries and cleans up every declared setup id", () => {
+    const cleanable = new Set(scratchIds());
+    for (const c of FEASIBILITY_CHECKS.filter((x) => (x.setup ?? []).length)) {
+      for (const id of c.setup) {
+        expect(c.requery, `${c.id} setup id ${id} must be re-queried`).toContain(id);
+        expect(cleanable.has(id), `${c.id} setup id ${id} must be cleanable`).toBe(true);
+      }
+      expect(c.act.toString(), `${c.id} declares setup ids but never calls ctx.baseline()`).toMatch(
+        /\.baseline\(/,
+      );
+    }
+  });
+
+  it("declares setup ids for every check whose act writes before inducing its conflict", () => {
+    for (const c of FEASIBILITY_CHECKS) {
+      if (/\.baseline\(/.test(c.act.toString())) {
+        expect((c.setup ?? []).length, `${c.id} calls ctx.baseline() but declares no setup ids`).toBeGreaterThan(0);
+      }
     }
   });
 
@@ -229,5 +268,128 @@ describe("assertNoPartialState — the after-conflict proof", () => {
   it("fails on a same-revision body change (belt and braces)", () => {
     const r = assertNoPartialState({ before: { [doc._id]: doc }, after: { [doc._id]: { ...doc, published: true } } });
     expect(r.failures[0].code).toBe("document_mutated");
+  });
+});
+
+describe("Content Lake conflict classification", () => {
+  // The shapes observed against the isolated dataset on 2026-07-24.
+  const alreadyExists = {
+    statusCode: 409,
+    message: 'Mutation failed: Document by ID "srv.x" already exists',
+    details: {
+      type: "mutationError",
+      items: [{ index: 1, error: { type: "documentAlreadyExistsError", id: "srv.x", description: "…" } }],
+    },
+  };
+  const revMismatch = {
+    statusCode: 409,
+    message: 'Mutation failed: Document "srv.y" has unexpected revision ID',
+    details: {
+      type: "mutationError",
+      items: [
+        {
+          index: 0,
+          error: { type: "documentRevisionIDDoesNotMatchError", currentRevisionID: "a", expectedRevisionID: "b" },
+        },
+      ],
+    },
+  };
+
+  it("accepts a 409 mutation conflict", () => {
+    expect(isMutationConflict(alreadyExists)).toBe(true);
+    expect(isMutationConflict(revMismatch)).toBe(true);
+  });
+
+  it("refuses to count a non-conflict failure as a guard firing", () => {
+    expect(isMutationConflict({ statusCode: 401, message: "Unauthorized" })).toBe(false);
+    expect(isMutationConflict({ statusCode: 500, message: "Internal" })).toBe(false);
+    expect(isMutationConflict(new Error("socket hang up"))).toBe(false);
+    expect(isMutationConflict(null)).toBe(false);
+    expect(isMutationConflict("nope")).toBe(false);
+  });
+
+  it("summarises the conflict as one line of evidence", () => {
+    expect(conflictSummary(alreadyExists)).toBe("409 documentAlreadyExistsError@srv.x");
+    expect(conflictSummary(revMismatch)).toBe("409 documentRevisionIDDoesNotMatchError");
+    expect(conflictSummary(null)).toBeNull();
+  });
+});
+
+describe("verifyRaceOutcome — exactly one racer wins, the loser writes nothing", () => {
+  const groups = [
+    { role: "srv.scratch.race.roleA", receipt: "roleCreate.raceA" },
+    { role: "srv.scratch.race.roleB", receipt: "roleCreate.raceB" },
+  ];
+  const lockId = "roleTarget.sunday";
+  const absent = {
+    "srv.scratch.race.roleA": null,
+    "srv.scratch.race.roleB": null,
+    "roleCreate.raceA": null,
+    "roleCreate.raceB": null,
+    [lockId]: null,
+  };
+  const aWon = {
+    ...absent,
+    "srv.scratch.race.roleA": { _id: "srv.scratch.race.roleA", _rev: "r1" },
+    "roleCreate.raceA": { _id: "roleCreate.raceA", _rev: "r1", roleId: "srv.scratch.race.roleA" },
+    [lockId]: { _id: lockId, _rev: "r1", state: "claimed", roleId: "srv.scratch.race.roleA" },
+  };
+
+  it("passes when one whole triple committed and the loser wrote nothing", () => {
+    expect(verifyRaceOutcome({ before: absent, after: aWon, groups, lockId }).ok).toBe(true);
+  });
+
+  it("fails when both racers left documents behind", () => {
+    const both = { ...aWon, "srv.scratch.race.roleB": { _id: "srv.scratch.race.roleB", _rev: "r1" } };
+    const r = verifyRaceOutcome({ before: absent, after: both, groups, lockId });
+    expect(r.ok).toBe(false);
+    expect(r.failures[0].code).toBe("race_winner_count");
+  });
+
+  it("fails when neither racer won", () => {
+    const r = verifyRaceOutcome({ before: absent, after: absent, groups, lockId });
+    expect(r.failures[0].code).toBe("race_winner_count");
+  });
+
+  it("fails when the winner's receipt is missing (a torn triple)", () => {
+    const torn = { ...aWon, "roleCreate.raceA": null };
+    const r = verifyRaceOutcome({ before: absent, after: torn, groups, lockId });
+    expect(r.failures.map((f) => f.code)).toContain("winner_receipt_missing");
+  });
+
+  it("fails when the loser left a stray receipt", () => {
+    const stray = { ...aWon, "roleCreate.raceB": { _id: "roleCreate.raceB", roleId: "srv.scratch.race.roleB" } };
+    const r = verifyRaceOutcome({ before: absent, after: stray, groups, lockId });
+    expect(r.failures[0].code).toBe("race_winner_count");
+  });
+
+  it("fails when the contended lock was claimed by the loser", () => {
+    const wrongLock = { ...aWon, [lockId]: { _id: lockId, state: "claimed", roleId: "srv.scratch.race.roleB" } };
+    const r = verifyRaceOutcome({ before: absent, after: wrongLock, groups, lockId });
+    expect(r.failures.map((f) => f.code)).toContain("lock_not_claimed_by_winner");
+  });
+
+  it("fails when the baseline was not absent, so no race was actually induced", () => {
+    const dirty = { ...absent, "srv.scratch.race.roleA": { _id: "srv.scratch.race.roleA" } };
+    const r = verifyRaceOutcome({ before: dirty, after: aWon, groups, lockId });
+    expect(r.failures.map((f) => f.code)).toContain("race_baseline_not_absent");
+  });
+});
+
+describe("verifySoleCreation — two racers on one id yield exactly one document", () => {
+  const id = "srv.scratch.proposal.firstCreate";
+
+  it("passes when the id was absent and exists afterwards", () => {
+    expect(verifySoleCreation({ before: { [id]: null }, after: { [id]: { _id: id, _rev: "r1" } }, id }).ok).toBe(true);
+  });
+
+  it("fails when no racer created it", () => {
+    const r = verifySoleCreation({ before: { [id]: null }, after: { [id]: null }, id });
+    expect(r.failures[0].code).toBe("sole_creation_missing");
+  });
+
+  it("fails when the document already existed before the race", () => {
+    const r = verifySoleCreation({ before: { [id]: { _id: id } }, after: { [id]: { _id: id } }, id });
+    expect(r.failures[0].code).toBe("race_baseline_not_absent");
   });
 });
