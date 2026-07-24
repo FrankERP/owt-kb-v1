@@ -236,10 +236,18 @@ export function buildMarkerDocument({ now }) {
  * - absent            -> create it (bootstrap)
  * - present + exact   -> ok
  * - present + other   -> refuse; a mismatched marker means "not this dataset"
+ *
+ * The value is accepted from either `marker` (this tooling's field) or `purpose`
+ * (the field used by the tooling that originally provisioned this dataset). Both
+ * identify the same dataset, so a schema-convention difference must not be
+ * mistaken for "wrong dataset". A document carrying the expected value in
+ * neither field is still fatal.
  */
 export function evaluateMarkerDocument(doc) {
   if (!doc) return { action: "create", ok: false, reason: "marker_absent" };
-  if (doc.marker === MARKER_VALUE) return { action: "ok", ok: true, reason: null };
+  if (doc.marker === MARKER_VALUE || doc.purpose === MARKER_VALUE) {
+    return { action: "ok", ok: true, reason: null };
+  }
   return { action: "refuse", ok: false, reason: "marker_document_mismatch" };
 }
 
@@ -329,6 +337,20 @@ export function evaluateLeaseOwnership({ existing, owner, now }) {
   if (existing.owner !== owner) return { ok: false, reason: "foreign_lease" };
   if (isLeaseExpired(existing, now)) return { ok: false, reason: "lease_expired" };
   return { ok: true, reason: null };
+}
+
+/**
+ * Fields to write when replacing an expired lease in place.
+ *
+ * `_id` is the patch target, and `_type` is immutable per document id in the
+ * Content Lake — a dataset provisioned by earlier tooling can carry a different
+ * lease `_type`, and sending it would abort the transaction. Ownership is
+ * decided by `owner` and expiry (never `_type`), so dropping it is safe and the
+ * claim stays revision-guarded.
+ */
+export function leaseReplaceFields(doc) {
+  const { _id, _type, ...fields } = doc;
+  return fields;
 }
 
 /** Renew only as the current owner, under `_rev`. */

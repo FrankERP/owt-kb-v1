@@ -30,6 +30,7 @@ import {
   evaluateLeaseRelease,
   evaluateLeaseRenewal,
   evaluateMarkerDocument,
+  leaseReplaceFields,
   filterDeletableIds,
   fixtureIds,
   isDeletableFixtureId,
@@ -264,6 +265,62 @@ describe("evaluateMarkerDocument", () => {
     const r = evaluateMarkerDocument({ marker: "something-else" });
     expect(r.action).toBe("refuse");
     expect(r.reason).toBe("marker_document_mismatch");
+  });
+
+  // The dataset was originally provisioned by earlier tooling that stored the
+  // same marker value under `purpose` with its own `_type`. That is the same
+  // dataset, so it must be accepted rather than read as "wrong dataset".
+  it("accepts a legacy marker document that carries the value in `purpose`", () => {
+    const legacy = {
+      _type: "serviceReadinessVerificationMarker",
+      purpose: MARKER_VALUE,
+      dataset: "service-readiness-verification",
+      projectId: "scbxomq9",
+      version: 1,
+    };
+    expect(evaluateMarkerDocument(legacy).ok).toBe(true);
+  });
+
+  it("still refuses when neither field carries the expected value", () => {
+    const r = evaluateMarkerDocument({ purpose: "some other dataset", marker: undefined });
+    expect(r.action).toBe("refuse");
+    expect(r.reason).toBe("marker_document_mismatch");
+  });
+});
+
+describe("leaseReplaceFields", () => {
+  // `_type` is immutable per document id in the Content Lake, so an in-place
+  // replace of a lease provisioned by earlier tooling must not send it.
+  it("omits _id and _type so an in-place replace cannot abort", () => {
+    const fields = leaseReplaceFields({
+      _id: "serviceReadiness.verificationLease",
+      _type: "srVerificationLease",
+      owner: "r:c:d",
+      expiresAt: "2026-07-24T00:00:00.000Z",
+    });
+    expect(fields).not.toHaveProperty("_id");
+    expect(fields).not.toHaveProperty("_type");
+  });
+
+  it("preserves every ownership-bearing field", () => {
+    const fields = leaseReplaceFields({
+      _id: "x",
+      _type: "y",
+      owner: "r:c:d",
+      runId: "r",
+      candidateSha: "c",
+      deploymentId: "d",
+      acquiredAt: "a",
+      expiresAt: "e",
+    });
+    expect(fields).toEqual({
+      owner: "r:c:d",
+      runId: "r",
+      candidateSha: "c",
+      deploymentId: "d",
+      acquiredAt: "a",
+      expiresAt: "e",
+    });
   });
 });
 
