@@ -172,6 +172,47 @@ export const setlistProposal = defineType({
       type: "datetime",
       readOnly: true,
     },
+    // ── Internal review integrity (Service Readiness A2 §6) ─────────────────
+    // Written only by the guarded approval/transition route, never by hand: the
+    // approval receipt is what proves a given setlist content was published by
+    // this code (an approved proposal without one is a legacy record), and the
+    // transition record is what makes a replayed review a no-write retry.
+    {
+      name: "approval_receipt",
+      title: "Approval receipt (internal)",
+      type: "object",
+      hidden: true,
+      readOnly: true,
+      fields: [
+        { name: "v", title: "Version", type: "number" },
+        { name: "marker", title: "App marker", type: "string" },
+        { name: "fingerprint", title: "Input fingerprint", type: "string" },
+        { name: "serviceType", title: "Service type", type: "string" },
+        { name: "serviceDate", title: "Service date", type: "string" },
+        { name: "serviceRef", title: "Service role id", type: "string" },
+        { name: "setlistTargetKey", title: "Setlist target key", type: "string" },
+        { name: "setlistId", title: "Published setlist id", type: "string" },
+        { name: "songCount", title: "Song count", type: "number" },
+        { name: "approvedAt", title: "Approved at", type: "datetime" },
+        { name: "approvedBy", title: "Approved by (member id)", type: "string" },
+      ],
+    },
+    {
+      name: "last_transition",
+      title: "Last review transition (internal)",
+      type: "object",
+      hidden: true,
+      readOnly: true,
+      fields: [
+        { name: "v", title: "Version", type: "number" },
+        { name: "marker", title: "App marker", type: "string" },
+        { name: "action", title: "Action", type: "string" },
+        { name: "fingerprint", title: "Intent fingerprint", type: "string" },
+        { name: "toStatus", title: "Resulting status", type: "string" },
+        { name: "at", title: "At", type: "datetime" },
+        { name: "by", title: "By (member id)", type: "string" },
+      ],
+    },
   ],
   preview: {
     select: {

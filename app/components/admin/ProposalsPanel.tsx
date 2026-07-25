@@ -16,6 +16,8 @@ interface ProposalSong {
 
 interface Proposal {
   _id: string;
+  /** The revision this card was rendered from — submitted with every transition. */
+  _rev: string;
   service_type: "sunday" | "saturday" | "special";
   service_date: string;
   status: ProposalStatus;
@@ -73,12 +75,19 @@ function ProposalCard({
   onAction,
 }: {
   proposal: Proposal;
-  onAction: (id: string, action: ProposalAction, notes?: string) => Promise<void>;
+  onAction: (
+    proposal: Proposal,
+    action: ProposalAction,
+    notes?: string,
+  ) => Promise<{ ok: boolean; conflict: boolean }>;
 }) {
   const [requestingChanges, setRequestingChanges] = useState(false);
   const [reopening, setReopening] = useState(false);
   const [adminNotes, setAdminNotes] = useState(proposal.admin_notes ?? "");
   const [submitting, setSubmitting] = useState(false);
+  // A 409 means the reviewed revision is stale: keep this card (and its open
+  // panel) exactly as it is and require a reload before reviewing again.
+  const [conflict, setConflict] = useState(false);
 
   // Co-leads who edited the shared proposal, besides the creator shown above.
   const coContributors = (proposal.contributors ?? [])
@@ -87,23 +96,36 @@ function ProposalCard({
 
   const handleApprove = async () => {
     setSubmitting(true);
-    await onAction(proposal._id, "approve");
-    setSubmitting(false);
+    try {
+      const res = await onAction(proposal, "approve");
+      if (res.conflict) setConflict(true);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleRequestChanges = async () => {
     if (!adminNotes.trim()) return;
     setSubmitting(true);
-    await onAction(proposal._id, "request_changes", adminNotes);
-    setSubmitting(false);
-    setRequestingChanges(false);
+    try {
+      const res = await onAction(proposal, "request_changes", adminNotes);
+      if (res.conflict) { setConflict(true); return; }
+      // Only collapse the panel on a real success — never on a rejected review.
+      if (res.ok) setRequestingChanges(false);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleReopen = async () => {
     setSubmitting(true);
-    await onAction(proposal._id, "reopen", adminNotes.trim() || undefined);
-    setSubmitting(false);
-    setReopening(false);
+    try {
+      const res = await onAction(proposal, "reopen", adminNotes.trim() || undefined);
+      if (res.conflict) { setConflict(true); return; }
+      if (res.ok) setReopening(false);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const inputCls = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors placeholder:text-gray-600";
@@ -186,6 +208,18 @@ function ProposalCard({
         </div>
       )}
 
+      {/* Stale-review banner (409). The card keeps exactly what was reviewed. */}
+      {conflict && (
+        <div className="px-4 pb-3">
+          <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-3 py-2">
+            <p className="font-label text-[11px] uppercase tracking-widest text-yellow-400">Propuesta actualizada</p>
+            <p className="font-body text-sm text-yellow-200/90">
+              Cambió mientras la revisabas. Recarga las propuestas y vuelve a revisar.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Actions */}
       {(proposal.status === "pending" || proposal.status === "changes_requested") && (
         <div className="px-4 pb-4 space-y-3">
@@ -208,7 +242,7 @@ function ProposalCard({
                 </button>
                 <button
                   onClick={handleRequestChanges}
-                  disabled={submitting || !adminNotes.trim()}
+                  disabled={submitting || conflict || !adminNotes.trim()}
                   className="flex-1 py-2 rounded-lg bg-red-800/60 hover:bg-red-700/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
                 >
                   {submitting ? "Enviando…" : "Solicitar cambios"}
@@ -225,7 +259,7 @@ function ProposalCard({
               </button>
               <button
                 onClick={handleApprove}
-                disabled={submitting || proposal.songs.length === 0}
+                disabled={submitting || conflict || proposal.songs.length === 0}
                 className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
               >
                 {submitting ? "Aprobando…" : "Aprobar"}
@@ -265,7 +299,7 @@ function ProposalCard({
                 </button>
                 <button
                   onClick={handleReopen}
-                  disabled={submitting}
+                  disabled={submitting || conflict}
                   className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
                 >
                   {submitting ? "Reabriendo…" : "Reabrir"}
@@ -323,26 +357,35 @@ export default function ProposalsPanel() {
   };
 
   const handleAction = async (
-    id: string,
+    proposal: Proposal,
     action: ProposalAction,
     notes?: string
-  ) => {
+  ): Promise<{ ok: boolean; conflict: boolean }> => {
     try {
-      const res = await fetch(`/api/admin/proposals/${id}`, {
+      const res = await fetch(`/api/admin/proposals/${proposal._id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, adminNotes: notes }),
+        // `rev` is the revision this card was REVIEWED at — not a fresh server
+        // read — so a concurrent lead edit is rejected instead of published.
+        body: JSON.stringify({ action, rev: proposal._rev, adminNotes: notes }),
       });
       if (res.ok) {
         showToast(ACTION_TOAST[action]);
         await load();
-      } else {
-        showToast("Error al procesar", false);
+        return { ok: true, conflict: false };
       }
+      if (res.status === 409) {
+        // The reviewed view is stale: keep the card as-is and require a reload.
+        showToast("La propuesta cambió — recarga", false);
+        return { ok: false, conflict: true };
+      }
+      showToast("Error al procesar", false);
+      return { ok: false, conflict: false };
     } catch {
       // Never reject: the caller (ProposalCard) resets its submitting flag after
       // this resolves, so a thrown network error must not strand the button.
       showToast("Error de conexión", false);
+      return { ok: false, conflict: false };
     }
   };
 

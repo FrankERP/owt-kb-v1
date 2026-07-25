@@ -131,6 +131,12 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
   const [rev, setRev] = useState<string | null>(proposal?._rev ?? null);
   useEffect(() => { setRev(proposal?._rev ?? null); }, [proposal?._rev]);
 
+  // The observed proposal id travels with the revision: after a first save the
+  // shared proposal exists, so the next save must observe it as a singleton even
+  // before router.refresh() re-delivers the prop.
+  const [proposalId, setProposalId] = useState<string | null>(proposal?._id ?? null);
+  useEffect(() => { if (proposal?._id) setProposalId(proposal._id); }, [proposal?._id]);
+
   // Other leads who have edited this shared proposal (exclude me).
   const otherContributors = (proposal?.contributors ?? [])
     .filter(c => c.id && c.id !== currentUserId)
@@ -304,13 +310,18 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           roleId: roleDoc._id,
-          serviceType: roleDoc.service_type,
-          serviceDate: roleDoc.service_date,
+          // The observed state of the ONE shared proposal for this service. The
+          // server refuses the save unless it is still exactly this (or, for
+          // `none`, unless no proposal exists yet — the deterministic-id create
+          // is then the mutex between co-leads). Service type/date are derived
+          // server-side from the authorized role, never sent from here.
+          observed: proposalId && rev
+            ? { state: "single", id: proposalId, rev }
+            : { state: "none" },
           songs: songs.map(s => ({ songId: s.songId, play_key: s.play_key, medley_tag: s.medley_tag })),
           leadNotes,
           teamNotes,
           status: submitStatus,
-          rev,
         }),
       });
 
@@ -322,9 +333,13 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
         return;
       }
       if (!res.ok) throw new Error();
-      const data: { status: ProposalStatus; _rev?: string | null } = await res.json();
+      const data: { _id?: string; status: ProposalStatus; _rev?: string | null } = await res.json();
       setStatus(data.status);
+      if (data._id) setProposalId(data._id);
+      // No fresh revision means the next save cannot be guarded: force a reload
+      // rather than let it fall back to an unguarded observation.
       if (data._rev) setRev(data._rev);
+      else setStaleReload(true);
       showToast(submitStatus === "pending" ? "Propuesta enviada" : "Borrador guardado");
       router.refresh();
     } catch {

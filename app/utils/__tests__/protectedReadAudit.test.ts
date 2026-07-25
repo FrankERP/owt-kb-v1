@@ -267,8 +267,11 @@ describe("A2 handoff allowlist", () => {
     expect(A2_HANDOFF_ALLOWLIST.every((e) => e.removalOwner === "A2")).toBe(true);
     expect(A2_HANDOFF_ALLOWLIST.map((e) => `${e.file}#${e.operation}`).sort()).toEqual(
       [
+        // The former `#module` entry (the mutation-local `reviewRecipients()`
+        // proposal read) is gone: A2 §6 derives review recipients from the
+        // canonical proposal the PATCH already loaded, so there is no
+        // module-level protected read left to exempt.
         "app/api/admin/proposals/[id]/route.ts#PATCH",
-        "app/api/admin/proposals/[id]/route.ts#module",
         "app/api/admin/roles/[id]/route.ts#PATCH",
         "app/api/admin/roles/copy-instruments/route.ts#POST",
         "app/api/admin/roles/publish/route.ts#POST",

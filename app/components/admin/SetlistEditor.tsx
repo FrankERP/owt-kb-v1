@@ -13,6 +13,12 @@ import { canEditSetlistResponse, SETLIST_READ_ISSUE_COPY } from "../../utils/set
 export interface SongResult   { _id: string; title: string; author: string; key: string; slug: string; }
 export interface SetlistEntry { localId: string; play_key: string; medley_tag?: string; song: SongResult; }
 
+/** A1's observed state, carried UNCHANGED from the GET into the PUT (A2 §5). */
+type ObservedTarget = { state: "none" } | { state: "single"; id: string; rev: string };
+
+const SAVE_CONFLICT_COPY =
+  "Alguien más cambió este setlist mientras lo editabas. Recarga para ver el estado actual antes de guardar.";
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const uid2 = () => Math.random().toString(36).slice(2, 9);
@@ -61,6 +67,12 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
   const [loadError, setLoadError]       = useState<string | null>(null);
   const [saving, setSaving]             = useState(false);
   const [saveError, setSaveError]       = useState<string | null>(null);
+  // The observed target state is retained until a successful save or a reload —
+  // never re-derived from a fresh server read, which would silently re-authorize
+  // an overwrite of someone else's change.
+  const [observed, setObserved]         = useState<ObservedTarget | null>(null);
+  const [saveConflict, setSaveConflict] = useState(false);
+  const [reloadToken, setReloadToken]   = useState(0);
   const [addKey, setAddKey]             = useState("");
   const [draggingIdx, setDraggingIdx]   = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx]   = useState<number | null>(null);
@@ -76,6 +88,9 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
     async function load() {
       setLoading(true);
       setLoadError(null);
+      setSaveConflict(false);
+      setSaveError(null);
+      setObserved(null);
       const params = new URLSearchParams({ type, week });
       if (roleId) params.set("roleId", roleId);
       try {
@@ -101,9 +116,11 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
         const data = decision.read as unknown as {
           songs: Array<{ play_key: string; medley_tag?: string; song: SongResult }>;
           recentSongs: Record<string, string>;
+          observed: ObservedTarget;
         };
         setEntries(data.songs.map(s => ({ localId: uid2(), play_key: s.play_key, medley_tag: s.medley_tag, song: s.song })));
         setRecentSongs(data.recentSongs);
+        setObserved(data.observed);
         if (tagsRes.ok) setAllTags(await tagsRes.json());
       } catch {
         if (alive) setLoadError(SETLIST_READ_ISSUE_COPY.http);
@@ -113,7 +130,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
     }
     load();
     return () => { alive = false; };
-  }, [week, type, roleId]);
+  }, [week, type, roleId, reloadToken]);
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
@@ -247,6 +264,9 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
   }
 
   async function save() {
+    // Without an observed state there is nothing to guard the write with; refuse
+    // rather than send a blind overwrite.
+    if (!observed) { setSaveError(SETLIST_READ_ISSUE_COPY.http); return; }
     setSaving(true);
     setSaveError(null);
     try {
@@ -255,11 +275,19 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           week, type, roleId,
+          // A1's observed state, unchanged: the server rejects the save unless the
+          // target is still exactly what this editor loaded.
+          observed,
           songs: entries.map(e => ({ songId: e.song._id, play_key: e.play_key, medley_tag: e.medley_tag })),
         }),
       });
       // Only close on success — otherwise keep the editor open so the admin's
       // edits aren't silently discarded on a failed/rejected save.
+      if (res.status === 409) {
+        setSaveConflict(true);
+        setSaveError(SAVE_CONFLICT_COPY);
+        return;
+      }
       if (!res.ok) { setSaveError("No se pudo guardar el setlist. Intenta de nuevo."); return; }
       if (onSaved) onSaved();
       else onClose();
@@ -443,11 +471,22 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
       {saveError && (
         <p className="text-red-400 font-label text-xs uppercase tracking-widest text-center -mb-1">{saveError}</p>
       )}
+      {/* A 409 keeps the editor (and the admin's edits) open and requires a
+          reload: the observed state is only replaced by a fresh read. */}
+      {saveConflict && (
+        <button
+          type="button"
+          onClick={() => setReloadToken(t => t + 1)}
+          className="w-full py-2 rounded-lg border border-yellow-500/40 font-label text-xs uppercase tracking-widest text-yellow-300 hover:bg-yellow-500/10 transition-colors"
+        >
+          Recargar setlist
+        </button>
+      )}
       <div className="flex gap-3 sticky bottom-0 bg-[#C8D8EB] dark:bg-[#0a1929] py-2">
         <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
           Cancelar
         </button>
-        <button type="button" onClick={save} disabled={saving} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+        <button type="button" onClick={save} disabled={saving || saveConflict || !observed} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
           {saving ? "Guardando..." : "Guardar setlist"}
         </button>
       </div>
