@@ -707,6 +707,18 @@ describe("PATCH /api/admin/proposals/[id] — approval", () => {
     expect(sendPushMock).toHaveBeenCalledWith(["mem-1"], "proposals", expect.anything());
   });
 
+  it("swallows a thrown review push without failing the committed approval (§7)", async () => {
+    seed();
+    sendPushMock.mockImplementation(() => {
+      throw new Error("fcm down");
+    });
+    const res = await patchAdmin(PROPOSAL_ID, { action: "approve", rev: "prop-rev-1" });
+    expect(res.status).toBe(200);
+    // The approval transaction stands and the caches were still refreshed.
+    expect(committedTransactions()).toHaveLength(1);
+    expect(revalidateServiceViewsMock).toHaveBeenCalledOnce();
+  });
+
   it("patches an existing live setlist under its observed revision", async () => {
     seed();
     store.setlists.push({

@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { operationalClient, rawIntegrityClient } from "@/sanity/lib/operationalClient";
-import { revalidateServiceViews } from "@/app/utils/revalidate";
-import { setlistRecipientIds, assignedMemberRefsQuery } from "@/app/utils/notifyTargets";
-import { sendPush } from "@/app/utils/push";
+import {
+  notifySetlistSaved,
+  revalidateSetlistSave,
+} from "@/app/utils/serviceMutationSideEffects";
 import { isValidServiceDate } from "@/app/utils/serviceReadModel";
 import { pickUnique } from "@/app/utils/serviceReadSelect";
 import { serviceError } from "@/app/utils/serviceMutation";
@@ -346,28 +347,13 @@ export async function PUT(req: NextRequest) {
     );
   }
 
-  // Invalidate the statically-cached pages so the edit appears immediately.
-  revalidateServiceViews();
-
-  // Fire-and-forget: notify setlist subscribers. Never blocks the save response.
-  // Recipients derive from committed canonical server state across all five seat
-  // paths — never a client list.
-  try {
-    const members = await operationalClient.fetch<
-      { _id: string; setlist?: "all" | "assigned" | "off" }[]
-    >(`*[_type == "teamMembers"]{ _id, "setlist": notifPrefs.setlist }`);
-    const roleFilter = `_type in ["sunday_role","saturday_role","special_role"] && (week == $week || date == $week)`;
-    const assigned = await operationalClient.fetch<string[]>(assignedMemberRefsQuery(roleFilter), {
-      week,
-    });
-    void sendPush(setlistRecipientIds(members ?? [], assigned ?? []), "setlist", {
-      title: "Setlist de la semana",
-      body: "Ya están las canciones de este servicio.",
-      path: "/",
-    });
-  } catch (err) {
-    console.error("[push] notify failed:", err);
-  }
+  // ── Post-commit side effects (§7), all through the one shared module ───────
+  // Invalidate the statically-cached pages so the edit appears immediately, then
+  // notify the existing setlist audience. The audience derives from committed
+  // canonical server state across all five seat paths — never a client list — and
+  // a failed notification never fails the save.
+  revalidateSetlistSave();
+  await notifySetlistSaved(week);
 
   return NextResponse.json({ ok: true, setlistId: createdId ?? targetId, created: !!createdId });
 }

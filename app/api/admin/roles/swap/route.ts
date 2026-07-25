@@ -1,16 +1,18 @@
 // app/api/admin/roles/swap/route.ts
-import { NextRequest, NextResponse, after } from "next/server";
-import { revalidatePath } from "next/cache";
+import { NextRequest, NextResponse } from "next/server";
 
 // Notifying the newly added assignees of two services can mean several
 // sequential emails; give the after() work room to finish past the response.
 export const maxDuration = 60;
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
-import { addedAssignees } from "@/app/utils/notifyTargets";
-import { sendPush } from "@/app/utils/push";
-import { sendAssignmentEmails, type ServiceType } from "@/app/utils/assignmentEmail";
-import { revalidateServiceViews } from "@/app/utils/revalidate";
+import type { ServiceType } from "@/app/utils/assignmentEmail";
+import {
+  notifyRoleAssignments,
+  revalidateRoleMutation,
+  roleUpdateNotice,
+  type RoleAssignmentNotice,
+} from "@/app/utils/serviceMutationSideEffects";
 import { serviceError } from "@/app/utils/serviceMutation";
 import {
   findSeatItem,
@@ -20,7 +22,6 @@ import {
   seatAssignees,
   seatPersonPatchPath,
   storedSeatArrays,
-  type NormalizedSeats,
   type SeatPersonReplacement,
 } from "@/app/utils/roleWriteRequest";
 import {
@@ -210,13 +211,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  revalidateServiceViews();
-  revalidatePath("/me");
+  // ── Post-commit side effects (§7), all through the one shared module ───────
+  revalidateRoleMutation();
 
-  // ── Post-commit additions, computed PER DESTINATION ROLE ──────────────────
-  // Recipients come from committed server state across all five seat paths: the
-  // seats stored before this transaction versus the seats it just wrote.
-  const notifications: { added: string[]; type: ServiceType; date: string; body: NormalizedSeats }[] = [];
+  // Additions computed PER DESTINATION ROLE. Recipients come from committed
+  // server state across all five seat paths: the seats stored before this
+  // transaction versus the seats it just wrote. Drafts stay silent.
+  const notices: (RoleAssignmentNotice | null)[] = [];
   for (const coordinated of coordination.roles) {
     if (!patchOf.has(coordinated.role._id)) continue;
     const before = normalizeStoredSeats(coordinated.role);
@@ -224,28 +225,17 @@ export async function POST(req: NextRequest) {
     const after_ = partnerId
       ? normalizeStoredSeats(targetById.get(partnerId)?.role)
       : normalizeStoredSeats(coordinated.role, replacementsOf.get(coordinated.role._id) ?? []);
-    const added = addedAssignees(seatAssignees(before), seatAssignees(after_));
-    // Drafts stay silent; published or grandfathered services notify.
-    if (!added.length || coordinated.role.published === false) continue;
-    notifications.push({
-      added,
-      type: coordinated.role._type as ServiceType,
-      date: coordinated.date,
-      body: after_,
-    });
+    notices.push(
+      roleUpdateNotice({
+        published: coordinated.role.published,
+        beforeAssignees: seatAssignees(before),
+        after: after_,
+        type: coordinated.role._type as ServiceType,
+        date: coordinated.date,
+      }),
+    );
   }
-  if (notifications.length) {
-    after(async () => {
-      for (const n of notifications) {
-        await sendPush(n.added, "assignments", {
-          title: "Servicio actualizado",
-          body: `Te asignaron para el ${n.date}.`,
-          path: "/me",
-        });
-        await sendAssignmentEmails(n.added, { type: n.type, date: n.date, body: n.body });
-      }
-    });
-  }
+  notifyRoleAssignments(notices);
 
   return NextResponse.json({ ok: true, kind: request.kind, roleIds: [...patchOf.keys()] });
 }

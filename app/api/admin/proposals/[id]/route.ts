@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
-import { sendPush } from "@/app/utils/push";
-import { revalidateServiceViews } from "@/app/utils/revalidate";
+import {
+  notifyProposalReview,
+  revalidateProposalApproval,
+} from "@/app/utils/serviceMutationSideEffects";
 import { serviceError } from "@/app/utils/serviceMutation";
 import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
 import { nextKey, nowIso, type StoredLock } from "@/app/utils/roleWriteOps";
@@ -35,34 +37,6 @@ import {
 
 function reject(res: { status: number; body: unknown }) {
   return NextResponse.json(res.body, { status: res.status });
-}
-
-/**
- * Everyone who should hear a review outcome on a shared proposal: the creator plus
- * every contributor, deduped. Derived from the canonical proposal this request
- * already loaded — never a client list, and never a second uncontrolled read.
- */
-function reviewRecipients(doc: Record<string, unknown>): string[] {
-  const lead = typeof doc.lead === "string" ? doc.lead : null;
-  const contributors = Array.isArray(doc.contributors) ? doc.contributors : [];
-  const people = contributors.map((row) => {
-    if (!row || typeof row !== "object") return null;
-    const person = (row as { person?: unknown }).person;
-    if (typeof person === "string") return person;
-    return (person as { _ref?: string } | null)?._ref ?? null;
-  });
-  return [...new Set([lead, ...people].filter((id): id is string => !!id))];
-}
-
-async function notifyReview(doc: Record<string, unknown>, title: string, body: string) {
-  try {
-    const recipients = reviewRecipients(doc);
-    if (recipients.length) {
-      void sendPush(recipients, "proposals", { title, body, path: "/me" });
-    }
-  } catch (err) {
-    console.error("[push] notify failed:", err);
-  }
 }
 
 const REVIEW_PUSH: Record<string, { title: string; body: string }> = {
@@ -365,10 +339,13 @@ async function approve(args: ApproveArgs) {
     );
   }
 
-  await notifyReview(doc, REVIEW_PUSH.approve.title, REVIEW_PUSH.approve.body);
+  // ── Post-commit side effects (§7), all through the one shared module ───────
+  // Review recipients come from the canonical proposal this request already
+  // loaded (creator + contributors), never a client list.
+  await notifyProposalReview(doc, REVIEW_PUSH.approve);
   // The approved proposal just wrote the real setlist — refresh the cached
   // home/schedule/song pages so it shows without waiting for ISR expiry.
-  revalidateServiceViews();
+  revalidateProposalApproval();
   return NextResponse.json({ ok: true, status: "approved", setlistId });
 }
 
@@ -499,8 +476,10 @@ async function transition(args: TransitionArgs) {
     );
   }
 
+  // Post-commit side effect (§7): `request_changes` / `reopen` push to the
+  // review recipients. `reconcile_target` is metadata repair and stays silent.
   const push = REVIEW_PUSH[action];
-  if (push) await notifyReview(doc, push.title, push.body);
+  if (push) await notifyProposalReview(doc, push);
 
   return NextResponse.json({
     ok: true,

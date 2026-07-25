@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { operationalClient, rawIntegrityClient } from "@/sanity/lib/operationalClient";
 import {
+  allRoleTargetLocksQuery,
   canonicalMembersByIdsQuery,
   canonicalRolesQuery,
   rawRoleDraftsQuery,
@@ -31,14 +32,23 @@ export async function GET() {
     ]);
 
     const memberRefs = collectRoleMemberRefs(canonicalRoles);
+    const locksQ = allRoleTargetLocksQuery();
+    // Locks are internal coordination documents on the canonical operational
+    // client; only raw-draft inventory uses `rawIntegrityClient`.
+    const [members, locks] = await Promise.all([
+      (async () => {
+        if (!memberRefs.length) return [] as CanonicalMember[];
+        const membersQ = canonicalMembersByIdsQuery(memberRefs);
+        return (
+          (await operationalClient.fetch<CanonicalMember[]>(membersQ.query, membersQ.params)) ?? []
+        );
+      })(),
+      operationalClient.fetch<unknown[]>(locksQ.query, locksQ.params),
+    ]);
     const membersById = new Map<string, CanonicalMember>();
-    if (memberRefs.length) {
-      const membersQ = canonicalMembersByIdsQuery(memberRefs);
-      const members = await operationalClient.fetch<CanonicalMember[]>(membersQ.query, membersQ.params);
-      for (const m of members ?? []) membersById.set(m._id, m);
-    }
+    for (const m of members) membersById.set(m._id, m);
 
-    const summary = buildRoleTargets(canonicalRoles, rawRoleDrafts, membersById);
+    const summary = buildRoleTargets(canonicalRoles, rawRoleDrafts, membersById, locks ?? []);
     return NextResponse.json(summary);
   } catch (err) {
     console.error("[service-integrity/roles] read failed:", err);

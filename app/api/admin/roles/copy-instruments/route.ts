@@ -1,14 +1,15 @@
 // app/api/admin/roles/copy-instruments/route.ts
-import { NextRequest, NextResponse, after } from "next/server";
-import { revalidatePath } from "next/cache";
+import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 60;
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
-import { addedAssignees } from "@/app/utils/notifyTargets";
-import { sendPush } from "@/app/utils/push";
-import { sendAssignmentEmails, type ServiceType } from "@/app/utils/assignmentEmail";
-import { revalidateServiceViews } from "@/app/utils/revalidate";
+import type { ServiceType } from "@/app/utils/assignmentEmail";
+import {
+  notifyRoleAssignments,
+  revalidateRoleMutation,
+  roleUpdateNotice,
+} from "@/app/utils/serviceMutationSideEffects";
 import { serviceError } from "@/app/utils/serviceMutation";
 import {
   normalizeStoredSeats,
@@ -156,24 +157,20 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  revalidateServiceViews();
-  revalidatePath("/me");
+  // ── Post-commit side effects (§7), all through the one shared module ───────
+  revalidateRoleMutation();
 
-  // ── Post-commit additions for the ONE destination role ────────────────────
+  // Additions for the ONE destination role, from committed server state.
   const before = normalizeStoredSeats(coordinatedTarget.role);
-  const added = addedAssignees(seatAssignees(before), seatAssignees(afterSeats));
-  if (added.length && coordinatedTarget.role.published !== false) {
-    const date = coordinatedTarget.date;
-    const type = coordinatedTarget.role._type as ServiceType;
-    after(async () => {
-      await sendPush(added, "assignments", {
-        title: "Servicio actualizado",
-        body: `Te asignaron para el ${date}.`,
-        path: "/me",
-      });
-      await sendAssignmentEmails(added, { type, date, body: afterSeats });
-    });
-  }
+  notifyRoleAssignments([
+    roleUpdateNotice({
+      published: coordinatedTarget.role.published,
+      beforeAssignees: seatAssignees(before),
+      after: afterSeats,
+      type: coordinatedTarget.role._type as ServiceType,
+      date: coordinatedTarget.date,
+    }),
+  ]);
 
   return NextResponse.json({
     ok: true,

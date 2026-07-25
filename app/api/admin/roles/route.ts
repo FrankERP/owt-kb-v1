@@ -1,14 +1,15 @@
-import { NextRequest, NextResponse, after } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 60;
 import { randomUUID } from "node:crypto";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
-import { sendPush } from "@/app/utils/push";
-import { sendAssignmentEmails } from "@/app/utils/assignmentEmail";
-import { revalidateServiceViews } from "@/app/utils/revalidate";
-import { revalidatePath } from "next/cache";
+import {
+  notifyRoleAssignments,
+  revalidateRoleMutation,
+  roleCreateNotice,
+} from "@/app/utils/serviceMutationSideEffects";
 import { serviceDependencyError, serviceError } from "@/app/utils/serviceMutation";
 import { buildCreationReceipt } from "@/app/utils/roleCreationReceipt";
 import { buildClaimedLock, claimLockPatch } from "@/app/utils/roleTargetLock";
@@ -18,7 +19,6 @@ import {
   parseCreateRequest,
   planTargetClaim,
   sanityConflictKind,
-  seatAssignees,
   type ParsedCreateRequest,
 } from "@/app/utils/roleWriteRequest";
 import {
@@ -251,35 +251,21 @@ export async function POST(req: NextRequest) {
     return reject(serviceError("stale_revision", { details: { targetKey: request.targetKey } }));
   }
 
+  // ── Post-commit side effects (§7), all through the one shared module ───────
   // ISR invalidation: a newly created service must appear on the schedule/home
   // and /me views immediately. Drafts still revalidate — they surface in the
   // admin (Editar) views.
-  revalidateServiceViews();
-  revalidatePath("/me");
-
-  // Recipients derive from the seats actually committed, across all five paths.
-  const notifyBody = {
-    leads: request.seats.leads,
-    bgvs: request.seats.bgvs,
-    chorus: request.seats.chorus,
-    instruments: request.seats.instruments,
-    foh: request.seats.foh,
-  };
-  const added = seatAssignees(request.seats);
-  if (request.published) {
-    after(async () => {
-      await sendPush(added, "assignments", {
-        title: "Nuevo servicio asignado",
-        body: `Te asignaron para el ${request.date}.`,
-        path: "/me",
-      });
-      await sendAssignmentEmails(added, {
-        type: request.roleType,
-        date: request.date,
-        body: notifyBody,
-      });
-    });
-  }
+  revalidateRoleMutation();
+  // Recipients derive from the seats actually committed, across all five paths;
+  // a draft create stays silent.
+  notifyRoleAssignments([
+    roleCreateNotice({
+      published: request.published,
+      seats: request.seats,
+      type: request.roleType,
+      date: request.date,
+    }),
+  ]);
 
   return NextResponse.json({ ...doc, creationRequestId: request.requestId }, { status: 201 });
 }

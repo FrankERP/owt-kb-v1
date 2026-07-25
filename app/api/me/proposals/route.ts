@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
-import { notifyProposalSubmitted } from "@/app/utils/proposalNotify";
+import { notifyProposalPending } from "@/app/utils/serviceMutationSideEffects";
 import { mergeContributor, type StoredContributor } from "@/app/utils/proposalContributors";
 import { serviceError } from "@/app/utils/serviceMutation";
 import { canonicalLeadRefs, pickUnique } from "@/app/utils/serviceReadSelect";
@@ -267,8 +267,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Post-commit side effect (§7): only a proposal committed as `pending` notifies
+  // — the existing admin/co-lead push plus the allowlist- and preference-aware
+  // admin email. A draft save is silent, and a failed notification never fails
+  // the write that already committed.
   if (request.status === "pending") {
-    await notifyProposalSubmitted({
+    await notifyProposalPending({
       leadId,
       roleId: target.serviceRef,
       serviceType: target.serviceType as "sunday" | "saturday" | "special",

@@ -1,14 +1,16 @@
 // app/api/admin/roles/publish/route.ts
-import { NextRequest, NextResponse, after } from "next/server";
-import { revalidatePath } from "next/cache";
+import { NextRequest, NextResponse } from "next/server";
 
 // Notifying the whole team can mean dozens of sequential emails; give the
 // after() work room to finish past the response.
 export const maxDuration = 60;
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
-import { sendPush } from "@/app/utils/push";
-import { sendAssignmentEmailsBatch, type ServiceType } from "@/app/utils/assignmentEmail";
+import type { ServiceType } from "@/app/utils/assignmentEmail";
+import {
+  notifyRolePublished,
+  revalidateRolePublication,
+} from "@/app/utils/serviceMutationSideEffects";
 import { computePublishTransitions } from "@/app/utils/publishTransitions";
 import { serviceError } from "@/app/utils/serviceMutation";
 import { validateRole } from "@/app/utils/serviceReadModel";
@@ -185,38 +187,25 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Deferred assignment notification, only for draft -> published transitions.
-  // Runs via after() so the (potentially dozens of) team emails reliably
-  // complete after the response is sent rather than racing the function exit.
-  if (toNotify.length) {
-    const notifySet = new Set(toNotify);
-    const docs = roles
+  // ── Post-commit side effects (§7), all through the one shared module ───────
+  // Only a real `false -> true` transition notifies, and then EVERY current
+  // assignee of that service hears about it — derived from committed server state
+  // across all five seat paths. An unpublish is silent. One deferred attempt per
+  // batch: a push per service plus ONE consolidated email per member.
+  const notifySet = new Set(toNotify);
+  notifyRolePublished(
+    roles
       .filter((r) => notifySet.has(r._id))
-      .map((r) => {
-        const v = validateRole(r);
-        return {
-          _id: r._id,
-          _type: r._type as ServiceType,
-          date: storedRoleDate(r) ?? "",
-          assignees: v.assignedRefs,
-          body: seatBody(r),
-        };
-      });
-    after(async () => {
-      for (const d of docs) {
-        await sendPush(d.assignees, "assignments", {
-          title: "Nuevo servicio asignado",
-          body: `Te asignaron para el ${d.date}.`,
-          path: "/me",
-        });
-      }
-      // One consolidated email per member across all newly-published services.
-      await sendAssignmentEmailsBatch(docs.map((d) => ({ type: d._type, date: d.date, body: d.body })));
-    });
-  }
+      .map((r) => ({
+        recipients: validateRole(r).assignedRefs,
+        type: r._type as ServiceType,
+        date: storedRoleDate(r) ?? "",
+        body: seatBody(r),
+      })),
+  );
 
   // Invalidate member-facing caches so the change is prompt (esp. on unpublish).
-  revalidatePath("/"); revalidatePath("/schedule"); revalidatePath("/me");
+  revalidateRolePublication();
 
   const publishedCount = published ? toPatch.length : 0;
   const unpublishedCount = published ? 0 : toPatch.length;

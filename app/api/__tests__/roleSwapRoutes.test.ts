@@ -653,10 +653,33 @@ describe("POST /api/admin/roles/swap — team swap", () => {
     await swapPOST(
       req({ kind: "team", roles: [{ id: "role-1", rev: "rev-1" }, { id: "role-2", rev: "rev-2" }] }),
     );
+    // ONE deferred attempt for the whole batch (§7), one push per destination.
+    expect(afterCallbacks).toHaveLength(1);
     await afterCallbacks[0]();
     expect(sendPushMock).toHaveBeenCalledTimes(2);
     expect(sendPushMock.mock.calls[0][0]).toEqual(["mem-5", "mem-6", "mem-7", "mem-8"]);
     expect(sendPushMock.mock.calls[1][0]).toEqual(["mem-1", "mem-2", "mem-3", "mem-4"]);
+    // …and ONE revalidation pass for the whole two-role batch, not one per role.
+    expect(revalidateServiceViewsMock).toHaveBeenCalledTimes(1);
+    expect(revalidatePathMock.mock.calls.map((c) => c[0])).toEqual(["/me"]);
+  });
+
+  it("swallows a thrown notification without failing the committed swap (§7)", async () => {
+    store.roles.push(role(), otherRole());
+    store.locks.push(lockFor("role-1", "2026-08-09", "lock-rev-1"), lockFor("role-2", "2026-08-16", "lock-rev-2"));
+    seedAllMembers();
+    sendPushMock.mockRejectedValue(new Error("fcm down"));
+    sendAssignmentEmailsMock.mockRejectedValue(new Error("smtp down"));
+    const res = await swapPOST(
+      req({ kind: "team", roles: [{ id: "role-1", rev: "rev-1" }, { id: "role-2", rev: "rev-2" }] }),
+    );
+    expect(res.status).toBe(200);
+    expect(committedTransactions()).toHaveLength(1);
+    await expect(afterCallbacks[0]()).resolves.toBeUndefined();
+    // Every destination was still attempted, and the swap is not rolled back.
+    expect(sendPushMock).toHaveBeenCalledTimes(2);
+    expect(sendAssignmentEmailsMock).toHaveBeenCalledTimes(2);
+    expect(committedTransactions()).toHaveLength(1);
   });
 
   it("refuses a stale entry, the same role twice, and a replacement team payload", async () => {

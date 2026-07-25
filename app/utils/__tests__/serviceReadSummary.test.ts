@@ -236,6 +236,180 @@ describe("buildRoleTargets", () => {
     expect(out.targets).toHaveLength(1);
     expect(out.recordIssues.some((i) => i.kind === "invalid_role")).toBe(true);
   });
+
+  it("omitting the lock inventory reports no lock state and invents no issues", () => {
+    const out = buildRoleTargets([sundayRole()], [], new Map());
+    expect(out.targets[0].lock).toBeNull();
+    expect(out.targets[0].lockIssues).toEqual([]);
+    expect(out.lockIssues).toEqual([]);
+  });
+});
+
+// ── buildRoleTargets — weekend lock state (A2 §1) ────────────────────────────
+
+describe("buildRoleTargets weekend lock state", () => {
+  const SUNDAY_KEY = "sunday_role:2026-07-26";
+  const SUNDAY_LOCK_ID = "roleTarget.sunday_role.2026-07-26";
+
+  function lock(over: Record<string, unknown> = {}) {
+    return {
+      _id: SUNDAY_LOCK_ID,
+      _rev: "lock-rev-1",
+      _type: "roleTargetLock",
+      targetKey: SUNDAY_KEY,
+      state: "claimed",
+      roleId: "role-sun-1",
+      roleType: "sunday_role",
+      date: "2026-07-26",
+      claimNonce: "n1",
+      generation: 3,
+      ...over,
+    };
+  }
+
+  function otherWeekLock(over: Record<string, unknown> = {}) {
+    return lock({
+      _id: "roleTarget.sunday_role.2026-08-02",
+      _rev: "lock-rev-2",
+      targetKey: "sunday_role:2026-08-02",
+      date: "2026-08-02",
+      roleId: "role-sun-2",
+      ...over,
+    });
+  }
+
+  function otherWeekRole(over: Record<string, unknown> = {}) {
+    return sundayRole({ _id: "role-sun-2", week: "2026-08-02", ...over });
+  }
+
+  it("reports lock state, owner and generation for a healthy claimed lock", () => {
+    const out = buildRoleTargets([sundayRole()], [], new Map(), [lock()]);
+    const t = out.targets[0];
+    expect(t.expectsLock).toBe(true);
+    expect(t.lock).toEqual({
+      id: SUNDAY_LOCK_ID,
+      rev: "lock-rev-1",
+      state: "claimed",
+      roleId: "role-sun-1",
+      generation: 3,
+    });
+    expect(t.lockIssues).toEqual([]);
+    expect(out.lockIssues).toEqual([]);
+  });
+
+  it("an occupied weekend target with no lock document is a missing_lock issue", () => {
+    const out = buildRoleTargets([sundayRole()], [], new Map(), []);
+    const t = out.targets[0];
+    expect(t.lock).toBeNull();
+    expect(t.lockIssues.map((i) => i.kind)).toEqual(["missing_lock"]);
+    expect(t.lockIssues[0].lockId).toBe(SUNDAY_LOCK_ID);
+    expect(out.lockIssues.map((i) => i.kind)).toEqual(["missing_lock"]);
+  });
+
+  it("a vacant lock that still names a roleId is a vacant_with_role issue", () => {
+    const out = buildRoleTargets([sundayRole()], [], new Map(), [lock({ state: "vacant" })]);
+    const t = out.targets[0];
+    expect(t.lock).toMatchObject({ state: "vacant", roleId: "role-sun-1" });
+    expect(t.lockIssues.map((i) => i.kind)).toEqual(["vacant_with_role"]);
+  });
+
+  it("a claimed lock with no roleId is a claimed_without_role issue", () => {
+    const out = buildRoleTargets([sundayRole()], [], new Map(), [lock({ roleId: undefined })]);
+    const t = out.targets[0];
+    expect(t.lock).toMatchObject({ state: "claimed", roleId: null });
+    expect(t.lockIssues.map((i) => i.kind)).toEqual(["claimed_without_role"]);
+  });
+
+  it("a lock claimed by a role that owns another target is a wrong_owner issue", () => {
+    const out = buildRoleTargets(
+      [sundayRole(), otherWeekRole()],
+      [],
+      new Map(),
+      [lock({ roleId: "role-sun-2" }), otherWeekLock()],
+    );
+    const t = out.targets.find((x) => x.targetKey === SUNDAY_KEY)!;
+    expect(t.lockIssues.map((i) => i.kind)).toEqual(["wrong_owner"]);
+    expect(t.lockIssues[0].roleId).toBe("role-sun-2");
+    // The other target is untouched by its neighbour's problem.
+    const other = out.targets.find((x) => x.targetKey === "sunday_role:2026-08-02")!;
+    expect(other.lockIssues).toEqual([]);
+  });
+
+  it("a lock claimed by an unknown role id is an orphan_lock issue", () => {
+    const out = buildRoleTargets([sundayRole()], [], new Map(), [lock({ roleId: "role-gone" })]);
+    expect(out.targets[0].lockIssues.map((i) => i.kind)).toEqual(["orphan_lock"]);
+    expect(out.targets[0].lockIssues[0].roleId).toBe("role-gone");
+  });
+
+  it("a claimed lock whose target has NO canonical role is a domain-level orphan_lock", () => {
+    const out = buildRoleTargets([], [], new Map(), [lock({ roleId: "role-gone" })]);
+    expect(out.targets).toHaveLength(0);
+    expect(out.lockIssues.map((i) => i.kind)).toEqual(["orphan_lock"]);
+    expect(out.lockIssues[0].lockId).toBe(SUNDAY_LOCK_ID);
+  });
+
+  it("a vacant lock on an unoccupied target is not an issue", () => {
+    const out = buildRoleTargets(
+      [],
+      [],
+      new Map(),
+      [lock({ state: "vacant", roleId: undefined, generation: 4 })],
+    );
+    expect(out.targets).toHaveLength(0);
+    expect(out.lockIssues).toEqual([]);
+  });
+
+  it("special roles take NO weekend lock, so absence there is not an issue", () => {
+    const out = buildRoleTargets([specialRole()], [], new Map(), []);
+    const t = out.targets[0];
+    expect(t.type).toBe("special_role");
+    expect(t.expectsLock).toBe(false);
+    expect(t.lock).toBeNull();
+    expect(t.lockIssues).toEqual([]);
+    expect(out.lockIssues).toEqual([]);
+  });
+
+  it("one malformed lock is a record-level issue that does not fail unrelated targets", () => {
+    const out = buildRoleTargets(
+      [sundayRole(), otherWeekRole()],
+      [],
+      new Map(),
+      // `state` is unusable and the generation is missing: structurally malformed.
+      [lock({ state: "weird", generation: "many" }), otherWeekLock()],
+    );
+    expect(out.targets).toHaveLength(2);
+    const broken = out.targets.find((x) => x.targetKey === SUNDAY_KEY)!;
+    expect(broken.lockIssues.every((i) => i.kind === "malformed_lock")).toBe(true);
+    expect(broken.lockIssues.length).toBeGreaterThan(0);
+    expect(broken.lock).toMatchObject({ id: SUNDAY_LOCK_ID, state: null, generation: null });
+    // The healthy neighbour still reports full lock state and no issues.
+    const healthy = out.targets.find((x) => x.targetKey === "sunday_role:2026-08-02")!;
+    expect(healthy.lockIssues).toEqual([]);
+    expect(healthy.lock).toMatchObject({ state: "claimed", roleId: "role-sun-2", generation: 3 });
+    // Every lock issue is reachable from the domain-level view, and only those.
+    expect(out.lockIssues).toEqual(broken.lockIssues);
+  });
+
+  it("a non-object lock record cannot throw the domain", () => {
+    const out = buildRoleTargets([sundayRole()], [], new Map(), [null, undefined, lock()]);
+    expect(out.targets).toHaveLength(1);
+    expect(out.targets[0].lockIssues).toEqual([]);
+    // The unusable records are reported, never silently dropped.
+    expect(out.lockIssues.some((i) => i.kind === "malformed_lock")).toBe(true);
+  });
+
+  it("a lock stored at the wrong deterministic id is an id_mismatch issue", () => {
+    const out = buildRoleTargets(
+      [sundayRole()],
+      [],
+      new Map(),
+      [lock({ _id: "roleTarget.sunday_role.1999-01-01" })],
+    );
+    // The target has no lock at its own deterministic id …
+    expect(out.targets[0].lockIssues.map((i) => i.kind)).toEqual(["missing_lock"]);
+    // … and the misfiled record is still reported rather than ignored.
+    expect(out.lockIssues.map((i) => i.kind).sort()).toEqual(["id_mismatch", "missing_lock"]);
+  });
 });
 
 // ── buildSetlistTargets ───────────────────────────────────────────────────────

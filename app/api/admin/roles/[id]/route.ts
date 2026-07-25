@@ -1,14 +1,14 @@
-import { NextRequest, NextResponse, after } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 60;
 import { randomUUID } from "node:crypto";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
-import { addedAssignees } from "@/app/utils/notifyTargets";
-import { sendPush } from "@/app/utils/push";
-import { sendAssignmentEmails } from "@/app/utils/assignmentEmail";
-import { revalidateServiceViews } from "@/app/utils/revalidate";
-import { revalidatePath } from "next/cache";
+import {
+  notifyRoleAssignments,
+  revalidateRoleMutation,
+  roleUpdateNotice,
+} from "@/app/utils/serviceMutationSideEffects";
 import { serviceDependencyError, serviceError } from "@/app/utils/serviceMutation";
 import { validateRole } from "@/app/utils/serviceReadModel";
 import { retireReceiptPatch } from "@/app/utils/roleCreationReceipt";
@@ -26,7 +26,6 @@ import {
   planTargetClaim,
   roleDateField,
   sanityConflictKind,
-  seatAssignees,
 } from "@/app/utils/roleWriteRequest";
 import {
   bootstrapLegacyLock,
@@ -276,35 +275,21 @@ export async function PATCH(
     );
   }
 
+  // ── Post-commit side effects (§7), all through the one shared module ───────
   // Recipients derive from committed server state across all five seat paths:
-  // the previously stored assignees versus the seats just written.
-  const prevIds = validateRole(role).assignedRefs;
-  const nextIds = seatAssignees(request.seats);
-  const added = addedAssignees(prevIds, nextIds);
-  if (role.published !== false) {
-    // published or grandfathered; drafts stay silent
-    after(async () => {
-      await sendPush(added, "assignments", {
-        title: "Servicio actualizado",
-        body: `Te asignaron para el ${newDate}.`,
-        path: "/me",
-      });
-      await sendAssignmentEmails(added, {
-        type: roleType,
-        date: newDate,
-        body: {
-          leads: request.seats.leads,
-          bgvs: request.seats.bgvs,
-          chorus: request.seats.chorus,
-          instruments: request.seats.instruments,
-          foh: request.seats.foh,
-        },
-      });
-    });
-  }
+  // the previously stored assignees versus the seats just written. A draft edit
+  // stays silent; published or grandfathered notifies only the newly added.
+  notifyRoleAssignments([
+    roleUpdateNotice({
+      published: role.published,
+      beforeAssignees: validateRole(role).assignedRefs,
+      after: request.seats,
+      type: roleType,
+      date: newDate,
+    }),
+  ]);
 
-  revalidateServiceViews();
-  revalidatePath("/me");
+  revalidateRoleMutation();
   return NextResponse.json({ _id: role._id, _type: roleType, date: newDate, ok: true });
 }
 
@@ -444,7 +429,7 @@ export async function DELETE(
     );
   }
 
-  revalidateServiceViews();
-  revalidatePath("/me");
+  // A removal is silent by §7: only the caches are refreshed, nobody is notified.
+  revalidateRoleMutation();
   return NextResponse.json({ ok: true, id: role._id });
 }
