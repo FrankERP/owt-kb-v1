@@ -25,6 +25,16 @@
 import fs from "fs";
 import path from "path";
 
+// ── Service Readiness A2 §8: RETIRED WRITER ────────────────────────────────
+// This one-shot writer already ran against production and cannot adopt the
+// guarded mutation invariant (target lock + creation receipt + exact observed
+// revision + dependency policy). It therefore FAILS CLOSED here, before any
+// Sanity client is constructed and before any mutation is assembled. See
+// scripts/lib/sr-retired-writer.mjs for the replacement path. Everything below
+// is kept only as the historical record of what was applied.
+import { assertRetiredWriter } from "./lib/sr-retired-writer.mjs";
+assertRetiredWriter("import-schedule", { argv: process.argv.slice(2), env: process.env });
+
 // ─── Load .env.local ────────────────────────────────────────────────────────
 
 function loadEnvLocal() {
