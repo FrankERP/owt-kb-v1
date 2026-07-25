@@ -183,6 +183,20 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — the publish surface itself)",
   },
   {
+    file: "app/api/admin/roles/publish-ready/route.ts",
+    operation: "POST",
+    reason:
+      "guarded readiness-aware publish (Plan B item 3): reloads the five A1 read domains, recomputes the shared readiness predicate, and commits ONE transaction whose every op asserts an observed revision — role, weekend lock, setlist singleton, proposal singleton and every assigned member — with `published: true` folded into each role's own assertion",
+    removalOwner: "permanent runtime writer (never removed — the ready/override publish surface itself)",
+  },
+  {
+    file: "app/api/admin/roles/unpublish/route.ts",
+    operation: "POST",
+    reason:
+      "guarded narrow unpublish (Plan B item 3): proves canonical singleton identity, raw-draft absence, observed revision, target occupancy and weekend lock ownership, then patches `published: false` under that revision and heartbeats each token; deliberately consults no readiness or blocker acknowledgement",
+    removalOwner: "permanent runtime writer (never removed — the hide-a-service safety surface itself)",
+  },
+  {
     file: "app/api/admin/roles/swap/route.ts",
     operation: "POST",
     reason:
