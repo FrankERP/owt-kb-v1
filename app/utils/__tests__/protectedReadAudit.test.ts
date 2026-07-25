@@ -274,6 +274,7 @@ describe("A2 handoff allowlist", () => {
         "app/api/admin/roles/route.ts#POST",
         "app/api/admin/setlists/route.ts#PUT",
         "app/api/me/proposals/route.ts#POST",
+        "scripts/backfill-legacy-seat-arrays.mjs#module",
         "scripts/cleanup-superseded-proposals.mjs#module",
         "scripts/import-schedule.ts#module",
         "scripts/import-setlist-history.mjs#module",

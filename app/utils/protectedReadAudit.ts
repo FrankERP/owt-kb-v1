@@ -188,6 +188,13 @@ export const A2_HANDOFF_ALLOWLIST: readonly AuditExemption[] = [
     reason: "queries July role documents and patches published: false",
     removalOwner: "A2",
   },
+  {
+    file: "scripts/backfill-legacy-seat-arrays.mjs",
+    operation: "module",
+    reason:
+      "spent one-off: read six hardcoded legacy role ids and added the seat arrays that predated those fields, revision-guarded; already applied to production, so A2 retires it alongside the other one-shot writers",
+    removalOwner: "A2",
+  },
 ];
 
 /**
