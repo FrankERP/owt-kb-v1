@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  DELETE_ONLY_STUDIO_TYPES,
   INTERNAL_STUDIO_FIELDS,
   INTERNAL_STUDIO_TYPES,
   PROTECTED_STUDIO_TITLES,
@@ -21,6 +22,8 @@ import {
   SANITY_V5_BUILT_IN_ACTIONS,
   STUDIO_MUTATING_CAPABILITIES,
   STUDIO_READ_ONLY_CAPABILITIES,
+  isDeleteOnlyStudioType,
+  isGovernedStudioType,
   isInternalStudioField,
   isInternalStudioType,
   isProtectedStudioType,
@@ -102,8 +105,8 @@ describe("studio protection policy", () => {
     expect(studioCapability("sunday_role", "").allowed).toBe(false);
   });
 
-  it("leaves unprotected types alone", () => {
-    for (const type of ["post", "teamMembers", "tag", "author", "loginEvent"]) {
+  it("leaves ungoverned types alone", () => {
+    for (const type of ["post", "teamMembers", "tag", "author"]) {
       for (const capability of [...STUDIO_MUTATING_CAPABILITIES, ...STUDIO_READ_ONLY_CAPABILITIES]) {
         expect(studioCapability(type, capability).allowed, `${type}/${capability}`).toBe(true);
       }
@@ -136,6 +139,78 @@ describe("studio protection policy", () => {
     }
     expect(isInternalStudioField("sunday_role", "week")).toBe(false);
     expect(isInternalStudioField("post", "title")).toBe(false);
+  });
+});
+
+// ── The delete-only category (Service Readiness A3 §4) ──────────────────────
+
+describe("delete-only studio policy (loginEvent)", () => {
+  it("covers exactly loginEvent, and is governed but not `protected`", () => {
+    expect([...DELETE_ONLY_STUDIO_TYPES]).toEqual(["loginEvent"]);
+    expect(isDeleteOnlyStudioType("loginEvent")).toBe(true);
+    expect(isDeleteOnlyStudioType("post")).toBe(false);
+    expect(isGovernedStudioType("loginEvent")).toBe(true);
+    expect(isGovernedStudioType("sunday_role")).toBe(true);
+    expect(isGovernedStudioType("post")).toBe(false);
+    // It is NOT one of the eight fully protected types.
+    expect(isProtectedStudioType("loginEvent")).toBe(false);
+    expect(PROTECTED_STUDIO_TYPES as readonly string[]).not.toContain("loginEvent");
+  });
+
+  it("allows read and delete", () => {
+    for (const capability of STUDIO_READ_ONLY_CAPABILITIES) {
+      expect(studioCapability("loginEvent", capability).allowed, capability).toBe(true);
+    }
+    const del = studioCapability("loginEvent", "delete");
+    expect(del.allowed).toBe(true);
+    expect(del.mechanism).toBe("document.actions -> [delete]");
+  });
+
+  it("denies create, update, publish, unpublish and duplicate", () => {
+    for (const capability of ["create", "update", "publish", "unpublish", "duplicate"]) {
+      const decision = studioCapability("loginEvent", capability);
+      expect(decision.allowed, `loginEvent must deny ${capability}`).toBe(false);
+      expect(decision.mechanism.length).toBeGreaterThan(0);
+      expect(decision.reason.length).toBeGreaterThan(10);
+    }
+  });
+
+  it("denies every other mutating capability, and fails closed on an unknown one", () => {
+    for (const capability of STUDIO_MUTATING_CAPABILITIES) {
+      if (capability === "delete") continue;
+      expect(studioCapability("loginEvent", capability).allowed, capability).toBe(false);
+    }
+    expect(studioCapability("loginEvent", "someFutureAction").allowed).toBe(false);
+    expect(studioCapability("loginEvent", "").allowed).toBe(false);
+  });
+
+  it("keeps only the delete action, and drops its create template", () => {
+    const actions = SANITY_V5_BUILT_IN_ACTIONS.map((action) => ({ action }));
+    expect(protectedDocumentActions(actions, { schemaType: "loginEvent" })).toEqual([{ action: "delete" }]);
+    expect(protectedNewDocumentOptions([{ templateId: "loginEvent" }, { templateId: "post" }])).toEqual([
+      { templateId: "post" },
+    ]);
+  });
+
+  it("stays in the default structure list (it is prunable, not `solo lectura`)", () => {
+    const { editable, inspectOnly } = partitionStudioTypes(["loginEvent", "sunday_role", "post"]);
+    expect(editable).toEqual(["loginEvent", "post"]);
+    expect(inspectOnly).toEqual(["sunday_role"]);
+  });
+
+  it("declares the schema type read-only with the four hidden A3 ownership fields", () => {
+    const src = read("sanity/schemas/loginEvent.ts");
+    expect(src).toMatch(/name:\s*["']loginEvent["']/);
+    expect(src, "loginEvent must be a readOnly type").toMatch(/^\s*readOnly:\s*true,\s*$/m);
+    for (const field of ["runId", "attemptId", "candidateSha", "deploymentId"]) {
+      const at = src.indexOf(`name: "${field}"`);
+      expect(at, `${field} is not declared`).toBeGreaterThan(-1);
+      const declaration = src.slice(at, at + 200);
+      expect(declaration, `${field} must be hidden`).toContain("hidden: true");
+      expect(declaration, `${field} must be readOnly`).toContain("readOnly: true");
+      // Optional: no validation rule may make an ordinary sign-in invalid.
+      expect(declaration, `${field} must stay optional`).not.toContain("validation");
+    }
   });
 });
 
@@ -227,16 +302,18 @@ describe("studio config installs the policy", () => {
     expect(config).toContain("structureTool({structure: serviceReadinessStructure})");
   });
 
-  it("never uses the v5-inert __experimental_actions in the protected schemas or the Studio config", () => {
+  it("never uses the v5-inert __experimental_actions in any governed schema or the Studio config", () => {
     // `__experimental_actions` was REMOVED in Sanity v5: assigning it protects
-    // nothing. Every protected type and the Studio config must therefore rely on
-    // the supported mechanisms only. (`sanity/schemas/loginEvent.ts` still
-    // carries an inert leftover from the v3 era; it is not a Service Readiness
-    // protected type and is outside this slice's scope.)
+    // nothing. Every governed type and the Studio config must therefore rely on
+    // the supported mechanisms only. `sanity/schemas/loginEvent.ts` carried an
+    // inert `["read","delete"]` leftover from the v3 era — meaning that type had
+    // silently lost its restriction — and A3 §4 replaced it with the code-owned
+    // delete-only policy above.
     const owned = [
       "sanity.config.ts",
       "sanity/structure.ts",
       "app/utils/studioProtection.ts",
+      "sanity/schemas/loginEvent.ts",
       "sanity/schemas/sunRole.ts",
       "sanity/schemas/satRole.ts",
       "sanity/schemas/specialRole.ts",

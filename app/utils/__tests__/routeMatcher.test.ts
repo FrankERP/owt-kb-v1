@@ -30,6 +30,20 @@ describe("auth middleware route matcher", () => {
     expect(middlewareRuns("/api/admin/roles")).toBe(true);
   });
 
+  it("leaves ONLY the exact A3 verification identity path public", () => {
+    // The harness must read the deployment's dataset identity before it has a
+    // session (Service Readiness A3 §4). The route itself fails closed with a 404
+    // in any ordinary deployment.
+    expect(middlewareRuns("/api/service-readiness-verification/identity")).toBe(false);
+    // Anchored with `$`: no sibling or child path inherits public reachability.
+    expect(middlewareRuns("/api/service-readiness-verification")).toBe(true);
+    expect(middlewareRuns("/api/service-readiness-verification/identity/")).toBe(true);
+    expect(middlewareRuns("/api/service-readiness-verification/identity/extra")).toBe(true);
+    expect(middlewareRuns("/api/service-readiness-verification/reset")).toBe(true);
+    expect(middlewareRuns("/api/service-readiness-verification/seed")).toBe(true);
+    expect(middlewareRuns("/api/service-readiness-verification/identityX")).toBe(true);
+  });
+
   it("leaves static assets public", () => {
     for (const p of ["/_next/static/chunks/main.js", "/_next/image", "/favicon.ico", "/LogoOasis.png", "/icons/backstage-v2-192.png", "/manifest.webmanifest"]) {
       expect(middlewareRuns(p)).toBe(false);
