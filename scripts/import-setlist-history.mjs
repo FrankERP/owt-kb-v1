@@ -7,6 +7,16 @@ import { parseMessages, detectSetlists, splitSections, parseSongLine, serviceDat
 import { buildCatalogIndex, matchSong } from "./lib/setlist-match.mjs";
 import { normalizeForMatch } from "./lib/catalog-reconcile.mjs";
 
+// ── Service Readiness A2 §8: RETIRED WRITER ────────────────────────────────
+// This one-shot writer already ran against production and cannot adopt the
+// guarded mutation invariant (target lock + creation receipt + exact observed
+// revision + dependency policy). It therefore FAILS CLOSED here, before any
+// Sanity client is constructed and before any mutation is assembled. See
+// scripts/lib/sr-retired-writer.mjs for the replacement path. Everything below
+// is kept only as the historical record of what was applied.
+import { assertRetiredWriter } from "./lib/sr-retired-writer.mjs";
+assertRetiredWriter("import-setlist-history", { argv: process.argv.slice(2), env: process.env });
+
 const WORKDIR = process.env.CATALOG_DIR || "/Users/frankrocha/Downloads/ContentUpdateProject";
 const ZIP = "/Users/frankrocha/Downloads/Chat de WhatsApp con Colaboradores Alabanza.zip";
 const TXT_NAME = "Chat de WhatsApp con Colaboradores Alabanza.txt";

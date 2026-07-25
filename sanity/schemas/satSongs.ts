@@ -2,6 +2,13 @@ export const saturdaySongs = {
   name: 'saturdarSongs',
   title: 'Saturday Songs',
   type: 'document',
+  // Service Readiness A2 §8 — Studio protection. This document is read-only in
+  // the embedded Studio: every write goes through the guarded API routes, which
+  // hold the target lock, assert the observed revision, and run the dependency
+  // policy. `document.actions` in `sanity.config.ts` also removes every mutating
+  // action (even by direct URL), and `newDocumentOptions` removes the create
+  // affordance. `__experimental_actions` is NOT used — it is inert in Sanity v5.
+  readOnly: true,
   fields: [
     {
       name: 'songs',

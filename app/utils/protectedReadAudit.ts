@@ -74,6 +74,14 @@ const QUERY_HELPER_MODULE = /(^|\/)app\/utils\/serviceReadQueries$|(^|\/)service
 /** Names exported by a Sanity client module that are not client instances. */
 const NON_CLIENT_EXPORTS = new Set(["createClient", "groq", "defineQuery", "defineLive"]);
 
+/**
+ * Guard-gated client FACTORIES used by the operator/verification tooling. A
+ * `const client = makeVerificationClient(...)` hands out a real Sanity client
+ * just like `createClient(...)` does, so the receiver must be audited — otherwise
+ * a script could reach the Content Lake through a helper and stay invisible here.
+ */
+const GUARDED_CLIENT_FACTORIES = ["makeVerificationClient"];
+
 export type ProtectedSiteKind =
   | "protected-literal-read"
   | "generic-id-protected-read"
@@ -194,6 +202,31 @@ export const A2_HANDOFF_ALLOWLIST: readonly AuditExemption[] = [
     operation: "module",
     reason: "queries July role documents and patches published: false",
     removalOwner: "A2",
+  },
+];
+
+/**
+ * Guarded OPERATOR TOOLING — kept SEPARATE from the A2 writer allowlist and NOT
+ * owned by A2, because A2 does not remove these writers: they exist precisely to
+ * be run by hand against the isolated verification dataset, and their guards
+ * (`scripts/lib/sr-verification.mjs`) hard-refuse the production project and
+ * dataset on either axis, in dry-run too. They are listed here, by exact
+ * file + operation, so they are visible to the audit rather than invisible to it.
+ */
+export const OPERATOR_TOOLING_ALLOWLIST: readonly AuditExemption[] = [
+  {
+    file: "scripts/service-readiness-cleanup.mjs",
+    operation: "module",
+    reason:
+      "guarded operator cleanup: gathers its own dependency/orphan proof over the protected types and commits one revision-asserted transaction; hard-refuses the production project/dataset and is dry-run by default",
+    removalOwner: "operator cleanup tooling (never A2 — A2 adds it, nothing removes it)",
+  },
+  {
+    file: "scripts/service-readiness-feasibility.mjs",
+    operation: "module",
+    reason:
+      "A3 isolated-dataset feasibility harness: creates and conflicts protected role/setlist/proposal documents inside the verification dataset only; hard-refuses the production project/dataset",
+    removalOwner: "A3 verification tooling (never A2)",
   },
 ];
 
@@ -335,6 +368,11 @@ export function sanityClientIdentifiers(code: string): ClientInfo {
   }
   const createRe = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*createClient\s*\(/g;
   while ((m = createRe.exec(code))) clients.add(m[1]);
+  const factoryRe = new RegExp(
+    `(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*(?:await\\s+)?(?:${GUARDED_CLIENT_FACTORIES.join("|")})\\s*\\(`,
+    "g",
+  );
+  while ((m = factoryRe.exec(code))) clients.add(m[1]);
   // A transaction handle inherits its client's write capability.
   const txRe = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*([A-Za-z_$][\w$]*)\s*\.\s*transaction\s*\(/g;
   while ((m = txRe.exec(code))) if (clients.has(m[2])) clients.add(m[1]);
@@ -667,14 +705,17 @@ function matches(entry: AuditExemption, site: ProtectedSite): boolean {
 /**
  * Protected sites that neither read through the canonical operational clients nor
  * carry an exact documented exemption. Guard sites are satisfied ONLY by the
- * defensive-guard registry; protected reads/writes ONLY by the A2 allowlist.
+ * defensive-guard registry; protected reads/writes ONLY by the A2 allowlist or the
+ * guarded operator-tooling registry. Each registry stays exact file + operation.
  */
 export function auditViolations(sites: readonly ProtectedSite[]): ProtectedSite[] {
   return sites.filter((site) => {
     if (site.compliant) return false;
-    const registry =
-      site.kind === "type-rejection-guard" ? DEFENSIVE_TYPE_REJECTION_GUARDS : A2_HANDOFF_ALLOWLIST;
-    return !registry.some((entry) => matches(entry, site));
+    const registries =
+      site.kind === "type-rejection-guard"
+        ? [DEFENSIVE_TYPE_REJECTION_GUARDS]
+        : [A2_HANDOFF_ALLOWLIST, OPERATOR_TOOLING_ALLOWLIST];
+    return !registries.some((registry) => registry.some((entry) => matches(entry, site)));
   });
 }
 

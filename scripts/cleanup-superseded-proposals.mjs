@@ -5,6 +5,16 @@
 // approve-time cleanup existed. Idempotent. Dry-run by default; pass --apply.
 import { createClient } from "@sanity/client";
 
+// ── Service Readiness A2 §8: RETIRED WRITER ────────────────────────────────
+// This one-shot writer already ran against production and cannot adopt the
+// guarded mutation invariant (target lock + creation receipt + exact observed
+// revision + dependency policy). It therefore FAILS CLOSED here, before any
+// Sanity client is constructed and before any mutation is assembled. See
+// scripts/lib/sr-retired-writer.mjs for the replacement path. Everything below
+// is kept only as the historical record of what was applied.
+import { assertRetiredWriter } from "./lib/sr-retired-writer.mjs";
+assertRetiredWriter("cleanup-superseded-proposals", { argv: process.argv.slice(2), env: process.env });
+
 const client = createClient({
   projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || "ebb8vcnk",
   dataset: "production",

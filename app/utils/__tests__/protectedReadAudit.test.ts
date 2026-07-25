@@ -17,6 +17,7 @@ import { describe, expect, it } from "vitest";
 import {
   A2_HANDOFF_ALLOWLIST,
   DEFENSIVE_TYPE_REJECTION_GUARDS,
+  OPERATOR_TOOLING_ALLOWLIST,
   PROTECTED_TYPES,
   auditViolations,
   describeSite,
@@ -234,7 +235,11 @@ export async function PATCH() {
 // ── Allowlist shape ─────────────────────────────────────────────────────────
 
 describe("A2 handoff allowlist", () => {
-  const ALL_ENTRIES = [...A2_HANDOFF_ALLOWLIST, ...DEFENSIVE_TYPE_REJECTION_GUARDS];
+  const ALL_ENTRIES = [
+    ...A2_HANDOFF_ALLOWLIST,
+    ...OPERATOR_TOOLING_ALLOWLIST,
+    ...DEFENSIVE_TYPE_REJECTION_GUARDS,
+  ];
   const VALID_OPERATIONS = new Set(["module", "GET", "POST", "PUT", "PATCH", "DELETE"]);
 
   it("names an exact file and operation, never a directory or glob", () => {
@@ -286,6 +291,33 @@ describe("A2 handoff allowlist", () => {
         "scripts/unpublish-july-2026.mjs#module",
       ].sort(),
     );
+  });
+
+  it("keeps guarded operator tooling in its own registry, never owned by A2", () => {
+    expect(OPERATOR_TOOLING_ALLOWLIST.map((e) => `${e.file}#${e.operation}`).sort()).toEqual(
+      ["scripts/service-readiness-cleanup.mjs#module", "scripts/service-readiness-feasibility.mjs#module"].sort(),
+    );
+    for (const entry of OPERATOR_TOOLING_ALLOWLIST) {
+      // A2 adds these writers; item 12 ("empty the A2 allowlist") never removes them.
+      expect(entry.removalOwner, entry.file).not.toBe("A2");
+      expect(
+        A2_HANDOFF_ALLOWLIST.some((a) => a.file === entry.file && a.operation === entry.operation),
+        entry.file,
+      ).toBe(false);
+    }
+  });
+
+  it("sees a client obtained from the guarded factory, not only from createClient", () => {
+    const sites = scanSource(
+      "scripts/example-tool.mjs",
+      `const { makeVerificationClient } = await import("./lib/sr-verification-runtime.mjs");
+const client = makeVerificationClient(guards, token);
+const rows = await client.fetch(\`*[_type == "sunday_role"]{ _id }\`);
+await client.transaction().delete(rows[0]._id).commit();`,
+    );
+    expect(sites.map((s) => s.kind).sort()).toEqual(["protected-literal-read", "protected-write"]);
+    // Unlisted guarded tooling is still a violation: the registry is exact.
+    expect(auditViolations(sites)).toHaveLength(2);
   });
 
   it("carries no dead entries — every exemption is exercised by a real site", () => {
