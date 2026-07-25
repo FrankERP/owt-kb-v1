@@ -1,5 +1,6 @@
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { getMessaging } from "./firebaseAdmin";
+import { blockDelivery, recordDeliveryAttempt } from "./deliveryFirewall";
 
 export type NotifCategory = "assignments" | "setlist" | "proposals" | "reminders";
 export type PushPayload = { title: string; body: string; path: string };
@@ -35,6 +36,13 @@ export async function sendPush(
 ): Promise<{ sent: number; pruned: number }> {
   try {
     if (memberIds.length === 0) return { sent: 0, pruned: 0 };
+    // A3 §3 outbound-delivery firewall. Gated on the MEMBER count, before the
+    // token read, so evidence is emitted even when the fixtures happen to carry no
+    // device tokens — "no tokens in the dataset" is exactly the fixture-absence
+    // non-proof the plan rejects. The count is non-PII; no id is ever emitted.
+    if (blockDelivery({ channel: "fcm", recipientCount: memberIds.length })) {
+      return { sent: 0, pruned: 0 };
+    }
     const members = await serverClient.fetch<MemberRow[]>(
       `*[_type == "teamMembers" && _id in $ids]{ _id, deviceTokens, notifPrefs }`,
       { ids: memberIds }
@@ -53,6 +61,7 @@ export async function sendPush(
     }
     if (tokens.length === 0) return { sent: 0, pruned: 0 };
 
+    recordDeliveryAttempt({ channel: "fcm", recipientCount: tokens.length });
     const res = await getMessaging().sendEachForMulticast({
       tokens,
       notification: { title: payload.title, body: payload.body },
@@ -72,6 +81,13 @@ export async function sendPush(
       }
     });
 
+    // Dead-token pruning is its own gated channel (A3 §3 names it explicitly).
+    // Unreachable while the firewall is closed — the `fcm` gate above already
+    // returned — but gated on its own axis so a future caller that reaches the
+    // prune without passing that gate still cannot write.
+    if (dead.length && blockDelivery({ channel: "prune", recipientCount: dead.length })) {
+      return { sent, pruned: 0 };
+    }
     for (const d of dead) {
       try {
         // FCM tokens are opaque URL-safe strings (no quotes), so interpolating into the

@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// `push.ts` now consults the A3 §3 delivery firewall, which is `import
+// "server-only"` guarded; neutralize the marker under vitest's node environment.
+vi.mock("server-only", () => ({}));
+
 const sendEachForMulticast = vi.fn();
 vi.mock("../firebaseAdmin", () => ({
   getMessaging: () => ({ sendEachForMulticast }),
