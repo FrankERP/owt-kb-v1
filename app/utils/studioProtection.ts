@@ -38,6 +38,26 @@ export const PROTECTED_STUDIO_TYPES = [
 export type ProtectedStudioType = (typeof PROTECTED_STUDIO_TYPES)[number];
 
 /**
+ * DELETE-ONLY governed types: read and delete are allowed, every other mutation
+ * is denied.
+ *
+ * `loginEvent` is the sign-in audit trail. It is written only by `auth.ts`'s
+ * `events.signIn` through the server write token, so hand-authoring or editing an
+ * entry would falsify an audit record — but pruning it is legitimate operator
+ * work, and Service Readiness A3 §4 deletes its own run-owned verification events
+ * by exact `_id`.
+ *
+ * It used to express this with an `__experimental_actions` list of `["read",
+ * "delete"]`, which Sanity v5 REMOVED — so the type had silently lost its
+ * restriction and every mutating action was available again. The policy now
+ * lives here, in code, and is asserted by
+ * `app/utils/__tests__/studioProtection.test.ts`.
+ */
+export const DELETE_ONLY_STUDIO_TYPES = ["loginEvent"] as const;
+
+export type DeleteOnlyStudioType = (typeof DELETE_ONLY_STUDIO_TYPES)[number];
+
+/**
  * Internal coordination types: never authored by hand at all, so they are also
  * `hidden: true` in the schema and never appear in any create affordance.
  */
@@ -118,12 +138,26 @@ export interface StudioCapabilityDecision {
 }
 
 const PROTECTED_SET: ReadonlySet<string> = new Set(PROTECTED_STUDIO_TYPES);
+const DELETE_ONLY_SET: ReadonlySet<string> = new Set(DELETE_ONLY_STUDIO_TYPES);
 const INTERNAL_SET: ReadonlySet<string> = new Set(INTERNAL_STUDIO_TYPES);
 const MUTATING_SET: ReadonlySet<string> = new Set(STUDIO_MUTATING_CAPABILITIES);
 const READ_ONLY_SET: ReadonlySet<string> = new Set(STUDIO_READ_ONLY_CAPABILITIES);
 
 export function isProtectedStudioType(typeName: unknown): typeName is ProtectedStudioType {
   return typeof typeName === "string" && PROTECTED_SET.has(typeName);
+}
+
+export function isDeleteOnlyStudioType(typeName: unknown): typeName is DeleteOnlyStudioType {
+  return typeof typeName === "string" && DELETE_ONLY_SET.has(typeName);
+}
+
+/**
+ * Any type this policy governs at all — the eight fully protected types plus the
+ * delete-only ones. The config resolvers branch on THIS, so a delete-only type
+ * cannot escape the policy just because it is not "protected".
+ */
+export function isGovernedStudioType(typeName: unknown): boolean {
+  return isProtectedStudioType(typeName) || isDeleteOnlyStudioType(typeName);
 }
 
 export function isInternalStudioType(typeName: unknown): boolean {
@@ -145,6 +179,41 @@ export function isInternalStudioField(typeName: unknown, fieldName: unknown): bo
  * become allowed).
  */
 export function studioCapability(typeName: unknown, capability: string): StudioCapabilityDecision {
+  if (isDeleteOnlyStudioType(typeName)) {
+    if (READ_ONLY_SET.has(capability)) {
+      return {
+        allowed: true,
+        mechanism: "read-only inspection",
+        reason: `${typeName} is an audit trail; reading it is the point.`,
+      };
+    }
+    if (capability === "delete") {
+      return {
+        allowed: true,
+        mechanism: "document.actions -> [delete]",
+        reason: `Pruning ${typeName} entries is legitimate operator work, and the A3 verification reset deletes its own run-owned events by exact _id.`,
+      };
+    }
+    if (capability === "create") {
+      return {
+        allowed: false,
+        mechanism: "document.newDocumentOptions",
+        reason: `${typeName} documents are written only by the server (auth.ts events.signIn); a hand-authored entry would falsify an audit record.`,
+      };
+    }
+    if (capability === "update") {
+      return {
+        allowed: false,
+        mechanism: "schema `readOnly: true`",
+        reason: `${typeName} fields are read-only in the Studio; editing an audit record would falsify it.`,
+      };
+    }
+    return {
+      allowed: false,
+      mechanism: "document.actions -> [delete]",
+      reason: `Only delete is kept for ${typeName}; ${JSON.stringify(capability)} is denied (fail closed).`,
+    };
+  }
   if (!isProtectedStudioType(typeName)) {
     return {
       allowed: true,
@@ -221,25 +290,30 @@ export function templateItemType(item: StudioTemplateItemLike): string | null {
 /**
  * `document.actions` resolver. For a protected type EVERY action is dropped —
  * built-in or plugin-supplied — because no action currently offered by the
- * Studio is read-only. Other types keep their actions untouched.
+ * Studio is read-only. A delete-only type keeps exactly `delete` and nothing
+ * else. Ungoverned types keep their actions untouched.
  */
 export function protectedDocumentActions<T extends StudioActionLike>(
   prev: T[],
   context: { schemaType: string },
 ): T[] {
-  if (!isProtectedStudioType(context?.schemaType)) return prev;
+  if (!isGovernedStudioType(context?.schemaType)) return prev;
   return prev.filter((action) => studioCapability(context.schemaType, action.action ?? "unknown").allowed);
 }
 
-/** `document.newDocumentOptions` resolver: no protected type may be created. */
+/** `document.newDocumentOptions` resolver: no governed type may be created. */
 export function protectedNewDocumentOptions<T extends StudioTemplateItemLike>(prev: T[]): T[] {
-  return prev.filter((item) => !isProtectedStudioType(templateItemType(item)));
+  return prev.filter((item) => !isGovernedStudioType(templateItemType(item)));
 }
 
 /**
  * Split a list of document type names into the ones the default structure may
  * offer for editing and the ones that only appear in the read-only inspection
  * group.
+ *
+ * A delete-only type (`loginEvent`) deliberately stays in the default list: it is
+ * not "solo lectura" — an operator must be able to find and prune it — and its
+ * form is already `readOnly: true` with `delete` as its only action.
  */
 export function partitionStudioTypes(typeNames: readonly string[]): {
   editable: string[];

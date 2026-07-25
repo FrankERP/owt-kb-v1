@@ -16,6 +16,7 @@ import {
   DEFAULT_LEASE_TTL_MS,
   LEASE_DOC_ID,
   MARKER_DOC_ID,
+  RUN_OWNED_LOGIN_EVENT_QUERY,
   backupFileName,
   buildBackupEnvelope,
   buildLeaseDocument,
@@ -26,7 +27,10 @@ import {
   evaluateLeaseRelease,
   evaluateLeaseRenewal,
   evaluateMarkerDocument,
+  filterRunOwnedLoginEvents,
   leaseOwner,
+  runOwnedLoginEventParams,
+  verifyLoginEventCleanup,
 } from "./sr-verification.mjs";
 
 /* ------------------------------------------------------------------ *
@@ -130,6 +134,55 @@ export async function ensureMarkerDocument(client, { now }) {
     return;
   }
   console.log(`  marker:    ${MARKER_DOC_ID} verified`);
+}
+
+/* ------------------------------------------------------------------ *
+ * Run-owned credentials login events (plan §4)
+ *
+ * The ONLY login-event query issued anywhere is the exact run + deployment
+ * ownership predicate, and the ONLY ids ever deleted are the ones that predicate
+ * returned AND that then validated against the full ownership tuple. There is no
+ * `*[_type == "loginEvent"]` path, no email/member path and no time-range path.
+ * ------------------------------------------------------------------ */
+
+/** Query the exact run/deployment ownership predicate. Never a broad type query. */
+export async function fetchRunOwnedLoginEvents(client, identity) {
+  const params = runOwnedLoginEventParams(identity);
+  if (!params) {
+    throw new Error(
+      "Refusing to query login events: the run identity is incomplete (SR_VERIFY_RUN_ID / SR_VERIFY_DEPLOYMENT_ID).",
+    );
+  }
+  return client.fetch(RUN_OWNED_LOGIN_EVENT_QUERY, params);
+}
+
+/**
+ * Delete exactly the validated run-owned documents, each under its own revision
+ * precondition (the `ifRevisionId` patch guards the delete inside the same
+ * transaction, so an event mutated since our read is left alone rather than
+ * removed). Returns the deleted ids plus anything refused, so a caller reports
+ * instead of silently dropping.
+ */
+export async function deleteRunOwnedLoginEvents(client, docs, identity) {
+  const { deletable, refused } = filterRunOwnedLoginEvents(docs, identity);
+  if (!deletable.length) return { deletedIds: [], refused };
+
+  const tx = client.transaction();
+  for (const { _id, _rev } of deletable) {
+    if (_rev) tx.patch(_id, (p) => p.ifRevisionId(_rev).set({ srVerificationCleanup: true }));
+    tx.delete(_id);
+  }
+  await tx.commit();
+  return { deletedIds: deletable.map((d) => d._id), refused };
+}
+
+/**
+ * Re-query the same exact predicate and require zero remaining documents. Called
+ * after the delete, while the dataset lease is still live.
+ */
+export async function verifyRunOwnedLoginEventsGone(client, identity) {
+  const remaining = await fetchRunOwnedLoginEvents(client, identity);
+  return { remaining, verdict: verifyLoginEventCleanup({ remaining }) };
 }
 
 /* ------------------------------------------------------------------ *

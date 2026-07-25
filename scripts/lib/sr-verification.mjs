@@ -999,6 +999,113 @@ export function filterDeletableIds(candidateIds = []) {
 }
 
 /* ------------------------------------------------------------------ *
+ * Run-owned credentials login events (plan §4)
+ *
+ * A real credentials sign-in creates a random-id `loginEvent`. During deployed
+ * verification those are RUN SIDE EFFECTS: the run must delete exactly its own,
+ * by explicit `_id`, and prove zero remain.
+ *
+ * The rules encoded here, and nowhere else:
+ *   · the ONLY query used is the exact run + deployment ownership predicate;
+ *   · a candidate `_id` may come only from that predicate's result set;
+ *   · every returned document must still validate against the FULL ownership
+ *     tuple (runId + candidateSha + deploymentId + a well-formed attemptId)
+ *     before it is eligible for deletion;
+ *   · nothing is ever deleted by `*[_type == "loginEvent"]`, by email/member, or
+ *     by a timestamp range.
+ * ------------------------------------------------------------------ */
+
+export const LOGIN_EVENT_TYPE = "loginEvent";
+
+/** The four optional ownership fields (mirrors app/utils/srVerificationLoginEvent.ts). */
+export const LOGIN_EVENT_OWNERSHIP_FIELDS = Object.freeze([
+  "runId",
+  "attemptId",
+  "candidateSha",
+  "deploymentId",
+]);
+
+/**
+ * The ONE permitted login-event query. Parameterized on the two ids that form the
+ * collision boundary (cryptographically random run id + recorded deployment id);
+ * `defined(...)` on both keeps an ordinary login event — which has neither field —
+ * structurally unmatchable even if a parameter were ever nullish.
+ */
+export const RUN_OWNED_LOGIN_EVENT_QUERY =
+  `*[_type == "${LOGIN_EVENT_TYPE}"` +
+  ` && defined(runId) && runId == $runId` +
+  ` && defined(deploymentId) && deploymentId == $deploymentId]` +
+  `{ _id, _rev, _type, runId, attemptId, candidateSha, deploymentId }`;
+
+/**
+ * Parameters for that query. Returns null unless BOTH ids are usable, so a run
+ * with an incomplete identity can never issue a broader query by accident.
+ */
+export function runOwnedLoginEventParams({ runId, deploymentId } = {}) {
+  if (typeof runId !== "string" || !runId.length) return null;
+  if (typeof deploymentId !== "string" || !deploymentId.length) return null;
+  return { runId, deploymentId };
+}
+
+/**
+ * Validate one returned document against the FULL ownership tuple. The query
+ * already matched runId + deploymentId; this re-checks them (never trust the
+ * transport), adds the candidate SHA, and requires a non-empty attemptId — an
+ * event with no attempt id cannot be reconciled and must not be deleted blind.
+ */
+export function validateRunOwnedLoginEvent(doc, { runId, candidateSha, deploymentId } = {}) {
+  if (!doc || typeof doc !== "object") return { ok: false, reason: "not_a_document" };
+  if (typeof doc._id !== "string" || !doc._id.length) return { ok: false, reason: "missing_id" };
+  if (doc._type !== undefined && doc._type !== LOGIN_EVENT_TYPE) return { ok: false, reason: "wrong_type" };
+  if (typeof runId !== "string" || !runId.length) return { ok: false, reason: "invalid_run_identity" };
+  if (typeof candidateSha !== "string" || !candidateSha.length) return { ok: false, reason: "invalid_run_identity" };
+  if (typeof deploymentId !== "string" || !deploymentId.length) return { ok: false, reason: "invalid_run_identity" };
+  if (doc.runId !== runId) return { ok: false, reason: "foreign_run" };
+  if (doc.deploymentId !== deploymentId) return { ok: false, reason: "foreign_deployment" };
+  if (doc.candidateSha !== candidateSha) return { ok: false, reason: "candidate_sha_mismatch" };
+  if (typeof doc.attemptId !== "string" || !doc.attemptId.length) return { ok: false, reason: "missing_attempt_id" };
+  return { ok: true, reason: null };
+}
+
+/**
+ * Split the predicate's result set into the exact `_id`/`_rev` pairs that may be
+ * deleted and the ones that may not. The deletable list is derived ONLY from the
+ * supplied documents, so an id that the predicate did not return cannot appear in
+ * it — that is the structural reason a broad delete is impossible here.
+ */
+export function filterRunOwnedLoginEvents(docs = [], identity = {}) {
+  const deletable = [];
+  const refused = [];
+  for (const doc of docs) {
+    const verdict = validateRunOwnedLoginEvent(doc, identity);
+    if (verdict.ok) deletable.push({ _id: doc._id, _rev: typeof doc._rev === "string" ? doc._rev : null });
+    else refused.push({ id: doc?._id ?? null, reason: verdict.reason });
+  }
+  return { deletable, refused };
+}
+
+/**
+ * Pre-run collision check. Before the first sign-in the exact predicate must
+ * return ZERO documents. A pre-existing match means the run id collided (or was
+ * reused): abort and generate a new run id. The pre-existing document is NEVER
+ * deleted — it belongs to whoever wrote it.
+ */
+export function evaluateLoginEventCollision({ existing = [] } = {}) {
+  const ids = existing.map((d) => d?._id).filter((id) => typeof id === "string");
+  if (!ids.length) return { ok: true, reason: null, collidingIds: [] };
+  return { ok: false, reason: "run_id_collision", collidingIds: ids };
+}
+
+/** Cleanup is exact only when the same predicate then returns zero documents. */
+export function verifyLoginEventCleanup({ remaining = [] } = {}) {
+  const leftovers = remaining.filter((d) => typeof d?._id === "string");
+  return {
+    ok: leftovers.length === 0,
+    failures: leftovers.map((d) => ({ code: "login_event_not_removed", id: d._id })),
+  };
+}
+
+/* ------------------------------------------------------------------ *
  * Post-apply exactness
  * ------------------------------------------------------------------ */
 

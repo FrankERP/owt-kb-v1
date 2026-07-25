@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { serverClient, writeClient } from "./sanity/lib/serverClient";
 import { verifyGoogleIdToken } from "@/app/utils/googleIdToken";
 import { isMemberActive, getMemberAccess } from "@/app/utils/memberAccess";
+import { createLoginEvent, resolveVerificationOwnership } from "@/app/utils/srVerificationLoginEvent";
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
@@ -65,7 +66,7 @@ export const authOptions: NextAuthOptions = {
         email:    { label: "Email",      type: "email"    },
         password: { label: "Contraseña", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) return null;
 
         const member = await getMemberByEmail(credentials.email);
@@ -75,6 +76,14 @@ export const authOptions: NextAuthOptions = {
         if (!valid) return null;
 
         if (!(await isMemberActive(member._id))) return null;
+
+        // Service Readiness A3 §4: carry the isolated-verification run markers
+        // from the request into the sign-in event, and ONLY when the deployment's
+        // own environment, its commit SHA / deployment id, and the live dataset
+        // lease owner all agree (see app/utils/srVerificationLoginEvent.ts).
+        // An unmarked request resolves to null and adds no field at all, so an
+        // ordinary sign-in is unchanged.
+        const srVerification = await resolveVerificationOwnership({ headers: req?.headers });
 
         return {
           id:       member._id,
@@ -87,6 +96,7 @@ export const authOptions: NextAuthOptions = {
           role:     member.role ?? "member",
           sanityId: member._id,
           alias:    member.alias ?? null,
+          ...(srVerification ? { srVerification } : {}),
         };
       },
     }),
@@ -111,12 +121,16 @@ export const authOptions: NextAuthOptions = {
         );
         if (!member?._id) return;
 
-        await writeClient.create({
-          _type: "loginEvent",
-          member: { _type: "reference", _ref: member._id },
+        // A3 §4: `srVerification` is present only when the credentials
+        // authorization above proved isolated-verification run ownership. With it
+        // absent the created document is byte-for-byte the historical one.
+        await createLoginEvent({
+          client: writeClient,
+          memberId: member._id,
           email: user.email,
           provider: account?.provider ?? "credentials",
           timestamp: new Date().toISOString(),
+          ownership: user.srVerification ?? null,
         });
 
         // Sync Google photo URL on every Google sign-in (simple string — no download needed)

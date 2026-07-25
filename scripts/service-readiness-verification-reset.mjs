@@ -22,12 +22,14 @@ import { dirname, resolve } from "node:path";
 
 import {
   INFRASTRUCTURE_IDS,
+  RUN_OWNED_LOGIN_EVENT_QUERY,
   TOKEN_ENV,
   evaluateGuards,
   filterDeletableIds,
   fixtureIds,
   parseCliArgs,
   resolveEnvironment,
+  runOwnedLoginEventParams,
   verifyResetState,
 } from "./lib/sr-verification.mjs";
 import { scratchIds } from "./lib/sr-feasibility-checks.mjs";
@@ -71,6 +73,21 @@ if (refusedFixtures.length) {
   for (const id of refusedFixtures) console.error(`      · ${id}`);
 }
 
+// Run-owned credentials login events (plan §4). These are the ONE category whose
+// ids are not deterministic — `auth.ts` creates them with a random id — so they
+// are discovered through the exact run + deployment ownership predicate and then
+// deleted by explicit `_id` only. There is no broad `*[_type == "loginEvent"]`
+// path, no email/member path and no timestamp-range path.
+const runIdentity = resolveEnvironment(process.env);
+const loginEventParams = runOwnedLoginEventParams(runIdentity);
+console.log(`\n  run-owned login events (discovered by exact predicate, deleted by exact _id):`);
+console.log(`    predicate: ${RUN_OWNED_LOGIN_EVENT_QUERY}`);
+console.log(
+  loginEventParams
+    ? `    params:    runId=${loginEventParams.runId} deploymentId=${loginEventParams.deploymentId}`
+    : `    params:    (run identity unresolved — set SR_VERIFY_RUN_ID / SR_VERIFY_CANDIDATE_SHA / SR_VERIFY_DEPLOYMENT_ID)`,
+);
+
 if (guards.hardFailures.length) {
   console.error("\n  REFUSED — hard guard failure:");
   for (const f of guards.hardFailures) console.error(`    ✗ [${f.code}] ${f.message}`);
@@ -95,11 +112,20 @@ if (!guards.willContactRemote) {
  * Apply — only reachable when guards.willContactRemote === true
  * ---------------------------------------------------------------- */
 
-const { makeVerificationClient, fetchByIds, writeBackup, ensureMarkerDocument, DatasetLease } = await import(
+const {
+  makeVerificationClient,
+  fetchByIds,
+  writeBackup,
+  ensureMarkerDocument,
+  DatasetLease,
+  fetchRunOwnedLoginEvents,
+  deleteRunOwnedLoginEvents,
+  verifyRunOwnedLoginEventsGone,
+} = await import(
   "./lib/sr-verification-runtime.mjs"
 );
 
-const env = resolveEnvironment(process.env);
+const env = runIdentity;
 const client = makeVerificationClient(guards, process.env[TOKEN_ENV]);
 
 await ensureMarkerDocument(client, { now });
@@ -133,6 +159,50 @@ try {
   for (const id of targets) tx.delete(id);
   await tx.commit();
   console.log(`  deleted:   ${targets.length} allowlisted id(s)`);
+
+  // Run-owned login events, still under the same live lease. Discovered by the
+  // exact ownership predicate, validated against the FULL ownership tuple, then
+  // deleted by explicit `_id` under each document's revision. Re-queried
+  // afterwards and required to be empty.
+  await lease.assertOwned();
+  const loginIdentity = {
+    runId: env.runId,
+    candidateSha: env.candidateSha,
+    deploymentId: env.deploymentId,
+  };
+  const ownedLoginEvents = await fetchRunOwnedLoginEvents(client, loginIdentity);
+  console.log(`  logins:    ${ownedLoginEvents.length} run-owned login event(s) matched the exact predicate`);
+  if (ownedLoginEvents.length) {
+    const loginBackup = writeBackup({
+      repoRoot: REPO_ROOT,
+      kind: "reset-login-events",
+      now,
+      projectId: guards.projectId,
+      dataset: guards.dataset,
+      owner: lease.owner,
+      documents: ownedLoginEvents,
+    });
+    console.log(`  backup:    run-owned login events -> ${loginBackup}`);
+  }
+  const { deletedIds, refused: refusedLoginEvents } = await deleteRunOwnedLoginEvents(
+    client,
+    ownedLoginEvents,
+    loginIdentity,
+  );
+  for (const id of deletedIds) console.log(`      · deleted ${id}`);
+  if (refusedLoginEvents.length) {
+    console.error(`\n  ✗ ${refusedLoginEvents.length} matched login event(s) failed full-tuple validation and were NOT deleted:`);
+    for (const r of refusedLoginEvents) console.error(`      · ${r.id ?? "(no id)"} [${r.reason}]`);
+    exitCode = 1;
+  }
+  const loginCleanup = await verifyRunOwnedLoginEventsGone(client, loginIdentity);
+  if (!loginCleanup.verdict.ok) {
+    console.error("\n  RUN-OWNED LOGIN EVENT CLEANUP FAILED:");
+    for (const f of loginCleanup.verdict.failures) console.error(`    ✗ [${f.code}] ${f.id}`);
+    exitCode = 1;
+  } else {
+    console.log("  verified:  zero run-owned login events remain");
+  }
 
   await lease.assertOwned();
   const remaining = await fetchByIds(client, targets);
