@@ -315,6 +315,13 @@ export const OPERATOR_TOOLING_ALLOWLIST: readonly AuditExemption[] = [
       "spent one-off: read six hardcoded legacy role ids and added the seat arrays that predated those fields, revision-guarded and idempotent; already applied to production",
     removalOwner: "one-off migration tooling (never A2 — retire alongside the other one-shot writers)",
   },
+  {
+    file: "scripts/bootstrap-weekend-locks.mjs",
+    operation: "module",
+    reason:
+      "one-off A2 §1 rollout: creates the claimed weekend roleTargetLock for each pre-A2 weekend role. Reads through the canonical published client and the raw client for draft evidence; each lock is created at its deterministic id (a concurrent create loses rather than overwriting) paired with a revision-asserting no-op patch on the role's own unchanged week field, which is the protected write this entry covers. Refuses a duplicate target, a draft overlay, a malformed role, or an existing lock",
+    removalOwner: "one-off migration tooling (never A2 — retire alongside the other one-shot writers)",
+  },
 ];
 
 /**

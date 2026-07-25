@@ -379,6 +379,7 @@ describe("A2 handoff allowlist", () => {
     expect(OPERATOR_TOOLING_ALLOWLIST.map((e) => `${e.file}#${e.operation}`).sort()).toEqual(
       [
         "scripts/backfill-legacy-seat-arrays.mjs#module",
+        "scripts/bootstrap-weekend-locks.mjs#module",
         "scripts/service-readiness-cleanup.mjs#module",
         "scripts/service-readiness-feasibility.mjs#module",
       ].sort(),
