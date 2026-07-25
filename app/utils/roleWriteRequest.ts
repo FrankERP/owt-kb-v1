@@ -391,6 +391,258 @@ export function parsePublishRequest(body: unknown): ParseResult<ParsedPublishReq
   return { ok: true, value: { entries, published: body.published } };
 }
 
+// ── Seat addressing for atomic swaps (§4) ──────────────────────────────────
+
+/**
+ * The five member-referencing seat paths, exactly as stored. Any other field
+ * name is refused by a swap: a swap moves people between seats, it is never a
+ * general-purpose document patcher.
+ */
+export const SEAT_PATHS = ["Lead", "BGVs", "Chorus", "instruments", "foh_team"] as const;
+export type SeatPath = (typeof SEAT_PATHS)[number];
+
+export function isSeatPath(value: unknown): value is SeatPath {
+  return (SEAT_PATHS as readonly unknown[]).includes(value);
+}
+
+/** True for the two object seats whose person hangs off a `person` reference. */
+function isSlotPath(path: SeatPath): boolean {
+  return path === "instruments" || path === "foh_team";
+}
+
+/** The label field of an object seat: instrument name, or FOH role. */
+function slotLabelField(path: SeatPath): "instrument" | "role" | null {
+  if (path === "instruments") return "instrument";
+  if (path === "foh_team") return "role";
+  return null;
+}
+
+/**
+ * A stored array-item `_key`, bounded and restricted to characters that are safe
+ * to embed in a key-addressed patch path. Anything else is a malformed selection
+ * (it can never break out of the `[_key=="…"]` predicate).
+ */
+const SEAT_ITEM_KEY_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
+
+export function isSeatItemKey(value: unknown): value is string {
+  return typeof value === "string" && SEAT_ITEM_KEY_RE.test(value);
+}
+
+/**
+ * Patch path addressing the PERSON of one stored seat item by its stable `_key`
+ * — never a rendered index. Setting only this path is what preserves the
+ * destination item's `_key`, its instrument label and its FOH label: the person
+ * moves, the seat does not.
+ */
+export function seatPersonPatchPath(path: SeatPath, itemKey: string): string | null {
+  if (!isSeatPath(path) || !isSeatItemKey(itemKey)) return null;
+  return `${path}[_key=="${itemKey}"].${isSlotPath(path) ? "person._ref" : "_ref"}`;
+}
+
+export interface SeatItemFacts {
+  itemKey: string;
+  personId: string;
+  /** Instrument/FOH label of an object seat; null for a vocal reference seat. */
+  label: string | null;
+}
+
+/**
+ * Resolve one stored seat item by `_key`. Returns null for an unknown key, a
+ * duplicated key, a malformed item, or a seat with no assigned person — a swap
+ * never invents, splices, or relabels a seat.
+ */
+export function findSeatItem(role: unknown, path: SeatPath, itemKey: string): SeatItemFacts | null {
+  if (!isObj(role) || !isSeatPath(path) || !isSeatItemKey(itemKey)) return null;
+  const arr = role[path];
+  if (!Array.isArray(arr)) return null;
+  const matches = arr.filter((item) => isObj(item) && item._key === itemKey);
+  if (matches.length !== 1) return null;
+  const item = matches[0] as Record<string, unknown>;
+  const labelField = slotLabelField(path);
+  if (labelField) {
+    const label = item[labelField];
+    const person = item.person;
+    if (!nonEmptyString(label)) return null;
+    if (!isObj(person) || !nonEmptyString(person._ref)) return null;
+    return { itemKey, personId: person._ref, label };
+  }
+  if (!nonEmptyString(item._ref)) return null;
+  return { itemKey, personId: item._ref, label: null };
+}
+
+/**
+ * The five stored seat arrays exactly as stored (items keep their `_key`, type
+ * and labels), for a whole-team exchange. Returns null when any seat field is
+ * missing or not an array — never silently treated as empty.
+ */
+export function storedSeatArrays(role: unknown): Record<SeatPath, unknown[]> | null {
+  if (!isObj(role)) return null;
+  const out = {} as Record<SeatPath, unknown[]>;
+  for (const path of SEAT_PATHS) {
+    const arr = role[path];
+    if (!Array.isArray(arr)) return null;
+    out[path] = arr;
+  }
+  return out;
+}
+
+/** Move one person into the seat at `itemKey`, keeping that seat's key/label. */
+export interface SeatPersonReplacement {
+  path: SeatPath;
+  itemKey: string;
+  personId: string;
+}
+
+/**
+ * Normalized seats derived from a STORED role, optionally with person
+ * replacements applied by `_key`. This is the post-commit view used for
+ * notification recipients and bodies: it is computed from server state plus the
+ * exact replacements this transaction wrote, never from a client list.
+ */
+export function normalizeStoredSeats(
+  role: unknown,
+  replacements: readonly SeatPersonReplacement[] = [],
+): NormalizedSeats {
+  const doc = isObj(role) ? role : {};
+  const replacementFor = (path: SeatPath, item: Record<string, unknown>): string | null => {
+    if (!nonEmptyString(item._key)) return null;
+    const hit = replacements.find((r) => r.path === path && r.itemKey === item._key);
+    return hit ? hit.personId : null;
+  };
+  const refs = (path: SeatPath): string[] => {
+    const arr = Array.isArray(doc[path]) ? (doc[path] as unknown[]) : [];
+    const out: string[] = [];
+    for (const item of arr) {
+      if (!isObj(item)) continue;
+      const next = replacementFor(path, item) ?? (nonEmptyString(item._ref) ? item._ref : null);
+      if (next) out.push(next);
+    }
+    return out;
+  };
+  const slots = (path: SeatPath): { label: string; personId: string }[] => {
+    const arr = Array.isArray(doc[path]) ? (doc[path] as unknown[]) : [];
+    const field = slotLabelField(path);
+    const out: { label: string; personId: string }[] = [];
+    if (!field) return out;
+    for (const item of arr) {
+      if (!isObj(item)) continue;
+      const label = normalizeLabel(item[field]);
+      const person = isObj(item.person) && nonEmptyString(item.person._ref) ? item.person._ref : null;
+      const next = replacementFor(path, item) ?? person;
+      if (!label || !next) continue;
+      out.push({ label, personId: next });
+    }
+    return out;
+  };
+  return {
+    leads: refs("Lead"),
+    bgvs: refs("BGVs"),
+    chorus: refs("Chorus"),
+    instruments: slots("instruments").map((s) => ({ instrument: s.label, personId: s.personId })),
+    foh: slots("foh_team").map((s) => ({ role: s.label, personId: s.personId })),
+  };
+}
+
+// ── Swap request ───────────────────────────────────────────────────────────
+
+export interface SeatSelection {
+  roleId: string;
+  /** Role revision the client observed when it rendered this seat. */
+  rev: string;
+  path: SeatPath;
+  itemKey: string;
+}
+
+export interface RoleSelection {
+  id: string;
+  rev: string;
+}
+
+export type ParsedSwapRequest =
+  | { kind: "seat"; source: SeatSelection; target: SeatSelection }
+  | { kind: "team"; roles: [RoleSelection, RoleSelection] };
+
+function parseSeatSelection(value: unknown, side: "source" | "target"): ParseResult<SeatSelection> {
+  if (!isObj(value)) return fail([side]);
+  if (!isCanonicalDocumentId(value.roleId)) return fail([`${side}.roleId`]);
+  if (!isRevisionString(value.rev)) return fail([`${side}.rev`]);
+  if (!isSeatPath(value.path)) return fail([`${side}.path`]);
+  if (!isSeatItemKey(value.itemKey)) return fail([`${side}.itemKey`]);
+  return {
+    ok: true,
+    value: { roleId: value.roleId, rev: value.rev, path: value.path, itemKey: value.itemKey },
+  };
+}
+
+function parseRoleSelection(value: unknown, index: number): ParseResult<RoleSelection> {
+  if (!isObj(value)) return fail([`roles[${index}]`]);
+  if (!isCanonicalDocumentId(value.id)) return fail([`roles[${index}].id`]);
+  if (!isRevisionString(value.rev)) return fail([`roles[${index}].rev`]);
+  return { ok: true, value: { id: value.id, rev: value.rev } };
+}
+
+/**
+ * Parse the exact §4 swap contract. Only selections are accepted: a replacement
+ * team payload is never read, so the assignments a swap writes always come from
+ * the currently stored roles.
+ */
+export function parseSwapRequest(body: unknown): ParseResult<ParsedSwapRequest> {
+  if (!isObj(body)) return fail(["payload"]);
+
+  if (body.kind === "seat") {
+    const source = parseSeatSelection(body.source, "source");
+    if (!source.ok) return source;
+    const target = parseSeatSelection(body.target, "target");
+    if (!target.ok) return target;
+    const a = source.value;
+    const b = target.value;
+    if (a.roleId === b.roleId && a.path === b.path && a.itemKey === b.itemKey) {
+      return fail(["identical_selection"]);
+    }
+    // One document has exactly one revision: two disagreeing observed revisions
+    // for the same role means the two chips came from different views.
+    if (a.roleId === b.roleId && a.rev !== b.rev) return fail(["rev_disagreement"]);
+    return { ok: true, value: { kind: "seat", source: a, target: b } };
+  }
+
+  if (body.kind === "team") {
+    const rows = body.roles;
+    if (!Array.isArray(rows) || rows.length !== 2) return fail(["roles"]);
+    const first = parseRoleSelection(rows[0], 0);
+    if (!first.ok) return first;
+    const second = parseRoleSelection(rows[1], 1);
+    if (!second.ok) return second;
+    if (first.value.id === second.value.id) return fail(["identical_selection"]);
+    return { ok: true, value: { kind: "team", roles: [first.value, second.value] } };
+  }
+
+  return fail(["kind"]);
+}
+
+// ── Copy-instruments request ───────────────────────────────────────────────
+
+export interface ParsedCopyInstrumentsRequest {
+  source: RoleSelection;
+  target: RoleSelection;
+}
+
+/**
+ * Parse the exact §4 copy-instruments contract: source and target ids plus BOTH
+ * client-observed role revisions. A cached client instrument payload is ignored;
+ * the instruments written are always read from the stored source role.
+ */
+export function parseCopyInstrumentsRequest(
+  body: unknown,
+): ParseResult<ParsedCopyInstrumentsRequest> {
+  if (!isObj(body)) return fail(["payload"]);
+  const source = parseRoleSelection(body.source, 0);
+  if (!source.ok) return fail(["source"]);
+  const target = parseRoleSelection(body.target, 1);
+  if (!target.ok) return fail(["target"]);
+  if (source.value.id === target.value.id) return fail(["identical_selection"]);
+  return { ok: true, value: { source: source.value, target: target.value } };
+}
+
 // ── Creation receipt decision ──────────────────────────────────────────────
 
 export type ReceiptDecision =

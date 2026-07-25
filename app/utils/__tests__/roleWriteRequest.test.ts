@@ -1,24 +1,31 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  SEAT_PATHS,
   buildRoleDocument,
   buildRoleEditPatch,
   decideReceipt,
+  findSeatItem,
   isCanonicalDocumentId,
   isRevisionString,
   isValidCreationRequestId,
   normalizeSeats,
+  normalizeStoredSeats,
+  parseCopyInstrumentsRequest,
   parseCreateRequest,
   parseDeleteRequest,
   parseEditRequest,
   parsePublishRequest,
+  parseSwapRequest,
   planOwnedLock,
   planTargetClaim,
   prevalidatePublishBatch,
   roleDateField,
   sanityConflictKind,
   seatAssignees,
+  seatPersonPatchPath,
   storedRoleDate,
+  storedSeatArrays,
 } from "@/app/utils/roleWriteRequest";
 import { payloadFingerprint, receiptIdForRequestId } from "@/app/utils/roleCreationReceipt";
 
@@ -378,5 +385,201 @@ describe("prevalidatePublishBatch", () => {
     expect(prevalidatePublishBatch({ entries, fetched: [docs[0], { ...docs[1], week: "bad" }] }).issues).toContain(
       "invalid:role-2",
     );
+  });
+});
+
+// ── Atomic swap and copy instruments (§4) ───────────────────────────────────
+
+describe("parseSwapRequest", () => {
+  const seatBody = (over: Record<string, unknown> = {}) => ({
+    kind: "seat",
+    source: { roleId: "role-1", rev: "rev-1", path: "Lead", itemKey: "k1" },
+    target: { roleId: "role-2", rev: "rev-2", path: "instruments", itemKey: "i9" },
+    ...over,
+  });
+
+  it("accepts a seat selection on any of the five stored seat paths", () => {
+    for (const path of SEAT_PATHS) {
+      const parsed = parseSwapRequest(seatBody({ target: { roleId: "role-2", rev: "rev-2", path, itemKey: "i9" } }));
+      expect(parsed.ok, path).toBe(true);
+    }
+  });
+
+  it("rejects a path that is not one of the five seat paths", () => {
+    for (const path of ["songs", "published", "week", "Lead[0]", "", null]) {
+      const parsed = parseSwapRequest(seatBody({ source: { roleId: "role-1", rev: "rev-1", path, itemKey: "k1" } }));
+      expect(parsed.ok, String(path)).toBe(false);
+      if (!parsed.ok) expect(parsed.issues).toContain("source.path");
+    }
+  });
+
+  it("rejects an identical seat selection", () => {
+    const same = { roleId: "role-1", rev: "rev-1", path: "Lead", itemKey: "k1" };
+    const parsed = parseSwapRequest({ kind: "seat", source: same, target: { ...same } });
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) expect(parsed.issues).toContain("identical_selection");
+  });
+
+  it("requires one agreed revision when both seats live in the same role", () => {
+    const parsed = parseSwapRequest({
+      kind: "seat",
+      source: { roleId: "role-1", rev: "rev-1", path: "Lead", itemKey: "k1" },
+      target: { roleId: "role-1", rev: "rev-other", path: "BGVs", itemKey: "k2" },
+    });
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) expect(parsed.issues).toContain("rev_disagreement");
+  });
+
+  it("rejects malformed keys, draft ids and missing revisions", () => {
+    for (const over of [
+      { source: { roleId: "role-1", rev: "rev-1", path: "Lead", itemKey: 'k"1' } },
+      { source: { roleId: "role-1", rev: "rev-1", path: "Lead", itemKey: "" } },
+      { source: { roleId: "drafts.role-1", rev: "rev-1", path: "Lead", itemKey: "k1" } },
+      { source: { roleId: "role-1", path: "Lead", itemKey: "k1" } },
+      { source: "role-1" },
+    ]) {
+      expect(parseSwapRequest(seatBody(over)).ok, JSON.stringify(over)).toBe(false);
+    }
+  });
+
+  it("accepts a team swap of exactly two distinct roles", () => {
+    const parsed = parseSwapRequest({
+      kind: "team",
+      roles: [{ id: "role-1", rev: "rev-1" }, { id: "role-2", rev: "rev-2" }],
+    });
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok && parsed.value.kind === "team") {
+      expect(parsed.value.roles.map((r) => r.id)).toEqual(["role-1", "role-2"]);
+    }
+  });
+
+  it("rejects a team swap of one role, three roles, or the same role twice", () => {
+    for (const roles of [
+      [{ id: "role-1", rev: "rev-1" }],
+      [{ id: "role-1", rev: "rev-1" }, { id: "role-2", rev: "r2" }, { id: "role-3", rev: "r3" }],
+      [{ id: "role-1", rev: "rev-1" }, { id: "role-1", rev: "rev-1" }],
+    ]) {
+      expect(parseSwapRequest({ kind: "team", roles }).ok, JSON.stringify(roles)).toBe(false);
+    }
+  });
+
+  it("rejects an unknown kind and a replacement team payload", () => {
+    expect(parseSwapRequest({ kind: "cards", roles: [] }).ok).toBe(false);
+    expect(parseSwapRequest(null).ok).toBe(false);
+    // A team payload is never accepted: assignments come from stored roles only.
+    const parsed = parseSwapRequest({
+      kind: "team",
+      roles: [{ id: "role-1", rev: "rev-1" }, { id: "role-2", rev: "rev-2" }],
+      leads: ["mem-hacker"],
+    });
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect(JSON.stringify(parsed.value)).not.toContain("mem-hacker");
+  });
+});
+
+describe("parseCopyInstrumentsRequest", () => {
+  it("requires both ids and both client-observed revisions", () => {
+    const parsed = parseCopyInstrumentsRequest({
+      source: { id: "role-1", rev: "rev-1" },
+      target: { id: "role-2", rev: "rev-2" },
+    });
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect(parsed.value).toEqual({
+      source: { id: "role-1", rev: "rev-1" },
+      target: { id: "role-2", rev: "rev-2" },
+    });
+    for (const body of [
+      { source: { id: "role-1" }, target: { id: "role-2", rev: "rev-2" } },
+      { source: { id: "role-1", rev: "rev-1" } },
+      { source: { id: "role-1", rev: "rev-1" }, target: { id: "role-1", rev: "rev-1" } },
+      { source: { id: "drafts.role-1", rev: "rev-1" }, target: { id: "role-2", rev: "rev-2" } },
+      { source: { id: "role-1", rev: "rev-1" }, target: { id: "role-2", rev: "rev-2" }, instruments: [] },
+    ]) {
+      const res = parseCopyInstrumentsRequest(body);
+      if ("instruments" in body) {
+        // A cached client instrument payload is ignored, never adopted.
+        expect(res.ok).toBe(true);
+        if (res.ok) expect(Object.keys(res.value)).toEqual(["source", "target"]);
+      } else {
+        expect(res.ok, JSON.stringify(body)).toBe(false);
+      }
+    }
+  });
+});
+
+describe("stored seat addressing", () => {
+  const storedRole = {
+    _id: "role-1",
+    _rev: "rev-1",
+    _type: "sunday_role",
+    week: "2026-08-09",
+    Lead: [{ _key: "k1", _type: "reference", _ref: "mem-1" }],
+    BGVs: [{ _key: "k2", _type: "reference", _ref: "mem-2" }],
+    Chorus: [],
+    instruments: [
+      { _key: "i1", _type: "instrument_slot", instrument: "Bajo", person: { _type: "reference", _ref: "mem-3" } },
+    ],
+    foh_team: [
+      { _key: "f1", _type: "foh_slot", role: "Audio", person: { _type: "reference", _ref: "mem-4" } },
+    ],
+  };
+
+  it("addresses the person of an item by its stable stored _key, never an index", () => {
+    expect(seatPersonPatchPath("Lead", "k1")).toBe('Lead[_key=="k1"]._ref');
+    expect(seatPersonPatchPath("instruments", "i1")).toBe('instruments[_key=="i1"].person._ref');
+    expect(seatPersonPatchPath("foh_team", "f1")).toBe('foh_team[_key=="f1"].person._ref');
+    // A key that could break out of the patch path is never rendered.
+    expect(seatPersonPatchPath("Lead", 'k"]._type')).toBeNull();
+  });
+
+  it("finds the person and label of one stored item", () => {
+    expect(findSeatItem(storedRole, "Lead", "k1")).toEqual({ itemKey: "k1", personId: "mem-1", label: null });
+    expect(findSeatItem(storedRole, "instruments", "i1")).toEqual({
+      itemKey: "i1",
+      personId: "mem-3",
+      label: "Bajo",
+    });
+    expect(findSeatItem(storedRole, "foh_team", "f1")).toEqual({
+      itemKey: "f1",
+      personId: "mem-4",
+      label: "Audio",
+    });
+  });
+
+  it("returns null for an unknown, duplicated, or personless key", () => {
+    expect(findSeatItem(storedRole, "Lead", "nope")).toBeNull();
+    expect(findSeatItem(storedRole, "Chorus", "k1")).toBeNull();
+    expect(findSeatItem({ ...storedRole, Lead: [{ _key: "k1" }, { _key: "k1" }] }, "Lead", "k1")).toBeNull();
+    expect(findSeatItem({ ...storedRole, Lead: [{ _key: "k1", _type: "reference" }] }, "Lead", "k1")).toBeNull();
+    expect(
+      findSeatItem({ ...storedRole, instruments: [{ _key: "i1", instrument: "Bajo" }] }, "instruments", "i1"),
+    ).toBeNull();
+    expect(findSeatItem(null, "Lead", "k1")).toBeNull();
+  });
+
+  it("reads the stored arrays for a whole-team exchange", () => {
+    const arrays = storedSeatArrays(storedRole);
+    expect(arrays).not.toBeNull();
+    expect(Object.keys(arrays!)).toEqual([...SEAT_PATHS]);
+    expect(arrays!.instruments).toEqual(storedRole.instruments);
+    // A missing seat array is never silently treated as empty.
+    expect(storedSeatArrays({ ...storedRole, foh_team: undefined })).toBeNull();
+  });
+
+  it("normalizes stored seats and applies person replacements by _key", () => {
+    expect(normalizeStoredSeats(storedRole)).toEqual({
+      leads: ["mem-1"],
+      bgvs: ["mem-2"],
+      chorus: [],
+      instruments: [{ instrument: "Bajo", personId: "mem-3" }],
+      foh: [{ role: "Audio", personId: "mem-4" }],
+    });
+    const swapped = normalizeStoredSeats(storedRole, [
+      { path: "Lead", itemKey: "k1", personId: "mem-9" },
+      { path: "instruments", itemKey: "i1", personId: "mem-8" },
+    ]);
+    expect(swapped.leads).toEqual(["mem-9"]);
+    expect(swapped.instruments).toEqual([{ instrument: "Bajo", personId: "mem-8" }]);
+    expect(seatAssignees(swapped)).toEqual(["mem-9", "mem-2", "mem-8", "mem-4"]);
   });
 });

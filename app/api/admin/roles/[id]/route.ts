@@ -20,7 +20,6 @@ import {
 } from "@/app/utils/roleTargetLock";
 import {
   buildRoleEditPatch,
-  isCanonicalDocumentId,
   parseDeleteRequest,
   parseEditRequest,
   planOwnedLock,
@@ -28,19 +27,18 @@ import {
   roleDateField,
   sanityConflictKind,
   seatAssignees,
-  storedRoleDate,
 } from "@/app/utils/roleWriteRequest";
 import {
   bootstrapLegacyLock,
-  loadCanonicalRole,
   loadDependencies,
   loadLock,
   loadReceiptsForRole,
+  loadRoleForWrite,
   loadTargetOccupancy,
   nextKey,
   nowIso,
+  type RoleWriteTarget,
   type StoredLock,
-  type StoredRole,
 } from "@/app/utils/roleWriteOps";
 
 function reject(res: { status: number; body: unknown }) {
@@ -66,77 +64,23 @@ async function denyUnlessManager(): Promise<NextResponse | null> {
   return null;
 }
 
-interface RoleTarget {
-  role: StoredRole;
-  targetKey: string;
-  lockId: string | null;
-  date: string;
-}
-
 type LoadOutcome =
-  | { ok: true; target: RoleTarget }
+  | { ok: true; target: RoleWriteTarget }
   | { ok: false; response: NextResponse };
 
 /**
  * Resolve the stored role, its canonical target, and its coordination token, and
  * assert the revision the client observed. Ambiguity, a raw draft overlay, and a
- * structurally invalid role all fail closed before any write.
+ * structurally invalid role all fail closed before any write. The rules live in
+ * the shared `loadRoleForWrite` so every protected role writer refuses the same
+ * states; this only wraps the rejection in a response.
  */
 async function loadRoleForMutation(id: string, rev: string): Promise<LoadOutcome> {
-  if (!isCanonicalDocumentId(id)) {
-    return { ok: false, response: reject(serviceError("invalid_request", { details: { issues: ["id"] } })) };
-  }
-  const lookup = await loadCanonicalRole(id);
-  if (lookup.state === "none") {
-    return { ok: false, response: reject(serviceError("not_found", { details: { id } })) };
-  }
-  if (lookup.state !== "single" || !lookup.role) {
-    return {
-      ok: false,
-      response: reject(serviceError("ambiguous_target", { details: { id, state: lookup.state } })),
-    };
-  }
-  if (lookup.draftIds.length) {
-    return {
-      ok: false,
-      response: reject(
-        serviceError("integrity_conflict", { details: { id, rawDrafts: lookup.draftIds } }),
-      ),
-    };
-  }
-  const role = lookup.role;
-  const validation = validateRole(role);
-  if (!validation.groupable || !validation.targetKey) {
-    return {
-      ok: false,
-      response: reject(
-        serviceError("integrity_conflict", { details: { id, issues: validation.issues } }),
-      ),
-    };
-  }
-  if (role._rev !== rev) {
-    return {
-      ok: false,
-      response: reject(
-        serviceError("stale_revision", { details: { id, storedRev: role._rev, observedRev: rev } }),
-      ),
-    };
-  }
-  const date = storedRoleDate(role);
-  if (!date) {
-    return {
-      ok: false,
-      response: reject(serviceError("integrity_conflict", { details: { id, issues: ["date"] } })),
-    };
-  }
+  const loaded = await loadRoleForWrite(id, rev);
+  if (loaded.ok) return { ok: true, target: loaded.target };
   return {
-    ok: true,
-    target: {
-      role,
-      date,
-      targetKey: validation.targetKey,
-      lockId: roleTargetLockId(validation.targetKey),
-    },
+    ok: false,
+    response: reject(serviceError(loaded.failure.code, { details: loaded.failure.details })),
   };
 }
 

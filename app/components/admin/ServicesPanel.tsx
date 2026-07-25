@@ -14,7 +14,16 @@ import CueDialogStatus from "../ui/CueDialogStatus";
 
 type ServiceType = "sunday_role" | "saturday_role" | "special_role";
 
-interface MemberOption { _id: string; member_name: string; alias?: string; memberType?: string[]; unavailableDates?: string[]; unavailabilityNotes?: { date: string; note: string }[]; }
+interface MemberOption {
+  _id: string; member_name: string; alias?: string; memberType?: string[];
+  unavailableDates?: string[]; unavailabilityNotes?: { date: string; note: string }[];
+  /**
+   * Stable stored `_key` of the seat this member occupies, when it came from a
+   * role seat rather than the member directory. Swaps address seats by this key,
+   * never by rendered index.
+   */
+  _key?: string;
+}
 
 const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;
 
@@ -45,8 +54,8 @@ interface ServiceRole {
   leads:       MemberOption[];
   bgvs:        MemberOption[];
   chorus:      MemberOption[];
-  instruments: { instrument: string; person: MemberOption | null }[];
-  foh:         { role: string;       person: MemberOption | null }[];
+  instruments: { _key?: string; instrument: string; person: MemberOption | null }[];
+  foh:         { _key?: string; role: string;       person: MemberOption | null }[];
   songs?: SetlistSong[];
 }
 
@@ -56,14 +65,21 @@ import { SetlistEditor, SongResult, SetlistEntry } from "./SetlistEditor";
 
 // ─── Swap types ───────────────────────────────────────────────────────────────
 
+// A chip selection is identified by the stored seat `_key` (`itemKey`) the server
+// addresses — never by a rendered index, which a concurrent edit can shift.
 type SwapSource =
   | { kind: "card"; roleId: string }
-  | { kind: "member"; roleId: string; section: "leads" | "bgvs" | "chorus"; index: number; member: MemberOption }
-  | { kind: "slot";   roleId: string; section: "instruments" | "foh";        index: number; member: MemberOption | null; slotLabel: string };
+  | { kind: "member"; roleId: string; section: "leads" | "bgvs" | "chorus"; itemKey: string; member: MemberOption }
+  | { kind: "slot";   roleId: string; section: "instruments" | "foh";        itemKey: string; member: MemberOption | null; slotLabel: string };
 
 type SwapConfirm =
   | { kind: "card"; roleA: ServiceRole; roleB: ServiceRole }
   | { kind: "member"; source: Exclude<SwapSource, { kind: "card" }>; target: Exclude<SwapSource, { kind: "card" }>; sourceRole: ServiceRole; targetRole: ServiceRole };
+
+/** Client section name → the stored seat path the swap writer accepts. */
+const SEAT_PATH: Record<"leads" | "bgvs" | "chorus" | "instruments" | "foh", string> = {
+  leads: "Lead", bgvs: "BGVs", chorus: "Chorus", instruments: "instruments", foh: "foh_team",
+};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -132,64 +148,9 @@ async function describeMutationError(res: Response, fallback: string): Promise<s
   }
 }
 
-function roleToPatchPayload(role: ServiceRole) {
-  return {
-    rev: role._rev,
-    _type: role._type,
-    date: role.date,
-    service_name: role.service_name,
-    leads:  (role.leads  ?? []).map(m => m._id),
-    bgvs:   (role.bgvs   ?? []).map(m => m._id),
-    chorus: (role.chorus ?? []).map(m => m._id),
-    instruments: (role.instruments ?? []).filter(s => s.person).map(s => ({ instrument: s.instrument, personId: s.person!._id })),
-    foh: (role.foh ?? []).filter(s => s.person).map(s => ({ role: s.role, personId: s.person!._id })),
-  };
-}
-
-function swapCardTeams(a: ServiceRole, b: ServiceRole): [ServiceRole, ServiceRole] {
-  return [
-    { ...a, leads: b.leads ?? [], bgvs: b.bgvs ?? [], chorus: b.chorus ?? [], instruments: b.instruments ?? [], foh: b.foh ?? [] },
-    { ...b, leads: a.leads ?? [], bgvs: a.bgvs ?? [], chorus: a.chorus ?? [], instruments: a.instruments ?? [], foh: a.foh ?? [] },
-  ];
-}
-
-function getMemberAt(role: ServiceRole, src: Exclude<SwapSource, { kind: "card" }>): MemberOption | null {
-  if (src.kind === "member") return (role[src.section] ?? [])[src.index] ?? null;
-  return (role[src.section] ?? [])[src.index]?.person ?? null;
-}
-
-function setMemberAt(role: ServiceRole, src: Exclude<SwapSource, { kind: "card" }>, member: MemberOption | null): ServiceRole {
-  if (src.kind === "member") {
-    const arr = [...((role[src.section] as MemberOption[]) ?? [])];
-    if (member) arr[src.index] = member; else arr.splice(src.index, 1);
-    return { ...role, [src.section]: arr };
-  }
-  const arr = [...((role[src.section] as any[]) ?? [])];
-  arr[src.index] = { ...arr[src.index], person: member };
-  return { ...role, [src.section]: arr };
-}
-
-function computeMemberSwap(roles: ServiceRole[], source: Exclude<SwapSource, { kind: "card" }>, target: Exclude<SwapSource, { kind: "card" }>): ServiceRole[] {
-  if (source.roleId === target.roleId) {
-    let role = { ...(roles.find(r => r._id === source.roleId)!) };
-    const mA = getMemberAt(role, source);
-    const mB = getMemberAt(role, target);
-    role = setMemberAt(role, source, mB);
-    role = setMemberAt(role, target, mA);
-    return roles.map(r => r._id === source.roleId ? role : r);
-  }
-  const srcRole = roles.find(r => r._id === source.roleId)!;
-  const tgtRole = roles.find(r => r._id === target.roleId)!;
-  const mA = getMemberAt(srcRole, source);
-  const mB = getMemberAt(tgtRole, target);
-  const newSrc = setMemberAt({ ...srcRole }, source, mB);
-  const newTgt = setMemberAt({ ...tgtRole }, target, mA);
-  return roles.map(r => {
-    if (r._id === source.roleId) return newSrc;
-    if (r._id === target.roleId) return newTgt;
-    return r;
-  });
-}
+// Swaps are computed and committed by the server from the currently stored roles
+// (`POST /api/admin/roles/swap`), so this panel no longer builds a replacement
+// team payload of its own — it only sends the two selections it observed.
 
 // ─── Member multi-select (searchable, type-filtered) ─────────────────────────
 
@@ -552,9 +513,9 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
     .sort((a, b) => pillWidth(a.label, dn(a.person)) - pillWidth(b.label, dn(b.person)));
 
   const isCardSelected = swapSource?.kind === "card" && swapSource.roleId === role._id;
-  const isChipSource   = (section: string, i: number) =>
-    swapSource && swapSource.kind !== "card" && swapSource.roleId === role._id &&
-    swapSource.section === section && swapSource.index === i;
+  const isChipSource   = (section: string, itemKey?: string) =>
+    !!itemKey && swapSource && swapSource.kind !== "card" && swapSource.roleId === role._id &&
+    swapSource.section === section && swapSource.itemKey === itemKey;
 
   const hasTeam    = !!(leads.length || bgvs.length || chorus.length || instrs.filter(s => s.person).length || foh.filter(s => s.person).length);
   const hasSetlist = songs.length > 0;
@@ -794,13 +755,14 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
                 <div key={section} className="flex items-start gap-2 flex-wrap">
                   <span className="font-label text-[10px] uppercase tracking-widest text-gray-600 pt-0.5 shrink-0 w-12">{lbl}</span>
                   <div className="flex flex-wrap gap-1">
-                    {arr.map((m, i) => (
+                    {arr.map(m => (
                       <MemberChip
-                        key={m._id}
+                        key={m._key ?? m._id}
                         name={dn(m)}
-                        isSource={!!isChipSource(section, i)}
+                        isSource={!!isChipSource(section, m._key)}
                         isTarget={false}
-                        onClick={swapSource?.kind === "card" ? undefined : () => onMemberChipClick({ kind: "member", roleId: role._id, section, index: i, member: m })}
+                        // No stored seat key (legacy/unresolvable item) → not swappable.
+                        onClick={swapSource?.kind === "card" || !m._key ? undefined : () => onMemberChipClick({ kind: "member", roleId: role._id, section, itemKey: m._key!, member: m })}
                       />
                     ))}
                   </div>
@@ -814,11 +776,11 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
                   <div className="flex flex-wrap gap-1">
                     {arr.map((s, i) => s.person && (
                       <MemberChip
-                        key={i}
+                        key={s._key ?? i}
                         name={`${dn(s.person)}${section === "instruments" ? ` · ${(s as any).instrument}` : ` · ${(s as any).role}`}`}
-                        isSource={!!isChipSource(section, i)}
+                        isSource={!!isChipSource(section, s._key)}
                         isTarget={false}
-                        onClick={swapSource?.kind === "card" ? undefined : () => onMemberChipClick({ kind: "slot", roleId: role._id, section, index: i, member: s.person, slotLabel: (s as any).instrument ?? (s as any).role })}
+                        onClick={swapSource?.kind === "card" || !s._key ? undefined : () => onMemberChipClick({ kind: "slot", roleId: role._id, section, itemKey: s._key!, member: s.person, slotLabel: (s as any).instrument ?? (s as any).role })}
                       />
                     ))}
                   </div>
@@ -908,8 +870,37 @@ function AvailabilityWarning({ lines }: { lines: string[] }) {
   );
 }
 
-function SwapConfirmModal({ confirm, onConfirm, onClose, loading, members }: {
-  confirm: SwapConfirm; onConfirm: () => void; onClose: () => void; loading: boolean; members: MemberOption[];
+/**
+ * Footer of the swap confirmation. A rejected swap keeps this modal open and
+ * shows why; a stale view (409) offers a reload instead of a retry, because
+ * retrying with the same observed revisions can only be rejected again.
+ */
+function SwapFooter({ onClose, onConfirm, onReload, loading, warn, error, confirmLabel }: {
+  onClose: () => void; onConfirm: () => void; onReload: () => void;
+  loading: boolean; warn: boolean; error: string | null; confirmLabel: string;
+}) {
+  return (
+    <>
+      {error && (
+        <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2.5">
+          <p className="font-body text-xs text-red-300">{error}</p>
+        </div>
+      )}
+      <div className="flex gap-3">
+        <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">Cancelar</button>
+        {error ? (
+          <button type="button" onClick={onReload} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors">Recargar</button>
+        ) : (
+          <button type="button" onClick={onConfirm} disabled={loading} className={`flex-1 py-2 rounded-lg font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${warn ? "bg-orange-600/70 hover:bg-orange-600" : "bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30"}`}>{loading ? "Intercambiando..." : confirmLabel}</button>
+        )}
+      </div>
+    </>
+  );
+}
+
+function SwapConfirmModal({ confirm, onConfirm, onClose, onReload, loading, members, error }: {
+  confirm: SwapConfirm; onConfirm: () => void; onClose: () => void; onReload: () => void;
+  loading: boolean; members: MemberOption[]; error: string | null;
 }) {
   function lookup(id: string | undefined) {
     return id ? members.find(m => m._id === id) : undefined;
@@ -964,10 +955,11 @@ function SwapConfirmModal({ confirm, onConfirm, onClose, loading, members }: {
           ))}
         </div>
         <AvailabilityWarning lines={warnLines} />
-        <div className="flex gap-3">
-          <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">Cancelar</button>
-          <button type="button" onClick={onConfirm} disabled={loading} className={`flex-1 py-2 rounded-lg font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${warnLines.length > 0 ? "bg-orange-600/70 hover:bg-orange-600" : "bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30"}`}>{loading ? "Intercambiando..." : "Confirmar intercambio"}</button>
-        </div>
+        <SwapFooter
+          onClose={onClose} onConfirm={onConfirm} onReload={onReload}
+          loading={loading} warn={warnLines.length > 0} error={error}
+          confirmLabel="Confirmar intercambio"
+        />
       </Modal>
     );
   }
@@ -1004,10 +996,11 @@ function SwapConfirmModal({ confirm, onConfirm, onClose, loading, members }: {
         </div>
       </div>
       <AvailabilityWarning lines={warnLines} />
-      <div className="flex gap-3">
-        <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">Cancelar</button>
-        <button type="button" onClick={onConfirm} disabled={loading} className={`flex-1 py-2 rounded-lg font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${warnLines.length > 0 ? "bg-orange-600/70 hover:bg-orange-600" : "bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30"}`}>{loading ? "Intercambiando..." : "Confirmar"}</button>
-      </div>
+      <SwapFooter
+        onClose={onClose} onConfirm={onConfirm} onReload={onReload}
+        loading={loading} warn={warnLines.length > 0} error={error}
+        confirmLabel="Confirmar"
+      />
     </Modal>
   );
 }
@@ -1038,6 +1031,7 @@ export default function ServicesPanel() {
   const [swapMode, setSwapMode]     = useState(false);
   const [swapSource, setSwapSource] = useState<SwapSource | null>(null);
   const [swapConfirm, setSwapConfirm] = useState<SwapConfirm | null>(null);
+  const [swapError, setSwapError] = useState<string | null>(null);
 
   // Copy-instruments mode: pick a source card, then a target day to repeat its lineup.
   const [copySource, setCopySource] = useState<string | null>(null);
@@ -1159,48 +1153,69 @@ export default function ServicesPanel() {
   function handleMemberChipClick(src: Exclude<SwapSource, { kind: "card" }>) {
     if (!swapSource) { setSwapSource(src); return; }
     if (swapSource.kind === "card") return;
-    // Deselect if same chip
-    if (swapSource.roleId === src.roleId && swapSource.section === src.section && swapSource.index === src.index) {
+    // Deselect if same chip (identified by its stored seat key, not its index)
+    if (swapSource.roleId === src.roleId && swapSource.section === src.section && swapSource.itemKey === src.itemKey) {
       setSwapSource(null); return;
     }
-    const sourceRole = roles.find(r => r._id === swapSource.roleId)!;
-    const targetRole = roles.find(r => r._id === src.roleId)!;
-    setSwapConfirm({ kind: "member", source: swapSource as any, target: src, sourceRole, targetRole });
+    const sourceRole = roles.find(r => r._id === swapSource.roleId);
+    const targetRole = roles.find(r => r._id === src.roleId);
+    if (!sourceRole || !targetRole) { setSwapSource(null); return; }
+    setSwapConfirm({ kind: "member", source: swapSource, target: src, sourceRole, targetRole });
   }
 
+  // ONE atomic server transaction, never two independent PATCHes: the server
+  // derives both sides from the currently stored roles and either applies the
+  // whole swap or nothing at all. A rejection keeps this modal open and reports
+  // honestly; a 409 means the view is stale and requires a reload.
   async function confirmSwap() {
     if (!swapConfirm) return;
     setSubmitting(true);
+    setSwapError(null);
     try {
-      let responses: Response[];
-      if (swapConfirm.kind === "card") {
-        const [newA, newB] = swapCardTeams(swapConfirm.roleA, swapConfirm.roleB);
-        responses = await Promise.all([
-          fetch(`/api/admin/roles/${swapConfirm.roleA._id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(roleToPatchPayload(newA)) }),
-          fetch(`/api/admin/roles/${swapConfirm.roleB._id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(roleToPatchPayload(newB)) }),
-        ]);
+      const body = swapConfirm.kind === "card"
+        ? {
+            kind: "team",
+            roles: [
+              { id: swapConfirm.roleA._id, rev: swapConfirm.roleA._rev },
+              { id: swapConfirm.roleB._id, rev: swapConfirm.roleB._rev },
+            ],
+          }
+        : {
+            kind: "seat",
+            source: {
+              roleId: swapConfirm.source.roleId,
+              rev: swapConfirm.sourceRole._rev,
+              path: SEAT_PATH[swapConfirm.source.section],
+              itemKey: swapConfirm.source.itemKey,
+            },
+            target: {
+              roleId: swapConfirm.target.roleId,
+              rev: swapConfirm.targetRole._rev,
+              path: SEAT_PATH[swapConfirm.target.section],
+              itemKey: swapConfirm.target.itemKey,
+            },
+          };
+      const res = await fetch("/api/admin/roles/swap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        setSwapConfirm(null);
+        setSwapSource(null);
+        fetchData();
+        showToast("Intercambio realizado.");
       } else {
-        const newRoles = computeMemberSwap(roles, swapConfirm.source, swapConfirm.target);
-        const ids = [...new Set([swapConfirm.source.roleId, swapConfirm.target.roleId])];
-        responses = await Promise.all(ids.map(id => {
-          const role = newRoles.find(r => r._id === id)!;
-          return fetch(`/api/admin/roles/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(roleToPatchPayload(role)) });
-        }));
+        setSwapError(await describeMutationError(res, "Error al intercambiar."));
       }
-      // Refresh to reflect the true saved state, then report honestly — a partial
-      // or failed swap must not claim success.
-      setSwapConfirm(null);
-      setSwapSource(null);
-      fetchData();
-      showToast(responses.every(r => r.ok) ? "Intercambio realizado." : "Error al intercambiar.");
     } catch {
-      showToast("Error de conexión.");
+      setSwapError("Error de conexión.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  function exitSwapMode() { setSwapMode(false); setSwapSource(null); setSwapConfirm(null); }
+  function exitSwapMode() { setSwapMode(false); setSwapSource(null); setSwapConfirm(null); setSwapError(null); }
 
   // ── Copy instruments to another day ─────────────────────────────────────────
 
@@ -1217,13 +1232,24 @@ export default function ServicesPanel() {
     if (!confirm(`¿Copiar ${count} instrumento(s) de ${fmt(source)} a ${fmt(target)}? Reemplazará los instrumentos del destino.`)) return;
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/admin/roles/${target._id}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(roleToPatchPayload({ ...target, instruments: source.instruments })),
+      // Both observed revisions are sent; the server re-reads the source lineup
+      // and patches only the target's instruments in one guarded transaction. On
+      // failure copy mode stays open and nothing is claimed.
+      const res = await fetch("/api/admin/roles/copy-instruments", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: { id: source._id, rev: source._rev },
+          target: { id: target._id, rev: target._rev },
+        }),
       });
-      setCopySource(null);
-      fetchData();
-      showToast(res.ok ? "Instrumentos copiados." : "Error al copiar.");
+      if (res.ok) {
+        setCopySource(null);
+        fetchData();
+        showToast("Instrumentos copiados.");
+      } else {
+        showToast(await describeMutationError(res, "Error al copiar."));
+        if (res.status === 409) fetchData();
+      }
     } catch {
       showToast("Error de conexión.");
     } finally {
@@ -1516,7 +1542,15 @@ export default function ServicesPanel() {
         </Modal>
       )}
       {swapConfirm && (
-        <SwapConfirmModal confirm={swapConfirm} onConfirm={confirmSwap} onClose={() => { setSwapConfirm(null); setSwapSource(null); }} loading={submitting} members={members} />
+        <SwapConfirmModal
+          confirm={swapConfirm}
+          onConfirm={confirmSwap}
+          onClose={() => { setSwapConfirm(null); setSwapSource(null); setSwapError(null); }}
+          onReload={() => { exitSwapMode(); fetchData(); }}
+          loading={submitting}
+          members={members}
+          error={swapError}
+        />
       )}
       {showGenerator && (
         <Modal title="Generar mes" onClose={() => setShowGenerator(false)} wide>

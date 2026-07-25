@@ -131,6 +131,20 @@ export const A2_HANDOFF_ALLOWLIST: readonly AuditExemption[] = [
     removalOwner: "A2",
   },
   {
+    file: "app/api/admin/roles/swap/route.ts",
+    operation: "POST",
+    reason:
+      "atomic swap writer: reads are migrated to the canonical clients, but the single guarded transaction still patches the seat assignments of sunday_role/saturday_role/special_role documents",
+    removalOwner: "A2",
+  },
+  {
+    file: "app/api/admin/roles/copy-instruments/route.ts",
+    operation: "POST",
+    reason:
+      "copy-instruments writer: reads are migrated to the canonical clients, but the single guarded transaction still patches the instruments of a sunday_role/saturday_role/special_role document",
+    removalOwner: "A2",
+  },
+  {
     file: "app/api/admin/setlists/route.ts",
     operation: "PUT",
     reason:
