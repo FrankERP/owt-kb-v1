@@ -1,8 +1,38 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { newCreationRequestId } from "@/app/utils/monthDraftCreate";
 import MonthGenerator from "./MonthGenerator";
+import {
+  SERVICE_SOURCE_KEYS,
+  selectServiceCapabilities,
+  type ServiceCapabilities,
+  type ServiceControl,
+  type ServiceSourceKey,
+} from "./serviceReadiness";
+import {
+  SOURCE_ENDPOINTS,
+  canFilterMonths,
+  captureActiveMode,
+  checkActiveMode,
+  editModalControl,
+  guardControl,
+  initialSourceRecords,
+  isValidSourcePayload,
+  latchInvalidation,
+  movesServiceDate,
+  mutationOutcomeMessage,
+  publishControl,
+  reduceSourceRecords,
+  retryTargets,
+  rolesView,
+  sourceStates,
+  unreadyMessage,
+  type ActiveMode,
+  type ActiveModeInvalidation,
+  type ActiveModeSnapshot,
+  type ServiceSourceRecords,
+} from "./serviceSourceState";
 import { buildRuns } from "../../utils/medley";
 import { ChainLinkIcon } from "../ChainLinkIcon";
 import { ParticipationSidebar } from "@/app/components/admin/ParticipationSidebar";
@@ -236,9 +266,16 @@ function SlotEditor({ label, fieldLabel, slots, members, onChange, filterType }:
 
 // ─── Create / Edit form ───────────────────────────────────────────────────────
 
-function ServiceForm({ initial, members, onSubmit, onClose, loading }: {
+function ServiceForm({ initial, members, onSubmit, onClose, loading, dateLockedReason, submitBlockedReason }: {
   initial?: ServiceRole; members: MemberOption[];
   onSubmit: (d: any) => void; onClose: () => void; loading: boolean;
+  /**
+   * Why the date may not be moved right now (the `changeServiceDate` row of the
+   * capability matrix needs all five sources). Null = editable.
+   */
+  dateLockedReason?: string | null;
+  /** Why this form may not be submitted at all (source state or a stale snapshot). */
+  submitBlockedReason?: string | null;
 }) {
   const [type, setType]             = useState<ServiceType>(initial?._type ?? "sunday_role");
   const [date, setDate]             = useState(initial?.date?.slice(0, 10) ?? "");
@@ -327,7 +364,18 @@ function ServiceForm({ initial, members, onSubmit, onClose, loading }: {
         </div>
         <div className="space-y-1">
           <label className="font-label text-xs uppercase tracking-widest text-gray-500">Fecha</label>
-          <input className={inputCls} type="date" value={date} onChange={e => setDate(e.target.value)} required />
+          <input
+            className={`${inputCls} disabled:opacity-50`}
+            type="date"
+            value={date}
+            onChange={e => setDate(e.target.value)}
+            disabled={!!dateLockedReason}
+            title={dateLockedReason ?? undefined}
+            required
+          />
+          {dateLockedReason && (
+            <p className="font-body text-[11px] text-amber-400">No se puede mover la fecha: {dateLockedReason}</p>
+          )}
         </div>
       </div>
       {type === "special_role" && (
@@ -357,7 +405,8 @@ function ServiceForm({ initial, members, onSubmit, onClose, loading }: {
               className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
               Revisar
             </button>
-            <button type="button" onClick={() => onSubmit(pendingData)} disabled={loading}
+            <button type="button" onClick={() => onSubmit(pendingData)} disabled={loading || !!submitBlockedReason}
+              title={submitBlockedReason ?? undefined}
               className="flex-1 py-2 rounded-lg bg-orange-600/70 hover:bg-orange-600 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
               {loading ? "Guardando..." : "Confirmar de todos modos"}
             </button>
@@ -368,11 +417,11 @@ function ServiceForm({ initial, members, onSubmit, onClose, loading }: {
           <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">Cancelar</button>
           {!initial ? (
             <>
-              <button type="button" onClick={() => submit(false)} disabled={loading} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 hover:border-[#00bfff] font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{loading ? "Guardando..." : "Crear"}</button>
-              <button type="button" onClick={() => submit(true)} disabled={loading} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{loading ? "Guardando..." : "Crear y publicar"}</button>
+              <button type="button" onClick={() => submit(false)} disabled={loading || !!submitBlockedReason} title={submitBlockedReason ?? undefined} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 hover:border-[#00bfff] font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{loading ? "Guardando..." : "Crear"}</button>
+              <button type="button" onClick={() => submit(true)} disabled={loading || !!submitBlockedReason} title={submitBlockedReason ?? undefined} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{loading ? "Guardando..." : "Crear y publicar"}</button>
             </>
           ) : (
-            <button type="submit" disabled={loading} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{loading ? "Guardando..." : "Guardar"}</button>
+            <button type="submit" disabled={loading || !!submitBlockedReason} title={submitBlockedReason ?? undefined} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{loading ? "Guardando..." : "Guardar"}</button>
           )}
         </div>
       )}
@@ -487,8 +536,25 @@ function conflictIdsForRole(role: ServiceRole, unavail: Map<string, Set<string>>
   return ids;
 }
 
-function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSetlist, onPublish, swapMode, swapSource, onCardSwapSelect, onMemberChipClick, copyMode, isCopySource, onCopyStart, onCopyPick }: {
-  role: ServiceRole; conflictIds: Set<string>; conflictNotes?: Map<string, string>; onEdit: () => void; onDelete: () => void; onSetlist: () => void; onPublish: (roles: { id: string; rev: string }[], published: boolean) => void;
+/**
+ * One control's current availability, derived from the five individual source
+ * states (never from aggregate `dataConfidence`). `reason` is the Spanish copy
+ * naming the missing source and its retry.
+ */
+interface CardGate { enabled: boolean; reason: string | null }
+
+interface CardGates {
+  editTeam: CardGate;
+  editSetlist: CardGate;
+  copyInstruments: CardGate;
+  deleteService: CardGate;
+  publish: CardGate;
+  unpublish: CardGate;
+  swap: CardGate;
+}
+
+function ServiceCard({ role, conflictIds, conflictNotes, gates, onEdit, onDelete, onSetlist, onPublish, swapMode, swapSource, onCardSwapSelect, onMemberChipClick, copyMode, isCopySource, onCopyStart, onCopyPick }: {
+  role: ServiceRole; conflictIds: Set<string>; conflictNotes?: Map<string, string>; gates: CardGates; onEdit: () => void; onDelete: () => void; onSetlist: () => void; onPublish: (roles: { id: string; rev: string }[], published: boolean) => void;
   swapMode: boolean; swapSource: SwapSource | null;
   onCardSwapSelect: () => void;
   onMemberChipClick: (src: Exclude<SwapSource, { kind: "card" }>) => void;
@@ -573,8 +639,9 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
           <button
             type="button"
             onClick={onCardSwapSelect}
-            title="Intercambiar equipo completo"
-            className={`mt-0.5 px-2.5 py-1.5 rounded-lg font-label text-xs transition-colors shrink-0 ${
+            disabled={!gates.swap.enabled}
+            title={gates.swap.reason ?? "Intercambiar equipo completo"}
+            className={`mt-0.5 px-2.5 py-1.5 rounded-lg font-label text-xs transition-colors shrink-0 disabled:opacity-40 ${
               isCardSelected
                 ? "bg-white/20 text-white border border-white/40"
                 : "text-[#C8D8EB]/70 hover:text-white hover:bg-white/15 border border-transparent"
@@ -588,8 +655,10 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
               Origen
             </span>
           ) : (
-            <button type="button" onClick={onCopyPick} title="Copiar los instrumentos del origen a este día"
-              className="mt-0.5 px-2.5 py-1.5 rounded-lg font-label text-xs transition-colors shrink-0 text-[#C8D8EB]/70 hover:text-white hover:bg-[#00bfff]/25 border border-[#00bfff]/40">
+            <button type="button" onClick={onCopyPick}
+              disabled={!gates.copyInstruments.enabled}
+              title={gates.copyInstruments.reason ?? "Copiar los instrumentos del origen a este día"}
+              className="mt-0.5 px-2.5 py-1.5 rounded-lg font-label text-xs transition-colors shrink-0 text-[#C8D8EB]/70 hover:text-white hover:bg-[#00bfff]/25 border border-[#00bfff]/40 disabled:opacity-40">
               Pegar aquí
             </button>
           )
@@ -609,18 +678,21 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
                 <div role="menu" className="absolute right-0 top-full mt-1 z-50 w-52 rounded-lg border border-[#00bfff]/25 bg-[#03101f] shadow-xl shadow-black/50 py-1 overflow-hidden">
-                  <MenuItem icon={<PencilIcon />} label="Editar equipo" onClick={() => { setMenuOpen(false); onEdit(); }} />
-                  <MenuItem icon={<MusicIcon />} label="Editar setlist" onClick={() => { setMenuOpen(false); onSetlist(); }} />
+                  <MenuItem icon={<PencilIcon />} label="Editar equipo" gate={gates.editTeam} onClick={() => { setMenuOpen(false); onEdit(); }} />
+                  <MenuItem icon={<MusicIcon />} label="Editar setlist" gate={gates.editSetlist} onClick={() => { setMenuOpen(false); onSetlist(); }} />
                   {instrs.filter(s => s.person).length > 0 && (
-                    <MenuItem icon={<CopyIcon />} label="Copiar instrumentos a otro día" onClick={() => { setMenuOpen(false); onCopyStart(); }} />
+                    <MenuItem icon={<CopyIcon />} label="Copiar instrumentos a otro día" gate={gates.copyInstruments} onClick={() => { setMenuOpen(false); onCopyStart(); }} />
                   )}
                   <MenuItem
                     icon={<EyeIcon />}
                     label={role.published === false ? "Publicar" : "Despublicar"}
+                    // Publishing needs all five sources; safe unpublish needs only
+                    // roles + role-target integrity (plan §"Unpublish is separate").
+                    gate={role.published === false ? gates.publish : gates.unpublish}
                     onClick={() => { setMenuOpen(false); onPublish([{ id: role._id, rev: role._rev }], role.published === false); }}
                   />
                   <div className="my-1 border-t border-[#00bfff]/15" />
-                  <MenuItem icon={<TrashIcon />} label="Eliminar servicio" danger onClick={() => { setMenuOpen(false); onDelete(); }} />
+                  <MenuItem icon={<TrashIcon />} label="Eliminar servicio" danger gate={gates.deleteService} onClick={() => { setMenuOpen(false); onDelete(); }} />
                 </div>
               </>
             )}
@@ -762,7 +834,8 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
                         isSource={!!isChipSource(section, m._key)}
                         isTarget={false}
                         // No stored seat key (legacy/unresolvable item) → not swappable.
-                        onClick={swapSource?.kind === "card" || !m._key ? undefined : () => onMemberChipClick({ kind: "member", roleId: role._id, section, itemKey: m._key!, member: m })}
+                        // A swap-source that is not `ready` also removes the click.
+                        onClick={swapSource?.kind === "card" || !m._key || !gates.swap.enabled ? undefined : () => onMemberChipClick({ kind: "member", roleId: role._id, section, itemKey: m._key!, member: m })}
                       />
                     ))}
                   </div>
@@ -780,7 +853,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
                         name={`${dn(s.person)}${section === "instruments" ? ` · ${(s as any).instrument}` : ` · ${(s as any).role}`}`}
                         isSource={!!isChipSource(section, s._key)}
                         isTarget={false}
-                        onClick={swapSource?.kind === "card" || !s._key ? undefined : () => onMemberChipClick({ kind: "slot", roleId: role._id, section, itemKey: s._key!, member: s.person, slotLabel: (s as any).instrument ?? (s as any).role })}
+                        onClick={swapSource?.kind === "card" || !s._key || !gates.swap.enabled ? undefined : () => onMemberChipClick({ kind: "slot", roleId: role._id, section, itemKey: s._key!, member: s.person, slotLabel: (s as any).instrument ?? (s as any).role })}
                       />
                     ))}
                   </div>
@@ -1010,7 +1083,9 @@ function SwapConfirmModal({ confirm, onConfirm, onClose, onReload, loading, memb
 export default function ServicesPanel() {
   const [roles, setRoles]       = useState<ServiceRole[]>([]);
   const [members, setMembers]   = useState<MemberOption[]>([]);
-  const [loading, setLoading]   = useState(true);
+  // The five read domains are tracked INDEPENDENTLY: a failure in one never
+  // clears another's data and never reads as a clean value (Plan B item 5).
+  const [sourceRecords, setSourceRecords] = useState<ServiceSourceRecords>(initialSourceRecords);
   const [submitting, setSubmitting] = useState(false);
   const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
   const [showPastMonths, setShowPastMonths] = useState(false);
@@ -1043,31 +1118,149 @@ export default function ServicesPanel() {
   // a retry of the same payload reuses the same idempotency key.
   const addRequest = useRef<{ id: string; payloadKey: string } | null>(null);
 
+  // ── Independent source loading + per-control capability ───────────────────
+
+  const sources = useMemo(() => sourceStates(sourceRecords), [sourceRecords]);
+  const capabilities: ServiceCapabilities = useMemo(
+    () => selectServiceCapabilities(sources),
+    [sources],
+  );
+  /** Render-time gate for one control, with the Spanish "which source" copy. */
+  const gate = useCallback(
+    (control: ServiceControl): CardGate => {
+      const capability = capabilities[control];
+      return { enabled: capability.enabled, reason: unreadyMessage(capability.blockedBy) };
+    },
+    [capabilities],
+  );
+  const view = rolesView(sourceRecords);
+
+  // Active edit/swap/copy snapshots, plus the LATCHED reason each became stale.
+  // A stale mode is never submitted: it requires an explicit reload.
+  const [snapshots, setSnapshots] = useState<Partial<Record<ActiveMode, ActiveModeSnapshot>>>({});
+  const [staleModes, setStaleModes] = useState<Partial<Record<ActiveMode, ActiveModeInvalidation>>>({});
+
+  const openSnapshot = (mode: ActiveMode, control: ServiceControl, observed: readonly ServiceRole[]) => {
+    setSnapshots(prev => ({
+      ...prev,
+      [mode]: captureActiveMode({ mode, control, roles: observed, records: sourceRecords }),
+    }));
+    setStaleModes(prev => {
+      if (!prev[mode]) return prev;
+      const next = { ...prev };
+      delete next[mode];
+      return next;
+    });
+  };
+
+  const clearSnapshot = (...modes: ActiveMode[]) => {
+    setSnapshots(prev => {
+      const next = { ...prev };
+      let changed = false;
+      for (const mode of modes) if (next[mode]) { delete next[mode]; changed = true; }
+      return changed ? next : prev;
+    });
+    setStaleModes(prev => {
+      const next = { ...prev };
+      let changed = false;
+      for (const mode of modes) if (next[mode]) { delete next[mode]; changed = true; }
+      return changed ? next : prev;
+    });
+  };
+
+  // A required source failing/reloading, a selected role disappearing, or an
+  // observed revision changing invalidates the open mode — and stays latched.
+  useEffect(() => {
+    setStaleModes(prev => {
+      let changed = false;
+      const next = { ...prev };
+      for (const mode of Object.keys(snapshots) as ActiveMode[]) {
+        const snapshot = snapshots[mode];
+        if (!snapshot) continue;
+        const latched = latchInvalidation(
+          prev[mode] ?? null,
+          checkActiveMode(snapshot, { records: sourceRecords, roles }),
+        );
+        if (latched && latched !== prev[mode]) {
+          next[mode] = latched;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [snapshots, sourceRecords, roles]);
+
   const openEditModal = (next: Exclude<EditModal, null>) => {
+    const control = editModalControl(next.type);
+    // Re-checked at handler entry, not only at render.
+    const guard = guardControl(sources, control);
+    if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
     setEditError(null);
     if (next.type === "add") addRequest.current = null;
+    if (next.type !== "add") openSnapshot(next.type, control, [next.role]);
     setEditModal(next);
   };
 
   const closeEditModal = () => {
     setEditError(null);
     addRequest.current = null;
+    clearSnapshot("edit", "delete");
     setEditModal(null);
   };
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    const [r, m] = await Promise.all([fetch("/api/admin/roles"), fetch("/api/admin/members")]);
-    if (r.ok) setRoles(await r.json());
-    if (m.ok) setMembers(await m.json());
-    setLoading(false);
-  }, []);
+  /**
+   * Load the given sources independently. Each one reports its own success or
+   * failure; a non-OK response or an unusable payload is an error, never an empty
+   * array. Returns the sources that did NOT load, so a caller that just mutated
+   * can be honest about an incomplete refresh.
+   */
+  const loadSources = useCallback(
+    async (keys: readonly ServiceSourceKey[] = SERVICE_SOURCE_KEYS): Promise<ServiceSourceKey[]> => {
+      setSourceRecords(prev => reduceSourceRecords(prev, { type: "load_start", sources: keys }));
+      const results = await Promise.all(
+        keys.map(async (key) => {
+          try {
+            const res = await fetch(SOURCE_ENDPOINTS[key]);
+            if (!res.ok) return { key, ok: false, body: null as unknown };
+            const body = (await res.json()) as unknown;
+            return { key, ok: isValidSourcePayload(key, body), body };
+          } catch {
+            return { key, ok: false, body: null as unknown };
+          }
+        }),
+      );
+      for (const result of results) {
+        if (!result.ok) continue;
+        if (result.key === "roles") setRoles(result.body as ServiceRole[]);
+        if (result.key === "members") setMembers(result.body as MemberOption[]);
+      }
+      setSourceRecords(prev =>
+        results.reduce(
+          (acc, result) =>
+            reduceSourceRecords(
+              acc,
+              result.ok ? { type: "load_ok", source: result.key } : { type: "load_error", source: result.key },
+            ),
+          prev,
+        ),
+      );
+      return results.filter(r => !r.ok).map(r => r.key);
+    },
+    [],
+  );
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const retryLoad = useCallback(() => {
+    void loadSources(retryTargets(sourceRecords));
+  }, [loadSources, sourceRecords]);
+
+  useEffect(() => { void loadSources(); }, [loadSources]);
 
   // ── Create / Edit / Delete ────────────────────────────────────────────────
 
   const handleAdd = async (data: any) => {
+    // Submit re-check: a source may have failed since the modal opened.
+    const guard = guardControl(sources, "createService");
+    if (!guard.ok) { setEditError(guard.message ?? "Datos incompletos."); return; }
     setSubmitting(true);
     // One creationRequestId per LOGICAL create: retained while this exact payload
     // stays retryable (network error, lost response), and replaced as soon as the
@@ -1084,10 +1277,14 @@ export default function ServicesPanel() {
       });
       if (res.ok) {
         addRequest.current = null;
-        closeEditModal(); fetchData(); showToast("Servicio creado.");
+        closeEditModal();
+        // A failed refresh after a committed create is reported as such — never
+        // as a fully refreshed success.
+        showToast(mutationOutcomeMessage("Servicio creado.", await loadSources()));
       } else {
         setEditError(await describeMutationError(res, "Error al crear."));
-        if (res.status === 409) fetchData();
+        // A 409 keeps the modal open and refreshes so the operator can reload.
+        if (res.status === 409) void loadSources();
       }
     } catch {
       setEditError("Error de conexión.");
@@ -1098,6 +1295,16 @@ export default function ServicesPanel() {
 
   const handleEdit = async (data: any) => {
     if (editModal?.type !== "edit") return;
+    // A stale snapshot is never submitted: reload first.
+    const stale = staleModes.edit;
+    if (stale) { setEditError(stale.message); return; }
+    const guard = guardControl(sources, "editTeam");
+    if (!guard.ok) { setEditError(guard.message ?? "Datos incompletos."); return; }
+    // Moving the date is its own capability row (all five sources).
+    if (movesServiceDate(editModal.role.date, data?.date)) {
+      const dateGuard = guardControl(sources, "changeServiceDate");
+      if (!dateGuard.ok) { setEditError(dateGuard.message ?? "Datos incompletos."); return; }
+    }
     setSubmitting(true);
     try {
       const res = await fetch(`/api/admin/roles/${editModal.role._id}`, {
@@ -1106,10 +1313,12 @@ export default function ServicesPanel() {
         // The revision this card was loaded with — the stale-view guard.
         body: JSON.stringify({ ...data, rev: editModal.role._rev }),
       });
-      if (res.ok) { closeEditModal(); fetchData(); showToast("Actualizado."); }
-      else {
+      if (res.ok) {
+        closeEditModal();
+        showToast(mutationOutcomeMessage("Actualizado.", await loadSources()));
+      } else {
         setEditError(await describeMutationError(res, "Error al actualizar."));
-        if (res.status === 409) fetchData();
+        if (res.status === 409) void loadSources();
       }
     } catch {
       setEditError("Error de conexión.");
@@ -1120,6 +1329,10 @@ export default function ServicesPanel() {
 
   const handleDelete = async () => {
     if (editModal?.type !== "delete") return;
+    const stale = staleModes.delete;
+    if (stale) { setEditError(stale.message); return; }
+    const guard = guardControl(sources, "deleteService");
+    if (!guard.ok) { setEditError(guard.message ?? "Datos incompletos."); return; }
     setSubmitting(true);
     try {
       const res = await fetch(`/api/admin/roles/${editModal.role._id}`, {
@@ -1127,10 +1340,14 @@ export default function ServicesPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rev: editModal.role._rev }),
       });
-      if (res.ok) { closeEditModal(); fetchData(); showToast("Eliminado."); }
-      else {
+      if (res.ok) {
+        closeEditModal();
+        showToast(
+          mutationOutcomeMessage("Eliminado.", await loadSources(), "Eliminado, pero no se pudo actualizar"),
+        );
+      } else {
         setEditError(await describeMutationError(res, "Error al eliminar."));
-        if (res.status === 409) fetchData();
+        if (res.status === 409) void loadSources();
       }
     } catch {
       setEditError("Error de conexión.");
@@ -1141,16 +1358,28 @@ export default function ServicesPanel() {
 
   // ── Swap logic ────────────────────────────────────────────────────────────
 
+  /** Swap selection AND confirmation both re-check the swap capability. */
+  function guardSwap(): boolean {
+    const guard = guardControl(sources, "swap");
+    if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return false; }
+    return true;
+  }
+
   function handleCardSwapSelect(roleId: string) {
+    if (!guardSwap()) return;
     if (!swapSource) { setSwapSource({ kind: "card", roleId }); return; }
     if (swapSource.kind !== "card") return;
     if (swapSource.roleId === roleId) { setSwapSource(null); return; }
-    const roleA = roles.find(r => r._id === swapSource.roleId)!;
-    const roleB = roles.find(r => r._id === roleId)!;
+    const roleA = roles.find(r => r._id === swapSource.roleId);
+    const roleB = roles.find(r => r._id === roleId);
+    // A selected role that vanished from the refreshed list is never swapped.
+    if (!roleA || !roleB) { setSwapSource(null); showToast("Este servicio ya no existe. Recarga la lista."); return; }
+    openSnapshot("swap", "swap", [roleA, roleB]);
     setSwapConfirm({ kind: "card", roleA, roleB });
   }
 
   function handleMemberChipClick(src: Exclude<SwapSource, { kind: "card" }>) {
+    if (!guardSwap()) return;
     if (!swapSource) { setSwapSource(src); return; }
     if (swapSource.kind === "card") return;
     // Deselect if same chip (identified by its stored seat key, not its index)
@@ -1160,6 +1389,7 @@ export default function ServicesPanel() {
     const sourceRole = roles.find(r => r._id === swapSource.roleId);
     const targetRole = roles.find(r => r._id === src.roleId);
     if (!sourceRole || !targetRole) { setSwapSource(null); return; }
+    openSnapshot("swap", "swap", [sourceRole, targetRole]);
     setSwapConfirm({ kind: "member", source: swapSource, target: src, sourceRole, targetRole });
   }
 
@@ -1169,6 +1399,12 @@ export default function ServicesPanel() {
   // honestly; a 409 means the view is stale and requires a reload.
   async function confirmSwap() {
     if (!swapConfirm) return;
+    // Stale selection or a lost dependency: require a reload instead of sending
+    // the snapshot the operator saw.
+    const stale = staleModes.swap;
+    if (stale) { setSwapError(stale.message); return; }
+    const guard = guardControl(sources, "swap");
+    if (!guard.ok) { setSwapError(guard.message ?? "Datos incompletos."); return; }
     setSubmitting(true);
     setSwapError(null);
     try {
@@ -1203,8 +1439,8 @@ export default function ServicesPanel() {
       if (res.ok) {
         setSwapConfirm(null);
         setSwapSource(null);
-        fetchData();
-        showToast("Intercambio realizado.");
+        clearSnapshot("swap");
+        showToast(mutationOutcomeMessage("Intercambio realizado.", await loadSources()));
       } else {
         setSwapError(await describeMutationError(res, "Error al intercambiar."));
       }
@@ -1215,17 +1451,34 @@ export default function ServicesPanel() {
     }
   }
 
-  function exitSwapMode() { setSwapMode(false); setSwapSource(null); setSwapConfirm(null); setSwapError(null); }
+  function exitSwapMode() {
+    setSwapMode(false); setSwapSource(null); setSwapConfirm(null); setSwapError(null);
+    clearSnapshot("swap");
+  }
 
   // ── Copy instruments to another day ─────────────────────────────────────────
 
-  function startCopyInstruments(roleId: string) { exitSwapMode(); setCopySource(roleId); }
+  function exitCopyMode() { setCopySource(null); clearSnapshot("copy"); }
+
+  function startCopyInstruments(roleId: string) {
+    const guard = guardControl(sources, "copyInstruments");
+    if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
+    const source = roles.find(r => r._id === roleId);
+    if (!source) { showToast("Este servicio ya no existe. Recarga la lista."); return; }
+    exitSwapMode();
+    openSnapshot("copy", "copyInstruments", [source]);
+    setCopySource(roleId);
+  }
 
   async function copyInstrumentsTo(targetId: string) {
     if (!copySource || copySource === targetId) return;
+    const stale = staleModes.copy;
+    if (stale) { showToast(stale.message); return; }
+    const guard = guardControl(sources, "copyInstruments");
+    if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
     const source = roles.find(r => r._id === copySource);
     const target = roles.find(r => r._id === targetId);
-    if (!source || !target) return;
+    if (!source || !target) { showToast("Este servicio ya no existe. Recarga la lista."); return; }
     const count = (source.instruments ?? []).filter(s => s.person).length;
     const fmt = (r: ServiceRole) =>
       new Date(r.date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short" });
@@ -1243,12 +1496,12 @@ export default function ServicesPanel() {
         }),
       });
       if (res.ok) {
-        setCopySource(null);
-        fetchData();
-        showToast("Instrumentos copiados.");
+        exitCopyMode();
+        showToast(mutationOutcomeMessage("Instrumentos copiados.", await loadSources()));
       } else {
+        // Copy mode stays open; a 409 refresh invalidates the stale selection.
         showToast(await describeMutationError(res, "Error al copiar."));
-        if (res.status === 409) fetchData();
+        if (res.status === 409) void loadSources();
       }
     } catch {
       showToast("Error de conexión.");
@@ -1261,20 +1514,41 @@ export default function ServicesPanel() {
 
   // Each entry carries the revision the card was loaded with; any stale entry
   // rejects the whole batch, so the list is refreshed and nothing is claimed.
-  async function handlePublish(roles: { id: string; rev: string }[], published: boolean) {
+  async function handlePublish(entries: { id: string; rev: string }[], published: boolean) {
+    // Publishing needs all five sources; hiding a published service is the
+    // separate narrow capability (roles + role-target integrity only).
+    const guard = guardControl(sources, publishControl(published));
+    if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
     try {
       const res = await fetch("/api/admin/roles/publish", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roles, published }),
+        body: JSON.stringify({ roles: entries, published }),
       });
-      if (res.ok) fetchData();
-      else {
+      if (res.ok) {
+        const refreshFailed = await loadSources();
+        const message = mutationOutcomeMessage("", refreshFailed);
+        if (message) showToast(message);
+      } else {
         showToast(await describeMutationError(res, "Error al publicar."));
-        if (res.status === 409) fetchData();
+        if (res.status === 409) void loadSources();
       }
     } catch {
       showToast("Error de conexión.");
     }
+  }
+
+  // ── Setlist editor ────────────────────────────────────────────────────────
+
+  function openSetlist(role: ServiceRole) {
+    const guard = guardControl(sources, "editSetlist");
+    if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
+    setSetlistRole(role);
+  }
+
+  function openGenerator() {
+    const guard = guardControl(sources, "generateMonth");
+    if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
+    setShowGenerator(true);
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -1342,6 +1616,32 @@ export default function ServicesPanel() {
     })
     .sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
 
+  // ── Per-control gates (one snapshot, five individual source states) ─────────
+  const swapGate          = gate("swap");
+  const publishGate       = gate("publishReady");
+  const generateGate      = gate("generateMonth");
+  const createGate        = gate("createService");
+  const participationGate = gate("participationSidebar");
+  const cardGates: CardGates = {
+    editTeam: gate("editTeam"),
+    editSetlist: gate("editSetlist"),
+    copyInstruments: gate("copyInstruments"),
+    deleteService: gate("deleteService"),
+    publish: publishGate,
+    unpublish: gate("unpublish"),
+    swap: swapGate,
+  };
+
+  // Honest banner: which sources are missing, and its retry. Availability/team
+  // are explicitly "unverified" while members is unavailable — never "clear".
+  const unreadySummary = unreadyMessage(
+    SERVICE_SOURCE_KEYS.filter(key => sources[key] !== "ready").map(key => ({
+      source: key,
+      state: sources[key] as "loading" | "error",
+    })),
+  );
+  const availabilityUnverified = sources.members !== "ready";
+
   return (
     <div className="space-y-5">
 
@@ -1349,7 +1649,7 @@ export default function ServicesPanel() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="font-display text-2xl uppercase tracking-wide">Servicios</h1>
-          {!loading && (
+          {view !== "loading" && (
             <p className="font-label text-xs uppercase tracking-widest text-gray-500 mt-0.5">
               {upcoming.length} próximo{upcoming.length !== 1 ? "s" : ""}
               {past.length > 0 && ` · ${past.length} pasado${past.length !== 1 ? "s" : ""}`}
@@ -1359,8 +1659,10 @@ export default function ServicesPanel() {
         <div className="flex items-center gap-2 flex-wrap">
           {/* Swap mode toggle */}
           <button
-            onClick={() => { if (swapMode) { exitSwapMode(); } else { setCopySource(null); setSwapMode(true); } }}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
+            onClick={() => { if (swapMode) { exitSwapMode(); } else { exitCopyMode(); setSwapMode(true); } }}
+            disabled={!swapGate.enabled && !swapMode}
+            title={swapGate.reason ?? undefined}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-40 ${
               swapMode ? "border-[#00bfff] bg-[#00bfff]/10 text-[#00bfff]" : "border-[#003572]/20 dark:border-[#00bfff]/15 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff]/30"
             }`}
           >
@@ -1370,25 +1672,52 @@ export default function ServicesPanel() {
             const draftEntries = visible.filter(r => r.published === false).map(r => ({ id: r._id, rev: r._rev }));
             return draftEntries.length > 0 ? (
               <button type="button"
+                disabled={!publishGate.enabled}
+                title={publishGate.reason ?? undefined}
                 onClick={() => { if (confirm(`¿Publicar ${draftEntries.length} servicio(s) del filtro actual?`)) handlePublish(draftEntries, true); }}
-                className="px-3 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 font-label text-xs uppercase tracking-widest transition-colors">
+                className="px-3 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-40">
                 Publicar todo ({draftEntries.length})
               </button>
             ) : null;
           })()}
-          <button onClick={() => setShowGenerator(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#003572]/20 dark:border-[#00bfff]/15 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff]/30 transition-colors">
+          <button onClick={openGenerator}
+            disabled={!generateGate.enabled}
+            title={generateGate.reason ?? undefined}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#003572]/20 dark:border-[#00bfff]/15 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff]/30 transition-colors disabled:opacity-40">
             📅 Generar mes
           </button>
           {!swapMode && !copyMode && (
-            <button onClick={() => openEditModal({ type: "add" })} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors">
+            <button onClick={() => openEditModal({ type: "add" })}
+              disabled={!createGate.enabled}
+              title={createGate.reason ?? undefined}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-40">
               <span className="text-base leading-none">+</span> Nuevo
             </button>
           )}
         </div>
       </div>
 
+      {/* Source state — names the missing source and offers its retry */}
+      {view !== "loading" && unreadySummary && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <p className="font-label text-xs uppercase tracking-widest text-amber-400">Datos incompletos</p>
+            <p className="font-body text-xs text-gray-300 mt-0.5">{unreadySummary}</p>
+            {availabilityUnverified && (
+              <p className="font-body text-xs text-gray-400 mt-0.5">
+                El equipo y la disponibilidad no se pudieron verificar.
+              </p>
+            )}
+          </div>
+          <button type="button" onClick={retryLoad}
+            className="px-3 py-1.5 rounded-lg border border-amber-500/40 font-label text-[11px] uppercase tracking-widest text-amber-300 hover:bg-amber-500/15 transition-colors shrink-0">
+            Reintentar carga
+          </button>
+        </div>
+      )}
+
       {/* Month filter */}
-      {!loading && allMonths.length > 0 && (
+      {canFilterMonths(sourceRecords) && allMonths.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-label text-[11px] uppercase tracking-widest text-gray-600 shrink-0">Mes:</span>
@@ -1418,7 +1747,7 @@ export default function ServicesPanel() {
       )}
 
       {/* Availability conflict summary */}
-      {!loading && conflictNotices.length > 0 && (
+      {view !== "loading" && conflictNotices.length > 0 && (
         <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3">
           <p className="font-label text-xs uppercase tracking-widest text-red-400 flex items-center gap-1.5">
             ⚠ {conflictNotices.length} conflicto{conflictNotices.length !== 1 ? "s" : ""} de disponibilidad
@@ -1471,20 +1800,57 @@ export default function ServicesPanel() {
                 Copiando los instrumentos de <span className="text-gray-300 capitalize">{srcLabel}</span>. Haz clic en «Pegar aquí» en el día destino (reemplaza sus instrumentos).
               </p>
             </div>
-            <button onClick={() => setCopySource(null)} className="font-label text-[11px] uppercase tracking-widest text-gray-500 hover:text-red-400 transition-colors ml-4 shrink-0">
+            <button onClick={exitCopyMode} className="font-label text-[11px] uppercase tracking-widest text-gray-500 hover:text-red-400 transition-colors ml-4 shrink-0">
               Cancelar
             </button>
           </div>
         );
       })()}
 
+      {/* An invalidated copy selection is never pasted: reload first. */}
+      {copyMode && staleModes.copy && (
+        <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+          <p className="font-body text-xs text-red-300">{staleModes.copy.message}</p>
+          <button type="button" onClick={() => { exitCopyMode(); retryLoad(); }}
+            className="px-3 py-1.5 rounded-lg border border-red-400/40 font-label text-[11px] uppercase tracking-widest text-red-200 hover:bg-red-500/15 transition-colors shrink-0">
+            Recargar
+          </button>
+        </div>
+      )}
+
       {/* Loading */}
-      {loading && <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-20 rounded-xl bg-[#003572]/10 dark:bg-[#00bfff]/5 animate-pulse" />)}</div>}
+      {view === "loading" && <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-20 rounded-xl bg-[#003572]/10 dark:bg-[#00bfff]/5 animate-pulse" />)}</div>}
+
+      {/* A roles failure prevents card rendering and shows retry instead */}
+      {view === "error" && (
+        <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-6 text-center space-y-3">
+          <p className="font-label text-xs uppercase tracking-widest text-red-400">No se pudieron cargar los servicios</p>
+          <p className="font-body text-sm text-gray-300">
+            No se pueden mostrar los servicios sin esa fuente. Reintenta la carga.
+          </p>
+          <button type="button" onClick={retryLoad}
+            className="px-4 py-2 rounded-lg border border-red-400/40 font-label text-xs uppercase tracking-widest text-red-200 hover:bg-red-500/15 transition-colors">
+            Reintentar carga
+          </button>
+        </div>
+      )}
 
       {/* Grid */}
-      {!loading && (
+      {view === "cards" && (
         <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
-          <ParticipationSidebar roles={visible as ParticipantRole[]} monthLabel={monthLabel} />
+          {participationGate.enabled ? (
+            <ParticipationSidebar roles={visible as ParticipantRole[]} monthLabel={monthLabel} />
+          ) : (
+            // Never compute participation from partial membership.
+            <aside className="rounded-xl border border-[#00bfff]/20 bg-[#C8D8EB]/40 dark:bg-[#010b17] p-3 space-y-2">
+              <p className="font-label text-xs uppercase tracking-widest text-[#003572] dark:text-[#00bfff]">Participaciones</p>
+              <p className="font-body text-xs text-gray-400">{participationGate.reason}</p>
+              <button type="button" onClick={retryLoad}
+                className="px-3 py-1.5 rounded-lg border border-[#00bfff]/30 font-label text-[11px] uppercase tracking-widest text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors">
+                Reintentar carga
+              </button>
+            </aside>
+          )}
           <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 items-start">
           {upcoming.length === 0 && selectedMonths.size === 0 && (
             <p className="font-body text-sm text-gray-500 text-center py-12">No hay servicios próximos.</p>
@@ -1495,9 +1861,10 @@ export default function ServicesPanel() {
               role={role}
               conflictIds={roleConflicts.get(role._id) ?? EMPTY_SET}
               conflictNotes={roleConflictNotes.get(role._id)}
+              gates={cardGates}
               onEdit={() => openEditModal({ type: "edit", role })}
               onDelete={() => openEditModal({ type: "delete", role })}
-              onSetlist={() => setSetlistRole(role)}
+              onSetlist={() => openSetlist(role)}
               onPublish={handlePublish}
               swapMode={swapMode}
               swapSource={swapSource}
@@ -1524,37 +1891,65 @@ export default function ServicesPanel() {
       {/* ── Modals ── */}
       {editModal?.type === "add" && (
         <Modal title="Nuevo servicio" onClose={closeEditModal} status={editError}>
-          <ServiceForm members={members} onSubmit={handleAdd} onClose={closeEditModal} loading={submitting} />
+          <ServiceForm members={members} onSubmit={handleAdd} onClose={closeEditModal} loading={submitting}
+            submitBlockedReason={createGate.reason} />
         </Modal>
       )}
       {editModal?.type === "edit" && (
-        <Modal title="Editar servicio" onClose={closeEditModal} status={editError}>
-          <ServiceForm initial={editModal.role} members={members} onSubmit={handleEdit} onClose={closeEditModal} loading={submitting} />
+        <Modal title="Editar servicio" onClose={closeEditModal} status={editError ?? staleModes.edit?.message}>
+          <ServiceForm initial={editModal.role} members={members} onSubmit={handleEdit} onClose={closeEditModal} loading={submitting}
+            dateLockedReason={gate("changeServiceDate").reason}
+            submitBlockedReason={staleModes.edit?.message ?? cardGates.editTeam.reason} />
+          {staleModes.edit && (
+            <button type="button" onClick={() => { closeEditModal(); retryLoad(); }}
+              className="w-full py-2 rounded-lg border border-[#00bfff]/30 font-label text-xs uppercase tracking-widest text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors">
+              Recargar
+            </button>
+          )}
         </Modal>
       )}
-      {editModal?.type === "delete" && (
-        <Modal title="Eliminar servicio" onClose={closeEditModal} status={editError}>
-          <p className="font-body text-sm text-gray-400">¿Eliminar el servicio del <span className="text-red-400 font-semibold">{formatDate(editModal.role.date)}</span>? Esta acción no se puede deshacer.</p>
-          <div className="flex gap-3">
-            <button onClick={closeEditModal} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">Cancelar</button>
-            <button onClick={handleDelete} disabled={submitting} className="flex-1 py-2 rounded-lg bg-red-800/60 hover:bg-red-700/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{submitting ? "Eliminando..." : "Eliminar"}</button>
-          </div>
-        </Modal>
-      )}
+      {editModal?.type === "delete" && (() => {
+        // Dependency inventory must be complete (all five) and the observed
+        // record still current, or this destructive confirmation is disabled.
+        const blocked = staleModes.delete?.message ?? cardGates.deleteService.reason;
+        return (
+          <Modal title="Eliminar servicio" onClose={closeEditModal} status={editError ?? blocked}>
+            <p className="font-body text-sm text-gray-400">¿Eliminar el servicio del <span className="text-red-400 font-semibold">{formatDate(editModal.role.date)}</span>? Esta acción no se puede deshacer.</p>
+            <div className="flex gap-3">
+              <button onClick={closeEditModal} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">Cancelar</button>
+              {staleModes.delete ? (
+                <button onClick={() => { closeEditModal(); retryLoad(); }} className="flex-1 py-2 rounded-lg border border-[#00bfff]/30 font-label text-xs uppercase tracking-widest text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors">Recargar</button>
+              ) : (
+                <button onClick={handleDelete} disabled={submitting || !!blocked} title={blocked ?? undefined} className="flex-1 py-2 rounded-lg bg-red-800/60 hover:bg-red-700/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{submitting ? "Eliminando..." : "Eliminar"}</button>
+              )}
+            </div>
+          </Modal>
+        );
+      })()}
       {swapConfirm && (
         <SwapConfirmModal
           confirm={swapConfirm}
           onConfirm={confirmSwap}
-          onClose={() => { setSwapConfirm(null); setSwapSource(null); setSwapError(null); }}
-          onReload={() => { exitSwapMode(); fetchData(); }}
+          onClose={() => { setSwapConfirm(null); setSwapSource(null); setSwapError(null); clearSnapshot("swap"); }}
+          onReload={() => { exitSwapMode(); retryLoad(); }}
           loading={submitting}
           members={members}
-          error={swapError}
+          // A stale/blocked selection shows its reason and offers reload.
+          error={swapError ?? staleModes.swap?.message ?? swapGate.reason}
         />
       )}
       {showGenerator && (
         <Modal title="Generar mes" onClose={() => setShowGenerator(false)} wide>
-          <MonthGenerator members={members} existingRoles={roles} onClose={() => setShowGenerator(false)} onCreated={() => { fetchData(); showToast("Servicios generados."); }} />
+          <MonthGenerator
+            members={members}
+            existingRoles={roles}
+            // Re-checked at preview and at confirmation, not just at open.
+            capability={{ enabled: generateGate.enabled, reason: generateGate.reason }}
+            onClose={() => setShowGenerator(false)}
+            onCreated={async () => {
+              showToast(mutationOutcomeMessage("Servicios generados.", await loadSources()));
+            }}
+          />
         </Modal>
       )}
       {setlistRole && (() => {
@@ -1569,7 +1964,10 @@ export default function ServicesPanel() {
               type={type}
               roleId={type === "special" ? r._id : undefined}
               onClose={() => setSetlistRole(null)}
-              onSaved={() => { setSetlistRole(null); fetchData(); showToast("Setlist guardado."); }}
+              onSaved={async () => {
+                setSetlistRole(null);
+                showToast(mutationOutcomeMessage("Setlist guardado.", await loadSources()));
+              }}
             />
           </Modal>
         );
@@ -1638,15 +2036,24 @@ function EyeIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>;
 }
 
-function MenuItem({ icon, label, onClick, danger }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
+function MenuItem({ icon, label, onClick, danger, gate }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean; gate?: CardGate }) {
+  const disabled = !!gate && !gate.enabled;
   return (
-    <button
-      type="button"
-      role="menuitem"
-      onClick={onClick}
-      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors ${danger ? "text-red-300 hover:bg-red-500/15" : "text-[#C8D8EB] hover:bg-white/10"}`}
-    >
-      <span className="shrink-0 opacity-80">{icon}</span>{label}
-    </button>
+    <>
+      <button
+        type="button"
+        role="menuitem"
+        onClick={onClick}
+        disabled={disabled}
+        title={disabled ? gate?.reason ?? undefined : undefined}
+        className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors disabled:opacity-40 ${danger ? "text-red-300 hover:bg-red-500/15" : "text-[#C8D8EB] hover:bg-white/10"}`}
+      >
+        <span className="shrink-0 opacity-80">{icon}</span>{label}
+      </button>
+      {disabled && gate?.reason && (
+        // `role="none"` so this explanatory line is not read as a menu item.
+        <p role="none" className="px-3 pb-1.5 font-body text-[11px] text-amber-400/80">{gate.reason}</p>
+      )}
+    </>
   );
 }
