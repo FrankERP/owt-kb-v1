@@ -49,16 +49,20 @@ export async function GET() {
   const SONG_PROJ = `{ _id, title, author, key, "slug": slug.current }`;
   const SETLIST_SONGS = `songs[]{ play_key, medley_tag, "song": song->${SONG_PROJ} }`;
 
+  // Every seat carries its stable stored `_key` alongside the resolved member, so
+  // the admin panel can address one seat by key — never by rendered index — when
+  // it asks the swap writer to move a person. Dangling references are filtered
+  // out exactly as the plain `->` projection did.
   const roles = await operationalClient.fetch(`
     *[_type in ["sunday_role", "saturday_role", "special_role"]]
     | order(coalesce(week, date) asc) {
       _id, _rev, _type, service_name, published,
       "date": coalesce(week, date),
-      "leads": Lead[]->{_id, member_name, alias},
-      "bgvs": BGVs[]->{_id, member_name, alias},
-      "chorus": Chorus[]->{_id, member_name, alias},
-      "instruments": instruments[]{instrument, "person": person->{_id, member_name, alias}},
-      "foh": foh_team[]{role, "person": person->{_id, member_name, alias}},
+      "leads": Lead[defined(@->)]{ _key, ...@->{_id, member_name, alias} },
+      "bgvs": BGVs[defined(@->)]{ _key, ...@->{_id, member_name, alias} },
+      "chorus": Chorus[defined(@->)]{ _key, ...@->{_id, member_name, alias} },
+      "instruments": instruments[]{_key, instrument, "person": person->{_id, member_name, alias}},
+      "foh": foh_team[]{_key, role, "person": person->{_id, member_name, alias}},
       "songs": coalesce(select(
         _type == "sunday_role"   => *[_type == "featuredSongs"  && week == ^.week][0].${SETLIST_SONGS},
         _type == "saturday_role" => *[_type == "saturdarSongs"  && week == ^.week][0].${SETLIST_SONGS},

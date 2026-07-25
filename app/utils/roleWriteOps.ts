@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import { operationalClient, rawIntegrityClient } from "@/sanity/lib/operationalClient";
 import { writeClient } from "@/sanity/lib/serverClient";
 import {
+  canonicalMembersByIdsQuery,
   canonicalRoleByIdQuery,
   canonicalRolesByIdsQuery,
   canonicalSetlistsForWeeksQuery,
@@ -34,10 +35,22 @@ import {
   roleCreationReceiptsForRoleQuery,
   roleTargetLocksByIdsQuery,
 } from "@/app/utils/serviceReadQueries";
-import { canonicalGroupState, type CanonicalGroupState, type RoleType } from "./serviceReadModel";
+import {
+  canonicalGroupState,
+  validateRole,
+  type CanonicalGroupState,
+  type RoleType,
+} from "./serviceReadModel";
 import { pickUnique } from "./serviceReadSelect";
-import { buildClaimedLock } from "./roleTargetLock";
-import { isSpecialRoleType, storedRoleDate } from "./roleWriteRequest";
+import { buildClaimedLock, roleTargetLockId } from "./roleTargetLock";
+import type { ServiceErrorCode } from "./serviceMutation";
+import {
+  isCanonicalDocumentId,
+  isSpecialRoleType,
+  planOwnedLock,
+  roleDateField,
+  storedRoleDate,
+} from "./roleWriteRequest";
 import {
   inventoryRoleDependencies,
   type RoleDependencyInventory,
@@ -168,6 +181,173 @@ export async function loadReceiptById(receiptId: string): Promise<StoredReceipt 
 /** Every receipt whose immutable `roleId` names this role (>1 = integrity conflict). */
 export async function loadReceiptsForRole(roleId: string): Promise<StoredReceipt[]> {
   return run<StoredReceipt>(roleCreationReceiptsForRoleQuery(roleId));
+}
+
+/** Canonical member ids that actually resolve, for dangling-assignment refusal. */
+export async function loadCanonicalMemberIds(ids: string[]): Promise<Set<string>> {
+  const unique = [...new Set(ids)].filter(Boolean);
+  if (!unique.length) return new Set();
+  const rows = await run<{ _id: string }>(canonicalMembersByIdsQuery(unique));
+  return new Set(rows.map((r) => r._id).filter((id): id is string => typeof id === "string"));
+}
+
+// ── Shared write-target resolution (§2/§4) ──────────────────────────────────
+
+/** A rejection a route turns into `serviceError(code, { details })`. */
+export interface RoleWriteFailure {
+  code: ServiceErrorCode;
+  details: Record<string, unknown>;
+}
+
+export interface RoleWriteTarget {
+  role: StoredRole;
+  targetKey: string;
+  /** Deterministic weekend lock id; null for a special service. */
+  lockId: string | null;
+  date: string;
+}
+
+export type RoleWriteLoad =
+  | { ok: true; target: RoleWriteTarget }
+  | { ok: false; failure: RoleWriteFailure };
+
+/**
+ * Resolve one role id to exactly one canonical role, its canonical target and its
+ * coordination token, and assert the revision the client observed. A non-canonical
+ * id, ambiguity, a raw draft overlay, a structurally invalid role, an unusable
+ * date, or a stale observed revision all fail closed BEFORE any write.
+ */
+export async function loadRoleForWrite(id: string, rev: string): Promise<RoleWriteLoad> {
+  if (!isCanonicalDocumentId(id)) {
+    return { ok: false, failure: { code: "invalid_request", details: { issues: ["id"] } } };
+  }
+  const lookup = await loadCanonicalRole(id);
+  if (lookup.state === "none") {
+    return { ok: false, failure: { code: "not_found", details: { id } } };
+  }
+  if (lookup.state !== "single" || !lookup.role) {
+    return { ok: false, failure: { code: "ambiguous_target", details: { id, state: lookup.state } } };
+  }
+  if (lookup.draftIds.length) {
+    return {
+      ok: false,
+      failure: { code: "integrity_conflict", details: { id, rawDrafts: lookup.draftIds } },
+    };
+  }
+  const role = lookup.role;
+  const validation = validateRole(role);
+  if (!validation.groupable || !validation.targetKey) {
+    return {
+      ok: false,
+      failure: { code: "integrity_conflict", details: { id, issues: validation.issues } },
+    };
+  }
+  if (role._rev !== rev) {
+    return {
+      ok: false,
+      failure: {
+        code: "stale_revision",
+        details: { id, storedRev: role._rev, observedRev: rev },
+      },
+    };
+  }
+  const date = storedRoleDate(role);
+  if (!date) {
+    return {
+      ok: false,
+      failure: { code: "integrity_conflict", details: { id, issues: ["date"] } },
+    };
+  }
+  return {
+    ok: true,
+    target: {
+      role,
+      date,
+      targetKey: validation.targetKey,
+      lockId: roleTargetLockId(validation.targetKey),
+    },
+  };
+}
+
+export interface CoordinatedRole {
+  /** The role to guard, refetched when a legacy lock had to be bootstrapped. */
+  role: StoredRole;
+  targetKey: string;
+  date: string;
+  /** The owned weekend token to assert/heartbeat; null for a special service. */
+  lock: StoredLock | null;
+}
+
+export type RoleCoordination =
+  | { ok: true; roles: CoordinatedRole[]; bootstrapped: boolean }
+  | { ok: false; failure: RoleWriteFailure; bootstrapped: boolean };
+
+/**
+ * Resolve the coordination token every involved role must already own, so ONE
+ * business transaction can assert all of them. A wrong-owner, vacant or malformed
+ * token is an integrity conflict and is never repaired implicitly; exactly one
+ * legacy weekend role with no token runs the §1 bootstrap maintenance transaction
+ * and the caller then continues only from the produced revisions.
+ */
+export async function resolveOwnedCoordination(
+  targets: readonly RoleWriteTarget[],
+): Promise<RoleCoordination> {
+  const out: CoordinatedRole[] = [];
+  let bootstrapped = false;
+  const lockIds = targets
+    .map((t) => t.lockId)
+    .filter((id): id is string => typeof id === "string");
+  const locks = await loadLocks(lockIds);
+
+  for (const target of targets) {
+    const { lockId, targetKey } = target;
+    if (!lockId) {
+      // A special service is serialized by its own document revision.
+      out.push({ role: target.role, targetKey, date: target.date, lock: null });
+      continue;
+    }
+    const plan = planOwnedLock({
+      lock: locks.get(lockId) ?? null,
+      targetKey,
+      roleId: target.role._id,
+    });
+    if (plan.kind === "integrity") {
+      return {
+        ok: false,
+        bootstrapped,
+        failure: { code: "integrity_conflict", details: { lockId, detail: plan.detail } },
+      };
+    }
+    if (plan.kind === "bootstrap") {
+      const boot = await bootstrapLegacyLock({
+        roleId: target.role._id,
+        roleRev: target.role._rev,
+        targetKey,
+        dateField: roleDateField(target.role._type),
+        date: target.date,
+      });
+      if (!boot.ok || !boot.role || !boot.lock) {
+        return {
+          ok: false,
+          bootstrapped: bootstrapped || boot.committed,
+          failure: {
+            code: boot.committed ? "bootstrap_completed_reload" : "stale_revision",
+            details: { id: target.role._id, lockId },
+          },
+        };
+      }
+      bootstrapped = true;
+      out.push({ role: boot.role, targetKey, date: target.date, lock: boot.lock });
+      continue;
+    }
+    out.push({
+      role: target.role,
+      targetKey,
+      date: target.date,
+      lock: locks.get(lockId) as StoredLock,
+    });
+  }
+  return { ok: true, roles: out, bootstrapped };
 }
 
 // ── Target occupancy ────────────────────────────────────────────────────────
