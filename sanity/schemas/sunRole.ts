@@ -3,6 +3,24 @@ export const sundayRole = {
   title: 'Sunday Role',
   type: 'document',
   fields: [
+    // ── Internal (Service Readiness A2 §2) ────────────────────────────────
+    // Forward link to the deterministic roleCreationReceipt that authorized this
+    // document's creation. Never authored by hand; the receipt's own `roleId`
+    // stays authoritative. Hidden and read-only in the Studio.
+    {
+      name: 'creationReceiptId',
+      title: 'Creation receipt id (internal)',
+      type: 'string',
+      hidden: true,
+      readOnly: true,
+    },
+    {
+      name: 'creationFingerprint',
+      title: 'Creation payload fingerprint (internal)',
+      type: 'string',
+      hidden: true,
+      readOnly: true,
+    },
     {
       name: "published",
       title: "Publicado",

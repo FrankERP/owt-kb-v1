@@ -5,6 +5,7 @@ import type { SolveRequest, SolveResponse } from "@/app/api/admin/solve/route";
 import { summarizeUnfilledSeats } from "@/app/utils/unfilledSeats";
 import { DayCard } from "@/app/components/DayCard";
 import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
+import { newCreationRequestId, runDraftCreateBatch } from "@/app/utils/monthDraftCreate";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,6 +21,13 @@ interface FohSlot       { id: string; role: string; personId: string; }
 
 interface DraftCard {
   localId: string;
+  /**
+   * Opaque per-draft creation idempotency key (A2 §2). Minted once, when this
+   * preview draft is first constructed, and preserved across edits, swaps,
+   * partial batches, refreshes, and retries — distinct from the short UI
+   * `localId`. Only a newly generated preview mints new ids.
+   */
+  creationRequestId: string;
   _type: ServiceType;
   date: string;
   exists: boolean;
@@ -1114,7 +1122,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
     const all: DraftCard[] = [];
     if (sundays) {
       getDates(year, month, 0).forEach(date => all.push({
-        localId: uid(), _type: "sunday_role", date,
+        localId: uid(), creationRequestId: newCreationRequestId(), _type: "sunday_role", date,
         exists: existing.has(`sunday_role__${date}`),
         skipped: existing.has(`sunday_role__${date}`),
         leads: [], bgvs: [], chorus: [], instruments: [], foh: [],
@@ -1122,7 +1130,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
     }
     if (saturdays) {
       getDates(year, month, 6).filter(d => activeSatDates.includes(d)).forEach(date => all.push({
-        localId: uid(), _type: "saturday_role", date,
+        localId: uid(), creationRequestId: newCreationRequestId(), _type: "saturday_role", date,
         exists: existing.has(`saturday_role__${date}`),
         skipped: existing.has(`saturday_role__${date}`),
         leads: [], bgvs: [], chorus: [], instruments: [], foh: [],
@@ -1258,7 +1266,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
       if (sundays && sunDate) {
         const sun = weekData.Sunday ?? { Lead: [], BGV: [], Choir: [] };
         allDrafts.push({
-          localId: uid(), _type: "sunday_role", date: sunDate,
+          localId: uid(), creationRequestId: newCreationRequestId(), _type: "sunday_role", date: sunDate,
           exists:  existing.has(`sunday_role__${sunDate}`),
           skipped: existing.has(`sunday_role__${sunDate}`),
           leads:  sun.Lead.map(n => nameToId(n, members)).filter(Boolean) as string[],
@@ -1273,7 +1281,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
         if (saturdayDates.includes(satDate)) {
           const sat = weekData.Saturday;
           allDrafts.push({
-            localId: uid(), _type: "saturday_role", date: satDate,
+            localId: uid(), creationRequestId: newCreationRequestId(), _type: "saturday_role", date: satDate,
             exists:  existing.has(`saturday_role__${satDate}`),
             skipped: existing.has(`saturday_role__${satDate}`),
             leads: sat.Lead.map(n => nameToId(n, members)).filter(Boolean) as string[],
@@ -1313,42 +1321,49 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
     if (!toCreate.length) return;
     setPushing(true);
     setPushError(null);
-    let failed = 0;
-    const created = new Set<string>();
+    let result;
     try {
-      for (const d of toCreate) {
-        try {
+      // Each draft POSTs its own stable creationRequestId, so a retry after a
+      // lost response replays idempotently instead of creating a duplicate.
+      result = await runDraftCreateBatch({
+        drafts: toCreate,
+        published: publish,
+        post: async (body) => {
           const res = await fetch("/api/admin/roles", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              _type: d._type, date: d.date,
-              leads: d.leads, bgvs: d.bgvs, chorus: d.chorus,
-              instruments: d.instruments.filter(s => s.instrument && s.personId),
-              foh: d.foh.filter(s => s.role && s.personId),
-              published: publish,
-            }),
+            body: JSON.stringify(body),
           });
-          if (res.ok) created.add(d.localId);
-          else failed++;
-        } catch {
-          failed++;
-        }
-      }
+          let error: string | undefined;
+          if (!res.ok) {
+            try {
+              error = (await res.json())?.error;
+            } catch {
+              error = undefined;
+            }
+          }
+          return { ok: res.ok, status: res.status, error };
+        },
+      });
     } finally {
       setPushing(false);
     }
-    // Mark the ones that succeeded as existing so a retry only re-attempts the
-    // failures (never re-POSTs an already-created service).
+    // Mark only confirmed successes as existing, so a retry re-attempts exactly
+    // the failed/unknown drafts — with their original request ids.
+    const created = new Set(result.createdLocalIds);
     if (created.size) setDrafts(prev => prev.map(d => created.has(d.localId) ? { ...d, exists: true } : d));
     // Refresh so the list reflects whatever actually got created.
     onCreated();
-    if (failed === 0) {
+    if (result.failed.length === 0) {
       onClose();
     } else {
       // Keep the dialog open and report the partial failure instead of closing
       // as if the whole month was created successfully.
-      setPushError(`No se pudieron crear ${failed} de ${toCreate.length} servicios. Intenta de nuevo.`);
+      const conflicts = result.failed.filter(f => f.status === 409).length;
+      setPushError(
+        `No se pudieron crear ${result.failed.length} de ${toCreate.length} servicios.` +
+        (conflicts ? " Alguien más cambió esas fechas: recarga y revisa." : " Intenta de nuevo."),
+      );
     }
   }
 

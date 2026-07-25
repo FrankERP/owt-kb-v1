@@ -15,7 +15,8 @@ export interface BoundQuery {
 const SONGS_FRAGMENT = `songs[]{ _key, play_key, medley_tag, song{ _type, _ref } }`;
 
 export const ROLE_PROJECTION = `{
-  _id, _rev, _type, published, week, date,
+  _id, _rev, _type, published, week, date, service_name,
+  creationReceiptId, creationFingerprint,
   Lead[]{ _key, _type, _ref },
   BGVs[]{ _key, _type, _ref },
   Chorus[]{ _key, _type, _ref },
@@ -132,6 +133,101 @@ export function editorRecentSetlistsQuery(cutoff: string): BoundQuery {
   };
 }
 
+// ── Protected mutation scopes (A2 §1/§2/§3) ─────────────────────────────────
+// Scoped variants of the canonical reads, so a writer inventories exactly the
+// target(s) it affects instead of the whole dataset. All of these run through the
+// canonical operational clients; the role/setlist/proposal types stay bound as
+// parameters or code-owned literals, never interpolated runtime values.
+
+export function canonicalRolesByIdsQuery(ids: string[]): BoundQuery {
+  return {
+    query: `*[_type in $roleTypes && _id in $ids] ${ROLE_PROJECTION}`,
+    params: { roleTypes: [...ROLE_TYPES], ids },
+  };
+}
+
+/** Canonical role group occupying one weekend target (`_type` + `week`). */
+export function canonicalWeekendRolesForTargetQuery(roleType: string, week: string): BoundQuery {
+  return {
+    query: `*[_type == $roleType && week == $week] ${ROLE_PROJECTION}`,
+    params: { roleType, week },
+  };
+}
+
+/** Canonical special-service group on one calendar day (identity is date + name). */
+export function canonicalSpecialRolesForDateQuery(date: string): BoundQuery {
+  return {
+    query: `*[_type == "special_role" && date == $date] ${ROLE_PROJECTION}`,
+    params: { date },
+  };
+}
+
+// ── Internal coordination documents ─────────────────────────────────────────
+
+export const ROLE_TARGET_LOCK_PROJECTION = `{
+  _id, _rev, _type, targetKey, state, roleId, roleType, date, claimNonce, generation
+}`;
+
+export function roleTargetLocksByIdsQuery(ids: string[]): BoundQuery {
+  return {
+    query: `*[_type == "roleTargetLock" && _id in $ids] ${ROLE_TARGET_LOCK_PROJECTION}`,
+    params: { ids },
+  };
+}
+
+export const ROLE_CREATION_RECEIPT_PROJECTION = `{
+  _id, _rev, _type, requestId, fingerprint, roleId, roleType, targetIdentity, state
+}`;
+
+export function roleCreationReceiptByIdQuery(id: string): BoundQuery {
+  return {
+    query: `*[_type == "roleCreationReceipt" && _id == $id] ${ROLE_CREATION_RECEIPT_PROJECTION}`,
+    params: { id },
+  };
+}
+
+/**
+ * Receipts whose immutable `roleId` names this role — the authoritative reverse
+ * link used when retiring a receipt-backed key on delete. Returned as an array:
+ * more than one is an integrity conflict, never an arbitrary pick.
+ */
+export function roleCreationReceiptsForRoleQuery(roleId: string): BoundQuery {
+  return {
+    query: `*[_type == "roleCreationReceipt" && roleId == $roleId] ${ROLE_CREATION_RECEIPT_PROJECTION}`,
+    params: { roleId },
+  };
+}
+
+// ── Dependency inventory scopes (§3) ────────────────────────────────────────
+
+/** Canonical weekend setlists on any of the affected dates. */
+export function canonicalSetlistsForWeeksQuery(weeks: string[]): BoundQuery {
+  return {
+    query: `*[_type in $setlistTypes && week in $weeks] ${SETLIST_PROJECTION}`,
+    params: { setlistTypes: [...SETLIST_TYPES], weeks },
+  };
+}
+
+/**
+ * Proposals reached through BOTH indexes: the role reference and the affected
+ * date(s), across every status. A destination proposal must block even when it
+ * references another role or no role at all.
+ */
+export function proposalsForRoleOrDatesQuery(roleId: string | null, dates: string[]): BoundQuery {
+  return {
+    query: `*[_type == "setlistProposal" && (service_ref._ref == $roleId || service_date in $dates)] ${PROPOSAL_PROJECTION}`,
+    params: { roleId, dates },
+  };
+}
+
+/** Documents holding a strong reference to this role (unknown references, §3). */
+export function documentsReferencingRoleQuery(roleId: string): BoundQuery {
+  return {
+    query: `*[references($roleId)]{ _id, _type }`,
+    params: { roleId },
+  };
+}
+
 // ── Raw-draft inventory (raw perspective, drafts.* only) ─────────────────────
 
 export function rawRoleDraftsQuery(): BoundQuery {
@@ -162,6 +258,49 @@ export function rawSetlistDraftsForWeekQuery(setlistType: string, week: string):
   return {
     query: `*[_type == $setlistType && ${DRAFTS_ONLY} && week == $week]{ _id }`,
     params: { setlistType, week },
+  };
+}
+
+/** Raw `drafts.*` weekend role overlays occupying one target (`_type` + `week`). */
+export function rawRoleDraftsForTargetQuery(roleType: string, week: string): BoundQuery {
+  return {
+    query: `*[_type == $roleType && ${DRAFTS_ONLY} && week == $week]{ _id, _type }`,
+    params: { roleType, week },
+  };
+}
+
+/** Raw `drafts.*` special-role overlays on one calendar day. */
+export function rawSpecialRoleDraftsForDateQuery(date: string): BoundQuery {
+  return {
+    query: `*[_type == "special_role" && ${DRAFTS_ONLY} && date == $date]{ _id, _type }`,
+    params: { date },
+  };
+}
+
+/** Raw `drafts.` overlays for a set of role base ids (publish batch prevalidation). */
+export function rawRoleDraftsForBaseIdsQuery(baseIds: string[]): BoundQuery {
+  return {
+    query: `*[_type in $roleTypes && ${DRAFTS_ONLY} && _id in $draftIds]{ _id, _type }`,
+    params: { roleTypes: [...ROLE_TYPES], draftIds: baseIds.map((id) => `drafts.${id}`) },
+  };
+}
+
+/** Raw `drafts.*` weekend setlists on any of the affected dates (§3 evidence). */
+export function rawSetlistDraftsForWeeksQuery(weeks: string[]): BoundQuery {
+  return {
+    query: `*[_type in $setlistTypes && ${DRAFTS_ONLY} && week in $weeks] ${SETLIST_PROJECTION}`,
+    params: { setlistTypes: [...SETLIST_TYPES], weeks },
+  };
+}
+
+/** Raw `drafts.*` proposals reached through the role reference or an affected date. */
+export function rawProposalDraftsForRoleOrDatesQuery(
+  roleId: string | null,
+  dates: string[],
+): BoundQuery {
+  return {
+    query: `*[_type == "setlistProposal" && ${DRAFTS_ONLY} && (service_ref._ref == $roleId || service_date in $dates)] ${PROPOSAL_PROJECTION}`,
+    params: { roleId, dates },
   };
 }
 
