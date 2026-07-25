@@ -1,3 +1,11 @@
+import { assertDeploymentCoherence } from "./scripts/lib/deployment-coherence.mjs";
+
+// Fail closed at BUILD time (A3 §3): the verification branch may only build
+// against the isolated dataset, and no other branch may build against it. A
+// misconfigured deployment therefore never exists to be caught later at runtime.
+// A build with no git ref (ordinary local development) asserts nothing.
+assertDeploymentCoherence(process.env);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   poweredByHeader: false,
