@@ -44,6 +44,14 @@ interface Props {
   existingRoles: ExistingRole[];
   onClose: () => void;
   onCreated: () => void;
+  /**
+   * Current capability snapshot for the `generateMonth` row of Plan B's matrix,
+   * passed in by `ServicesPanel` and RE-CHECKED at preview and at confirmation:
+   * a source that fails while this dialog is open must block the post, not be
+   * treated as an empty inventory. Optional so the dialog still renders
+   * standalone (defaults to enabled).
+   */
+  capability?: { enabled: boolean; reason: string | null };
 }
 
 // ─── Rule types ───────────────────────────────────────────────────────────────
@@ -1048,7 +1056,8 @@ function SolverConfigPanel({ members, config, onChange, history, onRemoveHistory
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function MonthGenerator({ members, existingRoles, onClose, onCreated }: Props) {
+export default function MonthGenerator({ members, existingRoles, onClose, onCreated, capability }: Props) {
+  const gateBlocked = capability && !capability.enabled ? capability.reason ?? "Datos incompletos." : null;
   const now = new Date();
   const [step, setStep]           = useState<"config" | "preview">("config");
   const [year, setYear]           = useState(now.getFullYear());
@@ -1141,6 +1150,9 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
 
   async function handlePreview() {
     setSolverError(null);
+    // Preview re-check: never build a roster/date preview from an incomplete
+    // inventory (a missing source is not "no existing service").
+    if (gateBlocked) { setSolverError(gateBlocked); return; }
 
     if (!useSolver) {
       const sunDates = sundays ? getDates(year, month, 0) : [];
@@ -1319,6 +1331,9 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
   async function handleConfirm(publish: boolean) {
     const toCreate = drafts.filter(d => !d.skipped && !d.exists);
     if (!toCreate.length) return;
+    // Confirmation re-check: a source that failed since the preview blocks the
+    // whole post rather than creating against a stale observation.
+    if (gateBlocked) { setPushError(gateBlocked); return; }
     setPushing(true);
     setPushError(null);
     let result;
@@ -1432,6 +1447,10 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
         )}
       </div>
 
+      {gateBlocked && (
+        <p className="font-body text-xs text-amber-400 bg-amber-500/10 rounded-lg px-3 py-2">{gateBlocked}</p>
+      )}
+
       {solverError && (
         <p className="font-body text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{solverError}</p>
       )}
@@ -1440,7 +1459,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
         <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
           Cancelar
         </button>
-        <button type="button" onClick={handlePreview} disabled={(!sundays && !saturdays) || solving} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+        <button type="button" onClick={handlePreview} disabled={(!sundays && !saturdays) || solving || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
           {solving ? "Calculando..." : "Previsualizar →"}
         </button>
       </div>
@@ -1548,6 +1567,10 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
         </div>
       )}
 
+      {gateBlocked && (
+        <p className="font-body text-xs text-amber-400 bg-amber-500/10 rounded-lg px-3 py-2">{gateBlocked}</p>
+      )}
+
       {pushError && (
         <p className="font-label text-xs uppercase tracking-widest text-red-400 text-center bg-red-500/10 rounded-lg py-1.5">{pushError}</p>
       )}
@@ -1556,10 +1579,10 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
         <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
           Cancelar
         </button>
-        <button type="button" onClick={() => handleConfirm(false)} disabled={pushing || toCreate.length === 0} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+        <button type="button" onClick={() => handleConfirm(false)} disabled={pushing || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
           {pushing ? "Creando..." : `Crear ${toCreate.length} borrador${toCreate.length !== 1 ? "es" : ""}`}
         </button>
-        <button type="button" onClick={() => handleConfirm(true)} disabled={pushing || toCreate.length === 0} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+        <button type="button" onClick={() => handleConfirm(true)} disabled={pushing || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
           Crear y publicar
         </button>
       </div>
