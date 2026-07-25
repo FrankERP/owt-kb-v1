@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { newCreationRequestId } from "@/app/utils/monthDraftCreate";
 import MonthGenerator from "./MonthGenerator";
 import { buildRuns } from "../../utils/medley";
 import { ChainLinkIcon } from "../ChainLinkIcon";
@@ -35,6 +36,8 @@ interface SetlistSong {
 
 interface ServiceRole {
   _id: string;
+  /** Revision observed when this card was loaded — sent with every mutation. */
+  _rev: string;
   _type: ServiceType;
   date: string;
   service_name?: string;
@@ -91,8 +94,47 @@ function formatDate(iso: string) {
   });
 }
 
+// Spanish message for a rejected mutation. A 409 always means "your view is
+// stale": the modal/mode stays open and the operator is told to reload.
+async function describeMutationError(res: Response, fallback: string): Promise<string> {
+  let code: string | undefined;
+  let dependencies: { type?: string }[] | undefined;
+  try {
+    const body = await res.json();
+    code = typeof body?.error === "string" ? body.error : undefined;
+    dependencies = body?.details?.dependencies;
+  } catch {
+    code = undefined;
+  }
+  switch (code) {
+    case "idempotency_mismatch":
+      return "Este intento ya se envió con otros datos. Cierra y crea el servicio de nuevo.";
+    case "idempotency_key_retired":
+      return "Este servicio fue eliminado. Cierra y créalo de nuevo.";
+    case "bootstrap_completed_reload":
+      return "Se repararon datos internos, pero tu cambio no se aplicó. Recarga e intenta de nuevo.";
+    case "target_has_orphaned_dependencies":
+    case "role_date_has_dependencies":
+    case "role_has_dependencies":
+      return `Hay ${dependencies?.length ?? 0} registro(s) dependientes (setlist o propuestas) en esa fecha. No se modificó nada.`;
+    case "stale_revision":
+      return "Alguien más cambió este servicio. Recarga e intenta de nuevo.";
+    case "ambiguous_target":
+      return "Ya existe un servicio en esa fecha (o hay duplicados). Recarga y revisa.";
+    case "integrity_conflict":
+      return "Los datos guardados no pasaron una revisión de integridad. No se modificó nada.";
+    case "invalid_request":
+      return "La solicitud fue rechazada antes de guardar. Revisa los datos.";
+    case "not_found":
+      return "Este servicio ya no existe. Recarga la lista.";
+    default:
+      return res.status === 409 ? "Alguien más cambió este servicio. Recarga e intenta de nuevo." : fallback;
+  }
+}
+
 function roleToPatchPayload(role: ServiceRole) {
   return {
+    rev: role._rev,
     _type: role._type,
     date: role.date,
     service_name: role.service_name,
@@ -485,7 +527,7 @@ function conflictIdsForRole(role: ServiceRole, unavail: Map<string, Set<string>>
 }
 
 function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSetlist, onPublish, swapMode, swapSource, onCardSwapSelect, onMemberChipClick, copyMode, isCopySource, onCopyStart, onCopyPick }: {
-  role: ServiceRole; conflictIds: Set<string>; conflictNotes?: Map<string, string>; onEdit: () => void; onDelete: () => void; onSetlist: () => void; onPublish: (ids: string[], published: boolean) => void;
+  role: ServiceRole; conflictIds: Set<string>; conflictNotes?: Map<string, string>; onEdit: () => void; onDelete: () => void; onSetlist: () => void; onPublish: (roles: { id: string; rev: string }[], published: boolean) => void;
   swapMode: boolean; swapSource: SwapSource | null;
   onCardSwapSelect: () => void;
   onMemberChipClick: (src: Exclude<SwapSource, { kind: "card" }>) => void;
@@ -614,7 +656,7 @@ function ServiceCard({ role, conflictIds, conflictNotes, onEdit, onDelete, onSet
                   <MenuItem
                     icon={<EyeIcon />}
                     label={role.published === false ? "Publicar" : "Despublicar"}
-                    onClick={() => { setMenuOpen(false); onPublish([role._id], role.published === false); }}
+                    onClick={() => { setMenuOpen(false); onPublish([{ id: role._id, rev: role._rev }], role.published === false); }}
                   />
                   <div className="my-1 border-t border-[#00bfff]/15" />
                   <MenuItem icon={<TrashIcon />} label="Eliminar servicio" danger onClick={() => { setMenuOpen(false); onDelete(); }} />
@@ -1003,13 +1045,19 @@ export default function ServicesPanel() {
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
+  // The in-flight add-modal logical create: `{ id, payloadKey }`, kept in a ref so
+  // a retry of the same payload reuses the same idempotency key.
+  const addRequest = useRef<{ id: string; payloadKey: string } | null>(null);
+
   const openEditModal = (next: Exclude<EditModal, null>) => {
     setEditError(null);
+    if (next.type === "add") addRequest.current = null;
     setEditModal(next);
   };
 
   const closeEditModal = () => {
     setEditError(null);
+    addRequest.current = null;
     setEditModal(null);
   };
 
@@ -1027,10 +1075,26 @@ export default function ServicesPanel() {
 
   const handleAdd = async (data: any) => {
     setSubmitting(true);
+    // One creationRequestId per LOGICAL create: retained while this exact payload
+    // stays retryable (network error, lost response), and replaced as soon as the
+    // form changes — a changed payload is a new logical create, never the old key.
+    const payloadKey = JSON.stringify(data);
+    if (!addRequest.current || addRequest.current.payloadKey !== payloadKey) {
+      addRequest.current = { id: newCreationRequestId(), payloadKey };
+    }
     try {
-      const res = await fetch("/api/admin/roles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-      if (res.ok) { closeEditModal(); fetchData(); showToast("Servicio creado."); }
-      else setEditError("Error al crear.");
+      const res = await fetch("/api/admin/roles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...data, creationRequestId: addRequest.current.id }),
+      });
+      if (res.ok) {
+        addRequest.current = null;
+        closeEditModal(); fetchData(); showToast("Servicio creado.");
+      } else {
+        setEditError(await describeMutationError(res, "Error al crear."));
+        if (res.status === 409) fetchData();
+      }
     } catch {
       setEditError("Error de conexión.");
     } finally {
@@ -1042,9 +1106,17 @@ export default function ServicesPanel() {
     if (editModal?.type !== "edit") return;
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/admin/roles/${editModal.role._id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      const res = await fetch(`/api/admin/roles/${editModal.role._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        // The revision this card was loaded with — the stale-view guard.
+        body: JSON.stringify({ ...data, rev: editModal.role._rev }),
+      });
       if (res.ok) { closeEditModal(); fetchData(); showToast("Actualizado."); }
-      else setEditError("Error al actualizar.");
+      else {
+        setEditError(await describeMutationError(res, "Error al actualizar."));
+        if (res.status === 409) fetchData();
+      }
     } catch {
       setEditError("Error de conexión.");
     } finally {
@@ -1056,9 +1128,16 @@ export default function ServicesPanel() {
     if (editModal?.type !== "delete") return;
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/admin/roles/${editModal.role._id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/roles/${editModal.role._id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rev: editModal.role._rev }),
+      });
       if (res.ok) { closeEditModal(); fetchData(); showToast("Eliminado."); }
-      else setEditError("Error al eliminar.");
+      else {
+        setEditError(await describeMutationError(res, "Error al eliminar."));
+        if (res.status === 409) fetchData();
+      }
     } catch {
       setEditError("Error de conexión.");
     } finally {
@@ -1154,14 +1233,19 @@ export default function ServicesPanel() {
 
   // ── Publish ───────────────────────────────────────────────────────────────
 
-  async function handlePublish(ids: string[], published: boolean) {
+  // Each entry carries the revision the card was loaded with; any stale entry
+  // rejects the whole batch, so the list is refreshed and nothing is claimed.
+  async function handlePublish(roles: { id: string; rev: string }[], published: boolean) {
     try {
       const res = await fetch("/api/admin/roles/publish", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids, published }),
+        body: JSON.stringify({ roles, published }),
       });
       if (res.ok) fetchData();
-      else showToast("Error al publicar.");
+      else {
+        showToast(await describeMutationError(res, "Error al publicar."));
+        if (res.status === 409) fetchData();
+      }
     } catch {
       showToast("Error de conexión.");
     }
@@ -1257,12 +1341,12 @@ export default function ServicesPanel() {
             ⇄ {swapMode ? "Salir" : "Intercambiar"}
           </button>
           {(() => {
-            const draftIds = visible.filter(r => r.published === false).map(r => r._id);
-            return draftIds.length > 0 ? (
+            const draftEntries = visible.filter(r => r.published === false).map(r => ({ id: r._id, rev: r._rev }));
+            return draftEntries.length > 0 ? (
               <button type="button"
-                onClick={() => { if (confirm(`¿Publicar ${draftIds.length} servicio(s) del filtro actual?`)) handlePublish(draftIds, true); }}
+                onClick={() => { if (confirm(`¿Publicar ${draftEntries.length} servicio(s) del filtro actual?`)) handlePublish(draftEntries, true); }}
                 className="px-3 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 font-label text-xs uppercase tracking-widest transition-colors">
-                Publicar todo ({draftIds.length})
+                Publicar todo ({draftEntries.length})
               </button>
             ) : null;
           })()}

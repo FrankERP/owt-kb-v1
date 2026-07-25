@@ -114,14 +114,14 @@ export const A2_HANDOFF_ALLOWLIST: readonly AuditExemption[] = [
     file: "app/api/admin/roles/[id]/route.ts",
     operation: "PATCH",
     reason:
-      "mutation-local read of the previous role assignment seats and publish state, used to diff before patching the same document",
+      "role edit writer: reads are migrated to the canonical clients, but the revision-guarded assignment/date patch still mutates sunday_role/saturday_role/special_role documents",
     removalOwner: "A2",
   },
   {
     file: "app/api/admin/roles/publish/route.ts",
     operation: "POST",
     reason:
-      "mutation-local reads of publish state and assignment seats for the publish transition and its assignment notifications",
+      "role publish writer: reads are migrated to the canonical clients, but the batch transaction still patches the publication state of sunday_role/saturday_role/special_role documents",
     removalOwner: "A2",
   },
   {
