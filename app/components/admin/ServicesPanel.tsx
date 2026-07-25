@@ -6,6 +6,7 @@ import MonthGenerator from "./MonthGenerator";
 import {
   SERVICE_SOURCE_KEYS,
   selectServiceCapabilities,
+  serviceTodayIso,
   type ServiceCapabilities,
   type ServiceControl,
   type ServiceSourceKey,
@@ -22,7 +23,6 @@ import {
   latchInvalidation,
   movesServiceDate,
   mutationOutcomeMessage,
-  publishControl,
   reduceSourceRecords,
   retryTargets,
   rolesView,
@@ -33,74 +33,69 @@ import {
   type ActiveModeSnapshot,
   type ServiceSourceRecords,
 } from "./serviceSourceState";
-import { buildRuns } from "../../utils/medley";
-import { ChainLinkIcon } from "../ChainLinkIcon";
+import {
+  INTEGRITY_QUEUE_TITLE,
+  buildIntegrityQueue,
+  integrityQueueSummary,
+  integrityQueueTone,
+} from "./serviceIntegrityQueue";
+import {
+  CARD_STYLE,
+  SECTION_LABEL,
+  SERVICE_BADGE,
+  SERVICE_LABEL,
+  TONE_CLASS,
+  buildPublishConfirmation,
+  buildServiceCards,
+  commandSummaryCounters,
+  commandSummarySegments,
+  describeAcknowledgedBlockers,
+  dn,
+  formatServiceDate,
+  integrityTargetForCard,
+  monthTargetPreflight,
+  primaryActionRoute,
+  proposalHandoffInput,
+  serviceCardLabel,
+  serviceCardRefs,
+  type CardSourceSummaries,
+  type MemberOption,
+  type PublishConfirmationPlan,
+  type ServiceCardModel,
+  type ServiceRole,
+  type ServiceType,
+  type SwapSource,
+} from "./serviceCardModel";
+import ServiceReadinessCard, {
+  type CardGate,
+  type CardGates,
+} from "./ServiceReadinessCard";
+import { overrideAcknowledgement, type PublishWorkflowBlocker } from "./publishSelection";
+import { buildProposalHandoff } from "./proposalHandoff";
+import { useServiceHandoff } from "./serviceHandoffContext";
+import type {
+  ProposalDomainSummary,
+  RoleDomainSummary,
+  SetlistDomainSummary,
+} from "@/app/utils/serviceReadSummary";
 import { ParticipationSidebar } from "@/app/components/admin/ParticipationSidebar";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-type ServiceType = "sunday_role" | "saturday_role" | "special_role";
-
-interface MemberOption {
-  _id: string; member_name: string; alias?: string; memberType?: string[];
-  unavailableDates?: string[]; unavailabilityNotes?: { date: string; note: string }[];
-  /**
-   * Stable stored `_key` of the seat this member occupies, when it came from a
-   * role seat rather than the member directory. Swaps address seats by this key,
-   * never by rendered index.
-   */
-  _key?: string;
-}
-
-const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;
-
-// Rough rendered-width of an instrument/FOH pill (label chip + name), in
-// char-widths, so pills can be sorted narrow→wide. Names/labels at or below the
-// CSS min-width floor count as equal; an emoji suffix adds a bit of width.
-const pillWidth = (label: string, value: string) =>
-  Math.max(label.length, 4) +
-  Math.max([...value].length + (/\p{Extended_Pictographic}/u.test(value) ? 2 : 0), 4);
+//
+// The card/member shapes, identity colours and every presentational decision live
+// in `serviceCardModel`; this file keeps the modal and mutation flows.
 
 interface InstrumentSlot { id: string; instrument: string; personId: string; }
 interface FohSlot         { id: string; role: string; personId: string; }
-
-interface SetlistSong {
-  play_key: string;
-  medley_tag?: string;
-  song: { _id: string; title: string; author: string; key: string; slug: string };
-}
-
-interface ServiceRole {
-  _id: string;
-  /** Revision observed when this card was loaded — sent with every mutation. */
-  _rev: string;
-  _type: ServiceType;
-  date: string;
-  service_name?: string;
-  published?: boolean;
-  leads:       MemberOption[];
-  bgvs:        MemberOption[];
-  chorus:      MemberOption[];
-  instruments: { _key?: string; instrument: string; person: MemberOption | null }[];
-  foh:         { _key?: string; role: string;       person: MemberOption | null }[];
-  songs?: SetlistSong[];
-}
 
 // ─── Setlist types ────────────────────────────────────────────────────────────
 
 import { SetlistEditor, SongResult, SetlistEntry } from "./SetlistEditor";
 
 // ─── Swap types ───────────────────────────────────────────────────────────────
-
-// A chip selection is identified by the stored seat `_key` (`itemKey`) the server
-// addresses — never by a rendered index, which a concurrent edit can shift.
-type SwapSource =
-  | { kind: "card"; roleId: string }
-  | { kind: "member"; roleId: string; section: "leads" | "bgvs" | "chorus"; itemKey: string; member: MemberOption }
-  | { kind: "slot";   roleId: string; section: "instruments" | "foh";        itemKey: string; member: MemberOption | null; slotLabel: string };
 
 type SwapConfirm =
   | { kind: "card"; roleA: ServiceRole; roleB: ServiceRole }
@@ -113,32 +108,15 @@ const SEAT_PATH: Record<"leads" | "bgvs" | "chorus" | "instruments" | "foh", str
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const SERVICE_LABEL: Record<ServiceType, string> = {
-  sunday_role: "Domingo", saturday_role: "Sábado", special_role: "Especial",
-};
-const SERVICE_BADGE: Record<ServiceType, string> = {
-  sunday_role:   "bg-orange-500/15 text-orange-400 border border-orange-500/30",
-  saturday_role: "bg-yellow-500/15 text-yellow-400 border border-yellow-400/30",
-  special_role:  "bg-[#00bfff]/15 text-[#00bfff] border border-[#00bfff]/30",
-};
-
-const SECTION_LABEL: Record<string, string> = {
-  leads: "Líder", bgvs: "BGV", chorus: "Coro", instruments: "Instrumento", foh: "FOH",
-};
-
 const inputCls  = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
 const selectCls = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-[#0a1929] font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const uid    = () => Math.random().toString(36).slice(2, 9);
-const isPast = (iso: string) => iso < new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
+const uid = () => Math.random().toString(36).slice(2, 9);
 
-function formatDate(iso: string) {
-  return new Date(iso.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", {
-    weekday: "long", day: "numeric", month: "long", year: "numeric",
-  });
-}
+/** Long Spanish date, parsed at local noon (never a bare `new Date(iso)`). */
+const formatDate = (iso: string) => formatServiceDate(iso, "es-MX");
 
 // Spanish message for a rejected mutation. A 409 always means "your view is
 // stale": the modal/mode stays open and the operator is told to reload.
@@ -454,482 +432,6 @@ function Modal({
   );
 }
 
-// ─── Member chip for swap mode ────────────────────────────────────────────────
-
-function MemberChip({ name, isSource, isTarget, onClick }: {
-  name: string; isSource: boolean; isTarget: boolean; onClick?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full border transition-all ${
-        isSource ? "bg-[#00bfff]/30 text-[#00bfff] border-[#00bfff] ring-1 ring-[#00bfff]/50 scale-105" :
-        isTarget ? "bg-[#00bfff]/10 text-[#00bfff] border-[#00bfff]/50 animate-pulse" :
-        onClick   ? "bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-400 border-[#003572]/20 dark:border-[#00bfff]/20 hover:bg-[#00bfff]/20 hover:text-[#00bfff] hover:border-[#00bfff]/40 cursor-pointer" :
-                    "bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-400 border-[#003572]/20 dark:border-[#00bfff]/20"
-      }`}
-    >
-      {name}
-    </button>
-  );
-}
-
-// ─── Setlist editor ───────────────────────────────────────────────────────────
-
-// ─── DayCard-style service card ───────────────────────────────────────────────
-
-const CARD_HEADER: Record<ServiceType, string> = {
-  sunday_role:   "bg-[#003572] dark:bg-[#001f3f] border-[#002249] dark:border-[#00bfff]",
-  saturday_role: "bg-[#78350f] dark:bg-[#1c0800] border-[#92400e] dark:border-[#f59e0b]",
-  special_role:  "bg-[#4c1d95] dark:bg-[#1e0a3c] border-[#5b21b6] dark:border-[#a78bfa]",
-};
-const CARD_BORDER: Record<ServiceType, string> = {
-  sunday_role:   "border-[#003572] dark:border-[#00bfff]",
-  saturday_role: "border-[#78350f] dark:border-[#f59e0b]",
-  special_role:  "border-[#4c1d95] dark:border-[#a78bfa]",
-};
-const CARD_ACCENT: Record<ServiceType, string> = {
-  sunday_role:   "text-[#00bfff]",
-  saturday_role: "text-[#f59e0b]",
-  special_role:  "text-[#a78bfa]",
-};
-const CARD_ACCENT_MUTED: Record<ServiceType, string> = {
-  sunday_role:   "text-[#00bfff]/70",
-  saturday_role: "text-[#f59e0b]/70",
-  special_role:  "text-[#a78bfa]/70",
-};
-const CARD_DIVIDER: Record<ServiceType, string> = {
-  sunday_role:   "bg-[#00bfff]/20",
-  saturday_role: "bg-[#f59e0b]/20",
-  special_role:  "bg-[#a78bfa]/20",
-};
-const CARD_ACCENT_HEX: Record<ServiceType, string> = {
-  sunday_role:   "#00bfff",
-  saturday_role: "#f59e0b",
-  special_role:  "#a78bfa",
-};
-
-// ─── Availability conflict helpers ────────────────────────────────────────────
-
-const EMPTY_SET: Set<string> = new Set();
-
-// _id -> Set<unavailable ISO date>
-function buildUnavailMap(members: MemberOption[]): Map<string, Set<string>> {
-  const map = new Map<string, Set<string>>();
-  for (const m of members) {
-    if (m.unavailableDates?.length) map.set(m._id, new Set(m.unavailableDates));
-  }
-  return map;
-}
-
-// Set of member _ids assigned to this role who marked its date unavailable
-function conflictIdsForRole(role: ServiceRole, unavail: Map<string, Set<string>>): Set<string> {
-  const date = role.date.slice(0, 10);
-  const ids = new Set<string>();
-  const check = (id?: string) => { if (id && unavail.get(id)?.has(date)) ids.add(id); };
-  (role.leads ?? []).forEach(m => check(m._id));
-  (role.bgvs ?? []).forEach(m => check(m._id));
-  (role.chorus ?? []).forEach(m => check(m._id));
-  (role.instruments ?? []).forEach(s => check(s.person?._id));
-  (role.foh ?? []).forEach(s => check(s.person?._id));
-  return ids;
-}
-
-/**
- * One control's current availability, derived from the five individual source
- * states (never from aggregate `dataConfidence`). `reason` is the Spanish copy
- * naming the missing source and its retry.
- */
-interface CardGate { enabled: boolean; reason: string | null }
-
-interface CardGates {
-  editTeam: CardGate;
-  editSetlist: CardGate;
-  copyInstruments: CardGate;
-  deleteService: CardGate;
-  publish: CardGate;
-  unpublish: CardGate;
-  swap: CardGate;
-}
-
-function ServiceCard({ role, conflictIds, conflictNotes, gates, onEdit, onDelete, onSetlist, onPublish, swapMode, swapSource, onCardSwapSelect, onMemberChipClick, copyMode, isCopySource, onCopyStart, onCopyPick }: {
-  role: ServiceRole; conflictIds: Set<string>; conflictNotes?: Map<string, string>; gates: CardGates; onEdit: () => void; onDelete: () => void; onSetlist: () => void; onPublish: (roles: { id: string; rev: string }[], published: boolean) => void;
-  swapMode: boolean; swapSource: SwapSource | null;
-  onCardSwapSelect: () => void;
-  onMemberChipClick: (src: Exclude<SwapSource, { kind: "card" }>) => void;
-  copyMode: boolean; isCopySource: boolean; onCopyStart: () => void; onCopyPick: () => void;
-}) {
-  const past    = isPast(role.date);
-  const leads   = role.leads       ?? [];
-  const bgvs    = role.bgvs        ?? [];
-  const chorus  = role.chorus      ?? [];
-  const instrs  = role.instruments ?? [];
-  const foh     = role.foh         ?? [];
-  const songs   = role.songs       ?? [];
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  // Pills sorted narrow→wide so the widest sink to the end of the list — any
-  // lone pill on a row ends up being a large one at the bottom, not a gap.
-  const instrPills = instrs.filter(s => s.person)
-    .map(s => ({ label: s.instrument, person: s.person! }))
-    .sort((a, b) => pillWidth(a.label, dn(a.person)) - pillWidth(b.label, dn(b.person)));
-  const fohPills = foh.filter(s => s.person)
-    .map(s => ({ label: s.role, person: s.person! }))
-    .sort((a, b) => pillWidth(a.label, dn(a.person)) - pillWidth(b.label, dn(b.person)));
-
-  const isCardSelected = swapSource?.kind === "card" && swapSource.roleId === role._id;
-  const isChipSource   = (section: string, itemKey?: string) =>
-    !!itemKey && swapSource && swapSource.kind !== "card" && swapSource.roleId === role._id &&
-    swapSource.section === section && swapSource.itemKey === itemKey;
-
-  const hasTeam    = !!(leads.length || bgvs.length || chorus.length || instrs.filter(s => s.person).length || foh.filter(s => s.person).length);
-  const hasSetlist = songs.length > 0;
-  const hasConflict = !past && conflictIds.size > 0;
-
-  // Conflicting members with their reason, for a visible (non-hover) card footer.
-  const conflictReasons = hasConflict
-    ? [...conflictIds].flatMap(id => {
-        const m =
-          leads.find(p => p._id === id) ??
-          bgvs.find(p => p._id === id) ??
-          chorus.find(p => p._id === id) ??
-          instrs.find(s => s.person?._id === id)?.person ??
-          foh.find(s => s.person?._id === id)?.person ?? null;
-        return m ? [{ name: dn(m), note: conflictNotes?.get(id) }] : [];
-      })
-    : [];
-
-  return (
-    <div className={`rounded-xl border transition-all ${
-      past && !swapMode && !copyMode
-        ? `${CARD_BORDER[role._type]} opacity-50 shadow-md`
-        : isCardSelected || (copyMode && isCopySource)
-          ? `${CARD_BORDER[role._type]} ring-2 ring-[#00bfff]/40 shadow-md`
-          : hasConflict
-            ? `border-2 border-red-500 ring-2 ring-red-500/40 shadow-lg shadow-red-500/30`
-            : `${CARD_BORDER[role._type]} shadow-md`
-    } group`}>
-
-      {/* ── Colored header band ── */}
-      <div className={`${CARD_HEADER[role._type]} rounded-t-xl border-b px-4 py-3 flex items-start justify-between gap-2`}>
-        <div>
-          <h3 className="font-display text-xl md:text-2xl uppercase font-bold text-[#C8D8EB]">
-            {role.service_name || SERVICE_LABEL[role._type]}
-          </h3>
-          <p className="font-label text-xs text-[#C8D8EB]/60 capitalize mt-0.5">
-            {new Date(role.date.slice(0,10) + "T12:00:00").toLocaleDateString("es-ES", {
-              weekday: "long", day: "numeric", month: "long", year: "numeric",
-            })}
-          </p>
-          {role.published === false && (
-            <span className="px-2 py-0.5 rounded-full text-[11px] font-label uppercase tracking-widest bg-amber-500/15 text-amber-400 border border-amber-500/30">
-              Borrador
-            </span>
-          )}
-          {hasConflict && (
-            <span className="inline-flex items-center gap-1 mt-1.5 font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-red-500/25 text-red-200 border border-red-400/60">
-              ⚠ Conflicto de disponibilidad
-            </span>
-          )}
-        </div>
-
-        {/* Action buttons / swap button / copy-instruments controls */}
-        {swapMode ? (
-          <button
-            type="button"
-            onClick={onCardSwapSelect}
-            disabled={!gates.swap.enabled}
-            title={gates.swap.reason ?? "Intercambiar equipo completo"}
-            className={`mt-0.5 px-2.5 py-1.5 rounded-lg font-label text-xs transition-colors shrink-0 disabled:opacity-40 ${
-              isCardSelected
-                ? "bg-white/20 text-white border border-white/40"
-                : "text-[#C8D8EB]/70 hover:text-white hover:bg-white/15 border border-transparent"
-            }`}
-          >
-            ⇄ Equipo
-          </button>
-        ) : copyMode ? (
-          isCopySource ? (
-            <span className="mt-0.5 px-2.5 py-1.5 rounded-lg font-label text-[11px] uppercase tracking-widest bg-white/20 text-white border border-white/40 shrink-0">
-              Origen
-            </span>
-          ) : (
-            <button type="button" onClick={onCopyPick}
-              disabled={!gates.copyInstruments.enabled}
-              title={gates.copyInstruments.reason ?? "Copiar los instrumentos del origen a este día"}
-              className="mt-0.5 px-2.5 py-1.5 rounded-lg font-label text-xs transition-colors shrink-0 text-[#C8D8EB]/70 hover:text-white hover:bg-[#00bfff]/25 border border-[#00bfff]/40 disabled:opacity-40">
-              Pegar aquí
-            </button>
-          )
-        ) : (
-          <div className="relative shrink-0 mt-0.5">
-            <button
-              type="button"
-              onClick={() => setMenuOpen(o => !o)}
-              title="Acciones"
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              className="p-1.5 rounded-lg text-[#C8D8EB]/70 hover:text-white hover:bg-white/15 transition-colors"
-            >
-              <KebabIcon />
-            </button>
-            {menuOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                <div role="menu" className="absolute right-0 top-full mt-1 z-50 w-52 rounded-lg border border-[#00bfff]/25 bg-[#03101f] shadow-xl shadow-black/50 py-1 overflow-hidden">
-                  <MenuItem icon={<PencilIcon />} label="Editar equipo" gate={gates.editTeam} onClick={() => { setMenuOpen(false); onEdit(); }} />
-                  <MenuItem icon={<MusicIcon />} label="Editar setlist" gate={gates.editSetlist} onClick={() => { setMenuOpen(false); onSetlist(); }} />
-                  {instrs.filter(s => s.person).length > 0 && (
-                    <MenuItem icon={<CopyIcon />} label="Copiar instrumentos a otro día" gate={gates.copyInstruments} onClick={() => { setMenuOpen(false); onCopyStart(); }} />
-                  )}
-                  <MenuItem
-                    icon={<EyeIcon />}
-                    label={role.published === false ? "Publicar" : "Despublicar"}
-                    // Publishing needs all five sources; safe unpublish needs only
-                    // roles + role-target integrity (plan §"Unpublish is separate").
-                    gate={role.published === false ? gates.publish : gates.unpublish}
-                    onClick={() => { setMenuOpen(false); onPublish([{ id: role._id, rev: role._rev }], role.published === false); }}
-                  />
-                  <div className="my-1 border-t border-[#00bfff]/15" />
-                  <MenuItem icon={<TrashIcon />} label="Eliminar servicio" danger gate={gates.deleteService} onClick={() => { setMenuOpen(false); onDelete(); }} />
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ── Body ── */}
-      <div className="p-5 space-y-5">
-
-        {/* Setlist */}
-        {hasSetlist && (
-          <section>
-            <SectionHead label="Setlist" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
-            <ol className="space-y-2.5 mt-3">
-              {buildRuns(songs).map((run) => {
-                const renderRow = (entry: SetlistSong, n: number) => (
-                  <div className="flex items-start gap-2">
-                    <span className="text-gray-500 text-sm w-5 shrink-0 mt-0.5">{n}.</span>
-                    <div>
-                      <span className="font-body text-sm font-semibold">{entry.song.title}</span>
-                      <span className="text-gray-500 text-sm"> — {entry.song.author}</span>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className={`font-label text-xs font-semibold ${CARD_ACCENT[role._type]}`}>
-                          {entry.play_key || entry.song.key}
-                        </span>
-                        {entry.play_key && entry.song.key && entry.play_key !== entry.song.key && (
-                          <span className="font-label text-[11px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800/60 text-gray-500 leading-tight">
-                            orig. {entry.song.key}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-
-                if (run.kind === "single" || run.songs.length === 1) {
-                  const { song, n } = run.kind === "single" ? run : run.songs[0];
-                  return <li key={song.song._id}>{renderRow(song, n)}</li>;
-                }
-
-                const hex = CARD_ACCENT_HEX[role._type];
-                return (
-                  <li key={run.songs[0].song.song._id + "_m"} className="relative pl-3.5">
-                    <span
-                      aria-hidden
-                      className="absolute left-0.5 top-5 bottom-1 w-[2px] rounded-full"
-                      style={{ background: `linear-gradient(to bottom, ${hex}00, ${hex}55 12%, ${hex}55 88%, ${hex}00)` }}
-                    />
-                    <div className="flex items-center gap-1 mb-1">
-                      <ChainLinkIcon color={hex} opacity={0.7} />
-                      <span className="font-label text-[10px] uppercase tracking-[0.18em]" style={{ color: `${hex}99` }}>Medley</span>
-                    </div>
-                    <div className="space-y-1.5">
-                      {run.songs.map(({ song, n }, si) => (
-                        <div key={song.song._id}>
-                          {si > 0 && (
-                            <span className="block w-5 text-center font-label text-[11px] leading-none -my-0.5" style={{ color: `${hex}70` }}>+</span>
-                          )}
-                          {renderRow(song, n)}
-                        </div>
-                      ))}
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          </section>
-        )}
-
-        {/* Team */}
-        {hasTeam && !swapMode && (
-          <section className={hasSetlist ? `border-t pt-5 border-gray-200 dark:border-gray-800` : ""}>
-            <p className="font-label text-xs uppercase tracking-widest text-gray-500 text-center mb-1">Equipo</p>
-            <div className="mt-2 space-y-3">
-              {(leads.length || bgvs.length || chorus.length) ? (
-                <div>
-                  <SectionHead label="Voces" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
-                  <div className="grid grid-cols-3 gap-x-3 mt-2">
-                    <VocalCol label="Lead" entries={leads.map(m => ({ name: dn(m), conflict: conflictIds.has(m._id), note: conflictNotes?.get(m._id) }))} />
-                    <VocalCol label="BGVs" entries={bgvs.map(m => ({ name: dn(m), conflict: conflictIds.has(m._id), note: conflictNotes?.get(m._id) }))} />
-                    <VocalCol label="Coro" entries={chorus.map(m => ({ name: dn(m), conflict: conflictIds.has(m._id), note: conflictNotes?.get(m._id) }))} />
-                  </div>
-                </div>
-              ) : null}
-              {instrPills.length > 0 && (
-                <div>
-                  <SectionHead label="Instrumentos" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {instrPills.map((p, i) => (
-                      <TeamRow key={i} label={p.label} value={dn(p.person)} accentHex={CARD_ACCENT_HEX[role._type]} isConflict={conflictIds.has(p.person._id)} conflictNote={conflictNotes?.get(p.person._id)} />
-                    ))}
-                  </div>
-                </div>
-              )}
-              {fohPills.length > 0 && (
-                <div>
-                  <SectionHead label="Front of House" accent={CARD_ACCENT_MUTED[role._type]} divider={CARD_DIVIDER[role._type]} />
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {fohPills.map((p, i) => (
-                      <TeamRow key={i} label={p.label} value={dn(p.person)} accentHex={CARD_ACCENT_HEX[role._type]} isConflict={conflictIds.has(p.person._id)} conflictNote={conflictNotes?.get(p.person._id)} />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-
-        {/* Availability conflicts — reasons shown as text (works without hover, e.g. on mobile) */}
-        {hasConflict && !swapMode && conflictReasons.length > 0 && (
-          <section className="rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2.5">
-            <p className="font-label text-[11px] uppercase tracking-widest text-red-400 mb-1">No disponible</p>
-            <ul className="space-y-0.5">
-              {conflictReasons.map((c, i) => (
-                <li key={i} className="font-body text-xs text-gray-300">
-                  <span className="text-red-300 font-semibold">⚠ {c.name}</span>
-                  {c.note
-                    ? <span className="text-gray-500 italic"> — "{c.note}"</span>
-                    : <span className="text-gray-500"> — sin razón indicada</span>}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {/* Swap mode: member chips */}
-        {swapMode && (
-          <div className="space-y-2">
-            {([ ["leads", leads, "Líderes"], ["bgvs", bgvs, "BGVs"], ["chorus", chorus, "Coro"] ] as const).map(([section, arr, lbl]) => (
-              arr.length > 0 && (
-                <div key={section} className="flex items-start gap-2 flex-wrap">
-                  <span className="font-label text-[10px] uppercase tracking-widest text-gray-600 pt-0.5 shrink-0 w-12">{lbl}</span>
-                  <div className="flex flex-wrap gap-1">
-                    {arr.map(m => (
-                      <MemberChip
-                        key={m._key ?? m._id}
-                        name={dn(m)}
-                        isSource={!!isChipSource(section, m._key)}
-                        isTarget={false}
-                        // No stored seat key (legacy/unresolvable item) → not swappable.
-                        // A swap-source that is not `ready` also removes the click.
-                        onClick={swapSource?.kind === "card" || !m._key || !gates.swap.enabled ? undefined : () => onMemberChipClick({ kind: "member", roleId: role._id, section, itemKey: m._key!, member: m })}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )
-            ))}
-            {([ ["instruments", instrs, "Instr."], ["foh", foh, "FOH"] ] as const).map(([section, arr, lbl]) => (
-              arr.length > 0 && (
-                <div key={section} className="flex items-start gap-2 flex-wrap">
-                  <span className="font-label text-[10px] uppercase tracking-widest text-gray-600 pt-0.5 shrink-0 w-12">{lbl}</span>
-                  <div className="flex flex-wrap gap-1">
-                    {arr.map((s, i) => s.person && (
-                      <MemberChip
-                        key={s._key ?? i}
-                        name={`${dn(s.person)}${section === "instruments" ? ` · ${(s as any).instrument}` : ` · ${(s as any).role}`}`}
-                        isSource={!!isChipSource(section, s._key)}
-                        isTarget={false}
-                        onClick={swapSource?.kind === "card" || !s._key || !gates.swap.enabled ? undefined : () => onMemberChipClick({ kind: "slot", roleId: role._id, section, itemKey: s._key!, member: s.person, slotLabel: (s as any).instrument ?? (s as any).role })}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )
-            ))}
-            {!hasTeam && <p className="font-body text-xs text-gray-600 italic">Sin miembros asignados</p>}
-          </div>
-        )}
-
-        {!hasTeam && !hasSetlist && (
-          <p className="font-body text-xs text-gray-600 italic">Sin información todavía.</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function SectionHead({ label, accent, divider }: { label: string; accent: string; divider: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className={`font-label text-xs uppercase tracking-wide ${accent} shrink-0`}>{label}</span>
-      <div className={`flex-1 h-px ${divider}`} />
-    </div>
-  );
-}
-
-function VocalCol({ label, entries }: { label: string; entries: { name: string; conflict: boolean; note?: string }[] }) {
-  if (!entries.length) return <div />;
-  return (
-    <div>
-      <p className="font-label text-[11px] uppercase tracking-widest text-gray-400 mb-0.5">{label}</p>
-      <p className="font-body text-sm leading-snug">
-        {entries.map((e, i) => (
-          <span key={i}>
-            {i > 0 && ", "}
-            {e.conflict ? (
-              <span title={e.note ?? undefined} className="text-red-400 font-semibold whitespace-nowrap">⚠&nbsp;{e.name}</span>
-            ) : (
-              <span className="whitespace-nowrap">{e.name}</span>
-            )}
-          </span>
-        ))}
-      </p>
-    </div>
-  );
-}
-
-function TeamRow({ label, value, accentHex, isConflict, conflictNote }: { label: string; value: string; accentHex: string; isConflict?: boolean; conflictNote?: string }) {
-  return (
-    <div
-      className="flex items-stretch rounded-lg overflow-hidden"
-      style={{ border: isConflict ? "1px solid rgba(239,68,68,0.7)" : `1px solid ${accentHex}40` }}
-    >
-      <span
-        className="font-label text-xs uppercase tracking-wide px-2.5 flex items-center justify-center shrink-0 min-w-[3.5rem] rounded-l-[7px]"
-        style={{
-          background: isConflict ? "rgba(239,68,68,0.18)" : `${accentHex}18`,
-          color: isConflict ? "#f87171" : accentHex,
-          borderRight: isConflict ? "1px solid rgba(239,68,68,0.45)" : `1px solid ${accentHex}30`,
-        }}
-      >
-        {label}
-      </span>
-      <span
-        title={isConflict && conflictNote ? conflictNote : undefined}
-        className={`font-body text-sm px-3 py-1.5 flex items-center justify-center gap-1 leading-tight whitespace-nowrap min-w-[3.5rem] ${isConflict ? "text-red-400 font-semibold" : ""}`}
-        style={isConflict ? { background: "rgba(239,68,68,0.10)" } : undefined}
-      >
-        {isConflict && <span>⚠</span>}
-        {value}
-      </span>
-    </div>
-  );
-}
-
 
 // ─── Swap confirm modal ───────────────────────────────────────────────────────
 
@@ -1112,7 +614,30 @@ export default function ServicesPanel() {
   const [copySource, setCopySource] = useState<string | null>(null);
   const copyMode = copySource !== null;
 
+  // The three A1 integrity summaries, kept beside the roles/members arrays. A
+  // failed domain is `null` = unproven; it is NEVER an empty inventory.
+  const [summaries, setSummaries] = useState<CardSourceSummaries>({
+    roles: null, setlists: null, proposals: null,
+  });
+
+  // `Publicar listos` confirmation, the individual override, and safe unpublish —
+  // three separate flows on purpose (a hide never routes through publish).
+  const [publishPlan, setPublishPlan] = useState<PublishConfirmationPlan | null>(null);
+  const [overrideCard, setOverrideCard] = useState<ServiceCardModel | null>(null);
+  const [unpublishCard, setUnpublishCard] = useState<ServiceCardModel | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  /**
+   * A lost/timed-out publish or unpublish response. Repeat submission is disabled
+   * until the read-only `recover` mode says what actually committed.
+   */
+  const [pendingOutcome, setPendingOutcome] = useState<
+    { kind: "publish" | "unpublish"; ids: string[]; published: boolean } | null
+  >(null);
+
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
+
+  // Transient proposal / integrity handoff, owned by `AdminPanel`.
+  const { openReviewTarget, openIntegrityIssue } = useServiceHandoff();
 
   // The in-flight add-modal logical create: `{ id, payloadKey }`, kept in a ref so
   // a retry of the same payload reuses the same idempotency key.
@@ -1230,9 +755,19 @@ export default function ServicesPanel() {
         }),
       );
       for (const result of results) {
-        if (!result.ok) continue;
-        if (result.key === "roles") setRoles(result.body as ServiceRole[]);
-        if (result.key === "members") setMembers(result.body as MemberOption[]);
+        if (result.key === "roles" && result.ok) setRoles(result.body as ServiceRole[]);
+        if (result.key === "members" && result.ok) setMembers(result.body as MemberOption[]);
+        // A failed integrity domain drops back to `null` (unproven) rather than
+        // keeping a stale inventory that would read as proof.
+        if (result.key === "roleTargets") {
+          setSummaries(prev => ({ ...prev, roles: result.ok ? (result.body as RoleDomainSummary) : null }));
+        }
+        if (result.key === "setlistTargets") {
+          setSummaries(prev => ({ ...prev, setlists: result.ok ? (result.body as SetlistDomainSummary) : null }));
+        }
+        if (result.key === "proposals") {
+          setSummaries(prev => ({ ...prev, proposals: result.ok ? (result.body as ProposalDomainSummary) : null }));
+        }
       }
       setSourceRecords(prev =>
         results.reduce(
@@ -1510,31 +1045,178 @@ export default function ServicesPanel() {
     }
   }
 
-  // ── Publish ───────────────────────────────────────────────────────────────
+  // ── Publish (server-authoritative) ────────────────────────────────────────
+  //
+  // Three distinct flows, never collapsed into one:
+  //   `ready`    — `Publicar listos`, and the card's rule-13 `Publicar`.
+  //   `override` — an explicit individual acknowledgement of WORKFLOW blockers.
+  //   unpublish  — the separate narrow safe-targeting capability (never publish).
+  // Every one re-checks its own capability row at submit, keeps its dialog open on
+  // failure, and refuses to repeat a submission whose outcome is unknown.
 
-  // Each entry carries the revision the card was loaded with; any stale entry
-  // rejects the whole batch, so the list is refreshed and nothing is claimed.
-  async function handlePublish(entries: { id: string; rev: string }[], published: boolean) {
-    // Publishing needs all five sources; hiding a published service is the
-    // separate narrow capability (roles + role-target integrity only).
-    const guard = guardControl(sources, publishControl(published));
-    if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
+  /** POST a publish/unpublish request; returns the Spanish outcome, if any. */
+  async function submitPublication(input: {
+    url: string;
+    body: unknown;
+    /** For the unknown-outcome recovery: what we asked to become true. */
+    outcome: { kind: "publish" | "unpublish"; ids: string[]; published: boolean };
+    success: string;
+    fallback: string;
+    onDone: () => void;
+  }): Promise<void> {
+    if (pendingOutcome) {
+      setPublishError("El resultado anterior es desconocido. Verifícalo antes de reintentar.");
+      return;
+    }
+    setSubmitting(true);
+    setPublishError(null);
     try {
-      const res = await fetch("/api/admin/roles/publish", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roles: entries, published }),
+      const res = await fetch(input.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input.body),
       });
       if (res.ok) {
-        const refreshFailed = await loadSources();
-        const message = mutationOutcomeMessage("", refreshFailed);
-        if (message) showToast(message);
+        input.onDone();
+        showToast(mutationOutcomeMessage(input.success, await loadSources()));
       } else {
-        showToast(await describeMutationError(res, "Error al publicar."));
+        // Never close as success. A 409 refreshes so the operator can reload.
+        setPublishError(await describeMutationError(res, input.fallback));
         if (res.status === 409) void loadSources();
       }
     } catch {
-      showToast("Error de conexión.");
+      // Outcome unknown: do NOT infer failure and do NOT replay automatically.
+      // Repeat submission is disabled until `recover` says what committed, and the
+      // authoritative bundle is refetched so any retry uses a new observation.
+      setPendingOutcome(input.outcome);
+      setPublishError(
+        "No se pudo confirmar el resultado. Verifica qué quedó guardado antes de reintentar.",
+      );
+      void loadSources();
+    } finally {
+      setSubmitting(false);
     }
+  }
+
+  /** Read-only outcome verification. An observed commit is recovered success. */
+  async function verifyPendingOutcome() {
+    const pending = pendingOutcome;
+    if (!pending) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(
+        pending.kind === "publish" ? "/api/admin/roles/publish-ready" : "/api/admin/roles/unpublish",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "recover",
+            roles: pending.ids.map(id => ({ id })),
+            ...(pending.kind === "publish" ? { published: pending.published } : {}),
+          }),
+        },
+      );
+      if (res.ok) {
+        setPendingOutcome(null);
+        setPublishError(null);
+        setPublishPlan(null);
+        setOverrideCard(null);
+        setUnpublishCard(null);
+        showToast(mutationOutcomeMessage("Cambio confirmado.", await loadSources()));
+      } else {
+        // Not in the requested state, or the refetch itself failed: stay unknown
+        // and require an explicit retry over a wholly new observed bundle.
+        setPublishError(
+          await describeMutationError(
+            res,
+            "El resultado sigue sin confirmarse. Recarga y vuelve a intentar.",
+          ),
+        );
+        if (res.status === 409) {
+          setPendingOutcome(null);
+          void loadSources();
+        }
+      }
+    } catch {
+      setPublishError("No se pudo verificar el resultado. Intenta de nuevo.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  /** `Publicar listos` (a batch) or a single rule-13 `Publicar` — always `ready`. */
+  async function publishReady(entries: { id: string; rev: string }[]) {
+    const guard = guardControl(sources, "publishReady");
+    if (!guard.ok) { setPublishError(guard.message ?? "Datos incompletos."); return; }
+    if (entries.length === 0) return;
+    await submitPublication({
+      url: "/api/admin/roles/publish-ready",
+      body: { mode: "ready", roles: entries },
+      outcome: { kind: "publish", ids: entries.map(e => e.id), published: true },
+      success: entries.length === 1 ? "Servicio publicado." : `${entries.length} servicios publicados.`,
+      fallback: "Error al publicar.",
+      onDone: () => { setPublishPlan(null); setOverrideCard(null); },
+    });
+  }
+
+  /** The explicit individual override: only WORKFLOW blockers, one service. */
+  async function publishOverride(card: ServiceCardModel, blockers: readonly PublishWorkflowBlocker[]) {
+    const guard = guardControl(sources, "publishReady");
+    if (!guard.ok) { setPublishError(guard.message ?? "Datos incompletos."); return; }
+    await submitPublication({
+      url: "/api/admin/roles/publish-ready",
+      body: {
+        mode: "override",
+        roles: [{ id: card.role._id, rev: card.role._rev, acknowledgedBlockers: [...blockers] }],
+      },
+      outcome: { kind: "publish", ids: [card.role._id], published: true },
+      success: "Servicio publicado.",
+      fallback: "Error al publicar.",
+      onDone: () => { setOverrideCard(null); setPublishPlan(null); },
+    });
+  }
+
+  /**
+   * Hide a published service. Deliberately narrow: it needs only roles +
+   * role-target integrity, so an unsafe/incomplete/unavailable member, setlist or
+   * proposal source must NOT prevent it, and it never sends acknowledgements.
+   */
+  async function unpublishService(card: ServiceCardModel) {
+    const guard = guardControl(sources, "unpublish");
+    if (!guard.ok) { setPublishError(guard.message ?? "Datos incompletos."); return; }
+    await submitPublication({
+      url: "/api/admin/roles/unpublish",
+      body: { roles: [{ id: card.role._id, rev: card.role._rev }] },
+      outcome: { kind: "unpublish", ids: [card.role._id], published: false },
+      success: "Servicio oculto.",
+      fallback: "Error al ocultar.",
+      onDone: () => setUnpublishCard(null),
+    });
+  }
+
+  function openPublishPlan(cards: readonly ServiceCardModel[]) {
+    const guard = guardControl(sources, "publishReady");
+    if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
+    setPublishError(null);
+    setPendingOutcome(null);
+    setPublishPlan(buildPublishConfirmation(cards));
+  }
+
+  function openOverride(card: ServiceCardModel) {
+    const guard = guardControl(sources, "publishReady");
+    if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
+    setPublishError(null);
+    setPendingOutcome(null);
+    setOverrideCard(card);
+  }
+
+  function openUnpublish(card: ServiceCardModel) {
+    // Re-checked here AND at confirmation.
+    const guard = guardControl(sources, "unpublish");
+    if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
+    setPublishError(null);
+    setPendingOutcome(null);
+    setUnpublishCard(card);
   }
 
   // ── Setlist editor ────────────────────────────────────────────────────────
@@ -1553,7 +1235,7 @@ export default function ServicesPanel() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const today = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
+  const today = serviceTodayIso();
 
   // Split months into current/future and past
   const currentYM   = today.slice(0, 7);
@@ -1568,53 +1250,111 @@ export default function ServicesPanel() {
       return next;
     });
 
-  // No filter selected → show upcoming only (default).  Months selected → show exactly those.
-  const visible = selectedMonths.size === 0
-    ? roles.filter(r => r.date >= today)
-    : roles.filter(r => selectedMonths.has(r.date.slice(0, 7)));
+  // ── Readiness models (one per card) ────────────────────────────────────────
+  //
+  // The global integrity queue is built from the SAME three summaries, over every
+  // loaded card (not just the visible ones), so a month filter can never push an
+  // owned issue into the global `Integridad de datos` list. Its `cardIssues`
+  // (lock/legacy only) are what `deriveServiceReadiness` consumes.
+  const queue = useMemo(
+    () =>
+      buildIntegrityQueue({
+        sources,
+        cards: serviceCardRefs(roles, summaries),
+        roles: summaries.roles,
+        setlists: summaries.setlists,
+        proposals: summaries.proposals,
+      }),
+    [sources, roles, summaries],
+  );
+
+  const cards = useMemo(
+    () => buildServiceCards({ roles, members, sources, summaries, todayIso: today, queue }),
+    [roles, members, sources, summaries, today, queue],
+  );
+
+  // No filter selected → show upcoming only (default). Months selected → exactly those.
+  const visibleCards = selectedMonths.size === 0
+    ? cards.filter(c => !c.isPast)
+    : cards.filter(c => selectedMonths.has(c.role.date.slice(0, 7)));
 
   const monthLabel =
     selectedMonths.size === 0 ? "Próximos"
     : selectedMonths.size === 1 ? fmtYM([...selectedMonths][0])
     : `${selectedMonths.size} meses`;
 
-  const upcoming = roles.filter(r => r.date >= today);
-  const past     = roles.filter(r => r.date < today);
+  const counters = commandSummaryCounters({ all: cards, visible: visibleCards });
+  const summaryLine = commandSummarySegments(counters).join(" · ");
+  const queueTone = integrityQueueTone(queue);
 
-  // ── Availability conflicts (computed live from current member availability) ──
-  const unavail = buildUnavailMap(members);
-  const roleConflicts = new Map<string, Set<string>>(); // roleId -> conflicting member ids
-  for (const role of roles) {
-    if (role.date < today) continue; // only flag upcoming services
-    const ids = conflictIdsForRole(role, unavail);
-    if (ids.size) roleConflicts.set(role._id, ids);
-  }
-  // Per-role map of memberId → note for that role's date (for tooltips)
-  const roleConflictNotes = new Map<string, Map<string, string>>();
-  for (const [roleId, ids] of roleConflicts) {
-    const role = roles.find(r => r._id === roleId);
-    if (!role) continue;
-    const date = role.date.slice(0, 10);
-    const noteMap = new Map<string, string>();
-    for (const id of ids) {
-      const note = members.find(x => x._id === id)?.unavailabilityNotes?.find(n => n.date === date)?.note;
-      if (note) noteMap.set(id, note);
-    }
-    if (noteMap.size) roleConflictNotes.set(roleId, noteMap);
-  }
-
-  // Summary notices for the cards currently visible
-  const conflictNotices = visible
-    .filter(r => roleConflicts.has(r._id))
-    .flatMap(role => {
-      const date = role.date.slice(0, 10);
-      return [...roleConflicts.get(role._id)!].map(id => {
-        const m = members.find(x => x._id === id);
-        const note = m?.unavailabilityNotes?.find(n => n.date === date)?.note;
-        return { name: m ? dn(m) : "—", label: SERVICE_LABEL[role._type], date, note };
-      });
-    })
+  // Availability conflicts across the visible, still-upcoming cards.
+  const conflictNotices = visibleCards
+    .filter(card => !card.isPast && card.readiness.availabilityStatus === "conflict")
+    .flatMap(card =>
+      card.readiness.conflicts.map(conflict => ({
+        name: conflict.memberName,
+        label: SERVICE_LABEL[card.role._type],
+        date: card.day ?? card.role.date.slice(0, 10),
+        note: conflict.note,
+      })),
+    )
     .sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
+
+  /** Per-target month/create preflight over the currently observed bundle. */
+  const preflightTarget = useCallback(
+    (type: "sunday_role" | "saturday_role", date: string) =>
+      monthTargetPreflight({ sources, summaries, queue, type, date }),
+    [sources, summaries, queue],
+  );
+
+  /**
+   * Run ONE card's primary action. The action itself is the shipped ladder's
+   * result; this only opens the existing flow its route names, and re-checks that
+   * flow's capability row at handler entry.
+   */
+  function runPrimaryAction(card: ServiceCardModel) {
+    switch (primaryActionRoute(card.readiness)) {
+      case "service_modal":
+        openEditModal({ type: "edit", role: card.role });
+        return;
+      case "setlist_editor":
+        // Unreachable for a non-editable target (the route falls back), but the
+        // guard stays so a malformed setlist can never open the editor.
+        if (!card.readiness.setlistEditable) { openIntegrityDetails(card); return; }
+        openSetlist(card.role);
+        return;
+      case "publish":
+        openPublishPlan([card]);
+        return;
+      case "proposal_handoff": {
+        const guard = guardControl(sources, "proposalHandoff");
+        if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
+        const target = buildProposalHandoff(proposalHandoffInput(card));
+        if (!target) { showToast("No hay una propuesta que abrir para este servicio."); return; }
+        openReviewTarget(target);
+        return;
+      }
+      case "integrity_details":
+        openIntegrityDetails(card);
+        return;
+      case "retry_sources":
+        retryLoad();
+        return;
+      default:
+        return;
+    }
+  }
+
+  /** Read-only integrity details, by explicit id — never an editable setlist. */
+  function openIntegrityDetails(card: ServiceCardModel) {
+    const target = integrityTargetForCard(card);
+    if (!target) {
+      showToast("No se pudo verificar este servicio. Reintenta la carga.");
+      retryLoad();
+      return;
+    }
+    openIntegrityIssue(target);
+  }
 
   // ── Per-control gates (one snapshot, five individual source states) ─────────
   const swapGate          = gate("swap");
@@ -1630,6 +1370,7 @@ export default function ServicesPanel() {
     publish: publishGate,
     unpublish: gate("unpublish"),
     swap: swapGate,
+    proposalHandoff: gate("proposalHandoff"),
   };
 
   // Honest banner: which sources are missing, and its retry. Availability/team
@@ -1645,41 +1386,54 @@ export default function ServicesPanel() {
   return (
     <div className="space-y-5">
 
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
+      {/* Command summary — replaces the plain count header */}
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="font-display text-2xl uppercase tracking-wide">Servicios</h1>
           {view !== "loading" && (
-            <p className="font-label text-xs uppercase tracking-widest text-gray-500 mt-0.5">
-              {upcoming.length} próximo{upcoming.length !== 1 ? "s" : ""}
-              {past.length > 0 && ` · ${past.length} pasado${past.length !== 1 ? "s" : ""}`}
-            </p>
+            <>
+              <p className={`mt-0.5 font-label text-xs uppercase tracking-widest text-gray-500 ${CARD_STYLE.longText}`}>
+                {summaryLine}
+              </p>
+              {/* The global integrity entry: never a clean zero when an inventory failed. */}
+              <p className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
+                <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">
+                  {INTEGRITY_QUEUE_TITLE}
+                </span>
+                <span
+                  className={`rounded-full border px-2 py-0.5 font-label text-[11px] uppercase tracking-widest ${
+                    TONE_CLASS[
+                      queueTone === "clean" ? "approved" : queueTone === "unknown" ? "unknown" : "error"
+                    ]
+                  }`}
+                >
+                  {integrityQueueSummary(queue)}
+                </span>
+              </p>
+            </>
           )}
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           {/* Swap mode toggle */}
           <button
             onClick={() => { if (swapMode) { exitSwapMode(); } else { exitCopyMode(); setSwapMode(true); } }}
             disabled={!swapGate.enabled && !swapMode}
             title={swapGate.reason ?? undefined}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-40 ${
+            className={`flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-40 ${
               swapMode ? "border-[#00bfff] bg-[#00bfff]/10 text-[#00bfff]" : "border-[#003572]/20 dark:border-[#00bfff]/15 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff]/30"
             }`}
           >
             ⇄ {swapMode ? "Salir" : "Intercambiar"}
           </button>
-          {(() => {
-            const draftEntries = visible.filter(r => r.published === false).map(r => ({ id: r._id, rev: r._rev }));
-            return draftEntries.length > 0 ? (
-              <button type="button"
-                disabled={!publishGate.enabled}
-                title={publishGate.reason ?? undefined}
-                onClick={() => { if (confirm(`¿Publicar ${draftEntries.length} servicio(s) del filtro actual?`)) handlePublish(draftEntries, true); }}
-                className="px-3 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-40">
-                Publicar todo ({draftEntries.length})
-              </button>
-            ) : null;
-          })()}
+          {visibleCards.some(c => c.readiness.publishState === "draft") && (
+            <button type="button"
+              disabled={!publishGate.enabled}
+              title={publishGate.reason ?? undefined}
+              onClick={() => openPublishPlan(visibleCards)}
+              className="min-h-[44px] rounded-lg bg-[#003572] px-3 font-label text-xs uppercase tracking-widest transition-colors hover:bg-[#003572]/80 disabled:opacity-40 dark:bg-[#00bfff]/20">
+              Publicar listos ({counters.readyToPublish})
+            </button>
+          )}
           <button onClick={openGenerator}
             disabled={!generateGate.enabled}
             title={generateGate.reason ?? undefined}
@@ -1839,7 +1593,10 @@ export default function ServicesPanel() {
       {view === "cards" && (
         <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
           {participationGate.enabled ? (
-            <ParticipationSidebar roles={visible as ParticipantRole[]} monthLabel={monthLabel} />
+            <ParticipationSidebar
+              roles={visibleCards.map(c => c.role) as ParticipantRole[]}
+              monthLabel={monthLabel}
+            />
           ) : (
             // Never compute participation from partial membership.
             <aside className="rounded-xl border border-[#00bfff]/20 bg-[#C8D8EB]/40 dark:bg-[#010b17] p-3 space-y-2">
@@ -1851,29 +1608,35 @@ export default function ServicesPanel() {
               </button>
             </aside>
           )}
-          <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 items-start">
-          {upcoming.length === 0 && selectedMonths.size === 0 && (
+          <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+          {counters.upcoming === 0 && selectedMonths.size === 0 && (
             <p className="font-body text-sm text-gray-500 text-center py-12">No hay servicios próximos.</p>
           )}
-          {visible.map(role => (
-            <ServiceCard
-              key={role._id}
-              role={role}
-              conflictIds={roleConflicts.get(role._id) ?? EMPTY_SET}
-              conflictNotes={roleConflictNotes.get(role._id)}
+          {visibleCards.map(card => (
+            <ServiceReadinessCard
+              key={card.cardId}
+              card={card}
+              sources={sources}
+              todayIso={today}
               gates={cardGates}
-              onEdit={() => openEditModal({ type: "edit", role })}
-              onDelete={() => openEditModal({ type: "delete", role })}
-              onSetlist={() => openSetlist(role)}
-              onPublish={handlePublish}
+              onPrimaryAction={() => runPrimaryAction(card)}
+              onEdit={() => openEditModal({ type: "edit", role: card.role })}
+              onDelete={() => openEditModal({ type: "delete", role: card.role })}
+              onSetlist={() => openSetlist(card.role)}
+              // The menu's `Publicar` is the explicit override path when workflow
+              // blockers remain; a clean draft goes through the ready confirmation.
+              onPublish={() =>
+                card.readiness.isReadyToPublish ? openPublishPlan([card]) : openOverride(card)
+              }
+              onUnpublish={() => openUnpublish(card)}
               swapMode={swapMode}
               swapSource={swapSource}
-              onCardSwapSelect={() => handleCardSwapSelect(role._id)}
+              onCardSwapSelect={() => handleCardSwapSelect(card.role._id)}
               onMemberChipClick={handleMemberChipClick}
               copyMode={copyMode}
-              isCopySource={copySource === role._id}
-              onCopyStart={() => startCopyInstruments(role._id)}
-              onCopyPick={() => copyInstrumentsTo(role._id)}
+              isCopySource={copySource === card.role._id}
+              onCopyStart={() => startCopyInstruments(card.role._id)}
+              onCopyPick={() => copyInstrumentsTo(card.role._id)}
             />
           ))}
           </div>
@@ -1938,6 +1701,149 @@ export default function ServicesPanel() {
           error={swapError ?? staleModes.swap?.message ?? swapGate.reason}
         />
       )}
+
+      {/* `Publicar listos` — the readiness-aware bulk confirmation */}
+      {publishPlan && (
+        <Modal
+          title="Publicar listos"
+          onClose={() => { setPublishPlan(null); setPublishError(null); setPendingOutcome(null); }}
+          status={publishError}
+        >
+          <div className={CARD_STYLE.dialog}>
+            <p className="font-body text-sm text-gray-400">
+              Solo se publican los servicios que pasaron toda la verificación. Los demás se
+              muestran abajo con su motivo y no se envían.
+            </p>
+            <section>
+              <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">
+                Se publicarán ({publishPlan.selected.length})
+              </p>
+              {publishPlan.selected.length === 0 ? (
+                <p className="font-body text-xs italic text-gray-500">
+                  Ningún borrador visible está listo para publicar.
+                </p>
+              ) : (
+                <ul className="mt-1 space-y-0.5">
+                  {publishPlan.selected.map(entry => (
+                    <li key={entry.id} className={`font-body text-xs text-gray-300 ${CARD_STYLE.longText}`}>
+                      {entry.label}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+            {publishPlan.skipped.length > 0 && (
+              <section>
+                <p className="font-label text-[11px] uppercase tracking-widest text-amber-400">
+                  Se omiten ({publishPlan.skipped.length})
+                </p>
+                <ul className="mt-1 space-y-0.5">
+                  {publishPlan.skipped.map(entry => (
+                    <li key={entry.id} className={`font-body text-xs text-gray-400 ${CARD_STYLE.longText}`}>
+                      <span className="text-gray-300">{entry.label}</span> — {entry.text}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+            <PublicationFooter
+              onClose={() => { setPublishPlan(null); setPublishError(null); setPendingOutcome(null); }}
+              onConfirm={() => publishReady(publishPlan.selected.map(({ id, rev }) => ({ id, rev })))}
+              onVerify={verifyPendingOutcome}
+              confirmLabel={`Publicar ${publishPlan.selected.length}`}
+              loading={submitting}
+              disabled={publishPlan.selected.length === 0 || !publishGate.enabled}
+              unknownOutcome={!!pendingOutcome}
+            />
+          </div>
+        </Modal>
+      )}
+
+      {/* Individual override: WORKFLOW blockers only, acknowledged explicitly */}
+      {overrideCard && (() => {
+        const acknowledgement = overrideAcknowledgement({
+          id: overrideCard.role._id,
+          rev: overrideCard.role._rev,
+          readiness: overrideCard.readiness,
+        });
+        return (
+          <Modal
+            title="Publicar de todos modos"
+            onClose={() => { setOverrideCard(null); setPublishError(null); setPendingOutcome(null); }}
+            status={publishError}
+          >
+            <div className={CARD_STYLE.dialog}>
+              <p className={`font-body text-sm text-gray-400 ${CARD_STYLE.longText}`}>
+                {serviceCardLabel(overrideCard.role)}
+              </p>
+              {acknowledgement ? (
+                <>
+                  <p className="font-label text-[11px] uppercase tracking-widest text-amber-400">
+                    Vas a publicar aunque:
+                  </p>
+                  <ul className="space-y-0.5">
+                    {describeAcknowledgedBlockers(acknowledgement.acknowledgedBlockers).map(text => (
+                      <li key={text} className="font-body text-xs text-amber-200/90">• {text}</li>
+                    ))}
+                  </ul>
+                  <p className="font-body text-xs text-gray-500">
+                    El servidor vuelve a calcular estos puntos y rechaza la publicación si
+                    cambiaron.
+                  </p>
+                </>
+              ) : (
+                <p className="font-body text-xs text-red-300">
+                  Este servicio tiene problemas de integridad: no se puede publicar con una
+                  confirmación. Usa «Revisar datos».
+                </p>
+              )}
+              <PublicationFooter
+                onClose={() => { setOverrideCard(null); setPublishError(null); setPendingOutcome(null); }}
+                onConfirm={() =>
+                  acknowledgement && publishOverride(overrideCard, acknowledgement.acknowledgedBlockers)
+                }
+                onVerify={verifyPendingOutcome}
+                confirmLabel="Publicar de todos modos"
+                loading={submitting}
+                disabled={!acknowledgement || !publishGate.enabled}
+                unknownOutcome={!!pendingOutcome}
+                danger
+              />
+            </div>
+          </Modal>
+        );
+      })()}
+
+      {/* Safe unpublish — never routed through publish readiness or override */}
+      {unpublishCard && (
+        <Modal
+          title="Ocultar servicio"
+          onClose={() => { setUnpublishCard(null); setPublishError(null); setPendingOutcome(null); }}
+          status={publishError ?? cardGates.unpublish.reason}
+        >
+          <div className={CARD_STYLE.dialog}>
+            <p className={`font-body text-sm text-gray-400 ${CARD_STYLE.longText}`}>
+              ¿Ocultar <span className="font-semibold text-gray-200">{serviceCardLabel(unpublishCard.role)}</span> del
+              equipo? Deja de ser visible para los miembros; no se borra nada.
+            </p>
+            <p className="font-body text-xs text-gray-500">
+              Ocultar no depende de la verificación de publicación: se puede ocultar un servicio
+              con datos incompletos o en conflicto.
+            </p>
+            <PublicationFooter
+              onClose={() => { setUnpublishCard(null); setPublishError(null); setPendingOutcome(null); }}
+              onConfirm={() => unpublishService(unpublishCard)}
+              onVerify={verifyPendingOutcome}
+              confirmLabel="Ocultar"
+              loading={submitting}
+              disabled={!cardGates.unpublish.enabled}
+              unknownOutcome={!!pendingOutcome}
+              danger
+            />
+          </div>
+        </Modal>
+      )}
+
       {showGenerator && (
         <Modal title="Generar mes" onClose={() => setShowGenerator(false)} wide>
           <MonthGenerator
@@ -1945,6 +1851,8 @@ export default function ServicesPanel() {
             existingRoles={roles}
             // Re-checked at preview and at confirmation, not just at open.
             capability={{ enabled: generateGate.enabled, reason: generateGate.reason }}
+            // Per-target A1/A2 preflight: only proven-`creatable` targets are posted.
+            preflight={preflightTarget}
             onClose={() => setShowGenerator(false)}
             onCreated={async () => {
               showToast(mutationOutcomeMessage("Servicios generados.", await loadSources()));
@@ -1972,6 +1880,67 @@ export default function ServicesPanel() {
           </Modal>
         );
       })()}
+    </div>
+  );
+}
+
+/**
+ * Footer of a publish / override / unpublish confirmation. When the outcome of a
+ * submission is UNKNOWN (a lost or timed-out response) the confirm button is
+ * replaced by a read-only verification: the panel never replays a mutation
+ * automatically, and never closes as success.
+ */
+function PublicationFooter({
+  onClose,
+  onConfirm,
+  onVerify,
+  confirmLabel,
+  loading,
+  disabled,
+  unknownOutcome,
+  danger,
+}: {
+  onClose: () => void;
+  onConfirm: () => void;
+  onVerify: () => void;
+  confirmLabel: string;
+  loading: boolean;
+  disabled?: boolean;
+  unknownOutcome?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap gap-3">
+      <button
+        type="button"
+        onClick={onClose}
+        className="min-h-[44px] flex-1 rounded-lg border border-[#003572]/30 px-3 font-label text-xs uppercase tracking-widest transition-colors hover:border-[#00bfff] dark:border-[#00bfff]/20"
+      >
+        Cancelar
+      </button>
+      {unknownOutcome ? (
+        <button
+          type="button"
+          onClick={onVerify}
+          disabled={loading}
+          className="min-h-[44px] flex-1 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 font-label text-xs uppercase tracking-widest text-amber-200 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
+        >
+          {loading ? "Verificando..." : "Verificar resultado"}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={loading || disabled}
+          className={`min-h-[44px] flex-1 rounded-lg px-3 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${
+            danger
+              ? "bg-orange-600/70 hover:bg-orange-600"
+              : "bg-[#003572] hover:bg-[#003572]/80 dark:bg-[#00bfff]/20 dark:hover:bg-[#00bfff]/30"
+          }`}
+        >
+          {loading ? "Guardando..." : confirmLabel}
+        </button>
+      )}
     </div>
   );
 }
@@ -2004,56 +1973,6 @@ function MonthPill({ label, selected, onClick, past }: { label: string; selected
   );
 }
 
-function ActionBtn({ onClick, title, danger, children }: { onClick: () => void; title: string; danger?: boolean; children: React.ReactNode }) {
-  return (
-    <button onClick={onClick} title={title} className={`p-1.5 rounded-lg transition-colors ${danger ? "hover:bg-red-500/20 hover:text-red-400 text-gray-500" : "hover:bg-[#00bfff]/10 hover:text-[#00bfff] text-gray-500"}`}>
-      {children}
-    </button>
-  );
-}
-
-function PencilIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
-}
-
-function MusicIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>;
-}
-
 function TrashIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>;
-}
-
-function KebabIcon() {
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>;
-}
-
-function CopyIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>;
-}
-
-function EyeIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>;
-}
-
-function MenuItem({ icon, label, onClick, danger, gate }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean; gate?: CardGate }) {
-  const disabled = !!gate && !gate.enabled;
-  return (
-    <>
-      <button
-        type="button"
-        role="menuitem"
-        onClick={onClick}
-        disabled={disabled}
-        title={disabled ? gate?.reason ?? undefined : undefined}
-        className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors disabled:opacity-40 ${danger ? "text-red-300 hover:bg-red-500/15" : "text-[#C8D8EB] hover:bg-white/10"}`}
-      >
-        <span className="shrink-0 opacity-80">{icon}</span>{label}
-      </button>
-      {disabled && gate?.reason && (
-        // `role="none"` so this explanatory line is not read as a menu item.
-        <p role="none" className="px-3 pb-1.5 font-body text-[11px] text-amber-400/80">{gate.reason}</p>
-      )}
-    </>
-  );
 }

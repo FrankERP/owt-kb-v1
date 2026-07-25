@@ -1,11 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import type { SolveRequest, SolveResponse } from "@/app/api/admin/solve/route";
 import { summarizeUnfilledSeats } from "@/app/utils/unfilledSeats";
 import { DayCard } from "@/app/components/DayCard";
 import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
 import { newCreationRequestId, runDraftCreateBatch } from "@/app/utils/monthDraftCreate";
+import { creatableTargets, type TargetPreflight } from "./serviceReadiness";
+import {
+  PREFLIGHT_COPY,
+  TONE_CLASS,
+  describePreflightReason,
+} from "./serviceCardModel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -52,6 +58,16 @@ interface Props {
    * standalone (defaults to enabled).
    */
   capability?: { enabled: boolean; reason: string | null };
+  /**
+   * Per-target A1/A2 preflight for the `generateMonth` row of Plan B's matrix
+   * (plan §"Data loading and validation consumption"). Every previewed target is
+   * labelled `checking | unknown | exists | blocked | creatable` from the observed
+   * bundle, and ONLY still-`creatable` targets are posted — a re-check runs again
+   * at confirmation, because a source or observation can change while the dialog
+   * is open. Optional so the dialog still renders standalone, in which case it
+   * falls back to the plain `existingRoles` date check.
+   */
+  preflight?: (type: ServiceType, date: string) => TargetPreflight;
 }
 
 // ─── Rule types ───────────────────────────────────────────────────────────────
@@ -887,10 +903,12 @@ function RuleBuilder({ config, onChange, members }: {
 
 // ─── Draft card editor ────────────────────────────────────────────────────────
 
-function DraftCardEditor({ draft, members, onChange, onToggleSkip, swapSelected, onSwapSelect }: {
+function DraftCardEditor({ draft, members, onChange, onToggleSkip, swapSelected, onSwapSelect, preflight }: {
   draft: DraftCard; members: MemberOption[];
   onChange: (d: DraftCard) => void; onToggleSkip: () => void;
   swapSelected: boolean; onSwapSelect: () => void;
+  /** A1/A2 observation for this exact target, when the panel supplied one. */
+  preflight?: TargetPreflight | null;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isSun = draft._type === "sunday_role";
@@ -921,15 +939,30 @@ function DraftCardEditor({ draft, members, onChange, onToggleSkip, swapSelected,
             <span className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full ${badgeCls}`}>
               {isSun ? "Domingo" : "Sábado"}
             </span>
-            {draft.exists && (
-              <span className="font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-500 border border-yellow-500/30">
-                Ya existe
+            {/* The A1/A2 target state, when observed; else the plain date check. */}
+            {preflight ? (
+              <span
+                className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full border ${TONE_CLASS[PREFLIGHT_COPY[preflight.state].tone]}`}
+              >
+                {PREFLIGHT_COPY[preflight.state].text}
               </span>
+            ) : (
+              draft.exists && (
+                <span className="font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-500 border border-yellow-500/30">
+                  Ya existe
+                </span>
+              )
             )}
           </div>
           <p className="font-label text-[11px] uppercase tracking-widest text-gray-600 mt-0.5">
             {total > 0 ? `${total} asignado${total !== 1 ? "s" : ""}` : "Sin asignar"}
           </p>
+          {preflight && preflight.state !== "creatable" && preflight.reasons.length > 0 && (
+            <p className="font-body text-[11px] text-gray-400 mt-0.5 [overflow-wrap:anywhere]">
+              {preflight.reasons.map(describePreflightReason).join(" · ")}
+              {preflight.ids.length > 0 && ` — ${preflight.ids.join(" · ")}`}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
@@ -1056,7 +1089,7 @@ function SolverConfigPanel({ members, config, onChange, history, onRemoveHistory
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function MonthGenerator({ members, existingRoles, onClose, onCreated, capability }: Props) {
+export default function MonthGenerator({ members, existingRoles, onClose, onCreated, capability, preflight }: Props) {
   const gateBlocked = capability && !capability.enabled ? capability.reason ?? "Datos incompletos." : null;
   const now = new Date();
   const [step, setStep]           = useState<"config" | "preview">("config");
@@ -1329,11 +1362,35 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
   }
 
   async function handleConfirm(publish: boolean) {
-    const toCreate = drafts.filter(d => !d.skipped && !d.exists);
-    if (!toCreate.length) return;
     // Confirmation re-check: a source that failed since the preview blocks the
     // whole post rather than creating against a stale observation.
     if (gateBlocked) { setPushError(gateBlocked); return; }
+
+    // With a preflight the observed target state is the ONLY authority on what may
+    // be created; the local `exists` flag is a fallback for the standalone dialog.
+    const candidates = drafts.filter(d =>
+      !d.skipped &&
+      (preflight ? preflights.get(d.localId)?.state === "creatable" : !d.exists),
+    );
+    let toCreate = candidates;
+    if (preflight) {
+      // Re-observe every candidate NOW: a target that stopped being `creatable`
+      // while this dialog was open is never posted, and a changed observation
+      // aborts the batch instead of racing A2's create preflight.
+      const fresh = candidates.map(d => ({ draft: d, result: preflight(d._type, d.date) }));
+      const stillCreatable = new Set(
+        creatableTargets(fresh.map(f => f.result)).map(r => r.targetKey),
+      );
+      toCreate = fresh.filter(f => stillCreatable.has(f.result.targetKey)).map(f => f.draft);
+      const dropped = candidates.length - toCreate.length;
+      if (dropped > 0) {
+        setPushError(
+          `${dropped} fecha(s) dejaron de estar disponibles para crear. Revisa la vista previa y vuelve a intentar.`,
+        );
+        return;
+      }
+    }
+    if (!toCreate.length) return;
     setPushing(true);
     setPushError(null);
     let result;
@@ -1382,8 +1439,23 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
     }
   }
 
-  const toCreate = drafts.filter(d => !d.skipped && !d.exists);
+  // Per-target A1/A2 observation for every previewed draft. Recomputed whenever the
+  // drafts or the observed bundle change, so a source failing while the dialog is
+  // open flips the label to `unknown` instead of silently reading as vacant.
+  const preflights = useMemo(() => {
+    const map = new Map<string, TargetPreflight>();
+    if (!preflight) return map;
+    for (const draft of drafts) map.set(draft.localId, preflight(draft._type, draft.date));
+    return map;
+  }, [drafts, preflight]);
+
+  const toCreate = preflight
+    ? drafts.filter(d => !d.skipped && preflights.get(d.localId)?.state === "creatable")
+    : drafts.filter(d => !d.skipped && !d.exists);
   const skipped  = drafts.filter(d => d.skipped).length;
+  const notCreatable = preflight
+    ? drafts.filter(d => !d.skipped && preflights.get(d.localId)?.state !== "creatable").length
+    : drafts.filter(d => !d.skipped && d.exists).length;
 
   // ── Step 1: Configure ────────────────────────────────────────────────────────
   if (step === "config") return (
@@ -1475,6 +1547,9 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
           <p className="font-body text-sm">
             <span className="text-[#00bfff] font-semibold">{toCreate.length}</span> por crear
             {skipped > 0 && <span className="text-gray-500"> · {skipped} omitido{skipped !== 1 ? "s" : ""}</span>}
+            {notCreatable > 0 && (
+              <span className="text-amber-400"> · {notCreatable} no disponible{notCreatable !== 1 ? "s" : ""}</span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -1554,6 +1629,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
               onToggleSkip={() => setDrafts(drafts.map(x => x.localId === d.localId ? { ...x, skipped: !x.skipped } : x))}
               swapSelected={swapSel === d.localId}
               onSwapSelect={() => handleCardSwap(d.localId)}
+              preflight={preflights.get(d.localId) ?? null}
             />
           ))}
         </div>
