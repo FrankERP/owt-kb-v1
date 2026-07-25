@@ -280,7 +280,7 @@ describe("A2 handoff allowlist", () => {
     expect(A2_HANDOFF_ALLOWLIST).toEqual([]);
   });
 
-  it("licenses the eight permanent runtime writers for WRITES ONLY, never reads", () => {
+  it("licenses the ten permanent runtime writers for WRITES ONLY, never reads", () => {
     // `roles/[id]` DELETE is absent on purpose: it mutates, but its region names no
     // protected type literal, so the detector reports no site and an entry would be
     // dead. See the note in the registry.
@@ -290,8 +290,10 @@ describe("A2 handoff allowlist", () => {
         "app/api/admin/roles/[id]/route.ts#PATCH",
         "app/api/admin/roles/copy-instruments/route.ts#POST",
         "app/api/admin/roles/publish/route.ts#POST",
+        "app/api/admin/roles/publish-ready/route.ts#POST",
         "app/api/admin/roles/route.ts#POST",
         "app/api/admin/roles/swap/route.ts#POST",
+        "app/api/admin/roles/unpublish/route.ts#POST",
         "app/api/admin/setlists/route.ts#PUT",
         "app/api/me/proposals/route.ts#POST",
       ].sort(),
