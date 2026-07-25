@@ -36,7 +36,9 @@ export const PROPOSAL_PROJECTION = `{
   service_date, status,
   ${SONGS_FRAGMENT},
   contributors[]{ _key, "person": person._ref },
-  "lead": lead._ref
+  "lead": lead._ref,
+  lead_notes, team_notes, admin_notes,
+  approval_receipt, last_transition
 }`;
 
 export const CANONICAL_MEMBER_PROJECTION = `{ _id, _rev, member_name, alias, unavailableDates, unavailabilityNotes }`;
@@ -159,6 +161,26 @@ export function canonicalSpecialRolesForDateQuery(date: string): BoundQuery {
   return {
     query: `*[_type == "special_role" && date == $date] ${ROLE_PROJECTION}`,
     params: { date },
+  };
+}
+
+/**
+ * Canonical live-setlist group for ONE weekend target (`_type` + `week`).
+ * Returned as an array: zero is an absent target, more than one is a duplicate
+ * conflict, never an arbitrary `[0]` pick.
+ */
+export function canonicalSetlistsForTargetQuery(setlistType: string, week: string): BoundQuery {
+  return {
+    query: `*[_type == $setlistType && week == $week] ${SETLIST_PROJECTION}`,
+    params: { setlistType, week },
+  };
+}
+
+/** Canonical proposal group for one proposal id (array — never `[0]`). */
+export function canonicalProposalByIdQuery(id: string): BoundQuery {
+  return {
+    query: `*[_type == "setlistProposal" && _id == $id] ${PROPOSAL_PROJECTION}`,
+    params: { id },
   };
 }
 
@@ -301,6 +323,14 @@ export function rawProposalDraftsForRoleOrDatesQuery(
   return {
     query: `*[_type == "setlistProposal" && ${DRAFTS_ONLY} && (service_ref._ref == $roleId || service_date in $dates)] ${PROPOSAL_PROJECTION}`,
     params: { roleId, dates },
+  };
+}
+
+/** The raw `drafts.` overlay(s) for one proposal base id (a blocking conflict). */
+export function rawProposalDraftForBaseQuery(baseId: string): BoundQuery {
+  return {
+    query: `*[_type == "setlistProposal" && ${DRAFTS_ONLY} && _id == $draftId]{ _id }`,
+    params: { draftId: `drafts.${baseId}` },
   };
 }
 

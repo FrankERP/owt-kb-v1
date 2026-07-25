@@ -1,12 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
-import { serverClient, writeClient } from "@/sanity/lib/serverClient";
+import { writeClient } from "@/sanity/lib/serverClient";
 import { operationalClient, rawIntegrityClient } from "@/sanity/lib/operationalClient";
 import { revalidateServiceViews } from "@/app/utils/revalidate";
 import { setlistRecipientIds, assignedMemberRefsQuery } from "@/app/utils/notifyTargets";
 import { sendPush } from "@/app/utils/push";
 import { isValidServiceDate } from "@/app/utils/serviceReadModel";
 import { pickUnique } from "@/app/utils/serviceReadSelect";
+import { serviceError } from "@/app/utils/serviceMutation";
+import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
+import { nextKey, nowIso, type StoredLock } from "@/app/utils/roleWriteOps";
+import {
+  loadSpecialSetlistTarget,
+  loadWeekendCoordination,
+  loadWeekendSetlistTarget,
+} from "@/app/utils/serviceWriteTargets";
+import {
+  buildSetlistSongDocs,
+  buildWeekendSetlistDocument,
+  compareObservedTarget,
+  parseSetlistWriteRequest,
+  type ServerTarget,
+} from "@/app/utils/setlistWriteRequest";
 import {
   editorRecentSetlistsQuery,
   editorSpecialRoleQuery,
@@ -16,8 +31,8 @@ import {
 } from "@/app/utils/serviceReadQueries";
 import { buildSetlistRead, type CanonicalSetlistRecord } from "@/app/utils/setlistReadContract";
 
-function key() {
-  return Math.random().toString(36).slice(2, 9);
+function reject(res: { status: number; body: unknown }) {
+  return NextResponse.json(res.body, { status: res.status });
 }
 
 function nWeeksAgo(n: number): string {
@@ -198,8 +213,22 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// ── PUT /api/admin/setlists
-// Body: { week, type, roleId?, songs: [{ songId, play_key, medley_tag? }] }
+/**
+ * Manual live-setlist save (A2 §5).
+ *
+ * Body: `{ week, type, roleId?, observed, songs: [{ songId, play_key?, medley_tag? }] }`
+ * where `observed` is A1's UNCHANGED observed state from the GET above.
+ *
+ * - An observed singleton requires the SAME target id and `_rev`.
+ * - An observed `none` permits only deterministic creation at
+ *   `featuredSongs.<week>` / `saturdarSongs.<week>` — the deterministic id is the
+ *   mutex, so a concurrent creation loses with `409` instead of duplicating the
+ *   target.
+ * - A duplicate group, a raw `drafts.*` overlay, an invalid target, a stale
+ *   identity/revision, or a concurrent creation all return `409` with NO write.
+ * - A weekend save asserts/heartbeats the owned weekend target lock in the SAME
+ *   transaction; a special save revision-guards the special role document.
+ */
 export async function PUT(req: NextRequest) {
   const session = await requireActiveManager();
   if (!session) {
@@ -210,83 +239,135 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = await req.json() as {
-    week?: string;
-    type: "sunday" | "saturday" | "special";
-    roleId?: string;
-    songs: { songId: string; play_key: string; medley_tag?: string }[];
-  };
+  let raw: unknown;
+  try {
+    raw = await req.json();
+  } catch {
+    return reject(serviceError("invalid_request", { details: { issues: ["json"] } }));
+  }
+  const parsed = parseSetlistWriteRequest(raw);
+  if (!parsed.ok) {
+    return reject(serviceError("invalid_request", { details: { issues: parsed.issues } }));
+  }
+  const request = parsed.value;
+  const { week, observed } = request;
 
-  const songDocs = (body.songs ?? []).map(s => ({
-    _type: "setlist_song" as const,
-    _key: key(),
-    play_key: s.play_key,
-    ...(s.medley_tag ? { medley_tag: s.medley_tag } : {}),
-    song: { _type: "reference" as const, _ref: s.songId },
-  }));
+  // ── Resolve the canonical target and its coordination token ───────────────
+  let server: ServerTarget;
+  /** The revision this transaction must assert on the target document. */
+  let targetRev: string | null = null;
+  let targetId: string | null = null;
+  let lock: StoredLock | null = null;
+  let bootstrapped = false;
 
-  let publishedWeek: string | undefined;
-
-  if (body.type === "sunday" && body.week) {
-    const existing = await serverClient.fetch(
-      `*[_type == "featuredSongs" && week == $week][0]._id`,
-      { week: body.week }
-    );
-    if (existing) {
-      await writeClient.patch(existing).set({ songs: songDocs }).commit();
-    } else {
-      await writeClient.create({ _type: "featuredSongs", week: body.week, songs: songDocs });
+  if (request.setlistType) {
+    const target = await loadWeekendSetlistTarget(request.setlistType, week);
+    if (!target.ok) {
+      return reject(serviceError(target.failure.code, { details: target.failure.details }));
     }
-    publishedWeek = body.week;
-  } else if (body.type === "saturday" && body.week) {
-    const existing = await serverClient.fetch(
-      `*[_type == "saturdarSongs" && week == $week][0]._id`,
-      { week: body.week }
-    );
-    if (existing) {
-      await writeClient.patch(existing).set({ songs: songDocs }).commit();
-    } else {
-      await writeClient.create({ _type: "saturdarSongs", week: body.week, songs: songDocs });
+    server = target.target.server;
+    if (server.state === "single") {
+      targetId = server.id;
+      targetRev = server.rev;
     }
-    publishedWeek = body.week;
-  } else if (body.type === "special" && body.roleId) {
-    const roleDoc = await serverClient.fetch<{ _type: string; date?: string }>(
-      `*[_id == $id][0]{ _type, date }`,
-      { id: body.roleId }
-    );
-    if (roleDoc?._type !== "special_role") {
-      return NextResponse.json({ error: "roleId must reference a special_role document" }, { status: 400 });
+    const coordination = await loadWeekendCoordination({
+      roleType: request.setlistType === "featuredSongs" ? "sunday_role" : "saturday_role",
+      week,
+    });
+    if (!coordination.ok) {
+      return reject(
+        serviceError(coordination.failure.code, { details: coordination.failure.details }),
+      );
     }
-    await writeClient.patch(body.roleId).set({ songs: songDocs }).commit();
-    publishedWeek = roleDoc?.date;
+    lock = coordination.coordination.lock;
+    bootstrapped = coordination.coordination.bootstrapped;
   } else {
-    return NextResponse.json({ error: "week (for sunday/saturday) or roleId (for special) required" }, { status: 400 });
+    const target = await loadSpecialSetlistTarget(request.roleId as string, week);
+    if (!target.ok) {
+      return reject(serviceError(target.failure.code, { details: target.failure.details }));
+    }
+    server = target.target.server;
+    // The special role IS the setlist target, so its own revision serializes this
+    // save whether or not it already stores a `songs` field.
+    targetId = target.target.role._id;
+    targetRev = target.target.role._rev;
+  }
+
+  // ── The observed state must still be exactly current ──────────────────────
+  const mismatch = compareObservedTarget(observed, server);
+  if (mismatch) {
+    return reject(
+      serviceError("stale_revision", {
+        details: { detail: mismatch, week, type: request.kind, observed, server },
+      }),
+    );
+  }
+
+  // ── One guarded transaction ───────────────────────────────────────────────
+  const now = nowIso();
+  const songs = buildSetlistSongDocs(request.songs, nextKey);
+  let tx = writeClient.transaction();
+  let createdId: string | null = null;
+
+  if (server.state === "none" && request.setlistType) {
+    const doc = buildWeekendSetlistDocument({ setlistType: request.setlistType, week, songs });
+    if (!doc) {
+      return reject(serviceError("invalid_request", { details: { issues: ["week"] } }));
+    }
+    createdId = doc._id;
+    // `create` (never `createIfNotExists`): a concurrent creation must be TOLD.
+    tx = tx.create(doc);
+  } else {
+    if (!targetId || !targetRev) {
+      return reject(serviceError("integrity_conflict", { details: { detail: "target_identity" } }));
+    }
+    const rev = targetRev;
+    // `_type` is never sent: it is immutable per document id.
+    tx = tx.patch(targetId, (p) => p.ifRevisionId(rev).set({ songs }));
+  }
+  if (lock) {
+    const lockRev = lock._rev;
+    tx = tx.patch(lock._id, (p) => p.ifRevisionId(lockRev).set({ updatedAt: now }));
+  }
+
+  try {
+    await tx.commit();
+  } catch (err) {
+    const kind = sanityConflictKind(err);
+    if (!kind) throw err;
+    return reject(
+      serviceError(bootstrapped ? "bootstrap_completed_reload" : "stale_revision", {
+        details: {
+          week,
+          type: request.kind,
+          detail: kind === "already_exists" ? "concurrent_creation" : "revision_moved",
+        },
+      }),
+    );
   }
 
   // Invalidate the statically-cached pages so the edit appears immediately.
   revalidateServiceViews();
 
-  // Fire-and-forget: notify setlist subscribers. Never blocks the publish response.
-  if (publishedWeek) {
-    const week = publishedWeek;
-    try {
-      const members = await serverClient.fetch<{ _id: string; setlist?: "all" | "assigned" | "off" }[]>(
-        `*[_type == "teamMembers"]{ _id, "setlist": notifPrefs.setlist }`
-      );
-      const roleFilter = `_type in ["sunday_role","saturday_role","special_role"] && (week == $week || date == $week)`;
-      const assigned = await serverClient.fetch<string[]>(
-        assignedMemberRefsQuery(roleFilter),
-        { week }
-      );
-      void sendPush(setlistRecipientIds(members, assigned), "setlist", {
-        title: "Setlist de la semana",
-        body: "Ya están las canciones de este servicio.",
-        path: "/",
-      });
-    } catch (err) {
-      console.error("[push] notify failed:", err);
-    }
+  // Fire-and-forget: notify setlist subscribers. Never blocks the save response.
+  // Recipients derive from committed canonical server state across all five seat
+  // paths — never a client list.
+  try {
+    const members = await operationalClient.fetch<
+      { _id: string; setlist?: "all" | "assigned" | "off" }[]
+    >(`*[_type == "teamMembers"]{ _id, "setlist": notifPrefs.setlist }`);
+    const roleFilter = `_type in ["sunday_role","saturday_role","special_role"] && (week == $week || date == $week)`;
+    const assigned = await operationalClient.fetch<string[]>(assignedMemberRefsQuery(roleFilter), {
+      week,
+    });
+    void sendPush(setlistRecipientIds(members ?? [], assigned ?? []), "setlist", {
+      title: "Setlist de la semana",
+      body: "Ya están las canciones de este servicio.",
+      path: "/",
+    });
+  } catch (err) {
+    console.error("[push] notify failed:", err);
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, setlistId: createdId ?? targetId, created: !!createdId });
 }

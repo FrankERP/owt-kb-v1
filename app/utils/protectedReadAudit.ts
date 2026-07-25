@@ -148,28 +148,21 @@ export const A2_HANDOFF_ALLOWLIST: readonly AuditExemption[] = [
     file: "app/api/admin/setlists/route.ts",
     operation: "PUT",
     reason:
-      "weekend/special setlist writer: mutation-local featuredSongs/saturdarSongs lookup plus role-document song writes",
-    removalOwner: "A2",
-  },
-  {
-    file: "app/api/admin/proposals/[id]/route.ts",
-    operation: "module",
-    reason:
-      "mutation-local reviewRecipients() proposal read, reached only from the PATCH review mutation in this file",
+      "live setlist writer: reads are migrated to the canonical clients, but the single guarded transaction still creates/patches featuredSongs/saturdarSongs documents and special_role songs",
     removalOwner: "A2",
   },
   {
     file: "app/api/admin/proposals/[id]/route.ts",
     operation: "PATCH",
     reason:
-      "proposal review/approval writer: reads the proposal and its live setlist target, then writes both",
+      "proposal review/approval writer: reads are migrated to the canonical clients, but the single guarded transaction still writes the setlistProposal plus its live featuredSongs/saturdarSongs/special_role target",
     removalOwner: "A2",
   },
   {
     file: "app/api/me/proposals/route.ts",
     operation: "POST",
     reason:
-      "shared proposal writer: mutation-local role and existing-proposal reads guarding a revision-checked create/patch",
+      "shared proposal writer: reads are migrated to the canonical clients, but the single guarded transaction still creates/patches setlistProposal documents",
     removalOwner: "A2",
   },
   {

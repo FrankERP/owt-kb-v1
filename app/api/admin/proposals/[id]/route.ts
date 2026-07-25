@@ -1,32 +1,96 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
-import { serverClient, writeClient } from "@/sanity/lib/serverClient";
+import { writeClient } from "@/sanity/lib/serverClient";
 import { sendPush } from "@/app/utils/push";
 import { revalidateServiceViews } from "@/app/utils/revalidate";
+import { serviceError } from "@/app/utils/serviceMutation";
+import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
+import { nextKey, nowIso, type StoredLock } from "@/app/utils/roleWriteOps";
+import {
+  loadCanonicalProposal,
+  loadProposalGroup,
+  loadSpecialSetlistTarget,
+  loadWeekendCoordination,
+  loadWeekendSetlistTarget,
+} from "@/app/utils/serviceWriteTargets";
+import {
+  buildSetlistSongDocs,
+  buildWeekendSetlistDocument,
+  type WeekendSetlistType,
+} from "@/app/utils/setlistWriteRequest";
+import {
+  approvalInputFingerprint,
+  buildApprovalReceipt,
+  buildTransitionRecord,
+  decideApprovalReceipt,
+  decideTransitionRetry,
+  isAllowedSourceStatus,
+  parseProposalTransitionRequest,
+  storedProposalSongRows,
+  targetFromCanonicalRole,
+  type ApprovalInput,
+  type ProposalAction,
+  type TransitionIntent,
+} from "@/app/utils/proposalWriteRequest";
 
-function rkey() {
-  return Math.random().toString(36).slice(2, 9);
+function reject(res: { status: number; body: unknown }) {
+  return NextResponse.json(res.body, { status: res.status });
 }
 
-// A Sanity ifRevisionId mismatch surfaces as a ClientError with statusCode 409.
-function isConflict(e: unknown): boolean {
-  const err = e as { statusCode?: number; response?: { statusCode?: number } };
-  return err?.statusCode === 409 || err?.response?.statusCode === 409;
+/**
+ * Everyone who should hear a review outcome on a shared proposal: the creator plus
+ * every contributor, deduped. Derived from the canonical proposal this request
+ * already loaded — never a client list, and never a second uncontrolled read.
+ */
+function reviewRecipients(doc: Record<string, unknown>): string[] {
+  const lead = typeof doc.lead === "string" ? doc.lead : null;
+  const contributors = Array.isArray(doc.contributors) ? doc.contributors : [];
+  const people = contributors.map((row) => {
+    if (!row || typeof row !== "object") return null;
+    const person = (row as { person?: unknown }).person;
+    if (typeof person === "string") return person;
+    return (person as { _ref?: string } | null)?._ref ?? null;
+  });
+  return [...new Set([lead, ...people].filter((id): id is string => !!id))];
 }
 
-// Everyone who should hear a review outcome on a shared proposal: the creator
-// plus every contributor, deduped. (GROQ `in` already dedupes on send, but we
-// dedupe here too so the set is clean.)
-async function reviewRecipients(id: string): Promise<string[]> {
-  const doc = await serverClient.fetch<{ lead?: string | null; contributors?: (string | null)[] }>(
-    `*[_id == $id][0]{ "lead": lead._ref, "contributors": contributors[].person._ref }`,
-    { id }
-  );
-  return [...new Set([doc?.lead, ...(doc?.contributors ?? [])].filter(Boolean))] as string[];
+async function notifyReview(doc: Record<string, unknown>, title: string, body: string) {
+  try {
+    const recipients = reviewRecipients(doc);
+    if (recipients.length) {
+      void sendPush(recipients, "proposals", { title, body, path: "/me" });
+    }
+  } catch (err) {
+    console.error("[push] notify failed:", err);
+  }
 }
 
-// PATCH /api/admin/proposals/[id]
-// Body: { action: "approve" | "request_changes", adminNotes?: string }
+const REVIEW_PUSH: Record<string, { title: string; body: string }> = {
+  approve: { title: "Propuesta aprobada", body: "La propuesta de setlist fue aprobada." },
+  request_changes: { title: "Cambios solicitados", body: "Revisaron la propuesta y pidieron cambios." },
+  reopen: { title: "Propuesta reabierta", body: "Un admin reabrió el setlist para ajustes." },
+};
+
+const STALE_MESSAGE =
+  "La propuesta cambió mientras la revisabas. Recárgala y vuelve a revisar.";
+
+/**
+ * Guarded proposal transitions (A2 §6): `approve`, `request_changes`, `reopen`
+ * and `reconcile_target`.
+ *
+ * Body: `{ action, rev, adminNotes? }` where `rev` is the proposal revision the
+ * admin ACTUALLY reviewed — a freshly fetched server revision is never a
+ * substitute, because it would re-authorize a decision made against content the
+ * reviewer never saw.
+ *
+ * Every action resolves the proposal through the canonical contract (exactly one
+ * document, no raw draft, a resolvable canonical role), validates the source
+ * state and the transition/approval fingerprint, and commits ONE transaction that
+ * asserts the proposal revision plus the weekend lock or the special role. A
+ * matching already-committed transition (or approval receipt) is an explicit
+ * no-write retry; every mismatch is a `409` that preserves the reviewed card and
+ * requires a reload.
+ */
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -41,186 +105,406 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const body = await req.json() as {
-    action: "approve" | "request_changes" | "reopen";
-    adminNotes?: string;
+  let raw: unknown;
+  try {
+    raw = await req.json();
+  } catch {
+    return reject(serviceError("invalid_request", { details: { issues: ["json"] } }));
+  }
+  const parsed = parseProposalTransitionRequest(raw);
+  if (!parsed.ok) {
+    return reject(serviceError("invalid_request", { details: { issues: parsed.issues } }));
+  }
+  const request = parsed.value;
+
+  // Only the guarded retarget may load a proposal whose stored target drifted
+  // from its role — repairing exactly that drift is what it is for.
+  const reconciling = request.action === "reconcile_target";
+  const loaded = await loadCanonicalProposal(
+    id,
+    reconciling ? ["date_mismatch", "role_type_mismatch"] : [],
+  );
+  if (!loaded.ok) {
+    return reject(serviceError(loaded.failure.code, { details: loaded.failure.details }));
+  }
+  const { doc, validation, role } = loaded.proposal;
+  const target = targetFromCanonicalRole(role);
+  if (!target) {
+    return reject(
+      serviceError("integrity_conflict", { details: { id, roleId: role._id, detail: "role_target" } }),
+    );
+  }
+  // The proposal's own stored target must agree with the authorized canonical
+  // role; a disagreement is reconciled explicitly, never silently published.
+  if (!reconciling && validation.targetKey !== target.targetKey) {
+    return reject(
+      serviceError("integrity_conflict", {
+        details: {
+          id,
+          storedTargetKey: validation.targetKey,
+          canonicalTargetKey: target.targetKey,
+          detail: "target_drift",
+        },
+      }),
+    );
+  }
+
+  const now = nowIso();
+  const reviewerId = typeof session.user.sanityId === "string" ? session.user.sanityId : null;
+
+  if (request.action === "approve") {
+    return approve({ id, doc, validation, role, target, request, now, reviewerId });
+  }
+  return transition({ id, doc, target, request, now, reviewerId });
+}
+
+// ── Approval ────────────────────────────────────────────────────────────────
+
+type ApproveArgs = {
+  id: string;
+  doc: Record<string, unknown>;
+  validation: { contentState: string };
+  role: { _id: string; _rev: string; _type: string; date?: string };
+  target: ReturnType<typeof targetFromCanonicalRole> & object;
+  request: { action: ProposalAction; rev: string; adminNotes: string };
+  now: string;
+  reviewerId: string | null;
+};
+
+async function approve(args: ApproveArgs) {
+  const { id, doc, target, request, now, reviewerId } = args;
+
+  const songRows = storedProposalSongRows(doc.songs);
+  if (!songRows) {
+    return reject(
+      serviceError("integrity_conflict", { details: { id, detail: "proposal_songs_malformed" } }),
+    );
+  }
+  const teamNotes = typeof doc.team_notes === "string" ? doc.team_notes : "";
+  const approval: ApprovalInput = {
+    serviceType: target.serviceType,
+    serviceDate: target.serviceDate,
+    serviceRef: target.serviceRef,
+    setlistTargetKey: target.setlistTargetKey,
+    songs: songRows,
+    teamNotes,
+  };
+  const fingerprint = approvalInputFingerprint(approval);
+
+  // ── Already approved: receipt decides (retry vs legacy vs drift) ──────────
+  if (doc.status === "approved") {
+    const decision = decideApprovalReceipt({
+      receipt: doc.approval_receipt,
+      fingerprint,
+      serviceRef: target.serviceRef,
+      setlistTargetKey: target.setlistTargetKey,
+    });
+    if (decision === "verified") {
+      // Lost-response replay: no write, no notification, no revalidation.
+      return NextResponse.json({ ok: true, status: "approved", idempotent: true });
+    }
+    if (decision === "unverified") {
+      return reject(
+        serviceError("legacy_approval_unverified", { details: { id, detail: "no_valid_receipt" } }),
+      );
+    }
+    return reject(
+      serviceError("integrity_conflict", {
+        details: { id, detail: "approval_fingerprint_mismatch" },
+      }),
+    );
+  }
+
+  if (!isAllowedSourceStatus("approve", doc.status)) {
+    return reject(
+      serviceError("stale_revision", {
+        message: STALE_MESSAGE,
+        details: { id, detail: "source_status", status: doc.status },
+      }),
+    );
+  }
+  if (doc._rev !== request.rev) {
+    return reject(
+      serviceError("stale_revision", {
+        message: STALE_MESSAGE,
+        details: { id, storedRev: doc._rev, observedRev: request.rev },
+      }),
+    );
+  }
+  if (args.validation.contentState !== "ready") {
+    return reject(
+      serviceError("integrity_conflict", {
+        message: "La propuesta no está lista para publicarse.",
+        details: { id, contentState: args.validation.contentState },
+      }),
+    );
+  }
+
+  // No duplicate/ambiguous group: this proposal must be THE shared proposal for
+  // its service on BOTH of A1's indexes before its content becomes the setlist.
+  const group = await loadProposalGroup({
+    roleId: target.serviceRef,
+    serviceDate: target.serviceDate,
+    targetKey: target.targetKey,
+  });
+  if (!group.ok) {
+    return reject(serviceError(group.failure.code, { details: group.failure.details }));
+  }
+  if (group.group.existing?._id !== id) {
+    return reject(
+      serviceError("ambiguous_target", {
+        details: { id, sharedProposalId: group.group.existing?._id ?? null, detail: "not_shared_proposal" },
+      }),
+    );
+  }
+
+  // ── Resolve the live setlist target and the coordination token ────────────
+  const songs = buildSetlistSongDocs(songRows, nextKey);
+  const special = target.serviceType === "special";
+  let lock: StoredLock | null = null;
+  let bootstrapped = false;
+  let setlistId: string;
+  /** The op that writes the live setlist, applied inside the ONE transaction. */
+  let writeSetlist: (tx: ReturnType<typeof writeClient.transaction>) => ReturnType<typeof writeClient.transaction>;
+
+  if (special) {
+    const targetLoad = await loadSpecialSetlistTarget(target.serviceRef, target.serviceDate);
+    if (!targetLoad.ok) {
+      return reject(serviceError(targetLoad.failure.code, { details: targetLoad.failure.details }));
+    }
+    const specialRole = targetLoad.target.role;
+    setlistId = specialRole._id;
+    const roleRev = specialRole._rev;
+    // The special role IS the live setlist target: its revision assertion both
+    // publishes the songs and serializes the service.
+    writeSetlist = (tx) =>
+      tx.patch(specialRole._id, (p) =>
+        p.ifRevisionId(roleRev).set({ songs, team_notes: teamNotes }),
+      );
+  } else {
+    const setlistType: WeekendSetlistType =
+      target.serviceType === "sunday" ? "featuredSongs" : "saturdarSongs";
+    const targetLoad = await loadWeekendSetlistTarget(setlistType, target.serviceDate);
+    if (!targetLoad.ok) {
+      return reject(serviceError(targetLoad.failure.code, { details: targetLoad.failure.details }));
+    }
+    const observed = targetLoad.target.server;
+    const coordination = await loadWeekendCoordination({
+      roleType: target.serviceType === "sunday" ? "sunday_role" : "saturday_role",
+      week: target.serviceDate,
+    });
+    if (!coordination.ok) {
+      return reject(
+        serviceError(coordination.failure.code, { details: coordination.failure.details }),
+      );
+    }
+    if (coordination.coordination.role?._id !== target.serviceRef) {
+      return reject(
+        serviceError("integrity_conflict", {
+          details: { id, detail: "target_owner_mismatch" },
+        }),
+      );
+    }
+    lock = coordination.coordination.lock;
+    bootstrapped = coordination.coordination.bootstrapped;
+
+    if (observed.state === "single") {
+      setlistId = observed.id;
+      const rev = observed.rev;
+      writeSetlist = (tx) =>
+        tx.patch(observed.id, (p) => p.ifRevisionId(rev).set({ songs, team_notes: teamNotes }));
+    } else {
+      const doc = buildWeekendSetlistDocument({
+        setlistType,
+        week: target.serviceDate,
+        songs,
+        teamNotes,
+      });
+      if (!doc) {
+        return reject(serviceError("integrity_conflict", { details: { id, detail: "setlist_id" } }));
+      }
+      setlistId = doc._id;
+      writeSetlist = (tx) => tx.create(doc);
+    }
+  }
+
+  const receipt = buildApprovalReceipt({ approval, setlistId, now, approvedBy: reviewerId });
+  if (!receipt) {
+    return reject(serviceError("integrity_conflict", { details: { id, detail: "receipt_build" } }));
+  }
+
+  // ── ONE transaction: proposal + coordination + live setlist + receipt ─────
+  const proposalRev = request.rev;
+  let tx = writeClient.transaction();
+  tx = tx.patch(id, (p) =>
+    p.ifRevisionId(proposalRev).set({
+      status: "approved",
+      reviewed_at: now,
+      approval_receipt: receipt,
+    }),
+  );
+  tx = writeSetlist(tx);
+  if (lock) {
+    const lockRev = lock._rev;
+    tx = tx.patch(lock._id, (p) => p.ifRevisionId(lockRev).set({ updatedAt: now }));
+  }
+
+  try {
+    await tx.commit();
+  } catch (err) {
+    const kind = sanityConflictKind(err);
+    if (!kind) throw err;
+    return reject(
+      serviceError(bootstrapped ? "bootstrap_completed_reload" : "stale_revision", {
+        message: STALE_MESSAGE,
+        details: {
+          id,
+          detail: kind === "already_exists" ? "concurrent_creation" : "revision_moved",
+        },
+      }),
+    );
+  }
+
+  await notifyReview(doc, REVIEW_PUSH.approve.title, REVIEW_PUSH.approve.body);
+  // The approved proposal just wrote the real setlist — refresh the cached
+  // home/schedule/song pages so it shows without waiting for ISR expiry.
+  revalidateServiceViews();
+  return NextResponse.json({ ok: true, status: "approved", setlistId });
+}
+
+// ── request_changes / reopen / reconcile_target ─────────────────────────────
+
+type TransitionArgs = {
+  id: string;
+  doc: Record<string, unknown>;
+  target: ReturnType<typeof targetFromCanonicalRole> & object;
+  request: { action: ProposalAction; rev: string; adminNotes: string };
+  now: string;
+  reviewerId: string | null;
+};
+
+async function transition(args: TransitionArgs) {
+  const { id, doc, target, request, now, reviewerId } = args;
+  const action = request.action;
+  const reconcile = action === "reconcile_target";
+  // A retarget changes metadata, not status, so its intent records the unchanged
+  // status; the other two transitions commit `changes_requested`.
+  const toStatus = reconcile ? String(doc.status ?? "") : "changes_requested";
+  const intent: TransitionIntent = {
+    action,
+    proposalId: id,
+    toStatus,
+    adminNotes: request.adminNotes,
+    targetIdentity: reconcile ? target.targetKey : null,
   };
 
-  const proposal = await serverClient.fetch(
-    `*[_type == "setlistProposal" && _id == $id][0] {
-      _id, _rev, service_type, service_date, status, team_notes,
-      "service_ref_id": service_ref._ref,
-      songs[] {
-        _key, play_key, medley_tag, "song_id": song._ref
-      }
-    }`,
-    { id }
-  );
-
-  if (!proposal) {
-    return NextResponse.json({ error: "Proposal not found" }, { status: 404 });
+  // An already-committed identical transition is an explicit no-write retry: the
+  // reviewed revision has necessarily moved, so the recorded intent is the proof.
+  if (
+    decideTransitionRetry({
+      storedStatus: doc.status,
+      storedTransition: doc.last_transition,
+      intent,
+    }) === "no_write_retry"
+  ) {
+    return NextResponse.json({ ok: true, status: doc.status, idempotent: true });
   }
 
-  const now = new Date().toISOString();
-
-  if (body.action === "request_changes") {
-    await writeClient.patch(id).set({
-      status: "changes_requested",
-      admin_notes: body.adminNotes ?? "",
-      reviewed_at: now,
-    }).commit();
-    try {
-      const recipients = await reviewRecipients(id);
-      if (recipients.length) {
-        void sendPush(recipients, "proposals", {
-          title: "Cambios solicitados",
-          body: "Revisaron la propuesta y pidieron cambios.",
-          path: "/me",
-        });
-      }
-    } catch (err) {
-      console.error("[push] notify failed:", err);
-    }
-    return NextResponse.json({ ok: true, status: "changes_requested" });
+  if (!isAllowedSourceStatus(action, doc.status)) {
+    return reject(
+      serviceError("stale_revision", {
+        message: STALE_MESSAGE,
+        details: { id, detail: "source_status", status: doc.status },
+      }),
+    );
+  }
+  if (doc._rev !== request.rev) {
+    return reject(
+      serviceError("stale_revision", {
+        message: STALE_MESSAGE,
+        details: { id, storedRev: doc._rev, observedRev: request.rev },
+      }),
+    );
   }
 
-  // Re-open an approved setlist for revision (admin-only). Sets the shared doc
-  // back to changes_requested; the live setlist doc is left intact until the
-  // revised proposal is re-approved. This is the ONLY way an approved proposal
-  // becomes editable again (leads cannot self-serve un-approve).
-  if (body.action === "reopen") {
-    if (proposal.status !== "approved") {
-      return NextResponse.json({ error: "Only an approved proposal can be re-opened" }, { status: 409 });
+  // Coordination: the weekend lock, or the special role's own revision.
+  let lock: StoredLock | null = null;
+  let bootstrapped = false;
+  let specialRole: { _id: string; _rev: string; date: string } | null = null;
+  if (target.serviceType === "special") {
+    const targetLoad = await loadSpecialSetlistTarget(target.serviceRef, target.serviceDate);
+    if (!targetLoad.ok) {
+      return reject(serviceError(targetLoad.failure.code, { details: targetLoad.failure.details }));
     }
-    await writeClient.patch(id).set({
-      status: "changes_requested",
-      admin_notes: body.adminNotes ?? "",
-      reviewed_at: now,
-    }).commit();
-    try {
-      const recipients = await reviewRecipients(id);
-      if (recipients.length) {
-        void sendPush(recipients, "proposals", {
-          title: "Propuesta reabierta",
-          body: "Un admin reabrió el setlist para ajustes.",
-          path: "/me",
-        });
-      }
-    } catch (err) {
-      console.error("[push] notify failed:", err);
+    specialRole = {
+      _id: targetLoad.target.role._id,
+      _rev: targetLoad.target.role._rev,
+      date: target.serviceDate,
+    };
+  } else {
+    const coordination = await loadWeekendCoordination({
+      roleType: target.serviceType === "sunday" ? "sunday_role" : "saturday_role",
+      week: target.serviceDate,
+    });
+    if (!coordination.ok) {
+      return reject(
+        serviceError(coordination.failure.code, { details: coordination.failure.details }),
+      );
     }
-    return NextResponse.json({ ok: true, status: "changes_requested" });
+    if (coordination.coordination.role?._id !== target.serviceRef) {
+      return reject(
+        serviceError("integrity_conflict", { details: { id, detail: "target_owner_mismatch" } }),
+      );
+    }
+    lock = coordination.coordination.lock;
+    bootstrapped = coordination.coordination.bootstrapped;
   }
 
-  if (body.action === "approve") {
-    const type: string = proposal.service_type;
-    const date: string = proposal.service_date;
-    const refId: string = proposal.service_ref_id;
-
-    // Validate the target BEFORE claiming, so we never mark a proposal approved
-    // that we then can't publish.
-    const targetOk =
-      (type === "sunday" && date) || (type === "saturday" && date) || (type === "special" && refId);
-    if (!targetOk) {
-      return NextResponse.json({ error: "Cannot determine service target" }, { status: 400 });
-    }
-
-    // Claim the proposal FIRST, guarded by the revision we read. If a concurrent
-    // lead edit landed since our read, the revision won't match → 409, and we
-    // abort BEFORE writing the setlist from a now-stale songs snapshot (the lead
-    // edit path allows edits until status === "approved"). This closes the
-    // read-then-write lost-update window between the fetch above and this write.
-    try {
-      await writeClient.patch(id).ifRevisionId(proposal._rev).set({
-        status: "approved",
+  const record = buildTransitionRecord({ intent, now, by: reviewerId });
+  const set: Record<string, unknown> = reconcile
+    ? {
+        // Target metadata refreshed from the authorized canonical role.
+        service_type: target.serviceType,
+        service_date: target.serviceDate,
+        last_transition: record,
+      }
+    : {
+        status: "changes_requested",
+        admin_notes: request.adminNotes,
         reviewed_at: now,
-      }).commit();
-    } catch (err) {
-      if (isConflict(err)) {
-        return NextResponse.json(
-          { error: "La propuesta cambió mientras la revisabas. Recárgala y vuelve a revisar." },
-          { status: 409 },
-        );
-      }
-      throw err;
-    }
+        last_transition: record,
+      };
 
-    // proposal.songs is now guaranteed current: no edit landed between the fetch
-    // and the revision-guarded claim above.
-    const songDocs = (proposal.songs ?? []).map((s: { _key: string; play_key: string; medley_tag?: string; song_id: string }) => ({
-      _type: "setlist_song" as const,
-      _key: rkey(),
-      play_key: s.play_key,
-      ...(s.medley_tag ? { medley_tag: s.medley_tag } : {}),
-      song: { _type: "reference" as const, _ref: s.song_id },
-    }));
-
-    if (type === "sunday" && date) {
-      const existing = await serverClient.fetch(
-        `*[_type == "featuredSongs" && week == $week][0]._id`,
-        { week: date }
-      );
-      if (existing) {
-        await writeClient.patch(existing).set({ songs: songDocs, team_notes: proposal.team_notes ?? "" }).commit();
-      } else {
-        await writeClient.create({ _type: "featuredSongs", week: date, songs: songDocs, team_notes: proposal.team_notes ?? "" });
-      }
-    } else if (type === "saturday" && date) {
-      const existing = await serverClient.fetch(
-        `*[_type == "saturdarSongs" && week == $week][0]._id`,
-        { week: date }
-      );
-      if (existing) {
-        await writeClient.patch(existing).set({ songs: songDocs, team_notes: proposal.team_notes ?? "" }).commit();
-      } else {
-        await writeClient.create({ _type: "saturdarSongs", week: date, songs: songDocs, team_notes: proposal.team_notes ?? "" });
-      }
-    } else if (type === "special" && refId) {
-      await writeClient.patch(refId).set({ songs: songDocs, team_notes: proposal.team_notes ?? "" }).commit();
-    }
-
-    // Supersede other outstanding proposals for the SAME service: the setlist is
-    // now decided, so any competing draft/pending/changes_requested proposals for
-    // this date+type (or special ref) would linger as stale duplicates.
-    try {
-      let staleIds: string[] = [];
-      if (type === "special" && refId) {
-        staleIds = await serverClient.fetch<string[]>(
-          `*[_type == "setlistProposal" && _id != $id && status != "approved" && service_ref._ref == $refId]._id`,
-          { id, refId }
-        );
-      } else if ((type === "sunday" || type === "saturday") && date) {
-        staleIds = await serverClient.fetch<string[]>(
-          `*[_type == "setlistProposal" && _id != $id && status != "approved" && service_type == $type && service_date == $date]._id`,
-          { id, type, date }
-        );
-      }
-      for (const staleId of staleIds) {
-        await writeClient.delete(staleId);
-      }
-    } catch (err) {
-      console.error("[proposals] superseded-proposal cleanup failed:", err);
-    }
-
-    try {
-      const recipients = await reviewRecipients(id);
-      if (recipients.length) {
-        void sendPush(recipients, "proposals", {
-          title: "Propuesta aprobada",
-          body: "La propuesta de setlist fue aprobada.",
-          path: "/me",
-        });
-      }
-    } catch (err) {
-      console.error("[push] notify failed:", err);
-    }
-
-    // The approved proposal just wrote the real setlist — refresh the cached
-    // home/schedule/song pages so it shows without waiting for ISR expiry.
-    revalidateServiceViews();
-
-    return NextResponse.json({ ok: true, status: "approved" });
+  const proposalRev = request.rev;
+  let tx = writeClient.transaction().patch(id, (p) => p.ifRevisionId(proposalRev).set(set));
+  if (lock) {
+    const lockRev = lock._rev;
+    tx = tx.patch(lock._id, (p) => p.ifRevisionId(lockRev).set({ updatedAt: now }));
+  } else if (specialRole) {
+    const roleRev = specialRole._rev;
+    const roleDate = specialRole.date;
+    tx = tx.patch(specialRole._id, (p) => p.ifRevisionId(roleRev).set({ date: roleDate }));
   }
 
-  return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+  try {
+    await tx.commit();
+  } catch (err) {
+    const kind = sanityConflictKind(err);
+    if (!kind) throw err;
+    return reject(
+      serviceError(bootstrapped ? "bootstrap_completed_reload" : "stale_revision", {
+        message: STALE_MESSAGE,
+        details: { id, detail: kind === "already_exists" ? "concurrent_creation" : "revision_moved" },
+      }),
+    );
+  }
+
+  const push = REVIEW_PUSH[action];
+  if (push) await notifyReview(doc, push.title, push.body);
+
+  return NextResponse.json({
+    ok: true,
+    status: reconcile ? doc.status : "changes_requested",
+    ...(reconcile ? { targetKey: target.targetKey } : {}),
+  });
 }
