@@ -1,15 +1,16 @@
 # API Reference — `app/api/`
 
-34 route handlers (`route.ts` files). Most talk to Sanity through `serverClient` (read) /
+36 route handlers (`route.ts` files). Most talk to Sanity through `serverClient` (read) /
 `writeClient` (write). Exceptions: `/api/practice-playlist` uses the CDN `client`, and
 `/api/admin/solve` touches no Sanity at all (it calls the external solver / spawns a subprocess).
 
 **Reads of the six protected service types** (`sunday_role`, `saturday_role`, `special_role`,
 `featuredSongs`, `saturdarSongs`, `setlistProposal`) go through **`operationalClient`**
 (published perspective) — `rawIntegrityClient` (raw) only inventories `drafts.*` as evidence.
-A static audit fails any route that bypasses this without an exact `file + operation` exemption;
-the remaining exemptions are the mutation-local writer reads listed in
-[ARCHITECTURE §8](ARCHITECTURE.md#8-canonical-operational-reads).
+A static audit fails any route that bypasses this without an exact `file + operation` exemption.
+**No route is exempt from the read rule any more:** the temporary A1 handoff allowlist is empty,
+and the guarded mutation routes are licensed to *write* only — a non-canonical read in one of them
+still fails the audit. → [ARCHITECTURE §8](ARCHITECTURE.md#8-canonical-operational-reads).
 
 ## Authorization primitives
 
@@ -38,6 +39,149 @@ is blocked). Roles: `super-admin` > `admin` > `content-editor` > `member`. Many 
 > affected ISR pages** → fire best-effort notifications (never let a notify failure fail the
 > write) → return `res.ok`-friendly JSON.
 
+Every side effect for the protected service mutations is centralized in
+[`app/utils/serviceMutationSideEffects.ts`](../app/utils/serviceMutationSideEffects.ts) — routes
+build a *notice* and hand it over; they never assemble a recipient list themselves. Recipients are
+derived from **committed server state across all five seat paths** through `operationalClient`, so a
+`drafts.*` overlay can never widen an audience, and a client-supplied list is never trusted.
+Delivery is **best-effort at-most-once**: one deferred attempt (`after()`) per committed request,
+every failure logged and swallowed (`[sideEffects] <label> failed:`), never rolled back. Nothing
+fires unless a business commit succeeded — prevalidation rejections, transaction conflicts, no-op
+idempotent retries, unpublishes, removals, and draft edits are silent by construction. **No
+exactly-once claim is made; that would need an outbox.**
+
+---
+
+## The protected mutation contract
+
+Every writer of a protected service type (`sunday_role`, `saturday_role`, `special_role`,
+`featuredSongs`, `saturdarSongs`, `setlistProposal`) obeys one contract: reject stale or ambiguous
+state, serialize against every competing writer, and commit all business changes or none. Shared
+helpers: [`serviceMutation.ts`](../app/utils/serviceMutation.ts) (error model),
+[`roleWriteRequest.ts`](../app/utils/roleWriteRequest.ts),
+[`setlistWriteRequest.ts`](../app/utils/setlistWriteRequest.ts),
+[`proposalWriteRequest.ts`](../app/utils/proposalWriteRequest.ts),
+[`roleTargetLock.ts`](../app/utils/roleTargetLock.ts),
+[`roleCreationReceipt.ts`](../app/utils/roleCreationReceipt.ts),
+[`roleDependencies.ts`](../app/utils/roleDependencies.ts).
+
+### Error envelope
+
+Every rejection (other than the auth denials, which stay `{error:"Forbidden"}` / `{error:"Unauthorized"}`):
+
+```ts
+{ error: ServiceErrorCode, message: string, conflict: boolean, details?: Record<string, unknown> }
+```
+
+`conflict: true` ⇔ the code is a conflict code ⇔ **409**. `serviceErrorStatus` **fails closed to
+409** for an unregistered code. `details.issues[]` carries parse-issue tags on `invalid_request`;
+`details.detail` carries a discriminator string on conflicts.
+
+| Code | Status | Meaning |
+|------|--------|---------|
+| `invalid_request` | 400 | Rejected before any write (bad JSON, parse issue, non-canonical id, wrong stored `_type`). |
+| `forbidden` | 403 | Registered but unused — routes emit the raw `{error:"Forbidden"}` body. |
+| `not_found` | 404 | The id resolves to **zero** canonical documents. |
+| `stale_revision` | 409 | A client-observed document/lock revision no longer matches stored state (or the commit lost the race). |
+| `ambiguous_target` | 409 | The target resolves to zero-or-many canonical documents, or a duplicate group / index disagreement. |
+| `integrity_conflict` | 409 | Malformed, dangling, wrong-owner, or draft-conflicted stored state that must **never** be repaired implicitly. |
+| `idempotency_mismatch` | 409 | Same `creationRequestId`, **different** canonical payload fingerprint. |
+| `idempotency_key_retired` | 409 | The `creationRequestId` belongs to a receipt whose role was deleted. |
+| `bootstrap_completed_reload` | 409 | Legacy lock maintenance **committed**, then the business step conflicted. Reload and retry. |
+| `target_has_orphaned_dependencies` | 409 | Create target already carries orphaned setlist/proposal history. |
+| `role_date_has_dependencies` | 409 | The old or destination date of a move carries dependent history. |
+| `role_has_dependencies` | 409 | The deletion target carries dependent history. |
+| `legacy_approval_unverified` | 409 | An `approved` proposal with no verifiable approval receipt. |
+
+A **non-conflict** Sanity error is rethrown (→ 500), never converted into a business code.
+
+### Client-observed revisions
+
+A mutation never trusts a freshly fetched server revision — the client submits the revision **it
+actually loaded/reviewed**, and a mismatch is `409 stale_revision` with the modal/card left open.
+
+| Operation | Required revision fields |
+|-----------|--------------------------|
+| `PATCH`/`DELETE /api/admin/roles/[id]` | `rev` (role `_rev`), optional `lockRev` (the owned `roleTargetLock._rev`) |
+| `POST /api/admin/roles/publish` | `roles[].rev` per `roles[].id` |
+| `POST /api/admin/roles/swap` | `source.rev` + `target.rev` (seat), or `roles[0..1].rev` (team) |
+| `POST /api/admin/roles/copy-instruments` | `source.rev` + `target.rev` |
+| `PUT /api/admin/setlists` | `observed: {state:"single", id, rev}` or `observed: {state:"none"}` |
+| `POST /api/me/proposals` | `observed` (same shape, the proposal's id/rev) |
+| `PATCH /api/admin/proposals/[id]` | `rev` — the proposal revision the admin reviewed |
+| `POST /api/admin/roles` (create) | none — idempotency is the `creationRequestId` receipt |
+
+Revision strings: non-empty, ≤200 chars, no whitespace. Ids: non-empty, ≤200 chars, no whitespace,
+**never** prefixed `drafts.`.
+
+### `creationRequestId` + deterministic creation receipts
+
+`POST /api/admin/roles` requires one bounded opaque **`creationRequestId`** per logical create
+(8–128 chars, `/^[A-Za-z0-9._:-]+$/`). The server canonicalizes the *complete* create payload and
+hashes it:
+
+- **included** in the fingerprint — `roleType`, normalized `date` day key, `targetIdentity`,
+  normalized `serviceName` (special only), effective `published`, and the ordered/normalized
+  `leads`/`bgvs`/`chorus`/`instruments`/`foh` inputs, plus a version marker;
+- **excluded** — the request id itself, the role `_id`, generated `_key`s, and all timestamps.
+  Ordering is codepoint, never `localeCompare`.
+
+The **`roleCreationReceipt`** is the global create-request mutex across *every* role type and
+target. Its `_id` is `roleCreate.<sha256(requestId)>`; it stores the exact `requestId` (equality is
+checked against the stored value, never the digest), the `fingerprint`, the pre-generated `roleId`,
+`roleType`, `targetIdentity`, and `state: committed | role_deleted`. One transaction `create`s
+(never `createIfNotExists`) the receipt, creates the role, and claims/reclaims the weekend lock.
+
+| Replay outcome | Result |
+|----------------|--------|
+| Same id, same fingerprint, live role carries the receipt | **200** with the committed role + `replay: true` — **no writes, no notifications, no revalidation** |
+| Same id, different fingerprint (incl. a different date, role type, or special name) | **409 `idempotency_mismatch`** |
+| Receipt `state: role_deleted` | **409 `idempotency_key_retired`** — the role is never recreated |
+| Receipt present, result role missing/wrong type | **409 `integrity_conflict`** — never recreated implicitly |
+
+Deleting a receipt-backed role flips its receipt to `role_deleted` **in the same transaction** that
+deletes the role and vacates the lock: a durable idempotency tombstone. A later recreation is a new
+logical create and needs a new request id. `MonthGenerator` mints one id per preview `DraftCard`
+(distinct from the UI `localId`) and reuses it byte-for-byte across edits, partial-batch retries,
+and lost responses; `ServicesPanel` mints one per add-modal logical submission.
+
+### Weekend `roleTargetLock`
+
+A hidden `roleTargetLock` serializes **one weekend target** (never the create-request mutex — that
+is the receipt). Deterministic `_id` `roleTarget.<roleType>.<date>` from the target key
+`<roleType>:<date>`; fields `targetKey`, `state: claimed | vacant`, `roleId` (a **plain string**),
+`roleType`, `date`, `claimNonce`, `generation`, `createdAt`, `updatedAt`.
+
+- `claimed` has exactly one non-empty `roleId` owning the same target; `vacate` clears `roleId` /
+  `claimNonce` and **advances `generation`**. Deletion **vacates**, never deletes the lock.
+- **`special_role` takes no lock** — its target key is its own `_id`, so weekend lock derivation
+  returns `null` and a special service is serialized by its own document revision.
+- Every Sunday/Saturday writer asserts or heartbeats (`set updatedAt` under `ifRevisionId`) the
+  owned lock **in the same business transaction**. Wrong-owner and orphan locks are integrity
+  issues, never reclaimed implicitly.
+
+**Legacy bootstrap:** when exactly one canonical legacy weekend role has no lock, a *separate*
+maintenance transaction revision-guards a no-op write of that role's own unchanged date field and
+creates the claimed lock; the writer then continues only from the produced revisions. If the
+business step then conflicts, the response is **`409 bootstrap_completed_reload`** — business
+fields are unchanged and no notification/revalidation ran, but the lock and the advanced role
+revision intentionally persist. All body/id/type/cardinality, revision, raw-draft, ambiguity, and
+dependency validation runs **before** bootstrap, so an invalid request writes nothing at all.
+
+### Dependency refusal policy
+
+Normal create / date-move / delete **never** cascades, adopts, migrates, archives, or deletes
+service history. Before any coordination maintenance, the writer inventories date-keyed canonical
+**and** raw-draft setlists (`references(roleId)` cannot find them — they are paired by `week`),
+proposals through **both** indexes (`service_ref` and target key, every status, malformed/dangling
+records, raw drafts), unknown strong references, and a special service's embedded `songs`. A
+destination proposal blocks even when it references another or a missing role; approved proposal
+history makes ordinary date/history mutation immutable. Refusal returns the exact ids/types in
+`details.dependencies[] = {id, type, kind, scope}` (`kind` ∈ `canonical_setlist`,
+`raw_setlist_draft`, `proposal`, `raw_proposal_draft`, `malformed_proposal`, `special_songs`,
+`unknown_reference`) under one of the three dependency codes above, and leaves every business
+document byte-for-byte unchanged.
+
 ---
 
 ## Auth
@@ -62,7 +206,7 @@ super-admin-only impersonation and live role/revocation refresh. Full detail in
 | `/api/me/notif-prefs` | PATCH | `{email?, assignments?, proposals?, reminders?, setlist?}` (booleans; `setlist` bool → `"all"`/`"off"`). Writes `notifPrefs.*`. |
 | `/api/me/password` | POST | `{currentPassword?, newPassword}` (≥8 chars). Verifies current via bcrypt if a hash exists; sets `passwordHash` (cost 12). |
 | `/api/me/photo` | POST | multipart `photo`. 5 MB max, MIME whitelist + **magic-byte** check (413/415). Uploads Sanity asset, sets own `profilePhoto` → `revalidateServiceViews()` + `revalidatePath("/me")`. |
-| `/api/me/proposals` | GET, POST | GET proposals for every service the user Leads. POST creates/updates the **one shared proposal** (Leads only); deterministic `_id` create-mutex → 409 on collision; `ifRevisionId` → 409 on stale/`approved`; fires `notifyProposalSubmitted` when `status="pending"`. |
+| `/api/me/proposals` | GET, POST | GET proposals for every service the user Leads (incl. `_rev`). POST creates/updates the **one shared proposal** (Leads only): `{roleId, observed, songs, leadNotes?, teamNotes?, status: "draft"\|"pending"}`. Resolution uses A1's **two** indexes (`service_ref` + target key), never an arbitrary `[0]`; deterministic `_id` `setlistProposal.<roleId>` is the first-create mutex (`tx.create`, so a co-lead race is a real conflict); `observed` gates every update; the weekend lock or the special-role revision is asserted in the same transaction; `service_type`/`service_date` are **refreshed from the authorized canonical role**, never accepted from the client. Fires `notifyProposalSubmitted` when `status="pending"`. |
 | `/api/me/push-token` | POST, DELETE | Register/remove an FCM `deviceToken` (token validated against `/^[A-Za-z0-9_:.-]{1,4096}$/`, GROQ-injection guard). |
 | `/api/me/songs` | GET | `?q=` search of `post` by title/author (prefix); up to 30/50 results. |
 
@@ -105,16 +249,62 @@ super-admin-only impersonation and live role/revocation refresh. Full detail in
 ### Setlists & services (roles)
 | Route | Methods | Notes |
 |-------|---------|-------|
-| `/api/admin/setlists` | GET, PUT | GET `?week=&type=sunday\|saturday\|special&roleId=` → additive canonical read: always `{setlistId, songs, recentSongs}` (recentSongs = songId→most-recent past use, 8-week window) **plus** `targetState: none\|single\|duplicate\|draft_conflict\|invalid`. `single` adds `contentState` (`empty\|incomplete\|ready\|invalid`) + `observed {state,id,rev}` (special uses the special-role id/rev); conflict branches add `conflictingIds`/`draftIds`/`canonicalIds`/`reason`+`recordIds` and return `setlistId: null`, `songs: []`. Request identity (`type`, valid `YYYY-MM-DD` `week`, special `roleId` resolving to one `special_role` on that date) is validated **before** any target read → 400, never `targetState: "none"`. Read failure → 500, never an empty clean result. PUT upserts `featuredSongs`/`saturdarSongs` or patches `special_role.songs` → `revalidateServiceViews()` + push to setlist subscribers. |
-| `/api/admin/roles` | GET, POST | GET all role docs with resolved seats + joined setlist. POST create a service (whitelists `_type`; defaults `published:false`) → `revalidateServiceViews()` + `revalidatePath("/me")`; if published, `after()` fires push (`assignments`) + assignment emails. `maxDuration=60`. |
-| `/api/admin/roles/[id]` | PATCH, DELETE | PATCH updates date/name/assignments; diffs `addedAssignees`; if `published !== false` (published **or** grandfathered), `after()` notifies newly added (drafts stay silent). DELETE removes. Both revalidate. `maxDuration=60`. |
-| `/api/admin/roles/publish` | POST | `{ids[], published}`. Computes `computePublishTransitions`, batches a Sanity **transaction**; newly-published → `after()` push + **one consolidated batch email per member**. Revalidates `/`, `/schedule`, `/me`. `maxDuration=60`. |
+| `/api/admin/setlists` | GET, PUT | GET `?week=&type=sunday\|saturday\|special&roleId=` → additive canonical read: always `{setlistId, songs, recentSongs}` (recentSongs = songId→most-recent past use, 8-week window) **plus** `targetState: none\|single\|duplicate\|draft_conflict\|invalid`. `single` adds `contentState` (`empty\|incomplete\|ready\|invalid`) + `observed {state,id,rev}` (special uses the special-role id/rev); conflict branches add `conflictingIds`/`draftIds`/`canonicalIds`/`reason`+`recordIds` and return `setlistId: null`, `songs: []`. Request identity (`type`, valid `YYYY-MM-DD` `week`, special `roleId` resolving to one `special_role` on that date) is validated **before** any target read → 400, never `targetState: "none"`. Read failure → 500, never an empty clean result. **PUT** submits the unchanged `observed` state from that GET (see below) → one guarded transaction → `revalidateServiceViews()` + push to setlist subscribers. |
+| `/api/admin/roles` | GET, POST | GET all role docs (incl. `_rev`) with resolved seats + joined setlist. **POST** create a service: requires `creationRequestId`; whitelists `_type`; `published` only on exact `true`; one transaction creates the receipt + role + weekend lock claim. **201** on create, **200 `{…role, replay:true}`** on an exact replay. Then `revalidateServiceViews()` + `revalidatePath("/me")`; if published, `after()` fires push (`assignments`) + assignment emails. `maxDuration=60`. |
+| `/api/admin/roles/[id]` | PATCH, DELETE | Both require the client-observed `rev` (+ optional `lockRev`) in the JSON body — **DELETE has a required body**. PATCH updates date/name/assignments; a permitted date move atomically vacates the old lock and claims the new one; request `_type` is a cross-check and **never converts a document** (the old type/target is derived from storage). Diffs `addedAssignees`; if `published !== false` (published **or** grandfathered), `after()` notifies newly added (drafts stay silent). DELETE applies the dependency policy, vacates the owned lock, retires a receipt-backed key, and deletes the role in one transaction. Both revalidate. `maxDuration=60`. |
+| `/api/admin/roles/publish` | POST | **CHANGED contract: `{ roles: [{id, rev}], published: boolean }`** — the old `{ids[], published}` shape is **no longer accepted** (it fails `invalid_request`, `issues:["roles"]`). Exact boolean required; non-empty batch ≤100; canonical ids, no duplicates, no `drafts.*`. Fetches only `sunday_role\|saturday_role\|special_role` and requires exact one-to-one cardinality/type/revision — a single missing / wrong-type / stale / raw-draft / duplicate-target entry **rejects the whole batch during prevalidation**. Then one transaction patches every publication state and heartbeats every coordination token. `{ok:true, published, unpublished}`. Only genuine `false → true` transitions notify (`computePublishTransitions`); newly-published → `after()` push + **one consolidated batch email per member**. Revalidates `/`, `/schedule`, `/me`. `maxDuration=60`. |
+| `/api/admin/roles/swap` | POST | **New.** Atomic seat/team swap, replacing the old two-PATCH client handler. Discriminated union: `{kind:"seat", source:{roleId,rev,path,itemKey}, target:{…}}` where `path` ∈ `Lead\|BGVs\|Chorus\|instruments\|foh_team`, or `{kind:"team", roles:[{id,rev},{id,rev}]}`. Assignments are derived from the **current stored roles** — a replacement team payload is never accepted. Seat swaps key off the stored `_key` (never a rendered index) and preserve the destination `_key`, instrument label, and FOH label; team swaps exchange exactly the five seats and preserve identity/date/name/publication/songs/team notes. Same-role, weekend↔weekend, weekend↔special and special↔special all assert every involved role + coordination token in **one** transaction. `{ok:true, kind, roleIds[]}`. Notifies newly added assignees **per destination role**. |
+| `/api/admin/roles/copy-instruments` | POST | **New.** `{source:{id,rev}, target:{id,rev}}`. Reads both current singleton roles and **never** accepts a cached client instrument payload; asserts/heartbeats both coordination tokens in one transaction while patching only `target.instruments`. `{ok:true, sourceId, targetId, copied}`. A stale/deleted source, stale target, dangling assignment, invalid target, or conflict leaves target assignments unchanged (`details.side: "source"\|"target"`). |
+
+#### `PUT /api/admin/setlists` — the observed-state contract
+
+The client sends back the **unchanged** `observed` object from the GET it edited. Only two shapes
+are expressible (the `duplicate` / `draft_conflict` / `invalid` GET branches carry no `observed` at
+all, so a non-editable target cannot be saved):
+
+| `observed` | Permits |
+|-----------|---------|
+| `{state:"single", id, rev}` | patching **that** target only — the same id at the same revision |
+| `{state:"none"}` | deterministic **creation** at `featuredSongs.<week>` / `saturdarSongs.<week>` |
+
+Body: `{week, type: "sunday"\|"saturday"\|"special", roleId?, observed, songs[]}` (≤60 songs;
+`roleId` required for `special`). Creation uses `tx.create` (never `createIfNotExists`), so a lost
+race surfaces as a conflict rather than a silent merge. Weekend saves heartbeat the owned lock in
+the same transaction; special saves revision-guard the `special_role` itself (the role *is* the
+setlist target). Mismatch → **409 `stale_revision`** with `details.detail` ∈ `concurrent_creation`,
+`target_vanished`, `identity_mismatch`, `revision_mismatch` (or `revision_moved` from the commit).
+`{ok:true, setlistId, created}`. The editor retains its observed state until success or reload and
+**never closes on failure**.
 
 ### Proposals
 | Route | Methods | Notes |
 |-------|---------|-------|
-| `/api/admin/proposals` | GET | List all `setlistProposal` docs. |
-| `/api/admin/proposals/[id]` | PATCH | `{action: "approve"\|"request_changes"\|"reopen", adminNotes?}`. **approve** claims via `ifRevisionId` (409 on concurrent lead edit), writes the real setlist, **deletes superseded competing proposals**, pushes, `revalidateServiceViews()`. **reopen** only from `approved` (409 else). All push `proposals`. |
+| `/api/admin/proposals` | GET | List all `setlistProposal` docs — now including **`_rev`** and the approval-input fingerprint fields (`approval_receipt`, `last_transition`, `service_type`, `service_date`, `team_notes`, ordered `songs[]{_key, play_key, medley_tag, song_id, …}`), so an admin can submit the revision they actually reviewed. |
+| `/api/admin/proposals/[id]` | PATCH | `{action, rev, adminNotes?}` — **`rev` is required for every action** and must be the revision the admin reviewed; a freshly fetched server revision is not a substitute. Actions: `approve` (from `pending`\|`changes_requested`), `request_changes` (same sources), `reopen` (from `approved` only), `reconcile_target` (from `draft`\|`pending`\|`changes_requested`, refreshes `service_type`/`service_date` without changing status). **Sibling/competing proposals are no longer deleted** — a duplicate group is *refused* (`ambiguous_target`, `detail:"not_shared_proposal"`). 409 preserves the reviewed card/modal and requires a reload. `approve`/`request_changes`/`reopen` push `proposals`; `reconcile_target` is silent. |
+
+#### Atomic approval + approval receipt
+
+`approve` requires proposal `contentState === "ready"`, a canonical role/target, the owned
+coordination token, a safe setlist observation, no raw draft, and no duplicate group. **One**
+transaction then asserts the proposal at the reviewed `rev`, writes the live setlist (patch the
+observed singleton, patch `special_role.songs`, or `create` the deterministic weekend setlist),
+heartbeats the weekend lock, and records `approval_receipt` — then `revalidateServiceViews()`.
+
+The receipt fingerprints the normalized target (`serviceType`, `serviceDate`, `serviceRef`,
+`setlistTargetKey`), the **ordered** song rows (`songId`, `playKey`, `medleyTag`), the team notes,
+and an app/version marker (`owt-kb-v1/a2-approval-1`, v1). The **approval timestamp is deliberately
+excluded** so a recomputation after a lost response matches; order *is* significant.
+
+| Retry against an already-`approved` proposal | Result |
+|---|---|
+| Receipt present, marker/version/target match, fingerprint matches | **200 `{ok:true, status:"approved", idempotent:true}`** — no write, no push, no revalidation |
+| Receipt present but fingerprint differs | **409 `integrity_conflict`**, `detail:"approval_fingerprint_mismatch"` |
+| Missing / malformed / foreign / old-version receipt | **409 `legacy_approval_unverified`**, `detail:"no_valid_receipt"` |
+
+`request_changes`, `reopen`, and `reconcile_target` work the same way through `last_transition`: a
+matching already-committed transition (same action, target status, and transition fingerprint over
+`action`/`proposalId`/`toStatus`/`adminNotes`/`targetIdentity` — source status and timestamps
+excluded) is an explicit **no-write retry** (`200 {…, idempotent:true}`); a mismatch is a 409.
 
 ### Service integrity (read-only)
 
@@ -127,7 +317,7 @@ evidence from `rawIntegrityClient`; assembly is the pure builders in
 
 | Route | Reports |
 |-------|---------|
-| `GET /api/admin/service-integrity/roles` | `targets[]` keyed by canonical target (`<type>:<week>`, or a `special_role` id): `canonicalCount` / `canonicalIds` / `canonicalState`, `publicState` (`draft_conflict` when a `drafts.*` overlay exists), `memberVisibleCount`, `draftIds`, and per-record `{id, rev, type, serviceDate, published, assignedRefs, members, danglingRefs}` — refs collected across **all five seat paths** and resolved against canonical members. `recordIssues[]` carries `invalid_role` (with its validation issue tags) and `draft_only` records. |
+| `GET /api/admin/service-integrity/roles` | `targets[]` keyed by canonical target (`<type>:<week>`, or a `special_role` id): `canonicalCount` / `canonicalIds` / `canonicalState`, `publicState` (`draft_conflict` when a `drafts.*` overlay exists), `memberVisibleCount`, `draftIds`, and per-record `{id, rev, type, serviceDate, published, assignedRefs, members, danglingRefs}` — refs collected across **all five seat paths** and resolved against canonical members. `recordIssues[]` carries `invalid_role` (with its validation issue tags) and `draft_only` records. **Plus weekend lock state:** per target `expectsLock` (weekend only — a `special_role` never expects one), `lock: {id, rev, state, roleId, generation} \| null`, and `lockIssues[]`; plus a flat top-level `lockIssues[]` that also catches locks belonging to no canonical target. Issue kinds: `missing_lock`, `malformed_lock`, `id_mismatch`, `claimed_without_role`, `vacant_with_role`, `wrong_owner`, `orphan_lock`. One malformed lock stays a record-level issue and never fails unrelated targets; when no lock inventory was supplied the array is empty rather than inventing issues. |
 | `GET /api/admin/service-integrity/setlists` | Same target shape for `featuredSongs` / `saturdarSongs` **plus** `special_role` documents that carry `songs`: `contentState` (`empty\|incomplete\|ready\|invalid`; `invalid` for an ambiguous/duplicate target), `songCount`, `songKeys`, `invalidEntries`, `draftIds`, `records[]`, and `recordIssues[]` (`invalid_setlist` / `draft_only`). |
 | `GET /api/admin/service-integrity/proposals` | Per-proposal `records[]` (`status`, `serviceRef`, `targetKey`, `contentState`, `valid`, `issues`, and the resolved `referencedRole`), plus grouping conflicts through **both** indexes — `serviceRefConflicts[]` and `targetKeyConflicts[]` — `recordIssues[]`, and `draftIds[]`. |
 
@@ -177,6 +367,11 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   yields **no** data rather than an arbitrary `[0]` pick — `/api/admin/setlists` GET reports it
   as a non-editable `targetState`, `/api/song/[id]` and `/api/me/songs` drop it from play
   history, and `notifyProposalSubmitted` sends nothing.
+- **Protected mutations have no alternate path:** the API routes above are the only writers. The
+  embedded Studio strips every mutating action from all eight protected types, and the five historical
+  one-shot scripts fail closed before constructing a client — see
+  [DATA_MODEL → Studio](DATA_MODEL.md#studio) and
+  [SOLVER_AND_INFRA §3](SOLVER_AND_INFRA.md#3-scripts--one-off-migrations-imports--ops).
 - **Push categories:** `assignments`, `setlist`, `proposals`, `reminders` — each gated by
   `notifPrefs` inside `sendPush`.
 - **`app/api/__tests__/proposalTeamNotes.test.ts`** is a test, not a route.
