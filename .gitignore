@@ -63,3 +63,9 @@ ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
 __pycache__/
 *.pyc
 *.pyo
+
+# One-off production backfill backups (never committed)
+.backfill-backups/
+
+# Isolated-dataset verification fixture backups (never committed)
+.sr-verification-backups/

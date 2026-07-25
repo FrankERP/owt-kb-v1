@@ -375,7 +375,11 @@ describe("A2 handoff allowlist", () => {
 
   it("keeps guarded operator tooling in its own registry, never owned by A2", () => {
     expect(OPERATOR_TOOLING_ALLOWLIST.map((e) => `${e.file}#${e.operation}`).sort()).toEqual(
-      ["scripts/service-readiness-cleanup.mjs#module", "scripts/service-readiness-feasibility.mjs#module"].sort(),
+      [
+        "scripts/backfill-legacy-seat-arrays.mjs#module",
+        "scripts/service-readiness-cleanup.mjs#module",
+        "scripts/service-readiness-feasibility.mjs#module",
+      ].sort(),
     );
     for (const entry of OPERATOR_TOOLING_ALLOWLIST) {
       // A2 adds these writers; item 12 ("empty the A2 allowlist") never removes them.

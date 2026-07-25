@@ -294,6 +294,13 @@ export const OPERATOR_TOOLING_ALLOWLIST: readonly AuditExemption[] = [
       "A3 isolated-dataset feasibility harness: creates and conflicts protected role/setlist/proposal documents inside the verification dataset only; hard-refuses the production project/dataset",
     removalOwner: "A3 verification tooling (never A2)",
   },
+  {
+    file: "scripts/backfill-legacy-seat-arrays.mjs",
+    operation: "module",
+    reason:
+      "spent one-off: read six hardcoded legacy role ids and added the seat arrays that predated those fields, revision-guarded and idempotent; already applied to production",
+    removalOwner: "one-off migration tooling (never A2 — retire alongside the other one-shot writers)",
+  },
 ];
 
 /**
