@@ -69,3 +69,14 @@ __pycache__/
 
 # Isolated-dataset verification fixture backups (never committed)
 .sr-verification-backups/
+
+# Service Readiness A3 deployed-route Playwright harness output.
+# NEVER committed: traces, videos, HTML reports and the run evidence/state files are
+# per-run artifacts, and a Playwright `storageState` would be a live session
+# credential for the verification administrator.
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+*storageState*.json
+
