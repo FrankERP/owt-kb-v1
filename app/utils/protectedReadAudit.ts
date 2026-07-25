@@ -1,4 +1,4 @@
-// Static audit of protected-type query sites (Service Readiness A1 §1/§3).
+// Static audit of protected-type query sites (Service Readiness A1 §1/§3, A2 §8/item 12).
 //
 // The six protected stored types must be read through the canonical operational
 // clients (`sanity/lib/operationalClient`). This module statically detects every
@@ -109,99 +109,165 @@ export interface AuditExemption {
 }
 
 // ── Registries ──────────────────────────────────────────────────────────────
+//
+// Four disjoint registries, each exact `file + operation`. They are separate on
+// purpose: "a temporary read we have not migrated yet" and "a writer that must
+// write" are different claims with different owners and different lifetimes, and
+// collapsing them would let a regression in the first hide behind the second.
+//
+//   A2_HANDOFF_ALLOWLIST      temporary unmigrated READS — empty (plan item 12)
+//   PROTECTED_RUNTIME_WRITERS permanent guarded WRITES — satisfies writes only
+//   RETIRED_ONE_SHOT_WRITERS  fail-closed historical scripts — reads and writes
+//   OPERATOR_TOOLING_ALLOWLIST guarded operator/verification tooling A2 added
+//
+// plus DEFENSIVE_TYPE_REJECTION_GUARDS for the `_type`-only rejection guard kind.
 
 /**
- * Exact file + operation entries for reads/writers that A1 deliberately leaves
- * in place because they are mutation-local and belong to the A2 mutation
- * integrity slice. A2 removes each entry in the same change that migrates or
- * retires its writer. No directory or glob exemptions: `scripts/**` and friends
- * are forbidden, every new script must be listed explicitly.
+ * TEMPORARY A1→A2 READ HANDOFF — **empty**, and it must stay empty.
+ *
+ * A1 used this registry for mutation-local *reads* of the protected types that it
+ * could not migrate without also rewriting the writer. A2 §2/§4/§5/§6 migrated
+ * every one of those reads onto `operationalClient` / `rawIntegrityClient` via the
+ * shared write helpers, so plan item 12 ("remove all A1 mutation-read audit
+ * allowlist entries") is satisfied by an empty list rather than by a rename.
+ *
+ * The export is deliberately kept: `auditViolations` still consults it for every
+ * non-guard kind, so the "is the handoff empty?" question stays machine-checkable,
+ * and a future slice that needs a *temporary* read exemption has an owned place to
+ * put it instead of widening a permanent registry.
+ *
+ * A legitimate, permanent protected **write** is a different category and lives in
+ * `PROTECTED_RUNTIME_WRITERS`; a fail-closed historical writer lives in
+ * `RETIRED_ONE_SHOT_WRITERS`; guarded operator tooling lives in
+ * `OPERATOR_TOOLING_ALLOWLIST`. None of those are read exemptions.
  */
-export const A2_HANDOFF_ALLOWLIST: readonly AuditExemption[] = [
+export const A2_HANDOFF_ALLOWLIST: readonly AuditExemption[] = [];
+
+/**
+ * PERMANENT protected WRITERS — the guarded runtime mutation routes. A writer must
+ * write: these entries exist because the route commits a revision-asserted
+ * transaction over a protected type, not because a read is unmigrated. Nothing
+ * removes them; the app would have no mutation surface without them.
+ *
+ * Scope is deliberately narrower than the old handoff allowlist: this registry
+ * satisfies ONLY `protected-write` sites. A non-canonical **read** appearing in one
+ * of these files/operations is still a violation, so migrating the reads cannot be
+ * silently undone later. Every entry is exact `file + operation`; no globs.
+ */
+export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
+  {
+    file: "app/api/admin/roles/route.ts",
+    operation: "POST",
+    reason:
+      "guarded role create: one transaction creates the deterministic roleCreationReceipt, the role, and the claimed/reclaimed weekend roleTargetLock (A2 §2)",
+    removalOwner: "permanent runtime writer (never removed — the create surface itself)",
+  },
   {
     file: "app/api/admin/roles/[id]/route.ts",
     operation: "PATCH",
     reason:
-      "role edit writer: reads are migrated to the canonical clients, but the revision-guarded assignment/date patch still mutates sunday_role/saturday_role/special_role documents",
-    removalOwner: "A2",
+      "guarded role edit: revision-asserted assignment/date patch that also vacates the old and claims the new weekend roleTargetLock on a permitted date move (A2 §2)",
+    removalOwner: "permanent runtime writer (never removed — the edit surface itself)",
   },
+  // NOTE: `app/api/admin/roles/[id]/route.ts` DELETE is deliberately NOT listed.
+  // It mutates through `writeClient.transaction()`, but its region names no
+  // protected type literal (the type comes from the stored document, never from the
+  // request), so the detector produces no site for it and an entry here would be a
+  // dead exemption. If a protected literal ever appears in that region the audit
+  // will fail and the entry must be added then — that is the audit working.
   {
     file: "app/api/admin/roles/publish/route.ts",
     operation: "POST",
     reason:
-      "role publish writer: reads are migrated to the canonical clients, but the batch transaction still patches the publication state of sunday_role/saturday_role/special_role documents",
-    removalOwner: "A2",
-  },
-  {
-    file: "app/api/admin/roles/route.ts",
-    operation: "POST",
-    reason: "role creation writer: creates sunday_role/saturday_role/special_role documents",
-    removalOwner: "A2",
+      "guarded batch publish/unpublish: one transaction patches every requested role's publication state under its client-observed revision and heartbeats each coordination token (A2 §2)",
+    removalOwner: "permanent runtime writer (never removed — the publish surface itself)",
   },
   {
     file: "app/api/admin/roles/swap/route.ts",
     operation: "POST",
     reason:
-      "atomic swap writer: reads are migrated to the canonical clients, but the single guarded transaction still patches the seat assignments of sunday_role/saturday_role/special_role documents",
-    removalOwner: "A2",
+      "guarded atomic swap: one transaction exchanges stored seat/team assignments across both roles under both observed revisions (A2 §4)",
+    removalOwner: "permanent runtime writer (never removed — the swap surface itself)",
   },
   {
     file: "app/api/admin/roles/copy-instruments/route.ts",
     operation: "POST",
     reason:
-      "copy-instruments writer: reads are migrated to the canonical clients, but the single guarded transaction still patches the instruments of a sunday_role/saturday_role/special_role document",
-    removalOwner: "A2",
+      "guarded copy-instruments: one transaction patches only the target role's instruments, read from the stored source under both observed revisions (A2 §4)",
+    removalOwner: "permanent runtime writer (never removed — the copy surface itself)",
   },
   {
     file: "app/api/admin/setlists/route.ts",
     operation: "PUT",
     reason:
-      "live setlist writer: reads are migrated to the canonical clients, but the single guarded transaction still creates/patches featuredSongs/saturdarSongs documents and special_role songs",
-    removalOwner: "A2",
-  },
-  {
-    file: "app/api/admin/proposals/[id]/route.ts",
-    operation: "PATCH",
-    reason:
-      "proposal review/approval writer: reads are migrated to the canonical clients, but the single guarded transaction still writes the setlistProposal plus its live featuredSongs/saturdarSongs/special_role target",
-    removalOwner: "A2",
+      "guarded live setlist writer: one transaction creates/patches featuredSongs/saturdarSongs at the deterministic id, or patches special_role songs, under the client-observed target state (A2 §5)",
+    removalOwner: "permanent runtime writer (never removed — the setlist save surface itself)",
   },
   {
     file: "app/api/me/proposals/route.ts",
     operation: "POST",
     reason:
-      "shared proposal writer: reads are migrated to the canonical clients, but the single guarded transaction still creates/patches setlistProposal documents",
-    removalOwner: "A2",
+      "guarded shared proposal writer: one transaction creates the deterministic setlistProposal or patches the observed one, heartbeating the weekend lock or special-role revision (A2 §6)",
+    removalOwner: "permanent runtime writer (never removed — the proposal save surface itself)",
   },
+  {
+    file: "app/api/admin/proposals/[id]/route.ts",
+    operation: "PATCH",
+    reason:
+      "guarded proposal transitions and atomic approval: one transaction asserts the reviewed proposal revision, writes the live featuredSongs/saturdarSongs/special_role target, and records the approval receipt (A2 §6)",
+    removalOwner: "permanent runtime writer (never removed — the review/approval surface itself)",
+  },
+];
+
+/**
+ * RETIRED one-shot executable writers — kept as the historical record of what was
+ * applied to production, and unreachable in code. Each of these five files calls
+ * `assertRetiredWriter()` (`scripts/lib/sr-retired-writer.mjs`) as its first
+ * statement, before any client is constructed and before any mutation is
+ * assembled, and that gate is an unconditional non-zero exit (A2 §8).
+ *
+ * They are still listed because this audit is a STATIC scan: the historical GROQ
+ * and mutation text remains in the files, so removing the entries would fail the
+ * audit rather than prove anything. They are NOT read exemptions in any live path —
+ * no code path reaches them — and they are not A2's to remove: deleting the files
+ * would erase the record, and `scripts/lib/__tests__/sr-retired-writer.test.mjs`
+ * proves the gate precedes every write marker in each one.
+ */
+export const RETIRED_ONE_SHOT_WRITERS: readonly AuditExemption[] = [
   {
     file: "scripts/cleanup-superseded-proposals.mjs",
     operation: "module",
-    reason: "queries setlistProposal, then deletes stale non-approved proposal documents",
-    removalOwner: "A2",
+    reason:
+      "retired one-shot: queried setlistProposal and deleted stale non-approved proposals; now fails closed at assertRetiredWriter() before any client is constructed. Replacement: scripts/service-readiness-cleanup.mjs --action resolve-proposal",
+    removalOwner: "retired historical writer (never A2 — the file is the record, the gate is the guard)",
   },
   {
     file: "scripts/import-schedule.ts",
     operation: "module",
-    reason: "create-if-missing and patch sunday_role/saturday_role assignment arrays",
-    removalOwner: "A2",
+    reason:
+      "retired one-shot: create-if-missing and patched sunday_role/saturday_role assignment arrays over raw Sanity HTTP; now fails closed at assertRetiredWriter(). Replacement: POST /api/admin/roles and PATCH /api/admin/roles/[id]",
+    removalOwner: "retired historical writer (never A2 — the file is the record, the gate is the guard)",
   },
   {
     file: "scripts/import-setlist-history.mjs",
     operation: "module",
-    reason: "queries existing featuredSongs/saturdarSongs, then creates missing history documents",
-    removalOwner: "A2",
+    reason:
+      "retired one-shot: queried featuredSongs/saturdarSongs and created missing history documents; now fails closed at assertRetiredWriter(). Replacement: PUT /api/admin/setlists",
+    removalOwner: "retired historical writer (never A2 — the file is the record, the gate is the guard)",
   },
   {
     file: "scripts/migrate-shared-proposals.mjs",
     operation: "module",
-    reason: "queries setlistProposal, patches the retained shared proposal, and deletes loser documents",
-    removalOwner: "A2",
+    reason:
+      "retired one-shot: queried setlistProposal, patched the retained shared proposal, and deleted losers; now fails closed at assertRetiredWriter(). Already applied in production on 2026-07-03",
+    removalOwner: "retired historical writer (never A2 — the file is the record, the gate is the guard)",
   },
   {
     file: "scripts/unpublish-july-2026.mjs",
     operation: "module",
-    reason: "queries July role documents and patches published: false",
-    removalOwner: "A2",
+    reason:
+      "retired one-shot: queried July 2026 role documents and patched published: false; now fails closed at assertRetiredWriter(). Replacement: POST /api/admin/roles/publish",
+    removalOwner: "retired historical writer (never A2 — the file is the record, the gate is the guard)",
   },
 ];
 
@@ -704,17 +770,33 @@ function matches(entry: AuditExemption, site: ProtectedSite): boolean {
 
 /**
  * Protected sites that neither read through the canonical operational clients nor
- * carry an exact documented exemption. Guard sites are satisfied ONLY by the
- * defensive-guard registry; protected reads/writes ONLY by the A2 allowlist or the
- * guarded operator-tooling registry. Each registry stays exact file + operation.
+ * carry an exact documented exemption. Each kind is satisfied by its own registries
+ * only — the narrower the kind, the narrower the registry set:
+ *
+ * - `type-rejection-guard` → `DEFENSIVE_TYPE_REJECTION_GUARDS` only.
+ * - `protected-write` → the permanent runtime writers, the retired one-shots, the
+ *   guarded operator tooling, or (in principle) the empty A2 read handoff.
+ * - any protected READ → everything EXCEPT `PROTECTED_RUNTIME_WRITERS`. A guarded
+ *   runtime route is licensed to write, never to read off a non-canonical client.
+ *
+ * Every registry stays exact `file + operation`; there are no globs anywhere.
  */
 export function auditViolations(sites: readonly ProtectedSite[]): ProtectedSite[] {
   return sites.filter((site) => {
     if (site.compliant) return false;
-    const registries =
-      site.kind === "type-rejection-guard"
-        ? [DEFENSIVE_TYPE_REJECTION_GUARDS]
-        : [A2_HANDOFF_ALLOWLIST, OPERATOR_TOOLING_ALLOWLIST];
+    let registries: ReadonlyArray<readonly AuditExemption[]>;
+    if (site.kind === "type-rejection-guard") {
+      registries = [DEFENSIVE_TYPE_REJECTION_GUARDS];
+    } else if (site.kind === "protected-write") {
+      registries = [
+        A2_HANDOFF_ALLOWLIST,
+        PROTECTED_RUNTIME_WRITERS,
+        RETIRED_ONE_SHOT_WRITERS,
+        OPERATOR_TOOLING_ALLOWLIST,
+      ];
+    } else {
+      registries = [A2_HANDOFF_ALLOWLIST, RETIRED_ONE_SHOT_WRITERS, OPERATOR_TOOLING_ALLOWLIST];
+    }
     return !registries.some((registry) => registry.some((entry) => matches(entry, site)));
   });
 }

@@ -11,10 +11,11 @@ exact strings used in GROQ `_type` filters.
 
 ---
 
-## Registered document types (11)
+## Registered document types (13)
 
 `post`, `tag`, `author`, `featuredSongs`, `saturdarSongs`, `saturday_role`, `sunday_role`,
-`teamMembers`, `special_role`, `loginEvent`, `setlistProposal`.
+`teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, and two **internal coordination**
+types never authored by hand: `roleTargetLock`, `roleCreationReceipt`.
 
 **Not registered** (present but intentionally unused — do not wire in):
 - `sanity/schemas/youtubeType/youtubeType.ts` — object type `youtube`.
@@ -100,6 +101,8 @@ Structurally identical.
 
 | Field | Type | Notes |
 |-------|------|-------|
+| `creationReceiptId` | string (hidden, readOnly) | The `roleCreationReceipt._id` that minted this role. **Internal** — written only by the guarded create. |
+| `creationFingerprint` | string (hidden, readOnly) | The canonical create-payload fingerprint. **Internal.** The receipt stays authoritative; this is the forward link. |
 | `published` | boolean | Default `true`. `false` = draft (managers only). **The gate.** |
 | `week` | date | The week this service is valid for. |
 | `Lead` | array of reference → `teamMembers` | "Leaders." **Seat 1.** |
@@ -115,6 +118,7 @@ keyed on **`date`** (not `week`).
 
 | Field | Type | Notes |
 |-------|------|-------|
+| `creationReceiptId`, `creationFingerprint` | string (hidden, readOnly) | Same internal create-receipt link as the weekend role docs. |
 | `published` | boolean | Default `true`. Draft gate. |
 | `date` | date | Date of the special service. |
 | `service_name` | string | e.g. "Viernes Santo," "Nochebuena." |
@@ -179,10 +183,77 @@ songs/notes are written to the real setlist. See the design spec
 | `team_notes` | text | Published to the team on approval. |
 | `admin_notes` | text | |
 | `submitted_at`, `reviewed_at` | datetime (readOnly) | |
+| `approval_receipt` | object (hidden, readOnly) | **Internal.** `{v, marker, fingerprint, serviceType, serviceDate, serviceRef, setlistTargetKey, setlistId, songCount, approvedAt, approvedBy}` — written atomically with the live setlist on approval. |
+| `last_transition` | object (hidden, readOnly) | **Internal.** `{v, marker, action, fingerprint, toStatus, at, by}` — the receipt for `request_changes` / `reopen` / `reconcile_target`. |
 
 **Concurrency:** the write path uses a **deterministic `_id`** (`setlistProposal.<roleId>`) as a
-create-mutex and `ifRevisionId` optimistic locking — co-lead collisions return **409**. See
-[API_REFERENCE.md](API_REFERENCE.md#post-apimeproposals).
+create-mutex and `ifRevisionId` optimistic locking — co-lead collisions return **409**. Resolution
+goes through A1's **two** indexes (`service_ref` and target key), never an arbitrary `[0]`, so a
+duplicate or disagreeing group is refused rather than guessed. Admin transitions submit the
+revision the admin **actually reviewed**, and approval is one atomic transaction that also writes
+the live setlist and records `approval_receipt`. A matching receipt makes a retry a **no-write
+success**; an `approved` proposal with no valid receipt is `409 legacy_approval_unverified`.
+**Sibling proposals are no longer deleted on approval** — a duplicate group is refused instead. See
+[API_REFERENCE](API_REFERENCE.md#the-protected-mutation-contract).
+
+---
+
+## Internal coordination types — `roleTargetLock`, `roleCreationReceipt`
+
+Files: [`roleTargetLock.ts`](../sanity/schemas/roleTargetLock.ts),
+[`roleCreationReceipt.ts`](../sanity/schemas/roleCreationReceipt.ts). Both are declared
+**`hidden: true` and `readOnly: true`** at the type level and are written **only** by the guarded
+mutation routes (never in Studio, never by a script). They carry no member-facing content; they
+exist so two concurrent writers cannot both win.
+
+### `roleTargetLock` — one weekend target, serialized
+
+Deterministic `_id`: **`roleTarget.<roleType>.<date>`** (e.g. `roleTarget.sunday_role.2026-08-02`),
+derived from the target key `<roleType>:<date>`.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `targetKey` | string | `sunday_role:<YYYY-MM-DD>` \| `saturday_role:<YYYY-MM-DD>`. |
+| `state` | string | `claimed` \| `vacant`. |
+| `roleId` | **string** | **A plain string, never a reference** — see below. Absent while `vacant`. |
+| `roleType` | string | `sunday_role` \| `saturday_role`. |
+| `date` | date | |
+| `claimNonce` | string | Per-claim nonce; cleared on vacate. |
+| `generation` | number | Starts at `0`; **advances on every vacate**. |
+| `createdAt`, `updatedAt` | datetime | `updatedAt` is the heartbeat every weekend writer sets. |
+
+> **Why `roleId` is a plain string, not a reference:** deleting a role must **not** cascade into the
+> lock, and a lock must never keep a deleted role alive. A strong reference would do both. Deletion
+> therefore *vacates* the lock (clears `roleId`, advances `generation`) instead of removing it, and a
+> recreation claims the same lock with a fresh, non-reused role id.
+
+**`special_role` never gets a lock.** Its target key is its own `_id`, which is not a weekend key, so
+lock derivation returns `null` — a special service is serialized by its own document revision.
+`claimed` must have exactly one `roleId` owning the same target; wrong-owner and orphan locks are
+integrity issues, surfaced by `GET /api/admin/service-integrity/roles` and **never reclaimed
+implicitly**.
+
+### `roleCreationReceipt` — the create-request mutex and idempotency tombstone
+
+Deterministic `_id`: **`roleCreate.<sha256(requestId)>`**. It is the global mutex for
+`creationRequestId` across *every* role type and target (the weekend lock only serializes one
+weekend target), and it outlives the role it minted.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `requestId` | string | The **exact** client `creationRequestId`. Equality is checked against this value, never the digest. Immutable. |
+| `fingerprint` | string | Canonical create-payload hash. Same id + different fingerprint → `409 idempotency_mismatch`. Immutable. |
+| `roleId` | **string** | Pre-generated role id. **Plain string** — the receipt must outlive the role it retired. Immutable. |
+| `roleType` | string | `sunday_role` \| `saturday_role` \| `special_role`. |
+| `targetIdentity` | string | `<roleType>:<date>`, or `special_role:<date>:<service name>`. Immutable. |
+| `state` | string | `committed` \| `role_deleted`. |
+| `createdAt`, `updatedAt` | datetime | |
+
+Deleting a receipt-backed role flips `state` to `role_deleted` in the **same** transaction that
+deletes the role and vacates the lock. Both states are durable idempotency tombstones: ordinary
+cleanup never deletes them, and a retried key returns `409 idempotency_key_retired` rather than
+recreating the service. Full replay semantics:
+[API_REFERENCE](API_REFERENCE.md#creationrequestid--deterministic-creation-receipts).
 
 ---
 
@@ -198,9 +269,11 @@ create-mutex and `ifRevisionId` optimistic locking — co-lead collisions return
 ## `loginEvent` — Auth audit log
 
 File: [`loginEvent.ts`](../sanity/schemas/loginEvent.ts). Append-only. `{ member → teamMembers,
-email, provider, timestamp }`. Uses `__experimental_actions: ["read", "delete"]` — created
-programmatically by the app on every sign-in (never through Studio UI). Powers the admin
-login/activity dashboard (`/api/admin/login-events`).
+email, provider, timestamp }`. Created programmatically by the app on every sign-in (never through
+the Studio UI). Powers the admin login/activity dashboard (`/api/admin/login-events`). It still
+declares `__experimental_actions: ["read", "delete"]`, but that property was **removed in Sanity v5
+and is inert** — it is not restricting anything. See [Studio](#studio) for the mechanisms that
+actually work.
 
 ---
 
@@ -284,6 +357,19 @@ the role/setlist split described above.
 
 Cardinality at a target is `none` (0) / `single` (1) / `duplicate` (>1); a relevant `drafts.*`
 overlay makes the public-facing state **`draft_conflict`**.
+
+**Deterministic ids derived from those keys** — every one of these is computed, never stored as a
+free choice, so two writers racing for the same thing collide on the same document id:
+
+| Document | Deterministic `_id` |
+|----------|---------------------|
+| Sunday / Saturday setlist | `featuredSongs.<week>` / `saturdarSongs.<week>` |
+| Shared proposal | `setlistProposal.<roleId>` |
+| Weekend target lock | `roleTarget.<roleType>.<date>` |
+| Creation receipt | `roleCreate.<sha256(creationRequestId)>` |
+
+Role documents themselves keep random ids — their uniqueness at a target is enforced by the lock and
+the canonical grouping, not by the id.
 
 **`setlistContentState(songs)`** → `empty` / `incomplete` / `ready` / `invalid`:
 - `empty` — zero songs; `incomplete` — a well-formed row with a blank `play_key`;
@@ -369,8 +455,47 @@ Rules of thumb:
 
 ## Studio
 
-`sanity.config.ts` mounts the Studio at `basePath: '/studio'` with `structureTool()` (default
-desk structure) + `visionTool()` (GROQ playground). It's embedded at
+`sanity.config.ts` mounts the Studio at `basePath: '/studio'` with `structureTool()` +
+`visionTool()` (GROQ playground). It's embedded at
 [`app/(admin)/studio/[[...tool]]/page.tsx`](../app/(admin)/studio/[[...tool]]/page.tsx) via
 `NextStudio`, and access is restricted to `admin`/`super-admin` by `proxy.ts`. Schema changes
 require a Studio deploy to appear in the Studio UI (the app reads/writes via GROQ regardless).
+
+### Protected types in the Studio — read-only, no mutating path
+
+The Studio is a *second* writer into the same dataset, so it would otherwise bypass every guard in
+[API_REFERENCE → the protected mutation contract](API_REFERENCE.md#the-protected-mutation-contract).
+**Eight** types are closed to it — the six protected service types **plus** the two internal
+coordination types:
+
+`sunday_role`, `saturday_role`, `special_role`, `featuredSongs`, `saturdarSongs`, `setlistProposal`,
+`roleTargetLock`, `roleCreationReceipt`.
+
+The rules are pure and unit-tested in
+[`app/utils/studioProtection.ts`](../app/utils/studioProtection.ts) (`PROTECTED_STUDIO_TYPES`,
+`studioCapability()`), and wired in `sanity.config.ts` + [`sanity/structure.ts`](../sanity/structure.ts)
+through **four Sanity v5 mechanisms**:
+
+1. **`document.actions` → `[]`** — every action is filtered out for a protected type, built-in or
+   plugin, including `delete`, `duplicate`, `publish`, `unpublish`, `discardChanges`,
+   `discardVersion`, `unpublishVersion`, `restore`, `schedule`, and the Canvas trio
+   (`linkToCanvas` / `editInCanvas` / `unlinkFromCanvas`). An action with no identifier is dropped
+   too — **fail closed**. This is what closes the direct-URL path.
+2. **`document.newDocumentOptions`** — protected types are removed from every create affordance.
+3. **schema `readOnly: true`** on the document type — the whole form is non-editable.
+4. **`structureTool({structure})`** — protected types are removed from the default document-type list
+   and re-offered under a read-only group *"Servicios (solo lectura)"*, so an operator can still
+   inspect, diff, and read history. Read-only capabilities (`read`, `inspect`, `history`, `preview`,
+   `structure-list`) stay allowed on purpose; any unknown capability on a protected type is denied.
+
+The internal coordination types are additionally `hidden: true`, and the internal *fields*
+(`creationReceiptId`, `creationFingerprint`, the lock/receipt bodies, `approval_receipt`,
+`last_transition`) are `hidden` + `readOnly` individually.
+
+> **⚠️ `__experimental_actions` is NOT the mechanism.** It was removed in Sanity v5 and is **inert**
+> — a test asserts no protected schema file contains it. The one remaining occurrence, on
+> `loginEvent`, therefore does nothing and is not load-bearing. Do not "fix" protection by adding it.
+
+**Deploy note:** the Studio protection lives in app code and is active as soon as the app deploys,
+but the two new schema *types* only appear in a deployed Studio after a Sanity schema deploy — see
+[DEVELOPMENT.md](DEVELOPMENT.md).

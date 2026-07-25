@@ -63,7 +63,7 @@ flowchart TB
   end
 
   subgraph Sanity[Sanity Content Lake]
-    Docs[(Documents: post, teamMembers,\nsunday_role, saturday_role, special_role,\nfeaturedSongs, saturdarSongs,\nsetlistProposal, tag, author, loginEvent)]
+    Docs[(Documents: post, teamMembers,\nsunday_role, saturday_role, special_role,\nfeaturedSongs, saturdarSongs,\nsetlistProposal, tag, author, loginEvent,\nroleTargetLock, roleCreationReceipt - internal)]
   end
 
   subgraph Google[Google Cloud]
@@ -289,35 +289,85 @@ bypasses the operational client without an exact `file + operation` exemption. D
 There are **no directory or glob exemptions** — every entry names one file and one operation, and
 gitignored local tooling is out of scope (never listed, never asserted to exist).
 
-**A2 writer exclusions (12)** — mutation-local reads/writers A1 deliberately left in place; A2
-removes each entry in the same change that migrates or retires its writer:
+### Five disjoint exemption registries
 
-| File | Operation |
-|------|-----------|
-| `app/api/admin/roles/[id]/route.ts` | `PATCH` |
-| `app/api/admin/roles/publish/route.ts` | `POST` |
-| `app/api/admin/roles/route.ts` | `POST` |
-| `app/api/admin/setlists/route.ts` | `PUT` |
-| `app/api/admin/proposals/[id]/route.ts` | `module`, `PATCH` |
-| `app/api/me/proposals/route.ts` | `POST` |
-| `scripts/cleanup-superseded-proposals.mjs` | `module` |
-| `scripts/import-schedule.ts` | `module` |
-| `scripts/import-setlist-history.mjs` | `module` |
-| `scripts/migrate-shared-proposals.mjs` | `module` |
-| `scripts/unpublish-july-2026.mjs` | `module` |
+The registries are separate on purpose: *"a read we have not migrated yet"* and *"a writer that must
+write"* are different claims, with different owners and different lifetimes. Collapsing them would
+let a regression in the first hide behind the second. A test asserts they are pairwise disjoint and
+that **no entry is dead** (each must be exercised by a real scanned site).
 
-**Separately — and never removed by A2** — one defensive **type-rejection guard**:
-`app/api/content/posts/[id]/route.ts` **PATCH**, which reads only `{ _type }` to reject
-overwriting a protected document through the song editor. It lives in its own registry
-(`DEFENSIVE_TYPE_REJECTION_GUARDS`), disjoint from the A2 allowlist; a generic `_id` read that
-projects protected *fields* is not covered by it and still fails the audit.
+| Registry | Satisfies | Contents | Owner |
+|----------|-----------|----------|-------|
+| `A2_HANDOFF_ALLOWLIST` | any kind | **empty** — every A1 mutation-local read is migrated | closed out by A2 |
+| `PROTECTED_RUNTIME_WRITERS` | **`protected-write` only** | the 8 guarded mutation routes (roles create / edit / publish / swap / copy-instruments, setlists PUT, proposal POST, proposal PATCH) | permanent — nothing removes them |
+| `RETIRED_ONE_SHOT_WRITERS` | reads + writes | the 5 historical one-shot scripts, each fail-closed before any client | permanent record, not A2's to delete |
+| `OPERATOR_TOOLING_ALLOWLIST` | reads + writes | `service-readiness-cleanup.mjs`, `service-readiness-feasibility.mjs` | operator / A3 tooling |
+| `DEFENSIVE_TYPE_REJECTION_GUARDS` | `type-rejection-guard` only | `app/api/content/posts/[id]/route.ts` `PATCH` — reads only `{_type}` to refuse overwriting a protected doc through the song editor | song-editor refactor |
+
+Two consequences worth internalizing:
+
+- **The runtime writers are licensed to write, never to read.** A non-canonical read appearing in one
+  of those eight file+operation pairs is still a violation, so the A1 read migration cannot be quietly
+  undone. A generic `_id` read that projects protected *fields* is likewise not covered by the
+  defensive-guard registry.
+- **A retired script's entry is contingent on its gate.** The scan is static, so the historical GROQ
+  and mutation text still matches — the entry stays, but a test pins that each listed file calls
+  `assertRetiredWriter()`, and `scripts/lib/__tests__/sr-retired-writer.test.mjs` proves that call
+  precedes every write marker in the file. Delete the gate and the exemption stops being honest.
+
+> One detector limit worth knowing: a mutation region is flagged only when it *names* a protected
+> type. `app/api/admin/roles/[id]/route.ts` **DELETE** mutates but derives the type from the stored
+> document, so it produces no site and is deliberately unlisted (an entry would be dead). Adding a
+> protected literal there will fail the audit until an entry is added — which is the audit working.
+
+### Protected mutation integrity
+
+Reads being canonical is only half the contract; the writers have their own. Every protected writer
+rejects stale or ambiguous state, serializes against every competing writer, and commits **all**
+business changes or none. Full request/response detail lives in
+[API_REFERENCE → the protected mutation contract](API_REFERENCE.md#the-protected-mutation-contract);
+the load-bearing shapes are:
+
+- **Client-observed revisions, not server refetches.** Edit / delete / publish / swap / copy /
+  setlist PUT / proposal save / proposal transition all submit the revision the client actually
+  loaded or reviewed. A stale one is `409 stale_revision` and the modal stays open. A freshly fetched
+  server revision is explicitly *not* a substitute — that would defeat the point.
+- **Two independent mutexes.** A `roleTargetLock` (deterministic `roleTarget.<roleType>.<date>`)
+  serializes competing writers at **one weekend target**; a `roleCreationReceipt`
+  (`roleCreate.<sha256(creationRequestId)>`) serializes **one logical create request** across every
+  role type and target. Special services take no lock — their own document revision is the token.
+  → [DATA_MODEL](DATA_MODEL.md#internal-coordination-types--roletargetlock-rolecreationreceipt)
+- **Deterministic receipts make retries safe.** An exact same-key/same-fingerprint replay is a
+  no-write `200`; a changed payload is `409 idempotency_mismatch`; a deleted role's key is
+  `409 idempotency_key_retired` and can never resurrect the service. Approval and the three proposal
+  transitions have the same shape via `approval_receipt` / `last_transition`.
+- **One transaction per business change.** Role+receipt+lock, both roles in a swap, proposal+setlist
+  +lock on approval — each is a single `transaction()` under `ifRevisionId` preconditions, so a
+  conflict leaves every business document byte-for-byte unchanged.
+- **Strict dependency refusal.** Create / date-move / delete never cascade, adopt, migrate, archive,
+  or delete service history. Dependencies are inventoried across canonical *and* raw-draft setlists
+  and both proposal indexes, and refusal returns exact ids under `target_has_orphaned_dependencies`,
+  `role_date_has_dependencies`, or `role_has_dependencies`.
+- **Prevalidation precedes maintenance.** All shape/revision/ambiguity/dependency checks run before
+  any legacy-lock bootstrap, so an invalid request writes nothing. When bootstrap *did* commit and the
+  business step then conflicts, the honest answer is `409 bootstrap_completed_reload`: business fields
+  unchanged, no side effects, but the lock and advanced role revision persist.
+- **Post-commit side effects are centralized** in
+  [`app/utils/serviceMutationSideEffects.ts`](../app/utils/serviceMutationSideEffects.ts) — see §9.
+- **Alternate write paths are closed:** the Studio strips every mutating action from all **eight**
+  protected types (→ [DATA_MODEL → Studio](DATA_MODEL.md#studio)) and the five historical one-shot
+  scripts fail closed (→ [SOLVER_AND_INFRA §3](SOLVER_AND_INFRA.md#3-scripts--one-off-migrations-imports--ops)).
 
 ### Integrity surface
 
 Three read-only admin summaries expose the resulting state —
 `GET /api/admin/service-integrity/roles|setlists|proposals`. The three domains load
 independently, one malformed record never fails a domain, and a read failure is a **500**, never
-an empty "clean" result. → [API_REFERENCE](API_REFERENCE.md#service-integrity-read-only).
+an empty "clean" result. The roles summary also reports weekend **lock** state per target
+(`expectsLock`, `lock {id, rev, state, roleId, generation}`, `lockIssues[]`) plus a flat
+`lockIssues[]` for locks belonging to no canonical target — `missing_lock`, `malformed_lock`,
+`id_mismatch`, `claimed_without_role`, `vacant_with_role`, `wrong_owner`, `orphan_lock`.
+→ [API_REFERENCE](API_REFERENCE.md#service-integrity-read-only).
 
 ---
 
@@ -326,6 +376,28 @@ an empty "clean" result. → [API_REFERENCE](API_REFERENCE.md#service-integrity-
 Publishing or editing a service, and submitting/approving a proposal, fan out notifications.
 **All notification paths are best-effort** (wrapped in try/catch, log-only) — a failed notify
 must never fail the underlying write.
+
+**Every protected-service side effect is centralized** in
+[`app/utils/serviceMutationSideEffects.ts`](../app/utils/serviceMutationSideEffects.ts): routes build
+a *notice* and hand it over; they never assemble a recipient list. Recipients come from **committed
+server state across all five seat paths** via `operationalClient` — never a client-supplied list, and
+never a `drafts.*` overlay that could widen the audience. The rules, exhaustively:
+
+| Event | Audience |
+|-------|----------|
+| Published create | every initial assignee |
+| Published/grandfathered edit, swap, or copy | **only newly added** assignees, per destination role |
+| Publish `false → true` | every current assignee (one consolidated email batch) |
+| Manual setlist save | the existing `setlistRecipientIds` audience + `revalidateServiceViews()` |
+| Proposal committed as `pending` | the existing admin/co-lead push + allowlist/preference-aware admin email |
+| `request_changes` / `reopen` / approval | the existing review recipients (proposal `lead` + contributors) |
+| Approval | also `revalidateServiceViews()` |
+| Draft edit, unpublish, removal, no-op idempotent retry, prevalidation or transaction conflict | **silent** |
+
+Delivery is **best-effort at-most-once**: one deferred attempt (`after()`) per committed request,
+each failure logged (`[sideEffects] <label> failed:`) and swallowed, never rolled back, and a retry
+that replays idempotently produces no second attempt. **No exactly-once claim is made** — that would
+require an outbox.
 
 ```mermaid
 flowchart LR
@@ -369,16 +441,17 @@ owt-kb-v1/
 │  │  ├─ layout.tsx, globals.css, loading.tsx, error.tsx
 │  ├─ (admin)/               # separate route group for embedded Sanity Studio
 │  │  └─ studio/[[...tool]]/ # /studio
-│  ├─ api/                   # 34 route handlers (see API_REFERENCE.md)
+│  ├─ api/                   # 36 route handlers (see API_REFERENCE.md)
 │  ├─ components/            # 41 components (31 top-level + 10 admin panels)
 │  ├─ context/               # PlayerContext (the single global context)
 │  └─ utils/                 # reusable helpers (37 .ts/.tsx/.mjs) + __tests__
 ├─ sanity/                   # schema + client setup
-│  ├─ schema.ts, env.ts
+│  ├─ schema.ts, structure.ts, env.ts
 │  ├─ lib/{client,serverClient,operationalClient,image}.ts
-│  └─ schemas/*.ts           # 11 registered types + deprecated/unregistered
+│  └─ schemas/*.ts           # 13 registered types + deprecated/unregistered
 ├─ gcf/                      # Python OR-Tools solver (owt-solver Cloud Function)
-├─ scripts/                  # one-off migrations, imports, ops (guarded by --apply)
+├─ scripts/                  # one-off migrations, imports, guarded ops (--apply)
+│                            # + 5 RETIRED one-shot writers that now fail closed
 ├─ ios/, android/, mobile/   # Capacitor native projects + offline fallback
 ├─ public/                   # PWA manifest, icons, brand images
 ├─ docs/                     # ← you are here
@@ -428,7 +501,15 @@ Condensed here; each is expanded in the linked doc.
    *member-visible* gate — **not** the same as *canonical*. → [DATA_MODEL](DATA_MODEL.md#draftpublish-gating), §8
 5. **The six protected types are read only through `operationalClient`** (published
    perspective). `rawIntegrityClient` is draft *evidence*, never content. A static audit fails
-   any new bypass without an exact `file + operation` exemption. → §8
+   any new bypass without an exact `file + operation` exemption, and the *read* handoff allowlist is
+   **empty** — the guarded mutation routes are licensed to write only. → §8
+
+   And their **writers** are revision-aware, coordinated, and atomic: send the client-observed
+   revision (never a server refetch); assert the weekend `roleTargetLock` — or the special role's own
+   revision — inside the same transaction; require a `creationRequestId` per logical create; refuse
+   dependencies instead of cascading; commit all business changes or none. The two internal
+   coordination types are never written by hand, by the Studio, or by a script.
+   → §8, [DATA_MODEL](DATA_MODEL.md#internal-coordination-types--roletargetlock-rolecreationreceipt)
 6. **Sanity array-of-object writes need a unique `_key` per item** (and the right `_type` for
    object slots: `setlist_song`, `proposal_song`, `instrument_slot`, `foh_slot`, `contributor`;
    reference-array items use `_type: "reference"`). Note `proposal_song` — proposal songs are

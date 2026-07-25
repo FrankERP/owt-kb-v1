@@ -108,6 +108,12 @@ write to Sanity with `--apply`. Run as `node --env-file=.env.local scripts/<name
 **Production writes need explicit user consent — dry-run first; never re-run a completed one-shot
 import with `--apply`.**
 
+> **Scripts may no longer write the protected service types on the honour system.** A script that
+> touches `sunday_role` / `saturday_role` / `special_role` / `featuredSongs` / `saturdarSongs` /
+> `setlistProposal` / `roleTargetLock` / `roleCreationReceipt` either uses the shared guarded
+> invariant or **fails before any write** — and it must be listed by exact `file + operation` in the
+> protected-read audit or `npm test` fails. See the two subsections below.
+
 ### Catalog import & processing
 - `catalog/xlsx-to-json.py` — Python (openpyxl); `oasis-songs.xlsx` → `oasis-songs.json`. Reusable.
 - `import-catalog.mjs` — main song importer; reconciles against existing posts via
@@ -117,16 +123,80 @@ import with `--apply`.**
 
 ### Migrations (one-off)
 - `migrate-authors.mjs` — free-text authors → canonical `author` references (`lib/author-canon.mjs`).
-- `migrate-shared-proposals.mjs` — legacy per-lead proposals → shared-per-service model
-  (`lib/proposalRank.mjs`; approved wins, contributors folded, losers deleted). Idempotent.
-- `cleanup-superseded-proposals.mjs` — delete non-approved proposals where an approved one exists.
-- `unpublish-july-2026.mjs` — one-off: set `published:false` on July 2026 services.
+
+### ⛔ Retired writers — five one-shots that now **fail closed**
+
+These five already ran against production and **cannot** adopt the guarded mutation invariant
+(target lock + creation receipt + exact observed revision + dependency policy). Documentation-only
+retirement would have been insufficient, so each one calls `assertRetiredWriter()` from
+[`lib/sr-retired-writer.mjs`](../scripts/lib/sr-retired-writer.mjs) as its **first statement** —
+before any client is constructed and before any mutation is assembled — and exits non-zero. There is
+no flag, argument, or environment that lets one reach the Content Lake again: the gate reuses
+`evaluateGuards()` (so the production project `ebb8vcnk` and dataset `production` are hard refusals
+on either axis, in dry-run too) and *always* adds a `retired_writer` hard failure on top. The file
+bodies are kept only as the historical record of what was applied.
+
+| Retired script | What it used to do | Use instead |
+|----------------|--------------------|-------------|
+| `import-schedule.ts` | create-if-missing + patch Lead/BGVs/Chorus on role docs from a solver history JSON | `POST /api/admin/roles`, `PATCH /api/admin/roles/[id]` |
+| `import-setlist-history.mjs` | create missing `featuredSongs`/`saturdarSongs` history from a WhatsApp export | `PUT /api/admin/setlists` |
+| `cleanup-superseded-proposals.mjs` | delete non-approved proposals where an approved one exists | `service-readiness-cleanup.mjs --action resolve-proposal --mode remove` |
+| `migrate-shared-proposals.mjs` | backfill `contributors` and delete collision losers | applied 2026-07-03; residual collisions → `--action resolve-proposal` |
+| `unpublish-july-2026.mjs` | patch `published:false` on every July 2026 service | `POST /api/admin/roles/publish` |
+
+Unit tests: `lib/__tests__/sr-retired-writer.test.mjs` proves the refusal is unconditional **and**
+statically checks each real file — the gate call must precede every write marker (`createClient(`,
+`api.sanity.io`, `.transaction(`, `.commit(`, `.patch(`, `.delete(`, `.create(`, `fetch(`).
+
+> Gitignored local developer tooling (e.g. `sa-roster.mjs`) is outside this committed-writer scope —
+> the operator guards or retires it by hand, and it is never a protected-read-audit entry.
+
+### Guarded Service Readiness operator tooling
+
+Unlike the retired one-shots, these are **meant** to be run by hand — but only against the isolated
+verification dataset. Guards live in [`lib/sr-verification.mjs`](../scripts/lib/sr-verification.mjs)
+and refuse **in dry-run too**, on either axis: `forbidden_project` (`ebb8vcnk`), `wrong_project`,
+`forbidden_dataset` (`production`), `wrong_dataset`, `marker_mismatch`, `unknown_flag` are hard
+failures; `missing_project_id` / `missing_dataset` / `missing_marker` / `missing_token` /
+`missing_admin_password_hash` block `--apply`. No client is constructed at all unless
+`willContactRemote` is true (i.e. `--apply` and nothing refused). Env: `SR_VERIFY_SANITY_PROJECT_ID`,
+`SR_VERIFY_SANITY_DATASET`, `SERVICE_READINESS_VERIFICATION_MARKER`, `SR_VERIFY_SANITY_TOKEN`
+(+ `SR_VERIFY_ADMIN_PASSWORD_HASH`, `SR_VERIFY_RUN_ID`, `SR_VERIFY_CANDIDATE_SHA`,
+`SR_VERIFY_DEPLOYMENT_ID` for the seed). Secrets are never printed — presence booleans only.
+
+- **`service-readiness-cleanup.mjs`** — one guarded, atomic cleanup per invocation. **Dry-run by
+  default;** `--apply` needs an exact action-specific confirmation phrase
+  (`<action>[#<mode>]:<id>@<rev>`), takes a timestamped backup outside tracked files
+  (`.sr-verification-backups/<ISO>-cleanup-<kind>.json`, gitignored), commits one revision-asserted
+  transaction, then **re-queries and verifies** the outcome. It gathers its own dataset evidence with
+  its own GROQ — an `--evidence` intent file is never trusted as proof. Actions:
+  `discard-raw-draft`, `select-canonical-duplicate` (never implicit merging),
+  `repair-malformed-record` (closed field allowlist), `remove-malformed-role` (**only** after the same
+  dependency inventory/refusal policy the routes use), `remove-orphan-setlist` (needs proof no
+  canonical owner exists), `resolve-proposal` (`--mode retarget|normalize|remove`, non-approved only),
+  `reconcile-approved-receipt` (never deletes approved history), `vacate-orphan-lock` (needs
+  published/raw proof the owner is gone), `cleanup-creation-receipt` (`--mode inspect|remove`, by
+  exact id+rev, only after proving no live role carries it — **committed and retired receipts are
+  durable idempotency tombstones and are never deleted by ordinary cleanup**). Refusals are named
+  codes, e.g. `revision_mismatch`, `lock_owner_alive`, `receipt_carried_by_live_role`,
+  `approval_via_cleanup_forbidden`, `destination_proposal_exists`, `role_has_dependencies`.
+  Multi-target cleanup is separate invocations, never one batch.
+- **`service-readiness-restore.mjs`** — revision-aware restore from a backup file. Dry-run prints the
+  confirmation phrase (`restore:<count>:<digest>`). It **refuses the whole restore** — never partially,
+  never latest-wins — on `later_write_conflict` (the document was written after the backup),
+  `restore_type_mismatch`, `restore_type_not_protected`, `empty_backup`, or a confirmation mismatch.
+  It never force-overwrites.
+- **`service-readiness-feasibility.mjs`** — the A3 isolated-dataset transaction-shape harness.
+- **`service-readiness-verification-seed.mjs` / `-reset.mjs`** — fixture seed/teardown, dry-run by
+  default. Reset deletes from a **closed allowlist** of `srv.`-prefixed fixture ids (infrastructure
+  docs excluded) — never a discovery query, never `*[_type == …]`.
+
+Both of the first two are listed by exact `file + operation` in the protected-read audit's
+`OPERATOR_TOOLING_ALLOWLIST` so they are visible to it rather than invisible.
+**Production `--apply` always requires separate explicit user consent.**
 
 ### History / backfill
-- `import-setlist-history.mjs` — WhatsApp chat ZIP → historical setlists
-  (`lib/whatsapp-setlists.mjs` + `lib/setlist-match.mjs`).
-- `import-schedule.ts` (tsx) — reads `worship_schedule_history.json` → upserts role docs (only
-  Lead/BGV/Chorus).
+- `import-setlist-history.mjs`, `import-schedule.ts` — **retired**, see above.
 
 ### Accounts / auth
 - `set-password.ts` (tsx) — `MEMBER_ID=… PASSWORD=… npx tsx scripts/set-password.ts` — bcrypt a
@@ -146,7 +216,11 @@ import with `--apply`.**
 ### `scripts/lib/` (unit-tested shared modules)
 `catalog-reconcile.mjs`, `author-canon.mjs`, `setlist-match.mjs`, `whatsapp-setlists.mjs`,
 `proposalRank.mjs` (note: `advancementRank` ranks `approved` **highest** here — the inverse of the
-`/me` surfacing rank; don't merge them). Tests in `scripts/lib/__tests__/`.
+`/me` surfacing rank; don't merge them). Service Readiness: `sr-verification.mjs` (pure guard
+evaluation, backup naming, fixture verifiers), `sr-verification-runtime.mjs` (the only module that
+constructs a client, acquires the dataset lease, and writes backups), `sr-cleanup.mjs` (pure cleanup
+plan/refusal decisions), `sr-feasibility-checks.mjs`, `sr-retired-writer.mjs` (the retirement gate).
+Tests in `scripts/lib/__tests__/`; CLI-level tests in `scripts/__tests__/`.
 
 ---
 

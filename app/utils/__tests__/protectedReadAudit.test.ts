@@ -18,7 +18,9 @@ import {
   A2_HANDOFF_ALLOWLIST,
   DEFENSIVE_TYPE_REJECTION_GUARDS,
   OPERATOR_TOOLING_ALLOWLIST,
+  PROTECTED_RUNTIME_WRITERS,
   PROTECTED_TYPES,
+  RETIRED_ONE_SHOT_WRITERS,
   auditViolations,
   describeSite,
   isAuditedQuerySiteFile,
@@ -26,6 +28,7 @@ import {
   stripComments,
   type ProtectedSite,
 } from "../protectedReadAudit";
+import { RETIRED_WRITERS } from "../../../scripts/lib/sr-retired-writer.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -237,6 +240,8 @@ export async function PATCH() {
 describe("A2 handoff allowlist", () => {
   const ALL_ENTRIES = [
     ...A2_HANDOFF_ALLOWLIST,
+    ...PROTECTED_RUNTIME_WRITERS,
+    ...RETIRED_ONE_SHOT_WRITERS,
     ...OPERATOR_TOOLING_ALLOWLIST,
     ...DEFENSIVE_TYPE_REJECTION_GUARDS,
   ];
@@ -268,14 +273,19 @@ describe("A2 handoff allowlist", () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it("contains exactly the documented A2-owned mutation reads/writers", () => {
-    expect(A2_HANDOFF_ALLOWLIST.every((e) => e.removalOwner === "A2")).toBe(true);
-    expect(A2_HANDOFF_ALLOWLIST.map((e) => `${e.file}#${e.operation}`).sort()).toEqual(
+  it("is EMPTY — plan item 12: every A1 mutation-local read is migrated", () => {
+    // A2's completion gate: "the A1 writer-read allowlist is empty". Not a rename —
+    // the reads themselves are gone. The permanent writes that remain are a
+    // different claim and live in their own registries below.
+    expect(A2_HANDOFF_ALLOWLIST).toEqual([]);
+  });
+
+  it("licenses the eight permanent runtime writers for WRITES ONLY, never reads", () => {
+    // `roles/[id]` DELETE is absent on purpose: it mutates, but its region names no
+    // protected type literal, so the detector reports no site and an entry would be
+    // dead. See the note in the registry.
+    expect(PROTECTED_RUNTIME_WRITERS.map((e) => `${e.file}#${e.operation}`).sort()).toEqual(
       [
-        // The former `#module` entry (the mutation-local `reviewRecipients()`
-        // proposal read) is gone: A2 §6 derives review recipients from the
-        // canonical proposal the PATCH already loaded, so there is no
-        // module-level protected read left to exempt.
         "app/api/admin/proposals/[id]/route.ts#PATCH",
         "app/api/admin/roles/[id]/route.ts#PATCH",
         "app/api/admin/roles/copy-instruments/route.ts#POST",
@@ -284,6 +294,37 @@ describe("A2 handoff allowlist", () => {
         "app/api/admin/roles/swap/route.ts#POST",
         "app/api/admin/setlists/route.ts#PUT",
         "app/api/me/proposals/route.ts#POST",
+      ].sort(),
+    );
+    // Nothing removes a writer: item 12 must never be "satisfied" by moving reads here.
+    for (const entry of PROTECTED_RUNTIME_WRITERS) {
+      expect(entry.removalOwner, entry.file).not.toBe("A2");
+      expect(
+        A2_HANDOFF_ALLOWLIST.some((a) => a.file === entry.file && a.operation === entry.operation),
+        entry.file,
+      ).toBe(false);
+    }
+
+    // The narrowing is real: the same file+operation still fails for every READ kind.
+    for (const entry of PROTECTED_RUNTIME_WRITERS) {
+      const write: ProtectedSite = {
+        file: entry.file,
+        operation: entry.operation,
+        kind: "protected-write",
+        client: "sanity-client",
+        compliant: false,
+        evidence: "",
+      };
+      expect(auditViolations([write]), `${entry.file} write`).toHaveLength(0);
+      for (const kind of ["protected-literal-read", "generic-id-protected-read", "type-rejection-guard"] as const) {
+        expect(auditViolations([{ ...write, kind }]), `${entry.file} ${kind}`).toHaveLength(1);
+      }
+    }
+  });
+
+  it("lists exactly the five retired one-shot writers, each proven fail-closed", () => {
+    expect(RETIRED_ONE_SHOT_WRITERS.map((e) => `${e.file}#${e.operation}`).sort()).toEqual(
+      [
         "scripts/cleanup-superseded-proposals.mjs#module",
         "scripts/import-schedule.ts#module",
         "scripts/import-setlist-history.mjs#module",
@@ -291,6 +332,45 @@ describe("A2 handoff allowlist", () => {
         "scripts/unpublish-july-2026.mjs#module",
       ].sort(),
     );
+    // Same set as the runtime retirement gate — one source of truth, not two lists
+    // that can drift apart.
+    expect(RETIRED_ONE_SHOT_WRITERS.map((e) => e.file).sort()).toEqual(
+      Object.values(RETIRED_WRITERS)
+        .map((entry) => entry.file)
+        .sort(),
+    );
+    // The exemption is only honest while the file actually fails closed. The gate
+    // must be present AND precede every write marker — that ordering is proven in
+    // scripts/lib/__tests__/sr-retired-writer.test.mjs; here we pin the call itself
+    // so an entry cannot outlive its guard.
+    for (const entry of RETIRED_ONE_SHOT_WRITERS) {
+      const src = readFileSync(path.join(REPO_ROOT, entry.file), "utf8");
+      expect(src, entry.file).toContain('from "./lib/sr-retired-writer.mjs"');
+      expect(src, entry.file).toMatch(/assertRetiredWriter\(\s*"/);
+      expect(entry.removalOwner, entry.file).not.toBe("A2");
+    }
+  });
+
+  it("keeps the four writer/read registries pairwise disjoint", () => {
+    const registries = {
+      A2_HANDOFF_ALLOWLIST,
+      PROTECTED_RUNTIME_WRITERS,
+      RETIRED_ONE_SHOT_WRITERS,
+      OPERATOR_TOOLING_ALLOWLIST,
+      DEFENSIVE_TYPE_REJECTION_GUARDS,
+    };
+    const names = Object.keys(registries) as Array<keyof typeof registries>;
+    for (const a of names) {
+      for (const b of names) {
+        if (a === b) continue;
+        for (const entry of registries[a]) {
+          expect(
+            registries[b].some((o) => o.file === entry.file && o.operation === entry.operation),
+            `${entry.file} [${entry.operation}] is in both ${a} and ${b}`,
+          ).toBe(false);
+        }
+      }
+    }
   });
 
   it("keeps guarded operator tooling in its own registry, never owned by A2", () => {
