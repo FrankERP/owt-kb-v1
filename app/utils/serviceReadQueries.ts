@@ -190,6 +190,18 @@ export const ROLE_TARGET_LOCK_PROJECTION = `{
   _id, _rev, _type, targetKey, state, roleId, roleType, date, claimNonce, generation
 }`;
 
+/**
+ * Every weekend target lock, for the roles integrity summary (A2 §1). Locks are
+ * internal coordination documents, so the whole set is small and bounded by the
+ * number of weekend targets that ever existed.
+ */
+export function allRoleTargetLocksQuery(): BoundQuery {
+  return {
+    query: `*[_type == "roleTargetLock"] ${ROLE_TARGET_LOCK_PROJECTION}`,
+    params: {},
+  };
+}
+
 export function roleTargetLocksByIdsQuery(ids: string[]): BoundQuery {
   return {
     query: `*[_type == "roleTargetLock" && _id in $ids] ${ROLE_TARGET_LOCK_PROJECTION}`,

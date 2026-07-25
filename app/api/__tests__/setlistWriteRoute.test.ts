@@ -379,6 +379,33 @@ describe("PUT /api/admin/setlists — observed none", () => {
     expect(sendPushMock).toHaveBeenCalledWith(["mem-1"], "setlist", expect.anything());
   });
 
+  it("swallows a failed audience notification without failing the save (§7)", async () => {
+    seedWeekendService();
+    sendPushMock.mockRejectedValue(new Error("fcm down"));
+    const res = await PUT(req(body()));
+    expect(res.status).toBe(200);
+    // The setlist was still written, and the cache still refreshed.
+    expect(committedTransactions()).toHaveLength(1);
+    expect(revalidateServiceViewsMock).toHaveBeenCalled();
+  });
+
+  it("swallows a failed audience READ without failing the save (§7)", async () => {
+    seedWeekendService();
+    let saw = 0;
+    operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) => {
+      if (String(q).includes("teamMembers")) {
+        saw++;
+        throw new Error("network");
+      }
+      return canonicalRead(q, p);
+    });
+    const res = await PUT(req(body()));
+    expect(res.status).toBe(200);
+    expect(saw).toBe(1);
+    expect(committedTransactions()).toHaveLength(1);
+    expect(sendPushMock).not.toHaveBeenCalled();
+  });
+
   it("creates the Saturday setlist at the deliberate saturdarSongs id", async () => {
     store.roles.push(sundayRole({ _id: "role-sat", _type: "saturday_role", week: "2026-08-08" }));
     store.locks.push(

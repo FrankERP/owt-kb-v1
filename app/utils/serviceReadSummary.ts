@@ -13,6 +13,13 @@
 //  - One malformed record cannot fail the whole domain response.
 
 import {
+  assessRoleTargetLock,
+  roleTargetLockId,
+  validateRoleTargetLock,
+  type RoleTargetLockIssue,
+  type RoleTargetLockState,
+} from "@/app/utils/roleTargetLock";
+import {
   canonicalGroupState,
   indexProposals,
   normalizeBaseId,
@@ -61,6 +68,18 @@ export interface RoleTargetRecord {
   danglingRefs: string[];
 }
 
+/** Reported lock state for one weekend target (A2 §1). */
+export interface RoleTargetLockSummary {
+  id: string;
+  rev: string;
+  /** null when the stored `state` is unusable (a malformed record). */
+  state: RoleTargetLockState | null;
+  /** owner role id — a plain string, never a strong reference. */
+  roleId: string | null;
+  /** null when the stored generation is unusable (a malformed record). */
+  generation: number | null;
+}
+
 export interface RoleTarget {
   targetKey: string;
   type: RoleType;
@@ -72,6 +91,16 @@ export interface RoleTarget {
   memberVisibleCount: number;
   draftIds: string[];
   records: RoleTargetRecord[];
+  /**
+   * True only for weekend targets. A `special_role` is its own target serialized
+   * by its own revision, so it takes NO weekend lock and a missing one there is
+   * never an issue.
+   */
+  expectsLock: boolean;
+  /** Stored lock at this target's deterministic id, when one was inventoried. */
+  lock: RoleTargetLockSummary | null;
+  /** §1 lock issues scoped to THIS target (never another target's problem). */
+  lockIssues: RoleTargetLockIssue[];
 }
 
 export interface RoleRecordIssue {
@@ -87,6 +116,12 @@ export interface RoleRecordIssue {
 export interface RoleDomainSummary {
   targets: RoleTarget[];
   recordIssues: RoleRecordIssue[];
+  /**
+   * Every §1 lock issue in one flat view: each target's own issues plus the
+   * records whose deterministic id belongs to no canonical target (an orphan or
+   * misfiled lock). Empty when no lock inventory was supplied.
+   */
+  lockIssues: RoleTargetLockIssue[];
 }
 
 /**
@@ -109,12 +144,20 @@ export function collectRoleMemberRefs(canonicalRoles: unknown[]): string[] {
   return [...seen];
 }
 
+/**
+ * @param locks Inventoried `roleTargetLock` documents. `null`/omitted means the
+ *   caller did not inventory locks at all: no lock state is reported and NO lock
+ *   issue is invented (an empty array, by contrast, is a real inventory in which
+ *   every occupied weekend target is genuinely missing its lock).
+ */
 export function buildRoleTargets(
   canonicalRoles: unknown[],
   rawRoleDrafts: unknown[],
   membersById: Map<string, CanonicalMember>,
+  locks: unknown[] | null = null,
 ): RoleDomainSummary {
   const recordIssues: RoleRecordIssue[] = [];
+  const lockIssues: RoleTargetLockIssue[] = [];
 
   // Index raw drafts by their normalized (published) base id.
   const draftsByBaseId = new Map<string, string[]>();
@@ -130,6 +173,8 @@ export function buildRoleTargets(
 
   // Group groupable roles by target key; collect invalid ones as record issues.
   const byKey = new Map<string, { type: RoleType; records: RoleTargetRecord[]; ids: string[] }>();
+  /** roleId -> the canonical target key that role owns (groupable roles only). */
+  const ownedTargetByRoleId = new Map<string, string>();
 
   for (const role of canonicalRoles) {
     try {
@@ -148,6 +193,7 @@ export function buildRoleTargets(
         continue;
       }
       matchedBaseIds.add(id);
+      if (id) ownedTargetByRoleId.set(id, v.targetKey);
       const { members, danglingRefs } = resolveMembers(v.assignedRefs, membersById);
       const record: RoleTargetRecord = {
         id,
@@ -172,6 +218,26 @@ export function buildRoleTargets(
     }
   }
 
+  // ── Weekend lock inventory (A2 §1) ──────────────────────────────────────────
+  // `ownerTargetKey` answers "which canonical target does this role id own?" —
+  // null means the lock owns nothing real (orphan). Each lock record is validated
+  // independently, so one malformed lock is a record-level issue that cannot fail
+  // an unrelated target or the domain response.
+  const ownerTargetKey = (roleId: string): string | null =>
+    ownedTargetByRoleId.get(roleId) ?? null;
+  const lockById = new Map<string, Record<string, unknown>>();
+  if (locks) {
+    for (const lock of locks) {
+      if (isObj(lock) && nonEmptyString(lock._id)) {
+        lockById.set(lock._id, lock);
+        continue;
+      }
+      // Structurally unusable record: report it, never silently drop it.
+      lockIssues.push(...validateRoleTargetLock(lock, ownerTargetKey).issues);
+    }
+  }
+  const consumedLockIds = new Set<string>();
+
   const targets: RoleTarget[] = [];
   for (const [targetKey, bucket] of byKey) {
     const draftIds: string[] = [];
@@ -180,6 +246,31 @@ export function buildRoleTargets(
       if (d) draftIds.push(...d);
     }
     const canonicalState = canonicalGroupState(bucket.records.length);
+
+    const expectsLock = roleTargetLockId(targetKey) !== null;
+    let lock: RoleTargetLockSummary | null = null;
+    let targetLockIssues: RoleTargetLockIssue[] = [];
+    if (locks && expectsLock) {
+      const lockId = roleTargetLockId(targetKey) as string;
+      consumedLockIds.add(lockId);
+      const stored = lockById.get(lockId) ?? null;
+      const assessment = assessRoleTargetLock(
+        { targetKey, lock: stored, canonicalRoleIds: bucket.ids },
+        ownerTargetKey,
+      );
+      targetLockIssues = assessment.issues;
+      if (stored && assessment.validation) {
+        lock = {
+          id: nonEmptyString(stored._id) ? stored._id : lockId,
+          rev: nonEmptyString(stored._rev) ? stored._rev : "",
+          state: assessment.validation.state,
+          roleId: assessment.validation.roleId,
+          generation: assessment.validation.generation,
+        };
+      }
+      lockIssues.push(...targetLockIssues);
+    }
+
     targets.push({
       targetKey,
       type: bucket.type,
@@ -190,7 +281,17 @@ export function buildRoleTargets(
       memberVisibleCount: bucket.records.filter((r) => r.published).length,
       draftIds,
       records: bucket.records,
+      expectsLock,
+      lock,
+      lockIssues: targetLockIssues,
     });
+  }
+
+  // Locks at a deterministic id no canonical target claims: a still-claimed one is
+  // an orphan/wrong-owner/misfiled record; a vacated one is legitimately idle.
+  for (const [lockId, stored] of lockById) {
+    if (consumedLockIds.has(lockId)) continue;
+    lockIssues.push(...validateRoleTargetLock(stored, ownerTargetKey).issues);
   }
 
   // Drafts whose base id matched no canonical role at all are draft-only issues.
@@ -201,7 +302,7 @@ export function buildRoleTargets(
     }
   }
 
-  return { targets, recordIssues };
+  return { targets, recordIssues, lockIssues };
 }
 
 // ── Setlists domain ────────────────────────────────────────────────────────────

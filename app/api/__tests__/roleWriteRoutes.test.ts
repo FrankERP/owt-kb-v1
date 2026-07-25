@@ -386,6 +386,19 @@ describe("POST /api/admin/roles — create", () => {
     expect(afterCallbacks).toHaveLength(0);
   });
 
+  it("swallows a thrown notification without failing the committed create (§7)", async () => {
+    sendPushMock.mockRejectedValue(new Error("fcm down"));
+    sendAssignmentEmailsMock.mockRejectedValue(new Error("smtp down"));
+    const res = await createPOST(req(createBody({ published: true })));
+    expect(res.status).toBe(201);
+    expect(committedTransactions()).toHaveLength(1);
+    await expect(afterCallbacks[0]()).resolves.toBeUndefined();
+    // Both channels were still attempted, and the create stands.
+    expect(sendPushMock).toHaveBeenCalledTimes(1);
+    expect(sendAssignmentEmailsMock).toHaveBeenCalledTimes(1);
+    expect(committedTransactions()).toHaveLength(1);
+  });
+
   it("creates a special role with NO weekend lock", async () => {
     const res = await createPOST(
       req(createBody({ _type: "special_role", service_name: "Bautizos", creationRequestId: "req-special-0000001" })),
@@ -932,6 +945,43 @@ describe("POST /api/admin/roles/publish", () => {
     expect(res.status).toBe(409);
     expect((await res.json()).details.detail).toBe("lock_wrong_owner");
     expect(transactions).toHaveLength(0);
+  });
+
+  it("revalidates ONCE per affected batch, not once per role (§7)", async () => {
+    store.roles.push(
+      role({ _id: "role-1", _rev: "r1", published: false }),
+      role({ _id: "role-3", _rev: "r3", week: "2026-08-23", published: false }),
+    );
+    store.locks.push(
+      lock({ roleId: "role-1" }),
+      lock({
+        _id: "roleTarget.sunday_role.2026-08-23",
+        targetKey: "sunday_role:2026-08-23",
+        date: "2026-08-23",
+        roleId: "role-3",
+        _rev: "lock-rev-3",
+      }),
+    );
+    const res = await publishPOST(
+      req({ roles: [{ id: "role-1", rev: "r1" }, { id: "role-3", rev: "r3" }], published: true }),
+    );
+    expect(res.status).toBe(200);
+    // Exactly one revalidation pass for the whole batch.
+    expect(revalidatePathMock.mock.calls.map((c) => c[0])).toEqual(["/", "/schedule", "/me"]);
+  });
+
+  it("swallows a thrown notification without failing the committed batch (§7)", async () => {
+    store.roles.push(role({ _id: "role-1", _rev: "r1", published: false }));
+    store.locks.push(lock({ roleId: "role-1" }));
+    sendPushMock.mockRejectedValue(new Error("fcm down"));
+    sendAssignmentEmailsBatchMock.mockRejectedValue(new Error("smtp down"));
+    const res = await publishPOST(req({ roles: [{ id: "role-1", rev: "r1" }], published: true }));
+    expect(res.status).toBe(200);
+    expect(committedTransactions()).toHaveLength(1);
+    // The deferred delivery attempt resolves rather than rejecting into the
+    // platform, and the committed publish is never rolled back.
+    await expect(afterCallbacks[0]()).resolves.toBeUndefined();
+    expect(committedTransactions()).toHaveLength(1);
   });
 
   it("refuses a stale batch commit without notifying", async () => {

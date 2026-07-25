@@ -106,6 +106,111 @@ describe("service-integrity route behavior", () => {
     expect(body.targets[0].records[0].members[0]._id).toBe("mem-1");
   });
 
+  it("roles route exposes weekend lock state, owner and generation (A2 §1)", async () => {
+    requireActiveManagerMock.mockResolvedValue({ user: { role: "admin" } });
+    const role = {
+      _id: "role-1",
+      _rev: "r1",
+      _type: "sunday_role",
+      week: "2026-07-26",
+      published: true,
+      Lead: [{ _key: "k1", _type: "reference", _ref: "mem-1" }],
+      BGVs: [],
+      Chorus: [],
+      instruments: [],
+      foh_team: [],
+    };
+    const lock = {
+      _id: "roleTarget.sunday_role.2026-07-26",
+      _rev: "lock-rev-1",
+      _type: "roleTargetLock",
+      targetKey: "sunday_role:2026-07-26",
+      state: "claimed",
+      roleId: "role-1",
+      roleType: "sunday_role",
+      date: "2026-07-26",
+      claimNonce: "n1",
+      generation: 2,
+    };
+    // canonicalRolesQuery, then members-by-ids, then the lock inventory — all on
+    // the canonical operational client; rawFetch only serves draft inventory.
+    operationalFetch
+      .mockResolvedValueOnce([role])
+      .mockResolvedValueOnce([{ _id: "mem-1", _rev: "m1", member_name: "Ana" }])
+      .mockResolvedValueOnce([lock]);
+    rawFetch.mockResolvedValueOnce([]);
+    const res = await rolesGET();
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.targets[0].expectsLock).toBe(true);
+    expect(body.targets[0].lock).toEqual({
+      id: "roleTarget.sunday_role.2026-07-26",
+      rev: "lock-rev-1",
+      state: "claimed",
+      roleId: "role-1",
+      generation: 2,
+    });
+    expect(body.targets[0].lockIssues).toEqual([]);
+    expect(body.lockIssues).toEqual([]);
+    // The lock inventory runs through the canonical client, never the raw one.
+    const lockCall = operationalFetch.mock.calls.find((c) =>
+      String(c[0]).includes("roleTargetLock"),
+    );
+    expect(lockCall).toBeTruthy();
+    expect(rawFetch.mock.calls.some((c) => String(c[0]).includes("roleTargetLock"))).toBe(false);
+  });
+
+  it("roles route reports an orphan lock and a missing lock as explicit issues", async () => {
+    requireActiveManagerMock.mockResolvedValue({ user: { role: "super-admin" } });
+    const role = {
+      _id: "role-1",
+      _rev: "r1",
+      _type: "sunday_role",
+      week: "2026-07-26",
+      published: true,
+      Lead: [],
+      BGVs: [],
+      Chorus: [],
+      instruments: [],
+      foh_team: [],
+    };
+    const orphan = {
+      _id: "roleTarget.saturday_role.2026-07-25",
+      _rev: "lock-rev-2",
+      _type: "roleTargetLock",
+      targetKey: "saturday_role:2026-07-25",
+      state: "claimed",
+      roleId: "role-gone",
+      roleType: "saturday_role",
+      date: "2026-07-25",
+      claimNonce: "n2",
+      generation: 0,
+    };
+    // No member refs on this role, so the next operational call is the locks read.
+    operationalFetch.mockResolvedValueOnce([role]).mockResolvedValueOnce([orphan]);
+    rawFetch.mockResolvedValueOnce([]);
+    const res = await rolesGET();
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.targets[0].lockIssues.map((i: { kind: string }) => i.kind)).toEqual([
+      "missing_lock",
+    ]);
+    expect(body.lockIssues.map((i: { kind: string }) => i.kind).sort()).toEqual([
+      "missing_lock",
+      "orphan_lock",
+    ]);
+  });
+
+  it("a lock read failure is a domain error, never a clean summary without lock state", async () => {
+    requireActiveManagerMock.mockResolvedValue({ user: { role: "admin" } });
+    operationalFetch
+      .mockResolvedValueOnce([]) // canonical roles
+      .mockRejectedValueOnce(new Error("lock read failed"));
+    rawFetch.mockResolvedValueOnce([]);
+    const res = await rolesGET();
+    expect(res.status).toBe(500);
+  });
+
   it("setlists route returns a setlist target from canonical setlists", async () => {
     requireActiveManagerMock.mockResolvedValue({ user: { role: "super-admin" } });
     const setlist = {
