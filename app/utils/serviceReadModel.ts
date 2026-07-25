@@ -184,7 +184,13 @@ export interface CanonicalMember {
   member_name?: string;
   alias?: string;
   unavailableDates?: string[];
-  unavailabilityNotes?: string;
+  /**
+   * Stored as an array of `{ date, note }` (see `sanity/schemas/worshipTeam.ts`),
+   * matching every other consumer. Declared as a plain string until 2026-07-25,
+   * which was simply wrong: nothing called a string method on it, so it never
+   * broke at runtime, but the type would have misled the next caller.
+   */
+  unavailabilityNotes?: { date: string; note: string }[];
 }
 
 /**
