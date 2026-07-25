@@ -309,6 +309,13 @@ export const OPERATOR_TOOLING_ALLOWLIST: readonly AuditExemption[] = [
     removalOwner: "A3 verification tooling (never A2)",
   },
   {
+    file: "e2e/service-readiness/lib/dataset.ts",
+    operation: "module",
+    reason:
+      "A3 §4 deployed-route harness dataset adapter: the ONLY Sanity access in the Playwright harness. It re-queries the protected role/setlist/proposal types after each deployed mutation (the stored document is the fact, the HTTP body is only the route's claim) and resets the deterministic fixtures between scenarios. Its client comes exclusively from makeVerificationClient(), whose guards hard-refuse production project ebb8vcnk and dataset production on either axis, and every read/write re-checks the exclusive dataset lease first",
+    removalOwner: "A3 verification tooling (never A2)",
+  },
+  {
     file: "scripts/backfill-legacy-seat-arrays.mjs",
     operation: "module",
     reason:

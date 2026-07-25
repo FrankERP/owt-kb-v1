@@ -378,6 +378,7 @@ describe("A2 handoff allowlist", () => {
   it("keeps guarded operator tooling in its own registry, never owned by A2", () => {
     expect(OPERATOR_TOOLING_ALLOWLIST.map((e) => `${e.file}#${e.operation}`).sort()).toEqual(
       [
+        "e2e/service-readiness/lib/dataset.ts#module",
         "scripts/backfill-legacy-seat-arrays.mjs#module",
         "scripts/bootstrap-weekend-locks.mjs#module",
         "scripts/service-readiness-cleanup.mjs#module",
