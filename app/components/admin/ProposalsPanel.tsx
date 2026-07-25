@@ -1,8 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-type ProposalStatus = "draft" | "pending" | "approved" | "changes_requested";
+import {
+  HANDOFF_NOTICE,
+  resolveProposalHandoff,
+  type ProposalFilter,
+  type ProposalReviewStatus,
+  type ProposalReviewTarget,
+} from "./proposalHandoff";
+
+/** The four stored statuses, from the shared handoff contract. */
+type ProposalStatus = ProposalReviewStatus;
 
 interface ProposalSong {
   _key: string;
@@ -73,6 +82,8 @@ const STATUS_ORDER: ProposalStatus[] = ["pending", "changes_requested", "approve
 function ProposalCard({
   proposal,
   onAction,
+  highlighted,
+  register,
 }: {
   proposal: Proposal;
   onAction: (
@@ -80,6 +91,9 @@ function ProposalCard({
     action: ProposalAction,
     notes?: string,
   ) => Promise<{ ok: boolean; conflict: boolean }>;
+  /** True when a `ProposalReviewTarget` handoff resolved to this exact id. */
+  highlighted?: boolean;
+  register?: (el: HTMLDivElement | null) => void;
 }) {
   const [requestingChanges, setRequestingChanges] = useState(false);
   const [reopening, setReopening] = useState(false);
@@ -131,7 +145,16 @@ function ProposalCard({
   const inputCls = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors placeholder:text-gray-600";
 
   return (
-    <div className="rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 bg-[#003572]/5 dark:bg-[#00bfff]/5 overflow-hidden">
+    <div
+      ref={register}
+      tabIndex={-1}
+      aria-current={highlighted ? "true" : undefined}
+      className={`min-w-0 rounded-xl border bg-[#003572]/5 dark:bg-[#00bfff]/5 overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00bfff] ${
+        highlighted
+          ? "border-[#00bfff] shadow-[0_0_0_1px_rgb(0_191_255/0.45)]"
+          : "border-[#003572]/15 dark:border-[#00bfff]/10"
+      }`}
+    >
       {/* Card header */}
       <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[#003572]/10 dark:border-[#00bfff]/10">
         <div>
@@ -322,12 +345,33 @@ function ProposalCard({
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
-export default function ProposalsPanel() {
+export interface ProposalsPanelProps {
+  /**
+   * A transient `ProposalReviewTarget` set by a service card. It is resolved by
+   * EXACT id against the already-loaded response — this panel never rebuilds a
+   * target key, re-groups records, or chooses a canonical proposal.
+   */
+  target?: ProposalReviewTarget | null;
+  /** Reports the resolution outcome; a successful `focus` consumes the target. */
+  onResolved?: (outcome: string) => void;
+}
+
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+export default function ProposalsPanel({ target = null, onResolved }: ProposalsPanelProps = {}) {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
-  const [filter, setFilter] = useState<ProposalStatus | "all">("pending");
+  const [filter, setFilter] = useState<ProposalFilter>("pending");
+  const [highlightIds, setHighlightIds] = useState<string[]>([]);
+  const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
+  const [conflictKey, setConflictKey] = useState<string | null>(null);
+  const cardRefs = useRef(new Map<string, HTMLDivElement | null>());
+  const scrollTargetRef = useRef<string | null>(null);
 
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
@@ -349,6 +393,65 @@ export default function ProposalsPanel() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // ── Proposal handoff (plan §"Proposal handoff") ───────────────────────────
+  // Exact-id resolution inside the already-loaded response. A load failure is a
+  // distinct outcome from not-found, and only a successful focus consumes the
+  // transient target — so a remount cannot resurrect an obsolete highlight.
+  const handoffContext = useMemo(
+    () => ({
+      state: (loading ? "loading" : error ? "error" : "ready") as
+        | "loading"
+        | "ready"
+        | "error",
+      records: proposals.map((p) => ({ id: p._id, status: p.status as string | null })),
+      currentFilter: filter,
+    }),
+    [loading, error, proposals, filter],
+  );
+
+  useEffect(() => {
+    // A cleared target must NOT wipe the highlight: the target is consumed the
+    // moment focus succeeds, while the revealed filter/highlight belongs to this
+    // panel from then on (a manual filter change or a reload drops it).
+    if (!target) return;
+    const result = resolveProposalHandoff(target, handoffContext);
+    if (result.outcome === "waiting") return;
+    if (result.outcome === "load_failed") {
+      setHandoffNotice(HANDOFF_NOTICE.load_failed);
+      onResolved?.(result.outcome);
+      return;
+    }
+    if (result.outcome === "not_found") {
+      setHandoffNotice(HANDOFF_NOTICE.not_found);
+      onResolved?.(result.outcome);
+      return;
+    }
+    if (result.nextFilter !== filter) setFilter(result.nextFilter);
+    setHighlightIds(result.ids);
+    setConflictKey(result.conflictKey);
+    setHandoffNotice(result.changed ? HANDOFF_NOTICE.changed : null);
+    // Scroll/focus in a follow-up effect: a filter change only reveals the card
+    // on the NEXT render, so the node may not exist yet.
+    scrollTargetRef.current = result.ids[0];
+    onResolved?.(result.outcome);
+    // `filter` is read through `handoffContext`; listing it again would re-run
+    // the effect on the filter change this effect itself performs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target, handoffContext, onResolved]);
+
+  // Reveal the focused card once it is actually rendered. Keyboard focus moves to
+  // it (the card is `tabIndex={-1}` with a visible focus ring), and the scroll
+  // respects `prefers-reduced-motion`.
+  useEffect(() => {
+    const id = scrollTargetRef.current;
+    if (!id) return;
+    const el = cardRefs.current.get(id);
+    if (!el) return;
+    scrollTargetRef.current = null;
+    el.scrollIntoView({ block: "center", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+    el.focus({ preventScroll: true });
+  }, [highlightIds, filter, proposals]);
 
   const ACTION_TOAST: Record<ProposalAction, string> = {
     approve: "Setlist publicado",
@@ -389,7 +492,7 @@ export default function ProposalsPanel() {
     }
   };
 
-  const FILTER_TABS: { id: ProposalStatus | "all"; label: string }[] = [
+  const FILTER_TABS: { id: ProposalFilter; label: string }[] = [
     { id: "all", label: "Todas" },
     { id: "pending", label: "Pendientes" },
     { id: "changes_requested", label: "En revisión" },
@@ -415,7 +518,15 @@ export default function ProposalsPanel() {
         {FILTER_TABS.map(({ id, label }) => (
           <button
             key={id}
-            onClick={() => setFilter(id)}
+            onClick={() => {
+              // A manual filter change is the user taking over: drop the handoff
+              // highlight/notice so nothing stale stays on screen.
+              setFilter(id);
+              setHighlightIds([]);
+              setConflictKey(null);
+              setHandoffNotice(null);
+              scrollTargetRef.current = null;
+            }}
             className={`relative font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors ${
               filter === id
                 ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#C8D8EB] dark:text-[#00bfff]"
@@ -431,6 +542,35 @@ export default function ProposalsPanel() {
           </button>
         ))}
       </div>
+
+      {/* Handoff notice: a changed / missing / unloadable target, never silent. */}
+      {handoffNotice && (
+        <p
+          role="status"
+          className="rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 font-body text-sm text-yellow-200/90 [overflow-wrap:anywhere]"
+        >
+          {handoffNotice}
+        </p>
+      )}
+
+      {/* A1's own grouping-conflict result, revealed as itself — not regrouped. */}
+      {conflictKey && highlightIds.length > 0 && (
+        <div
+          role="status"
+          className="min-w-0 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3"
+        >
+          <p className="font-label text-[11px] uppercase tracking-widest text-red-400">
+            Propuestas en conflicto
+          </p>
+          <p className="font-body text-sm text-red-200/90 [overflow-wrap:anywhere]">
+            Este servicio tiene más de una propuesta válida ({highlightIds.length}). Resuélvelo antes
+            de publicar.
+          </p>
+          <p className="mt-1 font-mono text-[11px] text-red-200/70 [overflow-wrap:anywhere]">
+            {conflictKey} · {highlightIds.join(" · ")}
+          </p>
+        </div>
+      )}
 
       {/* States */}
       {loading && (
@@ -459,7 +599,13 @@ export default function ProposalsPanel() {
       {!loading && !error && (
         <div className="space-y-4">
           {visible.map(p => (
-            <ProposalCard key={p._id} proposal={p} onAction={handleAction} />
+            <ProposalCard
+              key={p._id}
+              proposal={p}
+              onAction={handleAction}
+              highlighted={highlightIds.includes(p._id)}
+              register={(el) => cardRefs.current.set(p._id, el)}
+            />
           ))}
         </div>
       )}
