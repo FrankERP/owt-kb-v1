@@ -1,6 +1,10 @@
 // app/utils/__tests__/email.test.ts
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
+// `email.ts` now consults the A3 §3 delivery firewall, which is `import
+// "server-only"` guarded; neutralize the marker under vitest's node environment.
+vi.mock("server-only", () => ({}));
+
 const sendMock = vi.fn();
 vi.mock("resend", () => ({
   // Mock `new Resend(apiKey)` so the instance exposes `emails.send`. Uses a
