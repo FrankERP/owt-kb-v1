@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useReducer, useRef, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Fuse from "fuse.js";
@@ -9,6 +9,15 @@ import ActivityPanel from "./ActivityPanel";
 import ContentPanel from "./ContentPanel";
 import AvailabilityPanel from "./AvailabilityPanel";
 import ProposalsPanel from "./ProposalsPanel";
+import IntegrityQueuePanel from "./IntegrityQueuePanel";
+import { ServiceHandoffProvider, type ServiceHandoffApi } from "./serviceHandoffContext";
+import {
+  reduceReviewTarget,
+  type AdminReviewTarget,
+  type AdminTabId,
+  type IntegrityIssueTarget,
+  type ProposalReviewTarget,
+} from "./proposalHandoff";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
 
@@ -317,7 +326,9 @@ function PasswordForm({
 }
 
 // ─── Tab nav ──────────────────────────────────────────────────────────────────
-type Tab = "members" | "services" | "proposals" | "availability" | "activity" | "content";
+// The tab union lives beside the transient handoff target (`proposalHandoff`), so
+// one reducer owns both and a manual tab change cannot leave a stale target.
+type Tab = AdminTabId;
 
 const ALL_TABS: { id: Tab; label: string; roles: OWTRole[] }[] = [
   { id: "members",      label: "Miembros",       roles: ["super-admin"] },
@@ -360,7 +371,34 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
   const { update } = useSession();
   const router = useRouter();
   const firstTab = ALL_TABS.filter((t) => t.roles.includes(role))[0]?.id ?? "content";
-  const [tab, setTab]           = useState<Tab>(firstTab);
+  // `{ tab, target }` in ONE reducer: a manual tab change always clears the
+  // transient handoff target, and a successful focus consumes it, so a remount
+  // can never resurrect an obsolete filter/highlight.
+  const [review, dispatchReview] = useReducer(reduceReviewTarget, { tab: firstTab, target: null });
+  const tab = review.tab;
+  const setTab = useCallback(
+    (next: Tab) => dispatchReview({ type: "select_tab", tab: next }),
+    [],
+  );
+  const onReviewResolved = useCallback(
+    (outcome: string) => dispatchReview({ type: "resolved", outcome }),
+    [],
+  );
+  const handoff = useMemo<ServiceHandoffApi>(
+    () => ({
+      openProposalReview: (target: ProposalReviewTarget) =>
+        dispatchReview({ type: "open_target", target }),
+      openIntegrityIssue: (target: IntegrityIssueTarget) =>
+        dispatchReview({ type: "open_target", target }),
+      openReviewTarget: (target: AdminReviewTarget | null) => {
+        if (target) dispatchReview({ type: "open_target", target });
+      },
+      clearReviewTarget: () => dispatchReview({ type: "clear" }),
+    }),
+    [],
+  );
+  const proposalTarget = review.target?.kind === "proposal_review" ? review.target : null;
+  const integrityTarget = review.target?.kind === "integrity_issue" ? review.target : null;
   const [members, setMembers]   = useState<Member[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
@@ -541,17 +579,27 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
   };
 
   if (tab === "services") return (
-    <div className="brand-admin-workspace space-y-6">
-      <TabBar active={tab} onChange={setTab} role={role} />
-      <div className="brand-surface rounded-2xl p-4 sm:p-6"><ServicesPanel /></div>
-    </div>
+    <ServiceHandoffProvider value={handoff}>
+      <div className="brand-admin-workspace space-y-6">
+        <TabBar active={tab} onChange={setTab} role={role} />
+        <div className="brand-surface min-w-0 space-y-4 rounded-2xl p-4 sm:p-6">
+          {/* Read-only global integrity queue: issues no validated card owns. */}
+          <IntegrityQueuePanel target={integrityTarget} onResolved={onReviewResolved} />
+          <ServicesPanel />
+        </div>
+      </div>
+    </ServiceHandoffProvider>
   );
 
   if (tab === "proposals") return (
-    <div className="brand-admin-workspace space-y-6">
-      <TabBar active={tab} onChange={setTab} role={role} />
-      <div className="brand-surface rounded-2xl p-4 sm:p-6"><ProposalsPanel /></div>
-    </div>
+    <ServiceHandoffProvider value={handoff}>
+      <div className="brand-admin-workspace space-y-6">
+        <TabBar active={tab} onChange={setTab} role={role} />
+        <div className="brand-surface rounded-2xl p-4 sm:p-6">
+          <ProposalsPanel target={proposalTarget} onResolved={onReviewResolved} />
+        </div>
+      </div>
+    </ServiceHandoffProvider>
   );
 
   if (tab === "availability") return (
