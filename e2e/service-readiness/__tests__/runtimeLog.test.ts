@@ -21,7 +21,9 @@ import {
   CAPTURE_ENV,
   CAPTURE_VERCEL,
   describeManualCapture,
+  CAPTURE_POLL_SECONDS,
   planRuntimeLogCapture,
+  shellQuote,
 } from "../lib/runtimeLog";
 
 const DEPLOYMENT = "https://owt-backstage-abc123-frank.vercel.app";
@@ -41,8 +43,26 @@ describe("planRuntimeLogCapture", () => {
     expect(plan.enabled).toBe(true);
     expect(plan.refusals).toEqual([]);
     expect(plan.file).toBe("test-results/deployment-runtime.log");
-    expect(plan.command).toBe("npx");
-    expect(plan.args).toEqual(["--yes", "vercel", "logs", DEPLOYMENT, "--json"]);
+    // `vercel logs` snapshots and exits rather than following, so a single
+    // invocation covers seconds of a multi-minute run. The plan must POLL.
+    expect(plan.command).toBe("sh");
+    expect(plan.args).toHaveLength(2);
+    expect(plan.args[0]).toBe("-c");
+    const script = plan.args[1];
+    expect(script).toContain("while :;");
+    expect(script).toContain("npx --yes vercel logs");
+    expect(script).toContain("--json");
+    expect(script).toContain(`sleep ${CAPTURE_POLL_SECONDS}`);
+    // The deployment is named by its URL, single-quoted; never a token, never a
+    // query string.
+    expect(script).toContain(`'${DEPLOYMENT}'`);
+    expect(script).not.toMatch(/token|bypass|\?/i);
+  });
+
+  it("single-quotes the origin so it cannot break out of the poll script", () => {
+    expect(shellQuote("https://example.com")).toBe("'https://example.com'");
+    // A quote in the value is escaped rather than terminating the argument.
+    expect(shellQuote("a'b")).toBe(`'a'\\''b'`);
   });
 
   it("is OPT-IN: an unset capture mode starts nothing and says why", () => {
