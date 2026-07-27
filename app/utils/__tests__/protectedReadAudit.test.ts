@@ -73,6 +73,57 @@ export async function GET() {
     expect(auditViolations(sites)).toHaveLength(1);
   });
 
+  it("flags a delete that names no type literal, resolved through a protected loader", () => {
+    // The real blind spot this closes: `roles/[id]` DELETE resolves the document by
+    // id through a loader and then deletes it. Nothing in the region spells a
+    // protected type — the type comes from the stored document — so a literal-only
+    // detector reported no site at all, and the repo's most destructive protected
+    // write was the one operation the audit could not see.
+    const sites = scanSource(
+      "app/api/example/route.ts",
+      `${CLIENT_IMPORTS}
+import { loadRoleForMutation } from "@/app/utils/roleWriteOps";
+export async function DELETE() {
+  const loaded = await loadRoleForMutation(id, rev);
+  return writeClient.transaction().delete(loaded.target.role._id).commit();
+}`,
+    );
+    expect(sites).toHaveLength(1);
+    expect(sites[0]).toMatchObject({ operation: "DELETE", kind: "protected-write", compliant: false });
+    expect(sites[0].evidence).toContain("loadRoleForMutation");
+    expect(auditViolations(sites)).toHaveLength(1);
+  });
+
+  it("flags a module-scope protected write reached through a canonical loader", () => {
+    // Shared write helpers are not exported HTTP handlers, so they carry no
+    // operation of their own. They still mutate protected documents and must be
+    // registered rather than slip through as "not a route".
+    const sites = scanSource(
+      "app/utils/example.ts",
+      `${CLIENT_IMPORTS}
+import { loadCanonicalRole } from "@/app/utils/roleWriteOps";
+const role = await loadCanonicalRole(roleId);
+await writeClient.transaction().patch(roleId, (p) => p.set({ lock })).commit();`,
+    );
+    expect(sites).toHaveLength(1);
+    expect(sites[0]).toMatchObject({ operation: "module", kind: "protected-write", compliant: false });
+    expect(auditViolations(sites)).toHaveLength(1);
+  });
+
+  it("leaves a mutation that resolves no protected document alone", () => {
+    // The loader set is the whole signal — a write that never resolves a protected
+    // document is out of scope, and widening the detector must not make every
+    // unrelated mutation in the repo a violation.
+    const sites = scanSource(
+      "app/api/example/route.ts",
+      `${CLIENT_IMPORTS}
+export async function DELETE() {
+  return writeClient.delete(someUnrelatedId);
+}`,
+    );
+    expect(sites).toHaveLength(0);
+  });
+
   it("accepts the same query through the canonical operational client", () => {
     const sites = scanSource(
       "app/api/example/route.ts",
@@ -280,13 +331,11 @@ describe("A2 handoff allowlist", () => {
     expect(A2_HANDOFF_ALLOWLIST).toEqual([]);
   });
 
-  it("licenses the ten permanent runtime writers for WRITES ONLY, never reads", () => {
-    // `roles/[id]` DELETE is absent on purpose: it mutates, but its region names no
-    // protected type literal, so the detector reports no site and an entry would be
-    // dead. See the note in the registry.
+  it("licenses the twelve permanent runtime writers for WRITES ONLY, never reads", () => {
     expect(PROTECTED_RUNTIME_WRITERS.map((e) => `${e.file}#${e.operation}`).sort()).toEqual(
       [
         "app/api/admin/proposals/[id]/route.ts#PATCH",
+        "app/api/admin/roles/[id]/route.ts#DELETE",
         "app/api/admin/roles/[id]/route.ts#PATCH",
         "app/api/admin/roles/copy-instruments/route.ts#POST",
         "app/api/admin/roles/publish/route.ts#POST",
@@ -294,6 +343,7 @@ describe("A2 handoff allowlist", () => {
         "app/api/admin/roles/route.ts#POST",
         "app/api/admin/roles/swap/route.ts#POST",
         "app/api/admin/roles/unpublish/route.ts#POST",
+        "app/utils/roleWriteOps.ts#module",
         "app/api/admin/setlists/route.ts#PUT",
         "app/api/me/proposals/route.ts#POST",
       ].sort(),

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { newCreationRequestId } from "@/app/utils/monthDraftCreate";
 import MonthGenerator from "./MonthGenerator";
+import { applyRefreshedRole, refreshedRoleFromResponse } from "./applyRefreshedRole";
 import {
   SERVICE_SOURCE_KEYS,
   selectServiceCapabilities,
@@ -849,6 +850,15 @@ export default function ServicesPanel() {
         body: JSON.stringify({ ...data, rev: editModal.role._rev }),
       });
       if (res.ok) {
+        // Adopt the committed revision BEFORE reloading. If the reload then fails
+        // we still hold the revision the server just wrote, so the next save is
+        // not refused for a conflict we created ourselves. Parsing is best-effort:
+        // an unreadable body leaves the reload to correct things.
+        const refreshed = await res
+          .json()
+          .then(refreshedRoleFromResponse)
+          .catch(() => null);
+        if (refreshed) setRoles((current) => applyRefreshedRole(current, refreshed));
         closeEditModal();
         showToast(mutationOutcomeMessage("Actualizado.", await loadSources()));
       } else {

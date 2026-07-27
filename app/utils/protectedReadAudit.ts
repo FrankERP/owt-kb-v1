@@ -82,6 +82,22 @@ const NON_CLIENT_EXPORTS = new Set(["createClient", "groq", "defineQuery", "defi
  */
 const GUARDED_CLIENT_FACTORIES = ["makeVerificationClient"];
 
+/**
+ * Shared helpers that RESOLVE a protected document and hand it back. A mutation
+ * region that calls one is operating on a protected document even when no type
+ * literal appears, because the type came from stored data. This is how a
+ * delete-by-id writer stays visible to the audit.
+ */
+const PROTECTED_LOADER_HELPERS = [
+  "loadRoleForWrite",
+  "loadRoleForMutation",
+  "loadCanonicalRole",
+  "loadCanonicalProposal",
+  "resolveOwnedCoordination",
+] as const;
+
+const PROTECTED_LOADER_RE = new RegExp(`\\b(${PROTECTED_LOADER_HELPERS.join("|")})\\s*\\(`);
+
 export type ProtectedSiteKind =
   | "protected-literal-read"
   | "generic-id-protected-read"
@@ -169,12 +185,20 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
       "guarded role edit: revision-asserted assignment/date patch that also vacates the old and claims the new weekend roleTargetLock on a permitted date move (A2 §2)",
     removalOwner: "permanent runtime writer (never removed — the edit surface itself)",
   },
-  // NOTE: `app/api/admin/roles/[id]/route.ts` DELETE is deliberately NOT listed.
-  // It mutates through `writeClient.transaction()`, but its region names no
-  // protected type literal (the type comes from the stored document, never from the
-  // request), so the detector produces no site for it and an entry here would be a
-  // dead exemption. If a protected literal ever appears in that region the audit
-  // will fail and the entry must be added then — that is the audit working.
+  {
+    file: "app/utils/roleWriteOps.ts",
+    operation: "module",
+    reason:
+      "the shared A2 write-ops helper. `bootstrapLegacyLock` patches a legacy role onto its owned weekend lock under the role's observed revision, so the module itself is a protected writer, not only a loader for other writers. Like the delete surface it names no protected type literal — it is detected through the canonical loader it resolves with",
+    removalOwner: "permanent runtime writer (never removed — the shared write-op surface)",
+  },
+  {
+    file: "app/api/admin/roles/[id]/route.ts",
+    operation: "DELETE",
+    reason:
+      "guarded role delete: refuses dependent setlist/proposal history, then one transaction vacates the owned weekend lock, retires the creation receipt and deletes the role under its observed revision (A2 §2). It names no protected type literal — the type comes from the stored document — so it is detected by the loader it resolves through",
+    removalOwner: "permanent runtime writer (never removed — the delete surface itself)",
+  },
   {
     file: "app/api/admin/roles/publish/route.ts",
     operation: "POST",
@@ -789,16 +813,38 @@ export function scanSource(file: string, source: string): ProtectedSite[] {
   for (const region of regions) {
     if (!mutatingOperations.has(region.operation)) continue;
     const text = code.slice(region.start, region.end);
+    const client = info.rawSanityHttp && !info.clients.size ? "http" : "sanity-client";
+
     const hit = PROTECTED_LITERAL_RE.exec(text);
-    if (!hit) continue;
-    sites.push({
-      file,
-      operation: region.operation,
-      kind: "protected-write",
-      client: info.rawSanityHttp && !info.clients.size ? "http" : "sanity-client",
-      compliant: false,
-      evidence: `mutation operation names protected type ${hit[1]}`,
-    });
+    if (hit) {
+      sites.push({
+        file,
+        operation: region.operation,
+        kind: "protected-write",
+        client,
+        compliant: false,
+        evidence: `mutation operation names protected type ${hit[1]}`,
+      });
+      continue;
+    }
+
+    // A writer can mutate a protected document without ever naming its type: it
+    // resolves the document through a shared loader and then deletes or patches it
+    // BY ID, so the type comes from stored data and never appears in the source.
+    // The guarded role DELETE is exactly this shape, and it was invisible here —
+    // an unguarded delete could have been reintroduced without the audit noticing.
+    // Resolving a protected document through a known loader is itself the signal.
+    const loader = PROTECTED_LOADER_RE.exec(text);
+    if (loader) {
+      sites.push({
+        file,
+        operation: region.operation,
+        kind: "protected-write",
+        client,
+        compliant: false,
+        evidence: `mutation operation resolves a protected document via ${loader[1]}()`,
+      });
+    }
   }
 
   return sites;
