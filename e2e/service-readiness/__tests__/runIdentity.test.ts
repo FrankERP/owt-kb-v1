@@ -6,21 +6,24 @@
 // If either side is renamed alone, this fails — which is the whole point, because a
 // renamed header would silently produce login events nothing can clean up.
 
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
 import { VERIFICATION_MARKER_VALUE } from "../lib/harnessGuards";
 import {
   AttemptLedger,
   ID_PATTERN,
   VERIFICATION_HEADERS,
+  fileAttemptStore,
   generateAttemptId,
   generateRunId,
   isWellFormedId,
   leaseOwnerString,
   reconcileLoginEvents,
+  resetAttemptLedger,
   verificationHeaders,
   type RunIdentity,
 } from "../lib/runIdentity";
@@ -33,6 +36,21 @@ const IDENTITY: RunIdentity = {
   candidateSha: "0123456789abcdef0123456789abcdef01234567",
   deploymentId: "dpl_0123456789abcdef",
 };
+
+/** An owned event minus its attempt id, for the ledger reconciliation cases. */
+const OWNED = {
+  runId: IDENTITY.runId,
+  candidateSha: IDENTITY.candidateSha,
+  deploymentId: IDENTITY.deploymentId,
+};
+
+/** A throwaway ledger path per case, outside the repository. */
+const TMP_ROOT = mkdtempSync(path.join(tmpdir(), "sr-attempt-ledger-"));
+let tmpSeq = 0;
+function ledgerFile(): string {
+  return path.join(TMP_ROOT, `attempts-${tmpSeq++}.log`);
+}
+afterAll(() => rmSync(TMP_ROOT, { recursive: true, force: true }));
 
 describe("verification header parity with the server module", () => {
   const source = readFileSync(path.join(REPO_ROOT, SERVER_MODULE), "utf8");
@@ -127,6 +145,47 @@ describe("attempt ledger", () => {
     expect(ledger.expected()).toEqual([...ids].sort());
     expect(ledger.has(ids[0])).toBe(true);
     expect(ledger.has("never-used")).toBe(false);
+  });
+
+  // The regression this guards: `fetchOwnedLoginEvents` matches on
+  // runId+candidateSha+deploymentId, so it returns every event the RUN created. A
+  // per-test in-memory ledger saw only its own sign-in and reported every earlier
+  // scenario's legitimate event as `unexpected_attempt`. The ledger's store is
+  // therefore run-scoped and shared, so separate ledger INSTANCES — which is what
+  // a per-test Playwright fixture creates — still reconcile against the whole run.
+  it("is RUN-scoped: separate instances sharing a store see every attempt", () => {
+    const store = fileAttemptStore("srvrun-shared", ledgerFile());
+    const first = new AttemptLedger(store).next();
+    const second = new AttemptLedger(store).next();
+
+    const third = new AttemptLedger(store);
+    expect(third.expected()).toEqual([first, second].sort());
+    expect(third.has(first)).toBe(true);
+
+    const verdict = reconcileLoginEvents({
+      events: [
+        { ...OWNED, attemptId: first, _id: "ev1" },
+        { ...OWNED, attemptId: second, _id: "ev2" },
+      ],
+      identity: IDENTITY,
+      expectedAttemptIds: third.expected(),
+    });
+    expect(verdict.failures).toEqual([]);
+  });
+
+  it("ignores another run's entries, so a stale file cannot fake a missing event", () => {
+    const file = ledgerFile();
+    const mine = new AttemptLedger(fileAttemptStore("srvrun-mine", file)).next();
+    new AttemptLedger(fileAttemptStore("srvrun-theirs", file)).next();
+
+    expect(new AttemptLedger(fileAttemptStore("srvrun-mine", file)).expected()).toEqual([mine]);
+  });
+
+  it("resetAttemptLedger drops the file entirely", () => {
+    const file = ledgerFile();
+    new AttemptLedger(fileAttemptStore("srvrun-mine", file)).next();
+    resetAttemptLedger(file);
+    expect(new AttemptLedger(fileAttemptStore("srvrun-mine", file)).expected()).toEqual([]);
   });
 });
 

@@ -42,6 +42,15 @@ export const TOKEN_ENV = "SR_VERIFY_SANITY_TOKEN";
 /** Test-admin password hash, supplied outside Git. Never committed. */
 export const ADMIN_HASH_ENV = "SR_VERIFY_ADMIN_PASSWORD_HASH";
 
+/**
+ * Ordinary-member password hash, supplied outside Git. Never committed.
+ *
+ * Optional — the seed tolerates its absence — but the authorization scenarios that
+ * sign in AS an ordinary member need it, and every consumer that re-writes the
+ * fixtures must re-inject it or those sign-ins silently stop working.
+ */
+export const MEMBER_HASH_ENV = "SR_VERIFY_MEMBER_PASSWORD_HASH";
+
 /** Deterministic marker document proving the dataset's purpose. */
 export const MARKER_DOC_ID = "serviceReadiness.verificationMarker";
 

@@ -50,6 +50,10 @@ test.describe("non-member (unauthenticated) callers", () => {
         method: route.method,
         data: { probe: true },
         failOnStatusCode: false,
+        // Do NOT follow the redirect. A correct 307 to /api/auth/signin would
+        // otherwise be read as the sign-in page's own 200 — i.e. a real rejection
+        // reported as an unauthenticated caller getting through.
+        maxRedirects: 0,
       });
       // 401/403 from the app, or a NextAuth redirect to the sign-in page. Never 2xx.
       expect(
@@ -67,7 +71,8 @@ test.describe("non-member (unauthenticated) callers", () => {
 
   test("every admin read is rejected", async ({ anon }) => {
     for (const url of ADMIN_READS) {
-      const res = await anon.get(url, { failOnStatusCode: false });
+      // `maxRedirects: 0` for the same reason as above: the redirect TARGET is a 200.
+      const res = await anon.get(url, { failOnStatusCode: false, maxRedirects: 0 });
       expect(res.status(), `${url} must reject an unauthenticated caller`).not.toBe(200);
     }
   });
@@ -86,6 +91,7 @@ test.describe("non-member (unauthenticated) callers", () => {
         seats: fullSeats(),
       }),
       failOnStatusCode: false,
+      maxRedirects: 0,
     });
     expect(res.status()).not.toBe(201);
 

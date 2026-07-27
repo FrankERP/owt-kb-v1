@@ -34,7 +34,9 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 import {
+  ADMIN_HASH_ENV,
   MARKER_DOC_ID,
+  MEMBER_HASH_ENV,
   TOKEN_ENV,
   buildFixtureDocuments,
   evaluateGuards,
@@ -144,12 +146,21 @@ try {
   });
   console.log(`  backup:    ${existing.length} existing document(s) -> ${backupPath}`);
 
-  // Inject the test-admin password hash at apply time only. It is supplied by
-  // the environment, never committed, and never printed.
-  const adminHash = process.env.SR_VERIFY_ADMIN_PASSWORD_HASH;
-  const toWrite = fixtures.map((doc) =>
-    doc._id === "srv.member.admin" ? { ...doc, passwordHash: adminHash } : doc,
-  );
+  // Inject the synthetic credential hashes at apply time only. They are supplied
+  // by the environment, never committed, and never printed.
+  //
+  // The member hash exists because A3 §4 must prove that a *member* caller is
+  // rejected by the admin routes, which requires a member who can actually sign
+  // in. Without it the harness has an admin and nothing to contrast it against.
+  // It is optional: when unset, member fixtures are seeded without a password
+  // exactly as before, and only the member-authorization scenario is unavailable.
+  const adminHash = process.env[ADMIN_HASH_ENV];
+  const memberHash = process.env[MEMBER_HASH_ENV];
+  const toWrite = fixtures.map((doc) => {
+    if (doc._id === "srv.member.admin") return { ...doc, passwordHash: adminHash };
+    if (doc._id === "srv.member.lead" && memberHash) return { ...doc, passwordHash: memberHash };
+    return doc;
+  });
 
   const tx = client.transaction();
   for (const doc of toWrite) tx.createOrReplace(doc);

@@ -13,6 +13,20 @@ export const RUN_STATE_FILE = "test-results/sr-verification-run.json";
 /** Where the harness appends its own structured evidence lines during the run. */
 export const RUN_EVIDENCE_FILE = "test-results/sr-verification-evidence.log";
 
+/**
+ * Where the run records the sign-in attempt ids it actually used.
+ *
+ * File-backed and RUN-scoped on purpose. The login-event ownership predicate is
+ * `runId + candidateSha + deploymentId` — it is scoped to the whole RUN, not to one
+ * test — so the set of attempt ids it is reconciled against has to be run-scoped
+ * too. An in-memory, per-test ledger sees only its own sign-in and reports every
+ * earlier test's perfectly legitimate event as `unexpected_attempt`.
+ *
+ * Same directory and same append-only discipline as `CREATED_LEDGER_FILE`, so it
+ * also survives across Playwright workers.
+ */
+export const ATTEMPT_LEDGER_FILE = "test-results/sr-verification-attempts.log";
+
 /** `globalThis` key holding the lease-renewal interval between setup and teardown. */
 export const LEASE_RENEWAL_KEY = "__srVerificationLeaseRenewal";
 
