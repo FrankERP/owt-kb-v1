@@ -53,7 +53,7 @@ import {
   makeVerificationClient,
 } from "../../../scripts/lib/sr-verification-runtime.mjs";
 
-import { readCreatedDocuments } from "./createdDocs";
+import { evaluateCreatedId, readCreatedDocuments } from "./createdDocs";
 import type { RunIdentity } from "./runIdentity";
 
 /* ------------------------------------------------------------------ *
@@ -65,6 +65,7 @@ interface MinimalClient {
   getDocument<T = unknown>(id: string): Promise<T | undefined>;
   transaction(): {
     delete(id: string): unknown;
+    create(doc: Record<string, unknown>): unknown;
     createOrReplace(doc: Record<string, unknown>): unknown;
     commit(): Promise<unknown>;
   };
@@ -231,6 +232,50 @@ export async function resetFixtures(identity: RunIdentity): Promise<ResetResult>
 }
 
 /* ------------------------------------------------------------------ *
+ * Scenario-local integrity fixtures
+ * ------------------------------------------------------------------ */
+
+/**
+ * Write ONE scenario-local document that the guarded routes deliberately cannot
+ * produce — the A3 plan's "duplicate/draft-conflict/malformed fixtures created only
+ * for the specific test that resets them afterward".
+ *
+ * A real duplicate target is the clearest example: two canonical roles on one
+ * weekend target is precisely the state every guarded writer REFUSES to create, so
+ * the only way to prove the integrity summary reports it is to plant it directly.
+ *
+ * Safety is the same discipline as everything else here:
+ *   · the caller must already hold the live lease (re-checked);
+ *   · the id must pass `evaluateCreatedId` — a deterministic fixture id, an
+ *     infrastructure id (marker/lease) and a `drafts.` id are all REFUSED, so this
+ *     can never overwrite seeded state or the lease;
+ *   · the caller records the id in the run ledger, so the next per-scenario reset
+ *     deletes it by exact id.
+ * It is `create`, never `createOrReplace`: an id that already exists is a bug in the
+ * scenario, not something to silently clobber.
+ */
+export async function createScenarioDocument(
+  identity: RunIdentity,
+  doc: Record<string, unknown>,
+): Promise<void> {
+  // The id check runs FIRST, before the lease and before any client is built, so a
+  // refused id can never reach the Content Lake and the refusal is provable offline.
+  const id = doc._id;
+  const decision = evaluateCreatedId(id);
+  if (!decision.ok) {
+    throw new Error(
+      `Refusing to plant scenario document "${String(id)}": ${decision.reason}. ` +
+        `Deterministic fixtures and infrastructure documents are owned by the fixture reset.`,
+    );
+  }
+  await assertLeaseOwned(identity);
+  const client = datasetClient();
+  const tx = client.transaction();
+  tx.create(doc);
+  await tx.commit();
+}
+
+/* ------------------------------------------------------------------ *
  * Post-mutation re-query
  *
  * Every scenario re-queries Sanity after a success OR a conflict, always under the
@@ -317,6 +362,28 @@ export async function readWeekendSetlistsForWeek(
   );
 }
 
+/**
+ * The approval receipt A2 §6 records. It is an EMBEDDED object on the proposal,
+ * not a separate document: A2's "protected stored types" list introduces exactly
+ * two new internal types (`roleTargetLock`, `roleCreationReceipt`) and no approval
+ * receipt document, so the receipt lives inside the one transaction that marks the
+ * proposal approved and writes the live setlist. There is therefore no receipt id
+ * to dereference — the receipt IS the stored evidence.
+ */
+export interface StoredApprovalReceipt {
+  v?: number | null;
+  marker?: string | null;
+  fingerprint?: string | null;
+  serviceType?: string | null;
+  serviceDate?: string | null;
+  serviceRef?: string | null;
+  setlistTargetKey?: string | null;
+  setlistId?: string | null;
+  songCount?: number | null;
+  approvedAt?: string | null;
+  approvedBy?: string | null;
+}
+
 export interface StoredProposal {
   _id: string;
   _rev: string;
@@ -327,12 +394,13 @@ export interface StoredProposal {
   service_ref?: { _ref?: string } | null;
   songs?: Array<{ _key?: string; song?: { _ref?: string } }> | null;
   admin_notes?: string | null;
-  approvalReceiptId?: string | null;
+  approval_receipt?: StoredApprovalReceipt | null;
+  last_transition?: Record<string, unknown> | null;
 }
 
 const PROPOSAL_PROJECTION = `{
   _id, _rev, _type, status, service_type, service_date, service_ref, songs,
-  admin_notes, approvalReceiptId
+  admin_notes, approval_receipt, last_transition
 }`;
 
 /** Every `setlistProposal` for one service — the shared-singleton check. */

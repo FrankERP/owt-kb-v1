@@ -649,8 +649,20 @@ describe("buildFixtureDocuments — plan §2 coverage", () => {
   it("covers pending / changes_requested / approved / legacy-approved proposals", () => {
     const statuses = ofType("setlistProposal").map((p) => p.status);
     expect(statuses).toEqual(expect.arrayContaining(["pending", "changes_requested", "approved"]));
-    expect(byId.get("srv.proposal.approved").approvalReceiptId).toBeTruthy();
-    expect(byId.get("srv.proposal.legacyApproved").approvalReceiptId).toBeUndefined();
+    // "Approved WITH a receipt" versus "approved with none" — the A2 §6 receipt is
+    // an EMBEDDED object on the proposal, so the distinction is the presence and
+    // structural completeness of `approval_receipt`, not a receipt document id.
+    const receipt = byId.get("srv.proposal.approved").approval_receipt;
+    expect(receipt).toBeTruthy();
+    expect(receipt.marker).toBe("owt-kb-v1/a2-approval-1");
+    expect(receipt.v).toBe(1);
+    for (const field of ["fingerprint", "serviceRef", "setlistTargetKey", "setlistId", "approvedAt"]) {
+      expect(typeof receipt[field], field).toBe("string");
+      expect(receipt[field].length, field).toBeGreaterThan(0);
+    }
+    expect(byId.get("srv.proposal.legacyApproved").approval_receipt).toBeUndefined();
+    // The retired provisional field must be gone, not merely shadowed.
+    expect(byId.get("srv.proposal.approved").approvalReceiptId).toBeUndefined();
   });
 
   it("covers claimed lock, vacant lock, and a legacy role with NO lock", () => {

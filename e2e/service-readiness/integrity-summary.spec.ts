@@ -9,10 +9,11 @@
 // the specific test that resets them afterward".
 
 import { expect, test } from "./fixtures";
-import { readRolesAtTarget } from "./lib/dataset";
+import { createScenarioDocument, readRolesAtTarget } from "./lib/dataset";
 import {
   DANGLING_MEMBER_ID,
   FIXTURE_DATE,
+  MEMBERS,
   PROPOSALS,
   ROLES,
   createRoleBody,
@@ -29,6 +30,7 @@ interface RoleTarget {
   targetKey: string;
   canonicalCount: number;
   canonicalIds: string[];
+  canonicalState?: string;
   draftIds: string[];
   records?: Array<{ id: string; issues?: string[] }>;
 }
@@ -90,13 +92,12 @@ test.describe("integrity summary", () => {
     ).toBe(true);
   });
 
-  test("reports a DUPLICATE target created for this test only", async ({ admin, run }) => {
-    // Two canonical roles for the same weekend target cannot be produced through the
-    // guarded create route (it refuses an occupied target), which is the point: the
-    // duplicate is created by moving a role onto the occupied date is also refused,
-    // so the duplicate here is the one the fixtures deliberately allow — a second
-    // SPECIAL service on the same date with a different name shares the date but not
-    // the target key, and the summary must keep them distinct rather than merging.
+  test("keeps two special services on ONE date as two distinct targets", async ({ admin, run }) => {
+    // A second special service on the same DATE is not a duplicate TARGET: a
+    // `special_role` is its own target, keyed by its own document id (A1's
+    // `roleTargetKey`; A2 §1 "special roles use their own id/revision"). So the two
+    // must appear as two targets of one role each — never collapsed into one target
+    // holding two canonical roles, and never keyed by the shared date.
     const requestId = scopedRequestId(run.identity.runId, "integrity-dup");
     const created = await admin.api.post("/api/admin/roles", {
       data: createRoleBody({
@@ -109,9 +110,9 @@ test.describe("integrity summary", () => {
       failOnStatusCode: false,
     });
     expect(created.status(), await created.text()).toBe(201);
-    const duplicate = (await created.json()) as { _id: string };
-    run.recordCreated(duplicate._id, "integrity/duplicate-special");
-    run.recordCreated(receiptId(requestId), "integrity/duplicate-receipt");
+    const second = (await created.json()) as { _id: string };
+    run.recordCreated(second._id, "integrity/second-special");
+    run.recordCreated(receiptId(requestId), "integrity/second-special-receipt");
 
     const atDate = await readRolesAtTarget(run.identity, {
       type: "special_role",
@@ -120,15 +121,62 @@ test.describe("integrity summary", () => {
     expect(atDate.length, "two special services now share the date").toBeGreaterThan(1);
 
     const summary = (await (await admin.api.get(ROLES_SUMMARY, { failOnStatusCode: false })).json()) as RoleSummary;
-    const sameDate = summary.targets.filter((t) => t.targetKey.includes(FIXTURE_DATE.specialPublished));
-    expect(
-      sameDate.length,
-      "each special service is its own target — the summary must not collapse them",
-    ).toBeGreaterThan(1);
-    for (const target of sameDate) {
-      expect(target.canonicalCount, target.targetKey).toBe(1);
+    // Selected by ROLE ID, which is what a special target's key actually is — the
+    // date never appears in a special target key.
+    const byKey = new Map(summary.targets.map((t) => [t.targetKey, t]));
+    for (const roleId of [ROLES.specialPublished, second._id]) {
+      const target = byKey.get(roleId);
+      expect(target, `the special role ${roleId} must be its own target`).toBeTruthy();
+      expect(target?.canonicalCount, roleId).toBe(1);
+      expect(target?.canonicalIds).toEqual([roleId]);
     }
     // The per-scenario fixture reset removes the extra role afterwards.
+  });
+
+  test("reports a REAL duplicate weekend target planted for this test only", async ({
+    admin,
+    run,
+  }) => {
+    // Two canonical roles on ONE weekend target is exactly the state every guarded
+    // writer refuses to create (create refuses an occupied target; a move onto an
+    // occupied date is refused too). So the only way to prove the summary REPORTS a
+    // duplicate is to plant one directly in the isolated dataset — the A3 plan's
+    // "duplicate/... fixtures created only for the specific test that resets them
+    // afterward". It is recorded in the run ledger and removed by exact id.
+    const targetKey = `sunday_role:${FIXTURE_DATE.sundayPublished}`;
+    const plantedId = `srv.integrity.duplicate.${run.identity.runId.slice(-12)}`;
+    run.recordCreated(plantedId, "integrity/planted-duplicate-role");
+    await createScenarioDocument(run.identity, {
+      _id: plantedId,
+      _type: "sunday_role",
+      week: FIXTURE_DATE.sundayPublished,
+      published: true,
+      Lead: [{ _key: "dupLead", _type: "reference", _ref: MEMBERS.lead }],
+      BGVs: [],
+      Chorus: [],
+      instruments: [],
+      foh_team: [],
+    });
+
+    const atTarget = await readRolesAtTarget(run.identity, {
+      type: "sunday_role",
+      date: FIXTURE_DATE.sundayPublished,
+    });
+    expect(atTarget.map((r) => r._id).sort()).toEqual([ROLES.sundayPublished, plantedId].sort());
+
+    const summary = (await (await admin.api.get(ROLES_SUMMARY, { failOnStatusCode: false })).json()) as RoleSummary;
+    const duplicate = summary.targets.find((t) => t.targetKey === targetKey);
+    expect(duplicate, `the summary must still report ${targetKey}`).toBeTruthy();
+    expect(
+      duplicate?.canonicalCount,
+      "two canonical roles on one weekend target must be counted as two",
+    ).toBe(2);
+    expect(duplicate?.canonicalIds.sort()).toEqual([ROLES.sundayPublished, plantedId].sort());
+    expect(duplicate?.canonicalState, "and named as a duplicate, not as a healthy single").toBe(
+      "duplicate",
+    );
+
+    run.evidence("integrity_duplicate_target_reported", { targetKey, planted: plantedId });
   });
 
   test("reports the incomplete and empty setlist fixtures", async ({ admin }) => {

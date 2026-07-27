@@ -150,6 +150,14 @@ test.describe("role delete, vacate and recreate", () => {
     ).json()) as { _id: string };
 
     const stored = await readRole(run.identity, created._id);
+    // The generation the CLAIMED lock carries before the delete — the baseline the
+    // vacate must advance past (A2 §1: a vacant lock "advances generation").
+    const claimedBefore = await readSidecar<{ state: string; generation: number }>(
+      run.identity,
+      lockId("sunday_role", date),
+    );
+    expect(claimedBefore?.state).toBe("claimed");
+
     const del = await admin.api.delete(roleUrl(created._id), {
       data: { rev: stored?._rev },
       failOnStatusCode: false,
@@ -163,6 +171,12 @@ test.describe("role delete, vacate and recreate", () => {
       lockId("sunday_role", date),
     );
     expect(lock?.state).toBe("vacant");
+    // A2 §1: VACATING is what advances the generation, so a stale claimant can
+    // never be confused with the next one.
+    expect(
+      lock?.generation ?? 0,
+      "vacating an owned lock must advance its generation",
+    ).toBeGreaterThan(claimedBefore?.generation ?? 0);
     const receipt = await readSidecar<{ state: string }>(run.identity, receiptId(requestId));
     expect(receipt?.state).toBe("role_deleted");
 
@@ -189,8 +203,12 @@ test.describe("role delete, vacate and recreate", () => {
       lockId("sunday_role", date),
     );
     expect(reclaimed).toMatchObject({ state: "claimed", roleId: recreated._id });
-    // Generation is monotonic across vacate/reclaim, so a stale holder cannot win.
-    expect(reclaimed?.generation ?? 0).toBeGreaterThan(lock?.generation ?? 0);
+    // Generation is MONOTONIC (never rewound) across vacate/reclaim. A reclaim is
+    // deliberately not required to advance it again: A2 §1 attaches the advance to
+    // the VACANT transition, and the guard that actually stops a stale claimant is
+    // the lock's `_rev` precondition, not this counter. Asserting a second advance
+    // here would be asserting a rule the plan does not state.
+    expect(reclaimed?.generation ?? 0).toBeGreaterThanOrEqual(lock?.generation ?? 0);
 
     run.evidence("role_delete_vacate_recreate", {
       deleted: created._id,

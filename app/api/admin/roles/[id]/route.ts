@@ -29,6 +29,7 @@ import {
 } from "@/app/utils/roleWriteRequest";
 import {
   bootstrapLegacyLock,
+  loadCanonicalRole,
   loadDependencies,
   loadLock,
   loadReceiptsForRole,
@@ -290,7 +291,35 @@ export async function PATCH(
   ]);
 
   revalidateRoleMutation();
-  return NextResponse.json({ _id: role._id, _type: roleType, date: newDate, ok: true });
+
+  // ── Response: the REFRESHED stored read, at the COMMITTED revision ────────
+  // An echo of the request would leave the caller holding the revision it
+  // observed BEFORE this write, so its next edit would necessarily be stale —
+  // the client would have to refetch to keep editing at all, and a refetch that
+  // fails silently downgrades to a guaranteed `409` on the next save. So the
+  // committed revision is part of the success response, read back from the
+  // canonical contract rather than assembled from the request.
+  //
+  // The refresh is BEST EFFORT: the business transaction already committed, and
+  // a committed mutation is never reported as a failure because a follow-up
+  // read did not resolve. When it cannot be resolved unambiguously the response
+  // degrades to the identity-only shape it has always had.
+  let refreshed: Record<string, unknown> | null = null;
+  try {
+    const after = await loadCanonicalRole(role._id);
+    if (after.state === "single" && after.role && !after.draftIds.length) {
+      refreshed = after.role as unknown as Record<string, unknown>;
+    }
+  } catch {
+    refreshed = null;
+  }
+  return NextResponse.json({
+    ...(refreshed ?? {}),
+    _id: role._id,
+    _type: roleType,
+    date: newDate,
+    ok: true,
+  });
 }
 
 /**

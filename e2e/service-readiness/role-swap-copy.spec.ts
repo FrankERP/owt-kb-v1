@@ -19,6 +19,26 @@ function instrumentPairs(role: Awaited<ReturnType<typeof readRole>>): string[] {
     .map((s) => `${s.instrument}:${s.person?._ref}`)
     .sort();
 }
+/**
+ * Everything a role STORES, minus its revision and its `_key`s: the comparable
+ * content of a document. Used where the claim is "this document's content did not
+ * change", which is not the same claim as "this document's revision did not move".
+ */
+function roleContent(role: Awaited<ReturnType<typeof readRole>>): Record<string, unknown> {
+  return {
+    _id: role?._id ?? null,
+    _type: role?._type ?? null,
+    week: role?.week ?? null,
+    date: role?.date ?? null,
+    service_name: role?.service_name ?? null,
+    published: role?.published ?? null,
+    Lead: leadRefs(role),
+    BGVs: (role?.BGVs ?? []).map((r) => r._ref as string).sort(),
+    Chorus: (role?.Chorus ?? []).map((r) => r._ref as string).sort(),
+    instruments: instrumentPairs(role),
+    foh_team: (role?.foh_team ?? []).map((s) => `${s.role}:${s.person?._ref}`).sort(),
+  };
+}
 
 test.describe("swap", () => {
   test("swaps one seat between two roles and writes both under their observed revisions", async ({
@@ -153,8 +173,25 @@ test.describe("copy instruments", () => {
     expect(instrumentPairs(targetAfter)).toEqual(instrumentPairs(source));
     // Only instruments moved: the other four seat paths are unchanged.
     expect(leadRefs(targetAfter)).toEqual(leadRefs(target));
-    // The source is never written by a copy.
-    expect((await readRole(run.identity, ROLES.sundayPublished))?._rev).toBe(source?._rev);
+
+    // ── The source's CONTENT is never written by a copy ─────────────────────
+    // Its `_rev` DOES advance, and that is by design, not a leak. Content Lake
+    // offers no read-only revision assertion inside a transaction, so the only
+    // way to make "the source still holds this lineup" part of the same atomic
+    // commit is a revision-guarded no-op patch of the source's own unchanged
+    // date field (see `app/api/admin/roles/copy-instruments/route.ts`); the
+    // shipped guarded DELETE makes the identical tradeoff. A2 §4 requires the
+    // TARGET's assignments to be safe on failure — it never requires the
+    // source's revision to be frozen — so the honest assertion is that the
+    // source's stored content is byte-identical.
+    const sourceAfter = await readRole(run.identity, ROLES.sundayPublished);
+    expect(roleContent(sourceAfter), "a copy must not change the source's content").toEqual(
+      roleContent(source),
+    );
+    expect(
+      sourceAfter?._rev,
+      "the source's revision advances: its in-transaction assertion is a guarded no-op patch",
+    ).not.toBe(source?._rev);
   });
 
   test("rejects a STALE SOURCE revision and writes nothing", async ({ admin, run }) => {
