@@ -122,3 +122,75 @@ describe("zero-delivery verdict", () => {
     );
   });
 });
+
+// ── Provider log envelopes ───────────────────────────────────────────────────
+//
+// A provider's runtime log does not contain the application's stdout directly:
+// each line is an ENVELOPE whose `message` holds that stdout as an escaped JSON
+// string. Reading the envelope's own fields finds no `event` and no `runId`, so a
+// run's real evidence looks like an absence — which is exactly how a live run
+// reported "no run-scoped delivery evidence" while 21 matching lines sat in the
+// captured log. Nothing here may regress to reading only the outer object.
+describe("parseDeliveryEvents — provider envelope", () => {
+  const envelope = (payload: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      id: `log-${Math.random().toString(36).slice(2)}`,
+      source: "serverless",
+      level: "info",
+      ...extra,
+      message: JSON.stringify(payload),
+    });
+
+  it("reads the event, run id and transport from inside `message`", () => {
+    const text = envelope({
+      event: DELIVERY_BLOCKED_EVENT,
+      transport: "fcm",
+      recipientCount: 1,
+      reason: "disabled",
+      runId: "claudeRun021",
+      candidateSha: "f9f33fa",
+      deploymentId: "dpl_x",
+    });
+    const [event] = parseDeliveryEvents("runtime.log", text);
+    expect(event).toMatchObject({
+      event: DELIVERY_BLOCKED_EVENT,
+      runId: "claudeRun021",
+      transport: "fcm",
+    });
+  });
+
+  it("keeps another run's enveloped evidence attributable to that run", () => {
+    const text = [
+      envelope({ event: DELIVERY_BLOCKED_EVENT, transport: "fcm", runId: "claudeRun019" }),
+      envelope({ event: DELIVERY_BLOCKED_EVENT, transport: "fcm", runId: "claudeRun021" }),
+    ].join("\n");
+    const runIds = parseDeliveryEvents("runtime.log", text).map((e) => e.runId);
+    expect(runIds).toEqual(["claudeRun019", "claudeRun021"]);
+  });
+
+  it("does not mistake an enveloped ATTEMPT for a block", () => {
+    const text = envelope({ event: DELIVERY_ATTEMPT_EVENT, transport: "smtp", runId: "claudeRun021" });
+    const events = parseDeliveryEvents("runtime.log", text);
+    expect(events.map((e) => e.event)).toEqual([DELIVERY_ATTEMPT_EVENT]);
+  });
+
+  it("still parses a bare, un-enveloped application line", () => {
+    const text = JSON.stringify({
+      event: DELIVERY_BLOCKED_EVENT,
+      transport: "resend",
+      runId: "claudeRun021",
+    });
+    expect(parseDeliveryEvents("stdout.log", text)[0]).toMatchObject({
+      event: DELIVERY_BLOCKED_EVENT,
+      runId: "claudeRun021",
+      transport: "resend",
+    });
+  });
+
+  it("falls back to a textual scan when the envelope's message is truncated", () => {
+    // A snapshot taken mid-write can cut the inner JSON. The run id must still be
+    // recoverable, or a partial line would silently drop this run's evidence.
+    const text = `{"id":"log-1","message":"{\\"event\\":\\"${DELIVERY_BLOCKED_EVENT}\\",\\"runId\\":\\"claudeRun021\\",\\"transp`;
+    expect(parseDeliveryEvents("runtime.log", text)[0]?.runId).toBe("claudeRun021");
+  });
+});

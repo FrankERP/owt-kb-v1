@@ -86,7 +86,24 @@ export function parseDeliveryEvents(source: string, text: string): DeliveryEvent
       const jsonStart = raw.indexOf("{");
       if (jsonStart >= 0) {
         try {
-          const parsed = JSON.parse(raw.slice(jsonStart)) as Record<string, unknown>;
+          const outer = JSON.parse(raw.slice(jsonStart)) as Record<string, unknown>;
+          // A provider log line is an ENVELOPE: the application's stdout is a
+          // string in `message`, so the event fields are one level down and
+          // escaped. Unwrap it before reading them, otherwise the envelope's own
+          // (absent) `event`/`runId` are all we ever see. Vercel's runtime log is
+          // exactly this shape.
+          let parsed = outer;
+          if (typeof outer.message === "string" && outer.message.includes(event)) {
+            const innerStart = outer.message.indexOf("{");
+            if (innerStart >= 0) {
+              try {
+                parsed = JSON.parse(outer.message.slice(innerStart)) as Record<string, unknown>;
+              } catch {
+                // Truncated or non-JSON message — keep the envelope and let the
+                // textual scan below try.
+              }
+            }
+          }
           if (typeof parsed.runId === "string") runId = parsed.runId;
           if (typeof parsed.transport === "string") transport = parsed.transport;
           // A structured line whose `event` names the other event is not this one.
@@ -96,7 +113,8 @@ export function parseDeliveryEvents(source: string, text: string): DeliveryEvent
         }
       }
       if (runId === null) {
-        const m = /\brunId["'\s:=]+([A-Za-z0-9._-]+)/.exec(raw);
+        // `\\?"` so an escaped `\"runId\":\"x\"` inside an envelope still matches.
+        const m = /\brunId\\?["'\s:=]+\\?["']?([A-Za-z0-9._-]+)/.exec(raw);
         if (m) runId = m[1];
       }
       out.push({ source, line: i + 1, event, runId, transport });
