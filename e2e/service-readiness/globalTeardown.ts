@@ -33,6 +33,7 @@ import {
   type DeliveryEventLine,
 } from "./lib/deliveryEvidence";
 import { describeManualCapture } from "./lib/runtimeLog";
+import { awaitRunScopedEvidence, describeEvidenceWait } from "./lib/awaitRunEvidence";
 import {
   RUN_EVIDENCE_FILE,
   RUN_STATE_FILE,
@@ -192,29 +193,51 @@ export default async function globalTeardown(): Promise<void> {
   if (!redaction.ok) failures.push(redaction.message);
 
   /* --- 5. Zero-delivery evidence ------------------------------------ */
-  const events: DeliveryEventLine[] = [];
   const completeLogSources: string[] = [];
+  let missingRuntimeLog: string | null = null;
 
-  // The harness's own structured evidence (browser console + response observations).
-  // Useful, but explicitly NOT accepted as a complete log source.
-  const evidencePath = resolve(process.cwd(), RUN_EVIDENCE_FILE);
-  if (existsSync(evidencePath)) {
-    events.push(...parseDeliveryEvents(RUN_EVIDENCE_FILE, readFileSync(evidencePath, "utf8")));
-  }
+  // Re-read every source on each poll. `vercel logs` opens by replaying recent
+  // history and then follows, so at this moment the stream can still be behind the
+  // last scenario — and can legitimately hold an EARLIER run's blocked lines. That
+  // is a race, not an absence, so we wait for THIS run's evidence rather than
+  // judging a half-flushed file. The predicate is unchanged ("a blocked line
+  // carrying this run id"), so another run's evidence is still rejected and a real
+  // absence still fails after the deadline.
+  const readAllSources = (): DeliveryEventLine[] => {
+    const collected: DeliveryEventLine[] = [];
+    completeLogSources.length = 0;
+    missingRuntimeLog = null;
 
-  // The deployment's COMPLETE recorded log, exported by the operator. This is the
-  // only source that can prove an absence.
-  if (state.runtimeLogFile) {
-    const logPath = resolve(process.cwd(), state.runtimeLogFile);
-    if (existsSync(logPath)) {
-      events.push(...parseDeliveryEvents(state.runtimeLogFile, readFileSync(logPath, "utf8")));
-      completeLogSources.push(state.runtimeLogFile);
-    } else {
-      failures.push(
-        `SR_VERIFY_RUNTIME_LOG_FILE points at "${state.runtimeLogFile}", which does not exist. ` +
-          `The zero-delivery proof needs the deployment's complete recorded log.`,
-      );
+    // The harness's own structured evidence (browser console + response
+    // observations). Useful, but explicitly NOT a complete log source.
+    const evidencePath = resolve(process.cwd(), RUN_EVIDENCE_FILE);
+    if (existsSync(evidencePath)) {
+      collected.push(...parseDeliveryEvents(RUN_EVIDENCE_FILE, readFileSync(evidencePath, "utf8")));
     }
+
+    // The deployment's COMPLETE recorded log. This is the only source that can
+    // prove an absence.
+    if (state.runtimeLogFile) {
+      const logPath = resolve(process.cwd(), state.runtimeLogFile);
+      if (existsSync(logPath)) {
+        collected.push(...parseDeliveryEvents(state.runtimeLogFile, readFileSync(logPath, "utf8")));
+        completeLogSources.push(state.runtimeLogFile);
+      } else {
+        missingRuntimeLog = state.runtimeLogFile;
+      }
+    }
+    return collected;
+  };
+
+  const waited = await awaitRunScopedEvidence({ runId: state.runId, readEvents: readAllSources });
+  const events = waited.events;
+  console.log(`  evidence:  ${describeEvidenceWait(waited)}`);
+
+  if (missingRuntimeLog) {
+    failures.push(
+      `SR_VERIFY_RUNTIME_LOG_FILE points at "${missingRuntimeLog}", which does not exist. ` +
+        `The zero-delivery proof needs the deployment's complete recorded log.`,
+    );
   }
 
   const delivery = evaluateDeliveryEvidence({
