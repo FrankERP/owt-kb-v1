@@ -7,7 +7,7 @@
 // per-test reset would destroy that.
 
 import { expect, test } from "./fixtures";
-import { readProposal, readProposalsForRole, readSidecar, readWeekendSetlist } from "./lib/dataset";
+import { readProposal, readProposalsForRole, readWeekendSetlist } from "./lib/dataset";
 import { PROPOSALS, ROLES, SETLISTS, SONGS, observedNone, observedSingle } from "./lib/fixtureRefs";
 
 const MY_PROPOSALS = "/api/me/proposals";
@@ -19,12 +19,20 @@ function songRows(...ids: string[]): Array<Record<string, unknown>> {
 
 test.describe("proposal lifecycle", () => {
   test("first create for a service with no proposal yet", async ({ member, run }) => {
-    // `specialDraft` has no seeded proposal.
-    expect(await readProposalsForRole(run.identity, ROLES.specialDraft)).toEqual([]);
+    // `specialLegacy` has no seeded proposal, and the signed-in member IS its Lead.
+    //
+    // It is deliberately NOT `specialDraft`: an admin-only DRAFT service is not
+    // proposable by a member at all (the draft/publish gate refuses it with a 403),
+    // which the next scenario asserts on purpose. `specialLegacy` carries no
+    // `published` field, so it is grandfathered-published — the member-facing
+    // filter is `published != false` — and it exercises the special-role
+    // coordination path, which asserts the role's own revision instead of a
+    // weekend lock.
+    expect(await readProposalsForRole(run.identity, ROLES.specialLegacy)).toEqual([]);
 
     const res = await member.api.post(MY_PROPOSALS, {
       data: {
-        roleId: ROLES.specialDraft,
+        roleId: ROLES.specialLegacy,
         status: "draft",
         observed: observedNone(),
         songs: songRows(SONGS.a),
@@ -34,11 +42,27 @@ test.describe("proposal lifecycle", () => {
     });
     expect(res.status(), await res.text()).toBeLessThan(300);
 
-    const created = await readProposalsForRole(run.identity, ROLES.specialDraft);
+    const created = await readProposalsForRole(run.identity, ROLES.specialLegacy);
     expect(created, "one shared proposal per service, never one per member").toHaveLength(1);
     run.recordCreated(created[0]._id, "proposal/first-create");
     expect(created[0].status).toBe("draft");
     run.evidence("proposal_created", { id: created[0]._id });
+  });
+
+  test("refuses a member proposal for an admin-only DRAFT service", async ({ member, run }) => {
+    // The counterpart of the scenario above: a service still held back as a draft is
+    // not member-visible, so it is not proposable either. Nothing is written.
+    const res = await member.api.post(MY_PROPOSALS, {
+      data: {
+        roleId: ROLES.specialDraft,
+        status: "draft",
+        observed: observedNone(),
+        songs: songRows(SONGS.a),
+      },
+      failOnStatusCode: false,
+    });
+    expect(res.status(), await res.text()).toBe(403);
+    expect(await readProposalsForRole(run.identity, ROLES.specialDraft)).toEqual([]);
   });
 
   test("rejects a save whose observed state is stale, writing nothing", async ({ member, run }) => {
@@ -116,12 +140,24 @@ test.describe("proposal lifecycle", () => {
     const live = await readWeekendSetlist(run.identity, SETLISTS.sundayEmpty);
     expect((live?.songs ?? []).map((s) => s.song?._ref)).toEqual([SONGS.a, SONGS.b, SONGS.c]);
 
-    // The approval receipt exists and is the verifiable record of that approval.
-    const receiptRef = approved?.approvalReceiptId;
-    expect(receiptRef, "an approval must record a verifiable receipt").toBeTruthy();
-    const receipt = await readSidecar<Record<string, unknown>>(run.identity, receiptRef as string);
-    expect(receipt, "the recorded approval receipt must resolve").not.toBeNull();
-    run.recordCreated(receiptRef as string, "proposal/approval-receipt");
+    // ── The approval receipt (A2 §6) ────────────────────────────────────────
+    // It is an EMBEDDED object on the proposal, written by the same transaction —
+    // A2 introduces no approval-receipt DOCUMENT type, so there is no id to
+    // dereference and nothing extra for the run to clean up. What makes it
+    // verifiable is its content: the app/version marker, the fingerprint of the
+    // exact approved inputs, and the live setlist document it wrote.
+    const receipt = approved?.approval_receipt;
+    expect(receipt, "an approval must record a verifiable receipt").toBeTruthy();
+    expect(receipt).toMatchObject({
+      marker: "owt-kb-v1/a2-approval-1",
+      v: 1,
+      serviceRef: ROLES.sundayPublished,
+      setlistId: SETLISTS.sundayEmpty,
+      songCount: 3,
+    });
+    expect(receipt?.fingerprint, "the receipt fingerprints the approved inputs").toBeTruthy();
+    expect(receipt?.approvedAt).toBeTruthy();
+    const fingerprint = receipt?.fingerprint;
 
     /* --- receipt retry: the same approval again is idempotent ------- */
     const retry = await admin.api.patch(adminProposal(PROPOSALS.pending), {
@@ -132,7 +168,11 @@ test.describe("proposal lifecycle", () => {
     // receipt and never a second setlist write.
     expect([200, 409]).toContain(retry.status());
     const afterRetry = await readProposal(run.identity, PROPOSALS.pending);
-    expect(afterRetry?.approvalReceiptId).toBe(receiptRef);
+    // A matching receipt makes the retry a NO-WRITE success: same fingerprint, same
+    // timestamp, and the proposal's revision never moved again.
+    expect(afterRetry?.approval_receipt?.fingerprint).toBe(fingerprint);
+    expect(afterRetry?.approval_receipt?.approvedAt).toBe(receipt?.approvedAt);
+    expect(afterRetry?._rev, "a receipt retry must write nothing").toBe(approved?._rev);
     const liveAfterRetry = await readWeekendSetlist(run.identity, SETLISTS.sundayEmpty);
     expect((liveAfterRetry?.songs ?? []).map((s) => s.song?._ref)).toEqual([
       SONGS.a,
@@ -142,12 +182,37 @@ test.describe("proposal lifecycle", () => {
 
     run.evidence("proposal_approved", {
       id: PROPOSALS.pending,
-      receiptId: receiptRef ?? null,
+      receiptFingerprint: fingerprint ?? null,
       retryStatus: retry.status(),
     });
   });
 
-  test("reopens a changes-requested proposal under the reviewed revision", async ({ admin, run }) => {
+  test("reopens an APPROVED proposal under the reviewed revision", async ({ admin, run }) => {
+    // `reopen` means "send a published setlist back for revision": the admin UI
+    // offers it only on an approved card, and it commits `changes_requested`. So
+    // its one legal source state is `approved` — reopening from
+    // `changes_requested` is the refusal asserted in the next scenario, not this
+    // scenario's happy path.
+    const before = await readProposal(run.identity, PROPOSALS.approved);
+    expect(before?.status).toBe("approved");
+
+    const res = await admin.api.patch(adminProposal(PROPOSALS.approved), {
+      data: { action: "reopen", rev: before?._rev, adminNotes: "Reabrir para ajustes." },
+      failOnStatusCode: false,
+    });
+    expect(res.status(), await res.text()).toBe(200);
+
+    const after = await readProposal(run.identity, PROPOSALS.approved);
+    expect(after?.status).toBe("changes_requested");
+    expect(after?._rev).not.toBe(before?._rev);
+    // The transition is recorded, so an identical replay is a provable no-write retry.
+    expect(after?.last_transition).toMatchObject({ action: "reopen", toStatus: "changes_requested" });
+  });
+
+  test("refuses a reopen whose source state is not approved, writing nothing", async ({
+    admin,
+    run,
+  }) => {
     const before = await readProposal(run.identity, PROPOSALS.changesRequested);
     expect(before?.status).toBe("changes_requested");
 
@@ -155,11 +220,14 @@ test.describe("proposal lifecycle", () => {
       data: { action: "reopen", rev: before?._rev },
       failOnStatusCode: false,
     });
-    expect(res.status(), await res.text()).toBe(200);
+    expect(res.status()).toBe(409);
+    expect((await res.json()) as { details?: { detail?: string } }).toMatchObject({
+      details: { detail: "source_status" },
+    });
 
     const after = await readProposal(run.identity, PROPOSALS.changesRequested);
-    expect(after?.status).not.toBe("changes_requested");
-    expect(after?._rev).not.toBe(before?._rev);
+    expect(after?._rev, "a refused transition must write nothing").toBe(before?._rev);
+    expect(after?.status).toBe("changes_requested");
   });
 
   test("refuses a transition whose reviewed revision is not the current one", async ({
@@ -185,7 +253,7 @@ test.describe("proposal lifecycle", () => {
   test("flags a legacy approval that carries no verifiable receipt", async ({ admin, run }) => {
     const legacy = await readProposal(run.identity, PROPOSALS.legacyApproved);
     expect(legacy?.status).toBe("approved");
-    expect(legacy?.approvalReceiptId ?? null).toBeNull();
+    expect(legacy?.approval_receipt ?? null).toBeNull();
 
     const res = await admin.api.patch(adminProposal(PROPOSALS.legacyApproved), {
       data: { action: "approve", rev: legacy?._rev },

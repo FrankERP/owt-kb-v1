@@ -92,7 +92,10 @@ test.describe("transaction atomicity", () => {
     expect(await snapshot(run.identity, ids)).toEqual(before);
     const proposalAfter = await readProposal(run.identity, PROPOSALS.pending);
     expect(proposalAfter?.status).toBe(proposalBefore?.status);
-    expect(proposalAfter?.approvalReceiptId ?? null).toBe(proposalBefore?.approvalReceiptId ?? null);
+    // The approval receipt is an embedded object (A2 §6 adds no receipt document),
+    // so "no receipt was written" is "the embedded receipt is still absent".
+    expect(proposalAfter?.approval_receipt ?? null).toEqual(proposalBefore?.approval_receipt ?? null);
+    expect(proposalAfter?.approval_receipt ?? null).toBeNull();
     expect(
       (await readWeekendSetlist(run.identity, SETLISTS.sundayEmpty))?.songs ?? [],
       "the live setlist must stay empty when the approval aborts",

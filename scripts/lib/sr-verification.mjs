@@ -952,10 +952,32 @@ export function buildFixtureDocuments({ now }) {
     status: "approved",
     submitted_at: now,
     reviewed_at: now,
-    // Provisional forward-compatible marker of a verifiable approval. A2 step 6
-    // introduces the real approval-receipt document; this field distinguishes
-    // "approved with a receipt" from the legacy fixture below until then.
-    approvalReceiptId: `proposalApproval.${fixtureKey("approval", proposalApproved)}`,
+    // A2 §6's approval receipt, in the shape the shipped writer records: an
+    // EMBEDDED object on the proposal, not a separate document. (A2's protected
+    // stored types introduce `roleTargetLock` and `roleCreationReceipt` and no
+    // approval-receipt type, so the receipt is written inside the one transaction
+    // that marks the proposal approved and publishes the live setlist.)
+    //
+    // What this fixture is FOR: being structurally complete, so it reads as
+    // "approved WITH a receipt" rather than the legacy "approved with none"
+    // below. `fingerprint` is a deterministic fixture constant, NOT a recomputed
+    // fingerprint of the songs — so an approve retry against this document is a
+    // fingerprint mismatch (an honest 409), never a verified no-write replay.
+    // Mirroring the real fingerprint would mean mirroring `normalizeText` here,
+    // and a silently drifting mirror is worse than a fixture that does not claim
+    // to be replayable.
+    approval_receipt: {
+      v: 1,
+      marker: "owt-kb-v1/a2-approval-1",
+      fingerprint: fixtureKey("approvalFingerprint", proposalApproved),
+      serviceType: "sunday",
+      serviceDate: FIXTURE_DATES.sundayDraft,
+      serviceRef: sundayDraft,
+      setlistTargetKey: `featuredSongs:${FIXTURE_DATES.sundayDraft}`,
+      setlistId: setlistReady,
+      songCount: 1,
+      approvedAt: now,
+    },
   });
 
   const proposalLegacyApproved = "srv.proposal.legacyApproved";

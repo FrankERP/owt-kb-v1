@@ -122,11 +122,18 @@ function makeTransaction() {
       const outcome = commitOutcomes.shift();
       if (outcome) throw outcome;
       record.committed = true;
+      // Opt-in hook (default: no effect) so a test can move the store to the
+      // state the Content Lake would hold AFTER the transaction — the only way
+      // to observe what a route reads back post-commit.
+      onCommit?.();
       return { transactionId: "t1" };
     },
   };
   return tx;
 }
+
+/** Set by a test that needs the store to change at commit time. */
+let onCommit: (() => void) | null = null;
 
 function committedTransactions() {
   return transactions.filter((t) => t.committed);
@@ -324,6 +331,7 @@ beforeEach(() => {
   lateReceipts = [];
   lateRoles = [];
   receiptReads = 0;
+  onCommit = null;
   store = emptyStore();
   requireActiveManagerMock.mockResolvedValue(ADMIN);
   operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) =>
@@ -582,6 +590,53 @@ describe("PATCH /api/admin/roles/[id] — edit", () => {
     expect(ops[0].set._type).toBeUndefined();
     expect((ops[0].set.Lead as { _ref: string }[]).map((l) => l._ref)).toEqual(["mem-1", "mem-5"]);
     expect(ops[1]).toMatchObject({ id: "roleTarget.sunday_role.2026-08-09", rev: "lock-rev-1" });
+  });
+
+  it("answers with the REFRESHED stored read at the committed revision, not an echo", async () => {
+    store.roles.push(role());
+    store.locks.push(lock());
+    // What the Content Lake holds once the transaction lands.
+    onCommit = () => {
+      store.roles = [
+        role({
+          _rev: "rev-2",
+          Lead: [
+            { _key: "k1", _type: "reference", _ref: "mem-1" },
+            { _key: "k2", _type: "reference", _ref: "mem-5" },
+          ],
+        }),
+      ];
+    };
+
+    const res = await rolePATCH(req(editBody()), ctx("role-1"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // The COMMITTED revision, so the caller can keep editing without a refetch —
+    // never the revision it observed before the write.
+    expect(body._rev).toBe("rev-2");
+    expect(body._rev).not.toBe("rev-1");
+    expect(body._id).toBe("role-1");
+    expect(body._type).toBe("sunday_role");
+    expect(body.ok).toBe(true);
+    // Seat content comes from storage, not from the request body.
+    expect((body.Lead as { _ref: string }[]).map((l) => l._ref)).toEqual(["mem-1", "mem-5"]);
+  });
+
+  it("still reports the committed edit as success when the refresh read cannot resolve", async () => {
+    store.roles.push(role());
+    store.locks.push(lock());
+    // The role is gone (or ambiguous) by the time the response is assembled: the
+    // business transaction already committed, so this must NOT become a failure.
+    onCommit = () => {
+      store.roles = [];
+    };
+
+    const res = await rolePATCH(req(editBody()), ctx("role-1"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ _id: "role-1", _type: "sunday_role", date: "2026-08-09", ok: true });
+    expect(body._rev).toBeUndefined();
+    expect(committedTransactions()).toHaveLength(1);
   });
 
   it("never converts a stored document to another type", async () => {

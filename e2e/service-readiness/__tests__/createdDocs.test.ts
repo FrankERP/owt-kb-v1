@@ -147,3 +147,35 @@ describe("reset deletion targets", () => {
     expect(targets.fixtures.sort()).toEqual((fixtureIds() as string[]).sort());
   });
 });
+
+describe("scenario-local integrity fixtures", () => {
+  const identity = { runId: "r", candidateSha: "s", deploymentId: "d" };
+
+  // Every case below must be refused BEFORE the lease check and BEFORE any Sanity
+  // client is built, which is exactly why these assertions can run offline: reaching
+  // the lease would require a configured verification environment.
+  it("refuses to plant a document at a deterministic fixture id", async () => {
+    const { createScenarioDocument } = await import("../lib/dataset");
+    const fixture = (fixtureIds() as string[])[0];
+    await expect(
+      createScenarioDocument(identity, { _id: fixture, _type: "sunday_role" }),
+    ).rejects.toThrow(/deterministic_fixture/);
+  });
+
+  it("refuses to plant a document over the marker or the lease", async () => {
+    const { createScenarioDocument } = await import("../lib/dataset");
+    for (const id of INFRASTRUCTURE_IDS as readonly string[]) {
+      await expect(
+        createScenarioDocument(identity, { _id: id, _type: "sunday_role" }),
+      ).rejects.toThrow(/infrastructure_document/);
+    }
+  });
+
+  it("refuses a draft id and a malformed id", async () => {
+    const { createScenarioDocument } = await import("../lib/dataset");
+    await expect(
+      createScenarioDocument(identity, { _id: "drafts.srv.role.sunday.published" }),
+    ).rejects.toThrow(/draft_id/);
+    await expect(createScenarioDocument(identity, { _id: "" })).rejects.toThrow(/malformed_id/);
+  });
+});
