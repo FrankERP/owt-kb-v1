@@ -34,6 +34,7 @@ import {
   type ProposalAction,
   type TransitionIntent,
 } from "@/app/utils/proposalWriteRequest";
+import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
 function reject(res: { status: number; body: unknown }) {
   return NextResponse.json(res.body, { status: res.status });
@@ -65,7 +66,12 @@ const STALE_MESSAGE =
  * no-write retry; every mismatch is a `409` that preserves the reviewed card and
  * requires a reload.
  */
-export async function PATCH(
+// A3 §3: outbound-delivery evidence emitted anywhere under this handler — including
+// its post-commit `after()` fan-out — carries the in-flight verification run's markers.
+// An unmarked ordinary request establishes nothing and behaves exactly as before.
+export const PATCH = withVerificationRunContext(patchHandler);
+
+async function patchHandler(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {

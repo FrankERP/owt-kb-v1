@@ -17,7 +17,8 @@
 // Nothing here prints a secret. The recorded run state file contains non-secret
 // provenance only.
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { mkdirSync, openSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 import { request } from "@playwright/test";
@@ -28,8 +29,10 @@ import { fetchOwnedLoginEvents } from "./lib/loginEvents";
 import { describeRefusal, evaluateHarnessConfig } from "./lib/harnessGuards";
 import { IDENTITY_PATH, describePreflightAbort, evaluateIdentity } from "./lib/preflight";
 import { resetAttemptLedger, type RunIdentity } from "./lib/runIdentity";
+import { describeManualCapture, planRuntimeLogCapture } from "./lib/runtimeLog";
 import {
   LEASE_RENEWAL_KEY,
+  RUNTIME_LOG_CAPTURE_KEY,
   RUN_STATE_FILE,
   type RunState,
 } from "./lib/runState";
@@ -58,6 +61,35 @@ export default async function globalSetup(): Promise<void> {
   console.log(`  candidate:  ${config.candidateSha}`);
   console.log(`  deployment: ${config.deploymentId}`);
   console.log(`  bypass:     ${config.hasBypassSecret ? "runner-supplied (value never printed)" : "none"}`);
+
+  /* --- 1b. Zero-delivery evidence: start the runtime log capture ----- */
+  //
+  // BEFORE the first scenario, because `vercel logs` streams forward from the
+  // moment it is invoked and never back-fills. See `lib/runtimeLog.ts` for the
+  // window this defines and for the truncation limitation it cannot remove.
+  const capture = planRuntimeLogCapture({ env: process.env });
+  if (capture.enabled && capture.command && capture.file) {
+    const logPath = resolve(process.cwd(), capture.file);
+    mkdirSync(dirname(logPath), { recursive: true });
+    // Truncate: a stale file from a previous run must never be read as this run's
+    // evidence. (Its lines carry another run id, so it could not produce a false
+    // pass — but it could produce a very confusing failure.)
+    const fd = openSync(logPath, "w");
+    const child = spawn(capture.command, [...capture.args], {
+      // No stdin: an interactive CLI prompt must never be able to hang the run.
+      stdio: ["ignore", fd, fd],
+      detached: false,
+    });
+    child.unref();
+    (globalThis as Record<string, unknown>)[RUNTIME_LOG_CAPTURE_KEY] = child;
+    console.log(`  logs:       capturing deployment runtime output → ${capture.file}`);
+  } else {
+    // NOT fatal here: the teardown is what enforces the proof, and it fails closed.
+    // This is the early, actionable warning so the operator does not discover it
+    // only after a full mutating run.
+    console.warn(describeManualCapture(config.baseURL, capture.file));
+    for (const refusal of capture.refusals) console.warn(`    · [${refusal.code}] ${refusal.message}`);
+  }
 
   /* --- 2. Deployment identity preflight ----------------------------- */
   const { secret: bypassSecret } = resolveBypassSecret(process.env);

@@ -415,15 +415,30 @@ export function stripComments(src: string): string {
 
 interface Region { operation: string; start: number; end: number }
 
-/** Split a source into operations: exported route methods, else `"module"`. */
+/**
+ * Split a source into operations: exported route methods, else `"module"`.
+ *
+ * BOTH export shapes count, because a route handler may be exported directly or
+ * wrapped:
+ *
+ *   export async function POST(req) { … }
+ *   export const POST = withVerificationRunContext(postHandler);
+ *
+ * The wrapped form (A3 §3's request-scoped run context) is still the `POST`
+ * operation, and its handler body follows the export. Recognizing only the first
+ * shape would silently re-attribute every query in a wrapped route to `"module"`
+ * and make the handoff allowlist's per-method keys stop matching — this audit must
+ * describe the route as it is, not as it used to be written.
+ */
 export function operationRegions(code: string): Region[] {
+  const methods = HTTP_METHOD_NAMES.join("|");
   const re = new RegExp(
-    `export\\s+(?:async\\s+)?function\\s+(${HTTP_METHOD_NAMES.join("|")})\\s*\\(`,
+    `export\\s+(?:async\\s+)?function\\s+(${methods})\\s*\\(` + `|export\\s+const\\s+(${methods})\\s*=`,
     "g",
   );
   const marks: Array<{ operation: string; start: number }> = [];
   let m: RegExpExecArray | null;
-  while ((m = re.exec(code))) marks.push({ operation: m[1], start: m.index });
+  while ((m = re.exec(code))) marks.push({ operation: m[1] ?? m[2], start: m.index });
   const regions: Region[] = [
     { operation: "module", start: 0, end: marks.length ? marks[0].start : code.length },
   ];

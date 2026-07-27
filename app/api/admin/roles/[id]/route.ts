@@ -40,6 +40,7 @@ import {
   type RoleWriteTarget,
   type StoredLock,
 } from "@/app/utils/roleWriteOps";
+import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
 function reject(res: { status: number; body: unknown }) {
   return NextResponse.json(res.body, { status: res.status });
@@ -94,7 +95,12 @@ async function loadRoleForMutation(id: string, rev: string): Promise<LoadOutcome
  * target, raw draft, dependency, stale role/lock, or destination conflict returns
  * `409` with no business mutation.
  */
-export async function PATCH(
+// A3 §3: outbound-delivery evidence emitted anywhere under this handler — including
+// its post-commit `after()` fan-out — carries the in-flight verification run's markers.
+// An unmarked ordinary request establishes nothing and behaves exactly as before.
+export const PATCH = withVerificationRunContext(patchHandler);
+
+async function patchHandler(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -330,7 +336,12 @@ export async function PATCH(
  * owned weekend token, retires a receipt-backed creation key, and deletes the
  * role — atomically. A token owned by another role is never vacated.
  */
-export async function DELETE(
+// A3 §3: outbound-delivery evidence emitted anywhere under this handler — including
+// its post-commit `after()` fan-out — carries the in-flight verification run's markers.
+// An unmarked ordinary request establishes nothing and behaves exactly as before.
+export const DELETE = withVerificationRunContext(deleteHandler);
+
+async function deleteHandler(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {

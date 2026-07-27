@@ -46,12 +46,18 @@ import {
   observePublicationStates,
   parseUnpublishRequest,
 } from "@/app/utils/publishReadyBundle";
+import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
 function reject(res: { status: number; body: unknown }) {
   return NextResponse.json(res.body, { status: res.status });
 }
 
-export async function POST(req: NextRequest) {
+// A3 §3: outbound-delivery evidence emitted anywhere under this handler — including
+// its post-commit `after()` fan-out — carries the in-flight verification run's markers.
+// An unmarked ordinary request establishes nothing and behaves exactly as before.
+export const POST = withVerificationRunContext(postHandler);
+
+async function postHandler(req: NextRequest) {
   const session = await requireActiveManager();
   if (!session || session.user.role === "content-editor") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
