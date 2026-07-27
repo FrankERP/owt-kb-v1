@@ -25,6 +25,8 @@ Studio, and native iOS/Android apps (Capacitor).
 | 6 | [`UTILITIES_AND_COMPONENTS.md`](UTILITIES_AND_COMPONENTS.md) | The reusable `app/utils` helpers (don't reinvent these), the single React context, and the component inventory. |
 | 7 | [`SOLVER_AND_INFRA.md`](SOLVER_AND_INFRA.md) | The Python OR-Tools solver, its DSL, Cloud Build CI/CD, the `scripts/` catalog, mobile/Capacitor, testing. |
 | 8 | [`DEVELOPMENT.md`](DEVELOPMENT.md) | Setup, commands, the verification gate, branching/commit conventions, how to run data scripts safely, common tasks. |
+| 9 | [`SERVICE_READINESS_UI.md`](SERVICE_READINESS_UI.md) | The `/admin → Servicios` readiness layer: the five sources, the dimensions, the 15-rule primary-action ladder, the integrity queue, bulk-publish blockers. |
+| 10 | [`VERIFICATION_HARNESS.md`](VERIFICATION_HARNESS.md) | The deployed-verification (A3) runbook: isolation guarantees, env vars, the dataset lease, run identity, the zero-delivery proof, teardown. **Read before running Playwright.** |
 
 Also in this repo root:
 - [`../CLAUDE.md`](../CLAUDE.md) / [`../AGENTS.md`](../AGENTS.md) — the terse "don't-break-these" briefing (the same invariants, condensed). **Read one of these before touching code.**
@@ -50,7 +52,7 @@ roster. Everything is **Spanish UI**, **dark-mode-first**, timezone **America/Me
 ## Golden rules (the short list — full detail in the docs above)
 
 1. **Timezone is `America/Mexico_City`.** Render stored dates at **local noon**
-   (`new Date(iso.slice(0,10)+"T12:00:00")`), never bare `new Date(iso)`. See [ARCHITECTURE](ARCHITECTURE.md#timezone--dates).
+   (`new Date(iso.slice(0,10)+"T12:00:00")`), never bare `new Date(iso)`. See [ARCHITECTURE](ARCHITECTURE.md#11-timezone--dates).
 2. **`saturdarSongs` is a deliberate typo — never rename it.** Renaming orphans data.
 3. **Five member-referencing seats** on every role doc — any "who serves?" query must cover
    all five via `assignedMemberRefsQuery()`. See [DATA_MODEL](DATA_MODEL.md#the-five-member-referencing-seats).
@@ -75,3 +77,6 @@ roster. Everything is **Spanish UI**, **dark-mode-first**, timezone **America/Me
 - **"How does login / impersonation work?"** → [AUTH_AND_SECURITY.md](AUTH_AND_SECURITY.md)
 - **"How does the auto-scheduler work?"** → [SOLVER_AND_INFRA.md](SOLVER_AND_INFRA.md)
 - **"How do I run/verify a change?"** → [DEVELOPMENT.md](DEVELOPMENT.md)
+- **"Why does this service card say that / show one button?"** → [SERVICE_READINESS_UI.md](SERVICE_READINESS_UI.md)
+- **"Why can't I edit this document in Studio?"** → [AUTH_AND_SECURITY.md](AUTH_AND_SECURITY.md#studio-write-protection)
+- **"How do I run the deployed verification suite?"** → [VERIFICATION_HARNESS.md](VERIFICATION_HARNESS.md)

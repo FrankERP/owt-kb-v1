@@ -39,6 +39,19 @@ From `.env.local`: `NEXT_PUBLIC_SANITY_PROJECT_ID`, `NEXT_PUBLIC_SANITY_DATASET`
 > the preview tools (a dev-server config), then verify in-browser — never ask a human to check
 > manually.
 
+### Deployed verification (not part of the normal gate)
+
+There is deliberately **no npm script** for the Playwright suite — it signs in as a real admin and
+mutates a live deployment, so it is not something to run by reflex. It requires a fully configured
+isolated environment and refuses to start otherwise.
+
+```bash
+npx playwright test
+```
+
+Read [`VERIFICATION_HARNESS.md`](VERIFICATION_HARNESS.md) **before** running it. Every operator
+script under `scripts/service-readiness-*.mjs` is dry-run by default and needs `--apply` to write.
+
 ---
 
 ## The "done" gate (non-negotiable)
@@ -104,7 +117,7 @@ the full script inventory.
 | A new "who serves?" query | Reuse `assignedMemberRefsQuery()` in [`notifyTargets.ts`](../app/utils/notifyTargets.ts). |
 | A new notification path | `sendPush` / `sendAssignmentEmails` / `notifyProposalSubmitted`. Gate by `notifPrefs`; keep it best-effort. |
 | A new API mutation | Guard with `requireActiveManager`/`requireActiveSession`; validate input; `_key` every array-of-object write; revalidate affected ISR pages; client handler checks `res.ok`. |
-| A date computation | Local-noon rendering, Mexico_City. See [ARCHITECTURE §10](ARCHITECTURE.md#10-timezone--dates). |
+| A date computation | Local-noon rendering, Mexico_City. See [ARCHITECTURE §10](ARCHITECTURE.md#11-timezone--dates). |
 | The auto-scheduler | [`SOLVER_AND_INFRA.md`](SOLVER_AND_INFRA.md) + `MonthGenerator` + `/api/admin/solve`. |
 | Auth/roles/impersonation | [`AUTH_AND_SECURITY.md`](AUTH_AND_SECURITY.md) + `auth.ts`. |
 

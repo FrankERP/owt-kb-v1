@@ -63,7 +63,7 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   TZ stability.
 - **`ics.buildICS(events, calName?)`** ([ics.ts](../app/utils/ics.ts)) — minimal all-day `.ics`
   builder. **Timezone convention** (local-noon rendering, Mexico_City) is applied inline across
-  utils/components; there is no single dateUtils module — see [ARCHITECTURE §10](ARCHITECTURE.md#10-timezone--dates).
+  utils/components; there is no single dateUtils module — see [ARCHITECTURE §10](ARCHITECTURE.md#11-timezone--dates).
 
 ### Content conversion
 - **`textToBody(text)`**, **`bodyToLyrics(body)`**, **`groupBySections(blocks)`**
@@ -180,6 +180,25 @@ Legend: **[C]** client, **[S]** server.
 | `ActivityPanel` | Member activity / last-login ("Hoy"/"Ayer" calendar-day labels). |
 | `ParticipationSidebar` | Participation bar chart (`computeParticipation`); Voces/Instrumentos toggle. |
 
+#### Service-readiness card layer
+
+Rendered inside `ServicesPanel`. These decide **nothing** — every decision is made by the pure
+modules beside them. See [`SERVICE_READINESS_UI.md`](SERVICE_READINESS_UI.md).
+
+| Component | Purpose |
+|-----------|---------|
+| `ServiceReadinessCard` | One service card; maps over `CARD_SECTIONS` (the constant *is* the render order). |
+| `ReadinessStrip` | The four-module Equipo · Setlist · Propuesta · Disponibilidad strip. |
+| `ReadinessBadge` | One icon + text + tone chip. Colour is never the only carrier of meaning. |
+| `ServiceIssueList` | Blocking-issue lines, truncated to 4 + "y N problema(s) más". |
+| `ServicePrimaryAction` | The single primary-action button; emits `data-action-kind`/`-rule`. |
+| `IntegrityQueuePanel` | Standalone "Integridad de datos" panel; fetches the three service-integrity routes itself. |
+
+Their pure counterparts, also in `app/components/admin/`: `serviceReadiness.ts` (the dimensions,
+the 15-rule ladder, per-control gating), `serviceCardModel.ts` (card assembly + Spanish copy),
+`serviceIntegrityQueue.ts`, `serviceSourceState.ts`, `publishSelection.ts`, `proposalHandoff.ts`,
+`applyRefreshedRole.ts`, and the `serviceHandoffContext.tsx` context.
+
 `EditSongButton` [C] (top-level) — inline "edit song" affordance on song pages; role-gated; uses
 `bodyToLyrics`. Subject to the **multi-chord-chart collapse landmine**.
 
@@ -187,7 +206,10 @@ Legend: **[C]** client, **[S]** server.
 
 ## Tests
 
-32 test files (27 under `app/` + 5 under `scripts/`). Vitest (`environment: "node"`) covers
+**98 test files / 2,196 tests** (75 under `app/` + 13 under `scripts/`, plus others).
+Separately, **11 Playwright specs** under `e2e/service-readiness/` run only against the isolated
+verification deployment and are **not** part of `npm test` — see
+[`VERIFICATION_HARNESS.md`](VERIFICATION_HARNESS.md). Vitest (`environment: "node"`) covers
 `app/**/*.test.{ts,tsx,mjs}` and `scripts/**`. Highlights: `notifyTargets` (all five seats), `medley`, `computeParticipation`,
 `unfilledSeats`, `assignmentEmail`, `push`, `memberAccess` (TTL), `googleIdToken`, `draftGating`,
 `publishTransitions`, `lyrics` round-trip, `ics`, `scheduleMonths`, `routeMatcher` (login-gate

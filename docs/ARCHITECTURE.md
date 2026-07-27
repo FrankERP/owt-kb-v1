@@ -284,7 +284,10 @@ bypasses the operational client without an exact `file + operation` exemption. D
 
 1. quoted type literals (`_type == "sunday_role"`, `_type in [...]`);
 2. generic `_id` / `references()` queries whose **projection consumes protected fields**;
-3. **mutation** operations whose region names a protected type.
+3. **mutation** operations whose region names a protected type;
+4. **mutation** operations that resolve a document through a **protected loader** —
+   `loadRoleForWrite`, `loadRoleForMutation`, `loadCanonicalRole`, `loadCanonicalProposal`,
+   `resolveOwnedCoordination` — even when no type is named anywhere in the region.
 
 There are **no directory or glob exemptions** — every entry names one file and one operation, and
 gitignored local tooling is out of scope (never listed, never asserted to exist).
@@ -299,7 +302,7 @@ that **no entry is dead** (each must be exercised by a real scanned site).
 | Registry | Satisfies | Contents | Owner |
 |----------|-----------|----------|-------|
 | `A2_HANDOFF_ALLOWLIST` | any kind | **empty** — every A1 mutation-local read is migrated | closed out by A2 |
-| `PROTECTED_RUNTIME_WRITERS` | **`protected-write` only** | the 8 guarded mutation routes (roles create / edit / publish / swap / copy-instruments, setlists PUT, proposal POST, proposal PATCH) | permanent — nothing removes them |
+| `PROTECTED_RUNTIME_WRITERS` | **`protected-write` only** | the 12 guarded mutation surfaces (roles create / edit / **delete** / publish / publish-ready / unpublish / swap / copy-instruments, setlists PUT, proposal POST, proposal PATCH, and `app/utils/roleWriteOps.ts` itself) | permanent — nothing removes them |
 | `RETIRED_ONE_SHOT_WRITERS` | reads + writes | the 5 historical one-shot scripts, each fail-closed before any client | permanent record, not A2's to delete |
 | `OPERATOR_TOOLING_ALLOWLIST` | reads + writes | `service-readiness-cleanup.mjs`, `service-readiness-feasibility.mjs` | operator / A3 tooling |
 | `DEFENSIVE_TYPE_REJECTION_GUARDS` | `type-rejection-guard` only | `app/api/content/posts/[id]/route.ts` `PATCH` — reads only `{_type}` to refuse overwriting a protected doc through the song editor | song-editor refactor |
@@ -315,10 +318,14 @@ Two consequences worth internalizing:
   `assertRetiredWriter()`, and `scripts/lib/__tests__/sr-retired-writer.test.mjs` proves that call
   precedes every write marker in the file. Delete the gate and the exemption stops being honest.
 
-> One detector limit worth knowing: a mutation region is flagged only when it *names* a protected
-> type. `app/api/admin/roles/[id]/route.ts` **DELETE** mutates but derives the type from the stored
-> document, so it produces no site and is deliberately unlisted (an entry would be dead). Adding a
-> protected literal there will fail the audit until an entry is added — which is the audit working.
+> **A blind spot worth understanding, because the shape recurs.** The detector originally
+> recognised a protected mutation only when its region *named* a protected type. Two surfaces
+> never do — the role **DELETE** and `roleWriteOps.bootstrapLegacyLock` — because they resolve a
+> document by id and the type comes from stored data, never from the request. Both produced **no
+> site at all**, so the repo's most destructive protected write was the one operation the audit
+> could not see, and an entry for it would have been rejected as a dead exemption. Detection rule 4
+> (protected loaders) closes this. **Any new loader that resolves a protected document must be added
+> to `PROTECTED_LOADER_HELPERS`, or writes made through it become invisible again.**
 
 ### Protected mutation integrity
 
@@ -518,7 +525,7 @@ Condensed here; each is expanded in the linked doc.
 8. **Client mutation handlers** must wrap `fetch` in try/catch/finally, check `res.ok`, reset
    the loading flag, and never close-as-success on failure. (This is audited — keep it so.)
 9. **Impersonation is super-admin-only, enforced server-side in `auth.ts`'s `jwt` callback.**
-   Never move that check client-side. → [AUTH_AND_SECURITY](AUTH_AND_SECURITY.md#impersonation)
+   Never move that check client-side. → [AUTH_AND_SECURITY](AUTH_AND_SECURITY.md#a-impersonation-super-admin-only-server-enforced)
 10. **`proxy.ts` matcher must stay byte-for-byte equal to `MIDDLEWARE_MATCHER`** in
     `app/utils/routeMatcher.ts` (a test enforces this). Each excluded prefix is anchored with
     `(?:/|$)` so `/author` isn't mistaken for the public `/auth` route.
@@ -526,7 +533,7 @@ Condensed here; each is expanded in the linked doc.
     `roleFilter` in `assignedMemberRefsQuery`, and opaque FCM tokens in `push.ts`). Everywhere
     else, use bound `$params`.
 12. **Production Sanity writes require explicit user consent.** Diagnosing ≠ consent. Data
-    scripts dry-run by default and only write with `--apply`. → [DEVELOPMENT](DEVELOPMENT.md#data-scripts)
+    scripts dry-run by default and only write with `--apply`. → [DEVELOPMENT](DEVELOPMENT.md#data-scripts-sanity-writes)
 
 ---
 

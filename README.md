@@ -65,7 +65,7 @@ npm test
 4. **Member-facing reads filter `published != false`**; setlists gate via `publishedSetlist()`.
 5. **Mutations must revalidate** their ISR pages, and **array-of-object writes need a `_key`**.
 
-Full list in [docs/ARCHITECTURE.md §11](docs/ARCHITECTURE.md#11-the-load-bearing-invariants-do-not-break).
+Full list in [docs/ARCHITECTURE.md §11](docs/ARCHITECTURE.md#12-the-load-bearing-invariants-do-not-break).
 
 ## Conventions
 
