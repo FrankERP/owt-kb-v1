@@ -32,7 +32,14 @@ import {
   parseDeliveryEvents,
   type DeliveryEventLine,
 } from "./lib/deliveryEvidence";
-import { RUN_EVIDENCE_FILE, RUN_STATE_FILE, LEASE_RENEWAL_KEY, type RunState } from "./lib/runState";
+import { describeManualCapture } from "./lib/runtimeLog";
+import {
+  RUN_EVIDENCE_FILE,
+  RUN_STATE_FILE,
+  LEASE_RENEWAL_KEY,
+  RUNTIME_LOG_CAPTURE_KEY,
+  type RunState,
+} from "./lib/runState";
 import type { RunIdentity } from "./lib/runIdentity";
 
 /** Directories whose retained contents are scanned for a leaked secret. */
@@ -79,6 +86,23 @@ export default async function globalTeardown(): Promise<void> {
 
   const renewal = (globalThis as Record<string, unknown>)[LEASE_RENEWAL_KEY];
   if (renewal) clearInterval(renewal as NodeJS.Timeout);
+
+  // Close the runtime-log capture window: the last scenario has finished, so every
+  // line this run could produce has been produced. Stopped BEFORE the log is read
+  // so a half-written final line cannot be parsed. Killing it can never fail the
+  // run — the evidence check below is what decides.
+  const capture = (globalThis as Record<string, unknown>)[RUNTIME_LOG_CAPTURE_KEY] as
+    | { kill?: (signal?: NodeJS.Signals) => boolean; killed?: boolean }
+    | undefined;
+  if (capture?.kill) {
+    try {
+      capture.kill("SIGTERM");
+      // Let the child flush whatever it had buffered into the file.
+      await new Promise((r) => setTimeout(r, 750));
+    } catch {
+      /* a dead capture is reported by the evidence verdict, not by a throw here */
+    }
+  }
 
   const state = readRunState();
   if (!state) {
@@ -199,7 +223,15 @@ export default async function globalTeardown(): Promise<void> {
     completeLogSources,
   });
   console.log(`  delivery:  ${describeDeliveryVerdict(delivery)}`);
-  if (!delivery.ok) failures.push(describeDeliveryVerdict(delivery));
+  if (!delivery.ok) {
+    // Say what to DO about it, not just that it failed — the log source is an
+    // operator action, and the run cannot be made clean without one.
+    const noSource = delivery.failures.some((f) => f.code === "no_complete_log_source");
+    failures.push(
+      describeDeliveryVerdict(delivery) +
+        (noSource ? `\n${describeManualCapture(state.baseURL, state.runtimeLogFile)}` : ""),
+    );
+  }
 
   console.log("");
 

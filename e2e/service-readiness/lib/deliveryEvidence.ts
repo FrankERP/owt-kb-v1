@@ -17,10 +17,18 @@
 //      pass. "We saw no attempt in the browser console" is exactly the
 //      fixture-absence non-proof the plan rejects.
 //
-// The complete log source is the deployment's own recorded runtime log, exported
-// by the operator to `SR_VERIFY_RUNTIME_LOG_FILE`. The harness cannot fetch Vercel
-// runtime logs itself without introducing a second credential, and inventing one
-// would be a bigger risk than requiring the operator to export the log.
+// The complete log source is the deployment's own recorded runtime log, read from
+// `SR_VERIFY_RUNTIME_LOG_FILE`. `lib/runtimeLog.ts` can capture it for the run —
+// started before the first scenario and stopped after the last, because the
+// deployment's log stream only moves forward — or the operator can supply the file
+// themselves. The harness still reads no credential of its own: the capture shells
+// out to an already-authenticated CLI and nothing about that authentication enters
+// this process.
+//
+// A capture that stops early cannot produce a false pass. It loses the run-scoped
+// `delivery_blocked` lines along with everything else, so the verdict fails on
+// `no_run_scoped_delivery_blocked` instead of passing on a truncated file. That
+// coupling is deliberate: the two halves below check each other.
 //
 // This module is pure: it parses and decides. The teardown does the reading.
 
@@ -124,7 +132,8 @@ export function evaluateDeliveryEvidence({
       message:
         `No complete recorded log source was supplied (SR_VERIFY_RUNTIME_LOG_FILE). ` +
         `Zero delivery attempts cannot be PROVEN from browser output alone — fixture absence is not proof. ` +
-        `Export the deployment's runtime log for this run and point the variable at it.`,
+        `Capture the deployment's runtime log for the run (SR_VERIFY_RUNTIME_LOG_CAPTURE=vercel) ` +
+        `or export it yourself and point the variable at it.`,
     });
   }
 

@@ -2,8 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { sendPush } from "@/app/utils/push";
 import { tomorrowDateStr, assignedMemberRefsQuery } from "@/app/utils/notifyTargets";
+import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
-export async function GET(req: NextRequest) {
+// A3 §3: outbound-delivery evidence emitted anywhere under this handler — including
+// its post-commit `after()` fan-out — carries the in-flight verification run's markers.
+// An unmarked ordinary request establishes nothing and behaves exactly as before.
+export const GET = withVerificationRunContext(getHandler);
+
+async function getHandler(req: NextRequest) {
   const secret = req.headers.get("authorization")?.replace("Bearer ", "") || req.nextUrl.searchParams.get("secret");
   if (secret !== process.env.CRON_SECRET) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 

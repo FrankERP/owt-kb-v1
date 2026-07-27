@@ -35,7 +35,13 @@ import "server-only";
 // pure, so `app/utils/__tests__/srVerificationLoginEvent.test.ts` proves the gate
 // offline, with no Sanity client and no network.
 
-import { serverClient } from "@/sanity/lib/serverClient";
+// The Sanity client is imported LAZILY, inside `readLeaseDocument`, so that this
+// module stays statically dependency-free. A3 §3's request-scoped run context
+// (`srVerificationRunContext.ts`) reuses the header contract and the ownership gate
+// defined here, and that context sits on the hot path of every real notification —
+// a static Sanity client here would drag the Content Lake clients onto it. The one
+// function that genuinely needs the client still gets it, on the one path (a marked
+// sign-in) that already performs I/O.
 
 import {
   VERIFICATION_MARKER_VALUE,
@@ -425,6 +431,7 @@ export async function createLoginEvent({
 
 async function readLeaseDocument(): Promise<LeaseLike | null> {
   try {
+    const { serverClient } = await import("@/sanity/lib/serverClient");
     const doc = await serverClient.getDocument<LeaseLike>(LEASE_DOC_ID);
     return doc ?? null;
   } catch {

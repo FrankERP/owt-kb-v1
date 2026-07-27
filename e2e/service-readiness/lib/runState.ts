@@ -30,6 +30,15 @@ export const ATTEMPT_LEDGER_FILE = "test-results/sr-verification-attempts.log";
 /** `globalThis` key holding the lease-renewal interval between setup and teardown. */
 export const LEASE_RENEWAL_KEY = "__srVerificationLeaseRenewal";
 
+/**
+ * `globalThis` key holding the runtime-log capture child process.
+ *
+ * The capture must START before the first scenario and STOP after the last, because
+ * the deployment's log stream only moves forward — see `lib/runtimeLog.ts`. Handing
+ * it between the two global hooks is what makes that window exactly the run.
+ */
+export const RUNTIME_LOG_CAPTURE_KEY = "__srVerificationRuntimeLogCapture";
+
 export interface RunState {
   startedAt: string;
   baseURL: string;

@@ -48,6 +48,13 @@ import "server-only";
 // (`event`, `runId`, `transport`) are the ones that parser reads — there is one
 // format, not two.
 //
+// "Run-scoped" is the hard part: the run id belongs to the harness RUNNER and is
+// absent from the deployment's environment by construction. It arrives on the
+// request instead, on the same validated `x-sr-verification-*` ticket §4 already
+// defines, and `deliveryRunMarkers` prefers that ticket over the environment. See
+// `srVerificationRunContext.ts` for the mechanism and for why blocking is never
+// made conditional on having one.
+//
 // REDACTION
 // ---------
 // A record carries the channel, a non-PII recipient COUNT, and the non-secret
@@ -67,6 +74,10 @@ import {
   resolveVerificationEnvironment,
   type EnvLike,
 } from "./srVerificationIdentity";
+import {
+  currentVerificationRun,
+  type VerificationRunMarkers,
+} from "./srVerificationRunContext";
 
 /* ------------------------------------------------------------------ *
  * Constants — reused from the A3 identity module, never re-declared
@@ -194,15 +205,36 @@ export interface DeliveryRunMarkers {
 /**
  * The run/deployment/candidate markers, when present.
  *
- * `candidateSha`/`deploymentId` come from `resolveVerificationEnvironment`, so the
- * provider-variable-then-`SR_VERIFY_*`-fallback order is defined in exactly one
- * place. `runId` is the harness's own `SR_VERIFY_RUN_ID`, which is what scopes the
- * evidence to a single run.
+ * TWO SOURCES, IN THIS ORDER, AND NEVER MIXED:
+ *
+ *  1. THE IN-FLIGHT REQUEST. A verification run's id lives on the harness RUNNER,
+ *     never in the deployment's environment — `SR_VERIFY_RUN_ID` is not a Vercel
+ *     variable and cannot be one, because it is generated fresh per run. It reaches
+ *     the deployment on the already-defined `x-sr-verification-*` headers, and
+ *     `withVerificationRunContext` (see `srVerificationLoginEvent.ts`) publishes the
+ *     VALIDATED triple into a request-scoped async store. All three markers then come
+ *     from that one validated ticket, so a record can never pair one run's id with
+ *     another deployment's SHA.
+ *
+ *  2. THE DEPLOYMENT'S OWN ENVIRONMENT, when there is no request context — an
+ *     `after()` callback that outlived its scope, the reminder cron, a script.
+ *     `candidateSha`/`deploymentId` come from `resolveVerificationEnvironment`, so the
+ *     provider-variable-then-`SR_VERIFY_*`-fallback order is defined in exactly one
+ *     place. This is the behaviour every caller had before the request context
+ *     existed, kept unchanged.
  *
  * Absent markers are OMITTED rather than emitted as `null`, so an ordinary
  * production log line stays minimal.
  */
-export function deliveryRunMarkers(env: EnvLike = process.env as EnvLike): DeliveryRunMarkers {
+export function deliveryRunMarkers(
+  env: EnvLike = process.env as EnvLike,
+  run: VerificationRunMarkers | null = currentVerificationRun(),
+): DeliveryRunMarkers {
+  // A validated request ticket is complete by construction, and it is the only
+  // source that can name THIS run — prefer it whole rather than merging.
+  if (run) {
+    return { runId: run.runId, candidateSha: run.candidateSha, deploymentId: run.deploymentId };
+  }
   const resolved = resolveVerificationEnvironment(env);
   const runId = trimmed(env.SR_VERIFY_RUN_ID);
   const markers: DeliveryRunMarkers = {};

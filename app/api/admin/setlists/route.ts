@@ -31,6 +31,7 @@ import {
   rawSetlistDraftsForWeekQuery,
 } from "@/app/utils/serviceReadQueries";
 import { buildSetlistRead, type CanonicalSetlistRecord } from "@/app/utils/setlistReadContract";
+import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
 function reject(res: { status: number; body: unknown }) {
   return NextResponse.json(res.body, { status: res.status });
@@ -77,7 +78,12 @@ function songsOf(doc: EditorSetlistDoc): unknown {
 // queried, so a malformed/mismatched request is a 400 and never `targetState:
 // "none"`. Ambiguity (duplicate / draft overlay / malformed record) is an
 // explicit non-editable state, never an arbitrary `[0]` pick.
-export async function GET(req: NextRequest) {
+// A3 §3: outbound-delivery evidence emitted anywhere under this handler — including
+// its post-commit `after()` fan-out — carries the in-flight verification run's markers.
+// An unmarked ordinary request establishes nothing and behaves exactly as before.
+export const GET = withVerificationRunContext(getHandler);
+
+async function getHandler(req: NextRequest) {
   const session = await requireActiveManager();
   if (!session) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -230,7 +236,12 @@ export async function GET(req: NextRequest) {
  * - A weekend save asserts/heartbeats the owned weekend target lock in the SAME
  *   transaction; a special save revision-guards the special role document.
  */
-export async function PUT(req: NextRequest) {
+// A3 §3: outbound-delivery evidence emitted anywhere under this handler — including
+// its post-commit `after()` fan-out — carries the in-flight verification run's markers.
+// An unmarked ordinary request establishes nothing and behaves exactly as before.
+export const PUT = withVerificationRunContext(putHandler);
+
+async function putHandler(req: NextRequest) {
   const session = await requireActiveManager();
   if (!session) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
