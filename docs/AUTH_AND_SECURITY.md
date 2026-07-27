@@ -169,6 +169,49 @@ Applied to all routes:
 
 ---
 
+## Studio write protection
+
+The embedded Sanity Studio is an **alternate write path into exactly the documents the guarded
+mutation routes spend their whole effort protecting**. `app/utils/studioProtection.ts` closes it,
+and does so assertably — "we ticked a box in the config" is not testable; this module is.
+
+Eight `PROTECTED_STUDIO_TYPES` are read-only in Studio: `sunday_role`, `saturday_role`,
+`special_role`, `featuredSongs`, `saturdarSongs`, `setlistProposal`, `roleTargetLock`,
+`roleCreationReceipt`. The last two are additionally `INTERNAL_STUDIO_TYPES` — machine-owned
+bookkeeping no operator ever authors by hand.
+
+Three v5-correct mechanisms are used together, because each covers a different way in:
+
+| Mechanism | Blocks |
+|---|---|
+| `document.newDocumentOptions` | create |
+| schema `readOnly: true` | update |
+| `document.actions` resolving to `[]` | every mutating action, **however the pane was reached** — including a hand-typed `/studio/structure/...` or intent URL |
+
+> **The regression this closes is real and silent.** `__experimental_actions` — the old way to
+> restrict a type to `["read", "delete"]` — **was removed in Sanity v5 and is inert dead config
+> there.** `loginEvent` still carried it, so it had quietly lost its restriction and every mutating
+> action was available again. Nothing failed; the guard had simply stopped existing. `loginEvent`
+> is now governed by `DELETE_ONLY_STUDIO_TYPES`. If you see `__experimental_actions` anywhere,
+> it is doing nothing.
+
+## The outbound delivery firewall
+
+`app/utils/deliveryFirewall.ts` gates email and push at the **transport boundary** — in front of
+SMTP/Resend/FCM client construction, not in front of any one caller — so a future route, cron or
+script that reaches `sendEmail`/`sendPush` directly is covered by the same refusal.
+
+It exists because the deployed verification suite mutates real services, every service mutation
+fans out into assignment emails and pushes, and `EMAIL_ALLOWLIST` defaults to `"*"` — the whole
+team. Without it a verification run would email and push ~30 real people.
+
+Two invariants: it **fails closed** (any unrecognised mode blocks), and **production is
+unchanged** (an absent or explicitly `normal` mode delivers exactly as before the module existed).
+`SERVICE_READINESS_DELIVERY_MODE=disabled` arms it. See
+[`VERIFICATION_HARNESS.md`](VERIFICATION_HARNESS.md#the-delivery-firewall).
+
+---
+
 ## Environment variables
 
 Full list (names only — never print values; `.env.local` is git/claude-ignored). See
