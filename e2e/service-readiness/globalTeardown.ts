@@ -32,7 +32,7 @@ import {
   parseDeliveryEvents,
   type DeliveryEventLine,
 } from "./lib/deliveryEvidence";
-import { describeManualCapture } from "./lib/runtimeLog";
+import { describeManualCapture, dedupeLogText } from "./lib/runtimeLog";
 import { awaitRunScopedEvidence, describeEvidenceWait } from "./lib/awaitRunEvidence";
 import {
   RUN_EVIDENCE_FILE,
@@ -220,7 +220,9 @@ export default async function globalTeardown(): Promise<void> {
     if (state.runtimeLogFile) {
       const logPath = resolve(process.cwd(), state.runtimeLogFile);
       if (existsSync(logPath)) {
-        collected.push(...parseDeliveryEvents(state.runtimeLogFile, readFileSync(logPath, "utf8")));
+        collected.push(
+          ...parseDeliveryEvents(state.runtimeLogFile, dedupeLogText(readFileSync(logPath, "utf8"))),
+        );
         completeLogSources.push(state.runtimeLogFile);
       } else {
         missingRuntimeLog = state.runtimeLogFile;

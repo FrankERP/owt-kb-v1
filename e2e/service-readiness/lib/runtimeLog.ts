@@ -130,12 +130,71 @@ export function planRuntimeLogCapture({
   return {
     enabled: true,
     file,
-    command: "npx",
-    // `--yes` so an uninstalled CLI cannot block on an interactive prompt. The
-    // deployment is named by its URL; no token, and no query string, ever.
-    args: ["--yes", "vercel", "logs", base.origin, "--json"],
+    // `vercel logs` SNAPSHOTS and exits (~8s) — it does not follow. A single
+    // invocation therefore covers a few seconds of a multi-minute run, which is
+    // how an earlier run captured only replayed history from the run before it.
+    // Poll instead: re-snapshot on an interval and append, so the captured window
+    // spans the whole run. Repeats are harmless — the reader dedupes, the proof
+    // needs only one blocked line carrying this run id, and a duplicated
+    // `delivery_attempt` would still (correctly) fail.
+    //
+    // `sh -c` so the loop is the child we can kill: teardown stops this process,
+    // and `exec`-less `sleep` keeps the loop interruptible.
+    command: "sh",
+    args: [
+      "-c",
+      // `--yes` so an uninstalled CLI cannot block on an interactive prompt. The
+      // deployment is named by its URL; no token, and no query string, ever.
+      `while :; do npx --yes vercel logs ${shellQuote(base.origin)} --json; sleep ${CAPTURE_POLL_SECONDS}; done`,
+    ],
     refusals: [],
   };
+}
+
+/** Seconds between re-snapshots. Each snapshot costs ~8s, so this is not tight-looping. */
+export const CAPTURE_POLL_SECONDS = 20;
+
+/**
+ * Single-quote a value for `sh -c`. The origin is already validated by
+ * `evaluateBaseUrl` (https, no query, no userinfo, never production), so this is
+ * defence in depth rather than the primary control.
+ */
+export function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Collapse the overlap between successive snapshots.
+ *
+ * Each poll re-reports entries the previous poll already saw, so the raw file
+ * contains the same log line many times. Dedupe by the provider's entry `id` when
+ * present, else by the whole line. Order is preserved (first occurrence wins) so
+ * reported line numbers stay meaningful to an operator reading the file.
+ *
+ * Duplicates were never a correctness problem — the proof needs one blocked line
+ * carrying this run id, and a repeated `delivery_attempt` would still fail — but a
+ * log that repeats itself dozens of times is much harder to read.
+ */
+export function dedupeLogText(text: string): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of text.split("\n")) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine) continue;
+    let key = trimmedLine;
+    if (trimmedLine.startsWith("{")) {
+      try {
+        const id = (JSON.parse(trimmedLine) as { id?: unknown }).id;
+        if (typeof id === "string" && id) key = `id:${id}`;
+      } catch {
+        // Not JSON (CLI banner, partial write mid-poll) — fall back to the line.
+      }
+    }
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(line);
+  }
+  return out.join("\n");
 }
 
 /** The instruction an operator needs when no capture is configured. Names only. */
