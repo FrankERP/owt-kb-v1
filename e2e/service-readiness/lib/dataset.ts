@@ -39,6 +39,7 @@ import {
   INFRASTRUCTURE_IDS,
   LEASE_DOC_ID,
   MARKER_DOC_ID,
+  MEMBER_HASH_ENV,
   TOKEN_ENV,
   buildFixtureDocuments,
   evaluateGuards,
@@ -91,7 +92,7 @@ export function datasetClient(): MinimalClient {
 }
 
 /** Re-exported so the harness and the operator scripts name the same documents. */
-export { LEASE_DOC_ID, MARKER_DOC_ID, ADMIN_HASH_ENV };
+export { LEASE_DOC_ID, MARKER_DOC_ID, ADMIN_HASH_ENV, MEMBER_HASH_ENV };
 
 /* ------------------------------------------------------------------ *
  * Exclusive dataset lease
@@ -170,10 +171,22 @@ export function resetDeletionTargets(): { fixtures: string[]; runCreated: string
 }
 
 /**
+ * The member fixtures that carry a password hash, and the env var each hash comes
+ * from. Password hashes are never part of the committed fixture definition, so EVERY
+ * path that rewrites the fixtures has to re-inject them — the seed script and this
+ * reset alike. Omitting one silently removes that member's ability to sign in, which
+ * surfaces as an opaque sign-in timeout rather than as a configuration error.
+ */
+const FIXTURE_PASSWORD_HASHES: ReadonlyArray<{ id: string; env: string }> = Object.freeze([
+  { id: "srv.member.admin", env: ADMIN_HASH_ENV },
+  { id: "srv.member.lead", env: MEMBER_HASH_ENV },
+]);
+
+/**
  * Reset to the exact seeded state.
  *
- * The test admin's password hash is re-injected from the runner environment, since it
- * is never part of the committed fixture definition.
+ * The seeded members' password hashes are re-injected from the runner environment,
+ * since they are never part of the committed fixture definition.
  */
 export async function resetFixtures(identity: RunIdentity): Promise<ResetResult> {
   await assertLeaseOwned(identity);
@@ -183,10 +196,11 @@ export async function resetFixtures(identity: RunIdentity): Promise<ResetResult>
   const { fixtures, runCreated, refused } = resetDeletionTargets();
   const documents = buildFixtureDocuments({ now }) as Array<Record<string, unknown>>;
 
-  const adminHash = process.env[ADMIN_HASH_ENV];
-  for (const doc of documents) {
-    if (doc._id === "srv.member.admin" && typeof adminHash === "string" && adminHash.length) {
-      doc.passwordHash = adminHash;
+  for (const { id, env } of FIXTURE_PASSWORD_HASHES) {
+    const hash = process.env[env];
+    if (typeof hash !== "string" || !hash.length) continue;
+    for (const doc of documents) {
+      if (doc._id === id) doc.passwordHash = hash;
     }
   }
 

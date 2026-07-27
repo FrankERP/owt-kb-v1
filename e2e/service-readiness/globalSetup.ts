@@ -27,7 +27,7 @@ import { acquireRunLease, resetFixtures } from "./lib/dataset";
 import { fetchOwnedLoginEvents } from "./lib/loginEvents";
 import { describeRefusal, evaluateHarnessConfig } from "./lib/harnessGuards";
 import { IDENTITY_PATH, describePreflightAbort, evaluateIdentity } from "./lib/preflight";
-import type { RunIdentity } from "./lib/runIdentity";
+import { resetAttemptLedger, type RunIdentity } from "./lib/runIdentity";
 import {
   LEASE_RENEWAL_KEY,
   RUN_STATE_FILE,
@@ -45,6 +45,10 @@ export default async function globalSetup(): Promise<void> {
     candidateSha: config.candidateSha,
     deploymentId: config.deploymentId,
   };
+
+  // The run-scoped attempt ledger starts empty. Its entries are run-id-tagged too,
+  // so this is defence in depth rather than the only guard.
+  resetAttemptLedger();
 
   console.log("\nService Readiness A3 deployed-route verification");
   console.log(`  host:       ${config.host}`);

@@ -40,6 +40,7 @@ import {
 } from "./lib/harnessGuards";
 import {
   AttemptLedger,
+  fileAttemptStore,
   reconcileLoginEvents,
   verificationHeaders,
   type RunIdentity,
@@ -77,7 +78,11 @@ function makeRunContext(): RunContext {
   mkdirSync(dirname(path), { recursive: true });
   const context: RunContext = {
     identity,
-    ledger: new AttemptLedger(),
+    // RUN-scoped, not test-scoped. `fetchOwnedLoginEvents` matches on
+    // runId+candidateSha+deploymentId, so it returns every event this RUN created —
+    // including earlier scenarios'. A fresh per-test ledger would therefore report
+    // each of those as `unexpected_attempt`.
+    ledger: new AttemptLedger(fileAttemptStore(identity.runId)),
     evidence(event, fields = {}) {
       appendFileSync(
         path,

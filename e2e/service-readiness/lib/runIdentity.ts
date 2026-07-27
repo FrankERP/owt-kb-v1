@@ -22,8 +22,11 @@
 // as a missing event and fails the scenario on.
 
 import { randomBytes } from "node:crypto";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 
 import { VERIFICATION_MARKER_VALUE } from "./harnessGuards";
+import { ATTEMPT_LEDGER_FILE } from "./runState";
 
 /**
  * MIRROR of `VERIFICATION_HEADERS` in app/utils/srVerificationLoginEvent.ts.
@@ -113,27 +116,98 @@ export function leaseOwnerString(identity: RunIdentity): string {
  * ------------------------------------------------------------------ */
 
 /**
+ * Where a ledger keeps its attempt ids. Injected so the pure in-memory behaviour
+ * stays unit-testable with no filesystem, while the real run uses the run-scoped
+ * file store below.
+ */
+export interface AttemptStore {
+  read(): string[];
+  append(attemptId: string): void;
+}
+
+/** Process-local store. Adequate only when one ledger serves the whole run. */
+export function memoryAttemptStore(): AttemptStore {
+  const attempts = new Set<string>();
+  return {
+    read: () => [...attempts],
+    append: (attemptId) => void attempts.add(attemptId),
+  };
+}
+
+function attemptLedgerPath(file: string): string {
+  return resolve(process.cwd(), file);
+}
+
+/**
+ * Run-scoped, file-backed store.
+ *
+ * Every line carries the run id it belongs to and reads FILTER on it, so a stale
+ * file from an earlier run can never inject an attempt id this run never used —
+ * which would surface as a bogus `missing_event`. `resetAttemptLedger` still
+ * truncates it at run start; the run-id filter is the belt to that braces.
+ */
+export function fileAttemptStore(runId: string, file: string = ATTEMPT_LEDGER_FILE): AttemptStore {
+  const path = attemptLedgerPath(file);
+  return {
+    read() {
+      if (!existsSync(path)) return [];
+      const ids: string[] = [];
+      for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
+        if (!line.trim()) continue;
+        try {
+          const parsed = JSON.parse(line) as { runId?: unknown; attemptId?: unknown };
+          if (parsed.runId !== runId) continue;
+          if (typeof parsed.attemptId === "string" && isWellFormedId(parsed.attemptId)) {
+            ids.push(parsed.attemptId);
+          }
+        } catch {
+          continue;
+        }
+      }
+      return ids;
+    },
+    append(attemptId) {
+      mkdirSync(dirname(path), { recursive: true });
+      appendFileSync(
+        path,
+        `${JSON.stringify({ runId, attemptId, at: new Date().toISOString() })}\n`,
+        "utf8",
+      );
+    },
+  };
+}
+
+/** Drop any previous run's ledger. Called once, by the global setup. */
+export function resetAttemptLedger(file: string = ATTEMPT_LEDGER_FILE): void {
+  rmSync(attemptLedgerPath(file), { force: true });
+}
+
+/**
  * The set of attempt ids this run has actually signed in with, recorded so the
  * post-sign-in reconciliation can require EXACTLY these and nothing else. A
  * missing, duplicate, foreign or late event fails the scenario.
+ *
+ * The ledger is RUN-scoped, matching the run-scoped ownership predicate it is
+ * reconciled against — see `ATTEMPT_LEDGER_FILE`.
  */
 export class AttemptLedger {
-  private readonly attempts = new Set<string>();
+  constructor(private readonly store: AttemptStore = memoryAttemptStore()) {}
 
   next(): string {
+    const used = new Set(this.store.read());
     let id = generateAttemptId();
     // Defensive: a repeat would make two sign-ins indistinguishable.
-    while (this.attempts.has(id)) id = generateAttemptId();
-    this.attempts.add(id);
+    while (used.has(id)) id = generateAttemptId();
+    this.store.append(id);
     return id;
   }
 
   expected(): string[] {
-    return [...this.attempts].sort();
+    return [...new Set(this.store.read())].sort();
   }
 
   has(attemptId: unknown): boolean {
-    return typeof attemptId === "string" && this.attempts.has(attemptId);
+    return typeof attemptId === "string" && this.store.read().includes(attemptId);
   }
 }
 
