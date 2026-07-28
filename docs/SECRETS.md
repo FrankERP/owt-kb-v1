@@ -15,9 +15,13 @@ Platforms in play:
 Worth knowing before you need it, not during:
 
 - **GitHub Actions secrets are write-only.** Neither the UI nor the API will ever show a value again. There is no retrieve — only overwrite.
-- **Vercel environment variables are readable *only if* they are the ordinary `Encrypted` type.** Variables created as **`Sensitive`** are write-only too — the dashboard will not reveal them, and `vercel env pull` writes a short placeholder in place of the value.
+- **Vercel environment variables are readable only sometimes**, and you cannot tell which from the dashboard listing. Variables marked **`Sensitive`** are write-only: `vercel env pull` writes an 11-character redaction marker in place of the value.
 
-`npx vercel env add` creates **`Sensitive`** variables by default, so anything added with the CLI is unrecoverable. Check which you have with `npx vercel env ls production`.
+**`npx vercel env ls` will not tell you.** It prints `Encrypted` in the value column for *every* variable, sensitive or not — that column means "not shown here", not "recoverable". Verified on this project: `CRON_SECRET` and `SMTP_PASS` both pull the same 11-character marker, while `SMTP_USER`, `SMTP_HOST`, `SMTP_PORT` and `EMAIL_FROM` — three of them created in the same batch as `SMTP_PASS` — pull their real values.
+
+**The only reliable check is to pull and compare lengths against what you expect.** A password that pulls as 11 characters is a marker, not a secret.
+
+`npx vercel env add` creates `Sensitive` variables, and credential-shaped values added through the dashboard may be marked that way too, so assume any password or token is unrecoverable until proven otherwise.
 
 **This bites in a specific and quiet way.** A pull-and-pipe re-sync against a `Sensitive` variable copies the *placeholder* into the destination. Nothing errors. The secret looks set, and every request authenticated against it fails with a 401 that appears to be a mismatch of correct-looking values. Before trusting any pulled value, check its length against what you expect — a 64-character hex token that pulls as 11 characters is a placeholder, not a secret.
 
@@ -117,6 +121,18 @@ Then confirm with a manual run as above.
 **Related, and easy to confuse with it:** the app's own idea of its base URL is *not* this variable. `appBaseUrl()` (`app/utils/assignmentEmail.ts:70`) resolves `NEXTAUTH_URL` first, falling back to `VERCEL_PROJECT_PRODUCTION_URL`. That is what builds links inside outgoing emails.
 
 ---
+
+---
+
+## `SMTP_PASS` (and the rest of the SMTP set)
+
+**Needed in: Vercel.** Also needed locally by anything that actually sends mail — currently only `scripts/measure-send-budget.mjs`.
+
+`SMTP_HOST` (`mail.oasis.mx`), `SMTP_PORT` (465), `SMTP_USER` (`contacto@oasis.mx`) and `EMAIL_FROM` all pull cleanly from Vercel. **`SMTP_PASS` does not** — it is `Sensitive` and pulls as the 11-character marker described above, so `vercel env pull` alone will never give you a working local mail setup. Attempting it fails with `535 Incorrect authentication data`, which reads like wrong credentials rather than absent ones.
+
+**Where the value came from.** The cPanel/MailBaby mailbox for `contacto@oasis.mx`. Retrieve or reset it in that hosting control panel; it is not recoverable from Vercel.
+
+**How to rotate.** Reset the mailbox password in cPanel, then update `SMTP_PASS` in Vercel for Production *and* Preview, then redeploy. Note the blast radius is wider than the cron secret's: every outbound email — assignment notifications, the debounced notification sweep, proposal emails, and the outbox liveness alarm — is down between the reset and the redeploy.
 
 ## Not yet documented
 

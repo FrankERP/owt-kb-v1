@@ -16,10 +16,16 @@
 //   node --env-file=.env.local scripts/measure-send-budget.mjs --to=you@example.com
 //   node --env-file=.env.local scripts/measure-send-budget.mjs --to=you@example.com --apply
 //
-// Requires SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS / EMAIL_FROM. Those live
-// in Vercel, not in .env.local — pull them first (see docs/SECRETS.md):
+// Requires SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS / EMAIL_FROM.
 //
-//   npx vercel env pull .env.local --environment=production
+// `vercel env pull` is NOT enough: SMTP_PASS is a Sensitive variable and pulls as
+// an 11-character redaction marker, which fails with `535 Incorrect
+// authentication data` — a message that reads like a wrong password rather than a
+// missing one. Supply the real mailbox password (cPanel/MailBaby, the mailbox for
+// contacto@oasis.mx) yourself. Everything else pulls cleanly. See docs/SECRETS.md.
+//
+// Also pull into a scratch file, never .env.local — `vercel env pull` rewrites its
+// target wholesale and will discard your local NEXTAUTH_URL and friends.
 //
 // FIDELITY CAVEAT, and it is not small: this runs from wherever you run it. The
 // sweep runs on Vercel, whose network round-trip to the SMTP host may differ from
