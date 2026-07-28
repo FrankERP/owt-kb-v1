@@ -10,6 +10,40 @@ Platforms in play:
 - **GitHub Actions** — repo secrets for workflows. Settings → Secrets and variables → Actions.
 - **`.env.local`** — local development only, gitignored, loaded via `node --env-file=.env.local` for `scripts/*.mjs`.
 
+## Retrievability: the two stores are asymmetric
+
+Worth knowing before you need it, not during:
+
+- **GitHub Actions secrets are write-only.** Neither the UI nor the API will ever show a value again. There is no retrieve — only overwrite.
+- **Vercel environment variables are readable**, in the dashboard and via `vercel env pull`.
+
+So **Vercel is the source of truth** whenever a value has to exist in both places, and GitHub is always the copy. Set the value on Vercel first, then mirror it.
+
+### Setting a shared secret without ever handling the value
+
+Write both stores in one shell command, so the value lives only in a variable that is discarded at the end and never reaches your scrollback:
+
+```bash
+SECRET=$(openssl rand -hex 32) && \
+  printf '%s' "$SECRET" | npx vercel env add CRON_SECRET production && \
+  printf '%s' "$SECRET" | gh secret set CRON_SECRET && \
+  unset SECRET
+```
+
+There is no step where you carry the value between platforms, which is the step that otherwise ends with a secret in a clipboard or a chat log.
+
+### Re-syncing GitHub from Vercel, if they drift
+
+Pull into a scratch file — **not** `.env.local`, which `vercel env pull` rewrites wholesale:
+
+```bash
+npx vercel env pull /tmp/vercel-env.txt --environment=production
+grep '^CRON_SECRET=' /tmp/vercel-env.txt | cut -d= -f2- | tr -d '"' | gh secret set CRON_SECRET
+rm /tmp/vercel-env.txt
+```
+
+Prefer rotating both over recovering the old value. Secrets are cheap to replace and awkward to retrieve; that asymmetry is deliberate, and a rotation leaves both stores provably in agreement, where a recovery only assumes it.
+
 ---
 
 ## `CRON_SECRET`
@@ -27,28 +61,30 @@ Platforms in play:
 - `app/api/cron/service-reminders/route.ts:20` — the daily Vercel cron (service reminders **and** the notification-outbox liveness alarm) returns 403.
 - `app/api/cron/flush-notifications/route.ts:31` — the five-minute notification sweep **fails closed**: when `CRON_SECRET` is unset the route 401s every caller, including one presenting nothing. Layer 1 of the notification outbox stops entirely, and members' emails fall back to the daily cron — up to 24 hours late.
 
-**Where the value came from.** Originally provisioned in the Vercel dashboard for the service-reminders cron. It is a random bearer token with no external issuer — any high-entropy string works. Generate a replacement with:
-
-```bash
-openssl rand -hex 32
-```
+**Where the value came from.** A random bearer token with no external issuer — any high-entropy string works. Generate one with `openssl rand -hex 32`.
 
 **How to rotate.**
 
-1. Generate a new value.
-2. Vercel → project `owt-backstage` → Settings → Environment Variables → update `CRON_SECRET` for Production.
-3. **Redeploy.** Vercel env vars are bound at build/deploy time; the running deployment keeps the old value until you redeploy.
-4. GitHub → Settings → Secrets and variables → Actions → update `CRON_SECRET`, or:
+1. Write both stores in one command, per "Setting a shared secret without ever handling the value" above:
    ```bash
-   gh secret set CRON_SECRET
+   SECRET=$(openssl rand -hex 32) && \
+     printf '%s' "$SECRET" | npx vercel env add CRON_SECRET production && \
+     printf '%s' "$SECRET" | gh secret set CRON_SECRET && \
+     unset SECRET
    ```
-5. Verify end to end:
+   `vercel env add` refuses an existing key, so on a true rotation remove it first with `npx vercel env rm CRON_SECRET production`.
+2. **Redeploy.** This is the step that is easy to skip and makes the whole thing look broken if you do — Vercel binds env vars at deploy time, so the running production deployment keeps the old value until it is rebuilt:
+   ```bash
+   npx vercel deploy --prod
+   ```
+   Or dashboard → Deployments → ⋯ → Redeploy.
+3. Verify end to end:
    ```bash
    gh workflow run "Flush notification outbox"
    ```
-   A green run means the new value matches on both sides.
+   A green run means the new value matches on both sides. A 401 means it does not.
 
-**Blast radius of rotation.** Between step 2 and step 4 the values disagree, so every five-minute flush run goes red and no debounced notification email is sent. The daily cron is 403ing in the same window. Nothing is lost — outbox notices simply accumulate and flush once the values agree — but keep the gap short, and do steps 2–3 before step 4 so the window is one deploy long rather than open-ended.
+**Blast radius of rotation.** From the moment Vercel is updated until the redeploy completes, the deployed app still verifies against the *old* value while GitHub already presents the new one — so every five-minute flush run goes red and no debounced notification email is sent, and Vercel's own daily cron is 403ing in the same window. Nothing is lost: outbox notices accumulate and flush once the values agree. Keep the window to a single deploy by doing step 2 immediately.
 
 ---
 
