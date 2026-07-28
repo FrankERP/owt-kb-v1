@@ -10,14 +10,18 @@ Platforms in play:
 - **GitHub Actions** — repo secrets for workflows. Settings → Secrets and variables → Actions.
 - **`.env.local`** — local development only, gitignored, loaded via `node --env-file=.env.local` for `scripts/*.mjs`.
 
-## Retrievability: the two stores are asymmetric
+## Retrievability: assume nothing is recoverable
 
 Worth knowing before you need it, not during:
 
 - **GitHub Actions secrets are write-only.** Neither the UI nor the API will ever show a value again. There is no retrieve — only overwrite.
-- **Vercel environment variables are readable**, in the dashboard and via `vercel env pull`.
+- **Vercel environment variables are readable *only if* they are the ordinary `Encrypted` type.** Variables created as **`Sensitive`** are write-only too — the dashboard will not reveal them, and `vercel env pull` writes a short placeholder in place of the value.
 
-So **Vercel is the source of truth** whenever a value has to exist in both places, and GitHub is always the copy. Set the value on Vercel first, then mirror it.
+`npx vercel env add` creates **`Sensitive`** variables by default, so anything added with the CLI is unrecoverable. Check which you have with `npx vercel env ls production`.
+
+**This bites in a specific and quiet way.** A pull-and-pipe re-sync against a `Sensitive` variable copies the *placeholder* into the destination. Nothing errors. The secret looks set, and every request authenticated against it fails with a 401 that appears to be a mismatch of correct-looking values. Before trusting any pulled value, check its length against what you expect — a 64-character hex token that pulls as 11 characters is a placeholder, not a secret.
+
+**So: treat both stores as write-only, and rotate rather than recover.** There is no source of truth to copy from once a value is set; the value's only home is the moment it was generated.
 
 ### Setting a shared secret without ever handling the value
 
@@ -32,17 +36,19 @@ SECRET=$(openssl rand -hex 32) && \
 
 There is no step where you carry the value between platforms, which is the step that otherwise ends with a secret in a clipboard or a chat log.
 
-### Re-syncing GitHub from Vercel, if they drift
+### If the two ever drift
 
-Pull into a scratch file — **not** `.env.local`, which `vercel env pull` rewrites wholesale:
+**Rotate both. Do not try to recover the old value.** For a `Sensitive` Vercel variable there is nothing to recover, and the attempt fails silently in the way described above.
+
+Rerun the one-shot command with a fresh value, removing the existing Vercel key first (`vercel env add` refuses to overwrite):
 
 ```bash
-npx vercel env pull /tmp/vercel-env.txt --environment=production
-grep '^CRON_SECRET=' /tmp/vercel-env.txt | cut -d= -f2- | tr -d '"' | gh secret set CRON_SECRET
-rm /tmp/vercel-env.txt
+npx vercel env rm CRON_SECRET production
 ```
 
-Prefer rotating both over recovering the old value. Secrets are cheap to replace and awkward to retrieve; that asymmetry is deliberate, and a rotation leaves both stores provably in agreement, where a recovery only assumes it.
+then the generate-and-write block above, then redeploy. A rotation leaves both stores provably in agreement; a recovery only assumes it, and for a `Sensitive` variable it cannot even do that.
+
+`vercel env pull` remains useful for ordinary `Encrypted` variables — for populating a local `.env.local`, for instance. Point it at a scratch path when you only want to inspect, since it rewrites the target file wholesale.
 
 ---
 
