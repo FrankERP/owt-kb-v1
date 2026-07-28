@@ -29,7 +29,7 @@ export function td(inner: string, opts: { bg?: string; align?: string; colspan?:
   const bg = opts.bg ?? C.console;
   const align = opts.align ? ` align="${opts.align}"` : "";
   const colspan = opts.colspan ? ` colspan="${opts.colspan}"` : "";
-  return `<td bgcolor="${bg}"${align}${colspan} style="background:${bg};${opts.style ?? ""}">${inner}</td>`;
+  return `<td bgcolor="${bg}"${align}${colspan} style="background:${bg} !important;${opts.style ?? ""}">${inner}</td>`;
 }
 
 export function tr(inner: string): string {
@@ -49,9 +49,9 @@ export function shell(bodyRows: string, link: string): string {
     { style: `padding:16px 24px 24px;border-top:1px solid ${C.deck}` },
   ));
   const body =
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.blackout}" style="background:${C.blackout};margin:0;padding:0">` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.blackout}" style="background:${C.blackout} !important;margin:0;padding:0">` +
     tr(td(
-      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.console}" style="max-width:600px;background:${C.console};border-collapse:collapse">` +
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.console}" style="max-width:600px;background:${C.console} !important;border-collapse:collapse">` +
       eyebrow + bodyRows + footer +
       `</table>`,
       { align: "center", style: "padding:24px 12px" },
@@ -63,7 +63,7 @@ export function shell(bodyRows: string, link: string): string {
     `<meta name="color-scheme" content="dark">` +
     `<meta name="supported-color-schemes" content="dark">` +
     darkModeOptOut() +
-    `</head><body style="margin:0;padding:0;background:${C.blackout}">` +
+    `</head><body style="margin:0;padding:0;background:${C.blackout} !important">` +
     body +
     `</body></html>`
   );
