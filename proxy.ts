@@ -29,8 +29,11 @@ export default withAuth(
 );
 
 export const config = {
-  // Protect everything except: auth pages, NextAuth API, and static assets.
-  // Studio is now included — it requires login + admin role (checked above).
+  // Protect everything except: auth pages, NextAuth API, the cron routes and
+  // static assets. Studio is now included — it requires login + admin role
+  // (checked above). `api/cron/*` is excluded because it authenticates with
+  // `Authorization: Bearer ${CRON_SECRET}` inside each handler; a session gate
+  // in front of a machine caller only ever redirects it to the sign-in page.
   //
   // NOTE: Next.js requires this matcher to be a statically-analyzable string
   // literal (an imported constant is ignored at build time), so it is inlined
@@ -39,6 +42,6 @@ export const config = {
   // sync guard (routeMatcher.test.ts). Each excluded prefix is anchored with
   // `(?:/|$)` so `/author` is not mistaken for a public `/auth` route.
   matcher: [
-    "/((?!auth(?:/|$)|api/auth(?:/|$)|api/service-readiness-verification/identity$|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$|icons(?:/|$)|manifest\\.webmanifest$).*)",
+    "/((?!auth(?:/|$)|api/auth(?:/|$)|api/cron(?:/|$)|api/service-readiness-verification/identity$|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$|icons(?:/|$)|manifest\\.webmanifest$).*)",
   ],
 };

@@ -151,6 +151,16 @@ describe("layer 3 — the daily cron also sweeps", () => {
     expect(res.status).toBe(403);
     expect(sweepOutboxMock).not.toHaveBeenCalled();
   });
+
+  it("refuses when no secret is configured, rather than authorizing everyone", async () => {
+    // This route is now reachable without a session (the middleware matcher
+    // excludes /api/cron/*), so its own guard is the ONLY guard. Fail closed.
+    delete process.env.CRON_SECRET;
+    const GET = await remindersRoute();
+    expect((await GET(req({}))).status).toBe(403);
+    expect((await GET(req({ authorization: "Bearer undefined" }))).status).toBe(403);
+    expect(sweepOutboxMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("the liveness alarm", () => {

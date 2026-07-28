@@ -14,8 +14,18 @@
 // route itself fails closed — in any ordinary deployment it answers 404 because
 // the verification marker, isolated project/dataset, E2E-writes flag and
 // `disabled` delivery mode are all absent.
+//
+// `api/cron(?:/|$)` is NOT an unauthenticated exclusion — it is a DIFFERENT
+// authentication. Both cron routes check `Authorization: Bearer ${CRON_SECRET}`
+// inside their own handlers; a machine caller (Vercel's daily cron, the GitHub
+// Actions sweep every five minutes) has no NextAuth session, so a session gate
+// in front of them only ever produces a 307 to /api/auth/signin. That is exactly
+// what happened in production: the daily reminders + outbox liveness alarm never
+// ran, and layer 1's `curl --fail` does not treat 3xx as failure, so the sweep
+// was a silent no-op reporting green. Anchored like every other prefix, so
+// `/api/cronjobs` or `/api/cron-admin` stay session-gated.
 export const MIDDLEWARE_MATCHER =
-  "/((?!auth(?:/|$)|api/auth(?:/|$)|api/service-readiness-verification/identity$|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$|icons(?:/|$)|manifest\\.webmanifest$).*)";
+  "/((?!auth(?:/|$)|api/auth(?:/|$)|api/cron(?:/|$)|api/service-readiness-verification/identity$|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$|icons(?:/|$)|manifest\\.webmanifest$).*)";
 
 // Mirrors Next.js matcher semantics (full-path match) so the exclusion logic
 // can be unit-tested without importing the middleware runtime.
