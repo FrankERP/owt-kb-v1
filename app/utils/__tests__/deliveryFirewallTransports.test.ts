@@ -123,6 +123,7 @@ import {
   notifySetlistSaved,
 } from "@/app/utils/serviceMutationSideEffects";
 import { GET as remindersGET } from "@/app/api/cron/service-reminders/route";
+import { GET as flushGET } from "@/app/api/cron/flush-notifications/route";
 import {
   evaluateDeliveryEvidence,
   parseDeliveryEvents,
@@ -478,6 +479,24 @@ describe("delivery mode `disabled` refuses at the transport boundary", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ sent: 0, pruned: 0 });
     expect(sendEachForMulticast).not.toHaveBeenCalled();
+  });
+
+  it("still answers the sweep route 200 without claiming or sending anything", async () => {
+    // Spec §10: the firewall transport tests extend to the sweep route. The
+    // sweep refuses BEFORE the outbox is even read, so a verification run that
+    // hits layer 1 leaves the outbox untouched and mails nobody.
+    const req = {
+      headers: { get: (n: string) => (n === "authorization" ? "Bearer cron-secret" : null) },
+      nextUrl: { searchParams: { get: () => null } },
+    };
+    const res = await flushGET(req as unknown as Parameters<typeof flushGET>[0]);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ claimed: 0, emailed: 0, consumed: 0 });
+    // The outbox was never even READ — the gate is stage 1, ahead of selection.
+    expect(opFetch).not.toHaveBeenCalled();
+    expect(logLines.join("\n")).toContain("notify_sweep_blocked");
+    expect(createTransport).not.toHaveBeenCalled();
+    expect(ResendCtor).not.toHaveBeenCalled();
   });
 
   it("reports ok:false from sendEmail without touching a backend", async () => {

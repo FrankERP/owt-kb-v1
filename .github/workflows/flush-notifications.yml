@@ -1,0 +1,33 @@
+# Layer 1 of the notification outbox's three flush triggers (design spec §3).
+#
+# Vercel Hobby allows ONE cron per day, so the every-five-minutes trigger lives
+# here instead of in `vercel.json` — do not add a second Vercel cron. This job is
+# a thin caller: it curls the route, and the route calls the one exported sweep.
+#
+# Two operational properties, named rather than discovered:
+#   · GitHub's scheduled runs are routinely 5–15 minutes late. That makes an
+#     email later, never wrong.
+#   · GitHub DISABLES scheduled workflows after 60 days of repository inactivity,
+#     and that rule applies to public repositories like this one. The daily
+#     liveness alarm in /api/cron/service-reminders is what makes that state loud
+#     (detection window up to 48 h); `workflow_dispatch` is how you re-arm it.
+#
+# Repository secrets required: CRON_SECRET (the same value as the Vercel env var)
+# and APP_BASE_URL (e.g. https://oasisworship.vercel.app, no trailing slash).
+name: Flush notification outbox
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  flush:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger the sweep
+        run: |
+          curl --fail --silent --show-error --max-time 60 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_BASE_URL }}/api/cron/flush-notifications"

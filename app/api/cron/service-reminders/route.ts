@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { sendPush } from "@/app/utils/push";
 import { tomorrowDateStr, assignedMemberRefsQuery } from "@/app/utils/notifyTargets";
+import { reportOutboxLiveness } from "@/app/utils/outboxLiveness";
+import { sweepOutbox } from "@/app/utils/outboxSweep";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
 // The daily cron is the outbox's last-resort flush trigger (§3, Task 11); one
@@ -28,5 +30,18 @@ async function getHandler(req: NextRequest) {
     body: "Sirves mañana. ¡Prepárate!",
     path: "/me",
   });
-  return NextResponse.json({ day, ...r });
+
+  // LAYER 3 of the three flush triggers (spec §3) — the last resort. The same
+  // exported sweep layers 1 and 2 call, at the full budget: nothing can sit
+  // pending for more than a day even if both other triggers are broken.
+  const sweep = await sweepOutbox();
+
+  // The liveness alarm, AFTER the sweep so it measures what is genuinely stuck
+  // rather than what this request was about to flush. Past
+  // NOTIFY_STALE_ALERT_HOURS it logs one structured error AND emails the
+  // super-admins — layer 1 is a single point of failure and a `console.error`
+  // here has no consumer (§3).
+  const liveness = await reportOutboxLiveness();
+
+  return NextResponse.json({ day, ...r, sweep, liveness });
 }
