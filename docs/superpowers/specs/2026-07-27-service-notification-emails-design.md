@@ -28,6 +28,16 @@ So all three share one mechanism: a **debounced outbox**. A change queues a
 notice; the notice sends once its subject has been quiet for 15 minutes; a
 recipient with several pending notices gets one grouped email.
 
+## Open question for the user
+
+**Should unpublishing a service notify its participants?** From a member's side,
+a service disappearing from their schedule is indistinguishable from being
+removed from it — and *"eliminado de un servicio"* is in the requirement
+verbatim. This spec keeps unpublish silent, consistent with today's behaviour,
+but that is a product call rather than a technical one. If it should notify, the
+change is small: the unpublish path queues a `role` notice per assignee and §1's
+"drop when `published == false`" rule becomes "classify as *Ya no participas*".
+
 ## Non-goals
 
 - Push (FCM) behaviour is unchanged everywhere. This spec is about email.
@@ -79,13 +89,6 @@ the thing being debounced — holding a pending notice.
   deadline: string,        // ISO instant, fixed at creation, NEVER rewritten
   status: "pending" | "sending",
   claimedAt: string | null,
-
-  // Per-recipient delivery progress. A setlist notice has N participants and a
-  // leadNotes notice has N admins, so one document owes many emails and cannot
-  // be deleted until every one of them is served.
-  notified: [{ _key, memberId, at }],
-  attempts: number,        // failed send passes over this notice
-  lastError: string | null,
 }
 ```
 
@@ -95,9 +98,9 @@ the thing being debounced — holding a pending notice.
 | `setlist` | one service's song list | `${roleId}` | `songs: [{ref, key}]` + medley partition, ordered | that service's participants (N) |
 | `leadNotes` | one proposal's lead notes | `${proposalId}` | `notes: string` | admins (N) |
 
-Two of the three kinds are **one-to-many**. That is why the outbox carries
-per-recipient progress and why the notice, not the recipient, is the unit of
-claim (see "Claim and delete").
+Two of the three kinds are **one-to-many**: one notice discharges one email to
+each of N people in a single sweep. That is why the sweep's budget bounds the
+*union of recipients* rather than counting notices.
 
 ### Classifying a subject that no longer exists
 
@@ -125,7 +128,7 @@ writeClient.transaction()
   .createIfNotExists({ _id, _type: "notificationOutbox", kind, subjectKey,
                        serviceDate, roleType, before, status: "pending",
                        firstQueuedAt: now, deadline: now + MAX_WINDOW,
-                       notified: [], attempts: 0, lastError: null })
+                       claimedAt: null })
   .patch(_id, p => p.set({ notifyAfter: now + DEBOUNCE, status: "pending" }))
   .commit()
 ```
@@ -133,9 +136,9 @@ writeClient.transaction()
 `before` is a value computed **pre-commit** and passed into `after()` — never
 read here, where live state is already the post-write state (§2).
 
-`createIfNotExists` is a no-op when a notice already exists, so `before`,
-`deadline` and `notified` survive an entire burst of edits. The patch only slides
-`notifyAfter` and re-pends. A deterministic `_id` makes the whole thing
+`createIfNotExists` is a no-op when a notice already exists, so `before` and
+`deadline` survive an entire burst of edits. The patch only slides `notifyAfter`
+and re-pends. A deterministic `_id` makes the whole thing
 idempotent: an HTTP retry replaying the same commit produces the same document.
 
 ### The sliding window, and its ceiling
@@ -261,90 +264,92 @@ line or break it.
 
 ### Claim and delete
 
-**The unit of claim is the notice, not the recipient.** One `setlist` notice owes
-an email to every participant and one `leadNotes` notice owes one to every admin.
-Claiming per recipient and deleting after "the" send would notify exactly one
-participant and discard the rest — a direct failure of the requirement.
+**A notice is a debounce record, not a delivery ledger.** It buffers "this
+subject changed" until the subject goes quiet. It is then classified, consumed,
+and gone. Delivery itself is best-effort **at-most-once**, exactly the posture
+`serviceMutationSideEffects.ts` §7 already documents for every existing
+notification in this app.
 
-Per due notice:
+Earlier drafts tried to make the notice track per-recipient delivery progress as
+well. That produced two defects that only adversarial review surfaced: progress
+entries survived a re-pend, so a second edit resolved to "everyone already
+notified" and sent **nothing** — losing a notification in the exact interleaving
+the guard existed to catch — and the per-notice settle loop was flatly
+incompatible with grouping emails per recipient across notices. One document
+cannot be a debounce record, a delivery ledger, and an input to a cross-document
+fold at once.
 
-1. **Claim:** `patch(id).ifRevisionId(rev).set({ status: "sending", claimedAt: now })`.
-   A failed claim means another sweeper holds it, or a writer slid `notifyAfter`
-   mid-claim — skip it.
-2. **Resolve recipients** from live state (§4) and subtract those already in
-   `notified`.
-3. **Send** to each remaining recipient, appending `{_key, memberId, at}` to
-   `notified` after each success, so progress survives a mid-batch death.
-4. **Settle:**
-   - every resolved recipient now in `notified` → **delete** the notice;
-   - some remain (sweep cap reached, or sends failed) → set `status: "pending"`,
-     bump `attempts`, record `lastError`, and let a later sweep continue.
+### One pipeline, stated once
 
-A notice with more recipients than the per-sweep email budget therefore spans
-sweeps and completes, rather than being truncated into silent drops.
+A sweep runs these stages in order, and there is no second control flow:
 
-**The delete must be a transaction, not a guarded delete.** `delete()` takes no
+1. **Select.** Read due notices ordered by `(firstQueuedAt asc)`. Accumulate
+   them while the size of the **union of their resolved recipients** stays within
+   `NOTIFY_FLUSH_EMAIL_LIMIT`. Stop there and leave the rest pending. A single
+   notice whose own recipient count exceeds the budget is taken **alone**.
+2. **Claim** every selected notice:
+   `patch(id).ifRevisionId(rev).set({ status: "sending", claimedAt: now })`.
+   Any failed claim drops that notice from the batch — another sweeper has it, or
+   a writer just re-pended it.
+3. **Classify** each claimed notice against live state (above), producing
+   `(recipient, line)` pairs. Notices producing no line are simply consumed.
+4. **Filter** each line by the preference for its own kind (§5).
+5. **Group** by recipient — one email per person, covering every line they own.
+6. **Send** each grouped email.
+7. **Consume.** Delete every claimed notice in the batch, whatever each send
+   returned.
+
+Selection bounding the union of recipients is what makes step 7 safe: every
+notice in the batch is fully discharged by step 6, so there is no partial state
+to represent and no progress to track.
+
+**The delete is a transaction, not a guarded delete.** `delete()` takes no
 revision precondition — `ifRevisionId` is a `Patch` method only
-(`@sanity/client` `index.d.ts:594,647`). The guarded shape is the one this repo
-already uses for the role delete (`app/api/admin/roles/[id]/route.ts:455`): a
-revision-asserting no-op patch plus the delete **in one transaction**, so a
-notice touched during the send rolls the whole delete back and stays pending.
-Without this the interleaving the design exists to catch is silently swallowed.
+(`@sanity/client` `index.d.ts:594,647`). Use the shape this repo already uses for
+the role delete (`app/api/admin/roles/[id]/route.ts:458`): a revision-asserting
+no-op patch plus the delete **in one transaction**, asserting the revision
+returned by the **claim** in step 2. A notice re-pended by a writer during the
+send therefore fails to delete and survives to be re-classified — the correct
+outcome, and the one case where a member may see a duplicate.
+
+**Deletion is unconditional on send outcome.** A failed send is logged and the
+notice is still consumed. This is the at-most-once posture stated above; retrying
+would need delivery receipts, an attempt counter and a dead-letter path, and the
+last two rounds of review showed that half-building that machinery is worse than
+not building it. A member with a permanently-undeliverable address must never be
+able to hold the outbox — and therefore the liveness alarm (§3) — red forever.
 
 **`deadline` is written once and never rewritten.** An earlier draft required the
 upsert to both preserve `deadline` across a burst and refresh it on a re-pend —
 two behaviours on one unconditional `.set()`, which Sanity cannot express and
 which two implementers would resolve in opposite, both-plausible ways. The rule
-is now single: `createIfNotExists` writes `deadline`, nothing else touches it. A
-notice re-pended after its ceiling has passed is immediately due again, and the
-accepted duplicate arrives on the next sweep rather than after a fresh window.
-That is the correct trade — the ceiling exists to force delivery, and it has
-already fired once.
-
-`before` is preserved throughout, so any repeat is a truthful superset rather
-than a wrong message.
-
-### Giving up
-
-A notice that can never produce an email must die, or it is immortal: its lease
-expires every few minutes, it is due again forever, it permanently consumes part
-of the sweep budget, and it holds the liveness alarm (§3) permanently red — which
-destroys the only mitigation for layer 1 being load-bearing.
-
-A notice is **deleted with one structured error line** when any of:
-
-- `attempts >= NOTIFY_MAX_ATTEMPTS` (default 5) — e.g. a member with a
-  malformed address that nodemailer rejects on every pass;
-- `firstQueuedAt` is older than `NOTIFY_MAX_AGE_HOURS` (default 24);
-- **zero lines survive** classification or preference filtering — a `setlist`
-  notice whose only participant set `emailSetlist: false` has nothing to say and
-  must not linger. §1 "Grouping" says no email is sent; this says the notice is
-  also dropped.
-
-Sweeps order due notices by `firstQueuedAt` **ascending, excluding notices whose
-`attempts` exceed the others'** — a repeatedly-failing notice must not
-head-of-line block healthy ones behind it.
+is single: `createIfNotExists` writes `deadline`, nothing else touches it. A
+notice re-pended after its ceiling has passed is immediately due again.
 
 ### Bounding the sweep
 
 The budget is arithmetic, not assertion. SMTP here is a **pooled transport with
-`maxConnections: 1`** (`app/utils/email.ts:16`), so sends are serialized. The
-route declares `export const maxDuration = 60`, matching every other admin route
-in this repo.
+`maxConnections: 1`** (`app/utils/email.ts:16`), so sends are serialized. Every
+route that hosts a sweep declares `export const maxDuration = 60`, matching the
+admin routes in this repo.
 
 | Knob | Default | Why |
 |---|---|---|
-| `NOTIFY_FLUSH_LIMIT` | 200 | Notices *classified* — cheap, a few GROQ reads |
-| `NOTIFY_FLUSH_EMAIL_LIMIT` | 12 | Emails *sent* — at a conservative 2 s per serialized send that is ~24 s, leaving over half the 60 s budget for reads, claims and deletes |
-| `NOTIFY_CLAIM_TTL` | 5 min | Comfortably longer than any legitimate sweep, short enough that a crashed sweep recovers within two cron ticks |
+| `NOTIFY_FLUSH_EMAIL_LIMIT` | 12 | Distinct recipients per sweep; the selection stage bounds the union, not a running count |
+| `NOTIFY_CLAIM_TTL` | 5 min | Longer than any legitimate sweep, short enough that a crashed sweep recovers within two cron ticks |
 
-Layer 2 (the opportunistic sweep inside an admin's save) runs with part of the
-invocation budget already spent, so it uses **half** the email limit.
+Layer 2 (the opportunistic sweep inside an admin's save) uses **half** the limit,
+since part of its invocation budget is already spent.
 
-When either cap truncates the batch, the sweep logs one structured line naming
-how many notices were left behind, and the next sweep picks them up. Silent
-truncation is not acceptable — a partially-notified team must be visible in the
-logs.
+**The 2 s-per-send figure is an assumption, not a measurement.** A warm pooled
+connection should be well under it, but the whole-team case (~30 members) has not
+been timed. Implementation must measure one real batch and, if a single
+oversized notice cannot finish inside `maxDuration`, the fallback is to raise the
+limit and split that notice's recipients across sweeps — which reintroduces
+per-recipient progress and must be designed deliberately rather than discovered.
+
+When selection truncates, the sweep logs one structured line naming how many
+notices were left behind. Silent truncation is not acceptable.
 
 ---
 
@@ -470,6 +475,11 @@ below is part of the design rather than an operational nicety.
 
 The sweep is one exported function; the three triggers are three thin callers.
 
+**GitHub disables scheduled workflows after 60 days of repository inactivity**,
+public repos included. Combined with a once-daily liveness check, the detection
+window for that specific failure is up to 48 hours. Accepted, and named here so
+it is a known operational property rather than a surprise.
+
 ### Liveness signal
 
 Because layer 1 is load-bearing and can fail silently, the daily cron reports
@@ -566,6 +576,13 @@ Delivery is gated in this order, unchanged from today except for the pref step:
 valid email → `EMAIL_ALLOWLIST` → per-type preference → `EMAIL_REDIRECT_TO`
 override → `sendEmail`.
 
+**The panels must render the resolved value, not the raw field.** A member who
+set `notifPrefs.email: false` has all five new fields unset, which resolves to
+"no mail" — but an unset boolean renders as its `true` default. Since §5 removes
+the legacy `email` toggle from the member-facing UI, a naive render would show
+five switches ON to someone receiving nothing. `ProfilePanel` and `AdminPanel`
+apply the same fallback the sender does.
+
 ---
 
 ## 6. Presentation
@@ -630,7 +647,7 @@ borrows the app's visual language rather than inventing a second one.
 **The renderer must guard the one-song group itself.** `normalizeMedleyTags`
 clears a lone tag, but it runs only in the two client editors —
 `parseSetlistWriteRequest` stores whatever `medley_tag` arrives
-(`app/utils/setlistWriteRequest.ts:164`), and `buildRuns` will happily emit a
+(`parseSongRows`, `app/utils/setlistWriteRequest.ts:164`), and `buildRuns` will happily emit a
 one-song `medley` run from stored data. `DayCard.tsx:156` already defends against
 exactly this, and with 275 imported history documents in the catalog the
 defensive case is real, not theoretical. A one-song group renders as a plain
@@ -705,6 +722,13 @@ T+2min queues a notice that, once the edits stop, emails "tu rol cambió". The
 member gets two emails, the second carrying correct information. Accepted over
 adding suppression logic.
 
+Removing that leg **breaks existing tests** that assert an immediate assignment
+email — `app/api/__tests__/roleWriteRoutes.test.ts`,
+`app/api/__tests__/roleSwapRoutes.test.ts`, and the send paths in
+`app/utils/__tests__/assignmentEmail.test.ts`. They must be updated to assert an
+outbox notice instead. This is expected work, not a regression to discover
+mid-implementation.
+
 **`notifyRoleAssignments()` loses its email leg.** Its immediate assignment email
 is fully absorbed by the outbox — otherwise one edit produces "te asignaron" now
 and "tu rol cambió" fifteen minutes later. Its push leg is unchanged, so members
@@ -719,11 +743,17 @@ still get an immediate in-app signal. The pairing is deliberate: the push says
   `notificationOutbox` should be hidden from authoring *and* prunable by an
   operator. That combination is **not currently expressible**: `studioCapability`
   takes the `DELETE_ONLY_STUDIO_TYPES` branch before it consults internal-ness
-  (`studioProtection.ts:182`), and `studioProtection.test.ts:119` asserts every
+  (`studioProtection.ts:182`), and `studioProtection.test.ts:123` asserts every
   `INTERNAL_STUDIO_TYPES` entry's create mechanism contains `"hidden"`, which a
   delete-only type cannot produce. Implementation must restructure
   `studioCapability` so the two properties compose, and extend the test to assert
   the new combination. Treating this as "append to both lists" will fail `npm test`.
+  The restructure is larger than one branch: `studioProtection.test.ts:120` asserts
+  `INTERNAL_STUDIO_TYPES` equals an **exact array**, and `:367` asserts each
+  internal type is `hidden: true` in its own schema file. The spec's intent is
+  `notificationOutbox` in `DELETE_ONLY_STUDIO_TYPES` (operators may prune) **and**
+  hidden from authoring; implementation must decide how that is represented and
+  update both assertions.
 - **Read audit — the constraint is on writes, not reads.** A protected read
   through `operationalClient` is already compliant and needs no registration;
   there is no read registry (`A2_HANDOFF_ALLOWLIST` is empty and documented to
@@ -736,12 +766,16 @@ still get an immediate in-app signal. The pairing is deliberate: the push says
   needing its own `PROTECTED_RUNTIME_WRITERS` entry in the same shape as the
   existing `app/utils/roleWriteOps.ts` / `"module"` entry
   (`protectedReadAudit.ts:186`). Register the writers; do not touch the read side.
-- **`maxDuration` on the layer-2 hosts.** The roles routes declare
+- **`maxDuration` on every sweep host.** The roles routes declare
   `export const maxDuration = 60`; `app/api/admin/setlists/route.ts`,
-  `app/api/admin/proposals/[id]/route.ts` and `app/api/me/proposals/route.ts`
-  declare none. Since the opportunistic sweep runs in their `after()` blocks, all
-  three must declare it too, or serialized SMTP sends can outrun the default
-  budget on exactly the routes that trigger setlist emails.
+  `app/api/admin/proposals/[id]/route.ts`, `app/api/me/proposals/route.ts` and
+  **`app/api/cron/service-reminders/route.ts`** declare none. The first three host
+  the layer-2 sweep; the last *is* layer 3, the backstop for an acknowledged-flaky
+  layer 1. All four must declare it, as must the new flush route.
+- **Route conventions.** `/api/cron/flush-notifications` is wrapped in
+  `withVerificationRunContext`, like every other route in this repo, and
+  authorized by the `CRON_SECRET` header pattern at
+  `app/api/cron/service-reminders/route.ts:13`.
 - **The GitHub workflow is new infrastructure.** `.github/workflows/` does not
   exist in this repo; layer 1 is not an extension of an existing pattern. Only
   the `CRON_SECRET` header convention is borrowed, from
@@ -777,16 +811,13 @@ still get an immediate in-app signal. The pairing is deliberate: the push says
 | `NOTIFY_DEBOUNCE_MINUTES` | `15` | Quiet period before a subject's notice flushes |
 | `NOTIFY_MAX_WINDOW_MINUTES` | `60` | Hard ceiling from first queue; defeats starvation |
 | `NOTIFY_CLAIM_TTL_MINUTES` | `5` | Lease on a claimed notice; expiry makes it due again |
-| `NOTIFY_FLUSH_LIMIT` | `200` | Max notices classified per sweep |
 | `NOTIFY_FLUSH_EMAIL_LIMIT` | `12` | Max recipients emailed per sweep; halved for the layer-2 sweep |
-| `NOTIFY_MAX_ATTEMPTS` | `5` | Failed send passes before a notice is dropped |
-| `NOTIFY_MAX_AGE_HOURS` | `24` | Absolute age after which a notice is dropped |
 | `NOTIFY_STALE_ALERT_HOURS` | `6` | Oldest pending age that triggers the liveness error line |
 | `CRON_SECRET` | — | Already present; now also authorizes the sweep route |
 
-`NOTIFY_STALE_ALERT_HOURS` (6) sits below `NOTIFY_MAX_AGE_HOURS` (24) on purpose:
-a genuinely stuck outbox raises the alarm well before it starts silently
-discarding notices.
+Because every claimed notice is consumed in the sweep that claims it, nothing
+accumulates in normal operation. A pending age above `NOTIFY_STALE_ALERT_HOURS`
+therefore means layer 1 has stopped, which is exactly what the alarm is for.
 
 ## 10. Testing
 
@@ -796,7 +827,7 @@ Pure logic, unit-tested (vitest):
   deleted-role case (sends "Ya no participas"), the unpublished-role case (drops
   silently) and the past-date case (drops silently).
 - **`setlist` classification:** empty → non-empty is "listo"; a reorder, a
-  `play_key` change and a `medley_tag` change each count as changed; a
+  `play_key` change and a **regrouping** each count as changed; a
   `team_notes`-only edit does not; non-empty → empty is silent; equal is silent.
 - **`leadNotes` classification:** changed vs unchanged after trimming; `draft`,
   `approved` and deleted proposals drop.
@@ -820,14 +851,14 @@ Pure logic, unit-tested (vitest):
   due again; one inside its TTL is not. This is the test that would have caught
   the permanently-stranded-notice bug.
 - **One-to-many delivery:** a `setlist` notice with 5 participants sends 5 emails
-  and is deleted once; with more participants than the sweep's email budget it
-  sends a prefix, survives, and completes on the next sweep with **no recipient
-  emailed twice and none skipped**. This is the test that would have caught the
+  and is consumed once. This is the test that would have caught the
   notify-one-participant-then-delete bug.
-- **Giving up:** a notice hits `NOTIFY_MAX_ATTEMPTS` and is deleted with an error
-  line; one past `NOTIFY_MAX_AGE_HOURS` is deleted; one whose recipients all
-  filtered out is deleted rather than left immortal; a repeatedly-failing notice
-  does not head-of-line block healthy ones.
+- **Selection bounds the recipient union:** two notices sharing most participants
+  can both enter one sweep; two disjoint notices that would exceed the budget
+  cannot, and the second stays pending and is logged.
+- **Consumption is unconditional:** a notice is deleted even when its send fails,
+  so a permanently-undeliverable address cannot hold the outbox — or the liveness
+  alarm — red forever. A notice whose lines all filter out is consumed too.
 - **Deleted subject:** a `role` notice whose role document is gone still renders
   its subject and evaluates the past-date drop, from the queue-time snapshot.
 - **Date move:** a `setlist` notice whose live service date no longer matches its
@@ -838,7 +869,7 @@ Pure logic, unit-tested (vitest):
 - **One-song medley group** from stored data renders as a plain single.
 - **Medley partition, not tags:** two song lists with identical songs, keys and
   grouping but **different `medley_tag` values** classify as *unchanged*. A
-  regrouping with identical tags-per-song count classifies as *changed*. `NUEVO`
+  regrouping classifies as *changed*. `NUEVO`
   attaches only to a group whose adjacent-song set was not a group in `before`.
 - **Publish announces the setlist:** a draft service with songs, then published,
   yields *Setlist listo*; published with no songs yields no email.
@@ -848,8 +879,6 @@ Pure logic, unit-tested (vitest):
   notice are both discarded when the service becomes `published == false`.
 - **Past-date drop uses America/Mexico_City**, asserted at 18:00–23:59 local on
   the service date (where a UTC comparison would wrongly drop).
-- **Re-pended notice gets a fresh `deadline`**, so a write during the send window
-  produces the duplicate after a quiet window rather than on the next sweep.
 - **A blocked `sendEmail` (`ok: false`) does not delete the notice.**
 - **Presentation:**
   - `Mov.` is absent from *Setlist listo* and present on *El setlist cambió*.
