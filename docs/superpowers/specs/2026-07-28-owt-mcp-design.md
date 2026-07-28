@@ -87,10 +87,10 @@ surface:
 
 | Endpoint | Purpose |
 | --- | --- |
-| `/.well-known/oauth-authorization-server` | RFC 8414 metadata (static JSON) |
+| `/.well-known/oauth-authorization-server` | RFC 8414 metadata (static JSON). If the stage-0 handshake stalls, also alias `/.well-known/openid-configuration` — some clients fall back to it |
 | `/.well-known/oauth-protected-resource` | RFC 9728 metadata (static JSON). Served at the root form **and** the path-inserted form (`/.well-known/oauth-protected-resource/api/mcp/…`) — some clients fetch only the latter |
 | `/api/oauth/register` | Dynamic client registration; stores client doc in Sanity. **redirect_uri allowlist:** registration is rejected unless every redirect URI is on the allowlist of Claude connector callback origins (`claude.ai` / `claude.com` callback paths; exact set confirmed empirically during stage 0 and kept as a constant). Basic rate limiting on this unauthenticated endpoint |
-| `/api/oauth/authorize` | **Requires a live NextAuth session with role `super-admin`** (reuse `requireActiveSession` + explicit role check). Validates `redirect_uri` by **exact match** against the client's registration (PKCE does not protect against attacker-initiated flows — this check does). Renders a consent screen; approval is a **POST** (NextAuth's SameSite=Lax cookie then covers CSRF); on approve, issues a short-lived PKCE-bound auth code |
+| `/api/oauth/authorize` | **Requires a live NextAuth session with role `super-admin`** (reuse `requireActiveSession` + explicit role check). **No session → redirect to the app sign-in page with `callbackUrl` pointing back to the authorize URL, params intact** (the phone's connector browser usually starts cookie-less; a 401 here would dead-end the flow). Non-super-admin session → rejection page. Validates `redirect_uri` by **exact match** against the client's registration (PKCE does not protect against attacker-initiated flows — this check does). Renders a consent screen; approval is a **POST** (NextAuth's SameSite=Lax cookie then covers CSRF); on approve, issues a short-lived PKCE-bound auth code |
 | `/api/oauth/token` | Exchanges code (PKCE verified, `redirect_uri` exact-matched against registration again) for access + refresh tokens; handles refresh grant |
 
 - **Tokens:** JWTs signed with a **new dedicated secret** (`MCP_OAUTH_SECRET`
@@ -106,15 +106,29 @@ surface:
   for up to 7 days; `requireActiveManager` re-checks activity per request
   and the MCP must match that posture.)
 - **Persistence:** new Sanity doc types `mcpOauthClient` (registration) and
-  `mcpOauthGrant` (grant + refresh-token state, revocation flag). Auth codes
-  are stateless signed JWTs, TTL 60 s, PKCE challenge embedded; the grant
-  doc records the code's `jti` on redemption to block replay within TTL.
-  These doc types are invisible to the app UI and excluded from Studio
-  structure (or hidden in a "Sistema" group).
-- **Revocation:** set `revoked: true` on the grant doc (Studio or script) —
-  token verification checks the grant on refresh; access tokens die at most
-  7 days later. (A kill-switch env var `MCP_DISABLED=1` short-circuits the
-  route entirely for emergencies.)
+  `mcpOauthGrant` (grant state, revocation flag). **Hard constraint — the
+  production dataset answers unauthenticated public queries** (known and by
+  design: `operationalClient.ts` notes "public published reads work without
+  it"), so these docs are world-readable. They may therefore contain **only
+  non-secret, non-forgeable state**: the `jti` of the current refresh
+  token, redeemed auth-code `jti`s, the `revoked` flag, and registered
+  redirect URIs — **never token values, signing material, or anything a
+  reader could replay**. Token validity always requires the
+  `MCP_OAUTH_SECRET` signature, which never touches Sanity. Auth codes are
+  stateless signed JWTs, TTL 60 s, PKCE challenge embedded; redemption
+  records the code's `jti` on the grant doc using a **deterministic doc
+  `_id` + `createIfNotExists`** (atomic on `_id`) rather than
+  query-then-create, closing the replay race — Sanity queries are not
+  strictly read-your-writes. Grant docs are capped (a handful of
+  registrations for one user; registration prunes/refuses beyond a small
+  hard cap, which also bounds unauthenticated-DCR document spam). These
+  doc types are hidden in a "Sistema" group in Studio structure — visible
+  to Frank for manual revocation, out of the way otherwise.
+- **Revocation:** set `revoked: true` on the grant doc (Studio "Sistema"
+  group, or script). Because verification checks the flag on **every
+  request** (through the ~30 s cache above), revocation takes effect
+  within the cache TTL — not at the next refresh. `MCP_DISABLED=1`
+  remains the hard kill switch that short-circuits the route entirely.
 - **Secrets:** `MCP_OAUTH_SECRET` **and** `MCP_DISABLED` each get a
   `docs/SECRETS.md` entry in the same change that introduces them — needed
   on Vercel (all envs) and local `.env.local` for dev; **not** needed in
@@ -149,13 +163,14 @@ drafts are visible — every service payload carries an explicit
 | --- | --- |
 | `edit_setlist` | Add/remove/reorder songs on a service (`saturdarSongs` for Saturday — typo is load-bearing, never rename; `featuredSongs` for Sunday). Generates `_key` for every array item. Calls `revalidateServiceViews()` |
 | `swap_assignment` | Move/swap members across the five seat types on a role doc; same validation as the admin swap route |
-| `run_solver` | **The largest stage-2 work item — a server-side rebuild, not an extraction.** `/api/admin/solve` is compute-only (it just relays a prepared `SolveRequest` to the GCF and returns the schedule); the real pipeline — assembling the request (leads, support seats, availability, history, DSL rules) and applying the returned schedule via role writes — currently lives client-side in `MonthGenerator.tsx` (~1,700 lines, sole caller of the route). Stage 2 builds two shared server-side functions: `assembleSolveRequest(month)` (reads via `operationalClient`) and `applySchedule(schedule)` (guarded role writes, registered in the audit, revision-asserted). Semantics: `run_solver` solves **and writes assignments onto draft services**, then returns the solver's honest diagnostic plus a summary of what was written; it refuses (whole run, not per-service) if any target service in the month is published. `MonthGenerator.tsx` migrating onto the shared functions is desirable but **not** required for stage 2 |
+| `run_solver` | **The largest stage-2 work item — a server-side rebuild, not an extraction.** `/api/admin/solve` is compute-only (it just relays a prepared `SolveRequest` to the GCF and returns the schedule); the real pipeline — assembling the request (leads, support seats, availability, history, DSL rules) and applying the returned schedule via role writes — currently lives client-side in `MonthGenerator.tsx` (~1,700 lines, sole caller of the route). Stage 2 builds two shared server-side functions: `assembleSolveRequest(month)` (reads via `operationalClient`) and `applySchedule(schedule)` (guarded role writes, registered in the audit, revision-asserted). Semantics: `run_solver` solves **and writes assignments onto draft services**, then returns the solver's honest diagnostic plus a summary of what was written; it refuses (whole run, not per-service) if any target service in the month is published. `MonthGenerator.tsx` migrating onto the shared functions is desirable but **not** required for stage 2. The MCP route needs `maxDuration` ≥ the solve route's 60 s (assemble + GCF solve + apply happen in one request) |
 | `publish_service` / `unpublish_service` | Flip draft state through the same code path as the admin publish routes — assignment notifications/emails fire on publish exactly as from the UI. **Deliberately separate from `run_solver`: no tool both solves and publishes** |
 
 Write-tool contract (all stage 2+ tools):
 1. Verify token (route-level) — no per-tool auth bypass possible.
-2. Validate inputs with zod schemas (zod added as a **direct** dependency —
-   today it would only arrive transitively via the MCP SDK); reject
+2. Validate inputs with zod schemas (zod added as a **direct** dependency,
+   pinned to the major the MCP SDK/`mcp-handler` chain expects — the
+   ecosystem is zod-v3-based; don't jump to v4 independently); reject
    unknown fields.
 3. Read the target document(s) through `operationalClient`, capture
    `_rev`(s), and pass them as the observed revisions (the audit layer's
