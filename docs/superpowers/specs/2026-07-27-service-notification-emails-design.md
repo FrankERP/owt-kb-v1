@@ -79,9 +79,10 @@ the thing being debounced — holding a pending notice.
   kind: "role" | "setlist" | "leadNotes",
   subjectKey: string,
 
-  // Identity, snapshotted at queue time. NOT re-read at flush, because the
-  // subject document may be gone by then (a deleted role still owes its
-  // assignees a "Ya no participas" whose subject line carries a date).
+  // Identity, snapshotted at queue time as a FALLBACK for when the subject
+  // document is gone at flush (a deleted role still owes its assignees a
+  // "Ya no participas" whose subject line carries a date). Live state wins
+  // whenever the document exists — see "Which source renders the date".
   serviceDate: string,     // YYYY-MM-DD
   roleType: "sunday_role" | "saturday_role" | "special_role" | null,
 
@@ -112,9 +113,28 @@ A deleted role still owes its assignees *Ya no participas*, and both the subject
 line ("— Domingo 9 ago") and the past-service-date drop rule need a date that no
 longer exists anywhere else. Role ids are `randomUUID()` and encode nothing.
 
-The flusher therefore reads live state **when the document exists**, and falls
-back to the snapshot when it does not. The drop rules evaluate against whichever
-source answered.
+### Which source renders the date
+
+One rule, because every subject line carries a date and an earlier draft stated
+this three different ways:
+
+**Live state wins whenever the subject document exists. The snapshot is used only
+when it does not.** So a deleted role renders "Ya no participas — Domingo 9 ago"
+from its snapshot, and everything else renders from live. Drop rules evaluate
+against whichever source answered.
+
+Date moves are then handled per kind, and the two differ for a reason:
+
+- **`role` → re-date from live.** `PATCH /api/admin/roles/[id]` supports moving a
+  service (`isMove`, `app/api/admin/roles/[id]/route.ts:141`). If a published
+  service moves from Aug 9 to Aug 16 and a seat changes inside the same window,
+  `before.roles` is still perfectly valid — the member and the role document are
+  unchanged, only the label moved. The email reads "Tu rol cambió — Domingo 16
+  ago", the truth.
+- **`setlist` → drop on mismatch.** Here the snapshot *is* invalidated by a move:
+  `before.songs` was captured against one week's setlist and live songs now
+  resolve from another. There is nothing truthful to say, so the notice is
+  discarded (§4).
 
 `before.roles` holds seat labels (`"Líder"`, `"BGV"`, `"Coro"`, instrument and
 FOH labels) — the vocabulary `rolesForMember()` already produces — derived from
@@ -227,6 +247,16 @@ group is new when that set of adjacent songs was not a group in `before`.
 song belongs to (`null` for a standalone song), derived from `buildRuns` at
 snapshot time. One shape, stated once: no separate partition array.
 
+**A one-song run snapshots as `null`, not as a run index.** `buildRuns` will emit
+a one-song `medley` run from stored data (§6), so without this normalisation the
+comparison would treat it as a group while the renderer draws it as a plain
+single — the two disagreeing about the same song.
+
+Sanity schema: `before` is one object type with three optional fields —
+`beforeRoles: string[]`, `beforeSongs: [{_key, ref, key, group}]`,
+`beforeNotes: string` — not a JSON blob, and `beforeSongs` rows carry `_key` like
+every other array-of-object write in this repo.
+
 A `setlist` notice is also **dropped when the service is now
 `published == false`**, mirroring the `role` rule. Without this, queueing a
 setlist change and then unpublishing the service mails every participant about a
@@ -310,7 +340,9 @@ A sweep runs these stages in order, and there is no second control flow:
 Steps 1 and 3 each resolve recipients — two reads, deliberately. Step 1 needs a
 count to bound the batch before claiming anything; step 3 needs the authoritative
 set after the claim. The budget counts recipients **before** preference filtering,
-so the emails actually sent are always ≤ the budget, never more.
+so a batch of several notices sends no more emails than the budget. The single
+exception is the oversized-notice case in step 1, which is deliberately allowed to
+exceed it — see below.
 
 Selection bounding the union of recipients is what makes step 7 safe: every
 notice in the batch is fully discharged by step 6, so there is no partial state
@@ -323,7 +355,10 @@ the role delete (`app/api/admin/roles/[id]/route.ts:458`): a revision-asserting
 no-op patch plus the delete **in one transaction**, asserting the revision
 returned by the **claim** in step 2. A notice re-pended by a writer during the
 send therefore fails to delete and survives to be re-classified — the correct
-outcome, and the one case where a member may see a duplicate.
+outcome, and **one of two** cases where a member may see a duplicate. The other is
+a sweep killed mid-fan-out: the lease expires and the next sweep re-sends from the
+top. The wall-clock bound below keeps that second case bounded rather than
+unbounded, but it does not eliminate it.
 
 **Deletion is unconditional on send outcome.** A failed send is logged and the
 notice is still consumed. This is the at-most-once posture stated above; retrying
@@ -362,19 +397,35 @@ admin routes in this repo.
 
 | Knob | Default | Why |
 |---|---|---|
-| `NOTIFY_FLUSH_EMAIL_LIMIT` | 12 | Distinct recipients per sweep; the selection stage bounds the union, not a running count |
+| `NOTIFY_FLUSH_EMAIL_LIMIT` | 40 | Distinct recipients per sweep; the selection stage bounds the union, not a running count |
 | `NOTIFY_SEND_BUDGET_MS` | 40 000 | Wall-clock bound on step 6, inside `maxDuration = 60` |
 | `NOTIFY_CLAIM_TTL` | 5 min | Longer than any legitimate sweep, short enough that a crashed sweep recovers within two cron ticks |
 
 Layer 2 (the opportunistic sweep inside an admin's save) uses **half** the limit,
 since part of its invocation budget is already spent.
 
-**The 2 s-per-send figure is an assumption, not a measurement.** A warm pooled
-connection should be well under it, but the whole-team case (~30 members) has not
-been timed. Implementation must measure one real batch and, if a single
-oversized notice cannot finish inside `maxDuration`, the fallback is to raise the
-limit and split that notice's recipients across sweeps — which reintroduces
-per-recipient progress and must be designed deliberately rather than discovered.
+**The limit must exceed the largest realistic single-notice recipient count, and
+that is the whole reason it is 40.** A `setlist` notice's recipients are every
+seat on the service across all five paths — leads, BGVs, Chorus, instruments and
+FOH — which for a Sunday on this ~30-member team is routinely 12–20 people. An
+earlier draft set the limit to 12, which would have made "taken alone" the
+*normal* path for almost every setlist change rather than a rare exception, and
+combined with the wall-clock bound it would have silently dropped the tail of the
+biggest service every time. At 40, no single service can exceed it and the
+oversized branch becomes genuinely exceptional.
+
+**This is a release gate, not a knob to tune later.** The 2 s-per-send figure is
+an assumption; a warm pooled connection should be far under it, but nobody has
+timed it. Before shipping, measure one real batch of ~20 recipients:
+
+- comfortably inside `NOTIFY_SEND_BUDGET_MS` → ship as specified;
+- not inside it → **do not** raise the budget and hope. Splitting one notice's
+  recipients across sweeps reintroduces per-recipient progress, which "Claim and
+  delete" shows is incompatible with one document per subject. That is a
+  different outbox model and must be designed deliberately, not discovered in
+  production.
+
+If the team grows past 40 active members, this limit grows with it.
 
 When selection truncates, the sweep logs one structured line naming how many
 notices were left behind. Silent truncation is not acceptable.
@@ -447,6 +498,11 @@ rejects for the unpublish case.
   dropped at flush (§1).
 - **Lead notes on a `draft` proposal are silent.** The proposal is not in front
   of admins yet, so there is nothing for them to act on.
+- **A first submission does not queue `leadNotes`.** The predicate is that the
+  proposal was **already** `pending` or `changes_requested` *before* this write —
+  not merely that it is afterwards. A `draft → pending` submit carrying notes
+  already sends admins the immediate "Nueva propuesta" (§5); queueing on the same
+  write would mail them twice about one submission.
 
 ### Where `before` is captured, and in which transaction
 
@@ -503,8 +559,9 @@ below is part of the design rather than an operational nicety.
 
 The sweep is one exported function; the three triggers are three thin callers.
 
-**GitHub disables scheduled workflows after 60 days of repository inactivity**,
-public repos included. Combined with a once-daily liveness check, the detection
+**GitHub disables scheduled workflows after 60 days of repository inactivity.**
+That rule applies to public repositories, and this repo is public, so it applies
+here. Combined with a once-daily liveness check, the detection
 window for that specific failure is up to 48 hours. Accepted, and named here so
 it is a known operational property rather than a surprise.
 
@@ -821,10 +878,11 @@ still get an immediate in-app signal. The pairing is deliberate: the push says
   (`protectedReadAudit.ts:189`). Register the writers; do not touch the read side.
 - **`maxDuration` on every sweep host.** The roles routes declare
   `export const maxDuration = 60`; `app/api/admin/setlists/route.ts`,
-  `app/api/admin/proposals/[id]/route.ts`, `app/api/me/proposals/route.ts` and
-  **`app/api/cron/service-reminders/route.ts`** declare none. The first three host
+  `app/api/admin/proposals/[id]/route.ts`, `app/api/me/proposals/route.ts`,
+  `app/api/admin/roles/unpublish/route.ts` and
+  **`app/api/cron/service-reminders/route.ts`** declare none. The first four host
   the layer-2 sweep; the last *is* layer 3, the backstop for an acknowledged-flaky
-  layer 1. All four must declare it, as must the new flush route.
+  layer 1. All five must declare it, as must the new flush route.
 - **Route conventions.** `/api/cron/flush-notifications` is wrapped in
   `withVerificationRunContext`, like every other route in this repo, and
   authorized by the `CRON_SECRET` header pattern at
@@ -840,7 +898,12 @@ still get an immediate in-app signal. The pairing is deliberate: the push says
   transport-level refusal covers the new paths unchanged. The sweep route is
   included: a verification run must not mail the team. The sweep gates on
   `isDeliveryBlocked()` (`app/utils/deliveryFirewall.ts:191`) **before it claims
-  anything** and exits without touching the outbox — rather than discovering the
+  anything** and exits without touching the outbox. One caveat worth naming: any
+  unrecognised `DELIVERY_MODE` value blocks (`deliveryFirewall.ts:170`), so a typo
+  in production would silence both the sweep *and* the super-admin alarm that §3
+  designates as its own mitigation — the alarm shares a failure mode with the
+  thing it watches. Low probability, but not zero, and the daily cron's log line
+  remains the only trace — rather than discovering the
   block per-send, where `sendEmail` returns the same `{ ok: false }`
   (`email.ts:38`) for a firewall block, missing configuration and a genuine SMTP
   failure alike, and is therefore useless for deciding whether to consume.
@@ -873,7 +936,7 @@ still get an immediate in-app signal. The pairing is deliberate: the push says
 | `NOTIFY_MAX_WINDOW_MINUTES` | `60` | Hard ceiling from first queue; defeats starvation |
 | `NOTIFY_CLAIM_TTL_MINUTES` | `5` | Lease on a claimed notice; expiry makes it due again |
 | `NOTIFY_SEND_BUDGET_MS` | `40000` | Wall-clock bound on the send loop; the batch is consumed either way |
-| `NOTIFY_FLUSH_EMAIL_LIMIT` | `12` | Max recipients emailed per sweep; halved for the layer-2 sweep |
+| `NOTIFY_FLUSH_EMAIL_LIMIT` | `40` | Max recipients per sweep. **Must exceed the largest per-service seat count** — see §1 |
 | `NOTIFY_STALE_ALERT_HOURS` | `6` | Oldest pending age that triggers the liveness error line |
 | `CRON_SECRET` | — | Already present; now also authorizes the sweep route |
 
@@ -918,6 +981,13 @@ Pure logic, unit-tested (vitest):
 - **Selection bounds the recipient union:** two notices sharing most participants
   can both enter one sweep; two disjoint notices that would exceed the budget
   cannot, and the second stays pending and is logged.
+- **Budget sizing:** a `setlist` notice with 20 recipients is *not* treated as
+  oversized at the default limit — the regression test for the 12-vs-20 defect.
+- **Date move:** a `role` notice whose service moved renders the **live** date; a
+  `setlist` notice whose service moved is dropped.
+- **One-song run snapshots as `null` group**, so comparison and rendering agree.
+- **A first proposal submission queues no `leadNotes` notice**, so admins are not
+  mailed twice about one submission.
 - **The send loop is bounded:** a batch that exceeds `NOTIFY_SEND_BUDGET_MS` stops
   sending, is still consumed, and logs the unserved count — so a lease expiry can
   never re-send the same recipients indefinitely.
@@ -950,7 +1020,6 @@ Pure logic, unit-tested (vitest):
   notice are both discarded when the service becomes `published == false`.
 - **Past-date drop uses America/Mexico_City**, asserted at 18:00–23:59 local on
   the service date (where a UTC comparison would wrongly drop).
-- **A blocked `sendEmail` (`ok: false`) does not delete the notice.**
 - **Presentation:**
   - `Mov.` is absent from *Setlist listo* and present on *El setlist cambió*.
   - Unmoved rows render `–`, never an empty cell.
@@ -993,7 +1062,7 @@ Both gates must pass before this is done: `npx tsc --noEmit` and `npm test`.
 - **Everything is late by design now.** A member who checks email the instant an
   admin saves will see nothing for 15 minutes. That is the trade being bought:
   fewer, denser emails that stay worth opening.
-- **"Introduction before modification" has three holes, not one.** The property —
+- **"Introduction before modification" has five holes, not one.** The property —
   a member never gets a "changed" email about something they were never told
   about — holds by construction in the normal path, and fails in three ways:
   1. A **swallowed send failure**: *Setlist listo* fails at the transport, the
