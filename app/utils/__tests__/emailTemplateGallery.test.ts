@@ -175,7 +175,20 @@ describe("email template gallery", () => {
       expect(g.html).toContain('name="color-scheme" content="dark"');
       expect(g.html).toContain('name="supported-color-schemes" content="dark"');
 
-      expect(g.html).not.toContain("<style");           // no stylesheet dependency
+      // §6 forbids DEPENDING on a stylesheet, not using one. The single <style>
+      // block is the dark-mode opt-out, and it must stay pure enhancement: only
+      // background-color declarations, nothing structural. A client that drops it
+      // renders exactly what it rendered before, because every colour is also
+      // inline and on bgcolor.
+      const styles = g.html.match(/<style>([\s\S]*?)<\/style>/g) ?? [];
+      expect(styles).toHaveLength(1);
+      const css = styles[0] ?? "";
+      for (const structural of ["width", "display", "padding", "margin", "position", "float", "font"]) {
+        expect(css).not.toContain(`${structural}:`);
+      }
+      expect(css.replace(/background-color:/g, "")).not.toContain("color:"); // no foreground rules
+      // Nothing outside the opt-out block: no second stylesheet, no @import.
+      expect(g.html).not.toContain("@import");
       expect(g.html).not.toContain("display:flex");     // Outlook has no flexbox
       expect(g.html).not.toContain("display:grid");
       expect(g.html).not.toMatch(/<img[^>]+src="https?:/); // no remote images
