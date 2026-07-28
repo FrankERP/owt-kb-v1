@@ -113,8 +113,14 @@ describe("notifyProposalSubmitted", () => {
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
-  it("skips an admin who opted out of email (emailPref false)", async () => {
-    primeValidRole(["lead1"], ["a1"], [{ _id: "a1", email: "admin@x.com", emailPref: false }]);
+  it("skips an admin who opted out of email (notifPrefs.email false)", async () => {
+    primeValidRole(["lead1"], ["a1"], [{ _id: "a1", email: "admin@x.com", notifPrefs: { email: false } }]);
+    await notifyProposalSubmitted({ leadId: "lead1", roleId: "r1", serviceType: "sunday", serviceDate: "2026-07-05" });
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("skips an admin who opted out of proposal email specifically (emailProposals false)", async () => {
+    primeValidRole(["lead1"], ["a1"], [{ _id: "a1", email: "admin@x.com", notifPrefs: { emailProposals: false } }]);
     await notifyProposalSubmitted({ leadId: "lead1", roleId: "r1", serviceType: "sunday", serviceDate: "2026-07-05" });
     expect(sendEmailMock).not.toHaveBeenCalled();
   });

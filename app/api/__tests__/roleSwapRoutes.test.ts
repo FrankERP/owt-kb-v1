@@ -41,7 +41,11 @@ vi.mock("@/app/utils/revalidate", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidatePathMock(...a) }));
 vi.mock("@/app/utils/push", () => ({ sendPush: (...a: unknown[]) => sendPushMock(...a) }));
-vi.mock("@/app/utils/assignmentEmail", () => ({
+// PARTIAL: the send path is spied, but `rolesForMember` stays real — it is the
+// seat-label vocabulary the queued outbox snapshot records.
+vi.mock("@/app/utils/email", () => ({ sendEmail: vi.fn() }));
+vi.mock("@/app/utils/assignmentEmail", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/app/utils/assignmentEmail")>()),
   sendAssignmentEmails: (...a: unknown[]) => sendAssignmentEmailsMock(...a),
   sendAssignmentEmailsBatch: vi.fn(),
   assigneesOf: () => [],
@@ -63,7 +67,11 @@ interface PatchOp {
   set: Record<string, unknown>;
   unset: string[];
 }
-type TxOp = PatchOp | { kind: "create"; doc: Record<string, unknown> } | { kind: "delete"; id: string };
+type TxOp =
+  | PatchOp
+  | { kind: "create"; doc: Record<string, unknown> }
+  | { kind: "createIfNotExists"; doc: Record<string, unknown> }
+  | { kind: "delete"; id: string };
 
 interface RecordedTx {
   ops: TxOp[];
@@ -87,6 +95,10 @@ function makeTransaction() {
   const tx = {
     create(doc: Record<string, unknown>) {
       record.ops.push({ kind: "create", doc });
+      return tx;
+    },
+    createIfNotExists(doc: Record<string, unknown>) {
+      record.ops.push({ kind: "createIfNotExists", doc });
       return tx;
     },
     delete(id: string) {
@@ -126,8 +138,47 @@ function makeTransaction() {
   return tx;
 }
 
+/**
+ * The BUSINESS transactions. The post-commit outbox upsert runs on the same
+ * `writeClient`, but never as part of the business transaction (spec §2) — it is
+ * the only writer here that uses `createIfNotExists`, so the two are told apart
+ * by shape rather than by call order.
+ */
 function committedTransactions() {
-  return transactions.filter((t) => t.committed);
+  return transactions.filter(
+    (t) => t.committed && !t.ops.some((o) => o.kind === "createIfNotExists"),
+  );
+}
+
+/** The post-commit `notificationOutbox` upserts (spec §2). */
+function outboxUpserts(): Record<string, unknown>[] {
+  return transactions
+    .filter((t) => t.committed)
+    .flatMap((t) => t.ops)
+    .filter((o): o is { kind: "createIfNotExists"; doc: Record<string, unknown> } =>
+      o.kind === "createIfNotExists",
+    )
+    .map((o) => o.doc);
+}
+
+/** Member ids the outbox now owes a debounced email, per role id. */
+function queuedFor(roleId: string): string[] {
+  return outboxUpserts()
+    .filter((d) => d.roleId === roleId)
+    .map((d) => String(d.memberId))
+    .sort();
+}
+
+/**
+ * Run every registered `after()` callback. A committed write registers more than
+ * one — the immediate push fan-out and one outbox upsert PER DESTINATION ROLE
+ * are deliberately separate deferred blocks (spec §2).
+ */
+async function drainAfter(): Promise<void> {
+  for (let guard = 0; guard < 10 && afterCallbacks.length; guard++) {
+    const batch = afterCallbacks.splice(0);
+    for (const cb of batch) await cb();
+  }
 }
 
 function patches(tx: RecordedTx): PatchOp[] {
@@ -552,7 +603,7 @@ describe("POST /api/admin/roles/swap — seat swap", () => {
     expect(afterCallbacks).toHaveLength(0);
   });
 
-  it("notifies the newly added assignee of each destination role, drafts stay silent", async () => {
+  it("pushes to the newly added assignee of each destination role, drafts stay silent", async () => {
     seedTwoWeekendRoles();
     await swapPOST(
       req({
@@ -561,13 +612,15 @@ describe("POST /api/admin/roles/swap — seat swap", () => {
         target: seat("role-2", "rev-2", "instruments", "bi"),
       }),
     );
-    expect(afterCallbacks).toHaveLength(1);
-    await afterCallbacks[0]();
+    // The push fan-out, plus one outbox upsert per destination role.
+    expect(afterCallbacks).toHaveLength(3);
+    await drainAfter();
     // Per destination role: role-1 receives mem-7, role-2 receives mem-1.
     expect(sendPushMock).toHaveBeenCalledTimes(2);
     expect(sendPushMock.mock.calls[0][0]).toEqual(["mem-7"]);
     expect(sendPushMock.mock.calls[1][0]).toEqual(["mem-1"]);
-    expect(sendAssignmentEmailsMock).toHaveBeenCalledTimes(2);
+    // The immediate assignment email is gone; the outbox absorbed it (§7).
+    expect(sendAssignmentEmailsMock).not.toHaveBeenCalled();
 
     afterCallbacks.length = 0;
     transactions.length = 0;
@@ -584,6 +637,33 @@ describe("POST /api/admin/roles/swap — seat swap", () => {
     );
     expect(committedTransactions()).toHaveLength(1);
     expect(afterCallbacks).toHaveLength(0);
+    expect(outboxUpserts()).toHaveLength(0);
+  });
+
+  it("queues the UNION per destination role, so the person who LEFT hears too", async () => {
+    seedTwoWeekendRoles();
+    await swapPOST(
+      req({
+        kind: "seat",
+        source: seat("role-1", "rev-1", "Lead", "a1"),
+        target: seat("role-2", "rev-2", "instruments", "bi"),
+      }),
+    );
+    await drainAfter();
+    // mem-1 left role-1's Lead seat and mem-7 left role-2's Teclado seat. Under
+    // the old added-assignees diff neither heard anything about the role they
+    // were removed from — this is the defect the union rule exists to fix.
+    expect(queuedFor("role-1")).toEqual(["mem-1", "mem-2", "mem-3", "mem-4", "mem-7"]);
+    expect(queuedFor("role-2")).toEqual(["mem-1", "mem-5", "mem-6", "mem-7", "mem-8"]);
+    const byKey = new Map(outboxUpserts().map((d) => [d.subjectKey, d]));
+    // Each member's snapshot holds THEIR OWN pre-commit labels on THAT role.
+    expect(byKey.get("mem-1__role-1")!.before).toEqual({ beforeRoles: ["Líder"] });
+    expect(byKey.get("mem-7__role-1")!.before).toEqual({ beforeRoles: [] });
+    expect(byKey.get("mem-7__role-2")!.before).toEqual({ beforeRoles: ["Teclado"] });
+    expect(byKey.get("mem-1__role-2")!.before).toEqual({ beforeRoles: [] });
+    // Each notice carries its OWN service's identity, not the other's.
+    expect(byKey.get("mem-1__role-1")!.serviceDate).toBe("2026-08-09");
+    expect(byKey.get("mem-1__role-2")!.serviceDate).toBe("2026-08-16");
   });
 });
 
@@ -653,12 +733,20 @@ describe("POST /api/admin/roles/swap — team swap", () => {
     await swapPOST(
       req({ kind: "team", roles: [{ id: "role-1", rev: "rev-1" }, { id: "role-2", rev: "rev-2" }] }),
     );
-    // ONE deferred attempt for the whole batch (§7), one push per destination.
-    expect(afterCallbacks).toHaveLength(1);
-    await afterCallbacks[0]();
+    // ONE deferred push attempt for the whole batch (§7), one push per
+    // destination, plus one outbox upsert per destination role.
+    expect(afterCallbacks).toHaveLength(3);
+    await drainAfter();
     expect(sendPushMock).toHaveBeenCalledTimes(2);
     expect(sendPushMock.mock.calls[0][0]).toEqual(["mem-5", "mem-6", "mem-7", "mem-8"]);
     expect(sendPushMock.mock.calls[1][0]).toEqual(["mem-1", "mem-2", "mem-3", "mem-4"]);
+    // A team swap replaces BOTH lineups, so both sides of both roles are queued.
+    expect(queuedFor("role-1")).toEqual([
+      "mem-1", "mem-2", "mem-3", "mem-4", "mem-5", "mem-6", "mem-7", "mem-8",
+    ]);
+    expect(queuedFor("role-2")).toEqual([
+      "mem-1", "mem-2", "mem-3", "mem-4", "mem-5", "mem-6", "mem-7", "mem-8",
+    ]);
     // …and ONE revalidation pass for the whole two-role batch, not one per role.
     expect(revalidateServiceViewsMock).toHaveBeenCalledTimes(1);
     expect(revalidatePathMock.mock.calls.map((c) => c[0])).toEqual(["/me"]);
@@ -669,16 +757,14 @@ describe("POST /api/admin/roles/swap — team swap", () => {
     store.locks.push(lockFor("role-1", "2026-08-09", "lock-rev-1"), lockFor("role-2", "2026-08-16", "lock-rev-2"));
     seedAllMembers();
     sendPushMock.mockRejectedValue(new Error("fcm down"));
-    sendAssignmentEmailsMock.mockRejectedValue(new Error("smtp down"));
     const res = await swapPOST(
       req({ kind: "team", roles: [{ id: "role-1", rev: "rev-1" }, { id: "role-2", rev: "rev-2" }] }),
     );
     expect(res.status).toBe(200);
     expect(committedTransactions()).toHaveLength(1);
-    await expect(afterCallbacks[0]()).resolves.toBeUndefined();
+    await expect(drainAfter()).resolves.toBeUndefined();
     // Every destination was still attempted, and the swap is not rolled back.
     expect(sendPushMock).toHaveBeenCalledTimes(2);
-    expect(sendAssignmentEmailsMock).toHaveBeenCalledTimes(2);
     expect(committedTransactions()).toHaveLength(1);
   });
 
@@ -909,14 +995,25 @@ describe("POST /api/admin/roles/copy-instruments", () => {
   it("notifies only the destination role's newly added assignees", async () => {
     seed();
     await copyPOST(req(copyBody()));
-    expect(afterCallbacks).toHaveLength(1);
-    await afterCallbacks[0]();
+    // The push fan-out plus ONE outbox upsert — the source is untouched.
+    expect(afterCallbacks).toHaveLength(2);
+    await drainAfter();
     expect(sendPushMock).toHaveBeenCalledTimes(1);
     expect(sendPushMock.mock.calls[0][0]).toEqual(["mem-3"]);
-    expect(sendAssignmentEmailsMock.mock.calls[0][1]).toMatchObject({
-      type: "sunday_role",
-      date: "2026-08-16",
+    // No immediate assignment email any more (§7); the outbox carries it.
+    expect(sendAssignmentEmailsMock).not.toHaveBeenCalled();
+    expect(outboxUpserts().every((d) => d.roleId === "role-2")).toBe(true);
+    expect(outboxUpserts()[0]).toMatchObject({
+      kind: "role",
+      roleType: "sunday_role",
+      serviceDate: "2026-08-16",
     });
+    // Overwriting the lineup DROPS mem-7 (Teclado) and adds mem-3 (Bajo); the
+    // union covers both, and the untouched seats keep their own labels.
+    expect(queuedFor("role-2")).toEqual(["mem-3", "mem-5", "mem-6", "mem-7", "mem-8"]);
+    const byKey = new Map(outboxUpserts().map((d) => [d.subjectKey, d]));
+    expect(byKey.get("mem-7__role-2")!.before).toEqual({ beforeRoles: ["Teclado"] });
+    expect(byKey.get("mem-3__role-2")!.before).toEqual({ beforeRoles: [] });
   });
 
   it("copies from a weekend service onto a special service", async () => {

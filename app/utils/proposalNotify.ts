@@ -16,7 +16,9 @@ import { validateRole } from "./serviceReadModel";
 import { canonicalLeadRefs, pickUnique } from "./serviceReadSelect";
 import { sendPush } from "./push";
 import { sendEmail } from "./email";
-import { getAllowlist, isEmailAllowed, wantsEmail, appBaseUrl, escapeHtml } from "./assignmentEmail";
+import { getAllowlist, isEmailAllowed, appBaseUrl, escapeHtml } from "./assignmentEmail";
+import { wantsNotification } from "./notifyPrefs";
+import { C, td, tr, shell } from "./emailShell";
 
 const SERVICE_LABEL: Record<string, string> = {
   sunday: "Domingo",
@@ -24,19 +26,29 @@ const SERVICE_LABEL: Record<string, string> = {
   special: "Especial",
 };
 
+// Restyled onto the shared dark shell (spec §6: "proposalNotify.ts's 'nueva
+// propuesta' admin email is restyled with them, for consistency"). Same shell
+// as assignmentEmail.ts/notificationEmail.ts, imported from emailShell.ts.
 export function buildProposalEmail(o: { leadName: string; serviceType: string; serviceDate: string }): { subject: string; html: string } {
   const svc = SERVICE_LABEL[o.serviceType] ?? "Servicio";
   const dateFmt = new Date(o.serviceDate + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" });
   const lead = escapeHtml(o.leadName || "Un líder");
   const link = `${appBaseUrl()}/admin`;
   const subject = `Nueva propuesta — ${svc} ${dateFmt}`;
-  const html = `
-    <div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;color:#0b1f33">
-      <h2 style="color:#003572">Nueva propuesta de setlist</h2>
-      <p><strong>${lead}</strong> envió una propuesta para el <strong>${svc} ${dateFmt}</strong> y está lista para tu revisión.</p>
-      <p><a href="${link}" style="display:inline-block;background:#003572;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px">Revisar propuesta →</a></p>
-      <p style="color:#6b7280;font-size:12px">Oasis Worship Team</p>
-    </div>`.trim();
+  const header = tr(td(
+    `<span style="font:700 15px system-ui,sans-serif;color:${C.frost}">Nueva propuesta de setlist</span>`,
+    { style: "padding:18px 24px 8px" },
+  ));
+  const body = header +
+    tr(td(
+      `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.frost}"><strong style="color:${C.beam}">${lead}</strong> envió una propuesta para el <strong style="color:${C.frost}">${svc} ${dateFmt}</strong> y está lista para tu revisión.</p>`,
+      { style: "padding:0 24px 18px" },
+    )) +
+    tr(td(
+      `<a href="${link}" style="display:inline-block;background:${C.beam};color:${C.blackout};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Revisar propuesta →</a>`,
+      { style: "padding:0 24px 20px" },
+    ));
+  const html = shell(body, link);
   return { subject, html };
 }
 
@@ -46,15 +58,15 @@ async function emailAdmins(
 ): Promise<void> {
   if (!adminIds.length) return;
   const allow = getAllowlist();
-  const admins = await operationalClient.fetch<{ _id: string; email?: string; emailPref?: boolean | null }[]>(
-    `*[_type == "teamMembers" && _id in $ids]{ _id, email, "emailPref": notifPrefs.email }`,
+  const admins = await operationalClient.fetch<{ _id: string; email?: string; notifPrefs?: unknown }[]>(
+    `*[_type == "teamMembers" && _id in $ids]{ _id, email, notifPrefs }`,
     { ids: adminIds },
   );
   const redirectTo = process.env.EMAIL_REDIRECT_TO?.trim();
   const { subject, html } = buildProposalEmail(o);
   for (const m of admins) {
     const email = m.email?.trim().toLowerCase();
-    if (!email || !isEmailAllowed(email, allow) || !wantsEmail(m.emailPref)) continue;
+    if (!email || !isEmailAllowed(email, allow) || !wantsNotification(m.notifPrefs, "proposals")) continue;
     const to = redirectTo || email;
     const finalSubject = redirectTo ? `[→ ${email}] ${subject}` : subject;
     const res = await sendEmail({ to, subject: finalSubject, html });

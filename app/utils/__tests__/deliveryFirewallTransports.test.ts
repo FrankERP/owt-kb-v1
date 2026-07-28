@@ -123,6 +123,7 @@ import {
   notifySetlistSaved,
 } from "@/app/utils/serviceMutationSideEffects";
 import { GET as remindersGET } from "@/app/api/cron/service-reminders/route";
+import { GET as flushGET } from "@/app/api/cron/flush-notifications/route";
 import {
   evaluateDeliveryEvidence,
   parseDeliveryEvents,
@@ -140,7 +141,6 @@ const MEMBER_EMAIL_ROW = {
   member_name: "Ana",
   alias: "Ana",
   email: "ana@oasis.mx",
-  emailPref: null,
 };
 const MEMBER_PUSH_ROW = {
   _id: "m1",
@@ -481,6 +481,24 @@ describe("delivery mode `disabled` refuses at the transport boundary", () => {
     expect(sendEachForMulticast).not.toHaveBeenCalled();
   });
 
+  it("still answers the sweep route 200 without claiming or sending anything", async () => {
+    // Spec §10: the firewall transport tests extend to the sweep route. The
+    // sweep refuses BEFORE the outbox is even read, so a verification run that
+    // hits layer 1 leaves the outbox untouched and mails nobody.
+    const req = {
+      headers: { get: (n: string) => (n === "authorization" ? "Bearer cron-secret" : null) },
+      nextUrl: { searchParams: { get: () => null } },
+    };
+    const res = await flushGET(req as unknown as Parameters<typeof flushGET>[0]);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ claimed: 0, emailed: 0, consumed: 0 });
+    // The outbox was never even READ — the gate is stage 1, ahead of selection.
+    expect(opFetch).not.toHaveBeenCalled();
+    expect(logLines.join("\n")).toContain("notify_sweep_blocked");
+    expect(createTransport).not.toHaveBeenCalled();
+    expect(ResendCtor).not.toHaveBeenCalled();
+  });
+
   it("reports ok:false from sendEmail without touching a backend", async () => {
     const r = await sendEmail({ to: "ana@oasis.mx", subject: "s", html: "<p>h</p>" });
     expect(r.ok).toBe(false);
@@ -654,7 +672,9 @@ describe("an absent delivery mode delivers unchanged", () => {
   });
 
   it("still respects a per-member email opt-out", async () => {
-    serverFetch.mockResolvedValue([{ ...MEMBER_EMAIL_ROW, emailPref: false }]);
+    // The GROQ projection now returns `notifPrefs` (not a flattened
+    // `emailPref` alias) — see assignmentEmail.ts Task 7 restyle.
+    serverFetch.mockResolvedValue([{ ...MEMBER_EMAIL_ROW, notifPrefs: { email: false } }]);
     await sendAssignmentEmails(["m1"], { ...SERVICE, body: BODY });
     expect(sendMail).not.toHaveBeenCalled();
   });
@@ -676,7 +696,9 @@ describe("an absent delivery mode delivers unchanged", () => {
     notifyRoleAssignments([{ recipients: ["m1"], ...SERVICE, body: BODY, kind: "created" }]);
     await drainAfter();
     expect(sendEachForMulticast).toHaveBeenCalledTimes(1);
-    // The email leg re-reads the member rows; the push leg read the token rows.
+    // `notifyRoleAssignments` is push-ONLY since the outbox absorbed its
+    // immediate assignment email (spec §7). It reaches no mail transport at all
+    // now — previously it did re-read the member rows and found none mailable.
     expect(sendMail).toHaveBeenCalledTimes(0);
 
     serverFetch.mockResolvedValue([MEMBER_EMAIL_ROW]);

@@ -1,4 +1,4 @@
-// Studio protection policy for the eight protected stored types
+// Studio protection policy for the nine protected stored types
 // (Service Readiness A2 §8 / A3 §4) — pure, exported, and unit-testable.
 //
 // WHY a code-owned policy instead of UI configuration alone: the Studio is an
@@ -23,7 +23,25 @@
 // Read-only inspection stays available on purpose: an operator still needs to
 // look at a lock, a receipt, or a malformed role while diagnosing.
 
-/** The eight protected stored types. `saturdarSongs` is a deliberate stored typo — never rename. */
+/**
+ * The nine protected stored types. `saturdarSongs` is a deliberate stored typo —
+ * never rename.
+ *
+ * Membership here is what earns a type a pane in `sanity/structure.ts`'s
+ * read-only inspection group, because `partitionStudioTypes` classifies
+ * everything else as `editable`. A `hidden: true` internal type that is NOT
+ * listed here is therefore reachable NOWHERE in the Studio — which would make
+ * `DELETE_ONLY_REASONS.notificationOutbox.prune` ("safe to remove by hand") a
+ * promise the Studio cannot keep. Hence the invariant asserted in
+ * `app/utils/__tests__/studioProtection.test.ts`: every
+ * {@link INTERNAL_STUDIO_TYPES} entry appears in this list.
+ *
+ * `notificationOutbox` is listed here AND in {@link DELETE_ONLY_STUDIO_TYPES}.
+ * That is not a contradiction: `studioCapability` checks delete-only FIRST, so
+ * the type still resolves `delete` (an operator can prune a stray entry) while
+ * this list is what puts it behind "solo lectura" instead of in the ordinary
+ * "pick a type and edit it" list.
+ */
 export const PROTECTED_STUDIO_TYPES = [
   "sunday_role",
   "saturday_role",
@@ -33,6 +51,7 @@ export const PROTECTED_STUDIO_TYPES = [
   "setlistProposal",
   "roleTargetLock",
   "roleCreationReceipt",
+  "notificationOutbox",
 ] as const;
 
 export type ProtectedStudioType = (typeof PROTECTED_STUDIO_TYPES)[number];
@@ -115,7 +134,10 @@ export const INTERNAL_STUDIO_TYPES = ["roleTargetLock", "roleCreationReceipt", "
  *     `hidden: true` TYPES, so every field is off the authoring surface with
  *     them.
  * The read-only inspection group in `sanity/structure.ts` is the one deliberate
- * place these are visible, and it cannot write.
+ * place these are visible, and it cannot write. That statement holds only
+ * because every one of them is also in {@link PROTECTED_STUDIO_TYPES}, which is
+ * what builds the pane — it was briefly false for `notificationOutbox`, which
+ * was hidden and governed but listed nowhere the structure could reach.
  */
 export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>> = Object.freeze({
   sunday_role: ["creationReceiptId", "creationFingerprint"],
@@ -361,9 +383,13 @@ export function protectedNewDocumentOptions<T extends StudioTemplateItemLike>(pr
  * offer for editing and the ones that only appear in the read-only inspection
  * group.
  *
- * A delete-only type (`loginEvent`) deliberately stays in the default list: it is
- * not "solo lectura" — an operator must be able to find and prune it — and its
- * form is already `readOnly: true` with `delete` as its only action.
+ * Delete-only-ness is NOT what decides this; protected-ness is. `loginEvent` is
+ * delete-only and deliberately stays in the default list: it is not "solo
+ * lectura" — an operator must be able to find and prune it — and its form is
+ * already `readOnly: true` with `delete` as its only action. `notificationOutbox`
+ * is delete-only too but is ALSO protected, because a `hidden: true` type has no
+ * default list item to stay in; the inspection pane is the only way to reach it
+ * at all, and pruning still works from there.
  */
 export function partitionStudioTypes(typeNames: readonly string[]): {
   editable: string[];
@@ -385,4 +411,5 @@ export const PROTECTED_STUDIO_TITLES: Readonly<Record<ProtectedStudioType, strin
   setlistProposal: "Propuestas (solo lectura)",
   roleTargetLock: "Locks internos (solo lectura)",
   roleCreationReceipt: "Recibos internos (solo lectura)",
+  notificationOutbox: "Cola de avisos (solo lectura)",
 });

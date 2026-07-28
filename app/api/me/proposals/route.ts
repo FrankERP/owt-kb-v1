@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+
+// The post-commit `after()` fan-out queues the debounced lead-notes notice and
+// (from Task 11) hosts a sweep; give it room to finish past the response.
+export const maxDuration = 60;
+
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
-import { notifyProposalPending } from "@/app/utils/serviceMutationSideEffects";
+import {
+  notifyProposalPending,
+  queueLeadNotesNotice,
+} from "@/app/utils/serviceMutationSideEffects";
 import { mergeContributor, type StoredContributor } from "@/app/utils/proposalContributors";
 import { serviceError } from "@/app/utils/serviceMutation";
 import { canonicalLeadRefs, pickUnique } from "@/app/utils/serviceReadSelect";
@@ -187,6 +195,12 @@ async function postHandler(req: NextRequest) {
 
   // ── One guarded transaction ───────────────────────────────────────────────
   const now = nowIso();
+  // The outbox `leadNotes` snapshot, captured PRE-COMMIT from the proposal this
+  // handler already loaded (§2). Read back inside the post-commit `after()` block
+  // both would be the notes this save just wrote, so every notice would compare a
+  // value against itself and say nothing.
+  const previousStatus = existing ? existing.status : null;
+  const beforeNotes = existing ? existing.lead_notes : "";
   const songs = buildProposalSongDocs(request.songs, nextKey);
   const submitted: Record<string, unknown> =
     request.status === "pending"
@@ -285,6 +299,17 @@ async function postHandler(req: NextRequest) {
       serviceDate: target.serviceDate,
     });
   }
+  // The DEBOUNCED lead-notes email (§2). The predicate is that the proposal was
+  // ALREADY `pending` / `changes_requested` before this write — a first
+  // submission is silent, because `notifyProposalPending` above just mailed
+  // admins "Nueva propuesta" about that very same write.
+  queueLeadNotesNotice({
+    proposalId,
+    serviceDate: target.serviceDate,
+    previousStatus,
+    beforeNotes,
+    afterNotes: request.leadNotes,
+  });
 
   // Return the fresh revision so the client can keep editing without a reload.
   const bound = canonicalProposalByIdQuery(proposalId);
