@@ -140,7 +140,6 @@ const MEMBER_EMAIL_ROW = {
   member_name: "Ana",
   alias: "Ana",
   email: "ana@oasis.mx",
-  emailPref: null,
 };
 const MEMBER_PUSH_ROW = {
   _id: "m1",

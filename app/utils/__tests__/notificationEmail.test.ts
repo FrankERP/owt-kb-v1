@@ -113,4 +113,71 @@ describe("buildGroupedEmail", () => {
     expect(html).not.toContain("display:flex");
     expect(html).not.toContain("<style");
   });
+
+  it("pins the exact movement colours: signal up, amber down, steel dash", () => {
+    // before: [x, y, z] → after: [y, x, z] — y moves up, x moves down, z holds.
+    const line: Line = {
+      kind: "setlistChanged", serviceDate: "2026-08-09", roleType: "sunday_role",
+      before: [], after: [],
+      beforeSongs: [song("x", "G"), song("y", "D"), song("z", "A")],
+      songs: [song("y", "D"), song("x", "G"), song("z", "A")],
+    };
+    const withXYZ = new Map([...titles, ["x", "X"], ["y", "Y"], ["z", "Z"]]);
+    const { html } = buildGroupedEmail({ name: "Ana", lines: [line] }, withXYZ);
+    expect(html).toContain('color:#37F58A">▲1');
+    expect(html).toContain('color:#F5B437">▼1');
+    expect(html).toContain('color:#7F94A8">&ndash;');
+  });
+
+  it("renders NUEVA and SALIÓ chips for an actually added and removed song", () => {
+    const line: Line = {
+      kind: "setlistChanged", serviceDate: "2026-08-09", roleType: "sunday_role",
+      before: [], after: [],
+      beforeSongs: [song("a", "G"), song("b", "D")],
+      songs: [song("a", "G"), song("c", "A")],
+    };
+    const { html } = buildGroupedEmail({ name: "Ana", lines: [line] }, titles);
+    expect(html).toContain(">NUEVA<");
+    expect(html).toContain(">SALIÓ<");
+  });
+
+  it("escapes an injected payload in a role label (roleChanged before/after)", () => {
+    const line = roleLine("roleChanged", ['<img src=x onerror=alert(1)>'], ["<b>Líder</b>"]);
+    const { html } = buildGroupedEmail({ name: "Ana", lines: [line] }, titles);
+    expect(html).not.toContain("<img src=x onerror=alert(1)>");
+    expect(html).not.toContain("<b>Líder</b>");
+    expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;");
+    expect(html).toContain("&lt;b&gt;Líder&lt;/b&gt;");
+  });
+
+  it("escapes an injected payload in lead notes", () => {
+    const line: Line = {
+      kind: "leadNotes", serviceDate: "2026-08-09", roleType: "sunday_role",
+      before: [], after: [], notes: "<script>alert(2)</script>",
+    };
+    const { html } = buildGroupedEmail({ name: "Ana", lines: [line] }, titles);
+    expect(html).not.toContain("<script>alert(2)</script>");
+    expect(html).toContain("&lt;script&gt;alert(2)&lt;/script&gt;");
+  });
+
+  it("shows a non-empty movement cell for every row: up, down, same, new, gone", () => {
+    // before: [x, y, z, w] → after: [y, x, z, n]; w departs, n arrives.
+    const line: Line = {
+      kind: "setlistChanged", serviceDate: "2026-08-09", roleType: "sunday_role",
+      before: [], after: [],
+      beforeSongs: [song("x", "G"), song("y", "D"), song("z", "A"), song("w", "E")],
+      songs: [song("y", "D"), song("x", "G"), song("z", "A"), song("n", "C")],
+    };
+    const withAll = new Map([...titles, ["x", "X"], ["y", "Y"], ["z", "Z"], ["w", "W"], ["n", "N"]]);
+    const { html } = buildGroupedEmail({ name: "Ana", lines: [line] }, withAll);
+    // One row per movement kind, and every kind's marker is present exactly
+    // once (five songs total: y=up, x=down, z=same, n=new, w=gone).
+    expect(html).toContain("▲1");
+    expect(html).toContain("▼1");
+    expect(html).toContain("&ndash;");
+    expect(html).toContain(">NUEVA<");
+    expect(html).toContain(">SALIÓ<");
+    // No movement <td> is left with an empty cell body.
+    expect(html).not.toMatch(/font:13px monospace">\s*<\/td>/);
+  });
 });
