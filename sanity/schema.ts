@@ -12,7 +12,8 @@ import { specialRole } from './schemas/specialRole';
 import { loginEvent } from './schemas/loginEvent';
 import { setlistProposal } from './schemas/setlistProposal';
 // Internal Service Readiness A2 coordination types — hidden/read-only, never
-// authored by hand. See sanity/schemas/roleTargetLock.ts and roleCreationReceipt.ts.
+// authored by hand. See sanity/schemas/roleTargetLock.ts, roleCreationReceipt.ts,
+// and notificationOutbox.ts.
 import { roleTargetLock } from './schemas/roleTargetLock';
 import { roleCreationReceipt } from './schemas/roleCreationReceipt';
 import { notificationOutbox } from './schemas/notificationOutbox';
