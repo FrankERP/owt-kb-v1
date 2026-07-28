@@ -1,7 +1,9 @@
 # Service notification emails — design
 
 **Date:** 2026-07-27
-**Status:** approved (design), not implemented
+**Status:** approved (design), not implemented. One product question is open
+(unpublish notification, below); it has a stated default, so it does not block
+implementation.
 
 ## Problem
 
@@ -95,7 +97,7 @@ the thing being debounced — holding a pending notice.
 | Kind | Subject | `subjectKey` | `before` | Recipients (resolved at flush) |
 |---|---|---|---|---|
 | `role` | one member's seats on one service | `${memberId}__${roleId}` | `roles: string[]` — seat labels held before | that member (1) |
-| `setlist` | one service's song list | `${roleId}` | `songs: [{ref, key}]` + medley partition, ordered | that service's participants (N) |
+| `setlist` | one service's song list | `${roleId}` | `songs: [{ref, key, group}]`, ordered — see below | that service's participants (N) |
 | `leadNotes` | one proposal's lead notes | `${proposalId}` | `notes: string` | admins (N) |
 
 Two of the three kinds are **one-to-many**: one notice discharges one email to
@@ -205,7 +207,7 @@ list is identical. `team_notes` is **not** part of it — editing the message to
 the team without touching the songs notifies nobody.
 
 **Never compare raw `medley_tag` values.** `normalizeMedleyTags`
-(`app/utils/medley.ts:32`) mints a **fresh** tag for every group on every call,
+(`app/utils/medley.ts:33`) mints a **fresh** tag for every group on every call,
 and the editors call it on remove, reorder and toggle. Tag equality is therefore
 a false premise, and using it would produce three wrong behaviours:
 
@@ -219,7 +221,10 @@ Compare the **partition** instead: the contiguous grouping produced by
 `buildRuns` (`app/utils/medley.ts:9`), expressed as group boundaries over song
 positions and independent of tag values. `NUEVO` is defined the same way — a
 group is new when that set of adjacent songs was not a group in `before`.
-`before.songs` stores the partition, not the tags.
+`before.songs` stores the partition, not the tags. Concretely, each row is
+`{ ref, key, group }` where `group` is the **index of the contiguous run** the
+song belongs to (`null` for a standalone song), derived from `buildRuns` at
+snapshot time. One shape, stated once: no separate partition array.
 
 A `setlist` notice is also **dropped when the service is now
 `published == false`**, mirroring the `role` rule. Without this, queueing a
@@ -287,10 +292,12 @@ A sweep runs these stages in order, and there is no second control flow:
    them while the size of the **union of their resolved recipients** stays within
    `NOTIFY_FLUSH_EMAIL_LIMIT`. Stop there and leave the rest pending. A single
    notice whose own recipient count exceeds the budget is taken **alone**.
-2. **Claim** every selected notice:
+2. **Claim** every selected notice, **one transaction per notice**:
    `patch(id).ifRevisionId(rev).set({ status: "sending", claimedAt: now })`.
-   Any failed claim drops that notice from the batch — another sweeper has it, or
-   a writer just re-pended it.
+   Per-notice is required, not stylistic: a single batched transaction would
+   abort the whole sweep on one conflict, where the intended behaviour is that a
+   failed claim drops only that notice — another sweeper has it, or a writer just
+   re-pended it.
 3. **Classify** each claimed notice against live state (above), producing
    `(recipient, line)` pairs. Notices producing no line are simply consumed.
 4. **Filter** each line by the preference for its own kind (§5).
@@ -298,6 +305,11 @@ A sweep runs these stages in order, and there is no second control flow:
 6. **Send** each grouped email.
 7. **Consume.** Delete every claimed notice in the batch, whatever each send
    returned.
+
+Steps 1 and 3 each resolve recipients — two reads, deliberately. Step 1 needs a
+count to bound the batch before claiming anything; step 3 needs the authoritative
+set after the claim. The budget counts recipients **before** preference filtering,
+so the emails actually sent are always ≤ the budget, never more.
 
 Selection bounding the union of recipients is what makes step 7 safe: every
 notice in the batch is fully discharged by step 6, so there is no partial state
@@ -315,9 +327,23 @@ outcome, and the one case where a member may see a duplicate.
 **Deletion is unconditional on send outcome.** A failed send is logged and the
 notice is still consumed. This is the at-most-once posture stated above; retrying
 would need delivery receipts, an attempt counter and a dead-letter path, and the
-last two rounds of review showed that half-building that machinery is worse than
-not building it. A member with a permanently-undeliverable address must never be
-able to hold the outbox — and therefore the liveness alarm (§3) — red forever.
+review rounds showed that half-building that machinery is worse than not building
+it. A member with a permanently-undeliverable address must never be able to hold
+the outbox — and therefore the liveness alarm (§3) — red forever.
+
+**The send loop is bounded by wall clock, and the batch is consumed either way.**
+Step 6 stops sending when elapsed time reaches `NOTIFY_SEND_BUDGET_MS` (default
+40 s, inside `maxDuration = 60`), and step 7 consumes the whole batch regardless
+of how far it got, logging how many recipients went unserved.
+
+Without this bound, at-most-once is a false claim. A sweep that sends to 8 of 15
+recipients and is then killed leaves the notice in `sending`; the lease expires,
+the next sweep re-claims and re-sends **from the top**. If the cause is
+deterministic — an oversized notice that cannot finish inside `maxDuration`, which
+§1's own unmeasured 2 s/send figure admits is possible — those first recipients
+are re-mailed every `NOTIFY_CLAIM_TTL`, forever. Bounding the loop and consuming
+unconditionally converts an unbounded repeat into a bounded, logged partial
+delivery, which is what at-most-once actually means.
 
 **`deadline` is written once and never rewritten.** An earlier draft required the
 upsert to both preserve `deadline` across a burst and refresh it on a re-pend —
@@ -336,6 +362,7 @@ admin routes in this repo.
 | Knob | Default | Why |
 |---|---|---|
 | `NOTIFY_FLUSH_EMAIL_LIMIT` | 12 | Distinct recipients per sweep; the selection stage bounds the union, not a running count |
+| `NOTIFY_SEND_BUDGET_MS` | 40 000 | Wall-clock bound on step 6, inside `maxDuration = 60` |
 | `NOTIFY_CLAIM_TTL` | 5 min | Longer than any legitimate sweep, short enough that a crashed sweep recovers within two cron ticks |
 
 Layer 2 (the opportunistic sweep inside an admin's save) uses **half** the limit,
@@ -483,9 +510,19 @@ it is a known operational property rather than a surprise.
 ### Liveness signal
 
 Because layer 1 is load-bearing and can fail silently, the daily cron reports
-the **oldest pending `firstQueuedAt`** on every run. An outbox entry older than
-`NOTIFY_STALE_ALERT_HOURS` (default 6) emits a loud structured error line naming
-the count and the oldest age.
+the **oldest `firstQueuedAt` across notices in *either* status** — `pending` and
+`sending` both. Reporting only `pending` would blind the alarm to precisely the
+failure that spams the team: a notice stuck mid-fan-out sits in `sending`.
+
+An outbox entry older than `NOTIFY_STALE_ALERT_HOURS` (default 6) emits a loud
+structured error line naming the count and the oldest age, **and emails the
+super-admins through the same `sendEmail` path** as every other notification.
+
+The email is not belt-and-braces; it is the whole mitigation. This repo has no
+log drain, no error-reporting integration and no alerting, and Vercel Hobby
+provides none — a `console.error` in a daily cron has no consumer. §11 designates
+this signal as the mitigation for layer 1 being a single point of failure, so it
+has to reach a person or that risk is simply unmitigated.
 
 Six hours is far outside any legitimate window — the hard ceiling is one hour —
 so this fires only when layer 1 has genuinely stopped. Without it, a disabled
@@ -569,8 +606,20 @@ fallback and leaves the member-facing UI.
 
 Surfaces to update: `sanity/schemas/worshipTeam.ts`, `ProfilePanel.tsx`,
 `AdminPanel.tsx` (admin editing another member), `PATCH /api/me/notif-prefs`,
-`PATCH /api/admin/members/[id]`, and `proposalNotify.ts` (to read
-`emailProposals` instead of raw `notifPrefs.email`).
+`PATCH /api/admin/members/[id]`, `proposalNotify.ts` (to read `emailProposals`
+instead of raw `notifPrefs.email`), and — easy to miss, and the one that matters
+most — **`assignmentEmail.ts`**.
+
+`sendAssignmentEmails` and `sendAssignmentEmailsBatch` gate on
+`wantsEmail(m.emailPref)` where `emailPref` projects `notifPrefs.email`
+(`assignmentEmail.ts:144,150,173,184`). §7 keeps that batch send **outside** the
+outbox, so without this change a member who switches `emailAssigned` off keeps
+receiving publish assignment emails — the highest-volume "Nueva asignación" the
+system produces, and the toggle would be dead on it. Both functions route through
+the same shared per-type resolver as every other sender.
+
+The resolver is one exported function used by every send path. Nothing reads
+`notifPrefs` fields directly.
 
 Delivery is gated in this order, unchanged from today except for the pref step:
 valid email → `EMAIL_ALLOWLIST` → per-type preference → `EMAIL_REDIRECT_TO`
@@ -724,8 +773,10 @@ adding suppression logic.
 
 Removing that leg **breaks existing tests** that assert an immediate assignment
 email — `app/api/__tests__/roleWriteRoutes.test.ts`,
-`app/api/__tests__/roleSwapRoutes.test.ts`, and the send paths in
-`app/utils/__tests__/assignmentEmail.test.ts`. They must be updated to assert an
+`app/api/__tests__/roleSwapRoutes.test.ts`, the send paths in
+`app/utils/__tests__/assignmentEmail.test.ts`,
+`app/utils/__tests__/serviceMutationSideEffects.test.ts:212`, and
+`app/utils/__tests__/deliveryFirewallTransports.test.ts:273,676`. They must be updated to assert an
 outbox notice instead. This is expected work, not a regression to discover
 mid-implementation.
 
@@ -750,7 +801,8 @@ still get an immediate in-app signal. The pairing is deliberate: the push says
   the new combination. Treating this as "append to both lists" will fail `npm test`.
   The restructure is larger than one branch: `studioProtection.test.ts:120` asserts
   `INTERNAL_STUDIO_TYPES` equals an **exact array**, and `:367` asserts each
-  internal type is `hidden: true` in its own schema file. The spec's intent is
+  internal type is `hidden: true` in its own schema file, and `:373` asserts
+  `Object.keys(INTERNAL_STUDIO_FIELDS)` as an exact set. The spec's intent is
   `notificationOutbox` in `DELETE_ONLY_STUDIO_TYPES` (operators may prune) **and**
   hidden from authoring; implementation must decide how that is represented and
   update both assertions.
@@ -765,7 +817,7 @@ still get an immediate in-app signal. The pairing is deliberate: the push says
   that **whole file** one `protected-write` region at operation `"module"`,
   needing its own `PROTECTED_RUNTIME_WRITERS` entry in the same shape as the
   existing `app/utils/roleWriteOps.ts` / `"module"` entry
-  (`protectedReadAudit.ts:186`). Register the writers; do not touch the read side.
+  (`protectedReadAudit.ts:189`). Register the writers; do not touch the read side.
 - **`maxDuration` on every sweep host.** The roles routes declare
   `export const maxDuration = 60`; `app/api/admin/setlists/route.ts`,
   `app/api/admin/proposals/[id]/route.ts`, `app/api/me/proposals/route.ts` and
@@ -785,10 +837,18 @@ still get an immediate in-app signal. The pairing is deliberate: the push says
   read token only (`sanity/lib/operationalClient.ts:22`).
 - **Delivery firewall.** Everything routes through `sendEmail`, so A3's
   transport-level refusal covers the new paths unchanged. The sweep route is
-  included: a verification run must not mail the team. Note that a blocked
-  `sendEmail` returns `{ ok: false }` rather than throwing (`email.ts:38`), so the
-  sweep must treat a falsy `ok` as a failed send and **not** delete the notice —
-  otherwise a verification run would silently consume the real outbox.
+  included: a verification run must not mail the team. The sweep gates on
+  `isDeliveryBlocked()` (`app/utils/deliveryFirewall.ts:191`) **before it claims
+  anything** and exits without touching the outbox — rather than discovering the
+  block per-send, where `sendEmail` returns the same `{ ok: false }`
+  (`email.ts:38`) for a firewall block, missing configuration and a genuine SMTP
+  failure alike, and is therefore useless for deciding whether to consume.
+  (An earlier draft made consumption conditional on `ok` to protect the real
+  outbox from a verification run. That premise was false — the verification
+  deployment targets an isolated project and dataset and hard-refuses production
+  `ebb8vcnk`/`production` on either axis, `scripts/lib/sr-verification.mjs:12` —
+  and the rule it justified would have let one undeliverable address hold a
+  notice forever.)
 - **`_key`.** Any array-of-object field written to the outbox carries a `_key`.
 - **Document id length.** `outbox.role.${memberId}__${roleId}` composes two ids
   that `isCanonicalDocumentId` permits at up to 200 chars each, which can exceed
@@ -811,6 +871,7 @@ still get an immediate in-app signal. The pairing is deliberate: the push says
 | `NOTIFY_DEBOUNCE_MINUTES` | `15` | Quiet period before a subject's notice flushes |
 | `NOTIFY_MAX_WINDOW_MINUTES` | `60` | Hard ceiling from first queue; defeats starvation |
 | `NOTIFY_CLAIM_TTL_MINUTES` | `5` | Lease on a claimed notice; expiry makes it due again |
+| `NOTIFY_SEND_BUDGET_MS` | `40000` | Wall-clock bound on the send loop; the batch is consumed either way |
 | `NOTIFY_FLUSH_EMAIL_LIMIT` | `12` | Max recipients emailed per sweep; halved for the layer-2 sweep |
 | `NOTIFY_STALE_ALERT_HOURS` | `6` | Oldest pending age that triggers the liveness error line |
 | `CRON_SECRET` | — | Already present; now also authorizes the sweep route |
@@ -856,6 +917,15 @@ Pure logic, unit-tested (vitest):
 - **Selection bounds the recipient union:** two notices sharing most participants
   can both enter one sweep; two disjoint notices that would exceed the budget
   cannot, and the second stays pending and is logged.
+- **The send loop is bounded:** a batch that exceeds `NOTIFY_SEND_BUDGET_MS` stops
+  sending, is still consumed, and logs the unserved count — so a lease expiry can
+  never re-send the same recipients indefinitely.
+- **A blocked delivery environment exits before claiming**, leaving the outbox
+  untouched.
+- **Preferences bind the immediate path too:** a member with `emailAssigned: false`
+  receives no publish assignment email from `sendAssignmentEmailsBatch`.
+- **The liveness query counts `sending` as well as `pending`**, and the alarm
+  emails super-admins rather than only logging.
 - **Consumption is unconditional:** a notice is deleted even when its send fails,
   so a permanently-undeliverable address cannot hold the outbox — or the liveness
   alarm — red forever. A notice whose lines all filter out is consumed too.
@@ -933,17 +1003,24 @@ Both gates must pass before this is done: `npx tsc --noEmit` and `npm test`.
   3. **Out-of-order `after()` callbacks** on the same subject: the later write's
      snapshot can win `createIfNotExists`, so a creation whose snapshot records
      the songs yields *El setlist cambió* as the first email.
-  4. **`before` is per-subject, not per-recipient** — and this one is on the
+  4. **Unpublish then republish inside one window swallows *Setlist listo*.**
+     `createIfNotExists` preserves the earlier non-empty `before`, so the publish
+     path's `before.songs = []` is discarded and the comparison nets to equal.
+  5. **`before` is per-subject, not per-recipient** — and this one is on the
      normal path, not an exceptional one. A member added to a service that
      already has a setlist, followed by any setlist edit inside the window,
      receives *El setlist cambió* with `▲`/`▼` deltas and struck-through departed
      songs, measured against a list they were never sent. Fixing it properly
      means per-recipient snapshots, which changes the outbox from one document
      per subject to one per subject-recipient pair.
-  All four need machinery materially larger than this spec — delivery receipts
-  and retry for 1–3, per-recipient snapshots for 4 — so they are accepted, not
-  fixed. What matters is that they are four and enumerated, rather than one and
-  asserted.
+  All five need machinery materially larger than this spec — delivery receipts
+  and retry for 1–3, window-aware snapshot invalidation for 4, per-recipient
+  snapshots for 5 — so they are accepted, not fixed. What matters is that they are
+  five and enumerated, rather than one and asserted.
+- **A weekend setlist saved before its role exists never notifies.** §4 correctly
+  queues nothing — there are no participants yet — but nothing re-queues when the
+  role later appears, so that setlist's introduction is lost permanently. Rare
+  (the editor normally creates the role first) and accepted, but real.
 - **Two rendering behaviours are unverified.** Outlook/Windows treatment of the
   key pills, and the four-column table on a narrow phone in Gmail. Both are
   reasoned from known engine behaviour, neither is tested. They are release
