@@ -114,8 +114,16 @@ than hearing nothing.
 
 ### Due, and classification from live state
 
-A notice is due when `status == "pending"` and
-`min(notifyAfter, deadline) <= now`.
+A notice is due when **either**:
+
+- `status == "pending"` and `min(notifyAfter, deadline) <= now`; or
+- `status == "sending"` and `claimedAt <= now - NOTIFY_CLAIM_TTL` — the **lease
+  has expired**.
+
+The second clause is not optional. Without it, any function timeout, cold kill,
+unhandled throw or mid-sweep deploy strands every already-claimed notice in
+`sending` **permanently** — including *Ya no participas*, the very notice this
+design accepts duplicates to protect. A claim is a lease, never a tombstone.
 
 For each due notice the flusher reads **live** state and compares it against
 `before`. Reading at send time rather than storing an "after" at write time buys
@@ -140,8 +148,8 @@ Two cases resolve outside the table:
   Deliberately new behaviour — deleting a published service currently tells its
   participants nothing, and it should.
 
-**`setlist`** — the current ordered list of `(song._ref, play_key, medley_tag)`
-vs `before.songs`:
+**`setlist`** — the current ordered list of `(song._ref, play_key)` plus the
+**medley partition**, vs `before.songs`:
 
 | before | after | Result |
 |---|---|---|
@@ -150,16 +158,44 @@ vs `before.songs`:
 | non-empty | empty | **no email** — an emptied setlist is work in progress, not news |
 | equal | equal | **no email** |
 
-`medley_tag` is part of the comparison on purpose: regrouping three songs into a
-medley changes the arrangement the team rehearses even though the song list is
-identical. `team_notes` is **not** part of it — editing the message to the team
-without touching the songs notifies nobody.
+Medley grouping is part of the comparison on purpose: regrouping three songs
+into a medley changes the arrangement the team rehearses even though the song
+list is identical. `team_notes` is **not** part of it — editing the message to
+the team without touching the songs notifies nobody.
+
+**Never compare raw `medley_tag` values.** `normalizeMedleyTags`
+(`app/utils/medley.ts:47`) mints a **fresh** tag for every group on every call,
+and the editors call it on remove, reorder and toggle. Tag equality is therefore
+a false premise, and using it would produce three wrong behaviours:
+
+- removing one unrelated song regenerates every surviving group's tag, so the
+  whole setlist compares as changed and the "nets out to nothing" property dies;
+- a proposal approval writing the same songs in the same grouping compares as
+  changed, because the proposal editor's uids differ from the setlist's;
+- every medley in the email would wear a `NUEVO` chip after any unrelated edit.
+
+Compare the **partition** instead: the contiguous grouping produced by
+`buildRuns` (`app/utils/medley.ts:9`), expressed as group boundaries over song
+positions and independent of tag values. `NUEVO` is defined the same way — a
+group is new when that set of adjacent songs was not a group in `before`.
+`before.songs` stores the partition, not the tags.
+
+A `setlist` notice is also **dropped when the service is now
+`published == false`**, mirroring the `role` rule. Without this, queueing a
+setlist change and then unpublishing the service mails every participant about a
+service that is hidden from them — breaking the `published != false`
+member-facing gate.
 
 **`leadNotes`** — the proposal's current `lead_notes` vs `before.notes`. Equal
 (after trimming) means no email. A notice on a proposal that is no longer
 reviewable — `draft`, `approved`, or deleted — is dropped.
 
 A notice whose service date has already passed is dropped without sending.
+"Passed" is a **calendar-day comparison in America/Mexico_City**, per CLAUDE.md:
+`new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" })`. A
+naive UTC comparison would drop every notice for today's service from 18:00
+local onward, silently killing same-evening removal emails for Saturday
+services.
 
 ### Grouping
 
@@ -187,65 +223,157 @@ line or break it.
 
 ### Claim and delete
 
-Three independent triggers can sweep concurrently, so claiming is guarded:
+Three independent triggers can sweep concurrently, so claiming is guarded. The
+unit of claiming is **one recipient's email**, not the whole sweep — claiming 200
+notices up front and then sending serially would leave the entire batch under an
+expiring lease while a single slow SMTP send blocks it.
 
-1. `patch(id).ifRevisionId(rev).set({ status: "sending", claimedAt })`.
+Per recipient:
+
+1. Claim every notice feeding that email:
+   `patch(id).ifRevisionId(rev).set({ status: "sending", claimedAt: now })`.
    A failed claim means another sweeper got it, or a writer slid `notifyAfter`
-   mid-claim — either way, skip it.
-2. Send.
-3. `delete(id).ifRevisionId(claimedRev)`.
+   mid-claim — either way, release the recipient and move on.
+2. Send the one email.
+3. `delete(id).ifRevisionId(claimedRev)` for each claimed notice.
 
 Step 3 is revision-guarded on purpose. If a write lands during the send, it sets
-`status` back to `pending` with a fresh deadline, the delete fails, and the
-notice is re-sent later. `before` is preserved, so the repeat is a truthful
-superset rather than a wrong message. That trades a rare duplicate for never
-losing a notice, which is the right way round for "you were removed from
-Sunday".
+`status` back to `pending` **and refreshes `deadline` to `now + MAX_WINDOW`**,
+the delete fails, and the notice is re-sent after a fresh debounce. Refreshing
+`deadline` is required: `deadline` is otherwise written only by
+`createIfNotExists`, so a re-pended notice would carry an already-past deadline,
+be immediately due, and produce the duplicate on the very next sweep instead of
+after a quiet window.
+
+`before` is preserved across this, so the repeat is a truthful superset rather
+than a wrong message. That trades a rare duplicate for never losing a notice —
+the right way round for "you were removed from Sunday".
 
 ### Bounding the sweep
 
-A sweep classifies at most `NOTIFY_FLUSH_LIMIT` notices (default 200) and emails
-at most `NOTIFY_FLUSH_EMAIL_LIMIT` recipients (default 50), so a Hobby function
-cannot run past its limit. When either cap truncates the batch, the sweep logs
-one structured line naming how many notices were left behind, and the next sweep
-picks them up. Silent truncation is not acceptable — a partially-notified team
-must be visible in the logs.
+The budget is arithmetic, not assertion. SMTP here is a **pooled transport with
+`maxConnections: 1`** (`app/utils/email.ts:16`), so sends are serialized. The
+route declares `export const maxDuration = 60`, matching every other admin route
+in this repo.
+
+| Knob | Default | Why |
+|---|---|---|
+| `NOTIFY_FLUSH_LIMIT` | 200 | Notices *classified* — cheap, a few GROQ reads |
+| `NOTIFY_FLUSH_EMAIL_LIMIT` | 12 | Emails *sent* — at a conservative 2 s per serialized send that is ~24 s, leaving over half the 60 s budget for reads, claims and deletes |
+| `NOTIFY_CLAIM_TTL` | 5 min | Comfortably longer than any legitimate sweep, short enough that a crashed sweep recovers within two cron ticks |
+
+Layer 2 (the opportunistic sweep inside an admin's save) runs with part of the
+invocation budget already spent, so it uses **half** the email limit.
+
+When either cap truncates the batch, the sweep logs one structured line naming
+how many notices were left behind, and the next sweep picks them up. Silent
+truncation is not acceptable — a partially-notified team must be visible in the
+logs.
 
 ---
 
 ## 2. What queues a notice
 
-| Writer | Queues |
-|---|---|
-| `POST /api/admin/roles` (create) | `role`, for each initial assignee, when published |
-| `PATCH /api/admin/roles/[id]` | `role`, for each member in the union of before- and after-assignees |
-| `POST /api/admin/roles/swap` | same |
-| `POST /api/admin/roles/copy-instruments` | same |
-| `POST /api/admin/setlists` | `setlist`, for the target service |
-| `POST /api/admin/proposals/[id]` (approve) | `setlist`, for the service it just wrote |
-| `POST /api/me/proposals` | `leadNotes`, when `lead_notes` changed and the proposal is `pending` or `changes_requested` |
+HTTP methods below are the **actual exported handlers**, verified in the routes.
+They matter beyond documentation: `file + operation` is the key
+`protectedReadAudit`'s registries match on, so a wrong method propagates into a
+failing guard entry.
+
+| Writer | Method | Queues |
+|---|---|---|
+| `app/api/admin/roles/route.ts` (create) | `POST` | `role`, per initial assignee, when published |
+| `app/api/admin/roles/[id]/route.ts` | `PATCH` | `role`, per member in the union of before- and after-assignees |
+| `app/api/admin/roles/[id]/route.ts` (delete) | `DELETE` | `role`, per **current** assignee, snapshotted before the delete commits |
+| `app/api/admin/roles/swap/route.ts` | `POST` | as `PATCH` |
+| `app/api/admin/roles/copy-instruments/route.ts` | `POST` | as `PATCH` |
+| `app/api/admin/setlists/route.ts` | `PUT` | `setlist`, for the target service |
+| `app/api/admin/proposals/[id]/route.ts` (approve) | `PATCH` | `setlist`, for the service it just wrote |
+| `app/api/admin/roles/publish/route.ts` | `POST` | `setlist` on each `false -> true` transition (see below) |
+| `app/api/admin/roles/publish-ready/route.ts` | `POST` | same as `publish` — both are publish surfaces |
+| `app/api/me/proposals/route.ts` | `POST` | `leadNotes`, when `lead_notes` changed and the proposal is `pending` or `changes_requested` |
 
 Draft services stay silent, exactly as today: nothing is queued unless
 `published !== false`.
 
-Three boundaries worth stating, because each is easy to get wrong:
+### Publish must announce the setlist
+
+The dominant workflow is *create as draft → build the setlist → publish*. While
+the service is a draft nothing queues, so without a rule here **publishing a
+service that already has a setlist would send no setlist email at all** — which
+is the first clause of the requirement verbatim. Worse, the member's first
+setlist email for that service would be *El setlist cambió* on the first
+post-publish edit.
+
+So a `false -> true` transition queues a `setlist` notice with
+**`before.songs = []`**, on both publish surfaces. At flush, live songs are
+non-empty, so it classifies as *Setlist listo* — the member's introduction to
+the setlist, exactly as if it had been written after publication. A service
+published with no songs yields `[] → []`, which is silent.
+
+The cost is explicit: publishing sends the assignment email immediately (§7) and
+a setlist email once the window closes. Two emails, not one. Grouping keeps it
+at two no matter how many services are in the batch, because every queued
+`setlist` notice for one member collapses into a single email.
+
+### Deletion
+
+`DELETE` queues a `role` notice for each current assignee, with `before.roles`
+read from the stored role **before** the transaction commits. At flush the role
+document is gone, which classifies as *Ya no participas* (§1). Without this row
+the "deleted role" rule in §1 would be unreachable — it could only fire when a
+notice happened to already be pending, which is the arbitrary behaviour §1
+rejects for the unpublish case.
+
+### Other boundaries
 
 - **Creating an already-published service queues** rather than emailing
   immediately. Any seat write debounces, with no carve-out for creation — admins
   routinely create a service and then adjust it, and a carve-out would produce
   exactly the "asignado now, cambió later" double email this design exists to
   prevent.
-- **The publish route queues nothing.** A `false -> true` transition writes no
-  seats, so there is nothing to queue; it emails immediately (§7).
+- **Publish queues no `role` notice.** A `false -> true` transition writes no
+  seats; the assignment email is sent immediately by `notifyRolePublished()`
+  (§7). Only the `setlist` notice above is queued.
+- **Unpublish queues nothing**, and any pending `role` notice for that service is
+  dropped at flush (§1).
 - **Lead notes on a `draft` proposal are silent.** The proposal is not in front
   of admins yet, so there is nothing for them to act on.
+
+### Where `before` is captured, and in which transaction
+
+Both are load-bearing and neither may be left to the implementer:
+
+- **Capture is pre-commit**, from the document the writer has already loaded, and
+  the value is threaded into `after()` as an argument. Reading live state inside
+  `after()` would return the *post*-write state, making `before == after` for
+  every notice — a system that silently sends nothing while passing every unit
+  test that feeds `before`/`after` as parameters.
+  - `role` → `normalizeStoredSeats(role)` on the stored role, before the patch.
+  - `setlist` → `loadWeekendSetlistTarget(...).target.record.songs` or
+    `loadSpecialSetlistTarget(...).target.role.songs`.
+  - `leadNotes` → the proposal's stored `lead_notes`.
+- **The upsert is a separate post-commit write**, not part of the business
+  transaction, issued with `writeClient` (`operationalClient` carries a read
+  token only). Rationale: a failed outbox op must never abort a committed content
+  write. The accepted cost is that a crash between commit and queue drops that
+  notice — the same best-effort posture §11 already documents, and preferable to
+  coupling content integrity to notification bookkeeping.
 
 ---
 
 ## 3. Flush triggers — three layers
 
 Vercel Hobby allows one cron per day, so the primary trigger lives outside
-Vercel. No single trigger is load-bearing:
+Vercel.
+
+**Layer 1 is load-bearing, and earlier drafts of this spec claimed otherwise.**
+Layer 2 can only flush subjects that have *already* gone quiet, so it can never
+flush the terminal edit of a working session — and the terminal edit is what
+every notice eventually is. Every notice that ships therefore depends on the
+GitHub workflow or, failing that, the daily cron. The honest worst case when the
+workflow is broken, disabled or throttled is **up to 24 hours**, not 15 minutes.
+That is why §7 keeps the publish email immediate and why the liveness signal
+below is part of the design rather than an operational nicety.
 
 1. **Primary — GitHub Actions, every 5 minutes.** A workflow in this repo curls
    `GET /api/cron/flush-notifications` with a shared secret in an `Authorization`
@@ -254,15 +382,28 @@ Vercel. No single trigger is load-bearing:
    and needs no external account. GitHub's scheduled runs are routinely 5–15
    minutes late; that makes an email later, never wrong.
 2. **Backstop — opportunistic sweep.** Every protected role/setlist/proposal
-   write already runs an `after()` block; it also sweeps due notices. Since an
-   in-flight burst keeps sliding `notifyAfter` forward, an admin's own writes can
-   never flush their own unfinished work. In practice the admin making the
-   changes is the one who triggers delivery.
+   write also sweeps due notices in its `after()` block. Because an in-flight
+   burst keeps sliding `notifyAfter` forward, this can never flush the subject
+   the admin is *currently* editing — that is the safety property, and it is also
+   the limit. What it does cover is the cross-subject case: an admin who edits
+   service A, then twenty minutes later edits service B, flushes A. Useful, but
+   never sufficient on its own.
 3. **Last resort — the existing daily Vercel cron.** `/api/cron/service-reminders`
    calls the same sweep, so nothing can sit pending for more than a day even if
    both other triggers are broken.
 
 The sweep is one exported function; the three triggers are three thin callers.
+
+### Liveness signal
+
+Because layer 1 is load-bearing and can fail silently, the daily cron reports
+the **oldest pending `firstQueuedAt`** on every run. An outbox entry older than
+`NOTIFY_STALE_ALERT_HOURS` (default 6) emits a loud structured error line naming
+the count and the oldest age.
+
+Six hours is far outside any legitimate window — the hard ceiling is one hour —
+so this fires only when layer 1 has genuinely stopped. Without it, a disabled
+GitHub workflow produces a system that looks healthy and quietly sends nothing.
 
 ---
 
@@ -282,9 +423,23 @@ The existing setlist **push** audience (`notifPrefs.setlist` = all/assigned/off,
 default "all" — the whole team) is unchanged. Email is narrower on purpose: the
 requirement is "a service the user participates in".
 
-`leadNotes` recipients are the active members whose role is `admin` or
-`super-admin`, resolved at flush the same way `proposalNotify.ts` already
-resolves its admin audience.
+`leadNotes` recipients are the members whose `role` is `admin` or `super-admin`,
+resolved at flush with the **same query `proposalNotify.ts` already uses**. That
+query applies no active-member filter; this spec deliberately matches it rather
+than diverging, so the two admin audiences stay identical. Adding an active
+filter is a separate, pre-existing question and is out of scope here.
+
+### One subject key per service, from both writers
+
+The `setlist` `subjectKey` is `${roleId}`. The manual weekend writer holds only
+`week` + `setlistType` and must resolve the roleId via
+`loadWeekendCoordination(...).coordination.role`, which is **`null` when no role
+exists at that target** — in that case no notice is queued, because there are no
+participants to notify.
+
+Both the manual writer and the approve path must derive the **same** key for the
+same service. If they don't, one service produces two outbox documents and the
+member gets two emails for one change.
 
 ---
 
@@ -459,23 +614,44 @@ still get an immediate in-app signal. The pairing is deliberate: the push says
 
 ## 8. Integration constraints
 
-- **Studio protection.** `notificationOutbox` is internal coordination state,
-  written only by the server write token. It joins `INTERNAL_STUDIO_TYPES`
-  (hidden, no create affordance) and `DELETE_ONLY_STUDIO_TYPES` (pruning is
-  legitimate operator work, hand-authoring is not), alongside `loginEvent`,
-  `roleTargetLock` and `roleCreationReceipt`. `studioProtection.test.ts` enforces
-  this.
-- **Read audit.** The outbox is not a protected content type, so it does not join
-  `PROTECTED_TYPES` in `protectedReadAudit.ts`. The sweep reads protected role,
-  setlist and proposal documents, so it must use `operationalClient` and be
-  registered the way every other protected reader is.
+- **Studio protection — needs a policy restructure, not two list appends.**
+  `notificationOutbox` should be hidden from authoring *and* prunable by an
+  operator. That combination is **not currently expressible**: `studioCapability`
+  takes the `DELETE_ONLY_STUDIO_TYPES` branch before it consults internal-ness
+  (`studioProtection.ts:182`), and `studioProtection.test.ts:120` asserts every
+  `INTERNAL_STUDIO_TYPES` entry's create mechanism contains `"hidden"`, which a
+  delete-only type cannot produce. Implementation must restructure
+  `studioCapability` so the two properties compose, and extend the test to assert
+  the new combination. Treating this as "append to both lists" will fail `npm test`.
+- **Read audit — the constraint is on writes, not reads.** A protected read
+  through `operationalClient` is already compliant and needs no registration;
+  there is no read registry (`A2_HANDOFF_ALLOWLIST` is empty and documented to
+  stay that way). What actually bites: a mutation issued in a region that names a
+  protected `_type` literal is classified `protected-write`
+  (`protectedReadAudit.ts:813`), satisfiable only by a `PROTECTED_RUNTIME_WRITERS`
+  entry. The sweep module qualifies, and `serviceMutationSideEffects.ts` already
+  names `sunday_role` at line 215. Register the writers; do not touch the read
+  side.
+- **Client split.** Reads in the sweep use `operationalClient` (published
+  perspective). Outbox writes use `writeClient` — `operationalClient` carries a
+  read token only (`sanity/lib/operationalClient.ts:22`).
 - **Delivery firewall.** Everything routes through `sendEmail`, so A3's
   transport-level refusal covers the new paths unchanged. The sweep route is
-  included: a verification run must not mail the team.
+  included: a verification run must not mail the team. Note that a blocked
+  `sendEmail` returns `{ ok: false }` rather than throwing (`email.ts:34`), so the
+  sweep must treat a falsy `ok` as a failed send and **not** delete the notice —
+  otherwise a verification run would silently consume the real outbox.
 - **`_key`.** Any array-of-object field written to the outbox carries a `_key`.
-- **Timezone.** `notifyAfter`, `deadline` and `firstQueuedAt` are instants — no
-  calendar arithmetic, no DST trap. Every rendered service date keeps the
-  local-noon rule: `new Date(iso.slice(0,10) + "T12:00:00")`.
+- **Document id length.** `outbox.role.${memberId}__${roleId}` composes two ids
+  that `isCanonicalDocumentId` permits at up to 200 chars each, which can exceed
+  Sanity's id ceiling. Use the digest approach the repo already uses for this
+  shape (`receiptIdForRequestId`, `app/utils/roleCreationReceipt.ts:196`), keeping
+  the id deterministic while bounding its length.
+- **Timezone.** `notifyAfter`, `deadline`, `firstQueuedAt` and `claimedAt` are
+  instants — no calendar arithmetic there. The one calendar comparison in the
+  system is the past-service-date drop, which uses the America/Mexico_City
+  local-date rule (§1). Every rendered service date keeps the local-noon rule:
+  `new Date(iso.slice(0,10) + "T12:00:00")`.
 - **Cache.** Nothing here changes content, so no `revalidate*` call is added.
 - **Schema deploy.** The new document type and the five `notifPrefs` fields need
   a Sanity schema deploy before the Studio reflects them.
@@ -486,8 +662,10 @@ still get an immediate in-app signal. The pairing is deliberate: the push says
 |---|---|---|
 | `NOTIFY_DEBOUNCE_MINUTES` | `15` | Quiet period before a subject's notice flushes |
 | `NOTIFY_MAX_WINDOW_MINUTES` | `60` | Hard ceiling from first queue; defeats starvation |
+| `NOTIFY_CLAIM_TTL_MINUTES` | `5` | Lease on a claimed notice; expiry makes it due again |
 | `NOTIFY_FLUSH_LIMIT` | `200` | Max notices classified per sweep |
-| `NOTIFY_FLUSH_EMAIL_LIMIT` | `50` | Max recipients emailed per sweep |
+| `NOTIFY_FLUSH_EMAIL_LIMIT` | `12` | Max recipients emailed per sweep; halved for the layer-2 sweep |
+| `NOTIFY_STALE_ALERT_HOURS` | `6` | Oldest pending age that triggers the liveness error line |
 | `CRON_SECRET` | — | Already present; now also authorizes the sweep route |
 
 ## 10. Testing
@@ -518,6 +696,24 @@ Pure logic, unit-tested (vitest):
     empty.
   - `before` survives repeated writes: three edits in one window leave the
     snapshot from the first.
+- **Lease recovery:** a notice left in `sending` with an expired `claimedAt` is
+  due again; one inside its TTL is not. This is the test that would have caught
+  the permanently-stranded-notice bug.
+- **Medley partition, not tags:** two song lists with identical songs, keys and
+  grouping but **different `medley_tag` values** classify as *unchanged*. A
+  regrouping with identical tags-per-song count classifies as *changed*. `NUEVO`
+  attaches only to a group whose adjacent-song set was not a group in `before`.
+- **Publish announces the setlist:** a draft service with songs, then published,
+  yields *Setlist listo*; published with no songs yields no email.
+- **Deletion:** deleting a published role yields *Ya no participas* for every
+  assignee, from a notice queued by the `DELETE` handler.
+- **Unpublish drops both kinds:** a pending `role` notice and a pending `setlist`
+  notice are both discarded when the service becomes `published == false`.
+- **Past-date drop uses America/Mexico_City**, asserted at 18:00–23:59 local on
+  the service date (where a UTC comparison would wrongly drop).
+- **Re-pended notice gets a fresh `deadline`**, so a write during the send window
+  produces the duplicate after a quiet window rather than on the next sweep.
+- **A blocked `sendEmail` (`ok: false`) does not delete the notice.**
 - **Presentation:**
   - `Mov.` is absent from *Setlist listo* and present on *El setlist cambió*.
   - Unmoved rows render `–`, never an empty cell.
@@ -545,23 +741,35 @@ Both gates must pass before this is done: `npx tsc --noEmit` and `npm test`.
 
 ## 11. Risks
 
-- **The sweep is now on the critical path of assignment email.** Today that email
-  is sent in-request; after this change it depends on a trigger firing. Mitigated
-  by three independent triggers, the strongest of which (the opportunistic sweep)
-  runs inside the app itself.
+- **The sweep is on the critical path of assignment email, and layer 1 is
+  genuinely load-bearing.** Today that email is sent in-request; after this change
+  it waits for the GitHub workflow, because layer 2 structurally cannot flush the
+  terminal edit of a session (§3). If the workflow is broken or disabled, the
+  realistic delay is up to 24 hours. Mitigated by the liveness signal, which makes
+  that state loud rather than silent — **not** by trigger redundancy, which an
+  earlier draft of this spec claimed and which does not hold. The publish email
+  stays immediate (§7) precisely because of this.
 - **GitHub Actions schedules are unreliable under load.** Accepted: lateness
-  delays an email, it does not corrupt one, and layer 2 covers the active case.
+  delays an email, it does not corrupt one.
 - **A duplicate is possible** when a write lands inside the send window. Accepted
   deliberately over losing a notice; the repeat is truthful.
 - **Everything is late by design now.** A member who checks email the instant an
   admin saves will see nothing for 15 minutes. That is the trade being bought:
   fewer, denser emails that stay worth opening.
-- **A swallowed send failure can invert the introduction rule.** If *Setlist
-  listo* fails at the transport and is logged and dropped, the notice is gone; a
-  later edit then produces *El setlist cambió* for a setlist the member never
-  saw. Closing this needs delivery receipts and retry — a materially larger build
-  than this spec — so it is accepted, not fixed. It is the one hole in the
-  otherwise-guaranteed "introduction before modification" property.
+- **"Introduction before modification" has three holes, not one.** The property —
+  a member never gets a "changed" email about something they were never told
+  about — holds by construction in the normal path, and fails in three ways:
+  1. A **swallowed send failure**: *Setlist listo* fails at the transport, the
+     notice is deleted, and a later edit produces *El setlist cambió* for a
+     setlist never seen.
+  2. A **crash between commit and queue**: the outbox upsert is a separate
+     post-commit write (§2), so a process death in that gap drops the notice.
+  3. **Out-of-order `after()` callbacks** on the same subject: the later write's
+     snapshot can win `createIfNotExists`, so a creation whose snapshot records
+     the songs yields *El setlist cambió* as the first email.
+  All three need delivery receipts and retry — a materially larger build than
+  this spec — so they are accepted, not fixed. What matters is that they are
+  three, and enumerated, rather than one.
 - **Two rendering behaviours are unverified.** Outlook/Windows treatment of the
   key pills, and the four-column table on a narrow phone in Gmail. Both are
   reasoned from known engine behaviour, neither is tested. They are release
