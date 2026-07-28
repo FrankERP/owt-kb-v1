@@ -7,6 +7,7 @@ import { writeClient } from "@/sanity/lib/serverClient";
 import type { ServiceType } from "@/app/utils/assignmentEmail";
 import {
   notifyRoleAssignments,
+  queueRoleNotices,
   revalidateRoleMutation,
   roleUpdateNotice,
 } from "@/app/utils/serviceMutationSideEffects";
@@ -128,6 +129,11 @@ async function postHandler(req: NextRequest) {
     return reject(serviceError("integrity_conflict", { details: { detail: "coordination" } }));
   }
 
+  // The outbox `before` snapshot, captured PRE-COMMIT from the destination role
+  // this handler already loaded (§2). `afterSeats` above is likewise a
+  // pre-commit value: it is exactly what the patch is about to write.
+  const beforeSeats = normalizeStoredSeats(coordinatedTarget.role);
+
   const now = nowIso();
   const targetRev = coordinatedTarget.role._rev;
   const sourceRev = coordinatedSource.role._rev;
@@ -167,16 +173,26 @@ async function postHandler(req: NextRequest) {
   revalidateRoleMutation();
 
   // Additions for the ONE destination role, from committed server state.
-  const before = normalizeStoredSeats(coordinatedTarget.role);
   notifyRoleAssignments([
     roleUpdateNotice({
       published: coordinatedTarget.role.published,
-      beforeAssignees: seatAssignees(before),
+      beforeAssignees: seatAssignees(beforeSeats),
       after: afterSeats,
       type: coordinatedTarget.role._type as ServiceType,
       date: coordinatedTarget.date,
     }),
   ]);
+  // The debounced email (§2) for the destination role only — the source is
+  // untouched, so it has nothing to say. Overwriting the lineup DROPS whoever
+  // held an instrument seat before, and the union rule is what covers them.
+  queueRoleNotices({
+    roleId: coordinatedTarget.role._id,
+    roleType: coordinatedTarget.role._type,
+    serviceDate: coordinatedTarget.date,
+    published: coordinatedTarget.role.published,
+    beforeSeats,
+    afterSeats,
+  });
 
   return NextResponse.json({
     ok: true,

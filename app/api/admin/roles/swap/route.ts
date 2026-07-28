@@ -9,8 +9,10 @@ import { writeClient } from "@/sanity/lib/serverClient";
 import type { ServiceType } from "@/app/utils/assignmentEmail";
 import {
   notifyRoleAssignments,
+  queueRoleNotices,
   revalidateRoleMutation,
   roleUpdateNotice,
+  type QueueRoleNoticesInput,
   type RoleAssignmentNotice,
 } from "@/app/utils/serviceMutationSideEffects";
 import { serviceError } from "@/app/utils/serviceMutation";
@@ -22,6 +24,7 @@ import {
   seatAssignees,
   seatPersonPatchPath,
   storedSeatArrays,
+  type NormalizedSeats,
   type SeatPersonReplacement,
 } from "@/app/utils/roleWriteRequest";
 import {
@@ -188,6 +191,24 @@ async function postHandler(req: NextRequest) {
     );
   }
 
+  // ── The seat states, resolved PRE-COMMIT ─────────────────────────────────
+  // Both sides are derived from the roles this handler has already loaded, plus
+  // the exact replacements this transaction is about to write. Computing them
+  // here rather than in the post-commit block is the point (§2): after the
+  // commit a re-read would return the post-write state on BOTH sides, and every
+  // notice would compare a state against itself.
+  const seatStatesOf = new Map<string, { before: NormalizedSeats; after: NormalizedSeats }>();
+  for (const coordinated of coordination.roles) {
+    if (!patchOf.has(coordinated.role._id)) continue;
+    const partnerId = partnerOf.get(coordinated.role._id);
+    seatStatesOf.set(coordinated.role._id, {
+      before: normalizeStoredSeats(coordinated.role),
+      after: partnerId
+        ? normalizeStoredSeats(targetById.get(partnerId)?.role)
+        : normalizeStoredSeats(coordinated.role, replacementsOf.get(coordinated.role._id) ?? []),
+    });
+  }
+
   // ── One transaction: every role patch plus every coordination token ───────
   const now = nowIso();
   let tx = writeClient.transaction();
@@ -224,24 +245,33 @@ async function postHandler(req: NextRequest) {
   // server state across all five seat paths: the seats stored before this
   // transaction versus the seats it just wrote. Drafts stay silent.
   const notices: (RoleAssignmentNotice | null)[] = [];
+  const queued: QueueRoleNoticesInput[] = [];
   for (const coordinated of coordination.roles) {
-    if (!patchOf.has(coordinated.role._id)) continue;
-    const before = normalizeStoredSeats(coordinated.role);
-    const partnerId = partnerOf.get(coordinated.role._id);
-    const after_ = partnerId
-      ? normalizeStoredSeats(targetById.get(partnerId)?.role)
-      : normalizeStoredSeats(coordinated.role, replacementsOf.get(coordinated.role._id) ?? []);
+    const seatStates = seatStatesOf.get(coordinated.role._id);
+    if (!seatStates) continue;
     notices.push(
       roleUpdateNotice({
         published: coordinated.role.published,
-        beforeAssignees: seatAssignees(before),
-        after: after_,
+        beforeAssignees: seatAssignees(seatStates.before),
+        after: seatStates.after,
         type: coordinated.role._type as ServiceType,
         date: coordinated.date,
       }),
     );
+    queued.push({
+      roleId: coordinated.role._id,
+      roleType: coordinated.role._type,
+      serviceDate: coordinated.date,
+      published: coordinated.role.published,
+      beforeSeats: seatStates.before,
+      afterSeats: seatStates.after,
+    });
   }
   notifyRoleAssignments(notices);
+  // The debounced email (§2), per destination role. A swap is where the union
+  // rule earns its keep: the person who LEFT a seat is in `before` and not in
+  // `after`, and under the old added-assignees diff heard nothing at all.
+  for (const input of queued) queueRoleNotices(input);
 
   return NextResponse.json({ ok: true, kind: request.kind, roleIds: [...patchOf.keys()] });
 }

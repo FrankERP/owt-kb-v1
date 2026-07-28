@@ -41,7 +41,11 @@ vi.mock("@/app/utils/revalidate", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidatePathMock(...a) }));
 vi.mock("@/app/utils/push", () => ({ sendPush: (...a: unknown[]) => sendPushMock(...a) }));
-vi.mock("@/app/utils/assignmentEmail", () => ({
+// PARTIAL: the send paths are spied, but `rolesForMember` stays real — it is the
+// seat-label vocabulary the queued outbox snapshot records.
+vi.mock("@/app/utils/email", () => ({ sendEmail: vi.fn() }));
+vi.mock("@/app/utils/assignmentEmail", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/app/utils/assignmentEmail")>()),
   sendAssignmentEmails: (...a: unknown[]) => sendAssignmentEmailsMock(...a),
   sendAssignmentEmailsBatch: (...a: unknown[]) => sendAssignmentEmailsBatchMock(...a),
   assigneesOf: () => [],
@@ -65,7 +69,11 @@ interface PatchOp {
   set: Record<string, unknown>;
   unset: string[];
 }
-type TxOp = PatchOp | { kind: "create"; doc: Record<string, unknown> } | { kind: "delete"; id: string };
+type TxOp =
+  | PatchOp
+  | { kind: "create"; doc: Record<string, unknown> }
+  | { kind: "createIfNotExists"; doc: Record<string, unknown> }
+  | { kind: "delete"; id: string };
 
 interface RecordedTx {
   ops: TxOp[];
@@ -89,6 +97,10 @@ function makeTransaction() {
   const tx = {
     create(doc: Record<string, unknown>) {
       record.ops.push({ kind: "create", doc });
+      return tx;
+    },
+    createIfNotExists(doc: Record<string, unknown>) {
+      record.ops.push({ kind: "createIfNotExists", doc });
       return tx;
     },
     delete(id: string) {
@@ -135,8 +147,32 @@ function makeTransaction() {
 /** Set by a test that needs the store to change at commit time. */
 let onCommit: (() => void) | null = null;
 
+/**
+ * The BUSINESS transactions. The post-commit outbox upsert runs on the same
+ * `writeClient`, but never as part of the business transaction (spec §2) — it is
+ * the only writer here that uses `createIfNotExists`, so the two are told apart
+ * by shape rather than by call order.
+ */
 function committedTransactions() {
-  return transactions.filter((t) => t.committed);
+  return transactions.filter(
+    (t) => t.committed && !t.ops.some((o) => o.kind === "createIfNotExists"),
+  );
+}
+
+/** The post-commit `notificationOutbox` upserts (spec §2). */
+function outboxUpserts(): Record<string, unknown>[] {
+  return transactions
+    .filter((t) => t.committed)
+    .flatMap((t) => t.ops)
+    .filter((o): o is { kind: "createIfNotExists"; doc: Record<string, unknown> } =>
+      o.kind === "createIfNotExists",
+    )
+    .map((o) => o.doc);
+}
+
+/** Member ids the outbox now owes a debounced email, in queue order. */
+function queuedMemberIds(): unknown[] {
+  return outboxUpserts().map((d) => d.memberId);
 }
 
 // ── In-memory store, dispatched off the bound GROQ ──────────────────────────
@@ -323,6 +359,19 @@ function ctx(id: string) {
   return { params: Promise.resolve({ id }) };
 }
 
+/**
+ * Run every registered `after()` callback. A committed write now registers more
+ * than one — the immediate push fan-out and the post-commit outbox upsert are
+ * deliberately separate deferred blocks (spec §2), so indexing `afterCallbacks[0]`
+ * would silently skip whichever ran second.
+ */
+async function drainAfter(): Promise<void> {
+  for (let guard = 0; guard < 10 && afterCallbacks.length; guard++) {
+    const batch = afterCallbacks.splice(0);
+    for (const cb of batch) await cb();
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   transactions.length = 0;
@@ -380,31 +429,53 @@ describe("POST /api/admin/roles — create", () => {
     expect(revalidateServiceViewsMock).toHaveBeenCalled();
   });
 
-  it("notifies every initial assignee only when the create is published", async () => {
+  it("pushes to every initial assignee and QUEUES their notices, only when published", async () => {
     await createPOST(req(createBody({ published: true, leads: ["mem-1"] })));
-    expect(afterCallbacks).toHaveLength(1);
-    await afterCallbacks[0]();
+    // Two deferred blocks: the immediate push fan-out, then the outbox upsert.
+    expect(afterCallbacks).toHaveLength(2);
+    await drainAfter();
     expect(sendPushMock).toHaveBeenCalledWith(["mem-1", "mem-2"], "assignments", expect.anything());
-    expect(sendAssignmentEmailsMock).toHaveBeenCalled();
+    // The immediate assignment email is gone — the outbox absorbed it (§7).
+    expect(sendAssignmentEmailsMock).not.toHaveBeenCalled();
+    // …and every initial assignee is owed a debounced one instead.
+    expect(queuedMemberIds()).toEqual(["mem-1", "mem-2"]);
+    expect(outboxUpserts()[0]).toMatchObject({
+      _type: "notificationOutbox",
+      kind: "role",
+      roleType: "sunday_role",
+      serviceDate: "2026-08-09",
+      before: { beforeRoles: [] },
+    });
 
     afterCallbacks.length = 0;
     transactions.length = 0;
     store = emptyStore();
     await createPOST(req(createBody({ creationRequestId: "req-sunday-00000009" })));
     expect(afterCallbacks).toHaveLength(0);
+    expect(outboxUpserts()).toHaveLength(0);
   });
 
   it("swallows a thrown notification without failing the committed create (§7)", async () => {
     sendPushMock.mockRejectedValue(new Error("fcm down"));
-    sendAssignmentEmailsMock.mockRejectedValue(new Error("smtp down"));
     const res = await createPOST(req(createBody({ published: true })));
     expect(res.status).toBe(201);
     expect(committedTransactions()).toHaveLength(1);
-    await expect(afterCallbacks[0]()).resolves.toBeUndefined();
-    // Both channels were still attempted, and the create stands.
+    await expect(drainAfter()).resolves.toBeUndefined();
+    // The channel was still attempted, and the create stands.
     expect(sendPushMock).toHaveBeenCalledTimes(1);
-    expect(sendAssignmentEmailsMock).toHaveBeenCalledTimes(1);
     expect(committedTransactions()).toHaveLength(1);
+  });
+
+  it("commits the outbox upsert OUTSIDE the business transaction (§2)", async () => {
+    await createPOST(req(createBody({ published: true })));
+    // The business transaction is committed and closed before anything queues.
+    expect(committedTransactions()).toHaveLength(1);
+    expect(outboxUpserts()).toHaveLength(0);
+    await drainAfter();
+    expect(committedTransactions()).toHaveLength(1);
+    expect(outboxUpserts()).toHaveLength(2);
+    // No outbox op ever landed in the transaction that wrote the content.
+    expect(committedTransactions()[0].ops.some((o) => o.kind === "createIfNotExists")).toBe(false);
   });
 
   it("creates a special role with NO weekend lock", async () => {
@@ -711,12 +782,12 @@ describe("PATCH /api/admin/roles/[id] — edit", () => {
     expect(transactions).toHaveLength(0);
   });
 
-  it("notifies only newly added assignees, and stays silent for a draft", async () => {
+  it("pushes only to newly added assignees, and stays silent for a draft", async () => {
     store.roles.push(role({ published: true }));
     store.locks.push(lock());
     await rolePATCH(req(editBody()), ctx("role-1"));
-    expect(afterCallbacks).toHaveLength(1);
-    await afterCallbacks[0]();
+    expect(afterCallbacks).toHaveLength(2);
+    await drainAfter();
     expect(sendPushMock).toHaveBeenCalledWith(["mem-5"], "assignments", expect.anything());
 
     afterCallbacks.length = 0;
@@ -725,6 +796,32 @@ describe("PATCH /api/admin/roles/[id] — edit", () => {
     store.locks.push(lock());
     await rolePATCH(req(editBody()), ctx("role-1"));
     expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it("queues the UNION of before- and after-assignees, from a PRE-COMMIT snapshot", async () => {
+    // Stored Lead is mem-1; the edit replaces the lineup with mem-5 alone. The
+    // dropped member is the whole point: `addedAssignees` diffed member ids, so
+    // mem-1 heard nothing at all before this.
+    store.roles.push(role({ published: true }));
+    store.locks.push(lock());
+    await rolePATCH(req(editBody({ leads: ["mem-5"] })), ctx("role-1"));
+    await drainAfter();
+    expect(queuedMemberIds().sort()).toEqual(["mem-1", "mem-5"]);
+    const byMember = new Map(outboxUpserts().map((d) => [d.memberId, d]));
+    // Each member's snapshot holds their OWN pre-commit seat labels. Read back
+    // inside after() this would be the POST-write state and both would be empty
+    // vs empty — a system that queues and then says nothing.
+    expect(byMember.get("mem-1")!.before).toEqual({ beforeRoles: ["Líder"] });
+    expect(byMember.get("mem-5")!.before).toEqual({ beforeRoles: [] });
+    expect(byMember.get("mem-1")!.knownRecipients).toEqual(["mem-1"]);
+  });
+
+  it("a draft edit queues nothing at all", async () => {
+    store.roles.push(role({ published: false }));
+    store.locks.push(lock());
+    await rolePATCH(req(editBody()), ctx("role-1"));
+    await drainAfter();
+    expect(outboxUpserts()).toHaveLength(0);
   });
 
   it("bootstraps a legacy weekend role with no lock, then applies the edit", async () => {
@@ -875,6 +972,35 @@ describe("DELETE /api/admin/roles/[id]", () => {
     expect(res.status).toBe(409);
     expect((await res.json()).details.detail).toBe("multiple_receipts");
     expect(transactions).toHaveLength(0);
+  });
+
+  it("queues a notice per CURRENT assignee, snapshotted before the delete", async () => {
+    // Sends nothing immediately — there is no "te asignaron" for a service that
+    // has ceased to exist — but the assignees are still owed "Ya no participas",
+    // and after the commit no document can answer for who they were.
+    store.roles.push(role({ published: true }));
+    store.locks.push(lock());
+    const res = await roleDELETE(req({ rev: "rev-1" }), ctx("role-1"));
+    expect(res.status).toBe(200);
+    await drainAfter();
+    expect(sendPushMock).not.toHaveBeenCalled();
+    expect(queuedMemberIds()).toEqual(["mem-1"]);
+    expect(outboxUpserts()[0]).toMatchObject({
+      kind: "role",
+      roleId: "role-1",
+      // The identity a vanished role can no longer supply.
+      serviceDate: "2026-08-09",
+      roleType: "sunday_role",
+      before: { beforeRoles: ["Líder"] },
+    });
+  });
+
+  it("a draft delete queues nothing", async () => {
+    store.roles.push(role({ published: false }));
+    store.locks.push(lock());
+    expect((await roleDELETE(req({ rev: "rev-1" }), ctx("role-1"))).status).toBe(200);
+    await drainAfter();
+    expect(outboxUpserts()).toHaveLength(0);
   });
 });
 

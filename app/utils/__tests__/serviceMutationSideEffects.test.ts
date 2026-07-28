@@ -4,6 +4,12 @@
 // The two questions this file answers are "WHO hears about a committed change?"
 // (derived from committed server state, never a client list) and "does a failed
 // delivery stay swallowed?" (best-effort at-most-once, never a rollback).
+//
+// Since the notification-outbox design (spec §2/§7) a third question joins them:
+// "WHAT is queued for the debounced email?" — one notice per member in the UNION
+// of before- and after-assignees, each carrying that member's own seat labels.
+// The `writeClient` transaction is recorded rather than executed, so the outbox
+// upsert is asserted as a value.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -24,8 +30,65 @@ vi.mock("@/sanity/lib/operationalClient", () => ({
   operationalClient: { fetch: (...a: unknown[]) => operationalFetch(...a) },
   rawIntegrityClient: { fetch: vi.fn() },
 }));
+
+/* ── Outbox transaction recorder ────────────────────────────────────────────
+ *
+ * The upsert must be its OWN transaction on `writeClient` — never the business
+ * transaction — so it is recorded per commit and asserted as a value.
+ */
+
+interface RecordedUpsert {
+  createIfNotExists: Record<string, unknown>;
+  patchSet: Record<string, unknown>;
+}
+
+const outboxTransactions: RecordedUpsert[][] = [];
+/** Set to make the next `commit()` reject, proving the failure stays swallowed. */
+let outboxCommitError: Error | null = null;
+
+function makeOutboxTransaction() {
+  const ops: RecordedUpsert[] = [];
+  outboxTransactions.push(ops);
+  const byId = new Map<string, RecordedUpsert>();
+  const tx = {
+    createIfNotExists(doc: Record<string, unknown>) {
+      const row: RecordedUpsert = { createIfNotExists: doc, patchSet: {} };
+      byId.set(String(doc._id), row);
+      ops.push(row);
+      return tx;
+    },
+    patch(id: string, fn: (p: unknown) => unknown) {
+      const row = byId.get(id);
+      const p = {
+        set(values: Record<string, unknown>) {
+          if (row) Object.assign(row.patchSet, values);
+          return p;
+        },
+      };
+      fn(p);
+      return tx;
+    },
+    async commit() {
+      if (outboxCommitError) throw outboxCommitError;
+      return {};
+    },
+  };
+  return tx;
+}
+
+vi.mock("@/sanity/lib/serverClient", () => ({
+  serverClient: { fetch: vi.fn() },
+  writeClient: { transaction: () => makeOutboxTransaction() },
+}));
 vi.mock("@/app/utils/push", () => ({ sendPush: (...a: unknown[]) => sendPushMock(...a) }));
-vi.mock("@/app/utils/assignmentEmail", () => ({
+// assignmentEmail.ts also imports ./email, which imports the "server-only"
+// package guard — unresolvable outside a Next.js server build.
+vi.mock("@/app/utils/email", () => ({ sendEmail: vi.fn() }));
+// PARTIAL on purpose: the two send paths are spied, but `rolesForMember` is the
+// REAL seat-label vocabulary. Stubbing it would let the "each member's OWN seat
+// labels" assertion pass against a label set the emails never use.
+vi.mock("@/app/utils/assignmentEmail", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/app/utils/assignmentEmail")>()),
   sendAssignmentEmails: (...a: unknown[]) => sendAssignmentEmailsMock(...a),
   sendAssignmentEmailsBatch: (...a: unknown[]) => sendAssignmentEmailsBatchMock(...a),
 }));
@@ -48,6 +111,7 @@ import {
   notifyRolePublished,
   notifySetlistSaved,
   proposalReviewRecipients,
+  queueRoleNotices,
   revalidateProposalApproval,
   revalidateRoleMutation,
   revalidateRolePublication,
@@ -55,6 +119,7 @@ import {
   roleCreateNotice,
   roleUpdateNotice,
 } from "@/app/utils/serviceMutationSideEffects";
+import { outboxId } from "@/app/utils/outboxNotice";
 import type { NormalizedSeats } from "@/app/utils/roleWriteRequest";
 
 function seats(over: Partial<NormalizedSeats> = {}): NormalizedSeats {
@@ -80,8 +145,18 @@ const ALL_FIVE = seats({
 beforeEach(() => {
   vi.clearAllMocks();
   afterCallbacks.length = 0;
+  outboxTransactions.length = 0;
+  outboxCommitError = null;
   operationalFetch.mockReset();
 });
+
+/** Run every registered `after()` callback, draining anything they enqueue. */
+async function flushAfter(): Promise<void> {
+  for (let guard = 0; guard < 10 && afterCallbacks.length; guard++) {
+    const batch = afterCallbacks.splice(0);
+    for (const cb of batch) await cb();
+  }
+}
 
 // ── Who hears about a role change ───────────────────────────────────────────
 
@@ -192,7 +267,7 @@ describe("notifyRoleAssignments", () => {
     date: "2026-08-08",
   });
 
-  it("registers ONE deferred attempt for the whole batch, pushing and emailing per role", async () => {
+  it("registers ONE deferred attempt for the whole batch, pushing per role", async () => {
     notifyRoleAssignments([noticeA, noticeB]);
     expect(afterCallbacks).toHaveLength(1);
     expect(sendPushMock).not.toHaveBeenCalled();
@@ -209,12 +284,16 @@ describe("notifyRoleAssignments", () => {
       "assignments",
       { title: "Servicio actualizado", body: "Te asignaron para el 2026-08-08.", path: "/me" },
     ]);
-    expect(sendAssignmentEmailsMock).toHaveBeenCalledTimes(2);
-    expect(sendAssignmentEmailsMock.mock.calls[0][0]).toEqual(["mem-1"]);
-    expect(sendAssignmentEmailsMock.mock.calls[0][1]).toMatchObject({
-      type: "sunday_role",
-      date: "2026-08-09",
-    });
+  });
+
+  it("no longer sends an immediate assignment email — the outbox absorbed it (§7)", async () => {
+    notifyRoleAssignments([noticeA, noticeB]);
+    await flushAfter();
+    // Keeping it would produce "te asignaron" now and "tu rol cambió" fifteen
+    // minutes later for one edit.
+    expect(sendAssignmentEmailsMock).not.toHaveBeenCalled();
+    // The push leg is unchanged: members still get an immediate in-app signal.
+    expect(sendPushMock).toHaveBeenCalledTimes(2);
   });
 
   it("stays entirely silent for no notices, nulls, or empty recipients", () => {
@@ -232,7 +311,111 @@ describe("notifyRoleAssignments", () => {
     await expect(afterCallbacks[0]()).resolves.toBeUndefined();
     // The failed push did not abort the batch.
     expect(sendPushMock).toHaveBeenCalledTimes(2);
-    expect(sendAssignmentEmailsMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ── Outbox queueing (spec §2) ───────────────────────────────────────────────
+
+describe("queueRoleNotices", () => {
+  const ROLE_ID = "role-1";
+  const base = {
+    roleId: ROLE_ID,
+    roleType: "sunday_role" as const,
+    serviceDate: "2026-08-09",
+    published: true,
+  };
+
+  const leadsOf = (...ids: string[]) => seats({ leads: ids });
+  const bgvsOf = (...ids: string[]) => seats({ bgvs: ids });
+
+  const upserted = () => outboxTransactions.flat();
+  const upsertedIds = () => upserted().map((u) => String(u.createIfNotExists._id));
+  const upsertFor = (memberId: string) => {
+    const id = outboxId("role", `${memberId}__${ROLE_ID}`);
+    return upserted().find((u) => u.createIfNotExists._id === id)!;
+  };
+
+  it("queues one notice per member in the UNION of before and after", async () => {
+    // Removals must be covered, which `addedAssignees` never was: it diffed
+    // member ids, so being dropped from a service said nothing at all.
+    queueRoleNotices({
+      ...base,
+      beforeSeats: leadsOf("m1", "m2"),
+      afterSeats: leadsOf("m2", "m3"),
+    });
+    await flushAfter();
+    expect(upsertedIds()).toHaveLength(3);
+    expect(upsertedIds().sort()).toEqual(
+      ["m1", "m2", "m3"].map((m) => outboxId("role", `${m}__${ROLE_ID}`)).sort(),
+    );
+    // …and the dropped member is genuinely one of them.
+    expect(upsertFor("m1")).toBeTruthy();
+  });
+
+  it("snapshots each member's OWN seat labels, taken from the BEFORE state", async () => {
+    queueRoleNotices({ ...base, beforeSeats: leadsOf("m1"), afterSeats: bgvsOf("m1") });
+    await flushAfter();
+    expect(upsertFor("m1").createIfNotExists.before).toEqual({ beforeRoles: ["Líder"] });
+    // That is what lets a member who was never introduced to a service stay
+    // silent when it is deleted: an absent member's own labels are empty.
+    expect(upsertFor("m1").createIfNotExists.knownRecipients).toEqual(["m1"]);
+  });
+
+  it("records the identity a deleted role can no longer answer for", async () => {
+    queueRoleNotices({ ...base, beforeSeats: leadsOf("m1"), afterSeats: leadsOf("m1") });
+    await flushAfter();
+    const doc = upsertFor("m1").createIfNotExists;
+    expect(doc).toMatchObject({
+      _type: "notificationOutbox",
+      kind: "role",
+      subjectKey: `m1__${ROLE_ID}`,
+      memberId: "m1",
+      roleId: ROLE_ID,
+      proposalId: null,
+      serviceDate: "2026-08-09",
+      roleType: "sunday_role",
+      status: "pending",
+      claimedAt: null,
+    });
+    // The patch only slides the debounce and re-pends; `before` and `deadline`
+    // survive a whole burst of edits.
+    expect(Object.keys(upsertFor("m1").patchSet).sort()).toEqual(["notifyAfter", "status"]);
+  });
+
+  it("queues nothing for a draft service", async () => {
+    queueRoleNotices({ ...base, published: false, beforeSeats: null, afterSeats: leadsOf("m1") });
+    await flushAfter();
+    expect(upsertedIds()).toHaveLength(0);
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it("treats a missing published field as grandfathered published", async () => {
+    queueRoleNotices({ ...base, published: undefined, beforeSeats: null, afterSeats: leadsOf("m1") });
+    await flushAfter();
+    expect(upsertedIds()).toHaveLength(1);
+  });
+
+  it("queues per CURRENT assignee on a delete, with their pre-delete labels", async () => {
+    queueRoleNotices({ ...base, deleted: true, beforeSeats: leadsOf("m1"), afterSeats: null });
+    await flushAfter();
+    expect(upsertFor("m1").createIfNotExists.before).toEqual({ beforeRoles: ["Líder"] });
+  });
+
+  it("stays silent when neither state names anybody", async () => {
+    queueRoleNotices({ ...base, beforeSeats: null, afterSeats: seats() });
+    await flushAfter();
+    expect(afterCallbacks).toHaveLength(0);
+    expect(upsertedIds()).toHaveLength(0);
+  });
+
+  it("commits in its OWN transaction and swallows a failed outbox write", async () => {
+    // A failed outbox op must never abort a committed content write, so the
+    // upsert is never part of the business transaction and never rethrows.
+    outboxCommitError = new Error("sanity down");
+    queueRoleNotices({ ...base, beforeSeats: null, afterSeats: leadsOf("m1") });
+    expect(afterCallbacks).toHaveLength(1);
+    await expect(afterCallbacks[0]()).resolves.toBeUndefined();
+    expect(outboxTransactions).toHaveLength(1);
   });
 });
 
