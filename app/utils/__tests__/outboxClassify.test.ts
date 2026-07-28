@@ -45,6 +45,21 @@ describe("classifyRole", () => {
     expect(classifyRole({ ...base, roleExists: false, before: [], after: [] })).toBeNull();
   });
 
+  it("a deleted role still tells former assignees regardless of what `published` carries", () => {
+    // Pins the roleExists gate on the unpublish guard: once the role is gone
+    // there's no real `published` field to read, so the guard must not run —
+    // the deleted-role branch decides on its own, for either published value.
+    expect(classifyRole({ ...base, roleExists: false, published: true, before: ["BGV"], after: [] })?.kind).toBe("removed");
+    expect(classifyRole({ ...base, roleExists: false, published: false, before: ["BGV"], after: [] })?.kind).toBe("removed");
+  });
+
+  it("a deleted role with no before-snapshot stays silent regardless of what `published` carries", () => {
+    // Complementary case: the "never introduced" silence gate also must not
+    // depend on the meaningless `published` value for a vanished role.
+    expect(classifyRole({ ...base, roleExists: false, published: true, before: [], after: [] })).toBeNull();
+    expect(classifyRole({ ...base, roleExists: false, published: false, before: [], after: [] })).toBeNull();
+  });
+
   it("drops a service whose date has passed", () => {
     expect(classifyRole({ ...base, serviceDate: "2026-07-31", before: [], after: ["Líder"] })).toBeNull();
   });
@@ -91,6 +106,11 @@ describe("classifySetlist", () => {
     expect(classifySetlist({ ...base, roleExists: false, before: [], after })).toBeNull();
     expect(classifySetlist({ ...base, dateMatches: false, before: [], after })).toBeNull();
   });
+
+  it("drops a service whose date has passed", () => {
+    // Pins isPast for classifySetlist, exercised so far only via classifyRole.
+    expect(classifySetlist({ ...base, serviceDate: "2026-07-31", before: [], after: [row("a", "G")] })).toBeNull();
+  });
 });
 
 describe("classifyLeadNotes", () => {
@@ -106,6 +126,11 @@ describe("classifyLeadNotes", () => {
 
   it("drops when the proposal is no longer reviewable", () => {
     expect(classifyLeadNotes({ ...base, reviewable: false, before: "", after: "x" })).toBeNull();
+  });
+
+  it("drops a service whose date has passed", () => {
+    // Pins isPast for classifyLeadNotes, exercised so far only via classifyRole.
+    expect(classifyLeadNotes({ ...base, serviceDate: "2026-07-31", before: "", after: "x" })).toBeNull();
   });
 });
 
