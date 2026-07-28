@@ -15,7 +15,8 @@ import { setlistProposal } from './schemas/setlistProposal';
 // authored by hand. See sanity/schemas/roleTargetLock.ts and roleCreationReceipt.ts.
 import { roleTargetLock } from './schemas/roleTargetLock';
 import { roleCreationReceipt } from './schemas/roleCreationReceipt';
+import { notificationOutbox } from './schemas/notificationOutbox';
 
 export const schema: { types: SchemaTypeDefinition[] } = {
-  types: [post, tag, author, featuredSongs, saturdaySongs, saturdayRole, sundayRole, teamMembers, specialRole, loginEvent, setlistProposal, roleTargetLock, roleCreationReceipt],
+  types: [post, tag, author, featuredSongs, saturdaySongs, saturdayRole, sundayRole, teamMembers, specialRole, loginEvent, setlistProposal, roleTargetLock, roleCreationReceipt, notificationOutbox],
 }
