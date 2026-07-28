@@ -4,13 +4,17 @@
 
 export type NotifyKind = "assigned" | "removed" | "roleChanged" | "setlist" | "proposals";
 
-export const NOTIFY_PREF_FIELD: Record<NotifyKind, string> = {
+// `as const satisfies` keeps the values as string literals (not widened to
+// `string`), so callers can derive a precise union of field names — see
+// `EmailPrefValues` in EmailPrefToggles.tsx, which types the resolved-values
+// bag so a partial one is a compile error instead of a silent fallback.
+export const NOTIFY_PREF_FIELD = {
   assigned: "emailAssigned",
   removed: "emailRemoved",
   roleChanged: "emailRoleChanged",
   setlist: "emailSetlist",
   proposals: "emailProposals",
-};
+} as const satisfies Record<NotifyKind, string>;
 
 /**
  * Opt-out semantics with a legacy fallback and NO data migration: an explicit

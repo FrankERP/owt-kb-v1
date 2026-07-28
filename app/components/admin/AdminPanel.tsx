@@ -42,8 +42,14 @@ interface MemberFormData {
   email: string;
   role: OWTRole;
   memberType: string[];
-  /** The five per-type email toggles, sent flat to PATCH. Absent when adding. */
-  emailPrefs?: EmailPrefValues;
+  /**
+   * Only the per-type email toggles the admin actually touched this editing
+   * session, sent flat to PATCH. Absent (or empty) when adding, or when
+   * editing without touching a switch — an untouched form must write NOTHING
+   * here, or it silently restores whatever the member has since opted out of
+   * (the admin's member list can be stale relative to the member's own edits).
+   */
+  emailPrefs?: Partial<EmailPrefValues>;
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -188,7 +194,7 @@ const MEMBER_TYPES: { value: string; label: string }[] = [
   { value: "support",       label: "Soporte" },
 ];
 
-function MemberForm({
+export function MemberForm({
   initial,
   onSubmit,
   onClose,
@@ -206,8 +212,15 @@ function MemberForm({
   const [memberType, setMemberType] = useState<string[]>(initial?.memberType ?? []);
   // RESOLVED per-type values, not the raw fields: a member who opted out of the
   // legacy `notifPrefs.email` has all five unset, and unset renders as its `true`
-  // default — five switches ON for someone receiving nothing.
+  // default — five switches ON for someone receiving nothing. This is what
+  // renders the switches; it is NOT what gets submitted (see `touchedPrefFields`
+  // below) — an admin's stale snapshot of this must never overwrite a
+  // preference the member changed after the admin's member list was fetched.
   const [emailPrefs, setEmailPrefs] = useState<EmailPrefValues>(() => resolveEmailPrefs(initial?.notifPrefs));
+  // Only the switches the admin actually clicked THIS session. A save that
+  // never touches this section must PATCH none of the five fields, so the
+  // route leaves whatever the member has since set alone.
+  const [touchedPrefFields, setTouchedPrefFields] = useState<ReadonlySet<keyof EmailPrefValues>>(() => new Set());
 
   const toggleType = (value: string) => {
     setMemberType(prev =>
@@ -215,12 +228,27 @@ function MemberForm({
     );
   };
 
+  const handleTogglePref = (field: string, next: boolean) => {
+    const key = field as keyof EmailPrefValues;
+    setEmailPrefs((p) => ({ ...p, [key]: next }));
+    setTouchedPrefFields((prev) => new Set(prev).add(key));
+  };
+
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        // Only an edit carries preferences; a new member starts on the defaults.
-        onSubmit({ member_name: name, alias, email, role, memberType, ...(initial ? { emailPrefs } : {}) });
+        // Only an edit carries preferences, and only the fields actually touched
+        // this session — never the full resolved snapshot. That snapshot can be
+        // stale (fetched before the member last changed their own preference),
+        // so submitting all five every time would silently revert an opt-out
+        // the moment an admin fixes an unrelated typo in the name.
+        const touchedEmailPrefs: Partial<EmailPrefValues> = {};
+        for (const field of touchedPrefFields) touchedEmailPrefs[field] = emailPrefs[field];
+        onSubmit({
+          member_name: name, alias, email, role, memberType,
+          ...(initial && touchedPrefFields.size > 0 ? { emailPrefs: touchedEmailPrefs } : {}),
+        });
       }}
       className="space-y-4"
     >
@@ -271,7 +299,7 @@ function MemberForm({
           <label className="font-label text-xs uppercase tracking-widest text-gray-500">Correos</label>
           <EmailPrefToggles
             values={emailPrefs}
-            onToggle={(field, next) => setEmailPrefs((p) => ({ ...p, [field]: next }))}
+            onToggle={handleTogglePref}
             showHints={false}
             disabled={loading}
           />
@@ -520,7 +548,9 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
     if (modal?.type !== "edit") return;
     setSubmitting(true);
     try {
-      // The five toggles go flat: `emailAssigned`, `emailRemoved`, …
+      // Only the touched toggles go flat: `emailAssigned`, `emailRemoved`, …
+      // `emailPrefs` is already filtered to the fields the admin changed this
+      // session (see MemberForm) — an untouched form sends none of them.
       const { emailPrefs, ...rest } = data;
       const res = await fetch(`/api/admin/members/${modal.member._id}`, {
         method: "PATCH",

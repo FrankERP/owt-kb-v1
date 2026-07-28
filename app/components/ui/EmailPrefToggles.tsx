@@ -15,7 +15,7 @@ import { NOTIFY_PREF_FIELD, wantsNotification, type NotifyKind } from "@/app/uti
 
 export interface EmailPrefRow {
   kind: NotifyKind;
-  field: string;
+  field: (typeof NOTIFY_PREF_FIELD)[NotifyKind];
   label: string;
   hint: string;
 }
@@ -53,11 +53,15 @@ export const EMAIL_PREF_ROWS: EmailPrefRow[] = [
   },
 ];
 
-export type EmailPrefValues = Record<string, boolean>;
+// A complete map, one entry per row — deliberately NOT `Record<string, boolean>`.
+// A partial bag is a type error here, not a silent default: the whole point of
+// this module is that "absent" is resolved exactly once, in `wantsNotification`,
+// before the value ever reaches a component.
+export type EmailPrefValues = Record<(typeof EMAIL_PREF_ROWS)[number]["field"], boolean>;
 
 /** Resolved value per field — the same fallback the senders apply. */
 export function resolveEmailPrefs(prefs: unknown): EmailPrefValues {
-  const out: EmailPrefValues = {};
+  const out = {} as EmailPrefValues;
   for (const row of EMAIL_PREF_ROWS) out[row.field] = wantsNotification(prefs, row.kind);
   return out;
 }
@@ -80,7 +84,9 @@ export default function EmailPrefToggles({
   return (
     <div className="space-y-3">
       {EMAIL_PREF_ROWS.map((row) => {
-        const on = values[row.field] !== false;
+        // No fallback here: `values` is a complete EmailPrefValues, resolved once
+        // by `wantsNotification` before it ever reaches this component.
+        const on = values[row.field];
         return (
           <div key={row.field} className="flex items-center justify-between gap-4">
             <div className="min-w-0">
