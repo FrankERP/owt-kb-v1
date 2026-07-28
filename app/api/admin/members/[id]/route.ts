@@ -3,6 +3,9 @@ import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { revalidateServiceViews } from "@/app/utils/revalidate";
 import { revalidatePath } from "next/cache";
+import { NOTIFY_PREF_FIELD, wantsNotification, type NotifyKind } from "@/app/utils/notifyPrefs";
+
+const EMAIL_KINDS = Object.keys(NOTIFY_PREF_FIELD) as NotifyKind[];
 
 export async function PATCH(
   req: NextRequest,
@@ -24,7 +27,15 @@ export async function PATCH(
     email?: string;
     role?: string;
     memberType?: string[];
+    // Legacy fallback field. No UI writes it any more (§5 of the notification
+    // design takes it out of both panels); it stays accepted because it is what
+    // an unset per-type field falls back to.
     notifEmail?: boolean;
+    emailAssigned?: boolean;
+    emailRemoved?: boolean;
+    emailRoleChanged?: boolean;
+    emailSetlist?: boolean;
+    emailProposals?: boolean;
   };
 
   const VALID_ROLES = ["super-admin", "admin", "content-editor", "member"];
@@ -42,19 +53,36 @@ export async function PATCH(
   // Keep only recognised member types (drops unknown values rather than storing them).
   if (Array.isArray(body.memberType)) patch.memberType = body.memberType.filter(t => VALID_MEMBER_TYPES.includes(t));
 
-  if (Object.keys(patch).length === 0 && typeof body.notifEmail !== "boolean") {
+  // The five per-type email toggles, keyed off the same map every sender uses.
+  const notifPatch: Record<string, unknown> = {};
+  if (typeof body.notifEmail === "boolean") notifPatch["notifPrefs.email"] = body.notifEmail;
+  for (const kind of EMAIL_KINDS) {
+    const field = NOTIFY_PREF_FIELD[kind];
+    const value = (body as Record<string, unknown>)[field];
+    if (typeof value === "boolean") notifPatch[`notifPrefs.${field}`] = value;
+  }
+
+  if (Object.keys(patch).length === 0 && Object.keys(notifPatch).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
   let mutation = writeClient.patch(id).set(patch);
-  if (typeof body.notifEmail === "boolean") {
-    mutation = mutation.setIfMissing({ notifPrefs: {} }).set({ "notifPrefs.email": body.notifEmail });
+  if (Object.keys(notifPatch).length > 0) {
+    mutation = mutation.setIfMissing({ notifPrefs: {} }).set(notifPatch);
   }
   const doc = await mutation.commit();
   // A renamed member's name/alias surfaces on ISR schedule/home/me views.
   revalidateServiceViews();
   revalidatePath("/me");
-  return NextResponse.json(doc);
+  // `emailPrefs` is RESOLVED through the shared resolver, never the raw fields:
+  // with no data migration the five are unset for anyone who opted out of the
+  // legacy `email`, and an unset boolean would render as its `true` default —
+  // five switches ON for a member receiving nothing.
+  const p = (doc as { notifPrefs?: Record<string, unknown> }).notifPrefs ?? {};
+  const emailPrefs = Object.fromEntries(
+    EMAIL_KINDS.map((kind) => [NOTIFY_PREF_FIELD[kind], wantsNotification(p, kind)]),
+  );
+  return NextResponse.json({ ...doc, emailPrefs });
 }
 
 export async function DELETE(

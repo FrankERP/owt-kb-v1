@@ -20,6 +20,7 @@ import {
 } from "./proposalHandoff";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
+import EmailPrefToggles, { resolveEmailPrefs, type EmailPrefValues } from "../ui/EmailPrefToggles";
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
@@ -32,7 +33,17 @@ interface Member {
   memberType?: string[];
   hasPassword: boolean;
   photoUrl?: string;
-  notifPrefs?: { email?: boolean };
+  notifPrefs?: Record<string, unknown>;
+}
+
+interface MemberFormData {
+  member_name: string;
+  alias: string;
+  email: string;
+  role: OWTRole;
+  memberType: string[];
+  /** The five per-type email toggles, sent flat to PATCH. Absent when adding. */
+  emailPrefs?: EmailPrefValues;
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -184,7 +195,7 @@ function MemberForm({
   loading,
 }: {
   initial?: Partial<Member>;
-  onSubmit: (data: { member_name: string; alias: string; email: string; role: OWTRole; memberType: string[]; notifEmail?: boolean }) => void;
+  onSubmit: (data: MemberFormData) => void;
   onClose: () => void;
   loading: boolean;
 }) {
@@ -193,7 +204,10 @@ function MemberForm({
   const [email, setEmail]           = useState(initial?.email ?? "");
   const [role, setRole]             = useState<OWTRole>(initial?.role ?? "member");
   const [memberType, setMemberType] = useState<string[]>(initial?.memberType ?? []);
-  const [notifEmail, setNotifEmail] = useState<boolean>(initial?.notifPrefs?.email !== false);
+  // RESOLVED per-type values, not the raw fields: a member who opted out of the
+  // legacy `notifPrefs.email` has all five unset, and unset renders as its `true`
+  // default — five switches ON for someone receiving nothing.
+  const [emailPrefs, setEmailPrefs] = useState<EmailPrefValues>(() => resolveEmailPrefs(initial?.notifPrefs));
 
   const toggleType = (value: string) => {
     setMemberType(prev =>
@@ -203,7 +217,11 @@ function MemberForm({
 
   return (
     <form
-      onSubmit={(e) => { e.preventDefault(); onSubmit({ member_name: name, alias, email, role, memberType, notifEmail }); }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        // Only an edit carries preferences; a new member starts on the defaults.
+        onSubmit({ member_name: name, alias, email, role, memberType, ...(initial ? { emailPrefs } : {}) });
+      }}
       className="space-y-4"
     >
       <div className="space-y-1">
@@ -249,18 +267,14 @@ function MemberForm({
         </div>
       </div>
       {initial && (
-        <div className="flex items-center justify-between gap-4 pt-1">
-          <label className="font-label text-xs uppercase tracking-widest text-gray-500">Correo de asignaciones</label>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={notifEmail}
-            aria-label="Correo de asignaciones"
-            onClick={() => setNotifEmail((v) => !v)}
-            className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${notifEmail ? "bg-[#00bfff]" : "bg-gray-500/40"}`}
-          >
-            <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${notifEmail ? "translate-x-5" : "translate-x-0"}`} />
-          </button>
+        <div className="space-y-3 pt-1">
+          <label className="font-label text-xs uppercase tracking-widest text-gray-500">Correos</label>
+          <EmailPrefToggles
+            values={emailPrefs}
+            onToggle={(field, next) => setEmailPrefs((p) => ({ ...p, [field]: next }))}
+            showHints={false}
+            disabled={loading}
+          />
         </div>
       )}
       <div className="flex gap-3 pt-1">
@@ -483,13 +497,15 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
 
   useEffect(() => { fetchMembers(); }, [fetchMembers]);
 
-  const handleAdd = async (data: { member_name: string; alias: string; email: string; role: OWTRole; memberType: string[]; notifEmail?: boolean }) => {
+  const handleAdd = async (data: MemberFormData) => {
     setSubmitting(true);
     try {
+      // A new member starts on the preference defaults; POST takes identity only.
+      const { member_name, alias, email, role, memberType } = data;
       const res = await fetch("/api/admin/members", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ member_name, alias, email, role, memberType }),
       });
       if (res.ok) { setModal(null); setModalError(null); fetchMembers(); showToast("Miembro agregado."); }
       else setModalError("Error al agregar miembro.");
@@ -500,14 +516,16 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
     }
   };
 
-  const handleEdit = async (data: { member_name: string; alias: string; email: string; role: OWTRole; memberType: string[]; notifEmail?: boolean }) => {
+  const handleEdit = async (data: MemberFormData) => {
     if (modal?.type !== "edit") return;
     setSubmitting(true);
     try {
+      // The five toggles go flat: `emailAssigned`, `emailRemoved`, …
+      const { emailPrefs, ...rest } = data;
       const res = await fetch(`/api/admin/members/${modal.member._id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...rest, ...(emailPrefs ?? {}) }),
       });
       if (res.ok) { setModal(null); setModalError(null); fetchMembers(); showToast("Miembro actualizado."); }
       else setModalError("Error al actualizar.");
