@@ -5,7 +5,7 @@
 // rest. Dark table-and-inline-style shell shared with the assignment emails.
 
 import { escapeHtml, appBaseUrl } from "./assignmentEmail";
-import { C, td, tr, shell, solidBackgroundGif } from "./emailShell";
+import { C, td, tr, shell } from "./emailShell";
 import type { Line, LineKind } from "./outboxClassify";
 import { buildSetlistTable, type TableRow } from "./setlistDiff";
 
@@ -120,7 +120,7 @@ export function renderSetlistTable(rows: TableRow[], titles: Map<string, string>
   const legend = showMovement
     ? tr(td(`<span style="color:${C.steel};font:11px system-ui,sans-serif">▲ suena antes en el servicio</span>`, { colspan: cols, style: "padding:8px 8px 2px" }))
     : "";
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.deck}" background="${solidBackgroundGif(C.deck)}" style="background:${C.deck};border-collapse:collapse">${headRow(showMovement)}${body}${legend}</table>`;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.deck}" style="background:${C.deck};border-collapse:collapse">${headRow(showMovement)}${body}${legend}</table>`;
 }
 
 // ---- per-line sections ----
@@ -151,7 +151,7 @@ function roleChangedSection(before: string[], after: string[]): string {
     { bg: C.deck, style: "padding:10px 16px 4px" },
   );
   const value = (html: string) => td(html, { bg: C.deck, style: "padding:0 16px 12px;font:14px system-ui,sans-serif" });
-  const panel = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.deck}" background="${solidBackgroundGif(C.deck)}" style="background:${C.deck};border-collapse:collapse">` +
+  const panel = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.deck}" style="background:${C.deck};border-collapse:collapse">` +
     tr(heading("Antes") + heading("Ahora")) +
     tr(value(`<s style="color:${C.steel}">${b}</s>`) + value(`<strong style="color:${C.beam}">${a}</strong>`)) +
     `</table>`;
