@@ -18,6 +18,9 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
 - Production Sanity writes need explicit user consent — dry-run first
   (one-off scripts in `scripts/`, guarded by `--apply`, run with
   `node --env-file=.env.local scripts/<name>.mjs`). Diagnosing ≠ consent to write.
+- **Any new secret or env var gets an entry in `docs/SECRETS.md`** in the same
+  change: which platforms need it (and which don't), where the value came from,
+  how to rotate it, and what breaks mid-rotation. Never the value itself.
 
 ## Don't-break-these invariants
 - **Timezone = America/Mexico_City.** Service dates are Sanity `date`
