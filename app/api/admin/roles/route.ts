@@ -7,6 +7,7 @@ import { writeClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import {
   notifyRoleAssignments,
+  queueRoleNotices,
   revalidateRoleMutation,
   roleCreateNotice,
 } from "@/app/utils/serviceMutationSideEffects";
@@ -272,6 +273,19 @@ async function postHandler(req: NextRequest) {
       date: request.date,
     }),
   ]);
+  // The debounced email (§2). Creating an already-published service QUEUES
+  // rather than emailing immediately, with no carve-out for creation: admins
+  // routinely create a service and then adjust it, and a carve-out would produce
+  // exactly the "asignado now, cambió later" double email this exists to
+  // prevent. There is no before-state — the role did not exist a moment ago.
+  queueRoleNotices({
+    roleId,
+    roleType: request.roleType,
+    serviceDate: request.date,
+    published: request.published,
+    beforeSeats: null,
+    afterSeats: request.seats,
+  });
 
   return NextResponse.json({ ...doc, creationRequestId: request.requestId }, { status: 201 });
 }

@@ -36,7 +36,10 @@ import { writeClient } from "@/sanity/lib/serverClient";
 import type { ServiceType } from "@/app/utils/assignmentEmail";
 import {
   notifyRolePublished,
+  queuePublishedSetlistNotices,
   revalidateRolePublication,
+  serviceParticipants,
+  type RoleTypeName,
 } from "@/app/utils/serviceMutationSideEffects";
 import { serviceError } from "@/app/utils/serviceMutation";
 import { validateRole } from "@/app/utils/serviceReadModel";
@@ -275,21 +278,31 @@ async function postHandler(req: NextRequest) {
   // transition and every CURRENT assignee hears about it — derived from committed
   // server state across all five seat paths. Plan B adds no new idempotency or
   // duplicate-notification guarantee.
+  const observations = entries
+    .map((entry) => assembled.get(entry.id)?.observation)
+    .filter((o): o is NonNullable<typeof o> => !!o);
   notifyRolePublished(
-    entries
-      .map((entry) => {
-        const observation = assembled.get(entry.id)?.observation;
-        if (!observation) return null;
-        return {
-          recipients: validateRole(observation.role).assignedRefs,
-          type: observation.roleType as ServiceType,
-          date: observation.serviceDate,
-          body: normalizeStoredSeats(observation.role),
-        };
-      })
-      .filter(
-        (notice): notice is NonNullable<typeof notice> => !!notice && notice.recipients.length > 0,
-      ),
+    observations
+      .map((observation) => ({
+        recipients: validateRole(observation.role).assignedRefs,
+        type: observation.roleType as ServiceType,
+        date: observation.serviceDate,
+        body: normalizeStoredSeats(observation.role),
+      }))
+      .filter((notice) => notice.recipients.length > 0),
+  );
+  // The SAME publish rule as `/api/admin/roles/publish` (§2), through the same
+  // helper so the two publish surfaces cannot drift: every `false -> true`
+  // transition queues one `setlist` notice with an EMPTY before-snapshot, and a
+  // service published with no songs queues nothing.
+  queuePublishedSetlistNotices(
+    observations.map((observation) => ({
+      roleId: observation.roleId,
+      roleType: observation.roleType as RoleTypeName,
+      serviceDate: observation.serviceDate,
+      role: observation.role,
+      knownRecipients: serviceParticipants(observation.role),
+    })),
   );
   revalidateRolePublication();
 

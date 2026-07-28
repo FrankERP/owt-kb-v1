@@ -2,7 +2,7 @@
 // without a browser.
 //
 // The point of these tests: "we configured the Studio" is not evidence. The
-// policy is code, so every capability of every one of the eight protected types
+// policy is code, so every capability of every one of the nine protected types
 // is asserted here, plus the wiring in `sanity.config.ts` / `sanity/structure.ts`
 // that actually installs it — and the fact that the v5-inert
 // `__experimental_actions` is used nowhere.
@@ -36,6 +36,15 @@ import {
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
+/**
+ * Protected types that are NOT also delete-only — the fully locked ones, for
+ * which "denies every mutating capability" is literally true.
+ * `notificationOutbox` is protected AND delete-only, so it keeps exactly
+ * `delete`; it is asserted capability-by-capability in its own test below rather
+ * than folded into these loops, which would have meant loosening them.
+ */
+const FULLY_PROTECTED = PROTECTED_STUDIO_TYPES.filter((type) => !isDeleteOnlyStudioType(type));
+
 function read(rel: string): string {
   return readFileSync(path.join(REPO_ROOT, rel), "utf8");
 }
@@ -49,7 +58,7 @@ function gitTracked(): string[] {
 // ── The policy ──────────────────────────────────────────────────────────────
 
 describe("studio protection policy", () => {
-  it("covers exactly the eight protected types, keeping the saturdarSongs typo", () => {
+  it("covers exactly the nine protected types, keeping the saturdarSongs typo", () => {
     expect([...PROTECTED_STUDIO_TYPES]).toEqual([
       "sunday_role",
       "saturday_role",
@@ -59,13 +68,39 @@ describe("studio protection policy", () => {
       "setlistProposal",
       "roleTargetLock",
       "roleCreationReceipt",
+      "notificationOutbox",
     ]);
     expect(PROTECTED_STUDIO_TYPES).toContain("saturdarSongs");
     expect(PROTECTED_STUDIO_TYPES as readonly string[]).not.toContain("saturdaySongs");
+    // `notificationOutbox` is the ONLY type governed by both lists at once.
+    expect([...FULLY_PROTECTED]).toEqual([
+      "sunday_role",
+      "saturday_role",
+      "special_role",
+      "featuredSongs",
+      "saturdarSongs",
+      "setlistProposal",
+      "roleTargetLock",
+      "roleCreationReceipt",
+    ]);
   });
 
-  it("denies create, update, delete, publish, unpublish and duplicate on every protected type", () => {
-    for (const type of PROTECTED_STUDIO_TYPES) {
+  it("gives every hidden internal type a pane, so none is reachable nowhere", () => {
+    // `partitionStudioTypes` calls anything not protected `editable`, and
+    // `sanity/structure.ts` builds panes only from PROTECTED_STUDIO_TYPES. A
+    // `hidden: true` type that is not protected therefore appears in NO list at
+    // all — which is exactly how `notificationOutbox` shipped governed as
+    // "prunable by hand" with no hand to prune it from. This assertion is what
+    // stops the next hidden type from repeating it.
+    for (const type of INTERNAL_STUDIO_TYPES) {
+      expect(PROTECTED_STUDIO_TYPES as readonly string[], `${type} has no inspection pane`).toContain(type);
+      expect(partitionStudioTypes([type]).inspectOnly, type).toEqual([type]);
+      expect(PROTECTED_STUDIO_TITLES[type], `${type} has no pane title`).toMatch(/solo lectura/);
+    }
+  });
+
+  it("denies create, update, delete, publish, unpublish and duplicate on every fully protected type", () => {
+    for (const type of FULLY_PROTECTED) {
       for (const capability of ["create", "update", "delete", "publish", "unpublish", "duplicate"]) {
         const decision = studioCapability(type, capability);
         expect(decision.allowed, `${type} must deny ${capability}`).toBe(false);
@@ -76,7 +111,7 @@ describe("studio protection policy", () => {
   });
 
   it("denies every mutating capability, including every Sanity v5 built-in action", () => {
-    for (const type of PROTECTED_STUDIO_TYPES) {
+    for (const type of FULLY_PROTECTED) {
       for (const capability of STUDIO_MUTATING_CAPABILITIES) {
         expect(studioCapability(type, capability).allowed, `${type}/${capability}`).toBe(false);
       }
@@ -136,6 +171,20 @@ describe("studio protection policy", () => {
     expect(studioCapability("notificationOutbox", "create").mechanism).toContain("hidden");
     expect(isDeleteOnlyStudioType("notificationOutbox")).toBe(true);
     expect(isInternalStudioType("notificationOutbox")).toBe(true);
+    // Delete is the ONLY mutation it keeps, and every read-only capability holds.
+    for (const capability of STUDIO_MUTATING_CAPABILITIES) {
+      if (capability === "delete") continue;
+      expect(studioCapability("notificationOutbox", capability).allowed, capability).toBe(false);
+    }
+    for (const capability of STUDIO_READ_ONLY_CAPABILITIES) {
+      expect(studioCapability("notificationOutbox", capability).allowed, capability).toBe(true);
+    }
+    expect(studioCapability("notificationOutbox", "someFutureAction").allowed).toBe(false);
+    // Protected too — that is what earns it the inspection pane it is pruned from.
+    expect(isProtectedStudioType("notificationOutbox")).toBe(true);
+    expect(protectedDocumentActions(SANITY_V5_BUILT_IN_ACTIONS.map((action) => ({ action })), {
+      schemaType: "notificationOutbox",
+    })).toEqual([{ action: "delete" }]);
   });
 
   it("keeps the lock state and the internal idempotency fields hidden", () => {
@@ -232,9 +281,13 @@ describe("delete-only studio policy (loginEvent)", () => {
 describe("document.actions resolver", () => {
   const ALL_ACTIONS = SANITY_V5_BUILT_IN_ACTIONS.map((action) => ({ action }));
 
-  it("strips every action for every protected type", () => {
-    for (const type of PROTECTED_STUDIO_TYPES) {
+  it("strips every action for every fully protected type", () => {
+    for (const type of FULLY_PROTECTED) {
       expect(protectedDocumentActions(ALL_ACTIONS, { schemaType: type }), type).toEqual([]);
+    }
+    // The two delete-only types keep exactly `delete` — nothing more.
+    for (const type of DELETE_ONLY_STUDIO_TYPES) {
+      expect(protectedDocumentActions(ALL_ACTIONS, { schemaType: type }), type).toEqual([{ action: "delete" }]);
     }
   });
 
@@ -335,6 +388,7 @@ describe("studio config installs the policy", () => {
       "sanity/schemas/setlistProposal.ts",
       "sanity/schemas/roleTargetLock.ts",
       "sanity/schemas/roleCreationReceipt.ts",
+      "sanity/schemas/notificationOutbox.ts",
     ];
     const tracked = new Set(gitTracked());
     for (const file of owned) {
@@ -349,7 +403,7 @@ describe("studio config installs the policy", () => {
     expect(structure).toContain("PROTECTED_STUDIO_TYPES");
   });
 
-  it("marks all eight protected schema types read-only", () => {
+  it("marks all nine protected schema types read-only", () => {
     const files: Record<string, string> = {
       sunday_role: "sanity/schemas/sunRole.ts",
       saturday_role: "sanity/schemas/satRole.ts",
@@ -359,7 +413,9 @@ describe("studio config installs the policy", () => {
       setlistProposal: "sanity/schemas/setlistProposal.ts",
       roleTargetLock: "sanity/schemas/roleTargetLock.ts",
       roleCreationReceipt: "sanity/schemas/roleCreationReceipt.ts",
+      notificationOutbox: "sanity/schemas/notificationOutbox.ts",
     };
+    expect(Object.keys(files).sort()).toEqual([...PROTECTED_STUDIO_TYPES].sort());
     for (const type of PROTECTED_STUDIO_TYPES) {
       const src = read(files[type]);
       expect(src, `${files[type]} declares ${type}`).toMatch(new RegExp(`name:\\s*['"]${type}['"]`));

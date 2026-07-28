@@ -1,6 +1,8 @@
 // app/utils/assignmentEmail.ts
 import { serverClient } from "@/sanity/lib/serverClient";
 import { sendEmail } from "./email";
+import { wantsNotification } from "./notifyPrefs";
+import { C, td, tr, shell } from "./emailShell";
 
 export type ServiceType = "sunday_role" | "saturday_role" | "special_role";
 export interface ServiceBody {
@@ -29,11 +31,12 @@ export function isEmailAllowed(email: string | undefined, allow: string[] = getA
   return allow.includes("*") || allow.includes(email);
 }
 
-// Whether a member wants assignment emails. Opt-out: unset/null/true → yes,
-// only an explicit false → no. Mirrors push.ts optedIn semantics.
-export function wantsEmail(pref: unknown): boolean {
-  return pref !== false;
-}
+// NOTE: there is no `wantsEmail` here any more. It resolved the legacy
+// `notifPrefs.email` field alone and lost its last caller when `proposalNotify`
+// moved to `wantsNotification`. `wantsNotification` (app/utils/notifyPrefs.ts) is
+// the ONE preference resolver every sender goes through; a second, weaker one
+// sitting next to it is how "nothing reads `notifPrefs` fields directly" quietly
+// stops being true.
 
 export function assigneesOf(b: ServiceBody): string[] {
   return [
@@ -79,14 +82,17 @@ export function buildAssignmentEmail(o: { name: string; roles: string[]; type: S
   const name = escapeHtml(o.name || "equipo");
   const link = `${appBaseUrl()}/me`;
   const subject = `Asignación — ${svc} ${dateFmt}`;
-  const html = `
-    <div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;color:#0b1f33">
-      <h2 style="color:#003572">Nueva asignación</h2>
-      <p>Hola ${name},</p>
-      <p>Estás asignado como <strong>${rolesText}</strong> el <strong>${svc} ${dateFmt}</strong>.</p>
-      <p><a href="${link}" style="display:inline-block;background:#003572;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px">Ver servicio →</a></p>
-      <p style="color:#6b7280;font-size:12px">Oasis Worship Team</p>
-    </div>`.trim();
+  const body =
+    tr(td(
+      `<p style="margin:0 0 4px;font:14px system-ui,sans-serif;color:${C.frost}">Hola ${name},</p>` +
+      `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.frost}">Sirves como <strong style="color:${C.beam}">${rolesText}</strong> el <strong style="color:${C.frost}">${svc} ${dateFmt}</strong>.</p>`,
+      { style: "padding:0 24px 18px" },
+    )) +
+    tr(td(
+      `<a href="${link}" style="display:inline-block;background:${C.beam};color:${C.blackout};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Ver servicio →</a>`,
+      { style: "padding:0 24px 20px" },
+    ));
+  const html = shell(body, link);
   return { subject, html };
 }
 
@@ -102,21 +108,32 @@ export function buildBatchAssignmentEmail(o: { name: string; items: { type: Serv
   const link = `${appBaseUrl()}/me`;
   const n = o.items.length;
   const subject = `Nuevas asignaciones — ${n} servicios`;
+  const headCell = (text: string) => td(
+    `<span style="font:700 10px system-ui,sans-serif;text-transform:uppercase;letter-spacing:.08em;color:${C.steel}">${text}</span>`,
+    { bg: C.deck, style: `padding:8px 8px;border-bottom:1px solid ${C.blackout}` },
+  );
   const rows = o.items.map((it) => {
     const svc = SERVICE_LABEL[it.type];
     const dateFmt = new Date(it.date + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" });
     const rolesText = escapeHtml(it.roles.length ? it.roles.join(", ") : "el equipo");
-    return `<li style="margin-bottom:6px"><strong>${svc} ${dateFmt}</strong> — ${rolesText}</li>`;
+    return tr(
+      td(`<span style="color:${C.frost};font:13px system-ui,sans-serif">${svc} ${dateFmt}</span>`, { style: "padding:8px 8px" }) +
+      td(`<strong style="color:${C.beam};font:13px system-ui,sans-serif">${rolesText}</strong>`, { style: "padding:8px 8px" }),
+    );
   }).join("");
-  const html = `
-    <div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;color:#0b1f33">
-      <h2 style="color:#003572">Nuevas asignaciones</h2>
-      <p>Hola ${name},</p>
-      <p>Tienes <strong>${n}</strong> nuevas asignaciones:</p>
-      <ul style="padding-left:18px">${rows}</ul>
-      <p><a href="${link}" style="display:inline-block;background:#003572;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px">Ver mis servicios →</a></p>
-      <p style="color:#6b7280;font-size:12px">Oasis Worship Team</p>
-    </div>`.trim();
+  const table = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.deck}" style="background:${C.deck};border-collapse:collapse">${tr(headCell("Fecha") + headCell("Tu rol"))}${rows}</table>`;
+  const body =
+    tr(td(
+      `<p style="margin:0 0 4px;font:14px system-ui,sans-serif;color:${C.frost}">Hola ${name},</p>` +
+      `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.frost}">Tienes <strong style="color:${C.beam}">${n}</strong> nuevas asignaciones:</p>`,
+      { style: "padding:0 24px 12px" },
+    )) +
+    tr(td(table, { style: "padding:0 24px 20px" })) +
+    tr(td(
+      `<a href="${link}" style="display:inline-block;background:${C.beam};color:${C.blackout};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Ver mis servicios →</a>`,
+      { style: "padding:0 24px 20px" },
+    ));
+  const html = shell(body, link);
   return { subject, html };
 }
 
@@ -140,14 +157,14 @@ export async function sendAssignmentEmailsBatch(
     const ids = [...byMember.keys()];
     if (!ids.length) return;
     const allow = getAllowlist();
-    const members = await serverClient.fetch<{ _id: string; member_name?: string; alias?: string; email?: string; emailPref?: boolean | null }[]>(
-      `*[_type == "teamMembers" && _id in $ids]{ _id, member_name, alias, email, "emailPref": notifPrefs.email }`,
+    const members = await serverClient.fetch<{ _id: string; member_name?: string; alias?: string; email?: string; notifPrefs?: unknown }[]>(
+      `*[_type == "teamMembers" && _id in $ids]{ _id, member_name, alias, email, notifPrefs }`,
       { ids },
     );
     const redirectTo = process.env.EMAIL_REDIRECT_TO?.trim();
     for (const m of members) {
       const email = m.email?.trim().toLowerCase();
-      if (!email || !isEmailAllowed(email, allow) || !wantsEmail(m.emailPref)) continue;
+      if (!email || !isEmailAllowed(email, allow) || !wantsNotification(m.notifPrefs, "assigned")) continue;
       const items = (byMember.get(m._id) ?? []).slice().sort((a, b) => a.date.localeCompare(b.date));
       if (!items.length) continue;
       const { subject, html } = buildBatchAssignmentEmail({ name: m.alias || m.member_name || "", items });
@@ -161,6 +178,14 @@ export async function sendAssignmentEmailsBatch(
   }
 }
 
+/**
+ * Single-service send. NO PRODUCTION CALLER since the notification outbox
+ * absorbed the immediate assignment email (spec §7): `notifyRoleAssignments`
+ * lost this leg, and publishing uses the batched path above. It is kept as the
+ * single-service transport the A3 delivery-firewall contract tests exercise
+ * (`deliveryFirewallTransports.test.ts`), and as the shape a future
+ * single-service send would reuse rather than reinvent.
+ */
 export async function sendAssignmentEmails(
   memberIds: string[],
   service: { type: ServiceType; date: string; body: ServiceBody },
@@ -169,8 +194,8 @@ export async function sendAssignmentEmails(
     const ids = [...new Set(memberIds)].filter(Boolean);
     if (!ids.length) return;
     const allow = getAllowlist();
-    const members = await serverClient.fetch<{ _id: string; member_name?: string; alias?: string; email?: string; emailPref?: boolean | null }[]>(
-      `*[_type == "teamMembers" && _id in $ids]{ _id, member_name, alias, email, "emailPref": notifPrefs.email }`,
+    const members = await serverClient.fetch<{ _id: string; member_name?: string; alias?: string; email?: string; notifPrefs?: unknown }[]>(
+      `*[_type == "teamMembers" && _id in $ids]{ _id, member_name, alias, email, notifPrefs }`,
       { ids },
     );
     // Optional test override: when set, deliver every email to this address
@@ -181,7 +206,7 @@ export async function sendAssignmentEmails(
     const redirectTo = process.env.EMAIL_REDIRECT_TO?.trim();
     for (const m of members) {
       const email = m.email?.trim().toLowerCase();
-      if (!email || !isEmailAllowed(email, allow) || !wantsEmail(m.emailPref)) continue;
+      if (!email || !isEmailAllowed(email, allow) || !wantsNotification(m.notifPrefs, "assigned")) continue;
       const roles = rolesForMember(m._id, service.body);
       const { subject, html } = buildAssignmentEmail({ name: m.alias || m.member_name || "", roles, type: service.type, date: service.date });
       const to = redirectTo || email;

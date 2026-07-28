@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+
+// The post-commit `after()` fan-out queues the debounced setlist notice and (from
+// Task 11) hosts a sweep; give it room to finish past the response.
+export const maxDuration = 60;
+
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { operationalClient, rawIntegrityClient } from "@/sanity/lib/operationalClient";
 import {
   notifySetlistSaved,
+  queueSetlistNotice,
   revalidateSetlistSave,
+  serviceParticipants,
 } from "@/app/utils/serviceMutationSideEffects";
 import { isValidServiceDate } from "@/app/utils/serviceReadModel";
 import { pickUnique } from "@/app/utils/serviceReadSelect";
@@ -271,6 +278,17 @@ async function putHandler(req: NextRequest) {
   let targetId: string | null = null;
   let lock: StoredLock | null = null;
   let bootstrapped = false;
+  /**
+   * The outbox `setlist` subject: the SERVICE ROLE that owns this target, its
+   * participants, and the songs stored BEFORE this save — all captured PRE-COMMIT
+   * from documents this handler has already loaded (§2). Read back inside the
+   * post-commit `after()` block they would be the POST-write state, so every
+   * notice would compare the new setlist against itself and say nothing.
+   * Null when no role owns the target: there are no participants to notify and no
+   * id to key the subject on (§4).
+   */
+  let subject: { roleId: string; roleType: "sunday_role" | "saturday_role" | "special_role";
+    published: unknown; beforeSongs: unknown; knownRecipients: string[] } | null = null;
 
   if (request.setlistType) {
     const target = await loadWeekendSetlistTarget(request.setlistType, week);
@@ -282,10 +300,8 @@ async function putHandler(req: NextRequest) {
       targetId = server.id;
       targetRev = server.rev;
     }
-    const coordination = await loadWeekendCoordination({
-      roleType: request.setlistType === "featuredSongs" ? "sunday_role" : "saturday_role",
-      week,
-    });
+    const roleType = request.setlistType === "featuredSongs" ? "sunday_role" : "saturday_role";
+    const coordination = await loadWeekendCoordination({ roleType, week });
     if (!coordination.ok) {
       return reject(
         serviceError(coordination.failure.code, { details: coordination.failure.details }),
@@ -293,6 +309,17 @@ async function putHandler(req: NextRequest) {
     }
     lock = coordination.coordination.lock;
     bootstrapped = coordination.coordination.bootstrapped;
+    const owner = coordination.coordination.role;
+    if (owner) {
+      subject = {
+        roleId: owner._id,
+        roleType,
+        published: owner.published,
+        // `target.record` is nullable — no setlist document yet is `[]`.
+        beforeSongs: target.target.record?.songs ?? [],
+        knownRecipients: serviceParticipants(owner),
+      };
+    }
   } else {
     const target = await loadSpecialSetlistTarget(request.roleId as string, week);
     if (!target.ok) {
@@ -303,6 +330,13 @@ async function putHandler(req: NextRequest) {
     // save whether or not it already stores a `songs` field.
     targetId = target.target.role._id;
     targetRev = target.target.role._rev;
+    subject = {
+      roleId: target.target.role._id,
+      roleType: "special_role",
+      published: target.target.role.published,
+      beforeSongs: target.target.role.songs ?? [],
+      knownRecipients: serviceParticipants(target.target.role),
+    };
   }
 
   // ── The observed state must still be exactly current ──────────────────────
@@ -365,6 +399,20 @@ async function putHandler(req: NextRequest) {
   // a failed notification never fails the save.
   revalidateSetlistSave();
   await notifySetlistSaved(week);
+  // The DEBOUNCED email (§2): one `setlist` notice for this service, keyed on the
+  // owning role so this writer and the approve path share one subject — two keys
+  // would mean two outbox documents and two emails for one change.
+  if (subject) {
+    queueSetlistNotice({
+      roleId: subject.roleId,
+      roleType: subject.roleType,
+      serviceDate: week,
+      published: subject.published,
+      beforeSongs: subject.beforeSongs,
+      hasSongs: songs.length > 0,
+      knownRecipients: subject.knownRecipients,
+    });
+  }
 
   return NextResponse.json({ ok: true, setlistId: createdId ?? targetId, created: !!createdId });
 }
