@@ -456,6 +456,14 @@ function opportunisticSweepOptions(): { emailLimit: number; sendBudgetMs: number
  * What layer 2 cannot do is flush the subject the admin is editing right now —
  * an in-flight burst keeps sliding `notifyAfter` forward — which is why §3 calls
  * layer 1 load-bearing rather than one of three redundant paths.
+ *
+ * Nor does layer 2 fire on every protected write. It hangs off the outbox
+ * upsert, so a write that queues nothing never reaches it: a draft edit, a
+ * no-op save — and also PROPOSAL SUBMIT and PROPOSAL REVIEW, which §3's text
+ * names as protected writes but which send immediately via
+ * `notifyProposalSubmitted`/`notifyProposalReview` and queue no outbox document
+ * at all. Immaterial in practice, since layer 1 sweeps five minutes later; noted
+ * so the next reader does not read this as complete coverage.
  */
 async function commitUpserts(label: string, upserts: BuiltUpsert[]): Promise<void> {
   await attempt(label, () => {

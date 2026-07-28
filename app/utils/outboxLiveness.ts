@@ -64,23 +64,34 @@ export const STALE_OUTBOX_QUERY = `{
   "oldest": *[_type == "notificationOutbox" && status in ["pending","sending"]] | order(firstQueuedAt asc)[0].firstQueuedAt
 }`;
 
-/** The alarm's audience. Admins are not paged for a broken pipeline; owners are. */
-const SUPER_ADMIN_QUERY = `*[_type == "teamMembers" && role == "super-admin"]{ _id, email, alias, member_name }`;
+/**
+ * The alarm's audience. Admins are not paged for a broken pipeline; owners are.
+ *
+ * DISABLED super-admins are deliberately NOT excluded. A disabled member cannot
+ * sign in, so the argument for dropping them is real — but the failure this
+ * alarm now names out loud is reaching NOBODY, and every narrowing of the
+ * audience makes that more likely. A revoked owner's mailbox still works and
+ * they can still tell someone the mail has stopped, which is the entire ask.
+ * Nothing here is sensitive: a count and an age.
+ */
+const SUPER_ADMIN_QUERY = `*[_type == "teamMembers" && role == "super-admin"]{ _id, email }`;
 
 export interface OutboxLiveness {
-  /** Notices in `pending` or `sending`, after this run's sweep. */
+  /** Notices in `pending` or `sending`, measured BEFORE this run's sweep. */
   count: number;
   /** Age of the oldest, in hours; `0` when the outbox is empty. */
   oldestHours: number;
-  /** Did it cross `NOTIFY_STALE_ALERT_HOURS` and page somebody? */
+  /**
+   * Did it cross `NOTIFY_STALE_ALERT_HOURS` and actually reach a person? False
+   * when the threshold was crossed but no super-admin could be mailed — the
+   * email IS the mitigation, so "logged it and reached nobody" is not an alert.
+   */
   alerted: boolean;
 }
 
 interface SuperAdmin {
   _id: string;
   email?: string;
-  alias?: string;
-  member_name?: string;
 }
 
 const round1 = (n: number): number => Math.round(n * 10) / 10;
@@ -117,37 +128,77 @@ function buildStaleEmail(o: { count: number; oldestHours: number }): { subject: 
   return { subject, html: shell(body, link) };
 }
 
-async function emailSuperAdmins(o: { count: number; oldestHours: number }): Promise<void> {
+/**
+ * Mail every reachable super-admin. Answers whether the alarm ACTUALLY landed in
+ * a mailbox.
+ *
+ * Three ways it can reach nobody, and none of them used to say so: there is no
+ * super-admin at all; every super-admin doc is missing an email; or a narrowed
+ * `EMAIL_ALLOWLIST` — a supported configuration — excludes all of them. A fourth
+ * counts too: the sends were attempted and every one failed. This repo has no
+ * log drain and Hobby has no alerting, so the email is not one channel among
+ * several, it is the whole mitigation; "logged and delivered to nobody" while
+ * reporting success is the worst outcome available, so each case gets its own
+ * `notify_outbox_stale_unreachable` reason and a `false` answer.
+ */
+async function emailSuperAdmins(o: { count: number; oldestHours: number }): Promise<boolean> {
+  const unreachable = (reason: string, extra: Record<string, unknown> = {}) => {
+    console.error(JSON.stringify({ event: "notify_outbox_stale_unreachable", reason, ...extra }));
+    return false;
+  };
+
   const admins = (await operationalClient.fetch<SuperAdmin[] | null>(SUPER_ADMIN_QUERY, {})) ?? [];
-  if (!admins.length) {
-    console.error(JSON.stringify({ event: "notify_outbox_stale_unreachable", reason: "no_super_admin" }));
-    return;
-  }
+  if (!admins.length) return unreachable("no_super_admin");
+
   const allow = getAllowlist();
   const redirectTo = process.env.EMAIL_REDIRECT_TO?.trim();
   const { subject, html } = buildStaleEmail(o);
+  let noEmail = 0;
+  let notAllowlisted = 0;
+  let attempted = 0;
+  let delivered = 0;
   for (const admin of admins) {
     const email = admin.email?.trim().toLowerCase();
-    if (!email || !isEmailAllowed(email, allow)) continue;
+    if (!email) {
+      noEmail++;
+      continue;
+    }
+    if (!isEmailAllowed(email, allow)) {
+      notAllowlisted++;
+      continue;
+    }
+    attempted++;
     const res = await sendEmail({
       to: redirectTo || email,
       subject: redirectTo ? `[→ ${email}] ${subject}` : subject,
       html,
     });
-    if (!res.ok) {
-      console.error(
-        JSON.stringify({ event: "notify_outbox_stale_email_failed", memberId: admin._id, error: res.error }),
-      );
+    if (res.ok) {
+      delivered++;
+      continue;
     }
+    console.error(
+      JSON.stringify({ event: "notify_outbox_stale_email_failed", memberId: admin._id, error: res.error }),
+    );
   }
+  if (delivered) return true;
+  const reason = attempted ? "all_sends_failed" : notAllowlisted ? "not_allowlisted" : "no_email_address";
+  return unreachable(reason, { superAdmins: admins.length, attempted, noEmail, notAllowlisted });
 }
 
 /**
  * Measure the outbox and, past the threshold, say so loudly and to a person.
  *
- * Call it AFTER the sweep in the same request: what the sweep just consumed is
- * not a backlog, and measuring first would alarm on notices that are already
- * gone by the time the email lands.
+ * Call it BEFORE the sweep in the same request. Measuring after looks tidier —
+ * "report what is genuinely stuck" — and it is exactly wrong: the failure this
+ * alarm exists to catch is layer 1 being dead, and in that state the day's
+ * backlog is precisely what the daily cron's own sweep is about to claim, send
+ * and DELETE. Measured afterwards it reads zero, the alarm returns idle, and a
+ * pipeline delivering up to 24 h late is silent forever.
+ *
+ * Measuring first has no false-positive cost to trade against that: with layer 1
+ * healthy the hard ceiling on a notice's age is one hour
+ * (`NOTIFY_MAX_WINDOW_MINUTES`), so nothing legitimate is ever six hours old.
  *
  * The age is a difference of INSTANTS (`firstQueuedAt` is a full ISO datetime),
  * never calendar arithmetic — the local-noon rule in this repo governs
@@ -182,8 +233,11 @@ export async function reportOutboxLiveness(now: Date = new Date()): Promise<Outb
         oldest,
       }),
     );
-    await emailSuperAdmins({ count, oldestHours });
-    return { count, oldestHours, alerted: true };
+    // `alerted` follows the MAILBOX, not the attempt: §11 designates this email
+    // as the mitigation for layer 1's single point of failure, so a run that
+    // reached nobody has not alerted, however loudly it logged.
+    const reached = await emailSuperAdmins({ count, oldestHours });
+    return { count, oldestHours, alerted: reached };
   } catch (err) {
     console.error(JSON.stringify({ event: "notify_outbox_liveness_failed" }), err);
     return idle;
