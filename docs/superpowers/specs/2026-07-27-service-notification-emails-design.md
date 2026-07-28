@@ -724,9 +724,11 @@ renders with its ref omitted rather than blank-titled, and never fails the email
   a notice whose live service date no longer matches its snapshot is **dropped** —
   the subject moved out from under it.
 - A date move alone classifies as `equal → equal` for every member, so **moving a
-  published service notifies nobody**. That matches today's behaviour and is not
-  a regression, but every subject line carries a date, so it is recorded here as
-  an explicit non-goal rather than left as an artifact for someone to rediscover.
+  published service notifies nobody**. Raised with the user, since every subject
+  line carries a date and this looked like a gap. The answer: moving an entire
+  service — the whole team and its setlist — to a different day does not happen
+  in practice, so the case is not worth a fourth notice kind. Recorded as a
+  deliberate non-goal with that reasoning, not as an artifact.
 
 ---
 
