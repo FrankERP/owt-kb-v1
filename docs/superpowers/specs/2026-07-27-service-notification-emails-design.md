@@ -1,9 +1,7 @@
 # Service notification emails — design
 
 **Date:** 2026-07-27
-**Status:** approved (design), not implemented. One product question is open
-(unpublish notification, below); it has a stated default, so it does not block
-implementation.
+**Status:** approved (design), not implemented
 
 ## Problem
 
@@ -30,15 +28,18 @@ So all three share one mechanism: a **debounced outbox**. A change queues a
 notice; the notice sends once its subject has been quiet for 15 minutes; a
 recipient with several pending notices gets one grouped email.
 
-## Open question for the user
+## A product decision worth recording
 
-**Should unpublishing a service notify its participants?** From a member's side,
-a service disappearing from their schedule is indistinguishable from being
-removed from it — and *"eliminado de un servicio"* is in the requirement
-verbatim. This spec keeps unpublish silent, consistent with today's behaviour,
-but that is a product call rather than a technical one. If it should notify, the
-change is small: the unpublish path queues a `role` notice per assignee and §1's
-"drop when `published == false`" rule becomes "classify as *Ya no participas*".
+**Unpublishing a service does not notify its participants.** From a member's
+side, a service disappearing from their schedule looks identical to being removed
+from it, and *"eliminado de un servicio"* is in the requirement verbatim — so
+this was raised as a real question rather than assumed. The user's call is to
+keep it silent, consistent with today's behaviour.
+
+The reasoning that supports it: unpublishing is overwhelmingly *"that was wrong,
+let me fix it and republish"*, not *"you are off this service"*. Notifying would
+mail the team about an admin's correction. Removal from a service is expressed by
+removing the seat, which does notify (§1).
 
 ## Non-goals
 
