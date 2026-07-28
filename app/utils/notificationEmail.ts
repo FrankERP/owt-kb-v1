@@ -34,7 +34,7 @@ function headerLine(kind: LineKind, serviceDate: string): string {
 }
 
 function chip(text: string, bg: string, fg: string): string {
-  return `<span style="display:inline-block;background:${bg} !important;color:${fg};font:700 10px system-ui,sans-serif;text-transform:uppercase;letter-spacing:.04em;padding:2px 6px;border-radius:3px">${text}</span>`;
+  return `<span style="display:inline-block;background:${bg};color:${fg};font:700 10px system-ui,sans-serif;text-transform:uppercase;letter-spacing:.04em;padding:2px 6px;border-radius:3px">${text}</span>`;
 }
 
 // ---- setlist standings table (spec §6: one table, never a per-song diff) ----
@@ -120,7 +120,7 @@ export function renderSetlistTable(rows: TableRow[], titles: Map<string, string>
   const legend = showMovement
     ? tr(td(`<span style="color:${C.steel};font:11px system-ui,sans-serif">▲ suena antes en el servicio</span>`, { colspan: cols, style: "padding:8px 8px 2px" }))
     : "";
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.deck}" style="background:${C.deck} !important;border-collapse:collapse">${headRow(showMovement)}${body}${legend}</table>`;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.deck}" style="background:${C.deck};border-collapse:collapse">${headRow(showMovement)}${body}${legend}</table>`;
 }
 
 // ---- per-line sections ----
@@ -151,7 +151,7 @@ function roleChangedSection(before: string[], after: string[]): string {
     { bg: C.deck, style: "padding:10px 16px 4px" },
   );
   const value = (html: string) => td(html, { bg: C.deck, style: "padding:0 16px 12px;font:14px system-ui,sans-serif" });
-  const panel = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.deck}" style="background:${C.deck} !important;border-collapse:collapse">` +
+  const panel = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.deck}" style="background:${C.deck};border-collapse:collapse">` +
     tr(heading("Antes") + heading("Ahora")) +
     tr(value(`<s style="color:${C.steel}">${b}</s>`) + value(`<strong style="color:${C.beam}">${a}</strong>`)) +
     `</table>`;
