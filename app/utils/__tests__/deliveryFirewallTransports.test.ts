@@ -654,7 +654,9 @@ describe("an absent delivery mode delivers unchanged", () => {
   });
 
   it("still respects a per-member email opt-out", async () => {
-    serverFetch.mockResolvedValue([{ ...MEMBER_EMAIL_ROW, emailPref: false }]);
+    // The GROQ projection now returns `notifPrefs` (not a flattened
+    // `emailPref` alias) — see assignmentEmail.ts Task 7 restyle.
+    serverFetch.mockResolvedValue([{ ...MEMBER_EMAIL_ROW, notifPrefs: { email: false } }]);
     await sendAssignmentEmails(["m1"], { ...SERVICE, body: BODY });
     expect(sendMail).not.toHaveBeenCalled();
   });

@@ -1,6 +1,7 @@
 // app/utils/assignmentEmail.ts
 import { serverClient } from "@/sanity/lib/serverClient";
 import { sendEmail } from "./email";
+import { wantsNotification } from "./notifyPrefs";
 
 export type ServiceType = "sunday_role" | "saturday_role" | "special_role";
 export interface ServiceBody {
@@ -12,6 +13,51 @@ export interface ServiceBody {
 const SERVICE_LABEL: Record<ServiceType, string> = {
   sunday_role: "Domingo", saturday_role: "Sábado", special_role: "Servicio especial",
 };
+
+// Same dark shell as notificationEmail.ts (spec §6 restyle). Duplicated here
+// rather than imported: notificationEmail.ts already imports escapeHtml and
+// appBaseUrl FROM this file, so importing back the other way would cycle.
+const C = {
+  blackout: "#010B17",
+  console: "#071624",
+  deck: "#0D2234",
+  beam: "#12C8F4",
+  frost: "#D7E7F6",
+  steel: "#7F94A8",
+} as const;
+
+function td(inner: string, opts: { bg?: string; style?: string; align?: string } = {}): string {
+  const bg = opts.bg ?? C.console;
+  const align = opts.align ? ` align="${opts.align}"` : "";
+  return `<td bgcolor="${bg}"${align} style="background:${bg};${opts.style ?? ""}">${inner}</td>`;
+}
+
+function tr(inner: string): string {
+  return `<tr>${inner}</tr>`;
+}
+
+function shell(bodyRows: string): string {
+  const link = `${appBaseUrl()}/me`;
+  const eyebrow = tr(td(
+    `<span style="font:700 11px system-ui,sans-serif;letter-spacing:.24em;color:${C.beam}">OASIS WORSHIP TEAM</span>`,
+    { style: "padding:24px 24px 4px" },
+  ));
+  const footer = tr(td(
+    `<p style="margin:0 0 6px;font:12px system-ui,sans-serif;color:${C.steel}">Recibes esto porque sirves en el equipo de alabanza de Oasis.</p>` +
+    `<a href="${link}" style="font:12px system-ui,sans-serif;color:${C.beam};text-decoration:none">Ajustar mis avisos →</a>`,
+    { style: `padding:16px 24px 24px;border-top:1px solid ${C.deck}` },
+  ));
+  return (
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.blackout}" style="background:${C.blackout};margin:0;padding:0">` +
+    tr(td(
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.console}" style="max-width:600px;background:${C.console};border-collapse:collapse">` +
+      eyebrow + bodyRows + footer +
+      `</table>`,
+      { align: "center", style: "padding:24px 12px" },
+    )) +
+    `</table>`
+  );
+}
 
 export function getAllowlist(): string[] {
   // Default is the whole team ("*"): the Resend test-mode era that needed a
@@ -79,14 +125,17 @@ export function buildAssignmentEmail(o: { name: string; roles: string[]; type: S
   const name = escapeHtml(o.name || "equipo");
   const link = `${appBaseUrl()}/me`;
   const subject = `Asignación — ${svc} ${dateFmt}`;
-  const html = `
-    <div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;color:#0b1f33">
-      <h2 style="color:#003572">Nueva asignación</h2>
-      <p>Hola ${name},</p>
-      <p>Estás asignado como <strong>${rolesText}</strong> el <strong>${svc} ${dateFmt}</strong>.</p>
-      <p><a href="${link}" style="display:inline-block;background:#003572;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px">Ver servicio →</a></p>
-      <p style="color:#6b7280;font-size:12px">Oasis Worship Team</p>
-    </div>`.trim();
+  const body =
+    tr(td(
+      `<p style="margin:0 0 4px;font:14px system-ui,sans-serif;color:${C.frost}">Hola ${name},</p>` +
+      `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.frost}">Sirves como <strong style="color:${C.beam}">${rolesText}</strong> el <strong style="color:${C.frost}">${svc} ${dateFmt}</strong>.</p>`,
+      { style: "padding:0 24px 18px" },
+    )) +
+    tr(td(
+      `<a href="${link}" style="display:inline-block;background:${C.beam};color:${C.blackout};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Ver servicio →</a>`,
+      { style: "padding:0 24px 20px" },
+    ));
+  const html = shell(body);
   return { subject, html };
 }
 
@@ -102,21 +151,32 @@ export function buildBatchAssignmentEmail(o: { name: string; items: { type: Serv
   const link = `${appBaseUrl()}/me`;
   const n = o.items.length;
   const subject = `Nuevas asignaciones — ${n} servicios`;
+  const headCell = (text: string) => td(
+    `<span style="font:700 10px system-ui,sans-serif;text-transform:uppercase;letter-spacing:.08em;color:${C.steel}">${text}</span>`,
+    { bg: C.deck, style: `padding:8px 8px;border-bottom:1px solid ${C.blackout}` },
+  );
   const rows = o.items.map((it) => {
     const svc = SERVICE_LABEL[it.type];
     const dateFmt = new Date(it.date + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" });
     const rolesText = escapeHtml(it.roles.length ? it.roles.join(", ") : "el equipo");
-    return `<li style="margin-bottom:6px"><strong>${svc} ${dateFmt}</strong> — ${rolesText}</li>`;
+    return tr(
+      td(`<span style="color:${C.frost};font:13px system-ui,sans-serif">${svc} ${dateFmt}</span>`, { style: "padding:8px 8px" }) +
+      td(`<strong style="color:${C.beam};font:13px system-ui,sans-serif">${rolesText}</strong>`, { style: "padding:8px 8px" }),
+    );
   }).join("");
-  const html = `
-    <div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;color:#0b1f33">
-      <h2 style="color:#003572">Nuevas asignaciones</h2>
-      <p>Hola ${name},</p>
-      <p>Tienes <strong>${n}</strong> nuevas asignaciones:</p>
-      <ul style="padding-left:18px">${rows}</ul>
-      <p><a href="${link}" style="display:inline-block;background:#003572;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px">Ver mis servicios →</a></p>
-      <p style="color:#6b7280;font-size:12px">Oasis Worship Team</p>
-    </div>`.trim();
+  const table = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.deck}" style="background:${C.deck};border-collapse:collapse">${tr(headCell("Fecha") + headCell("Tu rol"))}${rows}</table>`;
+  const body =
+    tr(td(
+      `<p style="margin:0 0 4px;font:14px system-ui,sans-serif;color:${C.frost}">Hola ${name},</p>` +
+      `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.frost}">Tienes <strong style="color:${C.beam}">${n}</strong> nuevas asignaciones:</p>`,
+      { style: "padding:0 24px 12px" },
+    )) +
+    tr(td(table, { style: "padding:0 24px 20px" })) +
+    tr(td(
+      `<a href="${link}" style="display:inline-block;background:${C.beam};color:${C.blackout};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Ver mis servicios →</a>`,
+      { style: "padding:0 24px 20px" },
+    ));
+  const html = shell(body);
   return { subject, html };
 }
 
@@ -140,14 +200,14 @@ export async function sendAssignmentEmailsBatch(
     const ids = [...byMember.keys()];
     if (!ids.length) return;
     const allow = getAllowlist();
-    const members = await serverClient.fetch<{ _id: string; member_name?: string; alias?: string; email?: string; emailPref?: boolean | null }[]>(
-      `*[_type == "teamMembers" && _id in $ids]{ _id, member_name, alias, email, "emailPref": notifPrefs.email }`,
+    const members = await serverClient.fetch<{ _id: string; member_name?: string; alias?: string; email?: string; notifPrefs?: unknown }[]>(
+      `*[_type == "teamMembers" && _id in $ids]{ _id, member_name, alias, email, notifPrefs }`,
       { ids },
     );
     const redirectTo = process.env.EMAIL_REDIRECT_TO?.trim();
     for (const m of members) {
       const email = m.email?.trim().toLowerCase();
-      if (!email || !isEmailAllowed(email, allow) || !wantsEmail(m.emailPref)) continue;
+      if (!email || !isEmailAllowed(email, allow) || !wantsNotification(m.notifPrefs, "assigned")) continue;
       const items = (byMember.get(m._id) ?? []).slice().sort((a, b) => a.date.localeCompare(b.date));
       if (!items.length) continue;
       const { subject, html } = buildBatchAssignmentEmail({ name: m.alias || m.member_name || "", items });
@@ -169,8 +229,8 @@ export async function sendAssignmentEmails(
     const ids = [...new Set(memberIds)].filter(Boolean);
     if (!ids.length) return;
     const allow = getAllowlist();
-    const members = await serverClient.fetch<{ _id: string; member_name?: string; alias?: string; email?: string; emailPref?: boolean | null }[]>(
-      `*[_type == "teamMembers" && _id in $ids]{ _id, member_name, alias, email, "emailPref": notifPrefs.email }`,
+    const members = await serverClient.fetch<{ _id: string; member_name?: string; alias?: string; email?: string; notifPrefs?: unknown }[]>(
+      `*[_type == "teamMembers" && _id in $ids]{ _id, member_name, alias, email, notifPrefs }`,
       { ids },
     );
     // Optional test override: when set, deliver every email to this address
@@ -181,7 +241,7 @@ export async function sendAssignmentEmails(
     const redirectTo = process.env.EMAIL_REDIRECT_TO?.trim();
     for (const m of members) {
       const email = m.email?.trim().toLowerCase();
-      if (!email || !isEmailAllowed(email, allow) || !wantsEmail(m.emailPref)) continue;
+      if (!email || !isEmailAllowed(email, allow) || !wantsNotification(m.notifPrefs, "assigned")) continue;
       const roles = rolesForMember(m._id, service.body);
       const { subject, html } = buildAssignmentEmail({ name: m.alias || m.member_name || "", roles, type: service.type, date: service.date });
       const to = redirectTo || email;

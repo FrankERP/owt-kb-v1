@@ -108,8 +108,8 @@ describe("sendAssignmentEmails gating", () => {
     expect(html).toContain("Líder, Guitarra");
   });
 
-  it("skips a member who opted out of email (emailPref false)", async () => {
-    fetchMock.mockResolvedValue([{ _id: "m1", member_name: "Frank", email: "frank@x.com", emailPref: false }]);
+  it("skips a member who opted out of email (notifPrefs.email false)", async () => {
+    fetchMock.mockResolvedValue([{ _id: "m1", member_name: "Frank", email: "frank@x.com", notifPrefs: { email: false } }]);
     await sendAssignmentEmails(["m1"], { type: "sunday_role", date: "2026-07-05", body });
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
@@ -164,7 +164,7 @@ describe("sendAssignmentEmailsBatch", () => {
   it("skips an opted-out member even when EMAIL_ALLOWLIST is '*'", async () => {
     process.env.EMAIL_ALLOWLIST = "*";
     fetchMock.mockResolvedValue([
-      { _id: "m1", member_name: "Frank", email: "frank@x.com", emailPref: false },
+      { _id: "m1", member_name: "Frank", email: "frank@x.com", notifPrefs: { email: false } },
       { _id: "m2", member_name: "Gaby", email: "gaby@y.com" }, // unset → receives
     ]);
     sendEmailMock.mockResolvedValue({ ok: true });
