@@ -2,7 +2,7 @@
 import { serverClient } from "@/sanity/lib/serverClient";
 import { sendEmail } from "./email";
 import { wantsNotification } from "./notifyPrefs";
-import { C, td, tr, shell, solidBackgroundGif } from "./emailShell";
+import { C, td, tr, shell } from "./emailShell";
 
 export type ServiceType = "sunday_role" | "saturday_role" | "special_role";
 export interface ServiceBody {
@@ -121,7 +121,7 @@ export function buildBatchAssignmentEmail(o: { name: string; items: { type: Serv
       td(`<strong style="color:${C.beam};font:13px system-ui,sans-serif">${rolesText}</strong>`, { style: "padding:8px 8px" }),
     );
   }).join("");
-  const table = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.deck}" background="${solidBackgroundGif(C.deck)}" style="background:${C.deck};border-collapse:collapse">${tr(headCell("Fecha") + headCell("Tu rol"))}${rows}</table>`;
+  const table = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.deck}" style="background:${C.deck};border-collapse:collapse">${tr(headCell("Fecha") + headCell("Tu rol"))}${rows}</table>`;
   const body =
     tr(td(
       `<p style="margin:0 0 4px;font:14px system-ui,sans-serif;color:${C.frost}">Hola ${name},</p>` +
