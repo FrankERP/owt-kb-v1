@@ -45,7 +45,8 @@ removing the seat, which does notify (§1).
 
 - Push (FCM) behaviour is unchanged everywhere. This spec is about email.
 - The `false -> true` publish email is unchanged (see §7).
-- No exactly-once delivery guarantee. The existing best-effort posture holds.
+- No delivery guarantee and no retry. The existing best-effort posture holds,
+  and duplicates are possible on two enumerated paths (§1).
 
 ## Decisions taken during design
 
@@ -74,10 +75,13 @@ the thing being debounced — holding a pending notice.
 
 ```ts
 {
-  _id: `outbox.${kind}.${subjectKey}`,  // deterministic → upsert without a query
+  _id: digestId(kind, subjectKey),  // deterministic + length-bounded; see §8
   _type: "notificationOutbox",
   kind: "role" | "setlist" | "leadNotes",
   subjectKey: string,
+  memberId: string | null,  // `role` only — stored, never re-parsed from subjectKey
+  roleId: string | null,    // `role` and `setlist`
+  proposalId: string | null, // `leadNotes`
 
   // Identity, snapshotted at queue time as a FALLBACK for when the subject
   // document is gone at flush (a deleted role still owes its assignees a
@@ -93,6 +97,10 @@ the thing being debounced — holding a pending notice.
   deadline: string,        // ISO instant, fixed at creation, NEVER rewritten
   status: "pending" | "sending",
   claimedAt: string | null,
+
+  // Recipients known at queue time. A recipient absent from this set is new to
+  // the subject and is introduced ("Setlist listo") rather than sent a diff.
+  knownRecipients: string[],
 }
 ```
 
@@ -143,8 +151,17 @@ writer already loads before it patches. No new read.
 
 ### Upsert, on every committed write
 
-Inside the existing post-commit `after()` block, as its **own** transaction on
-`writeClient` — never the business transaction (§2):
+In a post-commit `after()` block, as its **own** transaction on `writeClient` —
+never the business transaction (§2).
+
+**Three of the writers have no `after()` block today** and must introduce one:
+`app/api/admin/setlists/route.ts` (which awaits `notifySetlistSaved(week)` inline
+at line 367), `app/api/me/proposals/route.ts`, and
+`app/api/admin/proposals/[id]/route.ts`. The `DELETE` handler in
+`app/api/admin/roles/[id]/route.ts` likewise has none — its current comment says
+"A removal is silent by §7", which this design makes false. Without the block the
+upsert and the layer-2 sweep run *inside* the admin's request instead of after
+the response.
 
 ```
 writeClient.transaction()
@@ -208,9 +225,20 @@ Two cases resolve outside the table:
 - **The role is now `published == false`.** The notice is **dropped**. An
   unpublish is silent today and stays silent; making it speak only when a notice
   happened to be pending would be arbitrary.
-- **The role document no longer exists.** Classifies as **Ya no participas**.
-  Deliberately new behaviour — deleting a published service currently tells its
-  participants nothing, and it should.
+- **The role document no longer exists**, *and* `before.roles` is non-empty →
+  **Ya no participas**. Deliberately new behaviour: deleting a published service
+  currently tells its participants nothing, and it should.
+- **The role document no longer exists and `before.roles` is empty** → the notice
+  is **dropped**, exactly as the table's `empty → empty` row would.
+
+  That second rule is not a nicety. Since §7 removes the immediate assignment
+  email, an assignee's first email is the queued one — so an admin who creates a
+  published service at 10:00 and deletes it at 10:05, having picked the wrong
+  week, leaves every assignee with `before.roles = []` and a missing role. Without
+  the gate, all of them are mailed *"Ya no participas — Domingo 9 ago"* about a
+  service they were never told existed. That would break the introduction-before-
+  modification property on a completely ordinary admin path, and it is invisible
+  to the member that the removal came via `DELETE` rather than `PATCH`.
 
 **`setlist`** — the current ordered list of `(song._ref, play_key)` plus the
 **medley partition**, vs `before.songs`:
@@ -302,9 +330,16 @@ line or break it.
 
 **A notice is a debounce record, not a delivery ledger.** It buffers "this
 subject changed" until the subject goes quiet. It is then classified, consumed,
-and gone. Delivery itself is best-effort **at-most-once**, exactly the posture
-`serviceMutationSideEffects.ts` §7 already documents for every existing
-notification in this app.
+and gone.
+
+Delivery is **best-effort with no retry, and duplicates are possible** — on a
+re-pend during a send, and on a lease expiry after a killed sweep. Earlier drafts
+called this "at-most-once", which is simply the wrong label for a mechanism that
+enumerates two duplicate paths, and the term was load-bearing in three separate
+justifications. The accurate posture is the one
+`serviceMutationSideEffects.ts` §7 already documents: attempts are logged and
+swallowed, nothing is rolled back into content, and no exactly-once claim is
+made.
 
 Earlier drafts tried to make the notice track per-recipient delivery progress as
 well. That produced two defects that only adversarial review surfaced: progress
@@ -323,8 +358,13 @@ A sweep runs these stages in order, and there is no second control flow:
    them while the size of the **union of their resolved recipients** stays within
    `NOTIFY_FLUSH_EMAIL_LIMIT`. Stop there and leave the rest pending. A single
    notice whose own recipient count exceeds the budget is taken **alone**.
-2. **Claim** every selected notice, **one transaction per notice**:
-   `patch(id).ifRevisionId(rev).set({ status: "sending", claimedAt: now })`.
+2. **Claim** every selected notice, **one `Patch.commit()` per notice**:
+   `writeClient.patch(id).ifRevisionId(rev).set({ status: "sending", claimedAt: now }).commit()`.
+   It must be a patch commit, not a transaction: `Transaction.commit()` resolves
+   to a `MultipleMutationResult` carrying no `_rev` (`index.d.ts:6027`), while
+   `Patch.commit()` returns the patched document (`index.d.ts:3963`) — and step 7
+   asserts the revision this claim returns. A transaction here yields a revision
+   the implementer cannot read back.
    Per-notice is required, not stylistic: a single batched transaction would
    abort the whole sweep on one conflict, where the intended behaviour is that a
    failed claim drops only that notice — another sweeper has it, or a writer just
@@ -361,7 +401,7 @@ top. The wall-clock bound below keeps that second case bounded rather than
 unbounded, but it does not eliminate it.
 
 **Deletion is unconditional on send outcome.** A failed send is logged and the
-notice is still consumed. This is the at-most-once posture stated above; retrying
+notice is still consumed. This is the no-retry posture stated above; retrying
 would need delivery receipts, an attempt counter and a dead-letter path, and the
 review rounds showed that half-building that machinery is worse than not building
 it. A member with a permanently-undeliverable address must never be able to hold
@@ -372,14 +412,14 @@ Step 6 stops sending when elapsed time reaches `NOTIFY_SEND_BUDGET_MS` (default
 40 s, inside `maxDuration = 60`), and step 7 consumes the whole batch regardless
 of how far it got, logging how many recipients went unserved.
 
-Without this bound, at-most-once is a false claim. A sweep that sends to 8 of 15
+Without this bound, the duplicate paths are unbounded. A sweep that sends to 8 of 15
 recipients and is then killed leaves the notice in `sending`; the lease expires,
 the next sweep re-claims and re-sends **from the top**. If the cause is
 deterministic — an oversized notice that cannot finish inside `maxDuration`, which
 §1's own unmeasured 2 s/send figure admits is possible — those first recipients
 are re-mailed every `NOTIFY_CLAIM_TTL`, forever. Bounding the loop and consuming
 unconditionally converts an unbounded repeat into a bounded, logged partial
-delivery, which is what at-most-once actually means.
+delivery — a bounded repeat rather than an endless one.
 
 **`deadline` is written once and never rewritten.** An earlier draft required the
 upsert to both preserve `deadline` across a burst and refresh it on a re-pend —
@@ -414,18 +454,40 @@ combined with the wall-clock bound it would have silently dropped the tail of th
 biggest service every time. At 40, no single service can exceed it and the
 oversized branch becomes genuinely exceptional.
 
-**This is a release gate, not a knob to tune later.** The 2 s-per-send figure is
-an assumption; a warm pooled connection should be far under it, but nobody has
-timed it. Before shipping, measure one real batch of ~20 recipients:
+**The knobs must satisfy an inequality, and as first drafted they did not.**
+Sends are serialized (`maxConnections: 1`), so the relationship is linear:
 
-- comfortably inside `NOTIFY_SEND_BUDGET_MS` → ship as specified;
-- not inside it → **do not** raise the budget and hope. Splitting one notice's
-  recipients across sweeps reintroduces per-recipient progress, which "Claim and
-  delete" shows is incompatible with one document per subject. That is a
-  different outbox model and must be designed deliberately, not discovered in
-  production.
+```
+measured_ms_per_send × NOTIFY_FLUSH_EMAIL_LIMIT  <  NOTIFY_SEND_BUDGET_MS
+```
 
-If the team grows past 40 active members, this limit grows with it.
+At the working assumption of 2 s/send, a limit of 40 needs 80 s against a 40 s
+budget — it does not fit, and step 7 would consume the batch anyway, permanently
+dropping the tail of exactly the largest services the limit was raised to protect.
+So one of the three values is derived, never all three guessed.
+
+**This is a release gate, not a knob to tune later.** Nobody has timed a real
+send. Before shipping, measure a batch of ~20 and evaluate the inequality
+directly rather than judging a single run "comfortable":
+
+- inequality holds at `NOTIFY_FLUSH_EMAIL_LIMIT` = 40 → ship as specified;
+- it does not hold → **derive**: either raise `NOTIFY_SEND_BUDGET_MS` (bounded by
+  `maxDuration = 60`) or lower the limit — and if lowering it drops below the
+  largest per-service seat count, stop. Splitting one notice's recipients across
+  sweeps reintroduces per-recipient progress, which "Claim and delete" shows is
+  incompatible with one document per subject. That is a different outbox model
+  and must be designed deliberately, not discovered in production.
+
+**Layer 2 derates both knobs, not just one.** It halves the recipient limit *and*
+the send budget, so the inequality holds identically there. An earlier draft
+halved only the limit, which would have let a layer-2 sweep spend a full 40 s
+sending *after* the write route had already consumed part of its `maxDuration`.
+Note the consequence: at a halved limit of 20, a large Sunday setlist is
+"oversized" for layer 2 and taken alone — which is fine, because layer 2 is a
+backstop, and layer 1 runs at the full limit.
+
+If the team grows past 40 active members, the limit grows with it, and the
+inequality is re-evaluated.
 
 When selection truncates, the sweep logs one structured line naming how many
 notices were left behind. Silent truncation is not acceptable.
@@ -548,9 +610,11 @@ below is part of the design rather than an operational nicety.
    minutes late; that makes an email later, never wrong.
 2. **Backstop — opportunistic sweep.** Every protected role/setlist/proposal
    write also sweeps due notices in its `after()` block. Because an in-flight
-   burst keeps sliding `notifyAfter` forward, this can never flush the subject
-   the admin is *currently* editing — that is the safety property, and it is also
-   the limit. What it does cover is the cross-subject case: an admin who edits
+   burst keeps sliding `notifyAfter` forward, this will not normally flush the
+   subject the admin is *currently* editing. The one exception is the `deadline`
+   ceiling: past 60 minutes a notice is due regardless of `notifyAfter`, so an
+   admin in a long session can flush their own in-progress subject from their own
+   save. §1 accepts that outcome deliberately — it is what the ceiling is for. What it does cover is the cross-subject case: an admin who edits
    service A, then twenty minutes later edits service B, flushes A. Useful, but
    never sufficient on its own.
 3. **Last resort — the existing daily Vercel cron.** `/api/cron/service-reminders`
@@ -625,6 +689,29 @@ member gets two emails for one change.
 The flush-time recipient query carries `published != false` explicitly, at the
 query, per the CLAUDE.md member-facing-read invariant — not merely by relying on
 the §1 drop rule to have caught it first.
+
+### A `setlist` notice whose role is gone
+
+Dropped, silently. Recipients resolve from the role's seats, so a missing role
+yields an empty audience and no email either way — but two implementers would
+write different code to reach that, so the rule is stated rather than left to
+converge by accident.
+
+### Resolving live songs at flush
+
+For a weekend service the live songs are not on the role: resolve `roleId` →
+`role.week` → the `featuredSongs` (Sunday) or `saturdarSongs` (Saturday) document
+for that week. For a `special_role` the songs are on the role document itself.
+`loadWeekendSetlistTarget(...).target.record` is nullable
+(`app/utils/serviceWriteTargets.ts:87`), so both the snapshot and the flush read
+treat a missing record as `[]`.
+
+### Departed songs need titles from the union
+
+§6 renders struck-through titles for songs that left, whose refs exist only in
+`before`. The flusher resolves titles for the **union** of before- and after-refs
+in one query. A song document deleted in the interim yields no title; that row
+renders with its ref omitted rather than blank-titled, and never fails the email.
 
 ### Two date-move behaviours, stated rather than discovered
 
@@ -829,8 +916,8 @@ T+2min queues a notice that, once the edits stop, emails "tu rol cambió". The
 member gets two emails, the second carrying correct information. Accepted over
 adding suppression logic.
 
-Removing that leg **breaks existing tests** that assert an immediate assignment
-email — `app/api/__tests__/roleWriteRoutes.test.ts`,
+Removing `notifyRoleAssignments()`'s email leg **breaks existing tests** that
+assert an immediate assignment email — `app/api/__tests__/roleWriteRoutes.test.ts`,
 `app/api/__tests__/roleSwapRoutes.test.ts`, the send paths in
 `app/utils/__tests__/assignmentEmail.test.ts`,
 `app/utils/__tests__/serviceMutationSideEffects.test.ts:212`, and
@@ -857,6 +944,10 @@ still get an immediate in-app signal. The pairing is deliberate: the push says
   delete-only type cannot produce. Implementation must restructure
   `studioCapability` so the two properties compose, and extend the test to assert
   the new combination. Treating this as "append to both lists" will fail `npm test`.
+  The write registry has the same class of assertion —
+  `protectedReadAudit.test.ts:335` asserts the exact `file#operation` key set of
+  `PROTECTED_RUNTIME_WRITERS` — so the new entries must be added there too, and it
+  is a staleness check, not a lint.
   The restructure is larger than one branch: `studioProtection.test.ts:120` asserts
   `INTERNAL_STUDIO_TYPES` equals an **exact array**, and `:367` asserts each
   internal type is `hidden: true` in its own schema file, and `:373` asserts
@@ -913,7 +1004,14 @@ still get an immediate in-app signal. The pairing is deliberate: the push says
   `ebb8vcnk`/`production` on either axis, `scripts/lib/sr-verification.mjs:12` —
   and the rule it justified would have let one undeliverable address hold a
   notice forever.)
-- **`_key`.** Any array-of-object field written to the outbox carries a `_key`.
+- **`_key`.** Any array-of-object field written to the outbox carries a `_key`,
+  including `before.beforeSongs` rows.
+- **Stale invariant comments must be updated with the behaviour.** The header
+  contract in `serviceMutationSideEffects.ts:7` states that "a removal … [is]
+  silent; the caller simply never builds a notice", and the `DELETE` handler
+  repeats it at `app/api/admin/roles/[id]/route.ts:470`. Both become false here.
+  CLAUDE.md exists to stop exactly this kind of drift, so they are part of the
+  change, not follow-up.
 - **Document id length.** `outbox.role.${memberId}__${roleId}` composes two ids
   that `isCanonicalDocumentId` permits at up to 200 chars each, which can exceed
   Sanity's id ceiling. Use the digest approach the repo already uses for this
@@ -983,6 +1081,14 @@ Pure logic, unit-tested (vitest):
   cannot, and the second stays pending and is logged.
 - **Budget sizing:** a `setlist` notice with 20 recipients is *not* treated as
   oversized at the default limit — the regression test for the 12-vs-20 defect.
+- **Create-published-then-delete inside the window sends nothing.** A published
+  create with 12 assignees, deleted 5 minutes later, yields **zero** emails — not
+  12 × *Ya no participas* for a service nobody was told about. Deleting a role
+  whose assignees *had* been introduced still yields *Ya no participas*.
+- **A recipient absent from `knownRecipients` gets *Setlist listo***, not a diff
+  against a list they never saw.
+- **The knob inequality holds:** `ms_per_send × EMAIL_LIMIT < SEND_BUDGET_MS` is
+  asserted for both the layer-1 and the halved layer-2 configuration.
 - **Date move:** a `role` notice whose service moved renders the **live** date; a
   `setlist` notice whose service moved is dropped.
 - **One-song run snapshots as `null` group**, so comparison and rendering agree.
@@ -1076,17 +1182,19 @@ Both gates must pass before this is done: `npx tsc --noEmit` and `npm test`.
   4. **Unpublish then republish inside one window swallows *Setlist listo*.**
      `createIfNotExists` preserves the earlier non-empty `before`, so the publish
      path's `before.songs = []` is discarded and the comparison nets to equal.
-  5. **`before` is per-subject, not per-recipient** — and this one is on the
-     normal path, not an exceptional one. A member added to a service that
-     already has a setlist, followed by any setlist edit inside the window,
-     receives *El setlist cambió* with `▲`/`▼` deltas and struck-through departed
-     songs, measured against a list they were never sent. Fixing it properly
-     means per-recipient snapshots, which changes the outbox from one document
-     per subject to one per subject-recipient pair.
-  All five need machinery materially larger than this spec — delivery receipts
-  and retry for 1–3, window-aware snapshot invalidation for 4, per-recipient
-  snapshots for 5 — so they are accepted, not fixed. What matters is that they are
-  five and enumerated, rather than one and asserted.
+  5. ~~`before` is per-subject, not per-recipient.~~ **Fixed, cheaply.** A
+     member added to a service that already had a setlist would otherwise receive
+     *El setlist cambió* — deltas and struck-through departed songs — measured
+     against a list they were never sent. An earlier draft accepted this on the
+     grounds that fixing it required one outbox document per subject-recipient
+     pair. It does not: the notice snapshots its **recipient set** at queue time
+     as one extra array, and any recipient absent from it renders *Setlist listo*
+     (no `Mov.` column, no `SALIÓ` rows) instead. One field, and a misleading
+     email on the normal path disappears.
+  Holes 1–3 need delivery receipts and retry and hole 4 needs window-aware
+  snapshot invalidation — all materially larger than this spec, so those four are
+  accepted, not fixed. Hole 5 turned out to be cheap and is fixed. What matters is
+  that they are enumerated rather than asserted away.
 - **A weekend setlist saved before its role exists never notifies.** §4 correctly
   queues nothing — there are no participants yet — but nothing re-queues when the
   role later appears, so that setlist's introduction is lost permanently. Rare
