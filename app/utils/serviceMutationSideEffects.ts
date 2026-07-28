@@ -20,15 +20,20 @@
 //    by that queue — keeping both would produce "te asignaron" now and "tu rol
 //    cambió" fifteen minutes later for one edit. The push says SOMETHING
 //    changed; the grouped email, once the edits stop, says WHAT.
+//    A committed live-setlist write queues one `setlist` notice for the SERVICE
+//    (keyed on the owning role, so the manual writer and the approve path share
+//    one subject), a `false -> true` publish queues the same notice with an EMPTY
+//    snapshot so publishing INTRODUCES the setlist, and a lead-notes edit on an
+//    already-reviewable proposal queues one `leadNotes` notice for admins.
 //  - Delivery is best-effort AT-MOST-ONCE: each attempt is logged and swallowed,
 //    never rolled back into content, and one failure never skips the rest. A
 //    committed request can register MORE THAN ONE deferred `after()` block —
 //    a published edit registers two (the push fan-out, then the outbox
 //    upsert), a swap registers one push fan-out plus one outbox upsert per
 //    affected role. What stays true per notice is idempotency: each outbox
-//    upsert's `_id` is deterministic (member + role), so an HTTP retry that
-//    replays a request produces no second outbox document, whatever the
-//    number of attempts.
+//    upsert's `_id` is deterministic (member + role, role, or proposal), so an
+//    HTTP retry that replays a request produces no second outbox document,
+//    whatever the number of attempts.
 //
 // Reads here go through the canonical operational client, so the audience is the
 // published perspective and a `drafts.*` overlay can never widen it. The one
@@ -52,9 +57,10 @@ import {
   setlistRecipientIds,
   type SetlistPref,
 } from "./notifyTargets";
-import { buildUpsert, outboxId } from "./outboxNotice";
+import { buildUpsert, outboxId, songRowsFrom } from "./outboxNotice";
 import { notifyProposalSubmitted } from "./proposalNotify";
-import { seatAssignees, type NormalizedSeats } from "./roleWriteRequest";
+import { canonicalSetlistsForWeeksQuery } from "./serviceReadQueries";
+import { normalizeStoredSeats, seatAssignees, type NormalizedSeats } from "./roleWriteRequest";
 
 /** Run one delivery attempt; log and swallow any failure. Never rejects. */
 async function attempt(label: string, fn: () => unknown | Promise<unknown>): Promise<void> {
@@ -320,20 +326,257 @@ export function queueRoleNotices(input: QueueRoleNoticesInput): void {
       ),
     }));
 
-    after(async () => {
-      // ONE transaction for this role's notices. No op asserts a revision, so
-      // there is no per-op conflict to isolate — a failure here is transport or
-      // auth, which would fail every op alike. `attempt` keeps it swallowed.
-      await attempt("outbox role upsert", () => {
-        let tx = writeClient.transaction();
-        for (const upsert of upserts) {
-          tx = tx
-            .createIfNotExists(upsert.createIfNotExists as { _id: string; _type: string })
-            .patch(upsert.id, (p) => p.set(upsert.patchSet));
+    // ONE transaction for this role's notices — see `commitUpserts`.
+    after(() => commitUpserts("outbox role upsert", upserts));
+  });
+}
+
+// ── Outbox: the debounced setlist notice (spec §2/§4) ───────────────────────
+
+/** The participants of one service, across all five member-referencing seats. */
+export function serviceParticipants(role: unknown): string[] {
+  return seatAssignees(normalizeStoredSeats(role));
+}
+
+export interface QueueSetlistNoticeInput {
+  /**
+   * The SERVICE ROLE that owns this setlist — the `setlist` subject key (§4).
+   * The manual weekend writer holds only `week` + `setlistType` and must resolve
+   * it through `loadWeekendCoordination(...).coordination.role`; the approve path
+   * holds the same id as `target.serviceRef`, which it has already asserted is
+   * that same coordination role. Both therefore key one service one way.
+   */
+  roleId: string;
+  roleType: RoleTypeName;
+  /** `YYYY-MM-DD`. A notice whose live date has moved is dropped at flush (§4). */
+  serviceDate: string;
+  /** The role's stored publication state. `published !== false` is visible. */
+  published: unknown;
+  /**
+   * The stored `songs` array as it was BEFORE this transaction, captured
+   * PRE-COMMIT by the writer from the target it had already loaded, and threaded
+   * in as a value. Never re-read here: inside `after()` live state is already the
+   * POST-write state, which would make `before == after` for every notice.
+   * `loadWeekendSetlistTarget(...).target.record` is nullable, so a missing
+   * record is `[]` — an absent setlist target, not a malformed one.
+   */
+  beforeSongs: unknown;
+  /**
+   * Does the service hold ANY songs after this write? `[] -> []` says nothing,
+   * so it is not worth an outbox document — the same reading `classifySetlist`
+   * applies when it refuses to build a line for an empty live setlist.
+   */
+  hasSongs: boolean;
+  /**
+   * The participants known at queue time. A recipient absent from this set is
+   * new to the subject and is INTRODUCED at flush ("Setlist listo") rather than
+   * sent a diff against a list they never saw.
+   */
+  knownRecipients: string[];
+}
+
+/** Build one `setlist` upsert, or `null` when this write says nothing. */
+function setlistUpsert(input: QueueSetlistNoticeInput, now: Date) {
+  // `published !== false` — missing/true is member-visible (grandfathered).
+  if (input.published === false) return null;
+  if (!input.roleId) return null;
+  if (!input.hasSongs) return null;
+  return {
+    id: outboxId("setlist", input.roleId),
+    ...buildUpsert(
+      {
+        kind: "setlist",
+        subjectKey: input.roleId,
+        memberId: null,
+        roleId: input.roleId,
+        proposalId: null,
+        serviceDate: input.serviceDate,
+        roleType: input.roleType,
+        before: { beforeSongs: songRowsFrom(input.beforeSongs) },
+        knownRecipients: input.knownRecipients,
+      },
+      now,
+    ),
+  };
+}
+
+type BuiltUpsert = NonNullable<ReturnType<typeof setlistUpsert>>;
+
+/**
+ * ONE transaction on `writeClient` for a whole batch of upserts — never the
+ * business transaction (§2). No op asserts a revision, so there is no per-op
+ * conflict to isolate; a failure here is transport or auth, which would fail
+ * every op alike, and `attempt` keeps it logged and swallowed.
+ */
+async function commitUpserts(label: string, upserts: BuiltUpsert[]): Promise<void> {
+  await attempt(label, () => {
+    let tx = writeClient.transaction();
+    for (const upsert of upserts) {
+      tx = tx
+        .createIfNotExists(upsert.createIfNotExists as { _id: string; _type: string })
+        .patch(upsert.id, (p) => p.set(upsert.patchSet));
+    }
+    return tx.commit();
+  });
+}
+
+/**
+ * Queue the debounced `setlist` notice for ONE service, in a post-commit
+ * `after()` block. Called by the two writers that change a live setlist: the
+ * manual editor save and the proposal approval — the latter writes the live
+ * setlist today and said nothing about it at all.
+ */
+export function queueSetlistNotice(input: QueueSetlistNoticeInput): void {
+  // The caller already committed the business write. `attemptSync` guards this
+  // whole synchronous build so a throw here is logged and swallowed instead of
+  // turning a committed content write into a 500 for the client.
+  attemptSync("queueSetlistNotice build", () => {
+    const upsert = setlistUpsert(input, new Date());
+    if (!upsert) return;
+    after(() => commitUpserts("outbox setlist upsert", [upsert]));
+  });
+}
+
+export interface PublishedSetlistSubject {
+  roleId: string;
+  roleType: RoleTypeName;
+  serviceDate: string;
+  /** The canonical role document — a special service carries its songs inline. */
+  role: unknown;
+  knownRecipients: string[];
+}
+
+const WEEKEND_SETLIST_TYPE: Record<string, string> = {
+  sunday_role: "featuredSongs",
+  saturday_role: "saturdarSongs",
+};
+
+/**
+ * Publishing must ANNOUNCE the setlist (§2). The dominant workflow is *create as
+ * draft → build the setlist → publish*, and nothing queues while the service is a
+ * draft — so without this a service published with a setlist already on it would
+ * send no setlist email at all, and the member's first one would be "El setlist
+ * cambió" on the first post-publish edit.
+ *
+ * Every `false -> true` transition therefore queues one `setlist` notice with an
+ * EMPTY before-snapshot, which classifies as "Setlist listo": the member's proper
+ * introduction. A service published with no songs is `[] -> []` and queues
+ * nothing.
+ *
+ * Both publish surfaces (`publish` and `publish-ready`) call exactly this, so the
+ * two cannot drift. Publishing writes no songs, so resolving song presence INSIDE
+ * the deferred block is exact — and it keeps the read off the admin's request.
+ * The `before` snapshot is the constant `[]`, so nothing here is subject to the
+ * pre-commit capture rule.
+ */
+export function queuePublishedSetlistNotices(subjects: PublishedSetlistSubject[]): void {
+  if (!subjects.length) return;
+  after(async () => {
+    await attempt("outbox publish setlist upsert", async () => {
+      const weeks = [
+        ...new Set(
+          subjects
+            .filter((s) => s.roleType !== "special_role")
+            .map((s) => s.serviceDate)
+            .filter(Boolean),
+        ),
+      ];
+      const bound = weeks.length ? canonicalSetlistsForWeeksQuery(weeks) : null;
+      const rows = bound
+        ? ((await operationalClient.fetch<Record<string, unknown>[]>(bound.query, bound.params)) ?? [])
+        : [];
+
+      const hasSongs = (subject: PublishedSetlistSubject): boolean => {
+        if (subject.roleType === "special_role") {
+          const songs = (subject.role as { songs?: unknown } | null)?.songs;
+          return Array.isArray(songs) && songs.length > 0;
         }
-        return tx.commit();
-      });
+        const type = WEEKEND_SETLIST_TYPE[subject.roleType];
+        const doc = rows.find((r) => r?._type === type && r?.week === subject.serviceDate);
+        return Array.isArray(doc?.songs) && (doc.songs as unknown[]).length > 0;
+      };
+
+      const now = new Date();
+      const upserts = subjects
+        .map((subject) =>
+          setlistUpsert(
+            {
+              roleId: subject.roleId,
+              roleType: subject.roleType,
+              serviceDate: subject.serviceDate,
+              // Publishing IS the `false -> true` transition; the role is visible.
+              published: true,
+              beforeSongs: [],
+              hasSongs: hasSongs(subject),
+              knownRecipients: subject.knownRecipients,
+            },
+            now,
+          ),
+        )
+        .filter((u): u is BuiltUpsert => !!u);
+      if (!upserts.length) return;
+      await commitUpserts("outbox publish setlist upsert", upserts);
     });
+  });
+}
+
+// ── Outbox: the debounced lead-notes notice (spec §2) ───────────────────────
+
+/**
+ * The statuses that mean a proposal is ALREADY in front of admins. The predicate
+ * is deliberately about the state BEFORE this write, not after: a `draft ->
+ * pending` submit already sends admins the immediate "Nueva propuesta", and
+ * queueing on the same write would mail them twice about one submission. Lead
+ * notes on a `draft` proposal are silent for the same reason inverted — there is
+ * nothing in front of admins to act on yet.
+ */
+const REVIEWABLE_BEFORE_WRITE = new Set(["pending", "changes_requested"]);
+
+export interface QueueLeadNotesNoticeInput {
+  proposalId: string;
+  /** `YYYY-MM-DD`, snapshotted so a deleted proposal still renders a subject. */
+  serviceDate: string;
+  /** The proposal's stored status BEFORE this write; `null` when it is new. */
+  previousStatus: unknown;
+  /** The stored `lead_notes` BEFORE this write, captured PRE-COMMIT. */
+  beforeNotes: unknown;
+  /** The notes this transaction committed. */
+  afterNotes: unknown;
+}
+
+const asNotes = (v: unknown): string => (typeof v === "string" ? v : "");
+
+/** Queue the debounced `leadNotes` notice, in a post-commit `after()` block. */
+export function queueLeadNotesNotice(input: QueueLeadNotesNoticeInput): void {
+  attemptSync("queueLeadNotesNotice build", () => {
+    if (!input.proposalId) return;
+    if (!REVIEWABLE_BEFORE_WRITE.has(String(input.previousStatus ?? ""))) return;
+    const before = asNotes(input.beforeNotes);
+    // The same trimmed comparison `classifyLeadNotes` makes at flush, so a save
+    // that did not touch the notes never mints a document that says nothing.
+    if (before.trim() === asNotes(input.afterNotes).trim()) return;
+
+    const upsert = {
+      id: outboxId("leadNotes", input.proposalId),
+      ...buildUpsert(
+        {
+          kind: "leadNotes",
+          subjectKey: input.proposalId,
+          memberId: null,
+          roleId: null,
+          proposalId: input.proposalId,
+          serviceDate: input.serviceDate,
+          roleType: null,
+          before: { beforeNotes: before },
+          // The admin audience is resolved at flush from the live team roster;
+          // there is no queue-time set to introduce anybody against, and
+          // `leadNotes` renders no diff for `knownRecipients` to qualify.
+          knownRecipients: [],
+        },
+        new Date(),
+      ),
+    };
+    after(() => commitUpserts("outbox leadNotes upsert", [upsert]));
   });
 }
 

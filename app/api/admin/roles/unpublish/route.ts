@@ -28,6 +28,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 
+// An unpublish notifies nobody, but its post-commit `after()` block hosts a sweep
+// (Task 11) that can fan out dozens of emails; give it room to finish.
+export const maxDuration = 60;
+
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { revalidateRolePublication } from "@/app/utils/serviceMutationSideEffects";

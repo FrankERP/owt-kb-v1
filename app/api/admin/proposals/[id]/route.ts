@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+
+// The post-commit `after()` fan-out queues the debounced setlist notice and (from
+// Task 11) hosts a sweep; give it room to finish past the response.
+export const maxDuration = 60;
+
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 import {
   notifyProposalReview,
+  queueSetlistNotice,
   revalidateProposalApproval,
+  serviceParticipants,
 } from "@/app/utils/serviceMutationSideEffects";
 import { serviceError } from "@/app/utils/serviceMutation";
 import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
@@ -246,6 +253,14 @@ async function approve(args: ApproveArgs) {
   let setlistId: string;
   /** The op that writes the live setlist, applied inside the ONE transaction. */
   let writeSetlist: (tx: ReturnType<typeof writeClient.transaction>) => ReturnType<typeof writeClient.transaction>;
+  /**
+   * The outbox `setlist` subject, captured PRE-COMMIT from the target this
+   * handler has already loaded (§2). Its `roleId` is `target.serviceRef` — the
+   * SAME id the manual writer derives from `loadWeekendCoordination(...).role`,
+   * because the weekend branch below refuses to proceed unless that coordination
+   * role IS `target.serviceRef`. One service, one subject key, one email.
+   */
+  let subject: { published: unknown; beforeSongs: unknown; knownRecipients: string[] };
 
   if (special) {
     const targetLoad = await loadSpecialSetlistTarget(target.serviceRef, target.serviceDate);
@@ -255,6 +270,12 @@ async function approve(args: ApproveArgs) {
     const specialRole = targetLoad.target.role;
     setlistId = specialRole._id;
     const roleRev = specialRole._rev;
+    subject = {
+      published: specialRole.published,
+      // A special role carries its songs inline.
+      beforeSongs: specialRole.songs ?? [],
+      knownRecipients: serviceParticipants(specialRole),
+    };
     // The special role IS the live setlist target: its revision assertion both
     // publishes the songs and serializes the service.
     writeSetlist = (tx) =>
@@ -287,6 +308,13 @@ async function approve(args: ApproveArgs) {
     }
     lock = coordination.coordination.lock;
     bootstrapped = coordination.coordination.bootstrapped;
+    const owner = coordination.coordination.role as NonNullable<typeof coordination.coordination.role>;
+    subject = {
+      published: owner.published,
+      // `targetLoad.target.record` is nullable — no setlist document yet is `[]`.
+      beforeSongs: targetLoad.target.record?.songs ?? [],
+      knownRecipients: serviceParticipants(owner),
+    };
 
     if (observed.state === "single") {
       setlistId = observed.id;
@@ -349,6 +377,22 @@ async function approve(args: ApproveArgs) {
   // Review recipients come from the canonical proposal this request already
   // loaded (creator + contributors), never a client list.
   await notifyProposalReview(doc, REVIEW_PUSH.approve);
+  // An approval writes the LIVE setlist, and until now said nothing about it at
+  // all (§2). Same subject key as the manual writer, so one service produces one
+  // outbox document however the songs got there.
+  queueSetlistNotice({
+    roleId: target.serviceRef,
+    roleType: special
+      ? "special_role"
+      : target.serviceType === "sunday"
+        ? "sunday_role"
+        : "saturday_role",
+    serviceDate: target.serviceDate,
+    published: subject.published,
+    beforeSongs: subject.beforeSongs,
+    hasSongs: songRows.length > 0,
+    knownRecipients: subject.knownRecipients,
+  });
   // The approved proposal just wrote the real setlist — refresh the cached
   // home/schedule/song pages so it shows without waiting for ISR expiry.
   revalidateProposalApproval();
