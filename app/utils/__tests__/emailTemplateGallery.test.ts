@@ -1,0 +1,199 @@
+// Renders every notification template once and asserts the email-client
+// constraints hold across ALL of them, not just the cases the per-template unit
+// tests happen to cover.
+//
+// The per-template tests check behaviour (does the Mov. column disappear, does a
+// one-song run render plain). This checks the constraints that are easy to break
+// anywhere and that no single behavioural test owns: table-based layout, bgcolor
+// on cells, no <style> block, no flexbox or grid, no remote images, no web fonts.
+// Spec §6 makes those hard requirements because they are what keeps a dark email
+// legible in Gmail and Apple Mail.
+//
+// Set PREVIEW_EMAILS=1 to also write the rendered HTML to .preview-emails/ (which
+// is gitignored) plus an index framing each one with its subject line — that is
+// what you forward to settle the two behaviours §6 flags as reasoned-but-unverified:
+// Outlook/Windows and the key pills, and the four-column table on a narrow phone.
+//
+//   PREVIEW_EMAILS=1 npx vitest run app/utils/__tests__/emailTemplateGallery.test.ts
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { describe, expect, it, vi } from "vitest";
+
+// `assignmentEmail` reaches the transport and the Sanity client at module load —
+// `email` -> `deliveryFirewall` -> `server-only` (which resolves only inside
+// Next's bundler), and `serverClient` -> `sanity/env` (which asserts its
+// variables on import). Nothing here sends or reads, so both are stubbed, the
+// same way `assignmentEmail.test.ts` does it.
+vi.mock("../email", () => ({ sendEmail: vi.fn() }));
+vi.mock("@/sanity/lib/serverClient", () => ({ serverClient: { fetch: vi.fn() } }));
+
+const { buildAssignmentEmail, buildBatchAssignmentEmail } = await import("../assignmentEmail");
+const { buildGroupedEmail } = await import("../notificationEmail");
+type Line = import("../outboxClassify").Line;
+
+const titles = new Map([
+  ["s1", "Abres Camino"],
+  ["s2", "Santo"],
+  ["s3", "Digno Es El Cordero"],
+  ["s4", "Cuán Grande Es Él"],
+  ["s5", "Al Que Está Sentado En El Trono"],
+  ["s6", "Renuévame"],
+]);
+
+const song = (ref: string, key: string, group: number | null = null) => ({
+  _key: `k-${ref}`, ref, key, group,
+});
+
+const SUNDAY = "2026-08-09";
+const SATURDAY = "2026-08-15";
+
+const line = (over: Partial<Line> & Pick<Line, "kind">): Line => ({
+  serviceDate: SUNDAY, roleType: "sunday_role", before: [], after: [], ...over,
+});
+
+const gallery: { file: string; label: string; subject: string; html: string }[] = [];
+const add = (file: string, label: string, built: { subject: string; html: string }) => {
+  gallery.push({ file, label, ...built });
+  return built;
+};
+
+add("01-assigned.html", "Nueva asignación", buildGroupedEmail(
+  { name: "Ana", lines: [line({ kind: "assigned", after: ["Líder"] })] }, titles));
+
+// Three of the five seat paths do not sing, so the copy must read "Sirves como".
+add("02-assigned-instrument.html", "Nueva asignación (instrumento)", buildGroupedEmail(
+  { name: "Beto", lines: [line({ kind: "assigned", after: ["Bajo"] })] }, titles));
+
+add("03-removed.html", "Ya no participas", buildGroupedEmail(
+  { name: "Carla", lines: [line({ kind: "removed", before: ["BGV"] })] }, titles));
+
+add("04-role-changed.html", "Tu rol cambió", buildGroupedEmail(
+  { name: "Diego", lines: [line({ kind: "roleChanged", before: ["BGV"], after: ["Líder"] })] }, titles));
+
+add("05-setlist-ready.html", "Setlist listo (sin columna Mov.)", buildGroupedEmail(
+  { name: "Elena", lines: [line({
+    kind: "setlistReady", beforeSongs: [],
+    songs: [song("s1", "G"), song("s2", "D", 0), song("s3", "D", 0), song("s4", "A")],
+  })] }, titles));
+
+// The hard case, every marker at once: s1 holds (dash), s5 is new, s3 moves up,
+// s4 is re-keyed and moves down, s2 departs, and s3+s6 form a NEW medley.
+add("06-setlist-changed.html", "El setlist cambió (todos los marcadores)", buildGroupedEmail(
+  { name: "Elena", lines: [line({
+    kind: "setlistChanged",
+    beforeSongs: [song("s1", "G"), song("s2", "E"), song("s3", "D"), song("s4", "A")],
+    songs: [song("s1", "G"), song("s5", "C"), song("s3", "D", 0), song("s6", "D", 0), song("s4", "B")],
+  })] }, titles));
+
+add("07-one-song-group.html", "Grupo de una canción (debe verse normal)", buildGroupedEmail(
+  { name: "Elena", lines: [line({
+    kind: "setlistReady", beforeSongs: [],
+    songs: [song("s1", "G", 0), song("s2", "D", 1), song("s3", "D", 1)],
+  })] }, titles));
+
+add("08-lead-notes.html", "Notas del líder", buildGroupedEmail(
+  { name: "Admin", lines: [line({
+    kind: "leadNotes", roleType: null,
+    notes: "Bajé la tonalidad de Santo a D. Ensayo el jueves 7pm.",
+  })] }, titles));
+
+add("09-grouped.html", "Novedades de tus servicios (agrupado)", buildGroupedEmail(
+  { name: "Ana", lines: [
+    line({ kind: "roleChanged", before: ["BGV"], after: ["Líder"] }),
+    line({ kind: "setlistChanged",
+      beforeSongs: [song("s1", "G"), song("s2", "E")],
+      songs: [song("s2", "E"), song("s1", "G"), song("s4", "A")] }),
+    line({ kind: "assigned", serviceDate: SATURDAY, roleType: "saturday_role", after: ["Teclado"] }),
+  ] }, titles));
+
+add("10-long-titles.html", "Títulos largos (ajuste en móvil)", buildGroupedEmail(
+  { name: "Ana", lines: [line({
+    kind: "setlistChanged",
+    beforeSongs: [song("s5", "G")],
+    songs: [song("s5", "G#m"), song("s3", "Bb")],
+  })] }, titles));
+
+add("11-publish-single.html", "Publicación: un servicio",
+  buildAssignmentEmail({ name: "Ana", roles: ["Líder", "Guitarra"], type: "sunday_role", date: SUNDAY }));
+
+add("12-publish-batch.html", "Publicación: varios servicios",
+  buildBatchAssignmentEmail({ name: "Ana", items: [
+    { type: "sunday_role", date: SUNDAY, roles: ["Líder"] },
+    { type: "saturday_role", date: SATURDAY, roles: ["BGV", "Pandero"] },
+    { type: "sunday_role", date: "2026-08-23", roles: ["Guitarra"] },
+  ] }));
+
+describe("email template gallery", () => {
+  it("renders every template without throwing", () => {
+    expect(gallery).toHaveLength(12);
+    for (const g of gallery) expect(g.html.length).toBeGreaterThan(200);
+  });
+
+  // Spec §6: these are hard requirements, not preferences. Each one is a way a
+  // dark email silently degrades in a real client.
+  it.each(gallery.map((g) => [g.label, g] as const))(
+    "%s obeys the email-client constraints",
+    (_label, g) => {
+      // §6 requires bgcolor on EVERY cell, not just the body — that is what keeps
+      // a dark email dark in Gmail and Apple Mail. Asserting the document merely
+      // contains one bgcolor would pass with a single attribute on the outer
+      // table and 180 bare cells, so count the cells that lack it.
+      const cells = g.html.match(/<td[^>]*>/g) ?? [];
+      expect(cells.length).toBeGreaterThan(0);
+      expect(cells.filter((c) => !c.includes("bgcolor="))).toEqual([]);
+
+      expect(g.html).not.toContain("<style");           // no stylesheet dependency
+      expect(g.html).not.toContain("display:flex");     // Outlook has no flexbox
+      expect(g.html).not.toContain("display:grid");
+      expect(g.html).not.toMatch(/<img[^>]+src="https?:/); // no remote images
+      expect(g.html).not.toMatch(/@import|fonts\.googleapis/); // no web fonts
+      expect(g.html).toContain("<table");                // table-based layout
+    },
+  );
+
+  it("never says Cantas como — three of five seat paths do not sing", () => {
+    for (const g of gallery) expect(g.html).not.toContain("Cantas");
+  });
+
+  it("uses the app's word for a group and never popurrí", () => {
+    for (const g of gallery) expect(g.html.toLowerCase()).not.toContain("popurr");
+  });
+
+  it("interpolates no content into any subject line", () => {
+    // A subject is a constant plus a formatted date. No song title, seat label or
+    // member name may leak in — that is what keeps a subject unbreakable.
+    for (const g of gallery) {
+      for (const title of titles.values()) expect(g.subject).not.toContain(title);
+      for (const seat of ["Líder", "BGV", "Bajo", "Teclado", "Guitarra"]) {
+        expect(g.subject).not.toContain(seat);
+      }
+      expect(g.subject).not.toContain("Ana");
+    }
+  });
+
+  it("writes the preview gallery when PREVIEW_EMAILS=1", () => {
+    if (!process.env.PREVIEW_EMAILS) return;
+    const out = ".preview-emails";
+    mkdirSync(out, { recursive: true });
+    for (const g of gallery) writeFileSync(join(out, g.file), g.html, "utf8");
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    writeFileSync(join(out, "index.html"), `<!doctype html><meta charset="utf-8">
+<title>Vista previa de correos</title>
+<style>
+ body{background:#010B17;color:#D7E7F6;font:15px/1.5 system-ui,sans-serif;margin:0;padding:28px}
+ h1{font-size:16px;letter-spacing:.14em;text-transform:uppercase;color:#7F94A8}
+ .c{margin:24px 0;border:1px solid #12C8F4;border-radius:6px;overflow:hidden}
+ .h{background:#0D2234;padding:12px 16px}
+ .l{color:#12C8F4;font-weight:600}
+ .s{color:#7F94A8;font-size:13px;margin-top:4px}
+ .s b{color:#D7E7F6}
+ iframe{width:100%;height:620px;border:0;border-top:1px solid #12C8F4;display:block;background:#010B17}
+</style>
+<h1>Vista previa de correos — ${gallery.length} plantillas</h1>
+${gallery.map((g) => `<div class="c"><div class="h"><div class="l">${esc(g.label)}</div>
+<div class="s">Asunto: <b>${esc(g.subject)}</b></div></div>
+<iframe src="./${g.file}" title="${esc(g.label)}"></iframe></div>`).join("\n")}`, "utf8");
+    expect(gallery.length).toBeGreaterThan(0);
+  });
+});

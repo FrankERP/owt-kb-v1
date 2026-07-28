@@ -80,3 +80,6 @@ __pycache__/
 /playwright/.cache/
 *storageState*.json
 
+
+# Local email template previews (scripts/preview-emails.mts)
+.preview-emails/
