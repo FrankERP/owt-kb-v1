@@ -45,7 +45,11 @@ export function classifyRole(i: {
   roleExists: boolean; published: boolean;
 }): Line | null {
   if (isPast(i.serviceDate, i.today)) return null;
-  // An unpublish is silent today and stays silent.
+  // An unpublish is silent today and stays silent. Gated on roleExists because
+  // `published` only means something while the role document is still there —
+  // for a vanished role, whatever the sweep passes for `published` is not a
+  // real reading. The deleted-role branch below is deliberately independent
+  // of this guard, so it stays correct no matter what that value is.
   if (i.roleExists && !i.published) return null;
 
   // A vanished role tells only the people who had already been introduced to it.
