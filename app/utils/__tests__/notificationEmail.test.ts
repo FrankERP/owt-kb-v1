@@ -111,7 +111,11 @@ describe("buildGroupedEmail", () => {
     const { html } = buildGroupedEmail({ name: "Ana", lines: [roleLine("assigned", [], ["Líder"])] }, titles);
     expect(html).toContain('bgcolor="#010B17"');
     expect(html).not.toContain("display:flex");
-    expect(html).not.toContain("<style");
+    // The one <style> block is the Outlook dark-mode opt-out, added after Outlook
+    // for Mac was observed rewriting #071624 to slate grey. It is enhancement
+    // only: this assertion is what guarantees the layout still does not depend on
+    // it, since every colour remains inline and on bgcolor.
+    expect(html.replace(/<style>[\s\S]*?<\/style>/, "")).not.toContain("<style");
   });
 
   it("pins the exact movement colours: signal up, amber down, steel dash", () => {
