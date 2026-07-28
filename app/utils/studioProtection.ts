@@ -111,8 +111,9 @@ export const INTERNAL_STUDIO_TYPES = ["roleTargetLock", "roleCreationReceipt", "
  * both:
  *   · on the three role types the listed fields are `hidden: true` FIELDS inside
  *     an otherwise operator-visible document;
- *   · `roleTargetLock` / `roleCreationReceipt` are `hidden: true` TYPES, so every
- *     field is off the authoring surface with them.
+ *   · `roleTargetLock` / `roleCreationReceipt` / `notificationOutbox` are
+ *     `hidden: true` TYPES, so every field is off the authoring surface with
+ *     them.
  * The read-only inspection group in `sanity/structure.ts` is the one deliberate
  * place these are visible, and it cannot write.
  */
@@ -122,6 +123,22 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
   special_role: ["creationReceiptId", "creationFingerprint"],
   roleTargetLock: ["targetKey", "state", "roleId", "roleType", "claimNonce", "generation"],
   roleCreationReceipt: ["requestId", "fingerprint", "roleId", "targetIdentity", "state"],
+  notificationOutbox: [
+    "kind",
+    "subjectKey",
+    "memberId",
+    "roleId",
+    "proposalId",
+    "serviceDate",
+    "roleType",
+    "before",
+    "knownRecipients",
+    "firstQueuedAt",
+    "notifyAfter",
+    "deadline",
+    "status",
+    "claimedAt",
+  ],
 });
 
 /**
