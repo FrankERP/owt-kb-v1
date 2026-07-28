@@ -111,7 +111,9 @@ import {
   notifyRolePublished,
   notifySetlistSaved,
   proposalReviewRecipients,
+  queuePublishedSetlistNotices,
   queueRoleNotices,
+  queueSetlistNotice,
   revalidateProposalApproval,
   revalidateRoleMutation,
   revalidateRolePublication,
@@ -495,6 +497,108 @@ describe("notifySetlistSaved", () => {
     operationalFetch.mockRejectedValueOnce(new Error("network"));
     await expect(notifySetlistSaved("2026-08-09")).resolves.toBeUndefined();
     expect(sendPushMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("setlist notice serviceDate guard", () => {
+  // A notice with no usable date could never render a correct subject line, and
+  // at flush `isPast("", today)` (a lexicographic YYYY-MM-DD comparison) has no
+  // defined reading for `""`. The mint boundary must refuse it outright rather
+  // than lean on that comparison's incidental behavior.
+  const upserted = () => outboxTransactions.flat();
+
+  it("queueSetlistNotice mints nothing when serviceDate is empty", async () => {
+    queueSetlistNotice({
+      roleId: "role-1",
+      roleType: "sunday_role",
+      serviceDate: "",
+      published: true,
+      beforeSongs: [],
+      hasSongs: true,
+      knownRecipients: [],
+    });
+    await flushAfter();
+    expect(afterCallbacks).toHaveLength(0);
+    expect(upserted()).toHaveLength(0);
+  });
+
+  it("queueSetlistNotice mints nothing when serviceDate is missing", async () => {
+    queueSetlistNotice({
+      roleId: "role-1",
+      roleType: "sunday_role",
+      serviceDate: undefined as unknown as string,
+      published: true,
+      beforeSongs: [],
+      hasSongs: true,
+      knownRecipients: [],
+    });
+    await flushAfter();
+    expect(afterCallbacks).toHaveLength(0);
+    expect(upserted()).toHaveLength(0);
+  });
+
+  it("queueSetlistNotice mints a notice once serviceDate is a real date (control)", async () => {
+    queueSetlistNotice({
+      roleId: "role-1",
+      roleType: "sunday_role",
+      serviceDate: "2026-08-09",
+      published: true,
+      beforeSongs: [],
+      hasSongs: true,
+      knownRecipients: [],
+    });
+    await flushAfter();
+    expect(upserted()).toHaveLength(1);
+  });
+
+  it("queuePublishedSetlistNotices mints nothing for a subject with an empty serviceDate", async () => {
+    queuePublishedSetlistNotices([
+      {
+        roleId: "role-2",
+        roleType: "special_role",
+        serviceDate: "",
+        role: { songs: [{ song: { _ref: "song-1" }, play_key: "C" }] },
+        knownRecipients: [],
+      },
+    ]);
+    await flushAfter();
+    expect(upserted()).toHaveLength(0);
+  });
+
+  it("queuePublishedSetlistNotices mints nothing for a subject with a missing serviceDate", async () => {
+    queuePublishedSetlistNotices([
+      {
+        roleId: "role-2",
+        roleType: "special_role",
+        serviceDate: undefined as unknown as string,
+        role: { songs: [{ song: { _ref: "song-1" }, play_key: "C" }] },
+        knownRecipients: [],
+      },
+    ]);
+    await flushAfter();
+    expect(upserted()).toHaveLength(0);
+  });
+
+  it("queuePublishedSetlistNotices still mints for the other subjects in the same batch", async () => {
+    queuePublishedSetlistNotices([
+      {
+        roleId: "role-2",
+        roleType: "special_role",
+        serviceDate: "",
+        role: { songs: [{ song: { _ref: "song-1" }, play_key: "C" }] },
+        knownRecipients: [],
+      },
+      {
+        roleId: "role-3",
+        roleType: "special_role",
+        serviceDate: "2026-08-09",
+        role: { songs: [{ song: { _ref: "song-1" }, play_key: "C" }] },
+        knownRecipients: [],
+      },
+    ]);
+    await flushAfter();
+    expect(upserted()).toHaveLength(1);
+    expect(upserted()[0].createIfNotExists._id).toBe(outboxId("setlist", "role-3"));
   });
 });
 

@@ -380,6 +380,11 @@ function setlistUpsert(input: QueueSetlistNoticeInput, now: Date) {
   // `published !== false` — missing/true is member-visible (grandfathered).
   if (input.published === false) return null;
   if (!input.roleId) return null;
+  // A notice with no usable date could never render a correct subject line —
+  // `isPast` at flush is a lexicographic YYYY-MM-DD comparison with no defined
+  // reading for `""`. Declining to mint the notice here is the right outcome,
+  // not deferring to that comparison's incidental behavior.
+  if (!input.serviceDate) return null;
   if (!input.hasSongs) return null;
   return {
     id: outboxId("setlist", input.roleId),
@@ -470,52 +475,60 @@ const WEEKEND_SETLIST_TYPE: Record<string, string> = {
  * pre-commit capture rule.
  */
 export function queuePublishedSetlistNotices(subjects: PublishedSetlistSubject[]): void {
-  if (!subjects.length) return;
-  after(async () => {
-    await attempt("outbox publish setlist upsert", async () => {
-      const weeks = [
-        ...new Set(
-          subjects
-            .filter((s) => s.roleType !== "special_role")
-            .map((s) => s.serviceDate)
-            .filter(Boolean),
-        ),
-      ];
-      const bound = weeks.length ? canonicalSetlistsForWeeksQuery(weeks) : null;
-      const rows = bound
-        ? ((await operationalClient.fetch<Record<string, unknown>[]>(bound.query, bound.params)) ?? [])
-        : [];
-
-      const hasSongs = (subject: PublishedSetlistSubject): boolean => {
-        if (subject.roleType === "special_role") {
-          const songs = (subject.role as { songs?: unknown } | null)?.songs;
-          return Array.isArray(songs) && songs.length > 0;
-        }
-        const type = WEEKEND_SETLIST_TYPE[subject.roleType];
-        const doc = rows.find((r) => r?._type === type && r?.week === subject.serviceDate);
-        return Array.isArray(doc?.songs) && (doc.songs as unknown[]).length > 0;
-      };
-
-      const now = new Date();
-      const upserts = subjects
-        .map((subject) =>
-          setlistUpsert(
-            {
-              roleId: subject.roleId,
-              roleType: subject.roleType,
-              serviceDate: subject.serviceDate,
-              // Publishing IS the `false -> true` transition; the role is visible.
-              published: true,
-              beforeSongs: [],
-              hasSongs: hasSongs(subject),
-              knownRecipients: subject.knownRecipients,
-            },
-            now,
+  // The caller already committed the business write. `attemptSync` guards this
+  // whole synchronous body — including registering the deferred block below —
+  // the same way its siblings (`queueRoleNotices`, `queueSetlistNotice`,
+  // `queueLeadNotesNotice`) guard theirs, so a throw here is logged and
+  // swallowed instead of turning a committed content write into a 500 for the
+  // client.
+  attemptSync("queuePublishedSetlistNotices build", () => {
+    if (!subjects.length) return;
+    after(async () => {
+      await attempt("outbox publish setlist upsert", async () => {
+        const weeks = [
+          ...new Set(
+            subjects
+              .filter((s) => s.roleType !== "special_role")
+              .map((s) => s.serviceDate)
+              .filter(Boolean),
           ),
-        )
-        .filter((u): u is BuiltUpsert => !!u);
-      if (!upserts.length) return;
-      await commitUpserts("outbox publish setlist upsert", upserts);
+        ];
+        const bound = weeks.length ? canonicalSetlistsForWeeksQuery(weeks) : null;
+        const rows = bound
+          ? ((await operationalClient.fetch<Record<string, unknown>[]>(bound.query, bound.params)) ?? [])
+          : [];
+
+        const hasSongs = (subject: PublishedSetlistSubject): boolean => {
+          if (subject.roleType === "special_role") {
+            const songs = (subject.role as { songs?: unknown } | null)?.songs;
+            return Array.isArray(songs) && songs.length > 0;
+          }
+          const type = WEEKEND_SETLIST_TYPE[subject.roleType];
+          const doc = rows.find((r) => r?._type === type && r?.week === subject.serviceDate);
+          return Array.isArray(doc?.songs) && (doc.songs as unknown[]).length > 0;
+        };
+
+        const now = new Date();
+        const upserts = subjects
+          .map((subject) =>
+            setlistUpsert(
+              {
+                roleId: subject.roleId,
+                roleType: subject.roleType,
+                serviceDate: subject.serviceDate,
+                // Publishing IS the `false -> true` transition; the role is visible.
+                published: true,
+                beforeSongs: [],
+                hasSongs: hasSongs(subject),
+                knownRecipients: subject.knownRecipients,
+              },
+              now,
+            ),
+          )
+          .filter((u): u is BuiltUpsert => !!u);
+        if (!upserts.length) return;
+        await commitUpserts("outbox publish setlist upsert", upserts);
+      });
     });
   });
 }
