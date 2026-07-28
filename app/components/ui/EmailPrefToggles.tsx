@@ -4,6 +4,11 @@
 // their own) and AdminPanel (a super-admin editing someone else's) so the copy
 // and — more importantly — the RESOLUTION cannot drift between the two.
 //
+// One row is hidden rather than shown-and-inert: both emails "Propuestas" gates
+// are addressed to `role in ["super-admin","admin"]`, so for a plain member that
+// switch could never change anything they receive. The stored field is untouched
+// — it is still resolved and still honoured — only the row is hidden.
+//
 // The switches must show the resolved preference, never the raw field. There was
 // no data migration: a member who opted out of the legacy `notifPrefs.email`
 // has all five fields unset, and an unset boolean renders as its `true` default.
@@ -18,7 +23,18 @@ export interface EmailPrefRow {
   field: (typeof NOTIFY_PREF_FIELD)[NotifyKind];
   label: string;
   hint: string;
+  /**
+   * The row gates emails that only ever go to an admin audience, so it is hidden
+   * from anyone else. Both proposal emails resolve their recipients with
+   * `role in ["super-admin","admin"]` (`proposalNotify.ts`, and
+   * `ADMIN_RECIPIENTS_QUERY` in `outboxSweep.ts`), so a plain member was being
+   * shown a switch that could never change anything they receive.
+   */
+  adminOnly?: boolean;
 }
+
+/** The roles the proposal emails are actually addressed to. */
+const ADMIN_ROLES = new Set(["super-admin", "admin"]);
 
 export const EMAIL_PREF_ROWS: EmailPrefRow[] = [
   {
@@ -50,8 +66,21 @@ export const EMAIL_PREF_ROWS: EmailPrefRow[] = [
     field: NOTIFY_PREF_FIELD.proposals,
     label: "Propuestas",
     hint: "Notas del líder y propuestas nuevas.",
+    adminOnly: true,
   },
 ];
+
+/**
+ * The rows a member of this role may actually act on.
+ *
+ * `EMAIL_PREF_ROWS` stays the complete list — it is what `resolveEmailPrefs`
+ * and `EmailPrefValues` are built from, and every one of the five fields is
+ * still stored, resolved and honoured by the senders for every member. This
+ * filters the RENDERED rows only.
+ */
+export function visibleEmailPrefRows(role: string | undefined): EmailPrefRow[] {
+  return EMAIL_PREF_ROWS.filter((row) => !row.adminOnly || ADMIN_ROLES.has(role ?? ""));
+}
 
 // A complete map, one entry per row — deliberately NOT `Record<string, boolean>`.
 // A partial bag is a type error here, not a silent default: the whole point of
@@ -69,12 +98,20 @@ export function resolveEmailPrefs(prefs: unknown): EmailPrefValues {
 export default function EmailPrefToggles({
   values,
   onToggle,
+  memberRole,
   showHints = true,
   busyField = null,
   disabled = false,
 }: {
   values: EmailPrefValues;
   onToggle: (field: string, next: boolean) => void;
+  /**
+   * The role of the member these switches belong to — required, so no caller can
+   * forget it and silently show an admin-only row to everybody. In `AdminPanel`
+   * it is the role currently selected in the form, so promoting someone to admin
+   * reveals the row immediately.
+   */
+  memberRole: string;
   /** Second-person hint copy — on for the member's own panel, off when an admin edits someone else. */
   showHints?: boolean;
   /** Field whose save is in flight (that one switch is disabled). */
@@ -83,7 +120,7 @@ export default function EmailPrefToggles({
 }) {
   return (
     <div className="space-y-3">
-      {EMAIL_PREF_ROWS.map((row) => {
+      {visibleEmailPrefRows(memberRole).map((row) => {
         // No fallback here: `values` is a complete EmailPrefValues, resolved once
         // by `wantsNotification` before it ever reaches this component.
         const on = values[row.field];

@@ -354,6 +354,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
             <EmailPrefToggles
               values={emailPrefs}
               onToggle={handleToggleEmailPref}
+              memberRole={member.role}
               busyField={savingPrefField}
             />
           </section>

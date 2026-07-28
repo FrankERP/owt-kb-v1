@@ -300,6 +300,9 @@ export function MemberForm({
           <EmailPrefToggles
             values={emailPrefs}
             onToggle={handleTogglePref}
+            // The role selected in THIS form, not `initial.role`: promoting
+            // someone to admin reveals the admin-only row straight away.
+            memberRole={role}
             showHints={false}
             disabled={loading}
           />

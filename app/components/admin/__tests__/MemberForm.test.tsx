@@ -57,8 +57,11 @@ describe("MemberForm — edit mode preference submission", () => {
 
   it("does not widen to the other four fields when the name also changes", () => {
     const onSubmit = vi.fn();
+    // An ADMIN, because "Propuestas" is the admin-only row: both emails it gates
+    // are addressed to `role in ["super-admin","admin"]`, so it is not rendered
+    // for a plain member (see the visibility test below).
     const { getByPlaceholderText, getByRole } = render(
-      <MemberForm initial={baseMember} onSubmit={onSubmit} onClose={() => {}} loading={false} />,
+      <MemberForm initial={{ ...baseMember, role: "admin" }} onSubmit={onSubmit} onClose={() => {}} loading={false} />,
     );
 
     fireEvent.change(getByPlaceholderText("Nombre completo"), { target: { value: "Ana T. Torres" } });
@@ -68,6 +71,20 @@ describe("MemberForm — edit mode preference submission", () => {
     const submitted = onSubmit.mock.calls[0][0];
     expect(submitted.member_name).toBe("Ana T. Torres");
     expect(submitted.emailPrefs).toEqual({ emailProposals: false });
+  });
+
+  it("hides the admin-only row for a member, and reveals it when the form promotes them", () => {
+    const { getAllByRole, queryByRole, getByRole, getByDisplayValue } = render(
+      <MemberForm initial={baseMember} onSubmit={() => {}} onClose={() => {}} loading={false} />,
+    );
+
+    expect(getAllByRole("switch")).toHaveLength(4);
+    expect(queryByRole("switch", { name: "Propuestas" })).toBeNull();
+
+    // The row follows the role selected in THIS form, not the stored one.
+    fireEvent.change(getByDisplayValue("Miembro"), { target: { value: "admin" } });
+    expect(getAllByRole("switch")).toHaveLength(5);
+    expect(getByRole("switch", { name: "Propuestas" })).toBeTruthy();
   });
 
   it("a brand-new member (no `initial`) never carries a preferences key", () => {

@@ -10,7 +10,11 @@
 
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import EmailPrefToggles, { EMAIL_PREF_ROWS, resolveEmailPrefs } from "../ui/EmailPrefToggles";
+import EmailPrefToggles, {
+  EMAIL_PREF_ROWS,
+  resolveEmailPrefs,
+  visibleEmailPrefRows,
+} from "../ui/EmailPrefToggles";
 import { CueDialogProvider } from "../ui/CueDialogProvider";
 import ProfilePanel from "../ProfilePanel";
 
@@ -52,10 +56,40 @@ describe("resolveEmailPrefs", () => {
   });
 });
 
+describe("visibleEmailPrefRows", () => {
+  // Both emails "Propuestas" gates go to `role in ["super-admin","admin"]`
+  // (proposalNotify.ts and outboxSweep's ADMIN_RECIPIENTS_QUERY), so showing that
+  // switch to a plain member offered control over nothing they could receive.
+  it("shows all five to an admin and a super-admin", () => {
+    for (const role of ["admin", "super-admin"]) {
+      expect(visibleEmailPrefRows(role).map((r) => r.field), role).toEqual(FIELDS);
+    }
+  });
+
+  it("hides the admin-only row from everyone else", () => {
+    for (const role of ["member", "content-editor", "", undefined]) {
+      expect(visibleEmailPrefRows(role).map((r) => r.field), String(role)).toEqual(
+        FIELDS.filter((f) => f !== "emailProposals"),
+      );
+    }
+  });
+
+  it("keeps EMAIL_PREF_ROWS itself complete — only the RENDERED rows are filtered", () => {
+    // The field is still stored, still resolved and still honoured by the
+    // senders for every member; this is a UI-visibility rule, not a policy one.
+    expect(EMAIL_PREF_ROWS.map((r) => r.field)).toEqual(FIELDS);
+    expect(Object.keys(resolveEmailPrefs({})).sort()).toEqual([...FIELDS].sort());
+  });
+});
+
 describe("EmailPrefToggles", () => {
-  it("draws one switch per type, checked from the resolved values", () => {
+  it("draws one switch per visible type, checked from the resolved values", () => {
     const { getAllByRole } = render(
-      <EmailPrefToggles values={resolveEmailPrefs({ email: false })} onToggle={() => {}} />,
+      <EmailPrefToggles
+        values={resolveEmailPrefs({ email: false })}
+        onToggle={() => {}}
+        memberRole="admin"
+      />,
     );
     const switches = getAllByRole("switch");
     expect(switches).toHaveLength(5);
@@ -64,10 +98,26 @@ describe("EmailPrefToggles", () => {
     );
   });
 
+  it("draws four switches for a plain member, without the admin-only row", () => {
+    const { getAllByRole, queryByRole } = render(
+      <EmailPrefToggles
+        values={resolveEmailPrefs({ email: false })}
+        onToggle={() => {}}
+        memberRole="member"
+      />,
+    );
+    const switches = getAllByRole("switch");
+    expect(switches).toHaveLength(4);
+    expect(switches.map((s) => s.getAttribute("aria-checked"))).toEqual(
+      ["false", "false", "false", "false"],
+    );
+    expect(queryByRole("switch", { name: "Propuestas" })).toBeNull();
+  });
+
   it("reports the field and the NEXT value on toggle", () => {
     const onToggle = vi.fn();
     const { getByRole } = render(
-      <EmailPrefToggles values={resolveEmailPrefs({})} onToggle={onToggle} />,
+      <EmailPrefToggles values={resolveEmailPrefs({})} onToggle={onToggle} memberRole="member" />,
     );
     fireEvent.click(getByRole("switch", { name: "Setlist" }));
     expect(onToggle).toHaveBeenCalledWith("emailSetlist", false);
@@ -84,10 +134,10 @@ const baseMember = {
   hasPassword: true,
 };
 
-function openProfile(notifPrefs: Record<string, unknown> | undefined) {
+function openProfile(notifPrefs: Record<string, unknown> | undefined, role = baseMember.role) {
   const utils = render(
     <CueDialogProvider>
-      <ProfilePanel initialMember={{ ...baseMember, notifPrefs }} />
+      <ProfilePanel initialMember={{ ...baseMember, role, notifPrefs }} />
     </CueDialogProvider>,
   );
   act(() => { fireEvent.click(utils.getByRole("button", { name: /Editar perfil/i })); });
@@ -99,22 +149,30 @@ describe("ProfilePanel notification section", () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({}) })));
   });
 
-  it("shows five switches OFF for a member who opted out before per-type toggles existed", () => {
-    const { getAllByRole } = openProfile({ email: false });
+  it("shows every switch OFF for a member who opted out before per-type toggles existed", () => {
+    const { getAllByRole, queryByRole } = openProfile({ email: false });
     const switches = getAllByRole("switch");
-    expect(switches).toHaveLength(5);
+    // Four, not five: "Propuestas" gates two admin-only emails (see above).
+    expect(switches).toHaveLength(4);
     for (const s of switches) expect(s.getAttribute("aria-checked")).toBe("false");
+    expect(queryByRole("switch", { name: "Propuestas" })).toBeNull();
   });
 
-  it("shows five switches ON for a member who never touched a preference", () => {
+  it("shows every switch ON for a member who never touched a preference", () => {
     const { getAllByRole } = openProfile({});
     const switches = getAllByRole("switch");
-    expect(switches).toHaveLength(5);
+    expect(switches).toHaveLength(4);
     for (const s of switches) expect(s.getAttribute("aria-checked")).toBe("true");
   });
 
+  it("shows the admin-only row to an admin, resolved like the rest", () => {
+    const { getAllByRole, getByRole } = openProfile({ email: false }, "admin");
+    expect(getAllByRole("switch")).toHaveLength(5);
+    expect(getByRole("switch", { name: "Propuestas" }).getAttribute("aria-checked")).toBe("false");
+  });
+
   it("honours an explicit per-type field over the legacy fallback", () => {
-    const { getByRole } = openProfile({ email: false, emailProposals: true });
+    const { getByRole } = openProfile({ email: false, emailProposals: true }, "admin");
     expect(getByRole("switch", { name: "Propuestas" }).getAttribute("aria-checked")).toBe("true");
     expect(getByRole("switch", { name: "Setlist" }).getAttribute("aria-checked")).toBe("false");
   });
