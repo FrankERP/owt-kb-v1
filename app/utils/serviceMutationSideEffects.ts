@@ -21,9 +21,14 @@
 //    cambió" fifteen minutes later for one edit. The push says SOMETHING
 //    changed; the grouped email, once the edits stop, says WHAT.
 //  - Delivery is best-effort AT-MOST-ONCE: each attempt is logged and swallowed,
-//    never rolled back into content, and one failure never skips the rest. There
-//    is exactly one deferred attempt per committed request, so an HTTP retry that
-//    replays idempotently produces no second attempt.
+//    never rolled back into content, and one failure never skips the rest. A
+//    committed request can register MORE THAN ONE deferred `after()` block —
+//    a published edit registers two (the push fan-out, then the outbox
+//    upsert), a swap registers one push fan-out plus one outbox upsert per
+//    affected role. What stays true per notice is idempotency: each outbox
+//    upsert's `_id` is deterministic (member + role), so an HTTP retry that
+//    replays a request produces no second outbox document, whatever the
+//    number of attempts.
 //
 // Reads here go through the canonical operational client, so the audience is the
 // published perspective and a `drafts.*` overlay can never widen it. The one
@@ -55,6 +60,22 @@ import { seatAssignees, type NormalizedSeats } from "./roleWriteRequest";
 async function attempt(label: string, fn: () => unknown | Promise<unknown>): Promise<void> {
   try {
     await fn();
+  } catch (err) {
+    console.error(`[sideEffects] ${label} failed:`, err);
+  }
+}
+
+/**
+ * Synchronous counterpart to {@link attempt}: run one SYNCHRONOUS build step
+ * that happens after a business write already committed, and log-and-swallow
+ * any throw exactly like a deferred delivery attempt. Without this, a throw
+ * while building a post-commit payload would propagate out of the route
+ * handler and turn an already-committed content write into a 500 for the
+ * client — the one thing §7's guarantee says must never happen.
+ */
+function attemptSync(label: string, fn: () => void): void {
+  try {
+    fn();
   } catch (err) {
     console.error(`[sideEffects] ${label} failed:`, err);
   }
@@ -262,50 +283,56 @@ const NO_SEATS: NormalizedSeats = { leads: [], bgvs: [], chorus: [], instruments
  * publishing is what introduces it.
  */
 export function queueRoleNotices(input: QueueRoleNoticesInput): void {
-  // `published !== false` — missing/true is member-visible (grandfathered).
-  if (input.published === false) return;
+  // The caller already committed the business write; everything below runs
+  // AFTER that commit. `attemptSync` guards this whole synchronous build the
+  // same way `attempt` guards the deferred write below, so a throw here is
+  // logged and swallowed instead of turning a committed write into a 500.
+  attemptSync("queueRoleNotices build", () => {
+    // `published !== false` — missing/true is member-visible (grandfathered).
+    if (input.published === false) return;
 
-  const before = input.beforeSeats ?? NO_SEATS;
-  // A deleted role has no post-state, whatever the caller passed.
-  const afterState = (input.deleted ? null : input.afterSeats) ?? NO_SEATS;
+    const before = input.beforeSeats ?? NO_SEATS;
+    // A deleted role has no post-state, whatever the caller passed.
+    const afterState = (input.deleted ? null : input.afterSeats) ?? NO_SEATS;
 
-  const members = [...new Set([...seatAssignees(before), ...seatAssignees(afterState)])];
-  if (!members.length) return;
+    const members = [...new Set([...seatAssignees(before), ...seatAssignees(afterState)])];
+    if (!members.length) return;
 
-  // Every value the deferred block writes is computed HERE, synchronously, from
-  // arguments the writer captured pre-commit. The block itself reads nothing.
-  const now = new Date();
-  const upserts = members.map((memberId) => ({
-    id: outboxId("role", `${memberId}__${input.roleId}`),
-    ...buildUpsert(
-      {
-        kind: "role",
-        subjectKey: `${memberId}__${input.roleId}`,
-        memberId,
-        roleId: input.roleId,
-        proposalId: null,
-        serviceDate: input.serviceDate,
-        roleType: input.roleType,
-        before: { beforeRoles: rolesForMember(memberId, before) },
-        // One member per `role` notice, so they are the whole known audience.
-        knownRecipients: [memberId],
-      },
-      now,
-    ),
-  }));
+    // Every value the deferred block writes is computed HERE, synchronously, from
+    // arguments the writer captured pre-commit. The block itself reads nothing.
+    const now = new Date();
+    const upserts = members.map((memberId) => ({
+      id: outboxId("role", `${memberId}__${input.roleId}`),
+      ...buildUpsert(
+        {
+          kind: "role",
+          subjectKey: `${memberId}__${input.roleId}`,
+          memberId,
+          roleId: input.roleId,
+          proposalId: null,
+          serviceDate: input.serviceDate,
+          roleType: input.roleType,
+          before: { beforeRoles: rolesForMember(memberId, before) },
+          // One member per `role` notice, so they are the whole known audience.
+          knownRecipients: [memberId],
+        },
+        now,
+      ),
+    }));
 
-  after(async () => {
-    // ONE transaction for this role's notices. No op asserts a revision, so
-    // there is no per-op conflict to isolate — a failure here is transport or
-    // auth, which would fail every op alike. `attempt` keeps it swallowed.
-    await attempt("outbox role upsert", () => {
-      let tx = writeClient.transaction();
-      for (const upsert of upserts) {
-        tx = tx
-          .createIfNotExists(upsert.createIfNotExists as { _id: string; _type: string })
-          .patch(upsert.id, (p) => p.set(upsert.patchSet));
-      }
-      return tx.commit();
+    after(async () => {
+      // ONE transaction for this role's notices. No op asserts a revision, so
+      // there is no per-op conflict to isolate — a failure here is transport or
+      // auth, which would fail every op alike. `attempt` keeps it swallowed.
+      await attempt("outbox role upsert", () => {
+        let tx = writeClient.transaction();
+        for (const upsert of upserts) {
+          tx = tx
+            .createIfNotExists(upsert.createIfNotExists as { _id: string; _type: string })
+            .patch(upsert.id, (p) => p.set(upsert.patchSet));
+        }
+        return tx.commit();
+      });
     });
   });
 }
