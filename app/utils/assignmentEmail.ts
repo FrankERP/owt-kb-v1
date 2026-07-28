@@ -84,12 +84,12 @@ export function buildAssignmentEmail(o: { name: string; roles: string[]; type: S
   const subject = `Asignación — ${svc} ${dateFmt}`;
   const body =
     tr(td(
-      `<p style="margin:0 0 4px;font:14px system-ui,sans-serif;color:${C.frost}">Hola ${name},</p>` +
-      `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.frost}">Sirves como <strong style="color:${C.beam}">${rolesText}</strong> el <strong style="color:${C.frost}">${svc} ${dateFmt}</strong>.</p>`,
+      `<p style="margin:0 0 4px;font:14px system-ui,sans-serif;color:${C.ink}">Hola ${name},</p>` +
+      `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}">Sirves como <strong style="color:${C.accent}">${rolesText}</strong> el <strong style="color:${C.ink}">${svc} ${dateFmt}</strong>.</p>`,
       { style: "padding:0 24px 18px" },
     )) +
     tr(td(
-      `<a href="${link}" style="display:inline-block;background:${C.beam};color:${C.blackout};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Ver servicio →</a>`,
+      `<a href="${link}" style="display:inline-block;background:${C.accent};color:${C.field};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Ver servicio →</a>`,
       { style: "padding:0 24px 20px" },
     ));
   const html = shell(body, link);
@@ -109,28 +109,28 @@ export function buildBatchAssignmentEmail(o: { name: string; items: { type: Serv
   const n = o.items.length;
   const subject = `Nuevas asignaciones — ${n} servicios`;
   const headCell = (text: string) => td(
-    `<span style="font:700 10px system-ui,sans-serif;text-transform:uppercase;letter-spacing:.08em;color:${C.steel}">${text}</span>`,
-    { bg: C.deck, style: `padding:8px 8px;border-bottom:1px solid ${C.blackout}` },
+    `<span style="font:700 10px system-ui,sans-serif;text-transform:uppercase;letter-spacing:.08em;color:${C.muted}">${text}</span>`,
+    { bg: C.surface, style: `padding:8px 8px;border-bottom:1px solid ${C.field}` },
   );
   const rows = o.items.map((it) => {
     const svc = SERVICE_LABEL[it.type];
     const dateFmt = new Date(it.date + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" });
     const rolesText = escapeHtml(it.roles.length ? it.roles.join(", ") : "el equipo");
     return tr(
-      td(`<span style="color:${C.frost};font:13px system-ui,sans-serif">${svc} ${dateFmt}</span>`, { style: "padding:8px 8px" }) +
-      td(`<strong style="color:${C.beam};font:13px system-ui,sans-serif">${rolesText}</strong>`, { style: "padding:8px 8px" }),
+      td(`<span style="color:${C.ink};font:13px system-ui,sans-serif">${svc} ${dateFmt}</span>`, { style: "padding:8px 8px" }) +
+      td(`<strong style="color:${C.accent};font:13px system-ui,sans-serif">${rolesText}</strong>`, { style: "padding:8px 8px" }),
     );
   }).join("");
-  const table = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.deck}" style="background:${C.deck};border-collapse:collapse">${tr(headCell("Fecha") + headCell("Tu rol"))}${rows}</table>`;
+  const table = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.surface}" style="background:${C.surface};border-collapse:collapse">${tr(headCell("Fecha") + headCell("Tu rol"))}${rows}</table>`;
   const body =
     tr(td(
-      `<p style="margin:0 0 4px;font:14px system-ui,sans-serif;color:${C.frost}">Hola ${name},</p>` +
-      `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.frost}">Tienes <strong style="color:${C.beam}">${n}</strong> nuevas asignaciones:</p>`,
+      `<p style="margin:0 0 4px;font:14px system-ui,sans-serif;color:${C.ink}">Hola ${name},</p>` +
+      `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}">Tienes <strong style="color:${C.accent}">${n}</strong> nuevas asignaciones:</p>`,
       { style: "padding:0 24px 12px" },
     )) +
     tr(td(table, { style: "padding:0 24px 20px" })) +
     tr(td(
-      `<a href="${link}" style="display:inline-block;background:${C.beam};color:${C.blackout};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Ver mis servicios →</a>`,
+      `<a href="${link}" style="display:inline-block;background:${C.accent};color:${C.field};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Ver mis servicios →</a>`,
       { style: "padding:0 24px 20px" },
     ));
   const html = shell(body, link);

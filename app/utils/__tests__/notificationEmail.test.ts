@@ -107,18 +107,18 @@ describe("buildGroupedEmail", () => {
     expect(subject).toContain("9 ago");
   });
 
-  it("puts bgcolor on cells so a dark email survives Gmail and Apple Mail", () => {
+  it("puts bgcolor on every cell so no client has to guess a surface colour", () => {
     const { html } = buildGroupedEmail({ name: "Ana", lines: [roleLine("assigned", [], ["Líder"])] }, titles);
-    expect(html).toContain('bgcolor="#010B17"');
+    expect(html).toContain('bgcolor="#F4F7FA"');
     expect(html).not.toContain("display:flex");
-    // The one <style> block is the Outlook dark-mode opt-out, added after Outlook
-    // for Mac was observed rewriting #071624 to slate grey. It is enhancement
-    // only: this assertion is what guarantees the layout still does not depend on
-    // it, since every colour remains inline and on bgcolor.
+    // The one <style> block restates each surface colour so a themeing client
+    // has nothing to guess at. It is enhancement only: this assertion is what
+    // guarantees the layout does not depend on it, since every colour remains
+    // inline and on bgcolor.
     expect(html.replace(/<style>[\s\S]*?<\/style>/, "")).not.toContain("<style");
   });
 
-  it("pins the exact movement colours: signal up, amber down, steel dash", () => {
+  it("pins the exact movement colours: positive up, warning down, muted dash", () => {
     // before: [x, y, z] → after: [y, x, z] — y moves up, x moves down, z holds.
     const line: Line = {
       kind: "setlistChanged", serviceDate: "2026-08-09", roleType: "sunday_role",
@@ -128,9 +128,9 @@ describe("buildGroupedEmail", () => {
     };
     const withXYZ = new Map([...titles, ["x", "X"], ["y", "Y"], ["z", "Z"]]);
     const { html } = buildGroupedEmail({ name: "Ana", lines: [line] }, withXYZ);
-    expect(html).toContain('color:#37F58A">▲1');
-    expect(html).toContain('color:#F5B437">▼1');
-    expect(html).toContain('color:#7F94A8">&ndash;');
+    expect(html).toContain('color:#127A45">▲1');
+    expect(html).toContain('color:#9A6206">▼1');
+    expect(html).toContain('color:#566B7F">&ndash;');
   });
 
   it("renders NUEVA and SALIÓ chips for an actually added and removed song", () => {

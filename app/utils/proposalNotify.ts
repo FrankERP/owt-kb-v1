@@ -36,16 +36,16 @@ export function buildProposalEmail(o: { leadName: string; serviceType: string; s
   const link = `${appBaseUrl()}/admin`;
   const subject = `Nueva propuesta — ${svc} ${dateFmt}`;
   const header = tr(td(
-    `<span style="font:700 15px system-ui,sans-serif;color:${C.frost}">Nueva propuesta de setlist</span>`,
+    `<span style="font:700 15px system-ui,sans-serif;color:${C.ink}">Nueva propuesta de setlist</span>`,
     { style: "padding:18px 24px 8px" },
   ));
   const body = header +
     tr(td(
-      `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.frost}"><strong style="color:${C.beam}">${lead}</strong> envió una propuesta para el <strong style="color:${C.frost}">${svc} ${dateFmt}</strong> y está lista para tu revisión.</p>`,
+      `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}"><strong style="color:${C.accent}">${lead}</strong> envió una propuesta para el <strong style="color:${C.ink}">${svc} ${dateFmt}</strong> y está lista para tu revisión.</p>`,
       { style: "padding:0 24px 18px" },
     )) +
     tr(td(
-      `<a href="${link}" style="display:inline-block;background:${C.beam};color:${C.blackout};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Revisar propuesta →</a>`,
+      `<a href="${link}" style="display:inline-block;background:${C.accent};color:${C.field};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Revisar propuesta →</a>`,
       { style: "padding:0 24px 20px" },
     ));
   const html = shell(body, link);
