@@ -177,6 +177,36 @@ describe("email template gallery", () => {
     const out = ".preview-emails";
     mkdirSync(out, { recursive: true });
     for (const g of gallery) writeFileSync(join(out, g.file), g.html, "utf8");
+
+    // Also emit RFC-822 messages. Opening one in Outlook for Windows renders it
+    // through the same Word engine a received message uses, which settles §6's
+    // remaining unverified behaviour (border-radius and padding on the key pills)
+    // without needing SMTP credentials or sending anything.
+    //
+    // quoted-printable, not 8bit: the templates carry accented Spanish and the
+    // ▲/▼ glyphs, and a raw 8-bit body is exactly what some clients mangle into
+    // mojibake — which would look like a template bug rather than a transfer
+    // encoding one.
+    const qp = (s: string) =>
+      Buffer.from(s, "utf8")
+        .toString("binary")
+        .replace(/[^\x20-\x3C\x3E-\x7E]/g, (c) => `=${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`)
+        .replace(/(.{1,73})/g, "$1=\r\n")
+        .replace(/=\r\n$/, "");
+    const b64 = (s: string) => `=?utf-8?B?${Buffer.from(s, "utf8").toString("base64")}?=`;
+    for (const g of gallery) {
+      const eml = [
+        "MIME-Version: 1.0",
+        "From: Oasis Worship Team <contacto@oasis.mx>",
+        "To: Prueba <preview@example.com>",
+        `Subject: ${b64(g.subject)}`,
+        "Content-Type: text/html; charset=utf-8",
+        "Content-Transfer-Encoding: quoted-printable",
+        "",
+        qp(g.html),
+      ].join("\r\n");
+      writeFileSync(join(out, g.file.replace(/\.html$/, ".eml")), eml, "utf8");
+    }
     const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
     writeFileSync(join(out, "index.html"), `<!doctype html><meta charset="utf-8">
 <title>Vista previa de correos</title>
