@@ -16,8 +16,22 @@ export const maxDuration = 60;
 export const GET = withVerificationRunContext(getHandler);
 
 async function getHandler(req: NextRequest) {
-  const secret = req.headers.get("authorization")?.replace("Bearer ", "") || req.nextUrl.searchParams.get("secret");
-  if (secret !== process.env.CRON_SECRET) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // FAIL CLOSED explicitly, matching /api/cron/flush-notifications. This route is
+  // now reachable without a session (the middleware matcher excludes /api/cron/*),
+  // so this check is the ONLY thing in front of it.
+  //
+  // The previous form was `presented !== process.env.CRON_SECRET`, which reads as
+  // a fail-open risk with the secret unset (`undefined !== undefined` → false →
+  // run). It was not actually exploitable: `presented` is `null` or a string and
+  // never `undefined`, so an unset secret still refused everyone. But that safety
+  // rested on a null-vs-undefined accident, one `?? undefined` refactor away from
+  // becoming a public endpoint. Behaviour is unchanged — 403 either way.
+  const configured = process.env.CRON_SECRET;
+  const presented =
+    req.headers.get("authorization")?.replace("Bearer ", "") || req.nextUrl.searchParams.get("secret");
+  if (!configured || presented !== configured) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const day = tomorrowDateStr("America/Mexico_City");
   const roleFilter = `_type in ["sunday_role","saturday_role","special_role"] && (week == $day || date == $day) && published != false`;
