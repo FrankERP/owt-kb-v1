@@ -116,13 +116,26 @@ describe("studio protection policy", () => {
     expect(isProtectedStudioType(null)).toBe(false);
   });
 
-  it("marks the two coordination types as internal, with an extra create mechanism", () => {
-    expect([...INTERNAL_STUDIO_TYPES]).toEqual(["roleTargetLock", "roleCreationReceipt"]);
+  it("marks the coordination types as internal, with an extra create mechanism", () => {
+    expect([...INTERNAL_STUDIO_TYPES]).toEqual(["roleTargetLock", "roleCreationReceipt", "notificationOutbox"]);
     for (const type of INTERNAL_STUDIO_TYPES) {
       expect(isInternalStudioType(type)).toBe(true);
       expect(studioCapability(type, "create").mechanism).toContain("hidden");
     }
     expect(isInternalStudioType("sunday_role")).toBe(false);
+  });
+
+  it("governs notificationOutbox as prunable by an operator but never hand-authored", () => {
+    // Coordination state written only by the server write token (spec §1). Pruning
+    // a stuck or malformed entry is legitimate operator work; hand-authoring or
+    // editing one is not — so it must be BOTH delete-only and internal at once.
+    expect(studioCapability("notificationOutbox", "read").allowed).toBe(true);
+    expect(studioCapability("notificationOutbox", "create").allowed).toBe(false);
+    expect(studioCapability("notificationOutbox", "update").allowed).toBe(false);
+    expect(studioCapability("notificationOutbox", "delete").allowed).toBe(true);
+    expect(studioCapability("notificationOutbox", "create").mechanism).toContain("hidden");
+    expect(isDeleteOnlyStudioType("notificationOutbox")).toBe(true);
+    expect(isInternalStudioType("notificationOutbox")).toBe(true);
   });
 
   it("keeps the lock state and the internal idempotency fields hidden", () => {
@@ -145,8 +158,8 @@ describe("studio protection policy", () => {
 // ── The delete-only category (Service Readiness A3 §4) ──────────────────────
 
 describe("delete-only studio policy (loginEvent)", () => {
-  it("covers exactly loginEvent, and is governed but not `protected`", () => {
-    expect([...DELETE_ONLY_STUDIO_TYPES]).toEqual(["loginEvent"]);
+  it("covers exactly loginEvent and notificationOutbox, and is governed but not `protected`", () => {
+    expect([...DELETE_ONLY_STUDIO_TYPES]).toEqual(["loginEvent", "notificationOutbox"]);
     expect(isDeleteOnlyStudioType("loginEvent")).toBe(true);
     expect(isDeleteOnlyStudioType("post")).toBe(false);
     expect(isGovernedStudioType("loginEvent")).toBe(true);
