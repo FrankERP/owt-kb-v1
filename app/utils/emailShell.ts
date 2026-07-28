@@ -48,7 +48,7 @@ export function shell(bodyRows: string, link: string): string {
     `<a href="${link}" style="font:12px system-ui,sans-serif;color:${C.beam};text-decoration:none">Ajustar mis avisos →</a>`,
     { style: `padding:16px 24px 24px;border-top:1px solid ${C.deck}` },
   ));
-  return (
+  const body =
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.blackout}" style="background:${C.blackout};margin:0;padding:0">` +
     tr(td(
       `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.console}" style="max-width:600px;background:${C.console};border-collapse:collapse">` +
@@ -56,6 +56,24 @@ export function shell(bodyRows: string, link: string): string {
       `</table>`,
       { align: "center", style: "padding:24px 12px" },
     )) +
-    `</table>`
+    `</table>`;
+
+  // A dark-mode-aware client that is not TOLD the email is already dark will
+  // "helpfully" remap it: Outlook for Mac lightened blackout (#010B17) to a
+  // slate grey and darkened the signal-green chips, flattening the design while
+  // leaving beam and amber untouched. `color-scheme` is the declaration that
+  // opts out of that transformation, and it is a meta tag rather than a <style>
+  // block, so §6's no-stylesheet-dependency rule still holds.
+  //
+  // It is honoured by WebKit-based clients — Apple Mail, iOS Mail, Outlook for
+  // Mac. It does NOT reach Outlook on Windows, whose Word engine ignores it;
+  // that client remains the open question §6 names.
+  return (
+    `<!doctype html><html><head><meta charset="utf-8">` +
+    `<meta name="color-scheme" content="dark">` +
+    `<meta name="supported-color-schemes" content="dark">` +
+    `</head><body style="margin:0;padding:0;background:${C.blackout}">` +
+    body +
+    `</body></html>`
   );
 }
