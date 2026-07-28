@@ -255,6 +255,36 @@ describe("email template gallery", () => {
     // encoding one.
     const qp = quotedPrintable;
     const b64 = (s: string) => `=?utf-8?B?${Buffer.from(s, "utf8").toString("base64")}?=`;
+    // ── Light-surface variant, for side-by-side comparison ──────────────────
+    // Not production code: a colour-swap of the rendered output, so the two can
+    // be judged on identical content. Every screenshot of the dark templates
+    // showed the SAME pattern — brand accents (beam, amber, signal, frost)
+    // survived every client transform, and only the dark SURFACES were remapped.
+    // Client dark-mode transforms assume email is light: darkening a light email
+    // is the case they handle well, lightening a dark one is the edge case they
+    // handle badly. This variant works with that grain instead of against it.
+    //
+    // Single-pass replace, deliberately: `#0D2234` is both a source (deck) and a
+    // target (frost), so sequential replaces would re-map their own output.
+    const LIGHT: Record<string, string> = {
+      "#010B17": "#F4F7FA", // field  → near-white
+      "#071624": "#FFFFFF", // panel  → white
+      "#0D2234": "#EDF2F7", // table  → light tint
+      "#12C8F4": "#0B6E93", // beam   → darkened for contrast on white
+      "#37F58A": "#127A45", // signal → darkened; chips keep light text
+      "#D7E7F6": "#10243A", // frost  → primary text, dark navy
+      "#7F94A8": "#566B7F", // steel  → secondary text
+      "#F5B437": "#9A6206", // amber  → darkened for contrast on white
+      "#3B4A5A": "#CBD7E3", // gone   → light grey chip
+    };
+    const toLight = (html: string) =>
+      html.replace(/#[0-9A-Fa-f]{6}/g, (m) => LIGHT[m.toUpperCase()] ?? m);
+
+    mkdirSync(join(out, "light"), { recursive: true });
+    for (const g of gallery) {
+      writeFileSync(join(out, "light", g.file), toLight(g.html), "utf8");
+    }
+
     for (const g of gallery) {
       const eml = [
         "MIME-Version: 1.0",
@@ -267,6 +297,18 @@ describe("email template gallery", () => {
         qp(g.html),
       ].join("\r\n");
       writeFileSync(join(out, g.file.replace(/\.html$/, ".eml")), eml, "utf8");
+
+      const lightEml = [
+        "MIME-Version: 1.0",
+        "From: Oasis Worship Team <contacto@oasis.mx>",
+        "To: Prueba <preview@example.com>",
+        `Subject: ${b64(`[CLARO] ${g.subject}`)}`,
+        "Content-Type: text/html; charset=utf-8",
+        "Content-Transfer-Encoding: quoted-printable",
+        "",
+        qp(toLight(g.html)),
+      ].join("\r\n");
+      writeFileSync(join(out, "light", g.file.replace(/\.html$/, ".eml")), lightEml, "utf8");
     }
     const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
     writeFileSync(join(out, "index.html"), `<!doctype html><meta charset="utf-8">
