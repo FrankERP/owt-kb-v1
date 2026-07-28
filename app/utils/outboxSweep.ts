@@ -69,7 +69,17 @@ const TIMEZONE = "America/Mexico_City";
  * per-service seat count, which for a Sunday on this team is 12–20. */
 export const EMAIL_LIMIT = parsePositiveEnv(process.env.NOTIFY_FLUSH_EMAIL_LIMIT, 40);
 
-/** Wall-clock bound on the send stage, inside the hosting route's maxDuration. */
+/**
+ * Wall-clock bound on the SEND STAGE, inside the hosting route's maxDuration.
+ *
+ * "Send stage" is literal: the clock starts immediately before the first
+ * `sendEmail`, not at the top of the sweep. §1 states the budget as
+ * `ms_per_send × EMAIL_LIMIT < SEND_BUDGET_MS`, and charging the read phase
+ * (the due-notices fetch, one recipient round trip per candidate, one
+ * `Patch.commit()` per claim, 2–3 reads per classification, the members read and
+ * the titles read) against it would silently turn that into
+ * `ms_per_send × EMAIL_LIMIT < SEND_BUDGET_MS − read_time`.
+ */
 export const SEND_BUDGET_MS = parsePositiveEnv(process.env.NOTIFY_SEND_BUDGET_MS, 40_000);
 
 /**
@@ -374,7 +384,10 @@ async function consume(claimed: ClaimedNotice[]): Promise<number> {
 export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport> {
   const emailLimit = opts.emailLimit ?? EMAIL_LIMIT;
   const sendBudgetMs = opts.sendBudgetMs ?? SEND_BUDGET_MS;
-  const startedAt = Date.now();
+  /** Whole-sweep wall clock — for the completion log only, never for the budget. */
+  const sweepStartedAt = Date.now();
+  /** Stage-7 wall clock, set where stage 7 begins; `null` if it never ran. */
+  let sendMs: number | null = null;
   const report: SweepReport = { claimed: 0, emailed: 0, consumed: 0, deferred: 0, unserved: 0 };
 
   // ── 1. Gate ───────────────────────────────────────────────────────────────
@@ -516,10 +529,17 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
     const allow = getAllowlist();
     const redirectTo = process.env.EMAIL_REDIRECT_TO?.trim();
     const entries = [...grouped.entries()];
+    // THE BUDGET CLOCK STARTS HERE, not at the top of the sweep. Everything
+    // above this line is read time, and stage 8 consumes UNCONDITIONALLY: a
+    // batch that overran a budget already half-spent on reads would lose the
+    // tail of its recipient list permanently and silently — on exactly the
+    // 12–20-seat Sunday services `EMAIL_LIMIT = 40` exists to protect. With the
+    // clock here, §1's inequality means what §1 says it means.
+    const sendStartedAt = Date.now();
     for (let i = 0; i < entries.length; i++) {
       // Bounded by wall clock. Without this bound, a sweep killed mid-fan-out
       // re-sends from the top on every lease expiry, forever.
-      if (Date.now() - startedAt >= sendBudgetMs) {
+      if (Date.now() - sendStartedAt >= sendBudgetMs) {
         report.unserved = entries.length - i;
         log("notify_sweep_send_budget_exhausted", {
           unserved: report.unserved,
@@ -544,11 +564,26 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
       if (res.ok) report.emailed++;
       else logError("notify_sweep_send_failed", { memberId: recipientId, error: res.error });
     }
+    sendMs = Date.now() - sendStartedAt;
   } catch (err) {
     logError("notify_sweep_failed", { claimed: claimed.length }, err);
   } finally {
     // ── 8. Consume ────────────────────────────────────────────────────────────
     report.consumed = await consume(claimed);
+    // §1's inequality rests on `ms_per_send`, and nobody has ever measured one.
+    // This line is what turns it from an assumption into an observed production
+    // number: `sendMs` is stage 7 alone, so `msPerSend` is exactly the quantity
+    // the release gate asks for, while `elapsedMs − sendMs` is the read time the
+    // budget deliberately no longer charges for. It is the smallest change that
+    // gives silent notification loss a number someone can look at.
+    log("notify_sweep_done", {
+      ...report,
+      elapsedMs: Date.now() - sweepStartedAt,
+      sendMs,
+      msPerSend: sendMs !== null && report.emailed > 0 ? Math.round(sendMs / report.emailed) : null,
+      emailLimit,
+      sendBudgetMs,
+    });
   }
 
   return report;
