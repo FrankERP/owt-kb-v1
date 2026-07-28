@@ -52,16 +52,55 @@ export type ProtectedStudioType = (typeof PROTECTED_STUDIO_TYPES)[number];
  * restriction and every mutating action was available again. The policy now
  * lives here, in code, and is asserted by
  * `app/utils/__tests__/studioProtection.test.ts`.
+ *
+ * `notificationOutbox` is the debounce/coordination queue for email notifications.
+ * It is written only by the server write token through the guarded outbox writers
+ * (`app/utils/serviceMutationSideEffects.ts`, `app/utils/outboxSweep.ts`), and it
+ * needs the same "prunable, never hand-authored" shape as `loginEvent` — but it is
+ * ALSO never hand-authored at all, so it is additionally listed in
+ * `INTERNAL_STUDIO_TYPES` below. `studioCapability` composes both: delete-only
+ * governs read/create/update/delete, and internal-ness is still consulted for the
+ * create mechanism so the "hidden" affordance isn't lost to the delete-only branch.
  */
-export const DELETE_ONLY_STUDIO_TYPES = ["loginEvent"] as const;
+export const DELETE_ONLY_STUDIO_TYPES = ["loginEvent", "notificationOutbox"] as const;
 
 export type DeleteOnlyStudioType = (typeof DELETE_ONLY_STUDIO_TYPES)[number];
 
 /**
+ * Reason text for the delete-only decisions, one entry per {@link DeleteOnlyStudioType}.
+ * Kept as data rather than inline in `studioCapability` so every delete-only type
+ * gets prose that is actually true of it — `loginEvent`'s "would falsify an audit
+ * record" language does not hold for `notificationOutbox`, which is coordination
+ * state, not an audit trail.
+ */
+const DELETE_ONLY_REASONS: Readonly<Record<DeleteOnlyStudioType, { read: string; prune: string; create: string; update: string }>> =
+  Object.freeze({
+    loginEvent: {
+      read: "loginEvent is an audit trail; reading it is the point.",
+      prune:
+        "Pruning loginEvent entries is legitimate operator work, and the A3 verification reset deletes its own run-owned events by exact _id.",
+      create:
+        "loginEvent documents are written only by the server (auth.ts events.signIn); a hand-authored entry would falsify an audit record.",
+      update: "loginEvent fields are read-only in the Studio; editing an audit record would falsify it.",
+    },
+    notificationOutbox: {
+      read: "notificationOutbox is coordination state; reading it is how an operator diagnoses a stuck or malformed entry.",
+      prune:
+        "Pruning notificationOutbox entries is legitimate operator work: the sweep already claims and consumes its own entries, so a stray or malformed one is safe to remove by hand.",
+      create:
+        "notificationOutbox documents are written only by the server write token, through the guarded outbox writers; a hand-authored entry is not legitimate coordination state.",
+      update:
+        "notificationOutbox fields are read-only in the Studio; editing an entry by hand is not legitimate coordination state.",
+    },
+  });
+
+/**
  * Internal coordination types: never authored by hand at all, so they are also
  * `hidden: true` in the schema and never appear in any create affordance.
+ * `notificationOutbox` is additionally delete-only (above) — it is the one type
+ * governed by both lists at once.
  */
-export const INTERNAL_STUDIO_TYPES = ["roleTargetLock", "roleCreationReceipt"] as const;
+export const INTERNAL_STUDIO_TYPES = ["roleTargetLock", "roleCreationReceipt", "notificationOutbox"] as const;
 
 /**
  * Fields owned by the guarded writers and never hand-authored: the lock's
@@ -72,8 +111,9 @@ export const INTERNAL_STUDIO_TYPES = ["roleTargetLock", "roleCreationReceipt"] a
  * both:
  *   · on the three role types the listed fields are `hidden: true` FIELDS inside
  *     an otherwise operator-visible document;
- *   · `roleTargetLock` / `roleCreationReceipt` are `hidden: true` TYPES, so every
- *     field is off the authoring surface with them.
+ *   · `roleTargetLock` / `roleCreationReceipt` / `notificationOutbox` are
+ *     `hidden: true` TYPES, so every field is off the authoring surface with
+ *     them.
  * The read-only inspection group in `sanity/structure.ts` is the one deliberate
  * place these are visible, and it cannot write.
  */
@@ -83,6 +123,22 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
   special_role: ["creationReceiptId", "creationFingerprint"],
   roleTargetLock: ["targetKey", "state", "roleId", "roleType", "claimNonce", "generation"],
   roleCreationReceipt: ["requestId", "fingerprint", "roleId", "targetIdentity", "state"],
+  notificationOutbox: [
+    "kind",
+    "subjectKey",
+    "memberId",
+    "roleId",
+    "proposalId",
+    "serviceDate",
+    "roleType",
+    "before",
+    "knownRecipients",
+    "firstQueuedAt",
+    "notifyAfter",
+    "deadline",
+    "status",
+    "claimedAt",
+  ],
 });
 
 /**
@@ -180,33 +236,27 @@ export function isInternalStudioField(typeName: unknown, fieldName: unknown): bo
  */
 export function studioCapability(typeName: unknown, capability: string): StudioCapabilityDecision {
   if (isDeleteOnlyStudioType(typeName)) {
+    const reasons = DELETE_ONLY_REASONS[typeName];
     if (READ_ONLY_SET.has(capability)) {
-      return {
-        allowed: true,
-        mechanism: "read-only inspection",
-        reason: `${typeName} is an audit trail; reading it is the point.`,
-      };
+      return { allowed: true, mechanism: "read-only inspection", reason: reasons.read };
     }
     if (capability === "delete") {
-      return {
-        allowed: true,
-        mechanism: "document.actions -> [delete]",
-        reason: `Pruning ${typeName} entries is legitimate operator work, and the A3 verification reset deletes its own run-owned events by exact _id.`,
-      };
+      return { allowed: true, mechanism: "document.actions -> [delete]", reason: reasons.prune };
     }
     if (capability === "create") {
+      // A delete-only type can ALSO be internal (`notificationOutbox` is both):
+      // consult internal-ness here too, so the "hidden" create mechanism isn't
+      // lost just because this branch runs before the protected-type branch below.
       return {
         allowed: false,
-        mechanism: "document.newDocumentOptions",
-        reason: `${typeName} documents are written only by the server (auth.ts events.signIn); a hand-authored entry would falsify an audit record.`,
+        mechanism: isInternalStudioType(typeName)
+          ? "document.newDocumentOptions + schema `hidden: true`"
+          : "document.newDocumentOptions",
+        reason: reasons.create,
       };
     }
     if (capability === "update") {
-      return {
-        allowed: false,
-        mechanism: "schema `readOnly: true`",
-        reason: `${typeName} fields are read-only in the Studio; editing an audit record would falsify it.`,
-      };
+      return { allowed: false, mechanism: "schema `readOnly: true`", reason: reasons.update };
     }
     return {
       allowed: false,
