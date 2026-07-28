@@ -677,7 +677,9 @@ describe("an absent delivery mode delivers unchanged", () => {
     notifyRoleAssignments([{ recipients: ["m1"], ...SERVICE, body: BODY, kind: "created" }]);
     await drainAfter();
     expect(sendEachForMulticast).toHaveBeenCalledTimes(1);
-    // The email leg re-reads the member rows; the push leg read the token rows.
+    // `notifyRoleAssignments` is push-ONLY since the outbox absorbed its
+    // immediate assignment email (spec §7). It reaches no mail transport at all
+    // now — previously it did re-read the member rows and found none mailable.
     expect(sendMail).toHaveBeenCalledTimes(0);
 
     serverFetch.mockResolvedValue([MEMBER_EMAIL_ROW]);

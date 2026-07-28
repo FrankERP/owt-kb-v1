@@ -6,6 +6,7 @@ import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 import {
   notifyRoleAssignments,
+  queueRoleNotices,
   revalidateRoleMutation,
   roleUpdateNotice,
 } from "@/app/utils/serviceMutationSideEffects";
@@ -20,6 +21,7 @@ import {
 } from "@/app/utils/roleTargetLock";
 import {
   buildRoleEditPatch,
+  normalizeStoredSeats,
   parseDeleteRequest,
   parseEditRequest,
   planOwnedLock,
@@ -215,6 +217,11 @@ async function patchHandler(
   }
 
   const now = nowIso();
+  // The outbox `before` snapshot, captured PRE-COMMIT from the role this handler
+  // has already loaded (§2). Reading it back inside the post-commit `after()`
+  // block would return the POST-write state, so every notice would compare a
+  // state against itself and say nothing.
+  const beforeSeats = normalizeStoredSeats(role);
   const setPayload = buildRoleEditPatch({
     roleType,
     date: newDate,
@@ -295,6 +302,18 @@ async function patchHandler(
       date: newDate,
     }),
   ]);
+  // The debounced email (§2): one notice per member in the UNION of before- and
+  // after-assignees, so a member REMOVED by this edit is finally covered. On a
+  // date move the snapshot stays valid — only the label moved — and the flush
+  // re-dates from live state.
+  queueRoleNotices({
+    roleId: role._id,
+    roleType,
+    serviceDate: newDate,
+    published: role.published,
+    beforeSeats,
+    afterSeats: request.seats,
+  });
 
   revalidateRoleMutation();
 
@@ -437,6 +456,10 @@ async function deleteHandler(
   }
 
   const now = nowIso();
+  // Captured PRE-COMMIT, from the role this handler already loaded: in a moment
+  // the document is gone and nothing can answer for who served on it (§2).
+  const beforeSeats = normalizeStoredSeats(role);
+  const rolePublished = role.published;
   let tx = writeClient.transaction();
   if (ownedLock) {
     const vacate = vacateLockPatch({ generation: ownedLock.generation ?? null, now });
@@ -469,7 +492,22 @@ async function deleteHandler(
     );
   }
 
-  // A removal is silent by §7: only the caches are refreshed, nobody is notified.
+  // A removal is no longer silent. It sends no IMMEDIATE signal — there is no
+  // "te asignaron" for a service that has ceased to exist — but it queues one
+  // debounced notice per current assignee, snapshotted before the delete
+  // committed (§2). At flush the role document is gone, which classifies as
+  // "Ya no participas"; without this the deleted-role rule would be unreachable.
+  // A member who was never on this service is not in `beforeSeats`, so they
+  // stay silent. A draft delete stays silent too.
+  queueRoleNotices({
+    roleId: role._id,
+    roleType: role._type,
+    serviceDate: date,
+    published: rolePublished,
+    beforeSeats,
+    afterSeats: null,
+    deleted: true,
+  });
   revalidateRoleMutation();
   return NextResponse.json({ ok: true, id: role._id });
 }

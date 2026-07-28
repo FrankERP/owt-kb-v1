@@ -177,6 +177,14 @@ export async function sendAssignmentEmailsBatch(
   }
 }
 
+/**
+ * Single-service send. NO PRODUCTION CALLER since the notification outbox
+ * absorbed the immediate assignment email (spec §7): `notifyRoleAssignments`
+ * lost this leg, and publishing uses the batched path above. It is kept as the
+ * single-service transport the A3 delivery-firewall contract tests exercise
+ * (`deliveryFirewallTransports.test.ts`), and as the shape a future
+ * single-service send would reuse rather than reinvent.
+ */
 export async function sendAssignmentEmails(
   memberIds: string[],
   service: { type: ServiceType; date: string; body: ServiceBody },
