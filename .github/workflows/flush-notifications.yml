@@ -52,9 +52,25 @@ jobs:
           # 90, not 60. The route declares `maxDuration = 60` and the sweep may
           # legitimately spend its full 40 s send budget plus the read phase plus
           # TLS setup; a 60 s client timeout would cut a HEALTHY run short and
-          # turn it red. `curl --fail` going red is layer 1's ONLY failure
-          # signal, so a spurious red erodes the one thing that makes a real
-          # failure visible. The 5-minute job timeout is still the real backstop.
-          curl --fail --silent --show-error --max-time 90 \
+          # turn it red. Going red is layer 1's ONLY failure signal, so a
+          # spurious red erodes the one thing that makes a real failure visible.
+          # The 5-minute job timeout is still the real backstop.
+          #
+          # Assert 200 explicitly rather than relying on `curl --fail`, which
+          # treats only 4xx/5xx as errors. A 3xx passes it — and that is not
+          # hypothetical: the session middleware once matched `/api/cron/*` and
+          # answered with a 307 to the sign-in page, so this job reported green
+          # for every run while the sweep never executed once. A silent no-op
+          # that looks healthy is the worst failure this trigger can have.
+          BODY=$(mktemp)
+          CODE=$(curl --silent --show-error --max-time 90 \
+            -o "$BODY" -w '%{http_code}' \
             -H "Authorization: Bearer $CRON_SECRET" \
-            "$APP_BASE_URL/api/cron/flush-notifications"
+            "$APP_BASE_URL/api/cron/flush-notifications")
+          echo "HTTP $CODE"
+          cat "$BODY"
+          echo
+          if [ "$CODE" != "200" ]; then
+            echo "::error::Expected HTTP 200 from the flush route, got $CODE"
+            exit 1
+          fi
