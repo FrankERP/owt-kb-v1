@@ -702,6 +702,56 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("unserved"));
     logSpy.mockRestore();
   });
+
+  it("charges the budget for the send stage only, never for the read phase", async () => {
+    // The defect this pins: the clock used to start before the due-notices
+    // fetch, the per-notice recipient reads, the claim commits and
+    // classification — so a slow read phase spent the whole budget, every email
+    // was dropped, and stage 8 consumed the batch anyway. Permanently.
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    world.notices = [roleNotice()];
+    world.roles = { r1: roleDoc() };
+    world.recipients = { r1: ["m1"] };
+    world.members = members(["m1"]);
+    // Every read costs 3 s of wall clock — several times the whole send budget.
+    operationalFetch.mockImplementation(async (query: string, params: Doc = {}) => {
+      reads.push({ query, params });
+      vi.setSystemTime(new Date(Date.now() + 3_000));
+      return routeRead(query, params);
+    });
+
+    const report = await sweepOutbox({ sendBudgetMs: 1_000 });
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    expect(report.emailed).toBe(1);
+    expect(report.unserved).toBe(0);
+    logSpy.mockRestore();
+  });
+
+  it("logs the observed send cost on completion, so ms_per_send stops being an assumption", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    world.notices = [roleNotice()];
+    world.roles = { r1: roleDoc() };
+    world.recipients = { r1: ["m1"] };
+    world.members = members(["m1"]);
+    // Each send costs 250 ms of wall clock.
+    sendEmailMock.mockImplementation(async () => {
+      vi.setSystemTime(new Date(Date.now() + 250));
+      return { ok: true };
+    });
+
+    await sweepOutbox();
+
+    const done = logSpy.mock.calls
+      .map(([line]) => JSON.parse(String(line)) as Record<string, unknown>)
+      .find((entry) => entry.event === "notify_sweep_done");
+    expect(done).toBeDefined();
+    expect(done?.emailed).toBe(1);
+    expect(done?.sendMs).toBe(250);
+    expect(done?.msPerSend).toBe(250);
+    expect(typeof done?.elapsedMs).toBe("number");
+    logSpy.mockRestore();
+  });
 });
 
 describe("sweepOutbox — recipient scoping and read contract", () => {
@@ -776,6 +826,27 @@ describe("sweepOutbox — recipient scoping and read contract", () => {
   });
 });
 
+/**
+ * PLACEHOLDER, pending §1's release-gate measurement — nobody has yet timed a
+ * real send through the pooled `maxConnections: 1` SMTP transport. §1's working
+ * assumption of 2 000 ms/send does NOT fit (2 000 × 40 = 80 000 > 40 000); this
+ * is the value the shipped knobs currently stand on, and the sweep now logs
+ * `msPerSend` on every run so the real one is observable in production.
+ *
+ * WHEN THE REAL NUMBER ARRIVES: replace this constant with the ms/send measured
+ * over a batch of ~20 and re-run. If the assertions below then fail, §1 says
+ * DERIVE, never re-guess: raise `NOTIFY_SEND_BUDGET_MS` (bounded by the hosting
+ * route's `maxDuration = 60`) or lower `NOTIFY_FLUSH_EMAIL_LIMIT` — and if
+ * lowering the limit would take it under the largest per-service seat count
+ * (12–20 on a Sunday), STOP: splitting one notice's recipients across sweeps is
+ * a different outbox model and must be designed, not discovered in production.
+ * Raising THIS constant to make the test green is the one forbidden move.
+ */
+const MEASURED_MS_PER_SEND = 500;
+
+/** Layer 2 (the opportunistic sweep inside a save) derates BOTH knobs by this. */
+const LAYER_2_DERATE = 2;
+
 describe("sweepOutbox — configuration", () => {
   it("defaults the recipient limit above the largest realistic single service", async () => {
     // 40, not 12: a Sunday on this ~30-member team routinely fills 12-20 seats,
@@ -783,5 +854,15 @@ describe("sweepOutbox — configuration", () => {
     expect(EMAIL_LIMIT).toBe(40);
     expect(EMAIL_LIMIT).toBeGreaterThan(20);
     expect(SEND_BUDGET_MS).toBe(40_000);
+  });
+
+  it("satisfies the knob inequality at layer 1 and at the halved layer 2", () => {
+    // §10's release gate as a STANDING regression check. Asserting the two
+    // constants' values (above) would pass against any pair of numbers someone
+    // typed, including a pair that cannot fit — this asserts they fit.
+    expect(MEASURED_MS_PER_SEND * EMAIL_LIMIT).toBeLessThan(SEND_BUDGET_MS);
+    expect(MEASURED_MS_PER_SEND * (EMAIL_LIMIT / LAYER_2_DERATE)).toBeLessThan(
+      SEND_BUDGET_MS / LAYER_2_DERATE,
+    );
   });
 });
