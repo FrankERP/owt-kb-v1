@@ -25,6 +25,10 @@
 //    one subject), a `false -> true` publish queues the same notice with an EMPTY
 //    snapshot so publishing INTRODUCES the setlist, and a lead-notes edit on an
 //    already-reviewable proposal queues one `leadNotes` notice for admins.
+//  - LAYER 2 of the flush triggers (spec §3): the same `after()` block that
+//    commits an outbox upsert then runs the sweep OPPORTUNISTICALLY, derating
+//    BOTH knobs to half. See `commitUpserts` for why it lives there and what it
+//    structurally cannot do.
 //  - Delivery is best-effort AT-MOST-ONCE: each attempt is logged and swallowed,
 //    never rolled back into content, and one failure never skips the rest. A
 //    committed request can register MORE THAN ONE deferred `after()` block —
@@ -58,6 +62,7 @@ import {
   type SetlistPref,
 } from "./notifyTargets";
 import { buildUpsert, outboxId, songRowsFrom } from "./outboxNotice";
+import { EMAIL_LIMIT, SEND_BUDGET_MS, sweepOutbox } from "./outboxSweep";
 import { notifyProposalSubmitted } from "./proposalNotify";
 import { canonicalSetlistsForWeeksQuery } from "./serviceReadQueries";
 import { normalizeStoredSeats, seatAssignees, type NormalizedSeats } from "./roleWriteRequest";
@@ -408,10 +413,49 @@ function setlistUpsert(input: QueueSetlistNoticeInput, now: Date) {
 type BuiltUpsert = NonNullable<ReturnType<typeof setlistUpsert>>;
 
 /**
+ * LAYER 2 of the three flush triggers (§3): the opportunistic sweep, DERATED.
+ *
+ * Both knobs are halved, not one. The knobs satisfy an inequality —
+ * `ms_per_send × emailLimit < sendBudgetMs` (§1, "Bounding the sweep") — and
+ * halving only the limit would let a sweep hosted inside an admin's save spend a
+ * FULL 40 s of send budget after that write route had already consumed part of
+ * its own `maxDuration`. Halving both keeps the inequality holding identically
+ * here. The consequence is named in §1 and accepted: at a limit of 20 a large
+ * Sunday setlist is "oversized" for layer 2 and taken alone, which is fine
+ * because layer 2 is a backstop and layer 1 runs at the full limit.
+ *
+ * Derived from the sweep's own exported defaults rather than restated as
+ * numbers, so retuning `NOTIFY_FLUSH_EMAIL_LIMIT` / `NOTIFY_SEND_BUDGET_MS`
+ * cannot leave layer 2 behind on stale constants.
+ */
+const LAYER_2_DERATE = 2;
+
+function opportunisticSweepOptions(): { emailLimit: number; sendBudgetMs: number } {
+  return {
+    emailLimit: Math.max(1, EMAIL_LIMIT / LAYER_2_DERATE),
+    sendBudgetMs: Math.max(1, SEND_BUDGET_MS / LAYER_2_DERATE),
+  };
+}
+
+/**
  * ONE transaction on `writeClient` for a whole batch of upserts — never the
  * business transaction (§2). No op asserts a revision, so there is no per-op
  * conflict to isolate; a failure here is transport or auth, which would fail
  * every op alike, and `attempt` keeps it logged and swallowed.
+ *
+ * This is also where LAYER 2 lives, and it lives here for one reason: it is the
+ * single funnel every queued notice already passes through, from all four
+ * writers (role, setlist, publish-setlist, lead notes), inside an `after()`
+ * block that has already left the user's request. Adding the call at each queue
+ * function — let alone each route — would be the same line copy-pasted four or
+ * fourteen times, with four or fourteen chances to drift.
+ *
+ * It runs AFTER the upsert, and unconditionally on its outcome: a failed upsert
+ * is exactly the moment an older subject's notice most wants flushing, and the
+ * sweep gates itself (`isDeliveryBlocked`) rather than trusting its callers.
+ * What layer 2 cannot do is flush the subject the admin is editing right now —
+ * an in-flight burst keeps sliding `notifyAfter` forward — which is why §3 calls
+ * layer 1 load-bearing rather than one of three redundant paths.
  */
 async function commitUpserts(label: string, upserts: BuiltUpsert[]): Promise<void> {
   await attempt(label, () => {
@@ -423,6 +467,7 @@ async function commitUpserts(label: string, upserts: BuiltUpsert[]): Promise<voi
     }
     return tx.commit();
   });
+  await attempt("opportunistic sweep", () => sweepOutbox(opportunisticSweepOptions()));
 }
 
 /**

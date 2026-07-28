@@ -24,6 +24,7 @@ const notifyProposalSubmittedMock = vi.fn();
 const revalidateServiceViewsMock = vi.fn();
 const revalidatePathMock = vi.fn();
 const operationalFetch = vi.fn();
+const sweepOutboxMock = vi.fn();
 const afterCallbacks: (() => unknown)[] = [];
 
 vi.mock("@/sanity/lib/operationalClient", () => ({
@@ -45,6 +46,12 @@ interface RecordedUpsert {
 const outboxTransactions: RecordedUpsert[][] = [];
 /** Set to make the next `commit()` reject, proving the failure stays swallowed. */
 let outboxCommitError: Error | null = null;
+/**
+ * Ordered record of the two things a queueing `after()` block does — the outbox
+ * commit and layer 2's opportunistic sweep (§3) — so their ORDER is assertable
+ * rather than assumed.
+ */
+const eventLog: string[] = [];
 
 function makeOutboxTransaction() {
   const ops: RecordedUpsert[] = [];
@@ -69,6 +76,7 @@ function makeOutboxTransaction() {
       return tx;
     },
     async commit() {
+      eventLog.push("upsert commit");
       if (outboxCommitError) throw outboxCommitError;
       return {};
     },
@@ -95,6 +103,13 @@ vi.mock("@/app/utils/assignmentEmail", async (importOriginal) => ({
 vi.mock("@/app/utils/proposalNotify", () => ({
   notifyProposalSubmitted: (...a: unknown[]) => notifyProposalSubmittedMock(...a),
 }));
+// PARTIAL on purpose (spec §3, layer 2): the sweep itself is spied so nothing is
+// sent, but `EMAIL_LIMIT`/`SEND_BUDGET_MS` stay the REAL exported defaults — the
+// derating assertion below divides those rather than restating two numbers.
+vi.mock("@/app/utils/outboxSweep", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/app/utils/outboxSweep")>()),
+  sweepOutbox: (...a: unknown[]) => sweepOutboxMock(...a),
+}));
 vi.mock("@/app/utils/revalidate", () => ({
   revalidateServiceViews: (...a: unknown[]) => revalidateServiceViewsMock(...a),
 }));
@@ -111,6 +126,7 @@ import {
   notifyRolePublished,
   notifySetlistSaved,
   proposalReviewRecipients,
+  queueLeadNotesNotice,
   queuePublishedSetlistNotices,
   queueRoleNotices,
   queueSetlistNotice,
@@ -122,6 +138,7 @@ import {
   roleUpdateNotice,
 } from "@/app/utils/serviceMutationSideEffects";
 import { outboxId } from "@/app/utils/outboxNotice";
+import { EMAIL_LIMIT, SEND_BUDGET_MS } from "@/app/utils/outboxSweep";
 import type { NormalizedSeats } from "@/app/utils/roleWriteRequest";
 
 function seats(over: Partial<NormalizedSeats> = {}): NormalizedSeats {
@@ -149,7 +166,12 @@ beforeEach(() => {
   afterCallbacks.length = 0;
   outboxTransactions.length = 0;
   outboxCommitError = null;
+  eventLog.length = 0;
   operationalFetch.mockReset();
+  sweepOutboxMock.mockImplementation(async () => {
+    eventLog.push("sweep");
+    return { claimed: 0, emailed: 0, consumed: 0, deferred: 0, unserved: 0 };
+  });
 });
 
 /** Run every registered `after()` callback, draining anything they enqueue. */
@@ -599,6 +621,98 @@ describe("setlist notice serviceDate guard", () => {
     await flushAfter();
     expect(upserted()).toHaveLength(1);
     expect(upserted()[0].createIfNotExists._id).toBe(outboxId("setlist", "role-3"));
+  });
+});
+
+// ── Layer 2: the opportunistic sweep (spec §3) ──────────────────────────────
+
+describe("the opportunistic sweep", () => {
+  const roleInput = {
+    roleId: "role-1",
+    roleType: "sunday_role" as const,
+    serviceDate: "2026-08-09",
+    published: true,
+    beforeSeats: seats({ leads: ["m1"] }),
+    afterSeats: seats({ leads: ["m2"] }),
+  };
+
+  const setlistInput = {
+    roleId: "role-1",
+    roleType: "sunday_role" as const,
+    serviceDate: "2026-08-09",
+    published: true,
+    beforeSongs: [],
+    hasSongs: true,
+    knownRecipients: [],
+  };
+
+  const leadNotesInput = {
+    proposalId: "prop-1",
+    serviceDate: "2026-08-09",
+    previousStatus: "pending",
+    beforeNotes: "antes",
+    afterNotes: "después",
+  };
+
+  it("every committed write that queues a notice also sweeps due notices", async () => {
+    queueRoleNotices(roleInput);
+    await flushAfter();
+    expect(sweepOutboxMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("derates BOTH knobs — half the recipient limit AND half the send budget", async () => {
+    // Halving only the limit would let a layer-2 sweep spend a FULL send budget
+    // after the write route already consumed part of its `maxDuration`; halving
+    // both keeps `ms_per_send × limit < budget` holding identically here.
+    queueRoleNotices(roleInput);
+    await flushAfter();
+    expect(sweepOutboxMock).toHaveBeenCalledWith({
+      emailLimit: EMAIL_LIMIT / 2,
+      sendBudgetMs: SEND_BUDGET_MS / 2,
+    });
+  });
+
+  it("sweeps from the setlist, publish and lead-notes writers too", async () => {
+    queueSetlistNotice(setlistInput);
+    await flushAfter();
+    queuePublishedSetlistNotices([
+      {
+        roleId: "role-2",
+        roleType: "special_role",
+        serviceDate: "2026-08-09",
+        role: { songs: [{ song: { _ref: "song-1" }, play_key: "C" }] },
+        knownRecipients: [],
+      },
+    ]);
+    await flushAfter();
+    queueLeadNotesNotice(leadNotesInput);
+    await flushAfter();
+    expect(sweepOutboxMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("runs AFTER the outbox upsert commits, never before it", async () => {
+    queueRoleNotices(roleInput);
+    await flushAfter();
+    expect(eventLog).toEqual(["upsert commit", "sweep"]);
+  });
+
+  it("a failing sweep stays swallowed — a committed write never fails on it", async () => {
+    sweepOutboxMock.mockRejectedValueOnce(new Error("sweep exploded"));
+    queueRoleNotices(roleInput);
+    await expect(flushAfter()).resolves.toBeUndefined();
+  });
+
+  it("a failing outbox commit does not skip the sweep", async () => {
+    outboxCommitError = new Error("transport down");
+    queueRoleNotices(roleInput);
+    await flushAfter();
+    expect(sweepOutboxMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a write that queues nothing does not sweep", async () => {
+    queueRoleNotices({ ...roleInput, published: false });
+    await flushAfter();
+    expect(sweepOutboxMock).not.toHaveBeenCalled();
   });
 });
 
