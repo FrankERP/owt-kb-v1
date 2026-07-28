@@ -5,22 +5,9 @@
 // rest. Dark table-and-inline-style shell shared with the assignment emails.
 
 import { escapeHtml, appBaseUrl } from "./assignmentEmail";
+import { C, td, tr, shell } from "./emailShell";
 import type { Line, LineKind } from "./outboxClassify";
 import { buildSetlistTable, type TableRow } from "./setlistDiff";
-
-// Palette from app/brand.css, plus the one approved non-token colour (amber
-// for downward movement — red would read as an error).
-const C = {
-  blackout: "#010B17",
-  console: "#071624",
-  deck: "#0D2234",
-  beam: "#12C8F4",
-  signal: "#37F58A",
-  frost: "#D7E7F6",
-  steel: "#7F94A8",
-  amber: "#F5B437",
-  gone: "#3B4A5A",
-} as const;
 
 export const SUBJECT: Record<LineKind, string> = {
   assigned: "Nueva asignación",
@@ -44,19 +31,6 @@ function formatDate(iso: string): string {
 
 function headerLine(kind: LineKind, serviceDate: string): string {
   return `${SUBJECT[kind]} — ${formatDate(serviceDate)}`;
-}
-
-// ---- small table-cell helpers (bgcolor on every cell, not just body) ----
-
-function td(inner: string, opts: { bg?: string; align?: string; colspan?: number; style?: string } = {}): string {
-  const bg = opts.bg ?? C.console;
-  const align = opts.align ? ` align="${opts.align}"` : "";
-  const colspan = opts.colspan ? ` colspan="${opts.colspan}"` : "";
-  return `<td bgcolor="${bg}"${align}${colspan} style="background:${bg};${opts.style ?? ""}">${inner}</td>`;
-}
-
-function tr(inner: string): string {
-  return `<tr>${inner}</tr>`;
 }
 
 function chip(text: string, bg: string, fg: string): string {
@@ -212,31 +186,6 @@ function renderLine(line: Line, titles: Map<string, string>): string {
   }
 }
 
-// ---- shell ----
-
-function shell(bodyRows: string): string {
-  const link = `${appBaseUrl()}/me`;
-  const eyebrow = tr(td(
-    `<span style="font:700 11px system-ui,sans-serif;letter-spacing:.24em;color:${C.beam}">OASIS WORSHIP TEAM</span>`,
-    { style: "padding:24px 24px 4px" },
-  ));
-  const footer = tr(td(
-    `<p style="margin:0 0 6px;font:12px system-ui,sans-serif;color:${C.steel}">Recibes esto porque sirves en el equipo de alabanza de Oasis.</p>` +
-    `<a href="${link}" style="font:12px system-ui,sans-serif;color:${C.beam};text-decoration:none">Ajustar mis avisos →</a>`,
-    { style: `padding:16px 24px 24px;border-top:1px solid ${C.deck}` },
-  ));
-  return (
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.blackout}" style="background:${C.blackout};margin:0;padding:0">` +
-    tr(td(
-      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.console}" style="max-width:600px;background:${C.console};border-collapse:collapse">` +
-      eyebrow + bodyRows + footer +
-      `</table>`,
-      { align: "center", style: "padding:24px 12px" },
-    )) +
-    `</table>`
-  );
-}
-
 // ---- public entry point ----
 
 export function buildGroupedEmail(
@@ -251,5 +200,6 @@ export function buildGroupedEmail(
     { style: "padding:0 24px 8px" },
   ));
   const bodyRows = greeting + o.lines.map((l) => renderLine(l, titles)).join("");
-  return { subject, html: shell(bodyRows) };
+  const link = `${appBaseUrl()}/me`;
+  return { subject, html: shell(bodyRows, link) };
 }

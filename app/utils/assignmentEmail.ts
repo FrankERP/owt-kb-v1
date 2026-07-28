@@ -2,6 +2,7 @@
 import { serverClient } from "@/sanity/lib/serverClient";
 import { sendEmail } from "./email";
 import { wantsNotification } from "./notifyPrefs";
+import { C, td, tr, shell } from "./emailShell";
 
 export type ServiceType = "sunday_role" | "saturday_role" | "special_role";
 export interface ServiceBody {
@@ -13,51 +14,6 @@ export interface ServiceBody {
 const SERVICE_LABEL: Record<ServiceType, string> = {
   sunday_role: "Domingo", saturday_role: "Sábado", special_role: "Servicio especial",
 };
-
-// Same dark shell as notificationEmail.ts (spec §6 restyle). Duplicated here
-// rather than imported: notificationEmail.ts already imports escapeHtml and
-// appBaseUrl FROM this file, so importing back the other way would cycle.
-const C = {
-  blackout: "#010B17",
-  console: "#071624",
-  deck: "#0D2234",
-  beam: "#12C8F4",
-  frost: "#D7E7F6",
-  steel: "#7F94A8",
-} as const;
-
-function td(inner: string, opts: { bg?: string; style?: string; align?: string } = {}): string {
-  const bg = opts.bg ?? C.console;
-  const align = opts.align ? ` align="${opts.align}"` : "";
-  return `<td bgcolor="${bg}"${align} style="background:${bg};${opts.style ?? ""}">${inner}</td>`;
-}
-
-function tr(inner: string): string {
-  return `<tr>${inner}</tr>`;
-}
-
-function shell(bodyRows: string): string {
-  const link = `${appBaseUrl()}/me`;
-  const eyebrow = tr(td(
-    `<span style="font:700 11px system-ui,sans-serif;letter-spacing:.24em;color:${C.beam}">OASIS WORSHIP TEAM</span>`,
-    { style: "padding:24px 24px 4px" },
-  ));
-  const footer = tr(td(
-    `<p style="margin:0 0 6px;font:12px system-ui,sans-serif;color:${C.steel}">Recibes esto porque sirves en el equipo de alabanza de Oasis.</p>` +
-    `<a href="${link}" style="font:12px system-ui,sans-serif;color:${C.beam};text-decoration:none">Ajustar mis avisos →</a>`,
-    { style: `padding:16px 24px 24px;border-top:1px solid ${C.deck}` },
-  ));
-  return (
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.blackout}" style="background:${C.blackout};margin:0;padding:0">` +
-    tr(td(
-      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.console}" style="max-width:600px;background:${C.console};border-collapse:collapse">` +
-      eyebrow + bodyRows + footer +
-      `</table>`,
-      { align: "center", style: "padding:24px 12px" },
-    )) +
-    `</table>`
-  );
-}
 
 export function getAllowlist(): string[] {
   // Default is the whole team ("*"): the Resend test-mode era that needed a
@@ -135,7 +91,7 @@ export function buildAssignmentEmail(o: { name: string; roles: string[]; type: S
       `<a href="${link}" style="display:inline-block;background:${C.beam};color:${C.blackout};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Ver servicio →</a>`,
       { style: "padding:0 24px 20px" },
     ));
-  const html = shell(body);
+  const html = shell(body, link);
   return { subject, html };
 }
 
@@ -176,7 +132,7 @@ export function buildBatchAssignmentEmail(o: { name: string; items: { type: Serv
       `<a href="${link}" style="display:inline-block;background:${C.beam};color:${C.blackout};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Ver mis servicios →</a>`,
       { style: "padding:0 24px 20px" },
     ));
-  const html = shell(body);
+  const html = shell(body, link);
   return { subject, html };
 }
 
