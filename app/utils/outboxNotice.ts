@@ -1,5 +1,8 @@
 // Pure helpers for the notification outbox (spec §1). No I/O: the callers own
-// the Sanity client and may only act on values produced here.
+// the Sanity client and may only act on values produced here. Exception: the
+// timing constants below read `process.env` once at import, so `buildUpsert`'s
+// default output depends on ambient config, not solely on its arguments — use
+// its third argument to pin an exact window in tests.
 
 import { createHash } from "node:crypto";
 import { buildRuns } from "./medley";
@@ -18,8 +21,10 @@ export interface OutboxSongRow {
 /**
  * Deterministic AND length-bounded. `${memberId}__${roleId}` composes two ids
  * that `isCanonicalDocumentId` allows at 200 chars each, which would overflow
- * Sanity's id ceiling — so the subject is digested, the way
- * `receiptIdForRequestId` already does for this shape.
+ * Sanity's id ceiling — so the subject is digested (truncated `base64url`
+ * `sha256`) to keep the id deterministic while bounding its length, following
+ * this repo's existing precedent of digesting composed ids (e.g.
+ * `receiptIdForRequestId`, which digests a different shape in full hex).
  */
 export function outboxId(kind: NoticeKind, subjectKey: string): string {
   const digest = createHash("sha256").update(`${kind}:${subjectKey}`).digest("base64url").slice(0, 32);
@@ -74,9 +79,29 @@ export interface UpsertInput {
   knownRecipients: string[];
 }
 
-export const DEBOUNCE_MS = Number(process.env.NOTIFY_DEBOUNCE_MINUTES ?? 15) * 60_000;
-export const MAX_WINDOW_MS = Number(process.env.NOTIFY_MAX_WINDOW_MINUTES ?? 60) * 60_000;
-export const CLAIM_TTL_MS = Number(process.env.NOTIFY_CLAIM_TTL_MINUTES ?? 5) * 60_000;
+/**
+ * Parses an env var as a positive number of minutes, falling back to
+ * `fallbackMinutes` when the value is absent, empty, non-numeric, zero, or
+ * negative. `??` alone doesn't catch `""` (an env var present but blank),
+ * which would otherwise coerce to `Number("") === 0` and silently zero out a
+ * timing window; a non-numeric value would coerce to `NaN` and propagate into
+ * `new Date(...).toISOString()`, throwing at the first call site.
+ */
+export function parseMinutesEnv(raw: string | undefined, fallbackMinutes: number): number {
+  if (raw === undefined || raw === "") return fallbackMinutes;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return fallbackMinutes;
+  return n;
+}
+
+export const DEBOUNCE_MS = parseMinutesEnv(process.env.NOTIFY_DEBOUNCE_MINUTES, 15) * 60_000;
+export const MAX_WINDOW_MS = parseMinutesEnv(process.env.NOTIFY_MAX_WINDOW_MINUTES, 60) * 60_000;
+export const CLAIM_TTL_MS = parseMinutesEnv(process.env.NOTIFY_CLAIM_TTL_MINUTES, 5) * 60_000;
+
+export interface UpsertWindowOverrides {
+  debounceMs?: number;
+  maxWindowMs?: number;
+}
 
 /**
  * `createIfNotExists` writes the identity, the snapshot and the CEILING once —
@@ -84,8 +109,18 @@ export const CLAIM_TTL_MS = Number(process.env.NOTIFY_CLAIM_TTL_MINUTES ?? 5) * 
  * re-pends. `deadline` is deliberately absent from the patch: writing it twice
  * would either kill the starvation ceiling or make a re-pended notice instantly
  * due, and Sanity cannot express "set only if unset" on one `.set()`.
+ *
+ * `windows` mirrors `isDue`'s injectable-override shape so the debounce/window
+ * arithmetic can be tested against a non-default configuration; omit it to use
+ * the env-derived module constants.
  */
-export function buildUpsert(input: UpsertInput, now: Date) {
+export function buildUpsert(
+  input: UpsertInput,
+  now: Date,
+  windows: UpsertWindowOverrides = {},
+) {
+  const debounceMs = windows.debounceMs ?? DEBOUNCE_MS;
+  const maxWindowMs = windows.maxWindowMs ?? MAX_WINDOW_MS;
   const _id = outboxId(input.kind, input.subjectKey);
   return {
     createIfNotExists: {
@@ -101,13 +136,13 @@ export function buildUpsert(input: UpsertInput, now: Date) {
       before: input.before,
       knownRecipients: input.knownRecipients,
       firstQueuedAt: now.toISOString(),
-      notifyAfter: new Date(now.getTime() + DEBOUNCE_MS).toISOString(),
-      deadline: new Date(now.getTime() + MAX_WINDOW_MS).toISOString(),
+      notifyAfter: new Date(now.getTime() + debounceMs).toISOString(),
+      deadline: new Date(now.getTime() + maxWindowMs).toISOString(),
       status: "pending",
       claimedAt: null,
     } as Record<string, unknown>,
     patchSet: {
-      notifyAfter: new Date(now.getTime() + DEBOUNCE_MS).toISOString(),
+      notifyAfter: new Date(now.getTime() + debounceMs).toISOString(),
       status: "pending",
     } as Record<string, unknown>,
   };

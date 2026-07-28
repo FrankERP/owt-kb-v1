@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildUpsert, isDue, outboxId, songRowsFrom } from "../outboxNotice";
+import { buildUpsert, isDue, outboxId, parseMinutesEnv, songRowsFrom } from "../outboxNotice";
 
 const NOW = new Date("2026-08-01T10:00:00.000Z");
 const DEBOUNCE = 15 * 60_000;
@@ -59,6 +59,33 @@ describe("songRowsFrom", () => {
   });
 });
 
+describe("parseMinutesEnv", () => {
+  it("falls back when the value is absent", () => {
+    expect(parseMinutesEnv(undefined, 15)).toBe(15);
+  });
+
+  it("falls back when the value is an empty string", () => {
+    // `??` alone wouldn't catch this — Number("") === 0, silently zeroing the window.
+    expect(parseMinutesEnv("", 15)).toBe(15);
+  });
+
+  it("falls back when the value is non-numeric", () => {
+    expect(parseMinutesEnv("abc", 15)).toBe(15);
+  });
+
+  it("falls back when the value is zero", () => {
+    expect(parseMinutesEnv("0", 15)).toBe(15);
+  });
+
+  it("falls back when the value is negative", () => {
+    expect(parseMinutesEnv("-5", 15)).toBe(15);
+  });
+
+  it("uses the parsed value when it is a positive number", () => {
+    expect(parseMinutesEnv("30", 15)).toBe(30);
+  });
+});
+
 describe("buildUpsert", () => {
   const input = {
     kind: "role" as const,
@@ -86,6 +113,25 @@ describe("buildUpsert", () => {
 
   it("uses the deterministic id", () => {
     expect(buildUpsert(input, NOW).createIfNotExists._id).toBe(outboxId("role", "m1__r1"));
+  });
+
+  it("computes notifyAfter and deadline from an overridden window", () => {
+    const debounceMs = 2 * 60_000;
+    const maxWindowMs = 10 * 60_000;
+    const { createIfNotExists, patchSet } = buildUpsert(input, NOW, { debounceMs, maxWindowMs });
+    expect(createIfNotExists.notifyAfter).toBe(new Date(NOW.getTime() + debounceMs).toISOString());
+    expect(createIfNotExists.deadline).toBe(new Date(NOW.getTime() + maxWindowMs).toISOString());
+    expect(patchSet).toEqual({
+      notifyAfter: new Date(NOW.getTime() + debounceMs).toISOString(),
+      status: "pending",
+    });
+  });
+
+  it("overriding only one window value leaves the other at its module default", () => {
+    const debounceMs = 90_000;
+    const { createIfNotExists } = buildUpsert(input, NOW, { debounceMs });
+    expect(createIfNotExists.notifyAfter).toBe(new Date(NOW.getTime() + debounceMs).toISOString());
+    expect(createIfNotExists.deadline).toBe(new Date(NOW.getTime() + MAX_WINDOW).toISOString());
   });
 });
 
