@@ -80,3 +80,4 @@ roster. Everything is **Spanish UI**, **dark-mode-first**, timezone **America/Me
 - **"Why does this service card say that / show one button?"** → [SERVICE_READINESS_UI.md](SERVICE_READINESS_UI.md)
 - **"Why can't I edit this document in Studio?"** → [AUTH_AND_SECURITY.md](AUTH_AND_SECURITY.md#studio-write-protection)
 - **"How do I run the deployed verification suite?"** → [VERIFICATION_HARNESS.md](VERIFICATION_HARNESS.md)
+- [NOTIFICATIONS.md](NOTIFICATIONS.md) — debounced notification emails: the outbox, the three flush triggers, the liveness alarm, and how to operate them.

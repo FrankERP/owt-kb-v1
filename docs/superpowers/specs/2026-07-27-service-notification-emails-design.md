@@ -560,6 +560,15 @@ rejects for the unpublish case.
   dropped at flush (§1).
 - **Lead notes on a `draft` proposal are silent.** The proposal is not in front
   of admins yet, so there is nothing for them to act on.
+- **A resubmit deliberately notifies twice, and that is accepted.** A
+  `changes_requested -> pending` resubmit sends admins the immediate "Nueva
+  propuesta" and, once the window closes, "Notas del líder" for the same save.
+  The carve-out below covers `draft -> pending` only. Review flagged the
+  asymmetry — the resubmit path is the *more* common one — and the user's call
+  (2026-07-28) is to keep it: on a resubmit the two emails say genuinely
+  different things, one that a proposal is back in the queue and one what
+  changed in it, and admins would rather have both than guess. Recorded as a
+  decision, not an oversight.
 - **A first submission does not queue `leadNotes`.** The predicate is that the
   proposal was **already** `pending` or `changes_requested` *before* this write —
   not merely that it is afterwards. A `draft → pending` submit carrying notes
