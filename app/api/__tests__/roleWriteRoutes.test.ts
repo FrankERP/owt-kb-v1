@@ -816,6 +816,36 @@ describe("PATCH /api/admin/roles/[id] — edit", () => {
     expect(byMember.get("mem-1")!.knownRecipients).toEqual(["mem-1"]);
   });
 
+  it("REGRESSION GUARD: the queued `before` snapshot survives even when the store already reflects the post-commit state by the time after() drains", async () => {
+    // This test exists to catch someone moving the `before` capture from
+    // pre-commit (a value threaded into queueRoleNotices as an argument) to a
+    // live read inside after(). If that ever happens, live state at that point
+    // is already the POST-write state, so `before` would collapse onto `after`
+    // and a dropped member like mem-1 below would receive NO notice at all —
+    // silently. `onCommit` here simulates the Content Lake already holding the
+    // new (mem-5-only) lineup by the time the deferred block runs, which is
+    // exactly what a real re-read would observe.
+    store.roles.push(role({ published: true }));
+    store.locks.push(lock());
+    onCommit = () => {
+      store.roles = [
+        role({
+          published: true,
+          _rev: "rev-2",
+          Lead: [{ _key: "k2", _type: "reference", _ref: "mem-5" }],
+        }),
+      ];
+    };
+    await rolePATCH(req(editBody({ leads: ["mem-5"] })), ctx("role-1"));
+    await drainAfter();
+    const byMember = new Map(outboxUpserts().map((d) => [d.memberId, d]));
+    // mem-1 was dropped by this edit. Their pre-commit label ("Líder") must
+    // still be what got queued, even though the store — by the time after()
+    // drains — already reflects the NEW lineup.
+    expect(queuedMemberIds().sort()).toEqual(["mem-1", "mem-5"]);
+    expect(byMember.get("mem-1")!.before).toEqual({ beforeRoles: ["Líder"] });
+  });
+
   it("a draft edit queues nothing at all", async () => {
     store.roles.push(role({ published: false }));
     store.locks.push(lock());
