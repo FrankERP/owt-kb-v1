@@ -115,13 +115,20 @@ surface:
   redirect URIs — **never token values, signing material, or anything a
   reader could replay**. Token validity always requires the
   `MCP_OAUTH_SECRET` signature, which never touches Sanity. Auth codes are
-  stateless signed JWTs, TTL 60 s, PKCE challenge embedded; redemption
-  records the code's `jti` on the grant doc using a **deterministic doc
-  `_id` + `createIfNotExists`** (atomic on `_id`) rather than
-  query-then-create, closing the replay race — Sanity queries are not
-  strictly read-your-writes. Grant docs are capped (a handful of
+  stateless signed JWTs, TTL 60 s, with the PKCE challenge, `client_id`,
+  and the exact `redirect_uri` used at authorize embedded; the token
+  endpoint verifies all three against what the client presents (direct
+  binding, not just re-matching the registration). Redemption writes a
+  marker doc at a **deterministic `_id` derived from the code's `jti`,
+  using `create()`** — *not* `createIfNotExists`, which no-ops silently
+  when the doc exists and cannot signal a replay — so the **409 conflict
+  is the replay signal**: conflict → redemption refused. The replay test
+  must assert the conflict path. Refresh-token rotation treats reuse of a
+  superseded `jti` as a theft signal and **revokes the whole grant**, per
+  OAuth 2.1 guidance. Grant docs are capped (a handful of
   registrations for one user; registration prunes/refuses beyond a small
-  hard cap, which also bounds unauthenticated-DCR document spam). These
+  hard cap — this cap, not the per-instance rate limit, is the real bound
+  on unauthenticated-DCR document spam). These
   doc types are hidden in a "Sistema" group in Studio structure — visible
   to Frank for manual revocation, out of the way otherwise.
 - **Revocation:** set `revoked: true` on the grant doc (Studio "Sistema"
@@ -163,7 +170,7 @@ drafts are visible — every service payload carries an explicit
 | --- | --- |
 | `edit_setlist` | Add/remove/reorder songs on a service (`saturdarSongs` for Saturday — typo is load-bearing, never rename; `featuredSongs` for Sunday). Generates `_key` for every array item. Calls `revalidateServiceViews()` |
 | `swap_assignment` | Move/swap members across the five seat types on a role doc; same validation as the admin swap route |
-| `run_solver` | **The largest stage-2 work item — a server-side rebuild, not an extraction.** `/api/admin/solve` is compute-only (it just relays a prepared `SolveRequest` to the GCF and returns the schedule); the real pipeline — assembling the request (leads, support seats, availability, history, DSL rules) and applying the returned schedule via role writes — currently lives client-side in `MonthGenerator.tsx` (~1,700 lines, sole caller of the route). Stage 2 builds two shared server-side functions: `assembleSolveRequest(month)` (reads via `operationalClient`) and `applySchedule(schedule)` (guarded role writes, registered in the audit, revision-asserted). Semantics: `run_solver` solves **and writes assignments onto draft services**, then returns the solver's honest diagnostic plus a summary of what was written; it refuses (whole run, not per-service) if any target service in the month is published. `MonthGenerator.tsx` migrating onto the shared functions is desirable but **not** required for stage 2. The MCP route needs `maxDuration` ≥ the solve route's 60 s (assemble + GCF solve + apply happen in one request) |
+| `run_solver` | **The largest stage-2 work item — a server-side rebuild, not an extraction.** `/api/admin/solve` is compute-only (it just relays a prepared `SolveRequest` to the GCF and returns the schedule); the real pipeline — assembling the request (leads, support seats, availability, history, DSL rules) and applying the returned schedule via role writes — currently lives client-side in `MonthGenerator.tsx` (~1,700 lines, sole caller of the route). Stage 2 builds two shared server-side functions: `assembleSolveRequest(month)` (reads via `operationalClient`) and `applySchedule(schedule)` (guarded role writes, registered in the audit, revision-asserted). Semantics: `run_solver` solves **and writes assignments onto draft services**, then returns the solver's honest diagnostic plus a summary of what was written; it refuses (whole run, not per-service) if any target service in the month is published, and refuses with a clear message if the month has no draft role docs at all (creating month drafts stays an app-UI step for stage 2; `run_solver` does not create them — planning may revisit). The MCP route needs `maxDuration` **strictly greater than** the solve route's 60 s (assemble + up-to-60 s GCF solve + apply happen in one request; confirm the Vercel plan's ceiling allows it) |
 | `publish_service` / `unpublish_service` | Flip draft state through the same code path as the admin publish routes — assignment notifications/emails fire on publish exactly as from the UI. **Deliberately separate from `run_solver`: no tool both solves and publishes** |
 
 Write-tool contract (all stage 2+ tools):
