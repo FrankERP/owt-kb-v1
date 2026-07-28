@@ -10,23 +10,37 @@
 // the other way would cycle. `shell()` therefore takes the footer link as a
 // parameter instead of computing it itself via `appBaseUrl()`.
 
-// Palette from app/brand.css, plus the two approved non-token colours: amber
-// for downward setlist movement (red would read as an error), and gone for
-// struck-through/departed rows.
+// Palette for EMAIL, deliberately light — and deliberately not app/brand.css.
+//
+// The app is dark-mode-only and these templates started dark to match. Five
+// attempts to hold a dark palette against Outlook for Mac failed, three of them
+// regressing light mode badly enough to revert. The pattern across every test
+// was consistent: the brand ACCENTS survived every client transform without
+// exception, and only the dark SURFACES were remapped to slate grey.
+//
+// That is structural, not bad luck. Client dark-mode transforms assume email is
+// light: darkening a light message is the case they are built for, lightening a
+// dark one is the edge case they handle badly. So the surfaces are light and the
+// brand accents sit on top — the elements that already rendered correctly
+// everywhere. Verified in Outlook for Mac in both toggle states.
+//
+// Accents are darkened from their brand.css values purely for contrast on a
+// light surface; every pairing clears WCAG AA, which the dark palette was never
+// checked against. See docs/superpowers/specs §6.
 export const C = {
-  blackout: "#010B17",
-  console: "#071624",
-  deck: "#0D2234",
-  beam: "#12C8F4",
-  signal: "#37F58A",
-  frost: "#D7E7F6",
-  steel: "#7F94A8",
-  amber: "#F5B437",
-  gone: "#3B4A5A",
+  field: "#F4F7FA",    // outer page field
+  panel: "#FFFFFF",    // the message card
+  surface: "#EDF2F7",  // table + panel surfaces
+  accent: "#0B6E93",   // beam, darkened: eyebrow, links, medley spine
+  positive: "#127A45", // signal, darkened: NUEVA chip, upward movement
+  ink: "#10243A",      // primary text
+  muted: "#566B7F",    // secondary text
+  warning: "#9A6206",  // amber, darkened: downward movement
+  retired: "#CBD7E3",  // departed-row chip
 } as const;
 
 export function td(inner: string, opts: { bg?: string; align?: string; colspan?: number; style?: string } = {}): string {
-  const bg = opts.bg ?? C.console;
+  const bg = opts.bg ?? C.panel;
   const align = opts.align ? ` align="${opts.align}"` : "";
   const colspan = opts.colspan ? ` colspan="${opts.colspan}"` : "";
   return `<td bgcolor="${bg}"${align}${colspan} style="background:${bg};${opts.style ?? ""}">${inner}</td>`;
@@ -40,18 +54,18 @@ export function tr(inner: string): string {
 // currently passes `${appBaseUrl()}/me`.
 export function shell(bodyRows: string, link: string): string {
   const eyebrow = tr(td(
-    `<span style="font:700 11px system-ui,sans-serif;letter-spacing:.24em;color:${C.beam}">OASIS WORSHIP TEAM</span>`,
+    `<span style="font:700 11px system-ui,sans-serif;letter-spacing:.24em;color:${C.accent}">OASIS WORSHIP TEAM</span>`,
     { style: "padding:24px 24px 4px" },
   ));
   const footer = tr(td(
-    `<p style="margin:0 0 6px;font:12px system-ui,sans-serif;color:${C.steel}">Recibes esto porque sirves en el equipo de alabanza de Oasis.</p>` +
-    `<a href="${link}" style="font:12px system-ui,sans-serif;color:${C.beam};text-decoration:none">Ajustar mis avisos →</a>`,
-    { style: `padding:16px 24px 24px;border-top:1px solid ${C.deck}` },
+    `<p style="margin:0 0 6px;font:12px system-ui,sans-serif;color:${C.muted}">Recibes esto porque sirves en el equipo de alabanza de Oasis.</p>` +
+    `<a href="${link}" style="font:12px system-ui,sans-serif;color:${C.accent};text-decoration:none">Ajustar mis avisos →</a>`,
+    { style: `padding:16px 24px 24px;border-top:1px solid ${C.surface}` },
   ));
   const body =
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.blackout}" style="background:${C.blackout};margin:0;padding:0">` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.field}" style="background:${C.field};margin:0;padding:0">` +
     tr(td(
-      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.console}" style="max-width:600px;background:${C.console};border-collapse:collapse">` +
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.panel}" style="max-width:600px;background:${C.panel};border-collapse:collapse">` +
       eyebrow + bodyRows + footer +
       `</table>`,
       { align: "center", style: "padding:24px 12px" },
@@ -60,10 +74,10 @@ export function shell(bodyRows: string, link: string): string {
 
   return (
     `<!doctype html><html><head><meta charset="utf-8">` +
-    `<meta name="color-scheme" content="dark">` +
-    `<meta name="supported-color-schemes" content="dark">` +
-    darkModeOptOut() +
-    `</head><body style="margin:0;padding:0;background:${C.blackout}">` +
+    `<meta name="color-scheme" content="light">` +
+    `<meta name="supported-color-schemes" content="light">` +
+    lockPalette() +
+    `</head><body style="margin:0;padding:0;background:${C.field}">` +
     body +
     `</body></html>`
   );
@@ -88,7 +102,7 @@ export function shell(bodyRows: string, link: string): string {
  * Outlook stamps on elements whose background/colour it rewrote; the bare
  * attribute selectors cover clients that transform without stamping.
  */
-function darkModeOptOut(): string {
+function lockPalette(): string {
   const rules = Object.values(C).flatMap((hex) => [
     `[bgcolor="${hex}"]{background-color:${hex}!important}`,
     `[data-ogsb][bgcolor="${hex}"]{background-color:${hex}!important}`,

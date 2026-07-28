@@ -103,25 +103,25 @@ function buildStaleEmail(o: { count: number; oldestHours: number }): { subject: 
   const subject = "Alerta: los correos de notificación no están saliendo";
   const body =
     tr(
-      td(`<span style="font:700 15px system-ui,sans-serif;color:${C.frost}">La cola de notificaciones está atascada</span>`, {
+      td(`<span style="font:700 15px system-ui,sans-serif;color:${C.ink}">La cola de notificaciones está atascada</span>`, {
         style: "padding:18px 24px 8px",
       }),
     ) +
     tr(
       td(
-        `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.frost}">Hay <strong style="color:${C.beam}">${count}</strong> aviso(s) sin enviar. El más antiguo lleva <strong style="color:${C.beam}">${hours} h</strong> esperando.</p>`,
+        `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}">Hay <strong style="color:${C.accent}">${count}</strong> aviso(s) sin enviar. El más antiguo lleva <strong style="color:${C.accent}">${hours} h</strong> esperando.</p>`,
         { style: "padding:0 24px 12px" },
       ),
     ) +
     tr(
       td(
-        `<p style="margin:0;font:13px system-ui,sans-serif;color:${C.frost}">Nada se envía cada 5 minutos, así que lo más probable es que el workflow <em>Flush notification outbox</em> de GitHub Actions esté detenido, deshabilitado o sin el secreto correcto. Revísalo en GitHub → Actions.</p>`,
+        `<p style="margin:0;font:13px system-ui,sans-serif;color:${C.ink}">Nada se envía cada 5 minutos, así que lo más probable es que el workflow <em>Flush notification outbox</em> de GitHub Actions esté detenido, deshabilitado o sin el secreto correcto. Revísalo en GitHub → Actions.</p>`,
         { style: "padding:0 24px 18px" },
       ),
     ) +
     tr(
       td(
-        `<a href="${link}" style="display:inline-block;background:${C.beam};color:${C.blackout};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Abrir el panel →</a>`,
+        `<a href="${link}" style="display:inline-block;background:${C.accent};color:${C.field};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Abrir el panel →</a>`,
         { style: "padding:0 24px 20px" },
       ),
     );
