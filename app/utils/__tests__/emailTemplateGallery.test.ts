@@ -52,6 +52,32 @@ const line = (over: Partial<Line> & Pick<Line, "kind">): Line => ({
   serviceDate: SUNDAY, roleType: "sunday_role", before: [], after: [], ...over,
 });
 
+// Quoted-printable encoder for the .eml sidecars (RFC 2045).
+function quotedPrintable(s: string): string {
+    // Encode first, THEN wrap on token boundaries. Wrapping on a raw character
+    // count splits an =XX triplet in half — `—` is =E2=80=94, and a break after
+    // `=E2=` yields `â= 80` in the client. The first version of this helper did
+    // exactly that, and the corruption looked like a template bug.
+    const tokens: string[] = [];
+    for (const byte of Buffer.from(s, "utf8")) {
+      const printable = byte >= 0x20 && byte <= 0x7e && byte !== 0x3d; // `=` must escape
+      tokens.push(printable ? String.fromCharCode(byte) : `=${byte.toString(16).toUpperCase().padStart(2, "0")}`);
+    }
+    const lines: string[] = [];
+    let line = "";
+    for (const t of tokens) {
+      // 75, so the line plus its trailing soft-break `=` stays inside the
+      // 76-character limit RFC 2045 sets.
+      if (line.length + t.length > 75) {
+        lines.push(line);
+        line = "";
+      }
+      line += t;
+    }
+    lines.push(line);
+    return lines.join("=\r\n");
+  }
+
 const gallery: { file: string; label: string; subject: string; html: string }[] = [];
 const add = (file: string, label: string, built: { subject: string; html: string }) => {
   gallery.push({ file, label, ...built });
@@ -152,6 +178,27 @@ describe("email template gallery", () => {
     },
   );
 
+  // The first version of this encoder wrapped on a raw character count and split
+  // =XX triplets, so an em dash arrived as `â= 80`. Decoding must return the exact
+  // input, and no line may end mid-escape.
+  it("quoted-printable survives multi-byte characters at any line boundary", () => {
+    const decode = (enc: string) =>
+      Buffer.from(
+        enc.replace(/=\r\n/g, "").replace(/=([0-9A-F]{2})/g, (_m, h) => String.fromCharCode(parseInt(h, 16))),
+        "binary",
+      ).toString("utf8");
+
+    // Shift the multi-byte character across every offset near the wrap column, so
+    // one of these lands exactly where a naive wrapper would cut the triplet.
+    for (let pad = 60; pad < 90; pad++) {
+      const src = `${"x".repeat(pad)}— ▲ ▼ Cuán cambió ñ`;
+      const enc = quotedPrintable(src);
+      expect(decode(enc)).toBe(src);
+      for (const l of enc.split("=\r\n")) expect(l.length).toBeLessThanOrEqual(75);
+      expect(enc).not.toMatch(/=[0-9A-F]?=\r\n/);
+    }
+  });
+
   it("never says Cantas como — three of five seat paths do not sing", () => {
     for (const g of gallery) expect(g.html).not.toContain("Cantas");
   });
@@ -187,12 +234,7 @@ describe("email template gallery", () => {
     // ▲/▼ glyphs, and a raw 8-bit body is exactly what some clients mangle into
     // mojibake — which would look like a template bug rather than a transfer
     // encoding one.
-    const qp = (s: string) =>
-      Buffer.from(s, "utf8")
-        .toString("binary")
-        .replace(/[^\x20-\x3C\x3E-\x7E]/g, (c) => `=${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`)
-        .replace(/(.{1,73})/g, "$1=\r\n")
-        .replace(/=\r\n$/, "");
+    const qp = quotedPrintable;
     const b64 = (s: string) => `=?utf-8?B?${Buffer.from(s, "utf8").toString("base64")}?=`;
     for (const g of gallery) {
       const eml = [
