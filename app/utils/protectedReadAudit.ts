@@ -255,6 +255,13 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
       "guarded proposal transitions and atomic approval: one transaction asserts the reviewed proposal revision, writes the live featuredSongs/saturdarSongs/special_role target, and records the approval receipt (A2 §6)",
     removalOwner: "permanent runtime writer (never removed — the review/approval surface itself)",
   },
+  {
+    file: "app/utils/outboxSweep.ts",
+    operation: "module",
+    reason:
+      "the notification sweep: claims and consumes notificationOutbox documents through writeClient while reading protected role/setlist/proposal documents through operationalClient; never mutates protected content",
+    removalOwner: "permanent runtime writer (never removed — the notification sweep itself)",
+  },
 ];
 
 /**

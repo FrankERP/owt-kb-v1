@@ -331,9 +331,10 @@ describe("A2 handoff allowlist", () => {
     expect(A2_HANDOFF_ALLOWLIST).toEqual([]);
   });
 
-  it("licenses the twelve permanent runtime writers for WRITES ONLY, never reads", () => {
+  it("licenses the thirteen permanent runtime writers for WRITES ONLY, never reads", () => {
     expect(PROTECTED_RUNTIME_WRITERS.map((e) => `${e.file}#${e.operation}`).sort()).toEqual(
       [
+        "app/utils/outboxSweep.ts#module",
         "app/api/admin/proposals/[id]/route.ts#PATCH",
         "app/api/admin/roles/[id]/route.ts#DELETE",
         "app/api/admin/roles/[id]/route.ts#PATCH",
