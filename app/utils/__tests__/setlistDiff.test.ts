@@ -24,11 +24,27 @@ describe("buildSetlistTable", () => {
 
   it("flags a new song and lists a departed one last", () => {
     const t = buildSetlistTable([row("a", "G"), row("b", "D")], [row("a", "G"), row("c", "E")]);
-    expect(t.find((r) => r.ref === "c")?.status).toBe("new");
+    const added = t.find((r) => r.ref === "c");
+    expect(added?.status).toBe("new");
+    expect(added?.movement).toBeNull();
     const gone = t[t.length - 1];
     expect(gone.ref).toBe("b");
     expect(gone.status).toBe("gone");
     expect(gone.position).toBeNull();
+  });
+
+  it("out of contract: a duplicate ref collapses to the later occurrence's match", () => {
+    // buildSetlistTable assumes each ref appears at most once per list. This
+    // pins today's actual behavior when that assumption is violated, so a
+    // future reader hits an assertion instead of a surprise: beforeIndex/
+    // beforeKey are built with `new Map`, which keeps only the last entry per
+    // ref, so the first "a" (key G) is diffed against the second "a" (key E)
+    // instead of itself.
+    const before = [row("a", "G"), row("b", "D"), row("a", "E")];
+    const after = [row("a", "G"), row("b", "D"), row("a", "E")];
+    const t = buildSetlistTable(before, after);
+    expect(t[0].movement).toEqual({ dir: "up", n: 2 });
+    expect(t[0].previousKey).toBe("E");
   });
 
   it("carries the old key when a song is re-keyed", () => {

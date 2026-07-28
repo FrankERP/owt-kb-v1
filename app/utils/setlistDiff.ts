@@ -23,9 +23,17 @@ function groupSignatures(rows: OutboxSongRow[]): Set<string> {
     if (r.group === null) return;
     byGroup.set(r.group, [...(byGroup.get(r.group) ?? []), r.ref]);
   });
-  return new Set([...byGroup.values()].map((refs) => refs.join("|")));
+  return new Set([...byGroup.values()].map((refs) => JSON.stringify(refs)));
 }
 
+/**
+ * Assumes each `ref` appears at most once per list. Both `SetlistEditor.tsx`
+ * and `ProposalEditor.tsx` block adding a song already in the list, so a
+ * duplicate can only arrive via a Studio direct-edit or legacy/migrated data.
+ * If it does: `beforeIndex`/`beforeKey` collapse repeats to the *last*
+ * occurrence, so an earlier occurrence's movement and `previousKey` end up
+ * computed against the later one instead of its own match.
+ */
 export function buildSetlistTable(before: OutboxSongRow[], after: OutboxSongRow[]): TableRow[] {
   const isFirst = before.length === 0;
   const beforeIndex = new Map(before.map((r, i) => [r.ref, i]));
@@ -41,7 +49,7 @@ export function buildSetlistTable(before: OutboxSongRow[], after: OutboxSongRow[
   const rows: TableRow[] = after.map((r, i) => {
     const prev = beforeIndex.get(r.ref);
     const prevKey = beforeKey.get(r.ref);
-    const sig = r.group === null ? null : (afterGroupRefs.get(r.group) ?? []).join("|");
+    const sig = r.group === null ? null : JSON.stringify(afterGroupRefs.get(r.group) ?? []);
     return {
       position: i + 1,
       ref: r.ref,
