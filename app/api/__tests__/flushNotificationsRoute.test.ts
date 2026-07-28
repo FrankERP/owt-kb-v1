@@ -58,7 +58,7 @@ function serveReminderFetches(stale: { count: number; oldest: string | null }) {
   operationalFetch.mockImplementation(async (query: string) => {
     if (query.includes("notificationOutbox")) return stale;
     if (query.includes("super-admin")) {
-      return [{ _id: "sa-1", email: "boss@oasis.mx", alias: "Jefa" }];
+      return [{ _id: "sa-1", email: "boss@oasis.mx" }];
     }
     return [];
   });
@@ -77,6 +77,7 @@ beforeEach(() => {
 afterEach(() => {
   delete process.env.CRON_SECRET;
   delete process.env.NOTIFY_STALE_ALERT_HOURS;
+  delete process.env.EMAIL_ALLOWLIST;
   vi.restoreAllMocks();
 });
 
@@ -124,6 +125,15 @@ describe("layer 1 — /api/cron/flush-notifications", () => {
   it("declares a maxDuration that can host a whole fan-out", async () => {
     const mod = await import("@/app/api/cron/flush-notifications/route");
     expect(mod.maxDuration).toBe(60);
+  });
+
+  it("lets a throwing sweep fail the request — the red run IS layer 1's signal", async () => {
+    // Deliberately the OPPOSITE of layer 3's handling. Here the caller is
+    // `curl --fail` in GitHub Actions, so a 500 becomes a red run somebody sees;
+    // swallowing it would make a broken sweep indistinguishable from a healthy one.
+    sweepOutboxMock.mockRejectedValue(new Error("outbox unreadable"));
+    const GET = await flushRoute();
+    await expect(GET(req({ authorization: `Bearer ${SECRET}` }))).rejects.toThrow("outbox unreadable");
   });
 });
 
@@ -205,6 +215,112 @@ describe("the liveness alarm", () => {
     const GET = await remindersRoute();
     await GET(req({ authorization: `Bearer ${SECRET}` }));
     expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("MEASURES BEFORE THE SWEEP — a backlog this run drains still fires", async () => {
+    // The regression this alarm is for: layer 1 is dead, notices queued all day,
+    // every one past its 1 h ceiling — and then THIS request's own sweep sends
+    // and DELETES them. A sweep-then-measure order reads an empty outbox, reports
+    // idle, and leaves 24-hour-late mail permanently silent.
+    //
+    // So the sweep here really consumes the fixture the liveness query reads,
+    // rather than being the inert no-op every other test uses. Under the wrong
+    // order this expectation fails.
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const outbox: { count: number; oldest: string | null } = { count: 7, oldest: hoursAgo(11) };
+    operationalFetch.mockImplementation(async (query: string) => {
+      if (query.includes("notificationOutbox")) return { ...outbox };
+      if (query.includes("super-admin")) return [{ _id: "sa-1", email: "boss@oasis.mx" }];
+      return [];
+    });
+    sweepOutboxMock.mockImplementation(async () => {
+      outbox.count = 0;
+      outbox.oldest = null;
+      return { claimed: 7, emailed: 7, consumed: 7, deferred: 0, unserved: 0 };
+    });
+
+    const GET = await remindersRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+
+    expect(sweepOutboxMock).toHaveBeenCalled();
+    expect(sendEmailMock).toHaveBeenCalled();
+    expect(error.mock.calls.map((c) => String(c[0])).join(" ")).toContain("notify_outbox_stale");
+    expect((await res.json()).liveness).toMatchObject({ count: 7, alerted: true });
+  });
+
+  it("still runs when the sweep throws — the alarm is not suppressed by it", async () => {
+    // Parts of the sweep run outside its internal try (the due-notices fetch,
+    // `resolveRecipients`), so a GROQ or transport failure there propagates. An
+    // unwrapped call would 500 the route on exactly the run where the pipeline is
+    // broken in the way the alarm exists to report.
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    serveReminderFetches({ count: 3, oldest: hoursAgo(9) });
+    sweepOutboxMock.mockRejectedValue(new Error("groq down"));
+
+    const GET = await remindersRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+
+    expect(res.status).toBe(200);
+    expect(sendEmailMock).toHaveBeenCalled();
+  });
+
+  it("does not claim it alerted when a narrowed allowlist excludes every super-admin", async () => {
+    // A narrowed EMAIL_ALLOWLIST is a supported configuration. The email IS the
+    // mitigation here — no log drain, no alerting — so reaching nobody while
+    // reporting `alerted: true` is the worst outcome available.
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.env.EMAIL_ALLOWLIST = "solo-frank@oasis.mx";
+    serveReminderFetches({ count: 4, oldest: hoursAgo(9) });
+
+    const GET = await remindersRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    const logged = error.mock.calls.map((c) => String(c[0])).join(" ");
+    expect(logged).toContain("notify_outbox_stale_unreachable");
+    expect(logged).toContain("not_allowlisted");
+    expect((await res.json()).liveness).toMatchObject({ alerted: false });
+  });
+
+  it("does not claim it alerted when the super-admin has no email address", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    operationalFetch.mockImplementation(async (query: string) => {
+      if (query.includes("notificationOutbox")) return { count: 2, oldest: hoursAgo(9) };
+      if (query.includes("super-admin")) return [{ _id: "sa-1" }];
+      return [];
+    });
+
+    const GET = await remindersRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(error.mock.calls.map((c) => String(c[0])).join(" ")).toContain("no_email_address");
+    expect((await res.json()).liveness).toMatchObject({ alerted: false });
+  });
+
+  it("does not claim it alerted when every send fails", async () => {
+    // The one super-admin provisioned by scripts/create-service-account.mjs
+    // carries an undeliverable address, so this is the live shape of the problem.
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    sendEmailMock.mockResolvedValue({ ok: false, error: "no mailbox" });
+    serveReminderFetches({ count: 4, oldest: hoursAgo(9) });
+
+    const GET = await remindersRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+
+    expect(sendEmailMock).toHaveBeenCalled();
+    const logged = error.mock.calls.map((c) => String(c[0])).join(" ");
+    expect(logged).toContain("notify_outbox_stale_email_failed");
+    expect(logged).toContain("all_sends_failed");
+    expect((await res.json()).liveness).toMatchObject({ alerted: false });
+  });
+
+  it("reports alerted when the mail actually lands", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    serveReminderFetches({ count: 4, oldest: hoursAgo(9) });
+    const GET = await remindersRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+    expect((await res.json()).liveness).toMatchObject({ alerted: true });
   });
 
   it("never fails the cron when the alarm itself throws", async () => {

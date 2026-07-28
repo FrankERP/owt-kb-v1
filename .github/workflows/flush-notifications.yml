@@ -21,13 +21,34 @@ on:
     - cron: "*/5 * * * *"
   workflow_dispatch:
 
+# This job curls one URL. It touches no repository contents and needs no
+# GITHUB_TOKEN at all, so it gets none.
+permissions: {}
+
+# A run that hangs on a slow sweep would otherwise still be in flight when the
+# next five-minute tick fires. The sweep claims before it sends, so an overlap is
+# not a double-send — but two concurrent sweeps do split one backlog and pile
+# onto an SMTP transport with `maxConnections: 1`. Newer wins: a skipped tick is
+# five minutes, and there is always another one.
+concurrency:
+  group: flush-notification-outbox
+  cancel-in-progress: false
+
 jobs:
   flush:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Trigger the sweep
+        # Via `env:`, not interpolated into the script. GitHub masks secrets in
+        # logs either way, but `${{ }}` in a `run:` block composes the value into
+        # the command line itself — visible to `ps`, and one stray `set -x` or
+        # error echo away from being printed. Quoted, so a value with shell
+        # metacharacters cannot break out.
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
         run: |
           curl --fail --silent --show-error --max-time 60 \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.APP_BASE_URL }}/api/cron/flush-notifications"
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_BASE_URL/api/cron/flush-notifications"
