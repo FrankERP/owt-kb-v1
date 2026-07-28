@@ -38,9 +38,41 @@ stages sequence the work so every write tool ships with its guards.
   logic is currently inline, extract it to a shared function both the route
   and the MCP tool call (targeted refactor, per admin area, in the stage
   that touches it).
-- **Middleware:** `proxy.ts` must exclude `/api/mcp` and `/api/oauth` from
-  any session-based redirect/guard. These routes enforce their own auth
-  (below); exclusion is transport-level only, never an auth bypass.
+- **Middleware:** the matcher must exclude `/api/mcp`, `/api/oauth`,
+  `/.well-known/oauth-authorization-server`, and
+  `/.well-known/oauth-protected-resource` — the two discovery endpoints are
+  fetched **unauthenticated** by claude.ai before any login exists, so
+  leaving them behind the session gate kills the handshake at step one.
+  The exclusion goes in **both** the inlined matcher in `proxy.ts` and
+  `MIDDLEWARE_MATCHER` in `app/utils/routeMatcher.ts` (they must stay
+  byte-for-byte identical — the sync guard in `routeMatcher.test.ts`
+  enforces this), with matcher tests updated in the same change. Discovery
+  endpoints are `app/.well-known/…/route.ts` route handlers serving static
+  JSON. These routes enforce their own auth (below); exclusion is
+  transport-level only, never an auth bypass.
+- **Service-Readiness audit layer (hard constraint on every tool):**
+  `app/utils/protectedReadAudit.ts` — enforced by a test in the `npm test`
+  gate — statically requires that all reads of the six protected types
+  (`sunday_role`, `saturday_role`, `special_role`, `featuredSongs`,
+  `saturdarSongs`, `setlistProposal`) go through
+  `sanity/lib/operationalClient`, and that every protected **write** appears
+  in its exact `file + operation` registries. Consequences the
+  implementation must plan for:
+  - Every `app/mcp/tools/*.ts` module touching protected types reads via
+    `operationalClient` and, for writes, ships a registry entry (exact
+    file + operation) plus audit-test update **in the same change** as the
+    tool.
+  - The "extract inline route logic to a shared function" refactors move
+    registered writes to new files — each extraction updates the write
+    registry to the new location in the same commit, keeping the audit
+    green at every step.
+  - The guarded writers assert a **client-observed revision** (e.g. the
+    swap writer requires both observed revisions). MCP tools have no
+    browser client, so each write tool performs its own
+    read-capture-assert: read the target doc(s) through
+    `operationalClient`, capture `_rev` (all of them, for multi-doc
+    writes), and pass those as the observed revisions so concurrent edits
+    from the app UI fail the assertion instead of being clobbered.
 - **Server identity:** name `owt-backstage`, version tracks package.json.
 - **Compat risk (verify first in planning):** `mcp-handler` with
   Next.js 16 App Router. Fallback if it fights Next 16: hand-roll the
@@ -56,10 +88,10 @@ surface:
 | Endpoint | Purpose |
 | --- | --- |
 | `/.well-known/oauth-authorization-server` | RFC 8414 metadata (static JSON) |
-| `/.well-known/oauth-protected-resource` | RFC 9728 metadata (static JSON) |
-| `/api/oauth/register` | Dynamic client registration; stores client doc in Sanity |
-| `/api/oauth/authorize` | **Requires a live NextAuth session with role `super-admin`** (reuse `requireActiveSession` + explicit role check). Renders a consent screen; on approve, issues a short-lived PKCE-bound auth code |
-| `/api/oauth/token` | Exchanges code (PKCE verified) for access + refresh tokens; handles refresh grant |
+| `/.well-known/oauth-protected-resource` | RFC 9728 metadata (static JSON). Served at the root form **and** the path-inserted form (`/.well-known/oauth-protected-resource/api/mcp/…`) — some clients fetch only the latter |
+| `/api/oauth/register` | Dynamic client registration; stores client doc in Sanity. **redirect_uri allowlist:** registration is rejected unless every redirect URI is on the allowlist of Claude connector callback origins (`claude.ai` / `claude.com` callback paths; exact set confirmed empirically during stage 0 and kept as a constant). Basic rate limiting on this unauthenticated endpoint |
+| `/api/oauth/authorize` | **Requires a live NextAuth session with role `super-admin`** (reuse `requireActiveSession` + explicit role check). Validates `redirect_uri` by **exact match** against the client's registration (PKCE does not protect against attacker-initiated flows — this check does). Renders a consent screen; approval is a **POST** (NextAuth's SameSite=Lax cookie then covers CSRF); on approve, issues a short-lived PKCE-bound auth code |
+| `/api/oauth/token` | Exchanges code (PKCE verified, `redirect_uri` exact-matched against registration again) for access + refresh tokens; handles refresh grant |
 
 - **Tokens:** JWTs signed with a **new dedicated secret** (`MCP_OAUTH_SECRET`
   — never reuse `NEXTAUTH_SECRET`, so either can rotate alone). Access token
@@ -67,8 +99,12 @@ surface:
   rotation on use.
 - **Verification:** the MCP route verifies the bearer token on **every
   request** before any tool executes; failure → 401 with
-  `WWW-Authenticate` per MCP spec. Equivalent posture to
-  `requireActiveManager`, but token-based.
+  `WWW-Authenticate` per MCP spec. Verification also checks the grant doc's
+  `revoked` flag through a short-TTL (~30 s) cache — same pattern as
+  `isMemberActive` — so revocation takes effect within seconds, not at
+  the next refresh. (Without this, an access token would be irrevocable
+  for up to 7 days; `requireActiveManager` re-checks activity per request
+  and the MCP must match that posture.)
 - **Persistence:** new Sanity doc types `mcpOauthClient` (registration) and
   `mcpOauthGrant` (grant + refresh-token state, revocation flag). Auth codes
   are stateless signed JWTs, TTL 60 s, PKCE challenge embedded; the grant
@@ -79,12 +115,13 @@ surface:
   token verification checks the grant on refresh; access tokens die at most
   7 days later. (A kill-switch env var `MCP_DISABLED=1` short-circuits the
   route entirely for emergencies.)
-- **Secrets:** `MCP_OAUTH_SECRET` gets a `docs/SECRETS.md` entry in the same
-  change that introduces it — needed on Vercel (all envs) and local
-  `.env.local` for dev; **not** needed in CI, the iOS build, or GCF.
-  Generated with `openssl rand -hex 32`. Rotation: generate new value, set
-  in Vercel, redeploy, re-add connector (all outstanding tokens die —
-  that's the point). Blast radius: MCP connector only; app unaffected.
+- **Secrets:** `MCP_OAUTH_SECRET` **and** `MCP_DISABLED` each get a
+  `docs/SECRETS.md` entry in the same change that introduces them — needed
+  on Vercel (all envs) and local `.env.local` for dev; **not** needed in
+  CI, the iOS build, or GCF. `MCP_OAUTH_SECRET` generated with
+  `openssl rand -hex 32`. Rotation: generate new value, set in Vercel,
+  redeploy, re-add connector (all outstanding tokens die — that's the
+  point). Blast radius: MCP connector only; app unaffected.
 
 ## Tool surface
 
@@ -112,17 +149,21 @@ drafts are visible — every service payload carries an explicit
 | --- | --- |
 | `edit_setlist` | Add/remove/reorder songs on a service (`saturdarSongs` for Saturday — typo is load-bearing, never rename; `featuredSongs` for Sunday). Generates `_key` for every array item. Calls `revalidateServiceViews()` |
 | `swap_assignment` | Move/swap members across the five seat types on a role doc; same validation as the admin swap route |
-| `run_solver` | Invokes the GCF solver for a month **onto draft services only** — refuses if the target service is published. Returns the solver's honest diagnostic |
+| `run_solver` | **The largest stage-2 work item — a server-side rebuild, not an extraction.** `/api/admin/solve` is compute-only (it just relays a prepared `SolveRequest` to the GCF and returns the schedule); the real pipeline — assembling the request (leads, support seats, availability, history, DSL rules) and applying the returned schedule via role writes — currently lives client-side in `MonthGenerator.tsx` (~1,700 lines, sole caller of the route). Stage 2 builds two shared server-side functions: `assembleSolveRequest(month)` (reads via `operationalClient`) and `applySchedule(schedule)` (guarded role writes, registered in the audit, revision-asserted). Semantics: `run_solver` solves **and writes assignments onto draft services**, then returns the solver's honest diagnostic plus a summary of what was written; it refuses (whole run, not per-service) if any target service in the month is published. `MonthGenerator.tsx` migrating onto the shared functions is desirable but **not** required for stage 2 |
 | `publish_service` / `unpublish_service` | Flip draft state through the same code path as the admin publish routes — assignment notifications/emails fire on publish exactly as from the UI. **Deliberately separate from `run_solver`: no tool both solves and publishes** |
 
 Write-tool contract (all stage 2+ tools):
 1. Verify token (route-level) — no per-tool auth bypass possible.
-2. Validate inputs with zod schemas (zod is a new dependency, arriving with
-   `mcp-handler`); reject unknown fields.
-3. Execute via the shared function the admin route uses (extracting it first
-   if inline).
-4. Revalidate the matching views (`revalidate.ts`) — never skip.
-5. Return a structured summary of **what actually changed** (and what
+2. Validate inputs with zod schemas (zod added as a **direct** dependency —
+   today it would only arrive transitively via the MCP SDK); reject
+   unknown fields.
+3. Read the target document(s) through `operationalClient`, capture
+   `_rev`(s), and pass them as the observed revisions (the audit layer's
+   guarded writers require this — see Architecture).
+4. Execute via the shared function the admin route uses (extracting it
+   first if inline, updating the audit write registry in the same commit).
+5. Revalidate the matching views (`revalidate.ts`) — never skip.
+6. Return a structured summary of **what actually changed** (and what
    notifications fired); errors are real errors, never success-shaped.
 
 ### Stage 3 — long tail (design later, additively)
@@ -171,5 +212,5 @@ AI attribution in commits — per repo convention).
 1. `mcp-handler` × Next.js 16 compatibility (fallback: hand-rolled handler).
 2. Whether the consent screen reuses the app's dark-mode layout shell or is
    a bare page (cosmetic).
-3. Exact shape of the solver invocation reuse — the admin solve route may
-   need its GCF-call logic extracted to a shared util (stage 2 concern).
+3. Exact Claude connector callback URIs for the redirect_uri allowlist —
+   confirmed empirically during the stage-0 handshake.
