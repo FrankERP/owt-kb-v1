@@ -29,7 +29,12 @@
 //    commits an outbox upsert then runs the sweep OPPORTUNISTICALLY, derating
 //    BOTH knobs to half. See `commitUpserts` for why it lives there and what it
 //    structurally cannot do.
-//  - Delivery is best-effort AT-MOST-ONCE: each attempt is logged and swallowed,
+//  - Delivery is BEST-EFFORT, NO RETRY, DUPLICATES POSSIBLE on two enumerated
+//    paths (spec §1): a re-pend during a send, and a lease expiry after a killed
+//    sweep. Spec §1 explicitly retired the earlier "at-most-once" label — it is
+//    simply the wrong name for a mechanism that enumerates two duplicate paths,
+//    and it was load-bearing in three separate justifications. What is true:
+//    each attempt is logged and swallowed,
 //    never rolled back into content, and one failure never skips the rest. A
 //    committed request can register MORE THAN ONE deferred `after()` block —
 //    a published edit registers two (the push fan-out, then the outbox
@@ -301,6 +306,13 @@ export function queueRoleNotices(input: QueueRoleNoticesInput): void {
   attemptSync("queueRoleNotices build", () => {
     // `published !== false` — missing/true is member-visible (grandfathered).
     if (input.published === false) return;
+    // Same guard as `setlistUpsert`, and for the same reason: `isPast` at flush
+    // is a lexicographic YYYY-MM-DD comparison with no defined reading for `""`,
+    // so a dateless notice would be minted here and then dropped silently at
+    // flush — losing a "Ya no participas" for a deleted role. Unreachable today
+    // (every call site supplies a validated date); stated here so the reasoning
+    // lives in ONE place rather than only on the setlist path.
+    if (!input.serviceDate) return;
 
     const before = input.beforeSeats ?? NO_SEATS;
     // A deleted role has no post-state, whatever the caller passed.

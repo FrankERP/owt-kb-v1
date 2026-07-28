@@ -31,11 +31,12 @@ export function isEmailAllowed(email: string | undefined, allow: string[] = getA
   return allow.includes("*") || allow.includes(email);
 }
 
-// Whether a member wants assignment emails. Opt-out: unset/null/true → yes,
-// only an explicit false → no. Mirrors push.ts optedIn semantics.
-export function wantsEmail(pref: unknown): boolean {
-  return pref !== false;
-}
+// NOTE: there is no `wantsEmail` here any more. It resolved the legacy
+// `notifPrefs.email` field alone and lost its last caller when `proposalNotify`
+// moved to `wantsNotification`. `wantsNotification` (app/utils/notifyPrefs.ts) is
+// the ONE preference resolver every sender goes through; a second, weaker one
+// sitting next to it is how "nothing reads `notifPrefs` fields directly" quietly
+// stops being true.
 
 export function assigneesOf(b: ServiceBody): string[] {
   return [

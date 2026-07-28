@@ -49,6 +49,12 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
         run: |
-          curl --fail --silent --show-error --max-time 60 \
+          # 90, not 60. The route declares `maxDuration = 60` and the sweep may
+          # legitimately spend its full 40 s send budget plus the read phase plus
+          # TLS setup; a 60 s client timeout would cut a HEALTHY run short and
+          # turn it red. `curl --fail` going red is layer 1's ONLY failure
+          # signal, so a spurious red erodes the one thing that makes a real
+          # failure visible. The 5-minute job timeout is still the real backstop.
+          curl --fail --silent --show-error --max-time 90 \
             -H "Authorization: Bearer $CRON_SECRET" \
             "$APP_BASE_URL/api/cron/flush-notifications"
