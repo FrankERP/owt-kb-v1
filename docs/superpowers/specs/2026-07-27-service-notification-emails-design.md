@@ -851,12 +851,45 @@ single, with no spine and no label.
 
 ### Palette and type
 
-Colors come from `brand.css`: `blackout` field, `deck` panels, `beam` accent and
-links, `signal` for additions and upward movement, `frost` primary text, `steel`
-secondary. One exception, deliberate and approved: **`#F5B437` amber for
-downward movement**. Red would read as an error, and a song moving later is not
-an error; `steel` was rejected because up and down stop being distinguishable at
-a glance. It is the only value in the email system not traceable to a token.
+**Superseded 2026-07-28 — the email palette is LIGHT, and deliberately not
+`brand.css`.** The original rule below is kept for the reasoning it carries about
+movement colours, which still holds.
+
+The templates shipped dark to match the app. Outlook for Mac rendered every dark
+surface as slate grey, flattening the design; five escalating attempts to hold
+the palette all failed, three of them regressing other clients badly enough to
+revert:
+
+| Attempt | Result |
+|---|---|
+| `color-scheme` / `supported-color-schemes` meta | ignored |
+| `<style>` with `[data-ogsb]`/`[data-ogsc]` `!important` | fixed light mode only |
+| `!important` on inline backgrounds | broke light mode too — reverted |
+| same, with conformant spacing | broke light mode again — reverted |
+| 1×1 `data:` GIF via the `background` attribute | broke light mode — reverted |
+
+The evidence across all of it was consistent: brand **accents** survived every
+transform without exception; only dark **surfaces** were remapped. That is
+structural. Client dark-mode transforms assume email is light — darkening a light
+message is the case they are built for, lightening a dark one is the edge case
+they handle badly. Fighting it from the sending side has no reliable hook.
+
+So the surfaces are light and the brand accents sit on top, which is the
+combination already proven to render everywhere. Accents are darkened from their
+`brand.css` values purely for contrast on a light surface, and **every pairing
+clears WCAG AA** — something the dark palette was never checked against. Verified
+in Outlook for Mac in both toggle states.
+
+The one `<style>` block restates each surface colour. §6 forbids *depending* on a
+stylesheet, which this does not: every colour is also inline and on `bgcolor`, so
+a client that drops the block renders identically.
+
+*Original rule, for the movement-colour reasoning:* colors came from `brand.css`
+— `blackout` field, `deck` panels, `beam` accent and links, `signal` for
+additions and upward movement, `frost` primary text, `steel` secondary — with one
+deliberate exception: **amber for downward movement**. Red would read as an
+error, and a song moving later is not an error; `steel` was rejected because up
+and down stop being distinguishable at a glance.
 
 No web fonts — Gmail and Outlook drop them. Personality comes from setting:
 wide-tracked uppercase eyebrows, a large date, monospace confined to data (keys,
