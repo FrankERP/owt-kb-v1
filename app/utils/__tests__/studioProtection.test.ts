@@ -378,14 +378,25 @@ describe("studio config installs the policy", () => {
       }
     }
     // Coordination types: the whole TYPE is hidden, which covers every field.
-    for (const file of ["sanity/schemas/roleTargetLock.ts", "sanity/schemas/roleCreationReceipt.ts"]) {
+    for (const file of [
+      "sanity/schemas/roleTargetLock.ts",
+      "sanity/schemas/roleCreationReceipt.ts",
+      "sanity/schemas/notificationOutbox.ts",
+    ]) {
       const src = read(file);
       expect(src, `${file} must be a hidden type`).toMatch(/^\s*hidden:\s*true,\s*$/m);
       expect(src, `${file} must be a readOnly type`).toMatch(/^\s*readOnly:\s*true,\s*$/m);
     }
     // And the policy lists the fields those mechanisms cover.
     expect(Object.keys(INTERNAL_STUDIO_FIELDS).sort()).toEqual(
-      ["sunday_role", "saturday_role", "special_role", "roleTargetLock", "roleCreationReceipt"].sort(),
+      [
+        "sunday_role",
+        "saturday_role",
+        "special_role",
+        "roleTargetLock",
+        "roleCreationReceipt",
+        "notificationOutbox",
+      ].sort(),
     );
   });
 });
