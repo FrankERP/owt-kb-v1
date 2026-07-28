@@ -169,6 +169,12 @@ describe("email template gallery", () => {
       expect(cells.length).toBeGreaterThan(0);
       expect(cells.filter((c) => !c.includes("bgcolor="))).toEqual([]);
 
+      // Without this declaration a dark-mode client remaps the palette: Outlook
+      // for Mac lightened blackout to slate grey and darkened the signal chips.
+      // It is what opts the email out of that transformation.
+      expect(g.html).toContain('name="color-scheme" content="dark"');
+      expect(g.html).toContain('name="supported-color-schemes" content="dark"');
+
       expect(g.html).not.toContain("<style");           // no stylesheet dependency
       expect(g.html).not.toContain("display:flex");     // Outlook has no flexbox
       expect(g.html).not.toContain("display:grid");
