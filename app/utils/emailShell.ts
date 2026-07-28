@@ -29,7 +29,7 @@ export function td(inner: string, opts: { bg?: string; align?: string; colspan?:
   const bg = opts.bg ?? C.console;
   const align = opts.align ? ` align="${opts.align}"` : "";
   const colspan = opts.colspan ? ` colspan="${opts.colspan}"` : "";
-  return `<td bgcolor="${bg}"${align}${colspan} style="background:${bg};${opts.style ?? ""}">${inner}</td>`;
+  return `<td bgcolor="${bg}"${align}${colspan} style="background:${bg}!important;${opts.style ?? ""}">${inner}</td>`;
 }
 
 export function tr(inner: string): string {
@@ -49,9 +49,9 @@ export function shell(bodyRows: string, link: string): string {
     { style: `padding:16px 24px 24px;border-top:1px solid ${C.deck}` },
   ));
   const body =
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.blackout}" style="background:${C.blackout};margin:0;padding:0">` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.blackout}" style="background:${C.blackout}!important;margin:0;padding:0">` +
     tr(td(
-      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.console}" style="max-width:600px;background:${C.console};border-collapse:collapse">` +
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.console}" style="max-width:600px;background:${C.console}!important;border-collapse:collapse">` +
       eyebrow + bodyRows + footer +
       `</table>`,
       { align: "center", style: "padding:24px 12px" },
@@ -63,7 +63,7 @@ export function shell(bodyRows: string, link: string): string {
     `<meta name="color-scheme" content="dark">` +
     `<meta name="supported-color-schemes" content="dark">` +
     darkModeOptOut() +
-    `</head><body style="margin:0;padding:0;background:${C.blackout}">` +
+    `</head><body style="margin:0;padding:0;background:${C.blackout}!important">` +
     body +
     `</body></html>`
   );
@@ -71,12 +71,16 @@ export function shell(bodyRows: string, link: string): string {
 
 /**
  * Holds the palette against clients that rewrite dark email into their own
- * theme. Verified in Outlook for Mac: `#071624` rendered as slate grey, which
- * flattened every surface to a single tone and destroyed the depth the layout
- * relies on — in BOTH states of Outlook's per-message light/dark toggle, so it
- * is an unconditional transform rather than part of the dark-mode pass. The
- * `color-scheme` meta above does not stop it; Microsoft's `data-ogs*` mechanism
- * is the only documented opt-out.
+ * theme. Verified in Outlook for Mac, which rendered `#071624` as slate grey and
+ * flattened every surface to one tone, destroying the depth the layout relies on.
+ * The `color-scheme` meta above does not stop it.
+ *
+ * These rules fixed Outlook's LIGHT mode. Its dark mode still transforms, which
+ * says the rewriter rewrites stylesheet rules too — so a `!important` rule here
+ * is rewritten along with everything else and has nothing left to win against.
+ * That is why the inline declarations carry `!important` as well: many dark-mode
+ * rewriters skip a value already marked important, and the inline attribute is
+ * the last thing they touch.
  *
  * §6 forbids depending on a `<style>` block, and this does not create one: every
  * colour is still carried inline AND on a `bgcolor` attribute, so a client that

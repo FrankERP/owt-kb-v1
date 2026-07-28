@@ -89,7 +89,7 @@ export function buildAssignmentEmail(o: { name: string; roles: string[]; type: S
       { style: "padding:0 24px 18px" },
     )) +
     tr(td(
-      `<a href="${link}" style="display:inline-block;background:${C.beam};color:${C.blackout};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Ver servicio →</a>`,
+      `<a href="${link}" style="display:inline-block;background:${C.beam}!important;color:${C.blackout};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Ver servicio →</a>`,
       { style: "padding:0 24px 20px" },
     ));
   const html = shell(body, link);
@@ -121,7 +121,7 @@ export function buildBatchAssignmentEmail(o: { name: string; items: { type: Serv
       td(`<strong style="color:${C.beam};font:13px system-ui,sans-serif">${rolesText}</strong>`, { style: "padding:8px 8px" }),
     );
   }).join("");
-  const table = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.deck}" style="background:${C.deck};border-collapse:collapse">${tr(headCell("Fecha") + headCell("Tu rol"))}${rows}</table>`;
+  const table = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.deck}" style="background:${C.deck}!important;border-collapse:collapse">${tr(headCell("Fecha") + headCell("Tu rol"))}${rows}</table>`;
   const body =
     tr(td(
       `<p style="margin:0 0 4px;font:14px system-ui,sans-serif;color:${C.frost}">Hola ${name},</p>` +
@@ -130,7 +130,7 @@ export function buildBatchAssignmentEmail(o: { name: string; items: { type: Serv
     )) +
     tr(td(table, { style: "padding:0 24px 20px" })) +
     tr(td(
-      `<a href="${link}" style="display:inline-block;background:${C.beam};color:${C.blackout};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Ver mis servicios →</a>`,
+      `<a href="${link}" style="display:inline-block;background:${C.beam}!important;color:${C.blackout};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Ver mis servicios →</a>`,
       { style: "padding:0 24px 20px" },
     ));
   const html = shell(body, link);
