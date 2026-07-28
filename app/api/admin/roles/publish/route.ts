@@ -9,7 +9,10 @@ import { writeClient } from "@/sanity/lib/serverClient";
 import type { ServiceType } from "@/app/utils/assignmentEmail";
 import {
   notifyRolePublished,
+  queuePublishedSetlistNotices,
   revalidateRolePublication,
+  serviceParticipants,
+  type RoleTypeName,
 } from "@/app/utils/serviceMutationSideEffects";
 import { computePublishTransitions } from "@/app/utils/publishTransitions";
 import { serviceError } from "@/app/utils/serviceMutation";
@@ -199,15 +202,28 @@ async function postHandler(req: NextRequest) {
   // across all five seat paths. An unpublish is silent. One deferred attempt per
   // batch: a push per service plus ONE consolidated email per member.
   const notifySet = new Set(toNotify);
+  const transitioned = roles.filter((r) => notifySet.has(r._id));
   notifyRolePublished(
-    roles
-      .filter((r) => notifySet.has(r._id))
-      .map((r) => ({
-        recipients: validateRole(r).assignedRefs,
-        type: r._type as ServiceType,
-        date: storedRoleDate(r) ?? "",
-        body: seatBody(r),
-      })),
+    transitioned.map((r) => ({
+      recipients: validateRole(r).assignedRefs,
+      type: r._type as ServiceType,
+      date: storedRoleDate(r) ?? "",
+      body: seatBody(r),
+    })),
+  );
+  // Publishing must ANNOUNCE the setlist (§2): a service built as a draft and
+  // then published would otherwise send no setlist email at all, and the member's
+  // first one would be "El setlist cambió" on the next edit. An empty
+  // before-snapshot makes it "Setlist listo" instead. An unpublish is not in
+  // `toNotify`, so it queues nothing.
+  queuePublishedSetlistNotices(
+    transitioned.map((r) => ({
+      roleId: r._id,
+      roleType: r._type as RoleTypeName,
+      serviceDate: storedRoleDate(r) ?? "",
+      role: r,
+      knownRecipients: serviceParticipants(r),
+    })),
   );
 
   // Invalidate member-facing caches so the change is prompt (esp. on unpublish).

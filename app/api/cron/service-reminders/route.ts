@@ -4,6 +4,10 @@ import { sendPush } from "@/app/utils/push";
 import { tomorrowDateStr, assignedMemberRefsQuery } from "@/app/utils/notifyTargets";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
+// The daily cron is the outbox's last-resort flush trigger (§3, Task 11); one
+// sweep can fan out dozens of emails, so give it room to finish.
+export const maxDuration = 60;
+
 // A3 §3: outbound-delivery evidence emitted anywhere under this handler — including
 // its post-commit `after()` fan-out — carries the in-flight verification run's markers.
 // An unmarked ordinary request establishes nothing and behaves exactly as before.

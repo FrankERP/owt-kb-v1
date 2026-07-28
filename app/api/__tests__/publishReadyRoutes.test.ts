@@ -64,7 +64,11 @@ interface PatchOp {
   set: Record<string, unknown>;
   unset: string[];
 }
-type TxOp = PatchOp | { kind: "create"; doc: Record<string, unknown> } | { kind: "delete"; id: string };
+type TxOp =
+  | PatchOp
+  | { kind: "create"; doc: Record<string, unknown> }
+  | { kind: "createIfNotExists"; doc: Record<string, unknown> }
+  | { kind: "delete"; id: string };
 
 interface RecordedTx {
   ops: TxOp[];
@@ -88,6 +92,10 @@ function makeTransaction() {
   const tx = {
     create(doc: Record<string, unknown>) {
       record.ops.push({ kind: "create", doc });
+      return tx;
+    },
+    createIfNotExists(doc: Record<string, unknown>) {
+      record.ops.push({ kind: "createIfNotExists", doc });
       return tx;
     },
     delete(id: string) {
@@ -124,8 +132,28 @@ function makeTransaction() {
   return tx;
 }
 
+/**
+ * The BUSINESS transactions. The post-commit outbox upsert runs on the same
+ * `writeClient`, but never as part of the business transaction (spec §2) — it is
+ * the only writer here that uses `createIfNotExists`, so the two are told apart
+ * by shape rather than by call order.
+ */
 function committed() {
-  return transactions.filter((t) => t.committed);
+  return transactions.filter(
+    (t) => t.committed && !t.ops.some((o) => o.kind === "createIfNotExists"),
+  );
+}
+
+/** The post-commit `notificationOutbox` upserts (spec §2). */
+function outboxUpserts(): Record<string, unknown>[] {
+  return transactions
+    .filter((t) => t.committed)
+    .flatMap((t) => t.ops)
+    .filter(
+      (o): o is { kind: "createIfNotExists"; doc: Record<string, unknown> } =>
+        o.kind === "createIfNotExists",
+    )
+    .map((o) => o.doc);
 }
 
 function patches(tx: RecordedTx): PatchOp[] {
@@ -497,11 +525,47 @@ describe("publish-ready ready mode", () => {
   it("notifies every current assignee of a real false -> true transition, once", async () => {
     seedReady();
     await publishReadyPOST(req({ mode: "ready", roles: [{ id: "role-1", rev: "rev-1" }] }));
-    expect(afterCallbacks).toHaveLength(1);
+    // Two deliberately separate deferred blocks (spec §2): the immediate publish
+    // fan-out, and the post-commit outbox upsert asserted in the next test.
+    expect(afterCallbacks).toHaveLength(2);
     for (const cb of afterCallbacks) await cb();
     expect(sendPushMock).toHaveBeenCalledTimes(1);
     expect(sendPushMock.mock.calls[0][0]).toEqual(["mem-1"]);
     expect(sendAssignmentEmailsBatchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("queues a setlist notice with an EMPTY before-snapshot, like the other publish surface", async () => {
+    // This is the second publish surface. Without this rule a service built as a
+    // draft and then published sends no setlist email at all, and the member's
+    // first one would be "El setlist cambió" on the next edit.
+    seedReady();
+    await publishReadyPOST(req({ mode: "ready", roles: [{ id: "role-1", rev: "rev-1" }] }));
+    for (const cb of afterCallbacks) await cb();
+    const notices = outboxUpserts().filter((d) => d.kind === "setlist");
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({
+      _type: "notificationOutbox",
+      subjectKey: "role-1",
+      roleId: "role-1",
+      roleType: "sunday_role",
+      serviceDate: WEEK,
+      knownRecipients: ["mem-1"],
+    });
+    expect((notices[0].before as { beforeSongs: unknown[] }).beforeSongs).toEqual([]);
+  });
+
+  it("queues no setlist notice when the published service has no songs", async () => {
+    seedReady();
+    store.setlists = [];
+    const res = await publishReadyPOST(
+      req({
+        mode: "override",
+        roles: [{ id: "role-1", rev: "rev-1", acknowledgedBlockers: ["incomplete_setlist"] }],
+      }),
+    );
+    expect(res.status).toBe(200);
+    for (const cb of afterCallbacks) await cb();
+    expect(outboxUpserts().filter((d) => d.kind === "setlist")).toHaveLength(0);
   });
 });
 
