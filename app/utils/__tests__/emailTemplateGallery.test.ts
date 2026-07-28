@@ -169,11 +169,12 @@ describe("email template gallery", () => {
       expect(cells.length).toBeGreaterThan(0);
       expect(cells.filter((c) => !c.includes("bgcolor="))).toEqual([]);
 
-      // Without this declaration a dark-mode client remaps the palette: Outlook
-      // for Mac lightened blackout to slate grey and darkened the signal chips.
-      // It is what opts the email out of that transformation.
-      expect(g.html).toContain('name="color-scheme" content="dark"');
-      expect(g.html).toContain('name="supported-color-schemes" content="dark"');
+      // Declares the palette so a themeing client does not remap it. The email
+      // is light BECAUSE Outlook for Mac remapped every dark surface to slate
+      // grey and no cascade-level fix survived; light is the direction client
+      // transforms are built to handle.
+      expect(g.html).toContain('name="color-scheme" content="light"');
+      expect(g.html).toContain('name="supported-color-schemes" content="light"');
 
       // §6 forbids DEPENDING on a stylesheet, not using one. The single <style>
       // block is the dark-mode opt-out, and it must stay pure enhancement: only

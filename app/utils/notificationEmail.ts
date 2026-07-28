@@ -54,8 +54,8 @@ function groupRuns(rows: TableRow[]): TableRow[][] {
 
 function headRow(showMovement: boolean): string {
   const label = (text: string, align: string) => td(
-    `<span style="font:700 10px system-ui,sans-serif;text-transform:uppercase;letter-spacing:.08em;color:${C.steel}">${text}</span>`,
-    { bg: C.deck, align, style: `padding:8px 8px;border-bottom:1px solid ${C.blackout}` },
+    `<span style="font:700 10px system-ui,sans-serif;text-transform:uppercase;letter-spacing:.08em;color:${C.muted}">${text}</span>`,
+    { bg: C.surface, align, style: `padding:8px 8px;border-bottom:1px solid ${C.field}` },
   );
   return tr(
     label("#", "right") + label("Canción", "left") + label("Tono", "right") +
@@ -65,29 +65,29 @@ function headRow(showMovement: boolean): string {
 
 function songCell(title: string, gone: boolean): string {
   const text = escapeHtml(title);
-  return gone ? `<s style="color:${C.steel}">${text}</s>` : `<span style="color:${C.frost}">${text}</span>`;
+  return gone ? `<s style="color:${C.muted}">${text}</s>` : `<span style="color:${C.ink}">${text}</span>`;
 }
 
 function keyCell(row: TableRow): string {
-  const cur = `<span style="color:${C.frost}">${escapeHtml(row.key)}</span>`;
+  const cur = `<span style="color:${C.ink}">${escapeHtml(row.key)}</span>`;
   if (!row.previousKey) return cur;
-  return `<s style="color:${C.steel}">${escapeHtml(row.previousKey)}</s> ${cur}`;
+  return `<s style="color:${C.muted}">${escapeHtml(row.previousKey)}</s> ${cur}`;
 }
 
 function movementCell(row: TableRow): string {
-  if (row.status === "new") return chip("NUEVA", C.signal, C.blackout);
-  if (row.status === "gone") return chip("SALIÓ", C.gone, C.frost);
-  if (!row.movement || row.movement.dir === "same") return `<span style="color:${C.steel}">&ndash;</span>`;
-  if (row.movement.dir === "up") return `<span style="color:${C.signal}">▲${row.movement.n}</span>`;
-  return `<span style="color:${C.amber}">▼${row.movement.n}</span>`;
+  if (row.status === "new") return chip("NUEVA", C.positive, C.field);
+  if (row.status === "gone") return chip("SALIÓ", C.retired, C.ink);
+  if (!row.movement || row.movement.dir === "same") return `<span style="color:${C.muted}">&ndash;</span>`;
+  if (row.movement.dir === "up") return `<span style="color:${C.positive}">▲${row.movement.n}</span>`;
+  return `<span style="color:${C.warning}">▼${row.movement.n}</span>`;
 }
 
 function songRow(row: TableRow, titles: Map<string, string>, showMovement: boolean, spine: boolean): string {
   const title = titles.get(row.ref) ?? row.ref;
   const posText = row.position !== null ? String(row.position) : "&ndash;";
-  const spineStyle = spine ? `border-left:2px solid ${C.beam};` : "";
+  const spineStyle = spine ? `border-left:2px solid ${C.accent};` : "";
   return tr(
-    td(`<span style="color:${C.steel}">${posText}</span>`, { align: "right", style: `padding:6px 8px;${spineStyle}` }) +
+    td(`<span style="color:${C.muted}">${posText}</span>`, { align: "right", style: `padding:6px 8px;${spineStyle}` }) +
     td(songCell(title, row.status === "gone"), { style: "padding:6px 8px;font:14px system-ui,sans-serif" }) +
     td(keyCell(row), { align: "right", style: "padding:6px 8px;font:13px monospace" }) +
     (showMovement ? td(movementCell(row), { align: "right", style: "padding:6px 8px;font:13px monospace" }) : ""),
@@ -101,13 +101,13 @@ function medleyGroup(run: TableRow[], titles: Map<string, string>, showMovement:
   const cols = showMovement ? 4 : 3;
   const isNew = run.some((r) => r.groupIsNew);
   const label = tr(td(
-    `<span style="text-transform:uppercase;letter-spacing:.12em;font:700 10px system-ui,sans-serif;color:${C.beam};border-left:2px solid ${C.beam};padding-left:8px">Medley</span>` +
-    (isNew ? ` ${chip("NUEVO", C.signal, C.blackout)}` : ""),
+    `<span style="text-transform:uppercase;letter-spacing:.12em;font:700 10px system-ui,sans-serif;color:${C.accent};border-left:2px solid ${C.accent};padding-left:8px">Medley</span>` +
+    (isNew ? ` ${chip("NUEVO", C.positive, C.field)}` : ""),
     { colspan: cols, style: "padding:10px 8px 2px" },
   ));
   const plus = tr(td(
-    `<span style="color:${C.beam};display:block;text-align:center">+</span>`,
-    { colspan: cols, style: `padding:0 8px;border-left:2px solid ${C.beam}` },
+    `<span style="color:${C.accent};display:block;text-align:center">+</span>`,
+    { colspan: cols, style: `padding:0 8px;border-left:2px solid ${C.accent}` },
   ));
   return label + run.map((row, i) => (i > 0 ? plus : "") + songRow(row, titles, showMovement, true)).join("");
 }
@@ -118,9 +118,9 @@ export function renderSetlistTable(rows: TableRow[], titles: Map<string, string>
     .map((run) => (run.length >= 2 ? medleyGroup(run, titles, showMovement) : songRow(run[0], titles, showMovement, false)))
     .join("");
   const legend = showMovement
-    ? tr(td(`<span style="color:${C.steel};font:11px system-ui,sans-serif">▲ suena antes en el servicio</span>`, { colspan: cols, style: "padding:8px 8px 2px" }))
+    ? tr(td(`<span style="color:${C.muted};font:11px system-ui,sans-serif">▲ suena antes en el servicio</span>`, { colspan: cols, style: "padding:8px 8px 2px" }))
     : "";
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.deck}" style="background:${C.deck};border-collapse:collapse">${headRow(showMovement)}${body}${legend}</table>`;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.surface}" style="background:${C.surface};border-collapse:collapse">${headRow(showMovement)}${body}${legend}</table>`;
 }
 
 // ---- per-line sections ----
@@ -130,7 +130,7 @@ export function renderSetlistTable(rows: TableRow[], titles: Map<string, string>
 function assignedSection(after: string[]): string {
   const roles = after.map(escapeHtml).join(", ");
   return tr(td(
-    `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.frost}">Sirves como <strong style="color:${C.beam}">${roles}</strong></p>`,
+    `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}">Sirves como <strong style="color:${C.accent}">${roles}</strong></p>`,
     { style: "padding:0 24px 18px" },
   ));
 }
@@ -138,7 +138,7 @@ function assignedSection(after: string[]): string {
 function removedSection(before: string[]): string {
   const roles = before.map(escapeHtml).join(", ");
   return tr(td(
-    `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.frost}">Ya no sirves como <s style="color:${C.steel}">${roles}</s></p>`,
+    `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}">Ya no sirves como <s style="color:${C.muted}">${roles}</s></p>`,
     { style: "padding:0 24px 18px" },
   ));
 }
@@ -147,20 +147,20 @@ function roleChangedSection(before: string[], after: string[]): string {
   const b = before.map(escapeHtml).join(", ") || "—";
   const a = after.map(escapeHtml).join(", ") || "—";
   const heading = (text: string) => td(
-    `<span style="font:700 10px system-ui,sans-serif;text-transform:uppercase;letter-spacing:.08em;color:${C.steel}">${text}</span>`,
-    { bg: C.deck, style: "padding:10px 16px 4px" },
+    `<span style="font:700 10px system-ui,sans-serif;text-transform:uppercase;letter-spacing:.08em;color:${C.muted}">${text}</span>`,
+    { bg: C.surface, style: "padding:10px 16px 4px" },
   );
-  const value = (html: string) => td(html, { bg: C.deck, style: "padding:0 16px 12px;font:14px system-ui,sans-serif" });
-  const panel = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.deck}" style="background:${C.deck};border-collapse:collapse">` +
+  const value = (html: string) => td(html, { bg: C.surface, style: "padding:0 16px 12px;font:14px system-ui,sans-serif" });
+  const panel = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.surface}" style="background:${C.surface};border-collapse:collapse">` +
     tr(heading("Antes") + heading("Ahora")) +
-    tr(value(`<s style="color:${C.steel}">${b}</s>`) + value(`<strong style="color:${C.beam}">${a}</strong>`)) +
+    tr(value(`<s style="color:${C.muted}">${b}</s>`) + value(`<strong style="color:${C.accent}">${a}</strong>`)) +
     `</table>`;
   return tr(td(panel, { style: "padding:0 24px 18px" }));
 }
 
 function leadNotesSection(notes: string): string {
   return tr(td(
-    `<p style="margin:0;white-space:pre-wrap;font:14px system-ui,sans-serif;color:${C.frost}">${escapeHtml(notes)}</p>`,
+    `<p style="margin:0;white-space:pre-wrap;font:14px system-ui,sans-serif;color:${C.ink}">${escapeHtml(notes)}</p>`,
     { style: "padding:0 24px 18px" },
   ));
 }
@@ -173,7 +173,7 @@ function setlistSection(line: Line, titles: Map<string, string>): string {
 
 function renderLine(line: Line, titles: Map<string, string>): string {
   const header = tr(td(
-    `<span style="font:700 15px system-ui,sans-serif;color:${C.frost}">${escapeHtml(headerLine(line.kind, line.serviceDate))}</span>`,
+    `<span style="font:700 15px system-ui,sans-serif;color:${C.ink}">${escapeHtml(headerLine(line.kind, line.serviceDate))}</span>`,
     { style: "padding:18px 24px 8px" },
   ));
   switch (line.kind) {
@@ -196,7 +196,7 @@ export function buildGroupedEmail(
     ? headerLine(o.lines[0].kind, o.lines[0].serviceDate)
     : "Novedades de tus servicios";
   const greeting = tr(td(
-    `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.frost}">Hola ${escapeHtml(o.name || "equipo")},</p>`,
+    `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}">Hola ${escapeHtml(o.name || "equipo")},</p>`,
     { style: "padding:0 24px 8px" },
   ));
   const bodyRows = greeting + o.lines.map((l) => renderLine(l, titles)).join("");
