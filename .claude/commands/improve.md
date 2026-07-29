@@ -38,7 +38,8 @@ worth changing is a success, not a failure. Never manufacture churn.
 5. **Verify it works — hard gate, no exceptions:**
    ```
    npx tsc --noEmit      # must exit 0
-   npm test              # must be all-green (currently 141 tests)
+   npm test              # must be all-green (2400+ tests)
+   npx eslint .          # 0 errors (warnings are the tracked backlog — see Ladder rung 8)
    ```
    For data scripts, dry-run first, then verify against production. Only claim
    success with evidence in hand — never assert "done" without the command
@@ -69,10 +70,19 @@ worth changing is a success, not a failure. Never manufacture churn.
    optimization, needless re-renders, bundle weight.
 7. **Test coverage** — add tests for untested pure logic (utils, GROQ builders,
    date math). High leverage because it locks in every future loop's work.
-8. **Small features that genuinely help the team** — a real convenience for
+8. **Lint-warning backlog** — `npx eslint .` reports warnings *by design*
+   (`no-explicit-any` ~65, `set-state-in-effect` ~22; rationale in
+   `eslint.config.mjs`). Burn down one small coherent batch per run — one file
+   or one rule-cluster — strictly behavior-preserving. Type the `any` properly
+   (from the GROQ result or component props); don't just cast it away. A
+   `set-state-in-effect` fix needs the same per-site care as a correctness fix
+   (it changes render timing) — skip any site you can't verify. When a rule's
+   warning count hits zero, promote it to `"error"` in `eslint.config.mjs` in
+   the same commit so it can't regress.
+9. **Small features that genuinely help the team** — a real convenience for
    leads/members/admins, scoped small enough to finish and verify in one run.
-9. **Tech debt / DX** — only when it removes real risk or unblocks future work,
-   never cosmetic refactoring for its own sake.
+10. **Tech debt / DX** — only when it removes real risk or unblocks future work,
+    never cosmetic refactoring for its own sake.
 
 ---
 
@@ -82,7 +92,7 @@ Cycle through these so consecutive runs don't cluster. Look at your last 2–3
 commits; deliberately pick a *different* lens this run:
 
 `correctness` → `a11y` → `security` → `performance` → `test-coverage` →
-`ux-polish` → `feature` → `data-integrity` → `docs/DX` → (repeat)
+`lint-backlog` → `ux-polish` → `feature` → `data-integrity` → `docs/DX` → (repeat)
 
 You do not have to force a lens if a clear higher-priority bug exists elsewhere —
 the Ladder wins ties — but never do >2 similar changes in a row.
@@ -147,8 +157,9 @@ for polish:
 (`next-sanity`), Tailwind, NextAuth v4, Fuse.js. Node 22. Dark-mode-only. Studio
 embedded at `/studio`. Spanish-language UI (`lang="es"`).
 
-**Commands:** `npx tsc --noEmit` (typecheck), `npm test` (vitest, ~141 tests).
-No `build` needed for the gate.
+**Commands:** `npx tsc --noEmit` (typecheck), `npm test` (vitest, 2400+ tests),
+`npx eslint .` (flat config in `eslint.config.mjs`; 0 errors required, warnings
+are the deliberate backlog). No `build` needed for the gate.
 
 **Timezone & dates (critical):** all service dates are Sanity `date` type
 (`YYYY-MM-DD`). Timezone is **America/Mexico_City**.
