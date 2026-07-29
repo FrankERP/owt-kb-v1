@@ -380,14 +380,6 @@ describe("publish-ready auth and request contract", () => {
       { mode: "ready", roles: [{ id: "role-1", rev: "rev-1" }, { id: "role-1", rev: "rev-1" }] },
       // A bulk submission acknowledges nothing.
       { mode: "ready", roles: [{ id: "role-1", rev: "rev-1", acknowledgedBlockers: ["team_empty"] }] },
-      // Override is the individual button: exactly one service.
-      {
-        mode: "override",
-        roles: [
-          { id: "role-1", rev: "rev-1", acknowledgedBlockers: [] },
-          { id: "role-2", rev: "rev-2", acknowledgedBlockers: [] },
-        ],
-      },
       // A hard blocker code is never an acknowledgeable workflow blocker.
       {
         mode: "override",
@@ -996,6 +988,81 @@ describe("publish-ready override mode", () => {
     const res = await override([]);
     expect(res.status).toBe(200);
     expect(committed()).toHaveLength(1);
+  });
+
+  // ── Batched override (`Publicar todos`) ───────────────────────────────────
+
+  const WEEK2 = "2026-08-16";
+  function seedTwo() {
+    seedReady();
+    store.roles = [role(), role({ _id: "role-2", _rev: "rev-2", week: WEEK2 })];
+    store.locks = [
+      lock(),
+      lock({
+        _id: `roleTarget.sunday_role.${WEEK2}`,
+        _rev: "lock-rev-2",
+        targetKey: `sunday_role:${WEEK2}`,
+        roleId: "role-2",
+        date: WEEK2,
+        claimNonce: "n2",
+      }),
+    ];
+    // `role-2` has no setlist of its own, so its only blocker is
+    // `incomplete_setlist` — the bulk-acknowledgeable one.
+  }
+
+  it("publishes a BATCH of a clean draft and an acknowledged one in ONE transaction", async () => {
+    seedTwo();
+    const res = await publishReadyPOST(
+      req({
+        mode: "override",
+        roles: [
+          { id: "role-1", rev: "rev-1", acknowledgedBlockers: [] },
+          { id: "role-2", rev: "rev-2", acknowledgedBlockers: ["incomplete_setlist"] },
+        ],
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(await json(res)).toMatchObject({ ok: true, mode: "override", published: 2 });
+    expect(committed()).toHaveLength(1);
+    const tx = committed()[0];
+    expect(patchFor(tx, "role-1")?.set).toMatchObject({ published: true });
+    expect(patchFor(tx, "role-2")?.set).toMatchObject({ published: true });
+  });
+
+  it("rejects the WHOLE batch when one entry's acknowledgement does not match", async () => {
+    seedTwo();
+    const res = await publishReadyPOST(
+      req({
+        mode: "override",
+        roles: [
+          { id: "role-1", rev: "rev-1", acknowledgedBlockers: [] },
+          // `role-2` really is missing a setlist; acknowledging nothing is a lie.
+          { id: "role-2", rev: "rev-2", acknowledgedBlockers: [] },
+        ],
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect(committed()).toHaveLength(0);
+  });
+
+  it("never lets a BATCH past a hard integrity blocker on any single entry", async () => {
+    seedTwo();
+    // A dangling assignment on `role-2` is hard, so no acknowledgement reaches it
+    // and the clean `role-1` beside it publishes nothing either.
+    store.roles = [role(), role({ _id: "role-2", _rev: "rev-2", week: WEEK2, Lead: [{ _key: "k9", _type: "reference", _ref: "ghost" }] })];
+    const res = await publishReadyPOST(
+      req({
+        mode: "override",
+        roles: [
+          { id: "role-1", rev: "rev-1", acknowledgedBlockers: [] },
+          { id: "role-2", rev: "rev-2", acknowledgedBlockers: ["incomplete_setlist"] },
+        ],
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect((await json(res)).error).toBe("integrity_conflict");
+    expect(committed()).toHaveLength(0);
   });
 });
 

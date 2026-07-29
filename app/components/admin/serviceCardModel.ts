@@ -66,8 +66,10 @@ import {
   deriveTargetPreflight,
 } from "./serviceReadiness";
 import {
+  selectBulkOverride,
   selectPublishReady,
   type PublishCandidate,
+  type PublishOverrideAcknowledgement,
   type PublishSelectionEntry,
   type PublishSkipReason,
   type PublishWorkflowBlocker,
@@ -1073,18 +1075,35 @@ export interface PublishSkippedLine {
   text: string;
 }
 
+export type PublishOverrideLine = PublishOverrideAcknowledgement & { label: string };
+
 export interface PublishConfirmationPlan {
   /** Exactly what `Publicar listos` may submit. */
   selected: (PublishSelectionEntry & { label: string })[];
-  /** Every DRAFT that was left out, with its reasons — never a silent drop. */
+  /** Every DRAFT that was left out of `selected`, with reasons — never a silent drop. */
   skipped: PublishSkippedLine[];
+  /**
+   * The ONE `mode: "override"` batch `Publicar todos` submits: every `selected`
+   * entry (acknowledging nothing) plus every draft whose only blockers are
+   * bulk-acknowledgeable. Empty when the override would add nothing.
+   */
+  overrideAll: PublishOverrideLine[];
+  /** The `skipped` lines `Publicar todos` WOULD publish, in `skipped` order. */
+  overrideAdds: PublishSkippedLine[];
+  /** The `skipped` lines NO bulk action can publish, in `skipped` order. */
+  overrideBlocked: PublishSkippedLine[];
 }
 
 /**
- * Split the visible cards into "submit these" and "skipped, because". Selection is
- * `selectPublishReady`'s — this only adds the Spanish reason copy and drops
- * already-published cards from the skipped list (they are not candidates an admin
- * needs explained).
+ * Split the visible cards into "submit these", "skipped, because", and "these
+ * extra ones only the override reaches". Both selections are the pure functions'
+ * (`selectPublishReady` / `selectBulkOverride`) — this only adds the Spanish
+ * reason copy and drops already-published cards from the skipped list (they are
+ * not candidates an admin needs explained).
+ *
+ * `overrideAll` is left EMPTY when the override adds nothing beyond `selected`,
+ * so the panel never offers a second action that would do the same thing as the
+ * first.
  */
 export function buildPublishConfirmation(
   cards: readonly ServiceCardModel[],
@@ -1096,16 +1115,29 @@ export function buildPublishConfirmation(
     label: serviceCardLabel(card.role),
   }));
   const { selected, skipped } = selectPublishReady(candidates);
+  const override = selectBulkOverride(candidates);
+
+  const skippedLines: PublishSkippedLine[] = skipped
+    .filter((entry) => entry.publishState === "draft")
+    .map((entry) => ({
+      id: entry.id,
+      label: entry.label ?? entry.id,
+      reasons: entry.reasons,
+      text: entry.reasons.map((reason) => PUBLISH_SKIP_COPY[reason] ?? reason).join("; "),
+    }));
+
+  const overrideIds = new Set(override.selected.map((entry) => entry.id));
+  const overrideAdds = skippedLines.filter((line) => overrideIds.has(line.id));
+
   return {
     selected: selected.map((entry) => ({ ...entry, label: entry.label ?? entry.id })),
-    skipped: skipped
-      .filter((entry) => entry.publishState === "draft")
-      .map((entry) => ({
-        id: entry.id,
-        label: entry.label ?? entry.id,
-        reasons: entry.reasons,
-        text: entry.reasons.map((reason) => PUBLISH_SKIP_COPY[reason] ?? reason).join("; "),
-      })),
+    skipped: skippedLines,
+    overrideAll:
+      overrideAdds.length > 0
+        ? override.selected.map((entry) => ({ ...entry, label: entry.label ?? entry.id }))
+        : [],
+    overrideAdds,
+    overrideBlocked: skippedLines.filter((line) => !overrideIds.has(line.id)),
   };
 }
 

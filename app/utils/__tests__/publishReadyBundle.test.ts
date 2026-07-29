@@ -178,6 +178,43 @@ describe("request parsing", () => {
     });
   });
 
+  it("accepts a BATCHED override, each entry with its own acknowledgement", () => {
+    // `Publicar todos` submits the ready drafts (acknowledging nothing) and the
+    // acknowledged ones in ONE request; the handler still checks each entry
+    // against its own freshly recomputed set.
+    expect(
+      parsePublishReadyRequest({
+        mode: "override",
+        roles: [
+          { id: "r1", rev: "v1", acknowledgedBlockers: [] },
+          { id: "r2", rev: "v2", acknowledgedBlockers: ["incomplete_setlist"] },
+        ],
+      }),
+    ).toEqual({
+      ok: true,
+      value: {
+        mode: "override",
+        entries: [
+          { id: "r1", rev: "v1", acknowledgedBlockers: [] },
+          { id: "r2", rev: "v2", acknowledgedBlockers: ["incomplete_setlist"] },
+        ],
+        requestedState: "published",
+      },
+    });
+  });
+
+  it("still rejects a duplicate role id inside an override batch", () => {
+    expect(
+      parsePublishReadyRequest({
+        mode: "override",
+        roles: [
+          { id: "r1", rev: "v1", acknowledgedBlockers: [] },
+          { id: "r1", rev: "v1", acknowledgedBlockers: ["team_empty"] },
+        ],
+      }).ok,
+    ).toBe(false);
+  });
+
   it("rejects an acknowledgement that is not a registered workflow blocker", () => {
     for (const codes of [["invalid_record"], ["source_unready"], ["nonsense"], [42], "team_empty"]) {
       const parsed = parsePublishReadyRequest({

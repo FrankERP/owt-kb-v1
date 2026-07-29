@@ -62,6 +62,7 @@ import {
   type CardSourceSummaries,
   type MemberOption,
   type PublishConfirmationPlan,
+  type PublishOverrideLine,
   type ServiceCardModel,
   type ServiceRole,
   type ServiceType,
@@ -1169,6 +1170,33 @@ export default function ServicesPanel() {
     });
   }
 
+  /**
+   * `Publicar todos` — ONE override batch carrying the ready drafts (acknowledging
+   * nothing) and the bulk-acknowledgeable ones together. The server recomputes
+   * every entry's own workflow set, so a service whose blockers moved since the
+   * modal opened rejects the whole request rather than publishing silently.
+   */
+  async function publishOverrideAll(entries: PublishOverrideLine[]) {
+    const guard = guardControl(sources, "publishReady");
+    if (!guard.ok) { setPublishError(guard.message ?? "Datos incompletos."); return; }
+    if (entries.length === 0) return;
+    await submitPublication({
+      url: "/api/admin/roles/publish-ready",
+      body: {
+        mode: "override",
+        roles: entries.map(({ id, rev, acknowledgedBlockers }) => ({
+          id,
+          rev,
+          acknowledgedBlockers: [...acknowledgedBlockers],
+        })),
+      },
+      outcome: { kind: "publish", ids: entries.map(e => e.id), published: true },
+      success: entries.length === 1 ? "Servicio publicado." : `${entries.length} servicios publicados.`,
+      fallback: "Error al publicar.",
+      onDone: () => { setPublishPlan(null); setOverrideCard(null); },
+    });
+  }
+
   /** The explicit individual override: only WORKFLOW blockers, one service. */
   async function publishOverride(card: ServiceCardModel, blockers: readonly PublishWorkflowBlocker[]) {
     const guard = guardControl(sources, "publishReady");
@@ -1721,8 +1749,8 @@ export default function ServicesPanel() {
         >
           <div className={CARD_STYLE.dialog}>
             <p className="font-body text-sm text-gray-400">
-              Solo se publican los servicios que pasaron toda la verificación. Los demás se
-              muestran abajo con su motivo y no se envían.
+              «Publicar {publishPlan.selected.length}» envía solo los servicios que pasaron toda
+              la verificación. Los demás se muestran abajo con su motivo.
             </p>
             <section>
               <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">
@@ -1742,13 +1770,31 @@ export default function ServicesPanel() {
                 </ul>
               )}
             </section>
-            {publishPlan.skipped.length > 0 && (
+            {publishPlan.overrideAdds.length > 0 && (
               <section>
                 <p className="font-label text-[11px] uppercase tracking-widest text-amber-400">
-                  Se omiten ({publishPlan.skipped.length})
+                  Solo con «Publicar todos» ({publishPlan.overrideAdds.length})
+                </p>
+                <p className="mt-0.5 font-body text-xs text-gray-500">
+                  Se publican los roles para que cada quien vea el día que le toca. El setlist
+                  se puede completar después.
                 </p>
                 <ul className="mt-1 space-y-0.5">
-                  {publishPlan.skipped.map(entry => (
+                  {publishPlan.overrideAdds.map(entry => (
+                    <li key={entry.id} className={`font-body text-xs text-gray-400 ${CARD_STYLE.longText}`}>
+                      <span className="text-gray-300">{entry.label}</span> — {entry.text}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+            {publishPlan.overrideBlocked.length > 0 && (
+              <section>
+                <p className="font-label text-[11px] uppercase tracking-widest text-amber-400">
+                  Se omiten ({publishPlan.overrideBlocked.length})
+                </p>
+                <ul className="mt-1 space-y-0.5">
+                  {publishPlan.overrideBlocked.map(entry => (
                     <li key={entry.id} className={`font-body text-xs text-gray-400 ${CARD_STYLE.longText}`}>
                       <span className="text-gray-300">{entry.label}</span> — {entry.text}
                     </li>
@@ -1764,6 +1810,15 @@ export default function ServicesPanel() {
               loading={submitting}
               disabled={publishPlan.selected.length === 0 || !publishGate.enabled}
               unknownOutcome={!!pendingOutcome}
+              secondary={
+                publishPlan.overrideAll.length > 0
+                  ? {
+                      label: `Publicar todos (${publishPlan.overrideAll.length})`,
+                      onClick: () => publishOverrideAll(publishPlan.overrideAll),
+                      disabled: !publishGate.enabled,
+                    }
+                  : undefined
+              }
             />
           </div>
         </Modal>
@@ -1909,6 +1964,7 @@ function PublicationFooter({
   disabled,
   unknownOutcome,
   danger,
+  secondary,
 }: {
   onClose: () => void;
   onConfirm: () => void;
@@ -1918,6 +1974,13 @@ function PublicationFooter({
   disabled?: boolean;
   unknownOutcome?: boolean;
   danger?: boolean;
+  /**
+   * An additional, wider-reaching commit beside the primary one (today: publishing
+   * the acknowledged drafts too). Hidden while an outcome is unknown, so the only
+   * offer after a lost response is still `Verificar resultado` — never a second
+   * way to re-submit a batch that may already have landed.
+   */
+  secondary?: { label: string; onClick: () => void; disabled?: boolean };
 }) {
   return (
     <div className="flex flex-wrap gap-3">
@@ -1949,6 +2012,16 @@ function PublicationFooter({
           }`}
         >
           {loading ? "Guardando..." : confirmLabel}
+        </button>
+      )}
+      {secondary && !unknownOutcome && (
+        <button
+          type="button"
+          onClick={secondary.onClick}
+          disabled={loading || secondary.disabled}
+          className="min-h-[44px] flex-1 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 font-label text-xs uppercase tracking-widest text-amber-200 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
+        >
+          {loading ? "Guardando..." : secondary.label}
         </button>
       )}
     </div>
