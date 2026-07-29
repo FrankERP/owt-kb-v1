@@ -720,11 +720,18 @@ function fail<T>(issues: string[]): ParseResult<T> {
  * `{ mode, roles: [{ id, rev, acknowledgedBlockers? }], published? }`.
  *
  * `ready` acknowledges nothing — a bulk submission that carries acknowledgements
- * is malformed, not generously reinterpreted as an override. `override` is
- * deliberately single-service (it is the individual publish button) and may name
+ * is malformed, not generously reinterpreted as an override. `override` may name
  * ONLY registered workflow blocker codes; a hard-blocker code in the payload is a
  * rejected request, never a negotiation. `recover` is read-only and needs no
  * revisions, but must state which publication state it was trying to reach.
+ *
+ * `override` accepts a BATCH (it was single-service while the individual card
+ * button was its only caller; `Publicar todos` now submits many). Batching costs
+ * no safety: the handler already classified, guarded and committed per entry, so
+ * each role is still checked against its OWN freshly recomputed workflow set, one
+ * mismatch still rejects the whole request, and hard blockers are still refused
+ * for every entry. An entry acknowledging nothing (`[]`) is a clean draft, which
+ * is how one atomic request can publish the ready and the acknowledged together.
  */
 export function parsePublishReadyRequest(
   body: unknown,
@@ -736,7 +743,6 @@ export function parsePublishReadyRequest(
   const rows = body.roles;
   if (!Array.isArray(rows) || rows.length === 0) return fail(["roles"]);
   if (rows.length > PUBLISH_BATCH_MAX) return fail(["batch_size"]);
-  if (mode === "override" && rows.length !== 1) return fail(["override_batch"]);
 
   let requestedState: PublishState = "published";
   if (mode === "recover") {

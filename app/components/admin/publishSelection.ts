@@ -9,10 +9,12 @@
 // `deriveServiceReadiness` output.
 //
 // The split that matters:
-//  - WORKFLOW blockers are the only codes an explicit individual override may
-//    acknowledge (plan §"Readiness-aware bulk publishing"): an empty team, an
-//    availability conflict, an active proposal, a missing/incomplete setlist.
-//    Each is a decision an admin is entitled to make knowingly.
+//  - WORKFLOW blockers are the only codes an explicit override may acknowledge
+//    (plan §"Readiness-aware bulk publishing"): an empty team, an availability
+//    conflict, an active proposal, a missing/incomplete setlist. Each is a
+//    decision an admin is entitled to make knowingly. The INDIVIDUAL override
+//    (one card) may acknowledge all four; `BULK_OVERRIDE_BLOCKERS` narrows the
+//    batch to the two that do not need a per-service look.
 //  - HARD blockers are integrity/observation failures — invalid or
 //    draft-conflicted records, duplicate targets, dangling assignments, unknown
 //    or failed sources, and A2 cleanup requirements. They are NEVER
@@ -319,6 +321,107 @@ export interface PublishOverrideAcknowledgement {
   rev: string;
   /** The exact workflow blocker codes the admin acknowledged, in priority order. */
   acknowledgedBlockers: PublishWorkflowBlocker[];
+  /** Optional admin-facing label for the confirmation list. */
+  label?: string;
+}
+
+/**
+ * The workflow blockers a BULK override (`Publicar todos`) may acknowledge — a
+ * strict subset of `PUBLISH_WORKFLOW_BLOCKERS`.
+ *
+ * Roles are published BEFORE the setlist exists, so members learn which day they
+ * serve and know to plan for it; a missing or half-finished setlist and a proposal
+ * still in flight are therefore the normal state of a service that is ready to
+ * announce, and one acknowledgement covers the whole month.
+ *
+ * The two that are deliberately absent need a per-service look and stay on the
+ * individual override:
+ *  - `availability_conflict` — someone assigned said they cannot serve that day.
+ *    Publishing emails them that they are serving anyway; that is a conversation,
+ *    not a batch.
+ *  - `team_empty` — nobody is assigned, so publishing announces nothing to anyone.
+ */
+export const BULK_OVERRIDE_BLOCKERS = ["active_proposal", "incomplete_setlist"] as const;
+
+export type BulkOverrideBlocker = (typeof BULK_OVERRIDE_BLOCKERS)[number];
+
+const BULK_OVERRIDE_SET: ReadonlySet<string> = new Set(BULK_OVERRIDE_BLOCKERS);
+
+/** True when every code is bulk-acknowledgeable. Vacuously true for a clean draft. */
+export function isBulkOverridable(workflow: readonly string[]): boolean {
+  return workflow.every((code) => BULK_OVERRIDE_SET.has(code));
+}
+
+export interface PublishOverrideSelection {
+  /** Exactly what ONE `mode: "override"` batch may submit. */
+  selected: PublishOverrideAcknowledgement[];
+  /** Every excluded candidate with its explicit reasons — never a silent drop. */
+  skipped: PublishSkippedEntry[];
+}
+
+/**
+ * Split the visible cards into "this one override batch may submit these" and
+ * "skipped, because". A candidate is selected only when it has a usable identity,
+ * is a first occurrence, is a draft, has ZERO hard blockers, and every workflow
+ * blocker it does have is bulk-acknowledgeable.
+ *
+ * A clean draft is selected with an empty acknowledgement, so a single atomic
+ * request publishes the ready services and the acknowledged ones together — the
+ * server compares each entry against its own recomputed set either way.
+ *
+ * Hard blockers are refused here exactly as they are in `selectPublishReady` and
+ * on the server: no acknowledgement makes a publish over unproven state safe.
+ */
+export function selectBulkOverride(
+  candidates: readonly PublishCandidate[],
+): PublishOverrideSelection {
+  const selected: PublishOverrideAcknowledgement[] = [];
+  const skipped: PublishSkippedEntry[] = [];
+  const seen = new Set<string>();
+
+  for (const candidate of candidates ?? []) {
+    const label = candidate?.label;
+    const withLabel = <T extends object>(v: T): T => (label ? { ...v, label } : v);
+    const id = candidate?.id;
+    const publishState = candidate?.readiness?.publishState ?? "published";
+
+    if (!nonEmptyString(id) || !nonEmptyString(candidate?.rev) || !candidate?.readiness) {
+      skipped.push(
+        withLabel({
+          id: nonEmptyString(id) ? id : "(unknown)",
+          publishState,
+          reasons: ["unusable_identity"] as PublishSkipReason[],
+        }),
+      );
+      continue;
+    }
+    if (seen.has(id)) {
+      skipped.push(withLabel({ id, publishState, reasons: ["duplicate_candidate"] as PublishSkipReason[] }));
+      continue;
+    }
+    seen.add(id);
+
+    if (publishState !== "draft") {
+      skipped.push(withLabel({ id, publishState, reasons: ["already_published"] as PublishSkipReason[] }));
+      continue;
+    }
+
+    const { hard, workflow } = classifyPublishBlockers(candidate.readiness);
+    if (hard.length > 0 || !isBulkOverridable(workflow)) {
+      skipped.push(
+        withLabel({
+          id,
+          publishState,
+          reasons: [...hard, ...workflow] as PublishSkipReason[],
+        }),
+      );
+      continue;
+    }
+
+    selected.push(withLabel({ id, rev: candidate.rev, acknowledgedBlockers: workflow }));
+  }
+
+  return { selected, skipped };
 }
 
 /**

@@ -4,7 +4,7 @@
 // contract:
 //
 //   { mode: "ready",    roles: [{ id, rev }] }
-//   { mode: "override", roles: [{ id, rev, acknowledgedBlockers: [...] }] }   // exactly one
+//   { mode: "override", roles: [{ id, rev, acknowledgedBlockers: [...] }] }   // batch
 //   { mode: "recover",  roles: [{ id }], published: boolean }                 // READ ONLY
 //
 // `ready` and `override` never trust the client's readiness. Both RELOAD the five
@@ -18,6 +18,10 @@
 // `override` exists only for WORKFLOW blockers (empty team, availability conflict,
 // active proposal, missing/incomplete setlist). The acknowledged set is compared
 // against the server's freshly recomputed set and a change rejects the publish.
+// It takes a BATCH: the card's individual button sends one entry, `Publicar todos`
+// sends many, and each is checked against its OWN recomputed set — one mismatch
+// rejects the whole request. An entry acknowledging nothing is a clean draft, so a
+// single atomic batch can carry the ready and the acknowledged together.
 // Hard integrity blockers — invalid or draft-conflicted records, duplicate
 // targets, dangling assignments, unknown/failed sources, A2 cleanup requirements —
 // are never override-eligible in either mode.

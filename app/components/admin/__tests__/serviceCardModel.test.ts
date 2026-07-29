@@ -386,6 +386,58 @@ describe("Publicar listos", () => {
     expect(plan.skipped.map((s) => s.id)).not.toContain("pub-1");
   });
 
+  it("offers `Publicar todos` for a draft with no setlist, and folds the ready one in", () => {
+    const ready = card({ role: role({ _id: "ok-1" }), readiness: readiness() });
+    const noSetlist = card({
+      role: role({ _id: "sin-1" }),
+      readiness: readiness({
+        setlistResponse: { targetState: "none", observed: { state: "none" }, setlistId: null, songs: [], recentSongs: {} },
+      }),
+    });
+
+    const plan = buildPublishConfirmation([ready, noSetlist]);
+    expect(plan.selected.map((s) => s.id)).toEqual(["ok-1"]);
+    // ONE batch covers both: the ready draft acknowledges nothing.
+    expect(plan.overrideAll.map((e) => [e.id, e.acknowledgedBlockers])).toEqual([
+      ["ok-1", []],
+      ["sin-1", ["incomplete_setlist"]],
+    ]);
+    expect(plan.overrideAdds.map((s) => s.id)).toEqual(["sin-1"]);
+    expect(plan.overrideBlocked).toEqual([]);
+    // Every add is still listed in `skipped` — the two views partition it.
+    expect(plan.skipped.map((s) => s.id)).toEqual(["sin-1"]);
+    expect([...plan.overrideAdds, ...plan.overrideBlocked].map((s) => s.id).sort()).toEqual(
+      plan.skipped.map((s) => s.id).sort(),
+    );
+  });
+
+  it("leaves `overrideAll` empty when the override would add nothing", () => {
+    const ready = card({ role: role({ _id: "ok-1" }), readiness: readiness() });
+    const empty = card({
+      role: role({ _id: "vacio-1" }),
+      readiness: readiness({ team: { assignedRefs: [], danglingRefs: [] }, members: [] }),
+    });
+
+    // A ready draft alone: nothing to add.
+    expect(buildPublishConfirmation([ready]).overrideAll).toEqual([]);
+    // An empty team is NOT bulk-acknowledgeable, so it stays blocked and the
+    // second action is not offered at all.
+    const plan = buildPublishConfirmation([ready, empty]);
+    expect(plan.overrideAll).toEqual([]);
+    expect(plan.overrideAdds).toEqual([]);
+    expect(plan.overrideBlocked.map((s) => s.id)).toEqual(["vacio-1"]);
+  });
+
+  it("never offers `Publicar todos` past a hard integrity blocker", () => {
+    const duplicate = card({
+      role: role({ _id: "dup-1" }),
+      readiness: readiness({ roleTarget: "duplicate", roleTargetIds: ["dup-1", "dup-2"] }),
+    });
+    const plan = buildPublishConfirmation([duplicate]);
+    expect(plan.overrideAll).toEqual([]);
+    expect(plan.overrideBlocked.map((s) => s.id)).toEqual(["dup-1"]);
+  });
+
   it("never silently includes an integrity-blocked draft", () => {
     const duplicate = card({
       role: role({ _id: "dup-1" }),

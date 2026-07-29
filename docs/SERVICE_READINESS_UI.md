@@ -213,8 +213,8 @@ would present a read-only document and waste the trip. A test pins this
 `publishSelection.ts` keeps **two disjoint blocker vocabularies**:
 
 - **`PUBLISH_WORKFLOW_BLOCKERS`** (4): `availability_conflict`, `active_proposal`,
-  `incomplete_setlist`, `team_empty`. These are the *only* codes an explicit individual
-  override may acknowledge — a human can knowingly publish a service with an empty setlist.
+  `incomplete_setlist`, `team_empty`. These are the *only* codes an explicit override may
+  acknowledge — a human can knowingly publish a service with an empty setlist.
 - **`PUBLISH_HARD_BLOCKERS`** (18): `source_unready`, `invalid_record`,
   `role_target_duplicate`, … `cleanup_required`. **Never override-eligible**, because no
   acknowledgement makes a publish computed over unproven state safe.
@@ -224,9 +224,34 @@ occurrence, is a draft, has zero blockers of either kind, **and** `isReadyToPubl
 independently agrees. That last check is deliberate redundancy against a caller handing over
 a self-contradictory readiness object.
 
+### The two publish actions
+
+The confirmation modal offers two commits, both server-recomputed:
+
+| Action | Submits | Reaches |
+|---|---|---|
+| `Publicar N` | `mode: "ready"` | drafts with **zero** blockers |
+| `Publicar todos (N)` | `mode: "override"` | the above **plus** drafts blocked only by `BULK_OVERRIDE_BLOCKERS` |
+
+**`BULK_OVERRIDE_BLOCKERS`** is a strict subset of the workflow four:
+`active_proposal` + `incomplete_setlist`. Roles are published *before* the setlist exists —
+that is how a member learns which day they serve and that they need to plan for it — so a
+missing setlist is the normal state of an announceable service and one acknowledgement can
+cover the whole month.
+
+The other two are deliberately **not** batchable and stay on the per-card override:
+`availability_conflict` (someone assigned said they cannot serve that day; publishing emails
+them that they are serving anyway — that is a conversation, not a batch) and `team_empty`
+(nobody is assigned, so publishing announces nothing to anyone).
+
+`Publicar todos` sends **one** `override` batch in which a ready draft carries an *empty*
+acknowledgement, so the whole month commits in a single atomic transaction. The button is
+hidden entirely when the override would add nothing beyond `Publicar N`.
+
 The client's selection is a **hint, never an authorization**: `publishReadyBundle.ts`
 reloads all five domains server-side and re-derives readiness with the same predicates
-before writing anything.
+before writing anything. In `override` mode each entry is compared against its **own**
+freshly recomputed workflow set, and one mismatch rejects the entire batch.
 
 Counters are computed over the **visible** set only, so "listos para publicar" always equals
 exactly what the button would submit.

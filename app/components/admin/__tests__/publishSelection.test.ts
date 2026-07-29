@@ -12,12 +12,15 @@ import {
   type ServiceSourceStates,
 } from "../serviceReadiness";
 import {
+  BULK_OVERRIDE_BLOCKERS,
   PUBLISH_HARD_BLOCKERS,
   PUBLISH_WORKFLOW_BLOCKERS,
   classifyPublishBlockers,
+  isBulkOverridable,
   isOverrideEligible,
   overrideAcknowledgement,
   sameBlockerSet,
+  selectBulkOverride,
   selectPublishReady,
   type PublishCandidate,
 } from "../publishSelection";
@@ -475,5 +478,119 @@ describe("selectPublishReady", () => {
 
   it("returns empty lists for no candidates", () => {
     expect(selectPublishReady([])).toEqual({ selected: [], skipped: [] });
+  });
+});
+
+// ── Bulk override (`Publicar todos`) ────────────────────────────────────────
+
+describe("bulk override selection", () => {
+  const NO_SETLIST = {
+    setlistResponse: setlistBody({
+      targetState: "none",
+      contentState: "none",
+      observed: { state: "none" },
+      setlistId: null,
+      songs: [],
+    }),
+  };
+  const ACTIVE_PROPOSAL = {
+    proposal: {
+      validated: [{ id: "p1", status: "pending" }],
+      conflicts: [],
+      recordIssues: [],
+      draftIds: [],
+    },
+  };
+
+  it("acknowledges only a strict subset of the workflow blockers", () => {
+    for (const code of BULK_OVERRIDE_BLOCKERS) {
+      expect(PUBLISH_WORKFLOW_BLOCKERS).toContain(code);
+    }
+    // The two that need a per-service look stay on the individual override.
+    expect([...BULK_OVERRIDE_BLOCKERS]).not.toContain("availability_conflict");
+    expect([...BULK_OVERRIDE_BLOCKERS]).not.toContain("team_empty");
+  });
+
+  it("treats a clean draft as vacuously overridable", () => {
+    expect(isBulkOverridable([])).toBe(true);
+  });
+
+  it("selects a draft with no setlist, acknowledging exactly that", () => {
+    const result = selectBulkOverride([candidate(NO_SETLIST, "sin-setlist")]);
+    expect(result.skipped).toEqual([]);
+    expect(result.selected).toEqual([
+      { id: "sin-setlist", rev: "sin-setlist-rev", acknowledgedBlockers: ["incomplete_setlist"] },
+    ]);
+  });
+
+  it("selects a draft with an active proposal, and both blockers together", () => {
+    const both = selectBulkOverride([
+      candidate({ ...NO_SETLIST, ...ACTIVE_PROPOSAL }, "ambos"),
+    ]);
+    expect(both.selected[0].acknowledgedBlockers).toEqual([
+      "active_proposal",
+      "incomplete_setlist",
+    ]);
+  });
+
+  it("includes a clean draft with an EMPTY acknowledgement, so one batch covers both", () => {
+    const result = selectBulkOverride([candidate({}, "limpio")]);
+    expect(result.selected).toEqual([
+      { id: "limpio", rev: "limpio-rev", acknowledgedBlockers: [] },
+    ]);
+  });
+
+  it("skips an availability conflict and an empty team — never batched", () => {
+    const conflicted = selectBulkOverride([
+      candidate({ members: [{ _id: "mem-1", member_name: "Ana", unavailableDates: [WEEK] }] }, "ocupada"),
+    ]);
+    expect(conflicted.selected).toEqual([]);
+    expect(conflicted.skipped[0].reasons).toContain("availability_conflict");
+
+    const empty = selectBulkOverride([
+      candidate({ team: { assignedRefs: [], danglingRefs: [] }, members: [] }, "vacio"),
+    ]);
+    expect(empty.selected).toEqual([]);
+    expect(empty.skipped[0].reasons).toContain("team_empty");
+  });
+
+  it("never selects past a hard blocker, whatever the workflow set looks like", () => {
+    const result = selectBulkOverride([
+      candidate({ ...NO_SETLIST, recordValid: false }, "roto"),
+    ]);
+    expect(result.selected).toEqual([]);
+    expect(result.skipped[0].reasons).toContain("invalid_record");
+  });
+
+  it("applies the same identity, duplicate and already-published guards", () => {
+    const published = selectBulkOverride([candidate({ published: true }, "ya")]);
+    expect(published.selected).toEqual([]);
+    expect(published.skipped[0].reasons).toEqual(["already_published"]);
+
+    const dupe = selectBulkOverride([candidate({}, "a"), candidate({}, "a")]);
+    expect(dupe.selected).toHaveLength(1);
+    expect(dupe.skipped[0].reasons).toEqual(["duplicate_candidate"]);
+
+    const noRev = selectBulkOverride([{ ...candidate({}, "a"), rev: "" }]);
+    expect(noRev.selected).toEqual([]);
+    expect(noRev.skipped[0].reasons).toEqual(["unusable_identity"]);
+  });
+
+  it("every acknowledged code is one the server accepts as a workflow blocker", () => {
+    const result = selectBulkOverride([
+      candidate(NO_SETLIST, "a"),
+      candidate(ACTIVE_PROPOSAL, "b"),
+      candidate({}, "c"),
+    ]);
+    for (const entry of result.selected) {
+      for (const code of entry.acknowledgedBlockers) {
+        expect(PUBLISH_WORKFLOW_BLOCKERS).toContain(code);
+        expect(BULK_OVERRIDE_BLOCKERS).toContain(code);
+      }
+    }
+  });
+
+  it("returns empty lists for no candidates", () => {
+    expect(selectBulkOverride([])).toEqual({ selected: [], skipped: [] });
   });
 });
