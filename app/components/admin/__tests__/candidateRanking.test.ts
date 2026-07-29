@@ -5,7 +5,7 @@
 // than inform: the same person twice in one category.
 import { describe, expect, it } from "vitest";
 
-import { instrumentSeatDef, VOICE_SEATS } from "../seatModel";
+import { fohSeatDef, instrumentSeatDef, VOICE_SEATS } from "../seatModel";
 import { rankCandidates, type AssignedSeat, type RankMember } from "../candidateRanking";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 
@@ -92,5 +92,39 @@ describe("rankCandidates", () => {
 
   it("returns an empty list rather than throwing on empty input", () => {
     expect(rankCandidates({ seat: LEAD, date: DATE, members: [], windowRoles: [], assigned: [] })).toEqual([]);
+  });
+
+  // The solver (gcf/owt_solver_v2.py) handles voice roles only — instrument and
+  // FOH load is a signal ONLY this board can surface. computeParticipation keeps
+  // instrWeeks/fohWeeks OUT of `total` (voice-only), so load must be read from
+  // the category-matching field or it silently reads as 0 for these two seats.
+  it("counts load for an instrument seat from instrument history, not voice total", () => {
+    const windowRoles = [
+      role({ date: "2026-07-19", instruments: [{ person: { _id: "m4" } }] }),
+      role({ date: "2026-07-26", instruments: [{ person: { _id: "m4" } }] }),
+      role({ date: "2026-08-02", instruments: [{ person: { _id: "m4" } }] }),
+    ];
+    const samo = rankCandidates({
+      seat: BASS, date: DATE, members: MEMBERS, windowRoles, assigned: [], weeks: 4,
+    }).find((c) => c.id === "m4");
+    expect(samo?.load).toBe(3);
+    expect(samo?.recent.filter(Boolean).length).toBe(3);
+  });
+
+  it("counts load for a FOH seat from FOH history, not voice total", () => {
+    const CONSOLE = fohSeatDef("Console");
+    const fohMembers: RankMember[] = [
+      ...MEMBERS,
+      m("m6", "Toño", ["foh"]),
+    ];
+    const windowRoles = [
+      role({ date: "2026-07-19", foh: [{ person: { _id: "m6" } }] }),
+      role({ date: "2026-08-02", foh: [{ person: { _id: "m6" } }] }),
+    ];
+    const tono = rankCandidates({
+      seat: CONSOLE, date: DATE, members: fohMembers, windowRoles, assigned: [], weeks: 4,
+    }).find((c) => c.id === "m6");
+    expect(tono?.load).toBe(2);
+    expect(tono?.recent.filter(Boolean).length).toBe(2);
   });
 });
