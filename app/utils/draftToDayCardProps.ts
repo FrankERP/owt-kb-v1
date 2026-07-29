@@ -20,7 +20,23 @@ export interface DayCardData {
 
 export function draftToDayCardProps(draft: DraftCardLike, members: MemberLike[]): DayCardData {
   const byId = new Map(members.map((m) => [m._id, m]));
-  const name = (id: string) => byId.get(id)?.member_name;
+  /**
+   * The app-wide display name: alias first, full name only as the fallback (the
+   * same rule as `dn` in `serviceCardModel` / `MonthGenerator`).
+   *
+   * `leads`, `instruments` and `fohTeam` are pre-resolved STRINGS in `DayCardData`,
+   * so the alias has to be applied here — `DayCard` cannot do it later the way it
+   * does for `bgvs`/`chorus`, which it receives as objects. Resolving with
+   * `member_name` alone is what showed solver-generated leads under their full
+   * legal names in the month preview's `Vista`.
+   *
+   * `undefined` still means "no such member", so unknown ids are filtered out
+   * exactly as before.
+   */
+  const name = (id: string) => {
+    const m = byId.get(id);
+    return m ? (m.alias?.trim() || m.member_name) : undefined;
+  };
   const obj = (id: string) => {
     const m = byId.get(id);
     return m ? { member_name: m.member_name ?? "", alias: m.alias } : undefined;
