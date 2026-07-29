@@ -48,5 +48,5 @@ wrote down why — a known gap, not a guess).
 | [0005](0005-play-history-bounded-by-week.md) | Bound play history by week, not by a published-role join | Accepted |
 | [0006](0006-approval-keeps-sibling-proposals.md) | Approving a proposal keeps the other proposals | Accepted |
 | [0007](0007-client-side-auth-keeps-pages-static.md) | Read auth client-side so member pages stay static | Accepted |
-| [0008](0008-forced-dark-theme.md) | Force dark mode app-wide | Rationale not recorded |
+| [0008](0008-forced-dark-theme.md) | Force dark mode app-wide | Accepted — being revisited |
 | [0009](0009-redesign-variants-abandoned.md) | Abandon seven UI redesign variants for "Backstage" | Rationale not recorded |
