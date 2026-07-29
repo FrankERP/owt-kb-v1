@@ -7,8 +7,9 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
 - Next.js 16 (App Router; `proxy.ts` = middleware), React 19, Sanity v5
   (`next-sanity`), Tailwind, NextAuth v4, Fuse.js. Node 22. Dark-mode only.
   Studio embedded at `/studio`. iOS app via Capacitor.
-- **Before claiming done, both must pass:** `npx tsc --noEmit` and `npm test`
-  (vitest). Add tests for testable pure logic.
+- **Before claiming done, all three must pass:** `npx tsc --noEmit`, `npm test`
+  (vitest), and `npx eslint .` with **0 errors** (warnings are a deliberate
+  backlog — see `eslint.config.mjs`). Add tests for testable pure logic.
 
 ## Conventions
 - Work on a branch, **merge to `main` periodically** (don't commit routine work
