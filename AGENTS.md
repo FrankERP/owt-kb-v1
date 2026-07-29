@@ -19,6 +19,9 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
 - Production Sanity writes need explicit user consent — dry-run first
   (one-off scripts in `scripts/`, guarded by `--apply`, run with
   `node --env-file=.env.local scripts/<name>.mjs`). Diagnosing ≠ consent to write.
+- **Any new secret or env var gets an entry in `docs/SECRETS.md`** in the same
+  change: which platforms need it (and which don't), where the value came from,
+  how to rotate it, and what breaks mid-rotation. Never the value itself.
 
 ## Vercel safety
 - Canonical project: `frank-rochas-projects/owt-backstage`
@@ -57,13 +60,22 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   ISR page stays stale.
 - **Client mutation handlers** must wrap `fetch` in try/catch/finally, check
   `res.ok`, reset their loading flag, and never close-as-success on failure.
+- **`/api/cron/*` stays excluded from the `proxy.ts` middleware matcher** — those
+  routes authenticate with `CRON_SECRET` themselves. The matcher is duplicated in
+  `app/utils/routeMatcher.ts` and the two must stay byte-identical (sync guard in
+  `routeMatcher.test.ts`).
+- **Notification emails: `before` is captured PRE-COMMIT** and threaded into
+  `after()`. Reading live state inside `after()` gives post-write state and the
+  system silently sends nothing. See `docs/NOTIFICATIONS.md`.
 
 ## Reusable utils (don't reinvent)
 `normalizeText` (accent-insensitive search), `assignedMemberRefsQuery`,
 `revalidateSongViews`/`revalidateServiceViews`, `buildRuns`/`normalizeMedleyTags`
 (medley grouping), `extractYouTubeId`, `computeParticipation`,
 `summarizeUnfilledSeats`, `isMemberActive` (30s-TTL auth gate),
-`requireActiveSession`/`requireActiveManager`.
+`requireActiveSession`/`requireActiveManager`, `wantsNotification` (the ONLY
+per-type email-preference resolver — nothing reads `notifPrefs` directly),
+`sweepOutbox`, `shell`/`td`/`C` (`emailShell.ts` — the shared email palette).
 
 ## Auth
 Roles: `super-admin` > `admin` > `content-editor` > `member`. Gate via
@@ -81,3 +93,23 @@ cadence.
   chart on save (0 songs affected today; a real feature to fix, not a patch).
 - ~15 songs have no lyrics source in the catalog PDF (expected).
 - Android build pending; Apple Developer enrollment in progress.
+- **Email templates are LIGHT, deliberately not `brand.css`.** Five attempts to
+  hold a dark palette against Outlook for Mac failed (spec §6 has the table).
+  Client dark-mode transforms assume email is light; there is no reliable hook to
+  win from the sending side. Don't "restore the brand colours".
+- `MEASURED_MS_PER_SEND` in `outboxSweep.test.ts` is a **placeholder** pending a
+  real production `notify_sweep_done` reading — see `docs/NOTIFICATIONS.md`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues (`FrankERP/owt-kb-v1`), managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default canonical labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
