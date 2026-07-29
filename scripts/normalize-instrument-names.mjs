@@ -10,8 +10,11 @@
 //
 // Dry-run prints every change and writes nothing. `--apply` is required to write.
 import { createClient } from "@sanity/client";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
 
 const APPLY = process.argv.includes("--apply");
+const BACKUP_DIR = process.env.SR_NORMALIZE_BACKUP_DIR || ".normalize-instrument-backups";
 
 const client = createClient({
   projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID,
@@ -30,33 +33,70 @@ const CANONICAL = new Map([
   ["ag", "AG"],
 ]);
 
+// `raw` is guaranteed non-null/undefined and non-blank by the caller before this
+// runs, so it always canonicalises a real, non-empty spelling.
 const canonicalise = (raw) => {
-  const key = String(raw ?? "").trim().replace(/\s+/g, " ").toLowerCase();
-  return CANONICAL.get(key) ?? String(raw ?? "").trim().replace(/\s+/g, " ");
+  const key = raw.trim().replace(/\s+/g, " ").toLowerCase();
+  return CANONICAL.get(key) ?? raw.trim().replace(/\s+/g, " ");
 };
 
 const roles = await client.fetch(
   `*[_type in ["sunday_role","saturday_role","special_role"] && defined(instruments)]{_id, _rev, instruments}`
 );
 
-let changed = 0;
+// Build every role's patch plan up front (no writes yet) so a single
+// pre-mutation backup can be taken before anything is committed, matching
+// scripts/backfill-legacy-seat-arrays.mjs.
+const plans = [];
 for (const role of roles) {
   const patches = [];
   (role.instruments ?? []).forEach((slot, i) => {
-    const next = canonicalise(slot?.instrument);
-    if (next !== slot?.instrument) {
-      patches.push({ i, from: slot?.instrument, to: next });
-    }
+    const raw = slot?.instrument;
+    // Unset (null/undefined) is a legitimate, common state: `instrument` has no
+    // required validation in sanity/schemas/sunRole.ts, and the Studio preview
+    // falls back to "Sin instrumento" for it. Comparing "" !== undefined would
+    // read as a change and fabricate a write turning "no instrument chosen"
+    // into an explicit "" — skip these slots entirely instead.
+    if (raw === null || raw === undefined) return;
+    // A whitespace-only string isn't a real spelling to canonicalise, and it
+    // carries the same "nothing chosen" meaning as unset — skip it too rather
+    // than writing "".
+    if (typeof raw === "string" && raw.trim() === "") return;
+    const next = canonicalise(raw);
+    if (next !== raw) patches.push({ i, from: raw, to: next });
   });
-  if (patches.length === 0) continue;
+  if (patches.length) plans.push({ role, patches });
+}
+
+let changed = 0;
+for (const { role, patches } of plans) {
   changed += patches.length;
   for (const p of patches) {
     console.log(`${role._id}  instruments[${p.i}]  ${JSON.stringify(p.from)} -> ${JSON.stringify(p.to)}`);
   }
-  if (APPLY) {
-    let tx = client.patch(role._id);
+}
+
+if (APPLY && plans.length) {
+  // Back up the exact pre-mutation documents before touching anything.
+  mkdirSync(BACKUP_DIR, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const backupPath = path.join(BACKUP_DIR, `${stamp}-normalize-instrument-names.json`);
+  writeFileSync(backupPath, JSON.stringify(plans.map(({ role }) => role), null, 2));
+  console.log(`\n  backup:  ${plans.length} document(s) -> ${backupPath}`);
+
+  for (const { role, patches } of plans) {
+    // Revision-guarded: if the array was reordered or an item was
+    // inserted/removed between the read above and this commit, the index-addressed
+    // set() below would land on the wrong slot. ifRevisionId makes a concurrent
+    // edit fail the commit loudly instead of silently corrupting a neighbour.
+    let tx = client.patch(role._id).ifRevisionId(role._rev);
     for (const p of patches) tx = tx.set({ [`instruments[${p.i}].instrument`]: p.to });
-    await tx.commit();
+    try {
+      await tx.commit();
+    } catch (err) {
+      console.error(`  COMMIT FAILED for ${role._id}: ${err.message}`);
+      console.error(`  Skipped — the document changed since the dry run. Re-run to refetch and retry.`);
+    }
   }
 }
 
