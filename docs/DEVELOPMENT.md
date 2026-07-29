@@ -6,7 +6,9 @@ Everything you need to run, verify, and contribute to `owt-kb-v1`.
 
 ## Prerequisites
 
-- **Node 22** (the repo pins it via `.nvmrc` and `engines.node: "22.x"`; required by Capacitor 8).
+- **Node 22** (the repo pins it via `.nvmrc` and `engines.node: "22.x"`). Capacitor 8
+  needs ≥22; the pin is *exact* for a different reason — see
+  [ADR-0002](adr/0002-node-pinned-to-exact-22x.md). Don't loosen it to a range.
   Run `nvm use`.
 - **`.env.local`** at the repo root with the required variables (see below). It is git-ignored
   and claude-ignored — never commit it.

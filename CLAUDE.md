@@ -40,6 +40,15 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   dev: merge the intended development branch into `preview`, push `preview`,
   then verify that Vercel deployed the `preview` commit to the stable dev domain.
 
+## Decision records
+When a choice rejects a real alternative and the reason won't be obvious from
+the code later — a pin that looks arbitrary, code that looks like a bug but
+isn't, something deliberately *not* done, an upgrade tried and reverted — write
+a short ADR in `docs/adr/` (see its README for the bar and the template) and
+link it from the code or doc it governs. **Not for routine work:** most changes
+need no ADR. Read the relevant ADR before "fixing" something that looks wrong —
+several exist precisely to stop a plausible-looking change.
+
 ## Don't-break-these invariants
 - **Timezone = America/Mexico_City.** Service dates are Sanity `date`
   (`YYYY-MM-DD`). Render pinned to local noon: `new Date(iso.slice(0,10)+"T12:00:00")`

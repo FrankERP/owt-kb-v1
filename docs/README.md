@@ -29,6 +29,11 @@ Studio, and native iOS/Android apps (Capacitor).
 | 10 | [`VERIFICATION_HARNESS.md`](VERIFICATION_HARNESS.md) | The deployed-verification (A3) runbook: isolation guarantees, env vars, the dataset lease, run identity, the zero-delivery proof, teardown. **Read before running Playwright.** |
 
 Also in this repo root:
+- [`adr/`](adr/README.md) — **decision records**: why a choice was made and what was
+  rejected. Read the relevant one before "fixing" something that looks wrong — several
+  exist specifically to stop a plausible-looking change (a pin that looks arbitrary, a
+  read that looks like it violates an invariant, a client-side check that looks like a
+  security hole).
 - [`../CLAUDE.md`](../CLAUDE.md) / [`../AGENTS.md`](../AGENTS.md) — the terse "don't-break-these" briefing (the same invariants, condensed). **Read one of these before touching code.**
 - [`MOBILE.md`](MOBILE.md) — native iOS/Android setup & handoff runbook.
 - [`superpowers/`](superpowers/) — dated design **specs** and **plans** for every shipped feature (the "why" behind each subsystem). Great for archaeology.

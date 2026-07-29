@@ -41,7 +41,7 @@ app is behind a login gate (there is no anonymous public surface except the auth
 | Push | **Firebase Admin (FCM)** | Self-healing dead-token pruning. |
 | Mobile | **Capacitor 8** | Wraps the web app; iOS + Android projects committed. |
 | Hosting | **Vercel** (web) + **Google Cloud** (solver) | `vercel.json` defines one daily cron. |
-| Runtime | **Node 22** (`.nvmrc`, `engines.node`) | Required by Capacitor 8. |
+| Runtime | **Node 22** (`.nvmrc`, `engines.node`) | Capacitor 8 needs ≥22; pinned to exact `22.x` per [ADR-0002](adr/0002-node-pinned-to-exact-22x.md). |
 | Tests | **Vitest** (JS/TS), **unittest** (Python solver) | `npm test` runs vitest. |
 
 ---
