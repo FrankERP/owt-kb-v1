@@ -47,7 +47,7 @@ export interface RankedCandidate {
   recent: boolean[];
 }
 
-const displayName = (m: RankMember) => m.alias?.trim() || m.member_name;
+export const displayName = (m: RankMember) => m.alias?.trim() || m.member_name;
 
 /**
  * Every member id serving in this role, in the given seat category only.

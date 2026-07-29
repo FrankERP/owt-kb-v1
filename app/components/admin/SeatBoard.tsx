@@ -20,7 +20,13 @@ import {
   normalizeSeatName,
   type SeatDef,
 } from "./seatModel";
-import { rankCandidates, type AssignedSeat, type RankedCandidate, type RankMember } from "./candidateRanking";
+import {
+  displayName,
+  rankCandidates,
+  type AssignedSeat,
+  type RankedCandidate,
+  type RankMember,
+} from "./candidateRanking";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import {
   CARD_STYLE,
@@ -112,16 +118,36 @@ export default function SeatBoard(props: SeatBoardProps) {
     });
   }
 
-  function addInstrumentSeat(raw: string) {
+  // A brand-new seat name keeps the admin's casing (normalizeSeatName's contract —
+  // see seatModel.ts), so without this check "Trombone" then "trombone" would
+  // create two seats. Reject the case-insensitive repeat here, at the add site,
+  // rather than in normalizeSeatName, and tell the admin instead of no-op'ing.
+  function addInstrumentSeat(raw: string): string | null {
     const name = normalizeSeatName(raw);
-    if (!name) return;
-    setInstrumentSeats((prev) => (prev.includes(name) ? prev : [...prev, name]));
+    if (!name) return null;
+    let error: string | null = null;
+    setInstrumentSeats((prev) => {
+      if (prev.some((s) => s.toLowerCase() === name.toLowerCase())) {
+        error = "Ya existe un puesto de instrumento con ese nombre.";
+        return prev;
+      }
+      return [...prev, name];
+    });
+    return error;
   }
 
-  function addFohSeat(raw: string) {
+  function addFohSeat(raw: string): string | null {
     const name = normalizeSeatName(raw);
-    if (!name) return;
-    setFohSeats((prev) => (prev.includes(name) ? prev : [...prev, name]));
+    if (!name) return null;
+    let error: string | null = null;
+    setFohSeats((prev) => {
+      if (prev.some((s) => s.toLowerCase() === name.toLowerCase())) {
+        error = "Ya existe un rol de FOH con ese nombre.";
+        return prev;
+      }
+      return [...prev, name];
+    });
+    return error;
   }
 
   function buildData(published?: boolean) {
@@ -147,16 +173,10 @@ export default function SeatBoard(props: SeatBoardProps) {
   const membersById = useMemo(() => new Map(members.map((m) => [m._id, m])), [members]);
   function memberName(id: string): string {
     const m = membersById.get(id);
-    if (!m) return id;
-    return m.alias?.trim() || m.member_name;
+    return m ? displayName(m) : id;
   }
 
   const isEdit = !!initial;
-  const [publishOnCreate, setPublishOnCreate] = useState(false);
-
-  function handlePrimarySubmit() {
-    props.onSubmit(isEdit ? buildData() : buildData(publishOnCreate));
-  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
@@ -275,19 +295,11 @@ export default function SeatBoard(props: SeatBoardProps) {
         </div>
       </div>
 
-      {/* Footer: sticky, never scrolls with the roster. */}
+      {/* Footer: sticky, never scrolls with the roster. Create mode keeps two
+          explicit, always-visible actions (Crear / Crear y publicar) rather than
+          one button plus an easy-to-miss checkbox — matching ServiceForm's
+          existing render contract at ServicesPanel.tsx. */}
       <div className="flex items-center gap-3 border-t border-[#00bfff]/10 pt-3">
-        {!isEdit && (
-          <label className="flex min-h-[44px] items-center gap-2 font-label text-[11px] uppercase tracking-widest text-[#C8D8EB]/70">
-            <input
-              type="checkbox"
-              checked={publishOnCreate}
-              onChange={(e) => setPublishOnCreate(e.target.checked)}
-              className="h-4 w-4 accent-[#00bfff]"
-            />
-            Publicar al crear
-          </label>
-        )}
         <div className="ml-auto flex gap-3">
           <button
             type="button"
@@ -296,15 +308,38 @@ export default function SeatBoard(props: SeatBoardProps) {
           >
             Cancelar
           </button>
-          <button
-            type="button"
-            onClick={handlePrimarySubmit}
-            disabled={loading || !!props.submitBlockedReason}
-            title={props.submitBlockedReason ?? undefined}
-            className="min-h-[44px] rounded-lg bg-[#003572] px-4 font-label text-xs uppercase tracking-widest transition-colors hover:bg-[#003572]/80 disabled:opacity-50 dark:bg-[#00bfff]/20 dark:hover:bg-[#00bfff]/30"
-          >
-            {loading ? "Guardando..." : isEdit ? "Guardar" : publishOnCreate ? "Crear y publicar" : "Crear"}
-          </button>
+          {isEdit ? (
+            <button
+              type="button"
+              onClick={() => props.onSubmit(buildData())}
+              disabled={loading || !!props.submitBlockedReason}
+              title={props.submitBlockedReason ?? undefined}
+              className="min-h-[44px] rounded-lg bg-[#003572] px-4 font-label text-xs uppercase tracking-widest transition-colors hover:bg-[#003572]/80 disabled:opacity-50 dark:bg-[#00bfff]/20 dark:hover:bg-[#00bfff]/30"
+            >
+              {loading ? "Guardando..." : "Guardar"}
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => props.onSubmit(buildData(false))}
+                disabled={loading || !!props.submitBlockedReason}
+                title={props.submitBlockedReason ?? undefined}
+                className="min-h-[44px] rounded-lg border border-[#003572]/30 px-4 font-label text-xs uppercase tracking-widest transition-colors hover:border-[#00bfff] disabled:opacity-50 dark:border-[#00bfff]/20"
+              >
+                {loading ? "Guardando..." : "Crear"}
+              </button>
+              <button
+                type="button"
+                onClick={() => props.onSubmit(buildData(true))}
+                disabled={loading || !!props.submitBlockedReason}
+                title={props.submitBlockedReason ?? undefined}
+                className="min-h-[44px] rounded-lg bg-[#003572] px-4 font-label text-xs uppercase tracking-widest transition-colors hover:bg-[#003572]/80 disabled:opacity-50 dark:bg-[#00bfff]/20 dark:hover:bg-[#00bfff]/30"
+              >
+                {loading ? "Guardando..." : "Crear y publicar"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -438,29 +473,44 @@ function SeatRow({
   );
 }
 
-function AddSeatForm({ placeholder, onAdd }: { placeholder: string; onAdd: (name: string) => void }) {
+function AddSeatForm({
+  placeholder,
+  onAdd,
+}: {
+  placeholder: string;
+  /** Returns a Spanish error to show (e.g. a case-insensitive duplicate) or null on success. */
+  onAdd: (name: string) => string | null;
+}) {
   const [value, setValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        onAdd(value);
-        setValue("");
+        const rejected = onAdd(value);
+        setError(rejected);
+        if (!rejected) setValue("");
       }}
-      className="flex gap-1.5"
+      className="flex flex-col gap-1"
     >
-      <input
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder={placeholder}
-        className={`${inputCls} flex-1 !py-1.5 text-xs`}
-      />
-      <button
-        type="submit"
-        className="min-h-[36px] shrink-0 rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest text-[#C8D8EB]/70 transition-colors hover:border-[#00bfff]"
-      >
-        Añadir
-      </button>
+      <div className="flex gap-1.5">
+        <input
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            if (error) setError(null);
+          }}
+          placeholder={placeholder}
+          className={`${inputCls} min-h-[44px] flex-1 text-xs`}
+        />
+        <button
+          type="submit"
+          className={`${CARD_STYLE.menuTrigger} shrink-0 rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest text-[#C8D8EB]/70 transition-colors hover:border-[#00bfff]`}
+        >
+          Añadir
+        </button>
+      </div>
+      {error && <p className="font-body text-[11px] text-red-400">{error}</p>}
     </form>
   );
 }
