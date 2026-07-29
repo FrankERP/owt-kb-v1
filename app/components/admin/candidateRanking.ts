@@ -93,7 +93,9 @@ export function rankCandidates(input: {
   // must match the seat's own category — otherwise instrumento/foh seats (the ones
   // the solver can't touch at all, and where this fairness signal matters most)
   // always read load 0. The `recent` strip below is built by `servingIds` filtered
-  // to this SAME category, so the number and the picture always agree.
+  // to this SAME category, so they count the same category—but load sums appearances
+  // and recent counts distinct weeks (by serviceWeekKey). E.g. serving both Sat and
+  // Sun of one weekend: load = 2, recent = one true cell.
   const loadField =
     seat.category === "instrumento" ? "instrWeeks" : seat.category === "foh" ? "fohWeeks" : "total";
   const loadById = new Map(computeParticipation(windowRoles).map((p) => [p.id, p[loadField]]));
