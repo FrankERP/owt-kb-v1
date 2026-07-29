@@ -49,15 +49,30 @@ export interface RankedCandidate {
 
 const displayName = (m: RankMember) => m.alias?.trim() || m.member_name;
 
-/** Every member id serving in this role, across all five seat paths. */
-function servingIds(role: ParticipantRole): string[] {
-  return [
-    ...(role.leads ?? []).map((p) => p._id),
-    ...(role.bgvs ?? []).map((p) => p._id),
-    ...(role.chorus ?? []).map((p) => p._id),
-    ...(role.instruments ?? []).filter((s) => s.person).map((s) => s.person!._id),
-    ...(role.foh ?? []).filter((s) => s.person).map((s) => s.person!._id),
-  ];
+/**
+ * Every member id serving in this role, in the given seat category only.
+ *
+ * `recent` must show the same fact as `load` (loadField below), so it has to
+ * be filtered by category exactly like load is: voz = leads+bgvs+chorus
+ * (matching computeParticipation's voice-only `total`), instrumento =
+ * instruments[].person, foh = foh[].person. Merging all five paths
+ * unconditionally (the old behaviour) made the strip light up for weeks a
+ * member served in a DIFFERENT category — a real case for the voz+instrumento
+ * members the design accommodates (D4) — contradicting the load number.
+ */
+function servingIds(role: ParticipantRole, category: SeatCategory): string[] {
+  switch (category) {
+    case "voz":
+      return [
+        ...(role.leads ?? []).map((p) => p._id),
+        ...(role.bgvs ?? []).map((p) => p._id),
+        ...(role.chorus ?? []).map((p) => p._id),
+      ];
+    case "instrumento":
+      return (role.instruments ?? []).filter((s) => s.person).map((s) => s.person!._id);
+    case "foh":
+      return (role.foh ?? []).filter((s) => s.person).map((s) => s.person!._id);
+  }
 }
 
 export function rankCandidates(input: {
@@ -77,8 +92,8 @@ export function rankCandidates(input: {
   // and tracks instrument/FOH history in separate fields, so the figure read here
   // must match the seat's own category — otherwise instrumento/foh seats (the ones
   // the solver can't touch at all, and where this fairness signal matters most)
-  // always read load 0, while the `recent` strip below (built from `servingIds`,
-  // which DOES cover all five seat paths) lights up anyway. Same source, same rule.
+  // always read load 0. The `recent` strip below is built by `servingIds` filtered
+  // to this SAME category, so the number and the picture always agree.
   const loadField =
     seat.category === "instrumento" ? "instrWeeks" : seat.category === "foh" ? "fohWeeks" : "total";
   const loadById = new Map(computeParticipation(windowRoles).map((p) => [p.id, p[loadField]]));
@@ -90,7 +105,7 @@ export function rankCandidates(input: {
     const key = serviceWeekKey(role);
     let set = servedInWeek.get(key);
     if (!set) servedInWeek.set(key, (set = new Set()));
-    for (const id of servingIds(role)) set.add(id);
+    for (const id of servingIds(role, seat.category)) set.add(id);
   }
 
   const seatById = new Map(assigned.map((a) => [a.memberId, a]));
