@@ -24,7 +24,7 @@
 // selection, copy-instruments source/target picking, the setlist editor, publish /
 // hide, edit and delete.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ChainLinkIcon } from "../ChainLinkIcon";
 import { buildRuns } from "../../utils/medley";
@@ -105,6 +105,21 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
   const role = card.role;
   const readiness = card.readiness;
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+
+  // Escape closes the kebab and hands focus back to its trigger. The backdrop
+  // click is a pointer-only escape hatch, so without this a keyboard user who
+  // opened the menu has no way out of it.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMenuOpen(false);
+      menuTriggerRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [menuOpen]);
 
   const identity = cardIdentity(card, props.todayIso);
   const preview = cardPreview(role);
@@ -215,6 +230,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                   />
                   <button
                     type="button"
+                    ref={menuTriggerRef}
                     onClick={() => setMenuOpen((o) => !o)}
                     aria-haspopup="menu"
                     aria-expanded={menuOpen}
