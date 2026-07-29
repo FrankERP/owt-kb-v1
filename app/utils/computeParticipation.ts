@@ -19,7 +19,15 @@ function plusOneDay(iso: string): string {
   d.setDate(d.getDate() + 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-const weekKey = (r: ParticipantRole) => (r._type === "saturday_role" ? plusOneDay(r.date) : r.date);
+/**
+ * The week a service belongs to: a Saturday counts toward the FOLLOWING Sunday,
+ * so a weekend is one week. Exported because the seat board's load strip must
+ * group by the same rule — a second implementation would drift.
+ */
+export const serviceWeekKey = (r: ParticipantRole) =>
+  r._type === "saturday_role" ? plusOneDay(r.date) : r.date;
+
+const weekKey = serviceWeekKey;
 const dn = (m: PMember) => (m.alias?.trim() || m.member_name || "");
 
 export function computeParticipation(roles: ParticipantRole[]): MemberParticipation[] {

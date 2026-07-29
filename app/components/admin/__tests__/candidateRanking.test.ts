@@ -1,0 +1,96 @@
+// app/components/admin/__tests__/candidateRanking.test.ts
+//
+// The three signals the old form withheld until after save — availability,
+// existing assignment, recent load — plus the one rule that must BLOCK rather
+// than inform: the same person twice in one category.
+import { describe, expect, it } from "vitest";
+
+import { instrumentSeatDef, VOICE_SEATS } from "../seatModel";
+import { rankCandidates, type AssignedSeat, type RankMember } from "../candidateRanking";
+import type { ParticipantRole } from "@/app/utils/computeParticipation";
+
+const LEAD = VOICE_SEATS[0];
+const BGV = VOICE_SEATS[1];
+const BASS = instrumentSeatDef("Bass");
+const DATE = "2026-08-09";
+
+const m = (id: string, name: string, types: string[], unavailable: string[] = []): RankMember =>
+  ({ _id: id, member_name: name, memberType: types, unavailableDates: unavailable });
+
+const MEMBERS: RankMember[] = [
+  m("m1", "Frank", ["voz", "instrumento"]),
+  m("m2", "Gaby", ["voz"]),
+  m("m3", "Liu", ["voz"], [DATE]),
+  m("m4", "Samo", ["instrumento"]),
+  m("m5", "Nestor", []), // no memberType: eligible for nothing
+];
+
+const role = (over: Partial<ParticipantRole> = {}): ParticipantRole => ({
+  _type: "sunday_role", date: "2026-08-02",
+  leads: [], bgvs: [], chorus: [], instruments: [], foh: [], ...over,
+});
+
+describe("rankCandidates", () => {
+  it("admits only members carrying the seat's memberType", () => {
+    const ids = rankCandidates({ seat: LEAD, date: DATE, members: MEMBERS, windowRoles: [], assigned: [] })
+      .map((c) => c.id);
+    expect(ids).toContain("m1");
+    expect(ids).toContain("m2");
+    expect(ids).not.toContain("m4"); // instrumento only
+    expect(ids).not.toContain("m5"); // no memberType at all
+  });
+
+  it("marks the date's unavailable members without removing them", () => {
+    const liu = rankCandidates({ seat: LEAD, date: DATE, members: MEMBERS, windowRoles: [], assigned: [] })
+      .find((c) => c.id === "m3");
+    // Still selectable: an admin may knowingly override. Never silent.
+    expect(liu).toMatchObject({ available: false, blockedReason: null });
+  });
+
+  it("BLOCKS a second seat in the same category and says why", () => {
+    const assigned: AssignedSeat[] = [{ seatId: "lead", category: "voz", memberId: "m1" }];
+    const frank = rankCandidates({ seat: BGV, date: DATE, members: MEMBERS, windowRoles: [], assigned })
+      .find((c) => c.id === "m1");
+    expect(frank?.alreadyAssigned).toBe(true);
+    expect(frank?.blockedReason).toBe("Ya asignado en Lead");
+  });
+
+  it("ALLOWS voz + instrumento and only informs", () => {
+    // Frank leads and plays EG on real services; the board must not fight that.
+    const assigned: AssignedSeat[] = [{ seatId: "lead", category: "voz", memberId: "m1" }];
+    const frank = rankCandidates({ seat: BASS, date: DATE, members: MEMBERS, windowRoles: [], assigned })
+      .find((c) => c.id === "m1");
+    expect(frank).toMatchObject({ alreadyAssigned: true, blockedReason: null });
+  });
+
+  it("counts load and builds the strip on the same week rule as participation", () => {
+    const windowRoles = [
+      role({ date: "2026-07-19", leads: [{ _id: "m2" }] }),
+      role({ date: "2026-08-02", leads: [{ _id: "m2" }] }),
+      // A Saturday counts toward the FOLLOWING Sunday: same week as 2026-08-02.
+      role({ _type: "saturday_role", date: "2026-08-01", bgvs: [{ _id: "m2" }] }),
+    ];
+    const gaby = rankCandidates({
+      seat: LEAD, date: DATE, members: MEMBERS, windowRoles, assigned: [], weeks: 4,
+    }).find((c) => c.id === "m2");
+    expect(gaby?.load).toBe(3);
+    expect(gaby?.recent).toHaveLength(4);
+    expect(gaby?.recent.filter(Boolean).length).toBeGreaterThan(0);
+  });
+
+  it("orders available and unblocked first, then by lowest load, then by name", () => {
+    const windowRoles = [
+      role({ date: "2026-08-02", leads: [{ _id: "m2" }] }),
+      role({ date: "2026-07-26", leads: [{ _id: "m2" }] }),
+    ];
+    const assigned: AssignedSeat[] = [{ seatId: "lead", category: "voz", memberId: "m1" }];
+    const order = rankCandidates({ seat: BGV, date: DATE, members: MEMBERS, windowRoles, assigned })
+      .map((c) => c.id);
+    // m2 free with load 2 → first. m3 unavailable → after. m1 blocked → last.
+    expect(order).toEqual(["m2", "m3", "m1"]);
+  });
+
+  it("returns an empty list rather than throwing on empty input", () => {
+    expect(rankCandidates({ seat: LEAD, date: DATE, members: [], windowRoles: [], assigned: [] })).toEqual([]);
+  });
+});
