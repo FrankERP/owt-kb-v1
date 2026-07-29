@@ -807,9 +807,74 @@ function RuleBuilder({ config, onChange, members }: {
 
   return (
     <div className="space-y-2">
-      <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">
-        Reglas{total > 0 ? ` (${total})` : ""}
-      </p>
+      {/*
+        The three "add" buttons live in the HEADER, not under the list. The
+        default config seeds twelve rules, so at the foot of the section they sat
+        below twelve cards inside a scrolling panel and were effectively
+        undiscoverable — the reason this section reads as having no way to add a
+        rule at all. While a form is open they are disabled rather than hidden:
+        a control that vanishes is the same discoverability bug in miniature, and
+        switching forms mid-edit would throw away what was typed.
+      */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+        <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">
+          Reglas{total > 0 ? ` (${total})` : ""}
+        </p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="font-label text-[10px] uppercase tracking-widest text-gray-600">
+            Añadir regla
+          </span>
+          <AddRuleButton
+            label="+ Persona"
+            title="Restringir a una persona: patrones excluidos, semanas, topes y equidad"
+            tone="border-red-500/40 text-red-400 hover:bg-red-500/10"
+            disabled={isFormOpen}
+            onClick={() => setAdding("restriction")}
+          />
+          <AddRuleButton
+            label="≠ Conflicto"
+            title="Impedir que dos personas coincidan en el mismo patrón"
+            tone="border-purple-500/40 text-purple-400 hover:bg-purple-500/10"
+            disabled={isFormOpen}
+            onClick={() => setAdding("conflict")}
+          />
+          <AddRuleButton
+            label="≥1 Presencia"
+            title="Exigir al menos una persona de un grupo en el patrón"
+            tone="border-green-500/40 text-green-400 hover:bg-green-500/10"
+            disabled={isFormOpen}
+            onClick={() => setAdding("presence")}
+          />
+        </div>
+      </div>
+
+      {/*
+        The add form opens directly UNDER its button. Rendered after the rule
+        list it landed ~770px below the click with twelve rules seeded, i.e. off
+        screen — pressing "+ Persona" would look like nothing happened.
+      */}
+      {/* Inline add forms */}
+      {adding === "restriction" && (
+        <PersonRestrictionForm
+          members={members}
+          onAdd={r => { onChange({ ...config, restrictions: [...config.restrictions, r] }); setAdding(null); }}
+          onCancel={() => setAdding(null)}
+        />
+      )}
+      {adding === "conflict" && (
+        <ConflictForm
+          members={members}
+          onAdd={r => { onChange({ ...config, conflicts: [...config.conflicts, r] }); setAdding(null); }}
+          onCancel={() => setAdding(null)}
+        />
+      )}
+      {adding === "presence" && (
+        <PresenceForm
+          members={members}
+          onAdd={r => { onChange({ ...config, presence: [...config.presence, r] }); setAdding(null); }}
+          onCancel={() => setAdding(null)}
+        />
+      )}
 
       {/* Restriction cards / edit forms */}
       {config.restrictions.map(r =>
@@ -851,53 +916,28 @@ function RuleBuilder({ config, onChange, members }: {
         <p className="font-body text-xs text-gray-600 italic px-1">Sin reglas configuradas</p>
       )}
 
-      {/* Inline add forms */}
-      {adding === "restriction" && (
-        <PersonRestrictionForm
-          members={members}
-          onAdd={r => { onChange({ ...config, restrictions: [...config.restrictions, r] }); setAdding(null); }}
-          onCancel={() => setAdding(null)}
-        />
-      )}
-      {adding === "conflict" && (
-        <ConflictForm
-          members={members}
-          onAdd={r => { onChange({ ...config, conflicts: [...config.conflicts, r] }); setAdding(null); }}
-          onCancel={() => setAdding(null)}
-        />
-      )}
-      {adding === "presence" && (
-        <PresenceForm
-          members={members}
-          onAdd={r => { onChange({ ...config, presence: [...config.presence, r] }); setAdding(null); }}
-          onCancel={() => setAdding(null)}
-        />
-      )}
-
-      {/* Add buttons — hidden while any form is open */}
-      {!isFormOpen && (
-        <div className="flex gap-2 pt-1 flex-wrap">
-          <button
-            type="button" onClick={() => setAdding("restriction")}
-            className="font-label text-[10px] uppercase tracking-widest px-2 py-1 rounded-full border border-red-500/30 text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-          >
-            + Persona
-          </button>
-          <button
-            type="button" onClick={() => setAdding("conflict")}
-            className="font-label text-[10px] uppercase tracking-widest px-2 py-1 rounded-full border border-purple-500/30 text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/10 transition-colors"
-          >
-            ≠ Conflicto
-          </button>
-          <button
-            type="button" onClick={() => setAdding("presence")}
-            className="font-label text-[10px] uppercase tracking-widest px-2 py-1 rounded-full border border-green-500/30 text-green-400/70 hover:text-green-400 hover:bg-green-500/10 transition-colors"
-          >
-            ≥1 Presencia
-          </button>
-        </div>
-      )}
     </div>
+  );
+}
+
+/** One "add a rule of this kind" pill, in the `Reglas` header. */
+function AddRuleButton({ label, title, tone, disabled, onClick }: {
+  label: string;
+  title: string;
+  tone: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={disabled ? "Termina la regla que estás editando primero" : title}
+      className={`font-label text-[11px] uppercase tracking-widest px-2.5 py-1.5 rounded-full border transition-colors disabled:opacity-30 disabled:hover:bg-transparent ${tone}`}
+    >
+      {label}
+    </button>
   );
 }
 
