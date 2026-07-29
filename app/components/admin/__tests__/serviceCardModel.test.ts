@@ -143,14 +143,13 @@ function card(over: Partial<ServiceCardModel> = {}): ServiceCardModel {
 // ── 1. Card hierarchy ────────────────────────────────────────────────────────
 
 describe("card hierarchy", () => {
-  it("renders the plan's five sections in order", () => {
+  it("renders the plan's four sections in order", () => {
     // `ServiceReadinessCard` maps over this constant, so this IS the DOM order.
     expect([...CARD_SECTIONS]).toEqual([
       "identity",
       "issues",
       "preview",
       "primary_action",
-      "secondary_menu",
     ]);
   });
 
@@ -158,12 +157,19 @@ describe("card hierarchy", () => {
     expect([...CARD_SECTIONS]).not.toContain("readiness");
   });
 
-  it("puts the issues above the primary action", () => {
+  it("no longer renders the full-width `Más acciones` bar", () => {
+    // The secondary actions moved into the `identity` header (icon buttons +
+    // kebab); they were not removed. `ServiceReadinessCard`'s own switch has no
+    // arm left for this section either.
+    expect([...CARD_SECTIONS]).not.toContain("secondary_menu");
+  });
+
+  it("puts the issues above the primary action, which stays last", () => {
     const order = CARD_SECTIONS.indexOf.bind(CARD_SECTIONS);
     expect(order("identity")).toBeLessThan(order("issues"));
     expect(order("issues")).toBeLessThan(order("preview"));
     expect(order("preview")).toBeLessThan(order("primary_action"));
-    expect(order("primary_action")).toBeLessThan(order("secondary_menu"));
+    expect(order("primary_action")).toBe(CARD_SECTIONS.length - 1);
   });
 });
 

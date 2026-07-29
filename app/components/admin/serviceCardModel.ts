@@ -256,17 +256,21 @@ export const CARD_STYLE = {
  * over this list, so the constant IS the rendered order — a reordering here (or
  * there) breaks the test rather than silently drifting.
  *
- * The four-module readiness strip (Equipo · Setlist · Propuesta · Disponibilidad)
- * used to sit between `identity` and `issues`. It was removed: it repeated what
- * the issue lines and the preview already say, and it dominated a card that has
- * to stay scannable in a three-column month view.
+ * Two sections were removed for the same reason — a card in a three-column month
+ * view has to stay scannable:
+ *  - the four-module readiness strip (Equipo · Setlist · Propuesta ·
+ *    Disponibilidad), which sat between `identity` and `issues` and repeated what
+ *    the issue lines and the preview already say;
+ *  - `secondary_menu`, a full-width `Más acciones` bar at the foot of every card.
+ *    Its two most-used items (`Editar equipo`, `Editar setlist`) are now icon
+ *    buttons in the `identity` header, and the rest moved into a kebab beside
+ *    them. Nothing was dropped — the actions moved, they did not shrink.
  */
 export const CARD_SECTIONS = [
   "identity",
   "issues",
   "preview",
   "primary_action",
-  "secondary_menu",
 ] as const;
 
 export type CardSection = (typeof CARD_SECTIONS)[number];
