@@ -461,7 +461,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
           >
             <span className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">+ Crear</span>
             {searchQ.trim()
-              ? <span className="font-body text-xs text-gray-400 truncate">"{searchQ}"</span>
+              ? <span className="font-body text-xs text-gray-400 truncate">&quot;{searchQ}&quot;</span>
               : <span className="font-body text-xs text-gray-400">nueva canción</span>}
           </button>
         </div>

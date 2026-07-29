@@ -1,7 +1,7 @@
 // ./schemaTypes/youTubeType/index.ts
 
 //@note Youtube-Preview-type-schema
-import { defineType, defineField } from "sanity";
+import { defineType } from "sanity";
 import { PlayIcon } from "@sanity/icons";
 import { YouTubePreview } from "./YoutubePreview";
 

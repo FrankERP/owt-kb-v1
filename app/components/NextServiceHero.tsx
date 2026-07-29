@@ -2,7 +2,7 @@
 
 import { DayCard, DayCardProps } from "./DayCard";
 
-interface NextServiceHeroProps extends DayCardProps {}
+type NextServiceHeroProps = DayCardProps;
 
 // Whole days from `now` to the service date. Both anchors are pinned to LOCAL
 // noon so the difference is a clean integer — comparing local midnight against

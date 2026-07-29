@@ -38,7 +38,6 @@ import {
   type ProposalObservation,
   type ReadinessDimensions,
   type ServiceControl,
-  type ServiceSourceKey,
   type ServiceSourceStates,
   type SourceState,
   type TargetPreflightInput,

@@ -145,7 +145,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (sheetRequestRef.current.id !== id) return;
       if (res.ok) setSheet(await res.json());
       else setSheetError(true);
-    } catch (error) {
+    } catch {
       if (controller.signal.aborted || sheetRequestRef.current.id !== id) return;
       setSheetError(true);
     } finally {

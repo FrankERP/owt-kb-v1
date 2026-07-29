@@ -682,7 +682,7 @@ function constInitializer(code: string, name: string): string | null {
   );
   const m = re.exec(code);
   if (!m) return null;
-  let i = m.index + m[0].length;
+  const i = m.index + m[0].length;
   if (code[i] === "`" || code[i] === '"' || code[i] === "'") {
     const q = code[i];
     let j = i + 1;

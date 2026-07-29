@@ -94,7 +94,7 @@ interface FohSlot         { id: string; role: string; personId: string; }
 
 // ─── Setlist types ────────────────────────────────────────────────────────────
 
-import { SetlistEditor, SongResult, SetlistEntry } from "./SetlistEditor";
+import { SetlistEditor } from "./SetlistEditor";
 
 // ─── Swap types ───────────────────────────────────────────────────────────────
 
@@ -1256,7 +1256,7 @@ export default function ServicesPanel() {
   const toggleMonth = (ym: string) =>
     setSelectedMonths(prev => {
       const next = new Set(prev);
-      next.has(ym) ? next.delete(ym) : next.add(ym);
+      if (next.has(ym)) next.delete(ym); else next.add(ym);
       return next;
     });
 
@@ -1523,7 +1523,7 @@ export default function ServicesPanel() {
                 {" · "}{c.label}{" "}
                 {new Date(c.date + "T12:00:00").toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short" })}
                 {c.note && (
-                  <span className="text-gray-500 italic"> — "{c.note}"</span>
+                  <span className="text-gray-500 italic"> — &quot;{c.note}&quot;</span>
                 )}
               </li>
             ))}

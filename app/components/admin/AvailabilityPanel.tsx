@@ -191,7 +191,7 @@ export default function AvailabilityPanel() {
                           <span className="font-body text-sm text-gray-400"> como no disponible</span>
                         </div>
                         {note && (
-                          <p className="font-body text-xs italic text-gray-500 mt-0.5">"{note}"</p>
+                          <p className="font-body text-xs italic text-gray-500 mt-0.5">&quot;{note}&quot;</p>
                         )}
                       </div>
                       <span className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full shrink-0 mt-0.5 ${SERVICE_COLOR[role._type]}`}>
@@ -247,7 +247,7 @@ export default function AvailabilityPanel() {
                           {datesWithNotes.map(d => (
                             <p key={d} className="font-body text-xs italic text-gray-500 leading-snug">
                               <span className="not-italic font-label uppercase tracking-widest text-amber-400/80">{fmtDate(d)}:</span>{" "}
-                              "{noteMap.get(d)}"
+                              &quot;{noteMap.get(d)}&quot;
                             </p>
                           ))}
                         </div>

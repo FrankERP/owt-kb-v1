@@ -22,7 +22,6 @@ import type {
   RoleDomainSummary,
   SetlistDomainSummary,
 } from "@/app/utils/serviceReadSummary";
-import type { SourceState } from "./serviceReadiness";
 import {
   INTEGRITY_ACTION_COPY,
   INTEGRITY_DOMAINS,

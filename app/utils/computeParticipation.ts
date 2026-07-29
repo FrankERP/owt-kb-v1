@@ -38,8 +38,8 @@ export function computeParticipation(roles: ParticipantRole[]): MemberParticipat
   for (const r of roles) {
     if (r._type === "special_role") continue;
     const isSun = r._type === "sunday_role";
-    for (const m of r.leads ?? []) { const e = get(m); isSun ? e.sunLead++ : e.satLead++; }
-    for (const m of r.bgvs ?? [])  { const e = get(m); isSun ? e.sunBGV++  : e.satBGV++; }
+    for (const m of r.leads ?? []) { const e = get(m); if (isSun) e.sunLead++; else e.satLead++; }
+    for (const m of r.bgvs ?? [])  { const e = get(m); if (isSun) e.sunBGV++;  else e.satBGV++; }
     for (const m of r.chorus ?? []) { get(m).coro++; }
     const wk = weekKey(r);
     for (const s of r.instruments ?? []) { if (s.person) get(s.person)._instr.add(wk); }

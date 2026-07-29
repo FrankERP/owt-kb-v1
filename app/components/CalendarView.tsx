@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { DayCard } from "./DayCard";
 import { Setlist } from "../utils/interface";
 import Link from "next/link";

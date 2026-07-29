@@ -23,7 +23,7 @@ export default function TextSizeControl() {
     <section className="rounded-2xl border border-[#003572]/20 dark:border-[#00bfff]/15 p-5">
       <h3 className="font-display text-lg font-bold mb-1">Tamaño de texto</h3>
       <p className="font-body text-sm text-gray-500 dark:text-gray-400 mb-4">
-        "Automático" sigue el ajuste de tu dispositivo. Elige un tamaño fijo para anularlo.
+        &quot;Automático&quot; sigue el ajuste de tu dispositivo. Elige un tamaño fijo para anularlo.
       </p>
       <div className="flex flex-wrap gap-2">
         {PRESETS.map((p) => {
