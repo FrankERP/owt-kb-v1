@@ -127,4 +127,54 @@ describe("rankCandidates", () => {
     expect(tono?.load).toBe(2);
     expect(tono?.recent.filter(Boolean).length).toBe(2);
   });
+
+  // CRITICAL FINDING: `recent` used to be built from `servingIds`, which merges
+  // ALL FIVE seat paths regardless of the seat being ranked. `load` was already
+  // category-aware (loadField above). For a member with genuine cross-category
+  // history — exactly the voz+instrumento members the design accommodates —
+  // the strip lit up for weeks that had nothing to do with the seat's category,
+  // contradicting the number. These three tests pin "load === count of true
+  // cells in recent" for each category, using a member who served in a
+  // DIFFERENT category in one of the weeks.
+  //
+  // Window-width note: all three windows below hold only 2 distinct week keys
+  // against a strip width of 4 (weeks: 4), so the strip is never truncated
+  // relative to the load window and the equality is not vacuous.
+  it("agrees: load equals the count of true cells in recent for an instrumento seat (cross-category member)", () => {
+    const windowRoles = [
+      role({ date: "2026-07-19", leads: [{ _id: "m1" }] }), // voice week — must NOT count
+      role({ date: "2026-08-02", instruments: [{ person: { _id: "m1" } }] }), // instrument week
+    ];
+    const frank = rankCandidates({
+      seat: BASS, date: DATE, members: MEMBERS, windowRoles, assigned: [], weeks: 4,
+    }).find((c) => c.id === "m1");
+    expect(frank?.load).toBe(1);
+    expect(frank?.recent.filter(Boolean).length).toBe(frank?.load);
+  });
+
+  it("agrees: load equals the count of true cells in recent for a voz seat (cross-category member)", () => {
+    const windowRoles = [
+      role({ date: "2026-07-19", instruments: [{ person: { _id: "m1" } }] }), // instrument week — must NOT count
+      role({ date: "2026-08-02", leads: [{ _id: "m1" }] }), // voice week
+    ];
+    const frank = rankCandidates({
+      seat: LEAD, date: DATE, members: MEMBERS, windowRoles, assigned: [], weeks: 4,
+    }).find((c) => c.id === "m1");
+    expect(frank?.load).toBe(1);
+    expect(frank?.recent.filter(Boolean).length).toBe(frank?.load);
+  });
+
+  it("agrees: load equals the count of true cells in recent for a foh seat (cross-category member)", () => {
+    const CONSOLE = fohSeatDef("Console");
+    const fohMembers: RankMember[] = [...MEMBERS, m("m6", "Toño", ["foh", "instrumento"])];
+    const windowRoles = [
+      role({ date: "2026-07-19", instruments: [{ person: { _id: "m6" } }] }), // instrument week — must NOT count
+      role({ date: "2026-08-02", foh: [{ person: { _id: "m6" } }] }), // foh week
+    ];
+    const tono = rankCandidates({
+      seat: CONSOLE, date: DATE, members: fohMembers, windowRoles, assigned: [], weeks: 4,
+    }).find((c) => c.id === "m6");
+    expect(tono?.load).toBe(1);
+    expect(tono?.recent.filter(Boolean).length).toBe(tono?.load);
+  });
 });
