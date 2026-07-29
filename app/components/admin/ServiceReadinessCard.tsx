@@ -3,16 +3,18 @@
 // One service card, in the plan's hierarchy (Plan B items 7-9):
 //
 //   1 identity + publication state
-//   2 readiness strip
-//   3 blocking issue summary
-//   4 assigned-team / setlist preview
-//   5 ONE primary action
-//   6 secondary / destructive menu
+//   2 blocking issue summary
+//   3 assigned-team / setlist preview
+//   4 ONE primary action
+//   5 secondary / destructive menu
+//
+// The four-module readiness strip that used to sit at position 2 was removed —
+// see `CARD_SECTIONS` in `serviceCardModel`.
 //
 // The card renders by MAPPING over `CARD_SECTIONS`, so that exported constant is
 // the real rendered order and the ordering test cannot drift from the DOM.
 //
-// It decides nothing: the strip, issue copy, preview and primary action all come
+// It decides nothing: the issue copy, preview and primary action all come
 // from `serviceCardModel` (which in turn reads the shipped readiness contracts).
 // The 15-rule ladder is rendered, never re-derived.
 //
@@ -25,7 +27,6 @@ import { useState } from "react";
 import { ChainLinkIcon } from "../ChainLinkIcon";
 import { buildRuns } from "../../utils/medley";
 import ReadinessBadge from "./ReadinessBadge";
-import ReadinessStrip from "./ReadinessStrip";
 import ServiceIssueList from "./ServiceIssueList";
 import ServicePrimaryAction from "./ServicePrimaryAction";
 import {
@@ -114,7 +115,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
     readiness.conflicts.filter((c) => c.note).map((c) => [c.memberId, c.note as string]),
   );
   // A past service is dimmed and never highlighted as a live conflict, but its
-  // readiness is untouched — the strip and issue list still tell the truth.
+  // readiness is untouched — the issue list still tells the truth.
   const highlightConflict = !card.isPast && readiness.availabilityStatus === "conflict";
   const isCardSelected = swapSource?.kind === "card" && swapSource.roleId === role._id;
   const modeActive = swapMode || copyMode;
@@ -215,15 +216,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
           </div>
         );
 
-      // ── 2. Readiness strip ───────────────────────────────────────────────
-      case "readiness":
-        return (
-          <div className={`${bodyPad} min-w-0`}>
-            <ReadinessStrip readiness={readiness} />
-          </div>
-        );
-
-      // ── 3. Blocking issue summary ────────────────────────────────────────
+      // ── 2. Blocking issue summary ────────────────────────────────────────
       case "issues":
         if (issueLines.length === 0) return null;
         return (
@@ -232,7 +225,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
           </div>
         );
 
-      // ── 4. Assigned-team / setlist preview ───────────────────────────────
+      // ── 3. Assigned-team / setlist preview ───────────────────────────────
       case "preview":
         return (
           <div className={`${bodyPad} min-w-0 space-y-4`}>
@@ -495,7 +488,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
           </div>
         );
 
-      // ── 5. ONE primary action ────────────────────────────────────────────
+      // ── 4. ONE primary action ────────────────────────────────────────────
       case "primary_action":
         if (modeActive) return null;
         return (
@@ -504,7 +497,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
           </div>
         );
 
-      // ── 6. Secondary / destructive menu ──────────────────────────────────
+      // ── 5. Secondary / destructive menu ──────────────────────────────────
       case "secondary_menu":
         if (modeActive) return null;
         return (

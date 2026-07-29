@@ -42,7 +42,6 @@ import {
   CARD_STYLE,
   PREFLIGHT_COPY,
   PUBLISH_SKIP_COPY,
-  STRIP_MODULE_KEYS,
   buildPublishConfirmation,
   buildServiceCards,
   cardIdentity,
@@ -53,7 +52,6 @@ import {
   monthTargetPreflight,
   primaryActionRoute,
   proposalHandoffInput,
-  readinessStripModules,
   selectCardObservation,
   selectProposalObservation,
   serviceCardRefs,
@@ -145,11 +143,10 @@ function card(over: Partial<ServiceCardModel> = {}): ServiceCardModel {
 // ── 1. Card hierarchy ────────────────────────────────────────────────────────
 
 describe("card hierarchy", () => {
-  it("renders the plan's six sections in order", () => {
+  it("renders the plan's five sections in order", () => {
     // `ServiceReadinessCard` maps over this constant, so this IS the DOM order.
     expect([...CARD_SECTIONS]).toEqual([
       "identity",
-      "readiness",
       "issues",
       "preview",
       "primary_action",
@@ -157,105 +154,20 @@ describe("card hierarchy", () => {
     ]);
   });
 
-  it("puts the readiness strip and issues above the primary action", () => {
+  it("no longer renders the four-module readiness strip", () => {
+    expect([...CARD_SECTIONS]).not.toContain("readiness");
+  });
+
+  it("puts the issues above the primary action", () => {
     const order = CARD_SECTIONS.indexOf.bind(CARD_SECTIONS);
-    expect(order("readiness")).toBeLessThan(order("issues"));
+    expect(order("identity")).toBeLessThan(order("issues"));
     expect(order("issues")).toBeLessThan(order("preview"));
     expect(order("preview")).toBeLessThan(order("primary_action"));
     expect(order("primary_action")).toBeLessThan(order("secondary_menu"));
   });
 });
 
-// ── 2. Readiness strip ───────────────────────────────────────────────────────
-
-describe("readiness strip", () => {
-  it("always renders the four modules in order", () => {
-    expect(readinessStripModules(readiness()).map((m) => m.key)).toEqual([...STRIP_MODULE_KEYS]);
-  });
-
-  const TEAM: [TeamStatus, string][] = [
-    ["assigned", "ok"],
-    ["empty", "warn"],
-    ["unknown", "unknown"],
-  ];
-  it.each(TEAM)("maps team %s to a text/icon/tone triple", (status, tone) => {
-    const base = readiness();
-    const mod = readinessStripModules({ ...base, teamStatus: status } as ServiceReadiness)[0];
-    expect(mod.text.length).toBeGreaterThan(0);
-    expect(mod.icon.length).toBeGreaterThan(0);
-    expect(mod.tone).toBe(tone);
-  });
-
-  it("reports a dangling assignment as an error, never as empty or assigned", () => {
-    const r = readiness({ team: { assignedRefs: ["m1", "ghost"], danglingRefs: ["ghost"] } });
-    const mod = readinessStripModules(r)[0];
-    expect(r.teamStatus).toBe("unknown");
-    expect(mod.tone).toBe("error");
-    expect(mod.text).toContain("inválida");
-  });
-
-  const SETLIST: [SetlistStatus, string][] = [
-    ["ready", "ok"],
-    ["incomplete", "warn"],
-    ["none", "warn"],
-    ["duplicate", "error"],
-    ["draft_conflict", "error"],
-    ["invalid", "error"],
-    ["unknown", "unknown"],
-  ];
-  it.each(SETLIST)("maps setlist %s to a text/icon/tone triple", (status, tone) => {
-    const mod = readinessStripModules({
-      ...readiness(),
-      setlistStatus: status,
-    } as ServiceReadiness)[1];
-    expect(mod.text.length).toBeGreaterThan(0);
-    expect(mod.icon.length).toBeGreaterThan(0);
-    expect(mod.tone).toBe(tone);
-  });
-
-  const PROPOSAL: [ProposalPresentation, string][] = [
-    ["none", "neutral"],
-    ["draft", "warn"],
-    ["pending", "warn"],
-    ["changes_requested", "warn"],
-    ["approved", "approved"],
-    ["conflict", "error"],
-    ["invalid", "error"],
-    ["draft_conflict", "error"],
-    ["unknown", "unknown"],
-  ];
-  it.each(PROPOSAL)("maps proposal %s to a text/icon/tone triple", (presentation, tone) => {
-    const mod = readinessStripModules({
-      ...readiness(),
-      proposalPresentation: presentation,
-    } as ServiceReadiness)[2];
-    expect(mod.text.length).toBeGreaterThan(0);
-    expect(mod.icon.length).toBeGreaterThan(0);
-    expect(mod.tone).toBe(tone);
-  });
-
-  it("counts availability conflicts and never reads a failure as clear", () => {
-    const conflicted = readiness({
-      members: [{ _id: "m1", member_name: "Ana", unavailableDates: [WEEK] }],
-    });
-    expect(readinessStripModules(conflicted)[3]).toMatchObject({
-      tone: "error",
-      text: "1 conflicto",
-    });
-    const unknown = readiness({ sources: { ...READY, members: "error" } });
-    expect(readinessStripModules(unknown)[3]).toMatchObject({ tone: "unknown", icon: "?" });
-  });
-
-  it("never carries colour alone", () => {
-    for (const mod of readinessStripModules(readiness())) {
-      expect(mod.text.trim()).not.toBe("");
-      expect(mod.icon.trim()).not.toBe("");
-      expect(mod.label.trim()).not.toBe("");
-    }
-  });
-});
-
-// ── 3. Issue copy ────────────────────────────────────────────────────────────
+// ── 2. Issue copy ────────────────────────────────────────────────────────────
 
 describe("issue copy", () => {
   const KINDS: ServiceIntegrityIssueKind[] = [
@@ -336,13 +248,21 @@ describe("issue copy", () => {
     });
     expect(pending.find((l) => l.key === "proposal")?.text).toContain("pendiente");
 
+    // "Sin setlist" is NOT a gap: roles are published before anyone plans a
+    // setlist, so a fresh service must produce no setlist line at all.
     const noSetlist = serviceIssueLines({
       readiness: readiness({
         setlistResponse: { targetState: "none", observed: { state: "none" }, setlistId: null, songs: [], recentSongs: {} },
       }),
       sources: READY,
     });
-    expect(noSetlist.find((l) => l.key === "setlist")?.text).toContain("setlist");
+    expect(noSetlist.find((l) => l.key === "setlist")).toBeUndefined();
+
+    const incomplete = serviceIssueLines({
+      readiness: { ...readiness(), setlistStatus: "incomplete" } as ServiceReadiness,
+      sources: READY,
+    });
+    expect(incomplete.find((l) => l.key === "setlist")?.text).toContain("incompleto");
 
     const noTeam = serviceIssueLines({
       readiness: readiness({ team: { assignedRefs: [], danglingRefs: [] }, members: [] }),
@@ -366,7 +286,7 @@ describe("issue copy", () => {
   });
 });
 
-// ── 4. Command summary ───────────────────────────────────────────────────────
+// ── 3. Command summary ───────────────────────────────────────────────────────
 
 describe("command summary", () => {
   const withReadiness = (over: Partial<ServiceReadinessInput>, extra: Partial<ServiceCardModel> = {}) =>
@@ -442,7 +362,7 @@ describe("command summary", () => {
   });
 });
 
-// ── 5. Bulk publishing ───────────────────────────────────────────────────────
+// ── 4. Bulk publishing ───────────────────────────────────────────────────────
 
 describe("Publicar listos", () => {
   it("selects only visible drafts that are ready, and explains every skipped draft", () => {
@@ -493,7 +413,7 @@ describe("Publicar listos", () => {
   });
 });
 
-// ── 6. Action routing ────────────────────────────────────────────────────────
+// ── 5. Action routing ────────────────────────────────────────────────────────
 
 describe("primary action", () => {
   it("renders the ladder's own result and never re-derives it", () => {
@@ -608,7 +528,7 @@ describe("primary action", () => {
   });
 });
 
-// ── 7. Handoff targets ───────────────────────────────────────────────────────
+// ── 6. Handoff targets ───────────────────────────────────────────────────────
 
 describe("handoff targets", () => {
   it("opens integrity details by explicit id, scoped to the action", () => {
@@ -659,7 +579,7 @@ describe("handoff targets", () => {
   });
 });
 
-// ── 8. Per-card A1 selection ─────────────────────────────────────────────────
+// ── 7. Per-card A1 selection ─────────────────────────────────────────────────
 
 const MEMBER: CanonicalMember = {
   _id: "m1",
@@ -834,7 +754,7 @@ describe("per-card A1 selection", () => {
   });
 });
 
-// ── 9. Identity + preview ────────────────────────────────────────────────────
+// ── 8. Identity + preview ────────────────────────────────────────────────────
 
 describe("identity and preview", () => {
   it("formats the date at local noon and labels the publication state", () => {
@@ -877,7 +797,7 @@ describe("identity and preview", () => {
   });
 });
 
-// ── 10. Month/create per-target preflight ────────────────────────────────────
+// ── 9. Month/create per-target preflight ────────────────────────────────────
 
 describe("month target preflight", () => {
   const emptySummaries = (): CardSourceSummaries => ({
@@ -1076,7 +996,7 @@ describe("month target preflight", () => {
   });
 });
 
-// ── 11. Narrow-viewport class invariants ─────────────────────────────────────
+// ── 10. Narrow-viewport class invariants ─────────────────────────────────────
 
 describe("narrow viewport (320px / 375px) invariants", () => {
   it("keeps every card region shrinkable", () => {
