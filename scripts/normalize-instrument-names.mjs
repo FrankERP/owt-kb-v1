@@ -9,6 +9,13 @@
 //   node --env-file=.env.local scripts/normalize-instrument-names.mjs --apply
 //
 // Dry-run prints every change and writes nothing. `--apply` is required to write.
+import { assertRetiredWriter } from "./lib/sr-retired-writer.mjs";
+
+assertRetiredWriter("normalize-instrument-names", {
+  argv: process.argv,
+  env: process.env,
+});
+
 import { createClient } from "@sanity/client";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";

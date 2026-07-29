@@ -61,6 +61,11 @@ export const RETIRED_WRITERS = Object.freeze({
     did: "patch published:false on every July 2026 sunday_role / saturday_role / special_role",
     replacement: "POST /api/admin/roles/publish (guarded batch publish/unpublish)",
   },
+  "normalize-instrument-names": {
+    file: "scripts/normalize-instrument-names.mjs",
+    did: "collapse 7 spellings of 5 instruments on role documents to canonical forms",
+    replacement: "seatModel.ts provides canonical forms; Task 2 supplies the picklist for the new seat board",
+  },
 });
 
 export const RETIRED_WRITER_NAMES = Object.freeze(Object.keys(RETIRED_WRITERS).sort());

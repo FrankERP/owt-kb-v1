@@ -376,13 +376,14 @@ describe("A2 handoff allowlist", () => {
     }
   });
 
-  it("lists exactly the five retired one-shot writers, each proven fail-closed", () => {
+  it("lists exactly the six retired one-shot writers, each proven fail-closed", () => {
     expect(RETIRED_ONE_SHOT_WRITERS.map((e) => `${e.file}#${e.operation}`).sort()).toEqual(
       [
         "scripts/cleanup-superseded-proposals.mjs#module",
         "scripts/import-schedule.ts#module",
         "scripts/import-setlist-history.mjs#module",
         "scripts/migrate-shared-proposals.mjs#module",
+        "scripts/normalize-instrument-names.mjs#module",
         "scripts/unpublish-july-2026.mjs#module",
       ].sort(),
     );
