@@ -188,7 +188,6 @@ modules beside them. See [`SERVICE_READINESS_UI.md`](SERVICE_READINESS_UI.md).
 | Component | Purpose |
 |-----------|---------|
 | `ServiceReadinessCard` | One service card; maps over `CARD_SECTIONS` (the constant *is* the render order). |
-| `ReadinessStrip` | The four-module Equipo · Setlist · Propuesta · Disponibilidad strip. |
 | `ReadinessBadge` | One icon + text + tone chip. Colour is never the only carrier of meaning. |
 | `ServiceIssueList` | Blocking-issue lines, truncated to 4 + "y N problema(s) más". |
 | `ServicePrimaryAction` | The single primary-action button; emits `data-action-kind`/`-rule`. |

@@ -1,9 +1,9 @@
 // Every presentational decision `/admin -> Servicios` makes, as pure functions
 // (Plan B items 7-9).
 //
-// The components in `ServiceReadinessCard` / `ReadinessStrip` / `ReadinessBadge` /
+// The components in `ServiceReadinessCard` / `ReadinessBadge` /
 // `ServicePrimaryAction` / `ServiceIssueList` render what this module returns and
-// decide nothing themselves, so card ordering, strip mapping, issue copy, the
+// decide nothing themselves, so card ordering, issue copy, the
 // command-summary counters, bulk-publish selection copy, action routing and the
 // per-target month preflight are all table-testable in vitest's `node`
 // environment — no DOM harness, no fake React renderer.
@@ -253,10 +253,14 @@ export const CARD_STYLE = {
  * The plan's card hierarchy, in order. `ServiceReadinessCard` renders by mapping
  * over this list, so the constant IS the rendered order — a reordering here (or
  * there) breaks the test rather than silently drifting.
+ *
+ * The four-module readiness strip (Equipo · Setlist · Propuesta · Disponibilidad)
+ * used to sit between `identity` and `issues`. It was removed: it repeated what
+ * the issue lines and the preview already say, and it dominated a card that has
+ * to stay scannable in a three-column month view.
  */
 export const CARD_SECTIONS = [
   "identity",
-  "readiness",
   "issues",
   "preview",
   "primary_action",
@@ -631,7 +635,7 @@ export function cardIdentity(card: ServiceCardModel, todayIso: string): CardIden
   };
 }
 
-// ── Readiness strip ──────────────────────────────────────────────────────────
+// ── Readiness tones ──────────────────────────────────────────────────────────
 
 export type ReadinessTone = "ok" | "approved" | "warn" | "error" | "unknown" | "neutral";
 
@@ -644,111 +648,6 @@ export const TONE_CLASS: Record<ReadinessTone, string> = {
   unknown: "border-gray-500/40 bg-gray-500/10 text-gray-300",
   neutral: "border-gray-600/40 bg-transparent text-gray-400",
 };
-
-export const STRIP_MODULE_KEYS = ["equipo", "setlist", "propuesta", "disponibilidad"] as const;
-
-export type StripModuleKey = (typeof STRIP_MODULE_KEYS)[number];
-
-export interface StripModule {
-  key: StripModuleKey;
-  label: string;
-  /** Always non-empty: a module is never colour alone. */
-  text: string;
-  /** Always non-empty: a text/icon pair backs every tone. */
-  icon: string;
-  tone: ReadinessTone;
-}
-
-const STRIP_LABEL: Record<StripModuleKey, string> = {
-  equipo: "Equipo",
-  setlist: "Setlist",
-  propuesta: "Propuesta",
-  disponibilidad: "Disponibilidad",
-};
-
-/**
- * The four readiness modules, always in order and always with text + icon + tone.
- * Every value is read from the shipped readiness dimensions; nothing is recomputed.
- */
-export function readinessStripModules(readiness: ServiceReadiness): StripModule[] {
-  const mod = (
-    key: StripModuleKey,
-    text: string,
-    icon: string,
-    tone: ReadinessTone,
-  ): StripModule => ({ key, label: STRIP_LABEL[key], text, icon, tone });
-
-  const equipo = (): StripModule => {
-    if (readiness.danglingRefCount > 0) {
-      return mod("equipo", "Asignación inválida", "⚠", "error");
-    }
-    switch (readiness.teamStatus) {
-      case "assigned":
-        return mod("equipo", `${readiness.teamSummary.resolvedCount} asignados`, "✓", "ok");
-      case "empty":
-        return mod("equipo", "Sin equipo", "○", "warn");
-      default:
-        return mod("equipo", "Sin verificar", "?", "unknown");
-    }
-  };
-
-  const setlist = (): StripModule => {
-    switch (readiness.setlistStatus) {
-      case "ready":
-        return mod("setlist", "Listo", "✓", "ok");
-      case "incomplete":
-        return mod("setlist", "Incompleto", "◐", "warn");
-      case "none":
-        return mod("setlist", "Sin setlist", "○", "warn");
-      case "duplicate":
-        return mod("setlist", "Duplicado", "⚠", "error");
-      case "draft_conflict":
-        return mod("setlist", "Borrador sin publicar", "⚠", "error");
-      case "invalid":
-        return mod("setlist", "Datos inválidos", "⚠", "error");
-      default:
-        return mod("setlist", "Sin verificar", "?", "unknown");
-    }
-  };
-
-  const propuesta = (): StripModule => {
-    switch (readiness.proposalPresentation) {
-      case "none":
-        return mod("propuesta", "Sin propuesta", "–", "neutral");
-      case "draft":
-        return mod("propuesta", "Borrador del líder", "◐", "warn");
-      case "pending":
-        return mod("propuesta", "Pendiente de revisión", "●", "warn");
-      case "changes_requested":
-        return mod("propuesta", "Cambios solicitados", "↺", "warn");
-      case "approved":
-        return mod("propuesta", "Aprobada", "✓", "approved");
-      case "conflict":
-        return mod("propuesta", "En conflicto", "⚠", "error");
-      case "invalid":
-        return mod("propuesta", "Datos inválidos", "⚠", "error");
-      case "draft_conflict":
-        return mod("propuesta", "Borrador sin publicar", "⚠", "error");
-      default:
-        return mod("propuesta", "Sin verificar", "?", "unknown");
-    }
-  };
-
-  const disponibilidad = (): StripModule => {
-    switch (readiness.availabilityStatus) {
-      case "clear":
-        return mod("disponibilidad", "Sin conflictos", "✓", "ok");
-      case "conflict": {
-        const n = readiness.conflicts.length;
-        return mod("disponibilidad", `${n} conflicto${n === 1 ? "" : "s"}`, "⚠", "error");
-      }
-      default:
-        return mod("disponibilidad", "Sin verificar", "?", "unknown");
-    }
-  };
-
-  return [equipo(), setlist(), propuesta(), disponibilidad()];
-}
 
 // ── Blocking issue copy ──────────────────────────────────────────────────────
 
@@ -766,8 +665,11 @@ const PROPOSAL_WORKFLOW_COPY: Partial<Record<ServiceReadiness["proposalPresentat
   changes_requested: "La propuesta tiene cambios solicitados.",
 };
 
+// `none` is deliberately absent: roles are published BEFORE anyone plans a
+// setlist, so "todavía no tiene setlist" fired on every fresh service and read as
+// a problem when it is the normal starting state. An `incomplete` setlist is a
+// real half-finished edit and still gets a line.
 const SETLIST_WORKFLOW_COPY: Partial<Record<ServiceReadiness["setlistStatus"], string>> = {
-  none: "Este servicio todavía no tiene setlist.",
   incomplete: "El setlist está incompleto.",
 };
 

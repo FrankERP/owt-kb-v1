@@ -47,7 +47,6 @@ publishing a service computed over data nobody proved.
 | `serviceHandoffContext.tsx` | context | The handoff API a card calls; no-ops outside a provider. |
 | `ServiceReadinessCard.tsx` | component | One service card. |
 | `ReadinessBadge.tsx` | component | One icon + text + tone chip. |
-| `ReadinessStrip.tsx` | component | The four-module readiness strip. |
 | `ServiceIssueList.tsx` | component | Blocking-issue lines, truncated with a count. |
 | `ServicePrimaryAction.tsx` | component | The single primary-action button. |
 | `IntegrityQueuePanel.tsx` | component | The standalone "Integridad de datos" panel. |
@@ -61,7 +60,6 @@ AdminPanel.tsx  (services tab)
    └─ ServicesPanel
       └─ ServiceReadinessCard    ← one per visible card
          ├─ ReadinessBadge       (publication badge)
-         ├─ ReadinessStrip → ReadinessBadge ×4
          ├─ ServiceIssueList
          └─ ServicePrimaryAction
 ```
@@ -273,7 +271,12 @@ silently re-arm a submit built on the pre-failure snapshot. The operator reloads
   Spanish text; the icon is `aria-hidden` so a screen reader reads the label once.
 - Purple is reserved exclusively for special-service identity and is never a readiness tone.
 - `CARD_SECTIONS` **is** the rendered order — the card maps over it, so a reorder breaks a
-  test rather than drifting silently.
+  test rather than drifting silently. The four-module readiness strip that Plan B put at
+  position 2 was removed: it repeated the issue lines and the preview, and it crowded out
+  the card content in the three-column month view. Readiness itself is unchanged — the
+  issue lines and the primary action still render the same ladder.
+- A service with no setlist yet emits **no** issue line. Roles are published before anyone
+  plans a setlist, so "sin setlist" is the normal starting state, not a problem to flag.
 - `ServiceIssueList` truncates to 4 lines plus "y N problema(s) más", so a broken record
   cannot fill the page.
 - Narrow-viewport (320 px / 375 px) class invariants are pinned by tests.
@@ -285,7 +288,7 @@ silently re-arm a submit built on the pre-failure snapshot. The operator reloads
 | File | Pins |
 |---|---|
 | `serviceReadiness.test.ts` | the full 3⁵ source-state space, every ladder rule *and its precedence*, the control matrix, Mexico-City date math run under a non-Mexico ambient timezone |
-| `serviceCardModel.test.ts` | section order, strip tones, issue copy, publish confirmation copy, primary-action routing |
+| `serviceCardModel.test.ts` | section order, issue copy, publish confirmation copy, primary-action routing |
 | `serviceIntegrityQueue.test.ts` | association ambiguity, the wrong-owner lock case, partial-source honesty, "never directs cleanup to Studio" |
 | `serviceSourceState.test.ts` | reducer semantics, per-control gating, invalidation latching |
 | `publishSelection.test.ts` | the two vocabularies stay disjoint, override refusal, fail-closed selection |
