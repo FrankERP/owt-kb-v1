@@ -56,6 +56,8 @@ export default async function MePage() {
   );
 
   const today = new Date().toLocaleDateString("sv", { timeZone: TZ });
+  // Server component: a fresh per-request date is the intended behavior.
+  // eslint-disable-next-line react-hooks/purity
   const limit = new Date(Date.now() + 365 * 86400 * 1000)
     .toLocaleDateString("sv", { timeZone: TZ });
 
@@ -67,6 +69,7 @@ export default async function MePage() {
     $id in foh_team[].person._ref
   )`;
 
+  // eslint-disable-next-line react-hooks/purity -- server component, as above
   const calendarLimit = new Date(Date.now() + 365 * 86400 * 1000)
     .toLocaleDateString("sv", { timeZone: TZ });
 

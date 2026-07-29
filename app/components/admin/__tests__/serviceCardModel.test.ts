@@ -180,18 +180,18 @@ describe("readiness strip", () => {
   ];
   it.each(TEAM)("maps team %s to a text/icon/tone triple", (status, tone) => {
     const base = readiness();
-    const module = readinessStripModules({ ...base, teamStatus: status } as ServiceReadiness)[0];
-    expect(module.text.length).toBeGreaterThan(0);
-    expect(module.icon.length).toBeGreaterThan(0);
-    expect(module.tone).toBe(tone);
+    const mod = readinessStripModules({ ...base, teamStatus: status } as ServiceReadiness)[0];
+    expect(mod.text.length).toBeGreaterThan(0);
+    expect(mod.icon.length).toBeGreaterThan(0);
+    expect(mod.tone).toBe(tone);
   });
 
   it("reports a dangling assignment as an error, never as empty or assigned", () => {
     const r = readiness({ team: { assignedRefs: ["m1", "ghost"], danglingRefs: ["ghost"] } });
-    const module = readinessStripModules(r)[0];
+    const mod = readinessStripModules(r)[0];
     expect(r.teamStatus).toBe("unknown");
-    expect(module.tone).toBe("error");
-    expect(module.text).toContain("inválida");
+    expect(mod.tone).toBe("error");
+    expect(mod.text).toContain("inválida");
   });
 
   const SETLIST: [SetlistStatus, string][] = [
@@ -204,13 +204,13 @@ describe("readiness strip", () => {
     ["unknown", "unknown"],
   ];
   it.each(SETLIST)("maps setlist %s to a text/icon/tone triple", (status, tone) => {
-    const module = readinessStripModules({
+    const mod = readinessStripModules({
       ...readiness(),
       setlistStatus: status,
     } as ServiceReadiness)[1];
-    expect(module.text.length).toBeGreaterThan(0);
-    expect(module.icon.length).toBeGreaterThan(0);
-    expect(module.tone).toBe(tone);
+    expect(mod.text.length).toBeGreaterThan(0);
+    expect(mod.icon.length).toBeGreaterThan(0);
+    expect(mod.tone).toBe(tone);
   });
 
   const PROPOSAL: [ProposalPresentation, string][] = [
@@ -225,13 +225,13 @@ describe("readiness strip", () => {
     ["unknown", "unknown"],
   ];
   it.each(PROPOSAL)("maps proposal %s to a text/icon/tone triple", (presentation, tone) => {
-    const module = readinessStripModules({
+    const mod = readinessStripModules({
       ...readiness(),
       proposalPresentation: presentation,
     } as ServiceReadiness)[2];
-    expect(module.text.length).toBeGreaterThan(0);
-    expect(module.icon.length).toBeGreaterThan(0);
-    expect(module.tone).toBe(tone);
+    expect(mod.text.length).toBeGreaterThan(0);
+    expect(mod.icon.length).toBeGreaterThan(0);
+    expect(mod.tone).toBe(tone);
   });
 
   it("counts availability conflicts and never reads a failure as clear", () => {
@@ -247,10 +247,10 @@ describe("readiness strip", () => {
   });
 
   it("never carries colour alone", () => {
-    for (const module of readinessStripModules(readiness())) {
-      expect(module.text.trim()).not.toBe("");
-      expect(module.icon.trim()).not.toBe("");
-      expect(module.label.trim()).not.toBe("");
+    for (const mod of readinessStripModules(readiness())) {
+      expect(mod.text.trim()).not.toBe("");
+      expect(mod.icon.trim()).not.toBe("");
+      expect(mod.label.trim()).not.toBe("");
     }
   });
 });

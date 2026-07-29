@@ -450,7 +450,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
             onDrop={() => onDrop(idx)}
             onDragEnd={onDragEnd}
             className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${idx > 0 ? "mt-1.5" : ""} ${
-              dragOverIdx === idx && dragIdx.current !== idx
+              dragOverIdx === idx && draggingIdx !== idx
                 ? "border-[#00bfff]/60 bg-[#00bfff]/10 scale-[1.01]"
                 : draggingIdx === idx
                 ? "opacity-30"

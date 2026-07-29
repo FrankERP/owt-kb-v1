@@ -282,7 +282,7 @@ export function SongForm({
                 <span className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">
                   {creatingAuthor ? "Creando..." : "+ Crear"}
                 </span>
-                <span className="font-body text-xs text-gray-400 truncate">"{authorSearch}"</span>
+                <span className="font-body text-xs text-gray-400 truncate">&quot;{authorSearch}&quot;</span>
               </button>
             </div>
           </div>
@@ -452,7 +452,7 @@ export function SongForm({
                 <span className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">
                   {creatingTag ? "Creando..." : "+ Crear"}
                 </span>
-                <span className="font-body text-xs text-gray-400 truncate">"{tagSearch}"</span>
+                <span className="font-body text-xs text-gray-400 truncate">&quot;{tagSearch}&quot;</span>
               </button>
             </div>
           </div>

@@ -67,8 +67,9 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
   const [recurDow, setRecurDow]           = useState(0); // 0 = Domingo
   const [recurInterval, setRecurInterval] = useState(1);
 
-  const initialSnap = useRef(snapshot(new Set(initialDates), new Map(initialNotes.map(n => [n.date, n.note]))));
-  const dirty = snapshot(dates, notes) !== initialSnap.current;
+  // Saved-state snapshot `dirty` compares against; reset after each successful save.
+  const [initialSnap, setInitialSnap] = useState(() => snapshot(new Set(initialDates), new Map(initialNotes.map(n => [n.date, n.note]))));
+  const dirty = snapshot(dates, notes) !== initialSnap;
 
   const now      = new Date();
   const todayIso = now.toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
@@ -170,7 +171,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
         }),
       });
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      initialSnap.current = snapshot(dates, notes);
+      setInitialSnap(snapshot(dates, notes));
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {

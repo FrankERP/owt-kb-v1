@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
-  stripDiacritics, normalizeForMatch, cleanTempoTags,
+  normalizeForMatch, cleanTempoTags,
   mergeTagNames, matchRow, computeFieldUpdates,
-  authorMatches, resolveMatchCollisions,
+  resolveMatchCollisions,
 } from "../catalog-reconcile.mjs";
 
 describe("normalizeForMatch", () => {
