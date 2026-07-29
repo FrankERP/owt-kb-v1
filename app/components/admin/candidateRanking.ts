@@ -73,7 +73,15 @@ export function rankCandidates(input: {
 
   // Load comes from the shipped counter so the week rule (Saturday counts toward
   // the following Sunday) cannot drift between this and the participation sidebar.
-  const loadById = new Map(computeParticipation(windowRoles).map((p) => [p.id, p.total]));
+  // computeParticipation keeps `total` VOICE-ONLY (sunLead+satLead+sunBGV+satBGV+coro)
+  // and tracks instrument/FOH history in separate fields, so the figure read here
+  // must match the seat's own category — otherwise instrumento/foh seats (the ones
+  // the solver can't touch at all, and where this fairness signal matters most)
+  // always read load 0, while the `recent` strip below (built from `servingIds`,
+  // which DOES cover all five seat paths) lights up anyway. Same source, same rule.
+  const loadField =
+    seat.category === "instrumento" ? "instrWeeks" : seat.category === "foh" ? "fohWeeks" : "total";
+  const loadById = new Map(computeParticipation(windowRoles).map((p) => [p.id, p[loadField]]));
 
   // The most recent `weeks` week-keys present in the window, oldest first.
   const weekKeys = [...new Set(windowRoles.map(serviceWeekKey))].sort().slice(-weeks);
