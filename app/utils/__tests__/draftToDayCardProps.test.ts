@@ -22,15 +22,42 @@ describe("draftToDayCardProps", () => {
     const r = draftToDayCardProps(baseDraft, members);
     expect(r.day).toBe("Domingo");
     expect(r.date).toBe("2026-07-05");
-    expect(r.leads).toEqual(["Frank"]);
+    // `m1` has the alias `Frankie`: the alias wins everywhere a name is
+    // pre-resolved to a string.
+    expect(r.leads).toEqual(["Frankie"]);
     expect(r.bgvs).toEqual([{ member_name: "Gaby", alias: undefined }, { member_name: "Jakey", alias: undefined }]);
     expect(r.chorus).toEqual([{ member_name: "Gaby", alias: undefined }]);
     expect(r.instruments).toEqual([{ label: "Guitarra", person: "Jakey" }]);
-    expect(r.fohTeam).toEqual([{ label: "Sonido", person: "Frank" }]);
+    expect(r.fohTeam).toEqual([{ label: "Sonido", person: "Frankie" }]);
   });
 
   it("labels saturday_role as Sábado", () => {
     expect(draftToDayCardProps({ ...baseDraft, _type: "saturday_role" }, members).day).toBe("Sábado");
+  });
+
+  it("prefers the alias over the full name in every pre-resolved string", () => {
+    // `bgvs`/`chorus` stay OBJECTS and let `DayCard` apply the same rule, so only
+    // these three carry a resolved display name.
+    const r = draftToDayCardProps(
+      {
+        ...baseDraft,
+        leads: ["m1"],
+        instruments: [{ instrument: "Guitarra", personId: "m1" }],
+        foh: [{ role: "Sonido", personId: "m1" }],
+      },
+      members,
+    );
+    expect(r.leads).toEqual(["Frankie"]);
+    expect(r.instruments[0].person).toBe("Frankie");
+    expect(r.fohTeam[0].person).toBe("Frankie");
+  });
+
+  it("falls back to the full name when there is no alias, or it is blank", () => {
+    const blank = [{ _id: "m9", member_name: "Guadalupe", alias: "   " }];
+    const r = draftToDayCardProps({ ...baseDraft, leads: ["m9"], bgvs: [], chorus: [], instruments: [], foh: [] }, blank);
+    expect(r.leads).toEqual(["Guadalupe"]);
+    // And with no alias field at all (`m2`).
+    expect(draftToDayCardProps({ ...baseDraft, leads: ["m2"] }, members).leads).toEqual(["Gaby"]);
   });
 
   it("drops ids with no matching member without crashing", () => {
