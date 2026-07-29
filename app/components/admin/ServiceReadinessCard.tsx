@@ -2,14 +2,16 @@
 
 // One service card, in the plan's hierarchy (Plan B items 7-9):
 //
-//   1 identity + publication state
+//   1 identity + publication state + the action cluster
 //   2 blocking issue summary
 //   3 assigned-team / setlist preview
 //   4 ONE primary action
-//   5 secondary / destructive menu
 //
-// The four-module readiness strip that used to sit at position 2 was removed —
-// see `CARD_SECTIONS` in `serviceCardModel`.
+// Two of the plan's sections are gone (see `CARD_SECTIONS` in `serviceCardModel`):
+// the four-module readiness strip, and the full-width `Más acciones` bar. The
+// card's secondary actions now live top-right in the header — `Editar equipo` and
+// `Editar setlist` as icon buttons, everything else behind the kebab beside them.
+// Every action and every gate survived the move; only their placement changed.
 //
 // The card renders by MAPPING over `CARD_SECTIONS`, so that exported constant is
 // the real rendered order and the ordering test cannot drift from the DOM.
@@ -152,67 +154,143 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
       case "identity":
         return (
           <div
-            className={`${CARD_HEADER[role._type]} flex min-w-0 items-start justify-between gap-2 rounded-t-xl border-b px-4 py-3`}
+            className={`${CARD_HEADER[role._type]} min-w-0 rounded-t-xl border-b px-4 py-3`}
           >
-            <div className="min-w-0">
+            {/*
+              Only the TITLE shares a row with the action cluster. The date and the
+              badges span the full header width below it, so three 44px targets in a
+              260px-wide month column cannot squeeze the date into a four-line wrap.
+            */}
+            <div className="flex min-w-0 items-start justify-between gap-2">
               <h3
                 className={`font-display text-xl font-bold uppercase text-[#C8D8EB] md:text-2xl ${CARD_STYLE.longText}`}
               >
                 {identity.title}
               </h3>
-              <p className="font-label text-xs capitalize text-[#C8D8EB]/60">{identity.dateText}</p>
-              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                <span
-                  className={`rounded-full px-2 py-0.5 font-label text-[11px] uppercase tracking-widest ${SERVICE_BADGE[role._type]}`}
-                >
-                  {identity.typeLabel}
-                </span>
-                <ReadinessBadge
-                  text={identity.publication.text}
-                  icon={isDraft ? "◌" : "◉"}
-                  tone={identity.publication.tone}
-                  className="!py-0.5"
-                />
-                {identity.relative && (
-                  <span className="font-label text-[11px] uppercase tracking-widest text-[#C8D8EB]/60">
-                    {identity.relative}
-                  </span>
-                )}
-              </div>
-            </div>
 
-            {/* Mode affordances replace the menu while a mode is active. */}
-            {swapMode ? (
-              <button
-                type="button"
-                onClick={props.onCardSwapSelect}
-                disabled={!gates.swap.enabled}
-                title={gates.swap.reason ?? "Intercambiar equipo completo"}
-                className={`${CARD_STYLE.menuTrigger} shrink-0 rounded-lg px-2.5 font-label text-xs transition-colors disabled:opacity-40 ${
-                  isCardSelected
-                    ? "border border-white/40 bg-white/20 text-white"
-                    : "border border-transparent text-[#C8D8EB]/70 hover:bg-white/15 hover:text-white"
-                }`}
-              >
-                ⇄ Equipo
-              </button>
-            ) : copyMode ? (
-              isCopySource ? (
-                <span className="shrink-0 rounded-lg border border-white/40 bg-white/20 px-2.5 py-1.5 font-label text-[11px] uppercase tracking-widest text-white">
-                  Origen
-                </span>
-              ) : (
+              {/* Mode affordances replace the action cluster while a mode is active. */}
+              {swapMode ? (
                 <button
                   type="button"
-                  onClick={props.onCopyPick}
-                  disabled={!gates.copyInstruments.enabled}
-                  title={gates.copyInstruments.reason ?? "Copiar los instrumentos del origen a este día"}
-                  className={`${CARD_STYLE.menuTrigger} shrink-0 rounded-lg border border-[#00bfff]/40 px-2.5 font-label text-xs text-[#C8D8EB]/70 transition-colors hover:bg-[#00bfff]/25 hover:text-white disabled:opacity-40`}
+                  onClick={props.onCardSwapSelect}
+                  disabled={!gates.swap.enabled}
+                  title={gates.swap.reason ?? "Intercambiar equipo completo"}
+                  className={`${CARD_STYLE.menuTrigger} shrink-0 rounded-lg px-2.5 font-label text-xs transition-colors disabled:opacity-40 ${
+                    isCardSelected
+                      ? "border border-white/40 bg-white/20 text-white"
+                      : "border border-transparent text-[#C8D8EB]/70 hover:bg-white/15 hover:text-white"
+                  }`}
                 >
-                  Pegar aquí
+                  ⇄ Equipo
                 </button>
-              )
-            ) : null}
+              ) : copyMode ? (
+                isCopySource ? (
+                  <span className="shrink-0 rounded-lg border border-white/40 bg-white/20 px-2.5 py-1.5 font-label text-[11px] uppercase tracking-widest text-white">
+                    Origen
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={props.onCopyPick}
+                    disabled={!gates.copyInstruments.enabled}
+                    title={gates.copyInstruments.reason ?? "Copiar los instrumentos del origen a este día"}
+                    className={`${CARD_STYLE.menuTrigger} shrink-0 rounded-lg border border-[#00bfff]/40 px-2.5 font-label text-xs text-[#C8D8EB]/70 transition-colors hover:bg-[#00bfff]/25 hover:text-white disabled:opacity-40`}
+                  >
+                    Pegar aquí
+                  </button>
+                )
+              ) : (
+                <div className="relative flex shrink-0 items-center gap-0.5">
+                  <IconAction
+                    label="Editar equipo"
+                    gate={gates.editTeam}
+                    onClick={props.onEdit}
+                    icon={<UsersIcon />}
+                  />
+                  <IconAction
+                    label="Editar setlist"
+                    gate={gates.editSetlist}
+                    onClick={props.onSetlist}
+                    icon={<MusicIcon />}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setMenuOpen((o) => !o)}
+                    aria-haspopup="menu"
+                    aria-expanded={menuOpen}
+                    aria-label="Más acciones"
+                    title="Más acciones"
+                    className={`${CARD_STYLE.menuTrigger} flex items-center justify-center rounded-lg text-[#C8D8EB]/70 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00bfff]`}
+                  >
+                    <KebabIcon />
+                  </button>
+                  {menuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                      <div
+                        role="menu"
+                        className={`absolute right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-[#00bfff]/25 bg-[#03101f] py-1 shadow-xl shadow-black/50 ${CARD_STYLE.menu}`}
+                      >
+                        {instrPills.length > 0 && (
+                          <MenuItem
+                            icon={<CopyIcon />}
+                            label="Copiar instrumentos a otro día"
+                            gate={gates.copyInstruments}
+                            onClick={() => {
+                              setMenuOpen(false);
+                              props.onCopyStart();
+                            }}
+                          />
+                        )}
+                        <MenuItem
+                          icon={<EyeIcon />}
+                          label={isDraft ? "Publicar" : "Ocultar"}
+                          // Publishing needs all five sources; safe unpublish needs only
+                          // roles + role-target integrity (plan §"Unpublish is separate").
+                          gate={isDraft ? gates.publish : gates.unpublish}
+                          onClick={() => {
+                            setMenuOpen(false);
+                            if (isDraft) props.onPublish();
+                            else props.onUnpublish();
+                          }}
+                        />
+                        <div className="my-1 border-t border-[#00bfff]/15" />
+                        <MenuItem
+                          icon={<TrashIcon />}
+                          label="Eliminar servicio"
+                          danger
+                          gate={gates.deleteService}
+                          onClick={() => {
+                            setMenuOpen(false);
+                            props.onDelete();
+                          }}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <p className="font-label text-xs capitalize text-[#C8D8EB]/60">{identity.dateText}</p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <span
+                className={`rounded-full px-2 py-0.5 font-label text-[11px] uppercase tracking-widest ${SERVICE_BADGE[role._type]}`}
+              >
+                {identity.typeLabel}
+              </span>
+              <ReadinessBadge
+                text={identity.publication.text}
+                icon={isDraft ? "◌" : "◉"}
+                tone={identity.publication.tone}
+                className="!py-0.5"
+              />
+              {identity.relative && (
+                <span className="font-label text-[11px] uppercase tracking-widest text-[#C8D8EB]/60">
+                  {identity.relative}
+                </span>
+              )}
+            </div>
           </div>
         );
 
@@ -497,85 +575,6 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
           </div>
         );
 
-      // ── 5. Secondary / destructive menu ──────────────────────────────────
-      case "secondary_menu":
-        if (modeActive) return null;
-        return (
-          <div className={`${bodyPad} relative min-w-0`}>
-            <button
-              type="button"
-              onClick={() => setMenuOpen((o) => !o)}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              className={`${CARD_STYLE.menuTrigger} w-full rounded-lg border border-[#00bfff]/15 px-3 font-label text-[11px] uppercase tracking-widest text-gray-400 transition-colors hover:border-[#00bfff]/40 hover:text-[#00bfff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00bfff]`}
-            >
-              Más acciones
-            </button>
-            {menuOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                <div
-                  role="menu"
-                  className={`absolute bottom-full right-4 z-50 mb-1 overflow-hidden rounded-lg border border-[#00bfff]/25 bg-[#03101f] py-1 shadow-xl shadow-black/50 sm:right-5 ${CARD_STYLE.menu}`}
-                >
-                  <MenuItem
-                    icon={<PencilIcon />}
-                    label="Editar equipo"
-                    gate={gates.editTeam}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      props.onEdit();
-                    }}
-                  />
-                  <MenuItem
-                    icon={<MusicIcon />}
-                    label="Editar setlist"
-                    gate={gates.editSetlist}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      props.onSetlist();
-                    }}
-                  />
-                  {instrPills.length > 0 && (
-                    <MenuItem
-                      icon={<CopyIcon />}
-                      label="Copiar instrumentos a otro día"
-                      gate={gates.copyInstruments}
-                      onClick={() => {
-                        setMenuOpen(false);
-                        props.onCopyStart();
-                      }}
-                    />
-                  )}
-                  <MenuItem
-                    icon={<EyeIcon />}
-                    label={isDraft ? "Publicar" : "Ocultar"}
-                    // Publishing needs all five sources; safe unpublish needs only
-                    // roles + role-target integrity (plan §"Unpublish is separate").
-                    gate={isDraft ? gates.publish : gates.unpublish}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      if (isDraft) props.onPublish();
-                      else props.onUnpublish();
-                    }}
-                  />
-                  <div className="my-1 border-t border-[#00bfff]/15" />
-                  <MenuItem
-                    icon={<TrashIcon />}
-                    label="Eliminar servicio"
-                    danger
-                    gate={gates.deleteService}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      props.onDelete();
-                    }}
-                  />
-                </div>
-              </>
-            )}
-          </div>
-        );
-
       default:
         return null;
     }
@@ -753,6 +752,38 @@ function MemberChip({
   );
 }
 
+/**
+ * One promoted header action: icon only, but never icon ALONE — the label is the
+ * accessible name and the tooltip, and a closed gate replaces the tooltip with its
+ * own Spanish reason (the header has no room for the explanatory line `MenuItem`
+ * renders, so the reason has to live on the control itself).
+ */
+function IconAction({
+  label,
+  icon,
+  gate,
+  onClick,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  gate: CardGate;
+  onClick: () => void;
+}) {
+  const disabled = !gate.enabled;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={disabled ? (gate.reason ?? label) : label}
+      className={`${CARD_STYLE.menuTrigger} flex items-center justify-center rounded-lg text-[#C8D8EB]/70 transition-colors hover:bg-white/15 hover:text-white disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00bfff]`}
+    >
+      {icon}
+    </button>
+  );
+}
+
 function MenuItem({
   icon,
   label,
@@ -792,18 +823,29 @@ function MenuItem({
   );
 }
 
-function PencilIcon() {
+function UsersIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function KebabIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="12" cy="5" r="1.8" />
+      <circle cx="12" cy="12" r="1.8" />
+      <circle cx="12" cy="19" r="1.8" />
     </svg>
   );
 }
 
 function MusicIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M9 18V5l12-2v13" />
       <circle cx="6" cy="18" r="3" />
       <circle cx="18" cy="16" r="3" />
@@ -813,7 +855,7 @@ function MusicIcon() {
 
 function TrashIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <polyline points="3 6 5 6 21 6" />
       <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
       <path d="M10 11v6M14 11v6" />
@@ -824,7 +866,7 @@ function TrashIcon() {
 
 function CopyIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="9" y="9" width="13" height="13" rx="2" />
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
     </svg>
@@ -833,7 +875,7 @@ function CopyIcon() {
 
 function EyeIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
       <circle cx="12" cy="12" r="3" />
     </svg>
