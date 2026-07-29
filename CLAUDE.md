@@ -80,3 +80,17 @@ honesty gate (empty runs over churn).
   win from the sending side. Don't "restore the brand colours".
 - `MEASURED_MS_PER_SEND` in `outboxSweep.test.ts` is a **placeholder** pending a
   real production `notify_sweep_done` reading — see `docs/NOTIFICATIONS.md`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues (`FrankERP/owt-kb-v1`), managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default canonical labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
