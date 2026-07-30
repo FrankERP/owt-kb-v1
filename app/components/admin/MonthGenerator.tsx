@@ -939,9 +939,23 @@ export default function MonthGenerator({
   const [viewMode, setViewMode]   = useState<"edit" | "view">("edit");
   const [swapSel, setSwapSel]     = useState<string | null>(null);
   const [swapToast, setSwapToast] = useState<string | null>(null);
-  const [confirmBack, setConfirmBack] = useState(false);
+  // Shared by "← Volver" and Escape (below): the ONE state that gates
+  // discarding grid work, naming which action is pending so the two exits
+  // can never end up with different rules about what counts as "unsaved" —
+  // see `assignmentCount` and the effect below.
+  const [pendingDiscard, setPendingDiscard] = useState<"back" | "close" | null>(null);
   const [pushing, setPushing]     = useState(false);
   const [pushError, setPushError] = useState<string | null>(null);
+
+  /**
+   * Total occupied seats across the whole grid — what "← Volver" (and Escape,
+   * via the shared `pendingDiscard` guard below) would discard. Counted as
+   * assignment SLOTS (one person in two seats counts twice), matching what
+   * the admin would actually have to redo. Computed up here, ahead of both
+   * effects that read it, rather than down near the JSX that used to be its
+   * only reader.
+   */
+  const assignmentCount = cells.reduce((n, c) => n + c.memberIds.length, 0);
 
   useEffect(() => {
     if (!saturdays) { setActiveSatDates([]); return; }
@@ -961,15 +975,26 @@ export default function MonthGenerator({
    * above it in the tab order is the app's own header/nav, same as any other
    * full page. Focus-return-to-opener is handled by `ServicesPanel`, which
    * owns the "Generar mes" trigger button this panel itself has no reference to.
+   *
+   * Escape must NOT bypass the same discard guard "← Volver" uses: pools and
+   * rules live on the config step while Auto lives on the grid step, so the
+   * config<->grid round trip is common, and the grid holds real manual
+   * effort. `ServicesPanel` unmounts this component on `onClose`, so a bare
+   * `onClose()` here would let one keystroke silently destroy a month of
+   * hand-assigned cells — the exact loss "← Volver" confirms before allowing.
+   * Gated on `step === "grid"` because `assignmentCount` only reflects real,
+   * currently-visible grid work while on that step; on "config" there is
+   * nothing on screen for Escape to discard.
    */
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      if (step === "grid" && assignmentCount > 0) { setPendingDiscard("close"); return; }
       onClose();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, [onClose, step, assignmentCount]);
 
   useEffect(() => {
     try {
@@ -1052,20 +1077,13 @@ export default function MonthGenerator({
     return map;
   }, [drafts, preflight]);
 
-  /**
-   * Total occupied seats across the whole grid — what "← Volver" would
-   * discard. Counted as assignment SLOTS (one person in two seats counts
-   * twice), matching what the admin would actually have to redo.
-   */
-  const assignmentCount = cells.reduce((n, c) => n + c.memberIds.length, 0);
-
   function requestBack() {
-    if (assignmentCount > 0) { setConfirmBack(true); return; }
+    if (assignmentCount > 0) { setPendingDiscard("back"); return; }
     goBackToConfig();
   }
 
   function goBackToConfig() {
-    setConfirmBack(false);
+    setPendingDiscard(null);
     setStep("config");
     setSwapSel(null);
   }
@@ -1405,17 +1423,27 @@ export default function MonthGenerator({
         a common round trip (pools/rules live on step 1, Auto lives on step
         2), so silently rebuilding an empty grid on every "← Volver" would lose
         real work far more often than the old preview ever did.
+
+        One `pendingDiscard` state (and this one banner) serves BOTH "← Volver"
+        and Escape — see the guard's doc comment near the top of the
+        component. Sharing the state, not just the `assignmentCount > 0`
+        check, means the two exits can never drift into asking different
+        questions or discarding different things.
       */}
-      {confirmBack && (
+      {pendingDiscard && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 space-y-2">
           <p className="font-body text-xs text-amber-300">
-            Volver a configuración descarta {assignmentCount} asignación{assignmentCount !== 1 ? "es" : ""} en este mes. ¿Continuar?
+            {pendingDiscard === "back" ? "Volver a configuración" : "Cerrar"} descarta {assignmentCount} asignación{assignmentCount !== 1 ? "es" : ""} en este mes. ¿Continuar?
           </p>
           <div className="flex gap-2">
-            <button type="button" onClick={goBackToConfig} className="min-h-[44px] rounded-lg bg-[#003572] px-3 font-label text-xs uppercase tracking-widest dark:bg-[#00bfff]/20">
-              Volver de todos modos
+            <button
+              type="button"
+              onClick={pendingDiscard === "back" ? goBackToConfig : onClose}
+              className="min-h-[44px] rounded-lg bg-[#003572] px-3 font-label text-xs uppercase tracking-widest dark:bg-[#00bfff]/20"
+            >
+              {pendingDiscard === "back" ? "Volver de todos modos" : "Cerrar de todos modos"}
             </button>
-            <button type="button" onClick={() => setConfirmBack(false)} className="min-h-[44px] rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest">
+            <button type="button" onClick={() => setPendingDiscard(null)} className="min-h-[44px] rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest">
               Cancelar
             </button>
           </div>
