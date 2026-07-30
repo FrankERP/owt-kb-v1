@@ -4,7 +4,7 @@
 // from the solver's wire format. Pure — no React, no network, no
 // `Date.now()`-dependent behaviour. `PlannerGrid` (Task 3) renders what this
 // returns and decides nothing; `MonthGenerator` (Task 4) owns the fetch, the
-// `cells`/`counts` state, and threading `previous` across calls.
+// `cells` state, and threading `previous` across calls.
 //
 // Six things adversarial review found broken in the code this replaces —
 // every test in the sibling `__tests__/plannerModel.test.ts` exists because
@@ -16,8 +16,13 @@
 //  3. The rendered column set is an EXPLICIT input (D9) — never inferred from
 //     `sundayDates`, so unchecking Domingos can never leak a Sunday draft.
 //  4. Every cell is multi-occupant (D3) — voice, instrument and FOH alike.
-//  5. `total_counts` is recomputed from the retained `role_counts`, never
-//     passed through raw once `role_counts` has been filtered (D19).
+//  5. Fairness history is derived from the services actually CREATED, never
+//     from the solver's raw response (2026-07-30 fix) — `applySolveResponse`
+//     used to carry a filtered `counts` field for this (D19's now-removed
+//     `total_counts`-recompute-on-filter fix), but that persisted a proposal
+//     nobody had committed to, and a hand-edit after Auto never changed what
+//     got recorded. `historyEntryFromDrafts` below replaces it, fed only
+//     `result.createdLocalIds` from `MonthGenerator`'s create batch.
 //  6. Availability rules only ever name POOL members (fact 15) — a DSL-named
 //     non-pool member is schedulable while unavailable, by design, not bug.
 
@@ -307,6 +312,17 @@ function resolveToMemberName(name: string, members: RankMember[]): string {
   return m?.member_name ?? name;
 }
 
+/**
+ * Canonical id -> NAME resolution: the solver identifies people by name, never
+ * id (`gcf/owt_solver_v2.py:454`, `:280`). Falls back to the raw id when no
+ * member matches. `buildSolveRequest` (pools) and `historyEntryFromDrafts`
+ * (fairness history) both resolve through this ONE function so a pool name
+ * and a history-entry name can never disagree about what the same id means.
+ */
+export function memberIdToName(id: string, members: RankMember[]): string {
+  return members.find((m) => m._id === id)?.member_name ?? id;
+}
+
 function restrictionToDs(r: PersonRestriction): string | null {
   if (!r.person) return null;
   const clauses: string[] = [];
@@ -374,7 +390,7 @@ export function buildSolveRequest(input: {
   const weeks = sundayDates.length;
   const weekendsWithSaturday = weekendWeekIndexes(sundayDates, activeSatDates);
 
-  const idToName = (id: string) => members.find((m) => m._id === id)?.member_name ?? id;
+  const idToName = (id: string) => memberIdToName(id, members);
 
   // Deduplicate pools: sunday_leads takes priority, then saturday_leads, then
   // support. The solver requires mutual exclusivity (fact 5).
@@ -452,46 +468,9 @@ function weekForColumn(column: GridColumn, sundayDates: string[]): number | null
   return null;
 }
 
-const ROLE_KEY_TYPE: Record<string, ColumnType> = {
-  "Sun.Lead": "sunday_role",
-  "Sun.BGV": "sunday_role",
-  "Sun.Choir": "sunday_role",
-  "Sat.Lead": "saturday_role",
-  "Sat.BGV": "saturday_role",
-};
-
-/**
- * `total_counts` is a separate scalar the solver reads as its own offset
- * (D19) — filtering `role_counts` while passing `total_counts` through raw
- * reproduces the defect. Recomputed here as the per-person sum of the
- * retained `role_counts`, restricted to `createdTypes`.
- */
-function filterCounts(
-  roleCounts: Record<string, Record<string, number>>,
-  createdTypes: Set<ColumnType>,
-): { total_counts: Record<string, number>; role_counts: Record<string, Record<string, number>> } {
-  const role_counts: Record<string, Record<string, number>> = {};
-  const total_counts: Record<string, number> = {};
-  for (const [person, counts] of Object.entries(roleCounts)) {
-    const kept: Record<string, number> = {};
-    let sum = 0;
-    for (const [key, n] of Object.entries(counts)) {
-      const type = ROLE_KEY_TYPE[key];
-      if (type && createdTypes.has(type)) {
-        kept[key] = n;
-        sum += n;
-      }
-    }
-    role_counts[person] = kept;
-    total_counts[person] = sum;
-  }
-  return { total_counts, role_counts };
-}
-
 export interface AppliedSolveResult {
   cells: GridCell[];
   unresolvedNames: string[];
-  counts: { total_counts: Record<string, number>; role_counts: Record<string, Record<string, number>> } | null;
 }
 
 /**
@@ -559,13 +538,7 @@ export function applySolveResponse(input: {
     }
   }
 
-  let counts: AppliedSolveResult["counts"] = null;
-  if (response.total_counts && response.role_counts) {
-    const createdTypes = new Set(columns.map((c) => c.type));
-    counts = filterCounts(response.role_counts, createdTypes);
-  }
-
-  return { cells: Array.from(byKey.values()), unresolvedNames: Array.from(unresolved), counts };
+  return { cells: Array.from(byKey.values()), unresolvedNames: Array.from(unresolved) };
 }
 
 /** Places each solver `unfilled_seats` string on a row and a date. */
@@ -680,6 +653,78 @@ export function cellsToDrafts(
   }
 
   return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// ─── Fairness history from CREATED drafts ────────────────────────────────────
+
+/**
+ * The role-key vocabulary the solver understands
+ * (`gcf/owt_solver_v2.py:34`, `:547-561`). There is no `Sat.Choir` — a
+ * Saturday draft's `chorus` is ignored rather than inventing a key the solver
+ * would not recognise (`cellsToDrafts` already zeroes it on write, but this
+ * stays defensive rather than assuming that always holds upstream).
+ */
+const HISTORY_ROLE_KEYS: Record<ServiceType, { leads: string; bgvs: string; chorus: string | null }> = {
+  sunday_role: { leads: "Sun.Lead", bgvs: "Sun.BGV", chorus: "Sun.Choir" },
+  saturday_role: { leads: "Sat.Lead", bgvs: "Sat.BGV", chorus: null },
+};
+
+/**
+ * Derives a fairness-history entry from the services actually CREATED — never
+ * from what the solver merely proposed. That was the defect: `handleAuto`
+ * used to persist history the instant a solve returned, so closing the panel
+ * without creating anything still penalised people next month for services
+ * that never existed, and a hand-edit after Auto (or a month assigned by hand
+ * with no Auto run at all) never showed up in fairness history either way.
+ *
+ * `createdDrafts` MUST already be filtered to whatever a create batch
+ * actually committed (`result.createdLocalIds` in `MonthGenerator`) — a
+ * skipped column or a draft that failed to create must never reach here.
+ * Returns `null` for an empty `createdDrafts` (the abandoned-run case): no
+ * entry is written, rather than an entry with empty counts.
+ *
+ * Only voice seats count (`leads`/`bgvs`/`chorus`) — those are the only roles
+ * the solver balances; instrument/FOH slots and `special_role` services (not
+ * even representable as a `DraftCard` — `ServiceType` has no third member)
+ * have no solver concept and contribute nothing.
+ *
+ * People are keyed by NAME, not id (`gcf/owt_solver_v2.py:454`, `:280`), via
+ * `memberIdToName` — the same resolution `buildSolveRequest` uses for pools,
+ * so a pool name and a history-entry name can never disagree about the same id.
+ *
+ * `total_counts` is the per-person sum of that same person's `role_counts` —
+ * the solver reads `total_counts` as a separate scalar offset, so it must
+ * stay derived from, never independent of, the roles actually counted (the
+ * same rule D19 established for `applySolveResponse`, now applied here).
+ */
+export function historyEntryFromDrafts(
+  createdDrafts: DraftCard[],
+  members: RankMember[],
+  year: number,
+  month: number,
+): SolverHistoryEntry | null {
+  if (createdDrafts.length === 0) return null;
+
+  const role_counts: Record<string, Record<string, number>> = {};
+  const bump = (id: string, key: string) => {
+    const name = memberIdToName(id, members);
+    const forName = role_counts[name] ?? (role_counts[name] = {});
+    forName[key] = (forName[key] ?? 0) + 1;
+  };
+
+  for (const draft of createdDrafts) {
+    const keys = HISTORY_ROLE_KEYS[draft._type];
+    for (const id of draft.leads) bump(id, keys.leads);
+    for (const id of draft.bgvs) bump(id, keys.bgvs);
+    if (keys.chorus) for (const id of draft.chorus) bump(id, keys.chorus);
+  }
+
+  const total_counts: Record<string, number> = {};
+  for (const [name, counts] of Object.entries(role_counts)) {
+    total_counts[name] = Object.values(counts).reduce((sum, n) => sum + n, 0);
+  }
+
+  return { key: `${year}-${month}`, year, month, total_counts, role_counts };
 }
 
 // ─── Cells ↔ ParticipantRole (D12's ranking union) ───────────────────────────

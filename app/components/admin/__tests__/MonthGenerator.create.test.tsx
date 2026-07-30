@@ -325,22 +325,31 @@ describe("MonthGenerator — create path", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("a successful solve writes one fairness-history entry under `${year}-${month}`, replacing rather than appending", async () => {
+  // ── Fairness-history persistence (2026-07-30 fix) ──────────────────────────
+  //
+  // History used to be written the instant a solve returned (`handleAuto`,
+  // the OLD version of this describe block ran two Auto+Confirmar cycles and
+  // checked localStorage without ever creating anything). That recorded
+  // services that might never exist: closing the panel after a disliked Auto
+  // run still penalised people next month, and a hand-edit after Auto (or a
+  // month assigned entirely by hand) never changed — or even reached —
+  // fairness history at all. Persistence now happens in `handleConfirm`,
+  // derived from `result.createdLocalIds` (`historyEntryFromDrafts` in
+  // `plannerModel.ts`), so every test below drives an actual create.
+
+  it("Auto runs and is confirmed, but the panel is closed WITHOUT creating anything — no history entry is written", async () => {
     const members = [
       { _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] },
     ];
-    let solveCallCount = 0;
     const fetchMock = vi.fn(async (url: string) => {
       if (url !== "/api/admin/solve") throw new Error(`unexpected fetch to ${url}`);
-      solveCallCount += 1;
-      const anaCount = solveCallCount; // 1st call -> 1, 2nd call -> 2
       return {
         ok: true,
         json: async () => ({
           ok: true,
           schedule: { "1": { Sunday: { Lead: ["Ana"], BGV: [], Choir: [] } } },
-          total_counts: { Ana: anaCount },
-          role_counts: { Ana: { "Sun.Lead": anaCount } },
+          total_counts: { Ana: 1 },
+          role_counts: { Ana: { "Sun.Lead": 1 } },
           unfilled_seats: [],
         }),
       };
@@ -350,8 +359,6 @@ describe("MonthGenerator — create path", () => {
     const { container } = render(
       <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
-    // Pools live on step 1 (config); Auto lives on step 2 (grid) — select the
-    // Sunday lead BEFORE building the grid (D17's layout, not a test artifact).
     fireEvent.click(screen.getByLabelText("Ana"));
     goToPreview(container, 2, 2026);
 
@@ -359,24 +366,165 @@ describe("MonthGenerator — create path", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    const historyAfterFirst = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
-    const entriesFor2026_2 = historyAfterFirst.filter((h: { key: string }) => h.key === "2026-2");
-    expect(entriesFor2026_2).toHaveLength(1);
-    expect(entriesFor2026_2[0].total_counts).toEqual({ Ana: 1 });
+    // The abandoned-run case: a real solve happened, produced real counts,
+    // but nothing was ever posted to /api/admin/roles. If the old
+    // `saveHistoryEntry(...)` call in `handleAuto` were restored, this would
+    // find a "2026-2" entry with `{ Ana: 1 }` here — that is the exact
+    // mutation this test exists to catch.
+    const history = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    expect(history.filter((h: { key: string }) => h.key === "2026-2")).toHaveLength(0);
+  });
 
-    // Run Auto again for the SAME month — the entry must be REPLACED, not
-    // appended, so the fairness window doesn't double-count this month.
-    // (D13 decouples Auto from the step transition, so there is no "Volver /
-    // Previsualizar" round trip needed to re-run it — a second Auto click on
-    // the same grid is enough.)
+  it("creating after Auto writes a history entry matching the CREATED drafts, not the solver's raw response", async () => {
+    const members = [
+      { _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] },
+      { _id: "lead-2", member_name: "Beto", memberType: ["voz"] },
+    ];
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/admin/solve") {
+        return {
+          ok: true,
+          json: async () => ({
+            ok: true,
+            schedule: { "1": { Sunday: { Lead: ["Ana"], BGV: [], Choir: [] } } },
+            total_counts: { Ana: 1 },
+            role_counts: { Ana: { "Sun.Lead": 1 } },
+            unfilled_seats: [],
+          }),
+        };
+      }
+      if (url === "/api/admin/roles") return { ok: true, status: 200, json: async () => ({}) };
+      throw new Error(`unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByLabelText("Ana"));
+    goToPreview(container, 2, 2026);
+
     fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
     fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/admin/solve", expect.anything()));
 
-    const historyAfterSecond = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
-    const entriesAfterSecond = historyAfterSecond.filter((h: { key: string }) => h.key === "2026-2");
-    expect(entriesAfterSecond).toHaveLength(1);
-    expect(entriesAfterSecond[0].total_counts).toEqual({ Ana: 2 });
+    // Hand-edit the exact cell Auto just filled: swap Ana for Beto before
+    // creating — the fixture diverges deliberately so the test can tell
+    // "what the solver proposed" from "what actually got created" apart.
+    const leadCell = container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]');
+    fireEvent.click(leadCell!);
+    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana")); // off
+    fireEvent.click(within(container.querySelector("ul")!).getByText("Beto")); // on
+    fireEvent.click(screen.getByText("Cerrar"));
+
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => u === "/api/admin/roles")).toBe(true));
+
+    const history = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    const entry = history.find((h: { key: string }) => h.key === "2026-2");
+    expect(entry).toBeTruthy();
+    // Beto, who was hand-assigned, is recorded — Ana, whom the solver
+    // proposed but who was removed before create, is not.
+    expect(entry.role_counts).toEqual({ Beto: { "Sun.Lead": 1 } });
+    expect(entry.total_counts).toEqual({ Beto: 1 });
+  });
+
+  it("a month assigned entirely by hand, with no Auto run at all, still records a fairness-history entry after create", async () => {
+    const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz"] }];
+    const { fetchMock } = stubRolesFetch(() => ({ ok: true }));
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+
+    const leadCell = container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]');
+    fireEvent.click(leadCell!);
+    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+    fireEvent.click(screen.getByText("Cerrar"));
+
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    const history = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    const entry = history.find((h: { key: string }) => h.key === "2026-2");
+    expect(entry).toBeTruthy();
+    expect(entry.total_counts).toEqual({ Ana: 1 });
+    expect(entry.role_counts).toEqual({ Ana: { "Sun.Lead": 1 } });
+  });
+
+  it("a skipped date and a date that failed to create are both excluded from the history counts", async () => {
+    const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz"] }];
+    const failingDate = FEB_2026_SUNDAYS[2]; // 2026-02-15
+    const skippedDate = FEB_2026_SUNDAYS[1]; // 2026-02-08
+    const { fetchMock } = stubRolesFetch((date) =>
+      date === failingDate ? { ok: false, status: 500 } : { ok: true },
+    );
+
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+
+    // Assign Ana as Lead on all four Sundays.
+    for (const date of FEB_2026_SUNDAYS) {
+      const cell = container.querySelector(`[data-row-id="lead"][data-date="${date}"]`);
+      fireEvent.click(cell!);
+      fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+      fireEvent.click(screen.getByText("Cerrar"));
+    }
+
+    fireEvent.click(screen.getByLabelText(`Omitir ${skippedDate}`));
+
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3)); // 4 - 1 skipped = 3 attempted
+
+    const history = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    const entry = history.find((h: { key: string }) => h.key === "2026-2");
+    expect(entry).toBeTruthy();
+    // 4 dates assigned, 1 skipped (never posted) and 1 failed to create — only
+    // the 2 that actually committed count.
+    expect(entry.total_counts).toEqual({ Ana: 2 });
+  });
+
+  it("re-creating the same month replaces the fairness-history entry rather than appending", async () => {
+    const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz"] }];
+
+    const first = stubRolesFetch(() => ({ ok: true }));
+    const { container, unmount } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+    const firstCell = container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]');
+    fireEvent.click(firstCell!);
+    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+    fireEvent.click(screen.getByText("Cerrar"));
+    fireEvent.click(createButton());
+    await waitFor(() => expect(first.fetchMock).toHaveBeenCalled());
+
+    const afterFirst = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    expect(afterFirst.find((h: { key: string }) => h.key === "2026-2").total_counts).toEqual({ Ana: 1 });
+    unmount();
+
+    // The month is regenerated from scratch (e.g. the drafts were discarded
+    // and the wizard re-run) — this time Ana is assigned on TWO Sundays.
+    const second = stubRolesFetch(() => ({ ok: true }));
+    const { container: container2 } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container2, 2, 2026);
+    for (const date of [FEB_2026_SUNDAYS[0], FEB_2026_SUNDAYS[1]]) {
+      const cell = container2.querySelector(`[data-row-id="lead"][data-date="${date}"]`);
+      fireEvent.click(cell!);
+      fireEvent.click(within(container2.querySelector("ul")!).getByText("Ana"));
+      fireEvent.click(screen.getByText("Cerrar"));
+    }
+    fireEvent.click(createButton());
+    await waitFor(() => expect(second.fetchMock).toHaveBeenCalled());
+
+    const afterSecond = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    const entriesFor2026_2 = afterSecond.filter((h: { key: string }) => h.key === "2026-2");
+    expect(entriesFor2026_2).toHaveLength(1); // replaced, not appended
+    expect(entriesFor2026_2[0].total_counts).toEqual({ Ana: 2 });
   });
 
   // ── Task 4: the live production bug ────────────────────────────────────────

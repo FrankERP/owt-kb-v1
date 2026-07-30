@@ -308,7 +308,7 @@ Expect an **empty saved window in the common case**: the 56-day slice looks back
 - **Pins:** rejected with reasons (D1) — not impossible, but over-constraining and infeasibility-prone.
 - **Soft maximum per seat:** not needed. D6 makes capacity advisory, so nothing is blocked or dropped; `seatModel` keeps `max: null`.
 - **Spec §8.1 (instrument spellings):** already satisfied in production (fact 30) — no script needed.
-- **Knowingly deferred:** history is persisted at *solve* time, not create time (`MonthGenerator.tsx:1383-1385`). D16 and D19 each close one axis of "counts recorded for services that never existed"; the third — a skipped column, or an Auto run the admin abandons without creating — stays open, and D13 makes it more frequent. Closing it properly means moving persistence to `handleConfirm`, which is a larger change than this plan carries.
+- **Fixed 2026-07-30:** history used to be persisted at *solve* time (`handleAuto`), recording whatever the solver proposed — including a schedule the admin closed without ever creating, and never reflecting a hand-edit made after Auto or a month assigned entirely by hand. Persistence now happens in `handleConfirm`, derived from `historyEntryFromDrafts` (`plannerModel.ts`) fed only `result.createdLocalIds` — the drafts a create batch actually committed. A skipped column, a draft that failed to create, or an abandoned Auto run all now correctly contribute nothing.
 
 ## Settled: the untyped members
 
@@ -329,7 +329,7 @@ and no task is gated on it.
 - **Pins:** rejected with reasons (D1) — not impossible, but over-constraining and infeasibility-prone.
 - **Soft maximum per seat:** not needed. D6 makes capacity advisory, so nothing is blocked or dropped; `seatModel` keeps `max: null`.
 - **Spec §8.1 (instrument spellings):** already satisfied in production (fact 30) — no script needed.
-- **Knowingly deferred:** history is persisted at *solve* time, not create time (`MonthGenerator.tsx:1383-1385`). D16 and D19 each close one axis of "counts recorded for services that never existed"; the third — a skipped column, or an Auto run the admin abandons without creating — stays open, and D13 makes it more frequent. Closing it properly means moving persistence to `handleConfirm`, which is a larger change than this plan carries.
+- **Fixed 2026-07-30:** history used to be persisted at *solve* time (`handleAuto`), recording whatever the solver proposed — including a schedule the admin closed without ever creating, and never reflecting a hand-edit made after Auto or a month assigned entirely by hand. Persistence now happens in `handleConfirm`, derived from `historyEntryFromDrafts` (`plannerModel.ts`) fed only `result.createdLocalIds` — the drafts a create batch actually committed. A skipped column, a draft that failed to create, or an abandoned Auto run all now correctly contribute nothing.
 
 ## Prerequisite
 
