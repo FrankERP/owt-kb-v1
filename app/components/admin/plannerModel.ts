@@ -257,9 +257,17 @@ export function weekendWeekIndexes(sundayDates: string[], activeSatDates: string
   return out;
 }
 
-/** The Saturday adjacent to week `n`'s Sunday — regardless of selection. */
-export function saturdayForWeek(n: number, sundayDates: string[]): string {
-  return subtractDay(sundayDates[n - 1]);
+/**
+ * The Saturday adjacent to week `n`'s Sunday — regardless of selection.
+ * Returns `null` for an out-of-range `n` (`sundayDates[n-1]` undefined)
+ * rather than throwing. Unreachable today because callers only ever pass a
+ * week number the solver derived from `weeks === sundayDates.length`, but
+ * `mapUnfilledSeats` calls this with a solver-supplied week number, so it
+ * must degrade instead of crashing if that ever stops holding.
+ */
+export function saturdayForWeek(n: number, sundayDates: string[]): string | null {
+  const sunDate = sundayDates[n - 1];
+  return sunDate ? subtractDay(sunDate) : null;
 }
 
 /**
@@ -311,14 +319,23 @@ function allRulesToDs(config: SolverConfig, members: RankMember[]): string[] {
   return out;
 }
 
-/** D14's exclusion: a month's Auto run must not be fed its own previous result. */
+/**
+ * D14's exclusion: a month's Auto run must not be fed its own previous
+ * result. Retained entries are sorted oldest-first by `(year, month)` before
+ * slicing, so "newest last, weight 10" (fact 9) is a property of this
+ * function's output, not a convention the caller has to already uphold in
+ * how it stores/passes `entries`.
+ */
 export function historyForRequest(
   entries: SolverHistoryEntry[],
   year: number,
   month: number,
 ): SolverHistoryEntry[] {
   const key = `${year}-${month}`;
-  return entries.filter((h) => h.key !== key).slice(-3);
+  return entries
+    .filter((h) => h.key !== key)
+    .sort((a, b) => a.year - b.year || a.month - b.month)
+    .slice(-3);
 }
 
 /**
@@ -472,6 +489,15 @@ export function applySolveResponse(input: {
   columns: GridColumn[];
   rows: GridRow[];
   sundayDates: string[];
+  /**
+   * Accepted but intentionally UNUSED here: the caller already built
+   * `columns` by calling `buildColumns({ sundayDates, activeSatDates, ... })`
+   * before this runs, so `columns` already encodes the selection and
+   * re-filtering against `activeSatDates` a second time would be redundant.
+   * Kept for signature symmetry with `buildSolveRequest`/`mapUnfilledSeats`
+   * (both of which DO need it directly) — don't "wire it in" as a second
+   * filter without first checking whether `columns` already covers the case.
+   */
   activeSatDates: string[];
   members: RankMember[];
 }): AppliedSolveResult {
@@ -544,7 +570,7 @@ export function mapUnfilledSeats(
       date = sundayDates[parsed.week - 1] ?? null;
     } else {
       const satDate = saturdayForWeek(parsed.week, sundayDates);
-      date = activeSat.has(satDate) ? satDate : null;
+      date = satDate && activeSat.has(satDate) ? satDate : null;
     }
     if (date) out.push({ date, rowId });
   }
