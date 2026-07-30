@@ -948,6 +948,29 @@ export default function MonthGenerator({
     setActiveSatDates(getDates(year, month, 6));
   }, [year, month, saturdays]);
 
+  /**
+   * D10: moving out of `CueDialog` into a full-width panel silently dropped
+   * Escape-to-close (along with the focus trap and `aria-modal`, which
+   * `CueDialog` also provided). Escape-to-close is restored here, matching
+   * `ServiceReadinessCard`'s kebab menu (`document.addEventListener("keydown", …)`).
+   * A full focus trap is judged OUT OF SCOPE: `CueDialog` traps focus because
+   * it is an overlay stacked on top of still-present page content the user
+   * must not tab into; this panel instead REPLACES the whole `ServicesPanel`
+   * view (see the early `return` in `ServicesPanel.tsx`), so there is no
+   * "content behind it" a trap would be protecting against — the only thing
+   * above it in the tab order is the app's own header/nav, same as any other
+   * full page. Focus-return-to-opener is handled by `ServicesPanel`, which
+   * owns the "Generar mes" trigger button this panel itself has no reference to.
+   */
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -1090,6 +1113,18 @@ export default function MonthGenerator({
     if (swapSel === date) { setSwapSel(null); return; }
     const a = swapSel;
     const b = date;
+    // A Sunday column and a Saturday column have different seats (a Saturday
+    // has no Coro row at all in the write path — `cellsToDrafts` zeroes
+    // `chorus` for `saturday_role` unconditionally). Swapping across types
+    // would carry a Coro cell onto a Saturday and lose it silently on create,
+    // under a success toast with no warning. Refuse instead.
+    const typeOf = (d: string) => columns.find(c => c.date === d)?.type;
+    if (typeOf(a) !== typeOf(b)) {
+      setSwapSel(null);
+      setSwapToast("No se puede intercambiar un Domingo con un Sábado.");
+      setTimeout(() => setSwapToast(null), 2500);
+      return;
+    }
     const byRowA = new Map(cells.filter(c => c.date === a).map(c => [c.rowId, c]));
     const byRowB = new Map(cells.filter(c => c.date === b).map(c => [c.rowId, c]));
     const rowIds = new Set([...byRowA.keys(), ...byRowB.keys()]);
@@ -1409,8 +1444,9 @@ export default function MonthGenerator({
             <button
               key={col.date}
               type="button"
+              data-swap-date={col.date}
               onClick={() => handleColumnSwap(col.date)}
-              className={`min-h-[32px] px-2 py-1 rounded-full border text-[10px] font-label uppercase tracking-widest transition-colors ${
+              className={`min-h-[44px] px-2 py-1 rounded-full border text-[10px] font-label uppercase tracking-widest transition-colors ${
                 swapSel === col.date
                   ? "border-[#00bfff] bg-[#00bfff]/20 text-[#00bfff]"
                   : "border-[#00bfff]/15 text-gray-500 hover:text-[#00bfff]"
@@ -1470,7 +1506,12 @@ export default function MonthGenerator({
           diagnostics={diagnostics}
         />
       ) : (
-        <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-0.5">
+        // D17/D10: this used to be `max-h-[50vh] overflow-y-auto` — a keyhole
+        // sized for the old `CueDialog` overlay. The full-width panel this
+        // section now lives in has no competing content to keep on screen, so
+        // it uses the page's own scroll like the rest of the panel, instead of
+        // nesting a second scroller inside it.
+        <div className="space-y-3 pr-0.5">
           {drafts.filter(d => !d.skipped).map(d => {
             const p = draftToDayCardProps(d, members);
             return <DayCard key={d.localId} day={p.day} date={p.date} leads={p.leads}
