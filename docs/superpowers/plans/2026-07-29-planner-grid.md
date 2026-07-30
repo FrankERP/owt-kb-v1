@@ -267,6 +267,18 @@ Expect an **empty saved window in the common case**: the 56-day slice looks back
 
 ### Task 4: Mount as a full-width panel; retire `DraftCardEditor` and `useSolver`
 
+> **⚠️ THIS TASK FIXES A LIVE PRODUCTION BUG. Do not close it without the test.**
+> Today's `MonthGenerator.tsx:1249-1251` assigns Saturday week indexes positionally
+> when no selected Saturday is adjacent to any Sunday. On October 2026 with only
+> Oct 31 selected, that creates a `saturday_role` for a Saturday the admin
+> **deselected** — and `Crear y publicar` emails the whole team about it.
+> `plannerModel` already drops the fallback (D16), but nothing imports
+> `plannerModel` until this task, so the bug is reachable in production right now.
+> The user was offered a standalone fix on 2026-07-30 and chose to fold it in here.
+> **Acceptance:** a test that fails against today's `MonthGenerator` — October 2026,
+> only Oct 31 selected, assert no `saturday_role` draft is produced and nothing is
+> POSTed for `2026-10-03`. Task 1's harness is the place for it.
+
 **Files:** Modify `app/components/admin/MonthGenerator.tsx`, `app/components/admin/ServicesPanel.tsx`, `docs/UTILITIES_AND_COMPONENTS.md`.
 
 - **Mount the generator as a full-width panel in the Servicios tab, not in `Modal`/`CueDialog`** (D10, fact 23). Confirm no other dialog changes — there is no `ServicesPanel` test suite, so state plainly that this one is a manual check.
