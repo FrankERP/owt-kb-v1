@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { newCreationRequestId } from "@/app/utils/monthDraftCreate";
 import MonthGenerator from "./MonthGenerator";
+import SeatBoard from "./SeatBoard";
 import { applyRefreshedRole, refreshedRoleFromResponse } from "./applyRefreshedRole";
 import {
   SERVICE_SOURCE_KEYS,
@@ -65,7 +66,6 @@ import {
   type PublishOverrideLine,
   type ServiceCardModel,
   type ServiceRole,
-  type ServiceType,
   type SwapSource,
 } from "./serviceCardModel";
 import ServiceReadinessCard, {
@@ -90,9 +90,6 @@ import CueDialogStatus from "../ui/CueDialogStatus";
 // The card/member shapes, identity colours and every presentational decision live
 // in `serviceCardModel`; this file keeps the modal and mutation flows.
 
-interface InstrumentSlot { id: string; instrument: string; personId: string; }
-interface FohSlot         { id: string; role: string; personId: string; }
-
 // ─── Setlist types ────────────────────────────────────────────────────────────
 
 import { SetlistEditor } from "./SetlistEditor";
@@ -108,17 +105,36 @@ const SEAT_PATH: Record<"leads" | "bgvs" | "chorus" | "instruments" | "foh", str
   leads: "Lead", bgvs: "BGVs", chorus: "Chorus", instruments: "instruments", foh: "foh_team",
 };
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const inputCls  = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
-const selectCls = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-[#0a1929] font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const uid = () => Math.random().toString(36).slice(2, 9);
 
 /** Long Spanish date, parsed at local noon (never a bare `new Date(iso)`). */
 const formatDate = (iso: string) => formatServiceDate(iso, "es-MX");
+
+/**
+ * How far back `SeatBoard`'s `windowRoles` looks for candidateRanking's "load"
+ * (recent-service count). `rankCandidates` derives `load` by counting each
+ * member's appearances across whatever role list it is given — handing it
+ * every role this panel has ever loaded would make "load" measure a season (or
+ * more), not "recent", and the seat board's whole fairness signal would read
+ * wrong. ~8 weeks keeps it a short, meaningful window no matter how much
+ * history is loaded.
+ */
+const CANDIDATE_LOAD_WINDOW_DAYS = 56;
+
+/**
+ * `allRoles` bounded to the last `CANDIDATE_LOAD_WINDOW_DAYS` days ending at
+ * `anchorIso` (inclusive), both compared at local noon — never a bare
+ * `new Date(iso)`, which can flip the calendar day across a UTC offset.
+ */
+function recentRolesWindow(allRoles: ServiceRole[], anchorIso: string): ServiceRole[] {
+  const noon = (iso: string) => new Date(iso.slice(0, 10) + "T12:00:00").getTime();
+  const anchor = noon(anchorIso);
+  const start = anchor - CANDIDATE_LOAD_WINDOW_DAYS * 86_400_000;
+  return allRoles.filter(r => {
+    const t = noon(r.date);
+    return t >= start && t <= anchor;
+  });
+}
 
 // Spanish message for a rejected mutation. A 409 always means "your view is
 // stale": the modal/mode stays open and the operator is told to reload.
@@ -162,253 +178,6 @@ async function describeMutationError(res: Response, fallback: string): Promise<s
 // (`POST /api/admin/roles/swap`), so this panel no longer builds a replacement
 // team payload of its own — it only sends the two selections it observed.
 
-// ─── Member multi-select (searchable, type-filtered) ─────────────────────────
-
-function MemberMultiSelect({ label, members, selected, onChange, filterType }: {
-  label: string; members: MemberOption[]; selected: string[];
-  onChange: (ids: string[]) => void; filterType?: string;
-}) {
-  const [q, setQ] = useState("");
-  const pool = filterType
-    ? members.filter(m => m.memberType?.includes(filterType))
-    : members;
-  const visible = q.trim()
-    ? pool.filter(m => dn(m).toLowerCase().includes(q.toLowerCase()))
-    : pool;
-  const toggle = (id: string) =>
-    onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]);
-  return (
-    <div className="space-y-1.5">
-      <label className="font-label text-xs uppercase tracking-widest text-gray-500">{label}</label>
-      <input
-        className="w-full px-2 py-1 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-xs focus:outline-none focus:border-[#00bfff] transition-colors placeholder-gray-600"
-        placeholder="Buscar..."
-        value={q}
-        onChange={e => setQ(e.target.value)}
-      />
-      <div className="max-h-36 overflow-y-auto rounded-lg border border-[#00bfff]/20 divide-y divide-[#00bfff]/10">
-        {visible.length === 0 && (
-          <p className="px-3 py-2 font-body text-xs text-gray-600 italic">Sin resultados</p>
-        )}
-        {visible.map(m => (
-          <label key={m._id} className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${selected.includes(m._id) ? "bg-[#00bfff]/10" : "hover:bg-[#00bfff]/5"}`}>
-            <input type="checkbox" checked={selected.includes(m._id)} onChange={() => toggle(m._id)} className="accent-[#00bfff]" />
-            <span className="font-body text-sm">{dn(m)}</span>
-          </label>
-        ))}
-      </div>
-      {selected.length > 0 && <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">{selected.length} seleccionado{selected.length > 1 ? "s" : ""}</p>}
-    </div>
-  );
-}
-
-// ─── Slot editor (instruments / FOH) with search ─────────────────────────────
-
-function SlotEditor({ label, fieldLabel, slots, members, onChange, filterType }: {
-  label: string; fieldLabel: string;
-  slots: { id: string; role?: string; instrument?: string; personId: string }[];
-  members: MemberOption[]; onChange: (s: any[]) => void; filterType?: string;
-}) {
-  const [q, setQ] = useState("");
-  const nameKey = fieldLabel === "Instrumento" ? "instrument" : "role";
-  const pool = filterType ? members.filter(m => m.memberType?.includes(filterType)) : members;
-  const filtered = q.trim() ? pool.filter(m => dn(m).toLowerCase().includes(q.toLowerCase())) : pool;
-  return (
-    <div className="space-y-1.5">
-      <label className="font-label text-xs uppercase tracking-widest text-gray-500">{label}</label>
-      {pool.length > 5 && (
-        <input
-          className="w-full px-2 py-1 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-xs focus:outline-none focus:border-[#00bfff] transition-colors placeholder-gray-600"
-          placeholder="Buscar persona..."
-          value={q}
-          onChange={e => setQ(e.target.value)}
-        />
-      )}
-      <div className="space-y-2">
-        {slots.map(slot => (
-          <div key={slot.id} className="flex gap-2 items-center">
-            <input className={`${inputCls} flex-1`} placeholder={fieldLabel} value={(slot as any)[nameKey] ?? ""} onChange={e => onChange(slots.map(s => s.id === slot.id ? { ...s, [nameKey]: e.target.value } : s))} />
-            <select className={`${selectCls} flex-1`} value={slot.personId} onChange={e => onChange(slots.map(s => s.id === slot.id ? { ...s, personId: e.target.value } : s))}>
-              <option value="">— Persona —</option>
-              {filtered.map(m => <option key={m._id} value={m._id}>{dn(m)}</option>)}
-            </select>
-            <button type="button" onClick={() => onChange(slots.filter(s => s.id !== slot.id))} className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0"><TrashIcon /></button>
-          </div>
-        ))}
-        {slots.length === 0 && <p className="font-body text-xs text-gray-600 italic">Sin entradas</p>}
-        <button type="button" onClick={() => onChange([...slots, { id: uid(), [nameKey]: "", personId: "" }])} className="flex items-center gap-1.5 font-label text-xs uppercase tracking-widest text-[#00bfff]/60 hover:text-[#00bfff] transition-colors">
-          <span className="text-base leading-none">+</span> Agregar {fieldLabel}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Create / Edit form ───────────────────────────────────────────────────────
-
-function ServiceForm({ initial, members, onSubmit, onClose, loading, dateLockedReason, submitBlockedReason }: {
-  initial?: ServiceRole; members: MemberOption[];
-  onSubmit: (d: any) => void; onClose: () => void; loading: boolean;
-  /**
-   * Why the date may not be moved right now (the `changeServiceDate` row of the
-   * capability matrix needs all five sources). Null = editable.
-   */
-  dateLockedReason?: string | null;
-  /** Why this form may not be submitted at all (source state or a stale snapshot). */
-  submitBlockedReason?: string | null;
-}) {
-  const [type, setType]             = useState<ServiceType>(initial?._type ?? "sunday_role");
-  const [date, setDate]             = useState(initial?.date?.slice(0, 10) ?? "");
-  const [serviceName, setServiceName] = useState(initial?.service_name ?? "");
-  const [leads, setLeads]           = useState<string[]>(initial?.leads?.map(m => m._id) ?? []);
-  const [bgvs, setBgvs]             = useState<string[]>(initial?.bgvs?.map(m => m._id) ?? []);
-  const [chorus, setChorus]         = useState<string[]>(initial?.chorus?.map(m => m._id) ?? []);
-  const [instruments, setInstruments] = useState<InstrumentSlot[]>(
-    initial?.instruments?.map(s => ({ id: uid(), instrument: s.instrument, personId: s.person?._id ?? "" })) ?? []
-  );
-  const [foh, setFoh] = useState<FohSlot[]>(
-    initial?.foh?.map(s => ({ id: uid(), role: s.role, personId: s.person?._id ?? "" })) ?? []
-  );
-  const [pendingData, setPendingData] = useState<any>(null);
-  const [unavailableNames, setUnavailableNames] = useState<string[]>([]);
-
-  function buildData(published?: boolean) {
-    const base = { _type: type, date, service_name: serviceName, leads, bgvs, chorus,
-      instruments: instruments.filter(s => s.instrument && s.personId),
-      foh: foh.filter(s => s.role && s.personId) };
-    // Only include published on create (no initial), not on edit/PATCH
-    if (!initial && published !== undefined) return { ...base, published };
-    return base;
-  }
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    // This path is used for edit (Guardar button). For create, use submit(published).
-    const data = buildData();
-    if (!date) return onSubmit(data);
-    const allIds = [
-      ...leads, ...bgvs, ...chorus,
-      ...instruments.filter(s => s.personId).map(s => s.personId),
-      ...foh.filter(s => s.personId).map(s => s.personId),
-    ];
-    const conflicts = allIds
-      .map(id => members.find(m => m._id === id))
-      .filter((m): m is MemberOption => !!(m?.unavailableDates?.includes(date)))
-      .map(m => m.alias?.trim() || m.member_name);
-    if (conflicts.length > 0) {
-      setUnavailableNames(conflicts);
-      setPendingData(data);
-      return;
-    }
-    onSubmit(data);
-  }
-
-  function submit(published: boolean) {
-    const data = buildData(published);
-    if (!date) return onSubmit(data);
-    const allIds = [
-      ...leads, ...bgvs, ...chorus,
-      ...instruments.filter(s => s.personId).map(s => s.personId),
-      ...foh.filter(s => s.personId).map(s => s.personId),
-    ];
-    const conflicts = allIds
-      .map(id => members.find(m => m._id === id))
-      .filter((m): m is MemberOption => !!(m?.unavailableDates?.includes(date)))
-      .map(m => m.alias?.trim() || m.member_name);
-    if (conflicts.length > 0) {
-      setUnavailableNames(conflicts);
-      setPendingData(data);
-      return;
-    }
-    onSubmit(data);
-  }
-
-  const fmtServiceDate = date
-    ? new Date(date + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })
-    : "";
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-5 max-h-[70vh] overflow-y-auto pr-1">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <label className="font-label text-xs uppercase tracking-widest text-gray-500">Tipo</label>
-          {initial ? (
-            <span className={`inline-flex font-label text-xs uppercase tracking-widest px-2 py-1 rounded-full ${SERVICE_BADGE[type]}`}>{SERVICE_LABEL[type]}</span>
-          ) : (
-            <select className={selectCls} value={type} onChange={e => setType(e.target.value as ServiceType)}>
-              <option value="sunday_role">Domingo</option>
-              <option value="saturday_role">Sábado</option>
-              <option value="special_role">Especial</option>
-            </select>
-          )}
-        </div>
-        <div className="space-y-1">
-          <label className="font-label text-xs uppercase tracking-widest text-gray-500">Fecha</label>
-          <input
-            className={`${inputCls} disabled:opacity-50`}
-            type="date"
-            value={date}
-            onChange={e => setDate(e.target.value)}
-            disabled={!!dateLockedReason}
-            title={dateLockedReason ?? undefined}
-            required
-          />
-          {dateLockedReason && (
-            <p className="font-body text-[11px] text-amber-400">No se puede mover la fecha: {dateLockedReason}</p>
-          )}
-        </div>
-      </div>
-      {type === "special_role" && (
-        <div className="space-y-1">
-          <label className="font-label text-xs uppercase tracking-widest text-gray-500">Nombre del servicio</label>
-          <input className={inputCls} value={serviceName} onChange={e => setServiceName(e.target.value)} placeholder="ej. Viernes Santo, Navidad..." />
-        </div>
-      )}
-      <div className="border-t border-[#00bfff]/10 pt-4 space-y-4">
-        <MemberMultiSelect label="Líderes"  members={members} selected={leads}  onChange={setLeads}  filterType="voz" />
-        <MemberMultiSelect label="BGVs"     members={members} selected={bgvs}   onChange={setBgvs}   filterType="voz" />
-        <MemberMultiSelect label="Coro"     members={members} selected={chorus} onChange={setChorus} filterType="voz" />
-        <SlotEditor label="Instrumentos"    fieldLabel="Instrumento" slots={instruments} members={members} onChange={s => setInstruments(s as InstrumentSlot[])} filterType="instrumento" />
-        <SlotEditor label="FOH / Técnicos"  fieldLabel="Rol"         slots={foh}         members={members} onChange={s => setFoh(s as FohSlot[])} filterType="foh" />
-      </div>
-
-      {/* Availability warning — replaces action buttons when conflicts are found */}
-      {pendingData ? (
-        <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-3 space-y-3 sticky bottom-0 bg-[#C8D8EB] dark:bg-[#0a1929]">
-          <p className="font-label text-[11px] uppercase tracking-widest text-orange-400">No disponibles el {fmtServiceDate}</p>
-          <p className="font-body text-sm text-gray-300">
-            <span className="text-orange-300">{unavailableNames.join(", ")}</span>
-            {unavailableNames.length === 1 ? " ha" : " han"} marcado este día como no disponible.
-          </p>
-          <div className="flex gap-2">
-            <button type="button" onClick={() => { setPendingData(null); setUnavailableNames([]); }}
-              className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
-              Revisar
-            </button>
-            <button type="button" onClick={() => onSubmit(pendingData)} disabled={loading || !!submitBlockedReason}
-              title={submitBlockedReason ?? undefined}
-              className="flex-1 py-2 rounded-lg bg-orange-600/70 hover:bg-orange-600 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
-              {loading ? "Guardando..." : "Confirmar de todos modos"}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex gap-3 pt-1 sticky bottom-0 bg-[#C8D8EB] dark:bg-[#0a1929] py-2">
-          <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">Cancelar</button>
-          {!initial ? (
-            <>
-              <button type="button" onClick={() => submit(false)} disabled={loading || !!submitBlockedReason} title={submitBlockedReason ?? undefined} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 hover:border-[#00bfff] font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{loading ? "Guardando..." : "Crear"}</button>
-              <button type="button" onClick={() => submit(true)} disabled={loading || !!submitBlockedReason} title={submitBlockedReason ?? undefined} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{loading ? "Guardando..." : "Crear y publicar"}</button>
-            </>
-          ) : (
-            <button type="submit" disabled={loading || !!submitBlockedReason} title={submitBlockedReason ?? undefined} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{loading ? "Guardando..." : "Guardar"}</button>
-          )}
-        </div>
-      )}
-    </form>
-  );
-}
-
 // ─── Modal wrapper ────────────────────────────────────────────────────────────
 
 function Modal({
@@ -416,18 +185,41 @@ function Modal({
   onClose,
   wide,
   status,
+  ownScroll,
   children,
 }: {
   title: string;
   onClose: () => void;
   wide?: boolean;
   status?: string | null;
+  /**
+   * True when `children` owns a single internal scroll region of its own (today:
+   * only `SeatBoard`'s roster list). The default body here is itself a scroll
+   * container (`overflow-y-auto`); stacking that under a child that ALSO scrolls
+   * reintroduces the nested-scrollbar problem SeatBoard exists to remove. In that
+   * case this body becomes a plain flex column instead — `min-h-0 flex-1` still
+   * gives the child a bounded height to size its own `overflow-y-auto` against,
+   * it just doesn't add a second one. Every other dialog (publish confirmation,
+   * override, swap, unpublish, delete, generator, setlist) keeps the scrolling
+   * body unchanged.
+   */
+  ownScroll?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <CueDialog open title={title} label={title} mode="sheet" size={wide ? "lg" : "sm"} onDismiss={onClose}>
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
-        {status && <CueDialogStatus tone="error">{status}</CueDialogStatus>}
+      <div
+        className={
+          ownScroll
+            ? "flex min-h-0 flex-1 flex-col gap-5 overflow-hidden p-6"
+            : "min-h-0 flex-1 space-y-5 overflow-y-auto p-6"
+        }
+      >
+        {status && (
+          <div className={ownScroll ? "shrink-0" : undefined}>
+            <CueDialogStatus tone="error">{status}</CueDialogStatus>
+          </div>
+        )}
         {children}
       </div>
     </CueDialog>
@@ -1275,6 +1067,14 @@ export default function ServicesPanel() {
 
   const today = serviceTodayIso();
 
+  // The seat board's "recent load" window: bounded to the service being edited
+  // (or `today` for a new one still without a date) — never the whole `roles`
+  // array. See `recentRolesWindow` / `CANDIDATE_LOAD_WINDOW_DAYS` above.
+  const seatWindowRoles = useMemo(
+    () => recentRolesWindow(roles, editModal?.type === "edit" ? editModal.role.date : today),
+    [roles, editModal, today],
+  );
+
   // Split months into current/future and past
   const currentYM   = today.slice(0, 7);
   const allMonths   = Array.from(new Set(roles.map(r => r.date.slice(0, 7)))).sort();
@@ -1691,19 +1491,19 @@ export default function ServicesPanel() {
 
       {/* ── Modals ── */}
       {editModal?.type === "add" && (
-        <Modal title="Nuevo servicio" onClose={closeEditModal} status={editError}>
-          <ServiceForm members={members} onSubmit={handleAdd} onClose={closeEditModal} loading={submitting}
+        <Modal title="Nuevo servicio" wide ownScroll onClose={closeEditModal} status={editError}>
+          <SeatBoard members={members} windowRoles={seatWindowRoles} onSubmit={handleAdd} onClose={closeEditModal} loading={submitting}
             submitBlockedReason={createGate.reason} />
         </Modal>
       )}
       {editModal?.type === "edit" && (
-        <Modal title="Editar servicio" onClose={closeEditModal} status={editError ?? staleModes.edit?.message}>
-          <ServiceForm initial={editModal.role} members={members} onSubmit={handleEdit} onClose={closeEditModal} loading={submitting}
+        <Modal title="Editar servicio" wide ownScroll onClose={closeEditModal} status={editError ?? staleModes.edit?.message}>
+          <SeatBoard initial={editModal.role} members={members} windowRoles={seatWindowRoles} onSubmit={handleEdit} onClose={closeEditModal} loading={submitting}
             dateLockedReason={gate("changeServiceDate").reason}
             submitBlockedReason={staleModes.edit?.message ?? cardGates.editTeam.reason} />
           {staleModes.edit && (
             <button type="button" onClick={() => { closeEditModal(); retryLoad(); }}
-              className="w-full py-2 rounded-lg border border-[#00bfff]/30 font-label text-xs uppercase tracking-widest text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors">
+              className="w-full shrink-0 py-2 rounded-lg border border-[#00bfff]/30 font-label text-xs uppercase tracking-widest text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors">
               Recargar
             </button>
           )}
