@@ -293,9 +293,9 @@ Expect an **empty saved window in the common case**: the 56-day slice looks back
 - Record the 10-column screenshot (Task 3) here.
 - **One end-to-end test of the seam nothing else covers:** assign a member to a cell, confirm, and assert the POSTed body carries that member in the right seat array **and** the draft's original `creationRequestId`. Task 1 never asserts seat content, Task 2 is pure and Task 3 never POSTs, so `cell edit → cellsToDrafts(previous) → POST` is otherwise untested — exactly where a fresh `localId` makes every `preflights.get` miss (fact 18) and the footer silently reads "0 por crear".
 
-**Decide with the user, and record here before starting:**
-- Whether the grid replaces the `Vista` (DayCard) preview or sits beside it. If `Vista` goes, fact 27's duplicate detection is already covered by Task 3's per-column `assigned`.
-- Whether whole-day swap (`handleCardSwap`) becomes a column swap or is dropped. Do not drop it silently.
+**Decided with the user 2026-07-30 — both capabilities are KEPT:**
+- **`Vista` stays beside the grid.** `Editar` becomes the grid; `Vista` keeps rendering `DayCard`. They answer different questions — the grid is where you assign, `Vista` is what the team will actually see before you publish — and `DayCard` remains an independent duplicate detector (fact 27) alongside the grid's own post-Auto check.
+- **Whole-day swap becomes a COLUMN swap.** `handleCardSwap` is carried over, not dropped: pick two date columns and exchange their assignments.
 
 ---
 
