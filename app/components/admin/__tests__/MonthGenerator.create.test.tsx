@@ -532,6 +532,67 @@ describe("MonthGenerator — create path", () => {
     expect(screen.getByRole("button", { name: /Previsualizar/ })).toBeTruthy();
   });
 
+  // ── Task 4 fix pass, Finding (Important) ────────────────────────────────────
+  //
+  // Escape-to-close (Finding 4 above) called `onClose()` unconditionally, so
+  // one keystroke could silently discard a full month of hand-assigned cells
+  // — exactly what "← Volver"'s confirmation exists to prevent. Escape must
+  // route through the SAME `pendingDiscard` guard, sharing `assignmentCount`
+  // with "← Volver" rather than growing a second, divergence-prone check.
+  it("Escape with assignments present shows the discard confirmation and does not call onClose", () => {
+    const members = [
+      { _id: "drum-1", member_name: "Beto", memberType: ["instrumento"] },
+    ];
+    const onClose = vi.fn();
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+    const drumsCell = container.querySelector('[data-row-id="instrumento:Drums"][data-date="2026-02-01"]');
+    fireEvent.click(drumsCell!);
+    fireEvent.click(screen.getByText("Beto"));
+    fireEvent.click(screen.getByText("Cerrar"));
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.getByText(/1 asignaci/i)).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("confirming the Escape discard prompt closes the generator", () => {
+    const members = [
+      { _id: "drum-1", member_name: "Beto", memberType: ["instrumento"] },
+    ];
+    const onClose = vi.fn();
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+    const drumsCell = container.querySelector('[data-row-id="instrumento:Drums"][data-date="2026-02-01"]');
+    fireEvent.click(drumsCell!);
+    fireEvent.click(screen.getByText("Beto"));
+    fireEvent.click(screen.getByText("Cerrar"));
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.click(screen.getByRole("button", { name: /Cerrar de todos modos/ }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("Escape with an empty grid closes immediately, no confirmation", () => {
+    const onClose = vi.fn();
+    const { container } = render(
+      <MonthGenerator members={noMembers} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/descarta/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Cerrar de todos modos/ })).toBeNull();
+  });
+
   // ── Task 4: the seam nothing else covers — cell edit → cellsToDrafts
   // (previous) → POST. Proven the same way Task 1 proves retry-id stability:
   // the first POST for a date fails (so it stays retryable, `exists` never
