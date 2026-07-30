@@ -30,6 +30,44 @@ const base = {
 };
 
 describe("SeatBoard", () => {
+  it("never evicts an occupant from a seat that already holds two people", () => {
+    // 18 production services run TWO drummers on one Drums seat (every service
+    // from 2026-06-07 to 2026-08-30). A `max: 1` on the seat made `toggle`
+    // replace rather than add, so opening one of those services and clicking
+    // anyone silently dropped a drummer. This is that case.
+    const drummers = [
+      { _id: "d1", member_name: "Samo", memberType: ["instrumento"] },
+      { _id: "d2", member_name: "Tony", memberType: ["instrumento"] },
+      { _id: "d3", member_name: "Fanta", memberType: ["instrumento"] },
+    ];
+    const onSubmit = vi.fn();
+    const initial = {
+      _type: "sunday_role",
+      date: "2026-08-09",
+      leads: [], bgvs: [], chorus: [],
+      instruments: [
+        { instrument: "Drums", person: drummers[0] },
+        { instrument: "Drums", person: drummers[1] },
+      ],
+      foh: [],
+    };
+    render(
+      <SeatBoard {...base} members={drummers} onSubmit={onSubmit} initial={initial as never} />,
+    );
+
+    // Target the Drums seat, then add a third person.
+    fireEvent.click(screen.getAllByText("Drums")[0]);
+    fireEvent.click(screen.getByText("Fanta"));
+    fireEvent.click(screen.getByRole("button", { name: /guardar/i }));
+
+    const drums = onSubmit.mock.calls[0][0].instruments.filter(
+      (s: { instrument: string }) => s.instrument === "Drums",
+    );
+    const ids = drums.map((s: { personId: string }) => s.personId).sort();
+    // Both original drummers survive; the third is added, not swapped in.
+    expect(ids).toEqual(["d1", "d2", "d3"]);
+  });
+
   it("shows the whole eligible pool at once, not a 4-row window", () => {
     render(<SeatBoard {...base} />);
     // All three voz members are in the document simultaneously.
