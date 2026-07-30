@@ -170,7 +170,10 @@ Legend: **[C]** client, **[S]** server.
 | Component | Purpose |
 |-----------|---------|
 | `AdminPanel` | Root admin shell: tabs + member management (Fuse.js search, add/edit modal, role-gated). |
-| `ServicesPanel` | Per-week roster editor (assign seats, medley-aware setlist). Embeds `ParticipationSidebar` + `MonthGenerator`. (~79 KB, the biggest surface.) |
+| `ServicesPanel` | Per-week roster editor (assign seats, medley-aware setlist). Embeds `ParticipationSidebar` + `MonthGenerator` + `SeatBoard`. (~79 KB, the biggest surface.) |
+| `SeatBoard` | The service team editor: seats + full roster, one scroll region. Decides nothing — see `seatModel` / `candidateRanking`. |
+| `seatModel` | Canonical seat names and categories; one spelling per seat. Pure. |
+| `candidateRanking` | Seat candidates ordered by availability, existing assignment and recent load. Pure; never calls the solver. |
 | `MonthGenerator` | Auto-scheduler UI — sends `SolveRequest` to `/api/admin/solve`, previews draft `DayCard`s (`draftToDayCardProps`), summarizes short-staffing (`summarizeUnfilledSeats`). |
 | `SetlistEditor` | Inline setlist builder (reorder/remove, play-key, medley via `normalizeMedleyTags`). |
 | `SongFormModal` | Song create/edit form + reusable `Modal`. Exports `Modal`, `SongForm`, `blankForm`, `songToForm`, `buildPayload`. |

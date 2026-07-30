@@ -39,13 +39,14 @@ const VERIFICATION_ENV = {
 };
 
 describe("retired-writer decision", () => {
-  it("registers exactly the five plan §8 executable writers", () => {
+  it("registers exactly the six plan §8 executable writers", () => {
     expect(RETIRED_WRITER_NAMES).toEqual(
       [
         "cleanup-superseded-proposals",
         "import-schedule",
         "import-setlist-history",
         "migrate-shared-proposals",
+        "normalize-instrument-names",
         "unpublish-july-2026",
       ].sort(),
     );

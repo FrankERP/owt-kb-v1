@@ -322,6 +322,13 @@ export const RETIRED_ONE_SHOT_WRITERS: readonly AuditExemption[] = [
       "retired one-shot: queried July 2026 role documents and patched published: false; now fails closed at assertRetiredWriter(). Replacement: POST /api/admin/roles/publish",
     removalOwner: "retired historical writer (never A2 — the file is the record, the gate is the guard)",
   },
+  {
+    file: "scripts/normalize-instrument-names.mjs",
+    operation: "module",
+    reason:
+      "retired one-shot: collapsed 7 spellings of 5 instruments on sunday_role/saturday_role/special_role documents to canonical forms; now fails closed at assertRetiredWriter(). Already applied in production. Replacement: seatModel.ts provides canonical forms; the new seat board uses them",
+    removalOwner: "retired historical writer (never A2 — the file is the record, the gate is the guard)",
+  },
 ];
 
 /**
