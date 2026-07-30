@@ -1,0 +1,540 @@
+// app/components/admin/__tests__/plannerModel.test.ts
+//
+// Every test here exists because a specific, verified failure was found in
+// nine rounds of adversarial review of the plan this implements
+// (docs/superpowers/plans/2026-07-29-planner-grid.md). They are the point of
+// this file, not decoration — see the file header comment in `plannerModel.ts`
+// for the six load-bearing facts they pin.
+import { describe, expect, it } from "vitest";
+
+import type { SolveResponse } from "@/app/api/admin/solve/route";
+import type { RankMember } from "../candidateRanking";
+import {
+  applySolveResponse,
+  buildColumns,
+  buildRows,
+  buildSolveRequest,
+  cellsToDrafts,
+  historyForRequest,
+  isSolvable,
+  mapUnfilledSeats,
+  saturdayForWeek,
+  seatDefForRow,
+  solvableWindow,
+  unaddressableDates,
+  weekendWeekIndexes,
+  type DraftCard,
+  type GridCell,
+  type GridColumn,
+  type SolverConfig,
+  type SolverHistoryEntry,
+} from "../plannerModel";
+
+// ─── Fixtures ─────────────────────────────────────────────────────────────────
+
+// February 2026: Sundays 1/8/15/22, Saturdays 7/14/21/28 (all verified, not
+// guessed — Feb 28 is a Saturday with NO Sunday of its own in-month).
+const FEB_SUNDAYS = ["2026-02-01", "2026-02-08", "2026-02-15", "2026-02-22"];
+const FEB_SATURDAYS = ["2026-02-07", "2026-02-14", "2026-02-21", "2026-02-28"];
+
+// October 2026: Sundays 4/11/18/25. Oct 31 is a Saturday with no Sunday of its
+// own in October (the following Sunday, Nov 1, is out of month) — D16's fixture.
+const OCT_SUNDAYS = ["2026-10-04", "2026-10-11", "2026-10-18", "2026-10-25"];
+
+const m = (id: string, name: string): RankMember => ({ _id: id, member_name: name });
+
+const emptyConfig: SolverConfig = {
+  sundayLeads: [],
+  saturdayLeads: [],
+  support: [],
+  restrictions: [],
+  conflicts: [],
+  presence: [],
+};
+
+// ─── Shape ────────────────────────────────────────────────────────────────────
+
+describe("buildRows", () => {
+  it("targets 2/3/3 for Lead/BGV/Coro and 1 for every instrument/FOH row", () => {
+    const rows = buildRows();
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+    expect(byId["lead"].target).toBe(2);
+    expect(byId["bgv"].target).toBe(3);
+    expect(byId["coro"].target).toBe(3);
+    for (const r of rows) {
+      if (r.category !== "voz") expect(r.target).toBe(1);
+    }
+  });
+
+  it("seeds 3 voice + 5 instrument + 1 FOH = 9 rows from the defaults", () => {
+    expect(buildRows()).toHaveLength(9);
+  });
+
+  it("a Coro row is present on Saturday columns, not omitted", () => {
+    const rows = buildRows();
+    const coro = rows.find((r) => r.id === "coro")!;
+    expect(coro).toBeDefined();
+    const satCol: GridColumn = { date: "2026-02-07", type: "saturday_role" };
+    expect(isSolvable(coro, satCol)).toBe(false); // present, but non-solvable
+  });
+});
+
+describe("isSolvable", () => {
+  const rows = buildRows();
+  const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+  const sunCol: GridColumn = { date: "2026-02-01", type: "sunday_role" };
+  const satCol: GridColumn = { date: "2026-02-07", type: "saturday_role" };
+
+  it("Lead and BGV are solvable on both column types", () => {
+    expect(isSolvable(byId["lead"], sunCol)).toBe(true);
+    expect(isSolvable(byId["lead"], satCol)).toBe(true);
+    expect(isSolvable(byId["bgv"], sunCol)).toBe(true);
+    expect(isSolvable(byId["bgv"], satCol)).toBe(true);
+  });
+
+  it("Coro is solvable on Sunday columns, not Saturday (no Sat.Choir, D11)", () => {
+    expect(isSolvable(byId["coro"], sunCol)).toBe(true);
+    expect(isSolvable(byId["coro"], satCol)).toBe(false);
+  });
+
+  it("every instrument and FOH row is non-solvable on both column types", () => {
+    for (const r of rows) {
+      if (r.category === "voz") continue;
+      expect(isSolvable(r, sunCol)).toBe(false);
+      expect(isSolvable(r, satCol)).toBe(false);
+    }
+  });
+});
+
+describe("seatDefForRow", () => {
+  it("maps every row back to a SeatDef carrying the matching memberType", () => {
+    const rows = buildRows();
+    for (const row of rows) {
+      const def = seatDefForRow(row);
+      expect(def.category).toBe(row.category);
+    }
+  });
+});
+
+describe("cellsToDrafts — round-trip", () => {
+  it("round-trips a Sunday with 2 Leads, 3 BGVs and 3 Coro through the five seat arrays unchanged", () => {
+    const date = "2026-02-01";
+    const cells: GridCell[] = [
+      { date, rowId: "lead", memberIds: ["m1", "m2"], origin: "manual" },
+      { date, rowId: "bgv", memberIds: ["m3", "m4", "m5"], origin: "manual" },
+      { date, rowId: "coro", memberIds: ["m6", "m7", "m8"], origin: "manual" },
+      { date, rowId: "instrumento:Drums", memberIds: ["m9", "m10"], origin: "manual" },
+      { date, rowId: "foh:Console", memberIds: ["m11"], origin: "manual" },
+    ];
+    const columns: GridColumn[] = [{ date, type: "sunday_role" }];
+    const [draft] = cellsToDrafts(cells, columns, new Set(), [], []);
+    expect(draft.leads).toEqual(["m1", "m2"]);
+    expect(draft.bgvs).toEqual(["m3", "m4", "m5"]);
+    expect(draft.chorus).toEqual(["m6", "m7", "m8"]);
+    expect(draft.instruments.map((s) => s.personId).sort()).toEqual(["m10", "m9"]);
+    expect(draft.instruments.every((s) => s.instrument === "Drums")).toBe(true);
+    expect(draft.foh).toEqual([{ id: expect.any(String), role: "Console", personId: "m11" }]);
+  });
+
+  it("round-trips ONE Drums row holding TWO members into TWO instruments[] slots, both instrument: Drums", () => {
+    const date = "2026-02-01";
+    const cells: GridCell[] = [{ date, rowId: "instrumento:Drums", memberIds: ["benji", "other"], origin: "manual" }];
+    const columns: GridColumn[] = [{ date, type: "sunday_role" }];
+    const [draft] = cellsToDrafts(cells, columns, new Set(), [], []);
+    expect(draft.instruments).toHaveLength(2);
+    expect(draft.instruments.every((s) => s.instrument === "Drums")).toBe(true);
+    expect(draft.instruments.map((s) => s.personId).sort()).toEqual(["benji", "other"]);
+  });
+});
+
+// ─── Column set — D9's safety property ───────────────────────────────────────
+
+describe("the column set (D9)", () => {
+  it("an all-empty grid over 9 columns yields 9 drafts, each with empty seat arrays", () => {
+    // 4 Sundays + 5 Saturdays = 9 columns (August 2026's real shape).
+    const sundayDates = ["2026-08-02", "2026-08-09", "2026-08-16", "2026-08-23", "2026-08-30"];
+    const activeSatDates = ["2026-08-01", "2026-08-08", "2026-08-15", "2026-08-22"];
+    const columns = buildColumns({ sundayDates, activeSatDates });
+    expect(columns).toHaveLength(9);
+    const drafts = cellsToDrafts([], columns, new Set(), [], []);
+    expect(drafts).toHaveLength(9);
+    for (const d of drafts) {
+      expect(d.leads).toEqual([]);
+      expect(d.bgvs).toEqual([]);
+      expect(d.chorus).toEqual([]);
+      expect(d.instruments).toEqual([]);
+      expect(d.foh).toEqual([]);
+    }
+  });
+
+  it("a skipped column yields a draft with skipped: true and is excluded by the create filter", () => {
+    const columns: GridColumn[] = [
+      { date: "2026-02-01", type: "sunday_role" },
+      { date: "2026-02-08", type: "sunday_role" },
+    ];
+    const skippedDates = new Set(["2026-02-01"]);
+    const drafts = cellsToDrafts([], columns, skippedDates, [], []);
+    const skippedDraft = drafts.find((d) => d.date === "2026-02-01")!;
+    const keptDraft = drafts.find((d) => d.date === "2026-02-08")!;
+    expect(skippedDraft.skipped).toBe(true);
+    expect(keptDraft.skipped).toBe(false);
+    // `handleConfirm` filters on `!d.skipped` — this is the authority.
+    const toCreate = drafts.filter((d) => !d.skipped);
+    expect(toCreate.map((d) => d.date)).toEqual(["2026-02-08"]);
+  });
+
+  it("buildColumns({ includeSundays: false }) yields Saturday columns only", () => {
+    const columns = buildColumns({ sundayDates: FEB_SUNDAYS, activeSatDates: FEB_SATURDAYS, includeSundays: false });
+    expect(columns.every((c) => c.type === "saturday_role")).toBe(true);
+    expect(columns.map((c) => c.date).sort()).toEqual([...FEB_SATURDAYS].sort());
+  });
+
+  it("cellsToDrafts with Sundays excluded yields ZERO sunday_role drafts, even though sundayDates is fully populated for the solve", () => {
+    const columns = buildColumns({ sundayDates: FEB_SUNDAYS, activeSatDates: FEB_SATURDAYS, includeSundays: false });
+    const drafts = cellsToDrafts([], columns, new Set(), [], []);
+    expect(drafts.filter((d) => d._type === "sunday_role")).toHaveLength(0);
+    expect(drafts.filter((d) => d._type === "saturday_role")).toHaveLength(FEB_SATURDAYS.length);
+  });
+});
+
+// ─── Saturday mapping — adjacency, not position (fact 10) ────────────────────
+
+describe("Saturday↔week mapping", () => {
+  it("February 2026, all Saturdays selected: weekendWeekIndexes -> [2,3,4], saturdayForWeek(2) -> 2026-02-07, unaddressableDates -> [2026-02-28]", () => {
+    expect(weekendWeekIndexes(FEB_SUNDAYS, FEB_SATURDAYS)).toEqual([2, 3, 4]);
+    expect(saturdayForWeek(2, FEB_SUNDAYS)).toBe("2026-02-07"); // NOT 2026-02-14 (positional)
+    expect(unaddressableDates(FEB_SUNDAYS, FEB_SATURDAYS)).toEqual(["2026-02-28"]);
+  });
+
+  it("activeSatDates supplied out of order gives the same result as sorted input", () => {
+    const shuffled = [FEB_SATURDAYS[2], FEB_SATURDAYS[0], FEB_SATURDAYS[3], FEB_SATURDAYS[1]];
+    expect(weekendWeekIndexes(FEB_SUNDAYS, shuffled)).toEqual(weekendWeekIndexes(FEB_SUNDAYS, FEB_SATURDAYS));
+    expect(unaddressableDates(FEB_SUNDAYS, shuffled)).toEqual(unaddressableDates(FEB_SUNDAYS, FEB_SATURDAYS));
+  });
+
+  it("October 2026, only Oct 31 selected: weekendWeekIndexes -> [] (D16 — no positional fallback)", () => {
+    expect(weekendWeekIndexes(OCT_SUNDAYS, ["2026-10-31"])).toEqual([]);
+    expect(unaddressableDates(OCT_SUNDAYS, ["2026-10-31"])).toEqual(["2026-10-31"]);
+  });
+
+  it("the three functions agree: October's deselected-Saturday shape produces no draft", () => {
+    const activeSatDates = ["2026-10-31"];
+    const weekIdx = weekendWeekIndexes(OCT_SUNDAYS, activeSatDates);
+    expect(weekIdx).toEqual([]);
+    // Without D16 the fallback would assign week 1, whose Saturday resolves
+    // in-month (2026-10-03) — a Saturday the admin never selected.
+    const fallbackWeek1Saturday = saturdayForWeek(1, OCT_SUNDAYS);
+    expect(fallbackWeek1Saturday).toBe("2026-10-03");
+    // The column set (D9) is built from activeSatDates, not from that fallback,
+    // so the deselected date never becomes a column and never becomes a draft.
+    const columns = buildColumns({ sundayDates: OCT_SUNDAYS, activeSatDates });
+    expect(columns.some((c) => c.date === fallbackWeek1Saturday)).toBe(false);
+    const drafts = cellsToDrafts([], columns, new Set(), [], []);
+    expect(drafts.some((d) => d.date === fallbackWeek1Saturday)).toBe(false);
+    expect(drafts.map((d) => d.date)).toContain("2026-10-31");
+  });
+});
+
+// ─── solvableWindow — defensive assert (D8) ──────────────────────────────────
+
+describe("solvableWindow", () => {
+  it("is solvable for a calendar month's 4 or 5 Sundays", () => {
+    expect(solvableWindow(FEB_SUNDAYS).solvable).toBe(true);
+    expect(solvableWindow(FEB_SUNDAYS).weeks).toBe(4);
+  });
+
+  it("flags an out-of-range window (defensive only — unreachable via a calendar month)", () => {
+    expect(solvableWindow(["2026-02-01", "2026-02-08"]).solvable).toBe(false);
+  });
+});
+
+// ─── Request construction (fact 14) ──────────────────────────────────────────
+
+describe("buildSolveRequest", () => {
+  const members: RankMember[] = [
+    m("frank", "Frank"),
+    m("gaby", "Gaby"),
+    m("mkz", "Mkz"),
+    m("outsider", "Outsider"),
+  ];
+
+  it("injects every DSL-named person absent from all pools into support", () => {
+    const config: SolverConfig = {
+      ...emptyConfig,
+      sundayLeads: ["frank"],
+      restrictions: [
+        {
+          id: "r1", person: "Mkz", excludedPatterns: ["Sat.*"],
+          fairness: "none", fairnessSlack: 1, weekExclusions: [], caps: [],
+        },
+      ],
+    };
+    const result = buildSolveRequest({
+      config, members, sundayDates: FEB_SUNDAYS, activeSatDates: [],
+      historyEntries: [], year: 2026, month: 2,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.request.support).toContain("Mkz");
+    expect(result.request.sunday_leads).toEqual(["Frank"]);
+  });
+
+  it("a pool member unavailable on a Sunday in the window yields !in week N Sun.*; unavailable on the adjacent Saturday yields Sat.*", () => {
+    const config: SolverConfig = {
+      ...emptyConfig,
+      sundayLeads: ["frank"],
+      support: ["gaby"],
+    };
+    const membersWithAvailability: RankMember[] = [
+      { ...m("frank", "Frank"), unavailableDates: ["2026-02-08"] }, // week 2 Sunday
+      { ...m("gaby", "Gaby"), unavailableDates: ["2026-02-07"] },   // week 2's Saturday
+    ];
+    const result = buildSolveRequest({
+      config, members: membersWithAvailability, sundayDates: FEB_SUNDAYS, activeSatDates: FEB_SATURDAYS,
+      historyEntries: [], year: 2026, month: 2,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.request.dsl_rules).toContain("Frank !in week 2 Sun.*");
+    expect(result.request.dsl_rules).toContain("Gaby !in week 2 Sat.*");
+  });
+
+  it("a non-pool member's unavailability yields no rule (fact 15 — the rules loop allPoolIds)", () => {
+    const config: SolverConfig = { ...emptyConfig, sundayLeads: ["frank"] };
+    const membersWithOutsider: RankMember[] = [
+      m("frank", "Frank"),
+      { ...m("outsider", "Outsider"), unavailableDates: ["2026-02-08"] },
+    ];
+    const result = buildSolveRequest({
+      config, members: membersWithOutsider, sundayDates: FEB_SUNDAYS, activeSatDates: [],
+      historyEntries: [], year: 2026, month: 2,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.request.dsl_rules.some((r) => r.startsWith("Outsider"))).toBe(false);
+  });
+
+  it("pools are mutually exclusive: a person in both sundayLeads and saturdayLeads appears only under sunday_leads", () => {
+    const config: SolverConfig = {
+      ...emptyConfig,
+      sundayLeads: ["frank"],
+      saturdayLeads: ["frank", "gaby"],
+    };
+    const result = buildSolveRequest({
+      config, members, sundayDates: FEB_SUNDAYS, activeSatDates: [],
+      historyEntries: [], year: 2026, month: 2,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.request.sunday_leads).toEqual(["Frank"]);
+    expect(result.request.saturday_leads).toEqual(["Gaby"]);
+  });
+
+  it("refuses with the Spanish reason when no Sunday leads are selected — and returns no request at all", () => {
+    const config: SolverConfig = { ...emptyConfig };
+    const result = buildSolveRequest({
+      config, members, sundayDates: FEB_SUNDAYS, activeSatDates: [],
+      historyEntries: [], year: 2026, month: 2,
+    });
+    expect(result).toEqual({ ok: false, reason: "Debes seleccionar al menos un líder de domingo." });
+  });
+
+  it("returns a literal typed SolveRequest carrying weekends_with_saturday verbatim", () => {
+    const config: SolverConfig = { ...emptyConfig, sundayLeads: ["frank"] };
+    const result = buildSolveRequest({
+      config, members, sundayDates: FEB_SUNDAYS, activeSatDates: FEB_SATURDAYS,
+      historyEntries: [], year: 2026, month: 2,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.request.weekends_with_saturday).toEqual([2, 3, 4]);
+    expect(Object.prototype.hasOwnProperty.call(result.request, "weekends_with_saturday")).toBe(true);
+  });
+
+  it("historyForRequest excludes the window's own ${year}-${month} entry, keeping only priors", () => {
+    const entries: SolverHistoryEntry[] = [
+      { key: "2026-1", year: 2026, month: 1, total_counts: { a: 1 }, role_counts: {} },
+      { key: "2025-12", year: 2025, month: 12, total_counts: { a: 2 }, role_counts: {} },
+      { key: "2026-2", year: 2026, month: 2, total_counts: { a: 99 }, role_counts: {} }, // this month's own run
+    ];
+    expect(historyForRequest(entries, 2026, 2).map((h) => h.key)).toEqual(["2026-1", "2025-12"]);
+
+    const config: SolverConfig = { ...emptyConfig, sundayLeads: ["frank"] };
+    const result = buildSolveRequest({
+      config, members, sundayDates: FEB_SUNDAYS, activeSatDates: [],
+      historyEntries: entries, year: 2026, month: 2,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.request.history).toEqual([
+      { total_counts: { a: 1 }, role_counts: {} },
+      { total_counts: { a: 2 }, role_counts: {} },
+    ]);
+  });
+});
+
+// ─── Response mapping ─────────────────────────────────────────────────────────
+
+describe("applySolveResponse", () => {
+  const rows = buildRows();
+  const members: RankMember[] = [m("m1", "Frank"), m("m2", "Gaby"), m("m3", "Liu")];
+
+  function response(over: Partial<SolveResponse> = {}): SolveResponse {
+    return { ok: true, ...over };
+  }
+
+  it("writes only solvable rows, and only on columns present in the column set", () => {
+    const columns: GridColumn[] = [{ date: "2026-02-01", type: "sunday_role" }]; // Saturday column intentionally excluded
+    const resp = response({
+      schedule: {
+        "1": {
+          Sunday: { Lead: ["Frank"], BGV: ["Gaby"], Choir: ["Liu"] },
+          // Cast to smuggle in a Choir key on Saturday, proving isSolvable's
+          // (row, column) gate — not mere field absence — keeps it out.
+          Saturday: { Lead: ["Frank"], BGV: ["Gaby"], Choir: ["Liu"] } as unknown as { Lead: string[]; BGV: string[] },
+        },
+      },
+    });
+    const result = applySolveResponse({
+      response: resp, previousCells: [], columns, rows,
+      sundayDates: FEB_SUNDAYS, activeSatDates: FEB_SATURDAYS, members,
+    });
+    expect(result.cells.some((c) => c.rowId === "lead" && c.date === "2026-02-07")).toBe(false);
+    expect(result.cells.find((c) => c.rowId === "lead" && c.date === "2026-02-01")).toBeTruthy();
+  });
+
+  it("every written cell carries origin: auto", () => {
+    const columns: GridColumn[] = [{ date: "2026-02-01", type: "sunday_role" }];
+    const resp = response({ schedule: { "1": { Sunday: { Lead: ["Frank"], BGV: ["Gaby"], Choir: ["Liu"] } } } });
+    const result = applySolveResponse({
+      response: resp, previousCells: [], columns, rows,
+      sundayDates: FEB_SUNDAYS, activeSatDates: [], members,
+    });
+    expect(result.cells.every((c) => c.origin === "auto")).toBe(true);
+  });
+
+  it("instrument and FOH cells survive byte-for-byte; only voice cells change", () => {
+    const date = "2026-02-01";
+    const previousCells: GridCell[] = [
+      { date, rowId: "instrumento:Drums", memberIds: ["p1", "p2"], origin: "manual" },
+      { date, rowId: "foh:Console", memberIds: ["p3"], origin: "manual" },
+      { date, rowId: "lead", memberIds: ["stale"], origin: "manual" },
+    ];
+    const columns: GridColumn[] = [{ date, type: "sunday_role" }];
+    const resp = response({ schedule: { "1": { Sunday: { Lead: ["Frank"], BGV: ["Gaby"], Choir: ["Liu"] } } } });
+    const result = applySolveResponse({
+      response: resp, previousCells, columns, rows,
+      sundayDates: FEB_SUNDAYS, activeSatDates: [], members,
+    });
+    const drums = result.cells.find((c) => c.rowId === "instrumento:Drums")!;
+    const console_ = result.cells.find((c) => c.rowId === "foh:Console")!;
+    expect(drums).toEqual({ date, rowId: "instrumento:Drums", memberIds: ["p1", "p2"], origin: "manual" });
+    expect(console_).toEqual({ date, rowId: "foh:Console", memberIds: ["p3"], origin: "manual" });
+    const lead = result.cells.find((c) => c.rowId === "lead")!;
+    expect(lead.memberIds).toEqual(["m1"]);
+    expect(lead.origin).toBe("auto");
+  });
+
+  it("an unmatched name leaves the cell empty and appears in unresolvedNames", () => {
+    const columns: GridColumn[] = [{ date: "2026-02-01", type: "sunday_role" }];
+    const resp = response({ schedule: { "1": { Sunday: { Lead: ["Nadie Conocido"], BGV: [], Choir: [] } } } });
+    const result = applySolveResponse({
+      response: resp, previousCells: [], columns, rows,
+      sundayDates: FEB_SUNDAYS, activeSatDates: [], members,
+    });
+    const lead = result.cells.find((c) => c.rowId === "lead")!;
+    expect(lead.memberIds).toEqual([]);
+    expect(result.unresolvedNames).toContain("Nadie Conocido");
+  });
+
+  it("counts carries total_counts/role_counts out unfiltered when every service type was created", () => {
+    const columns: GridColumn[] = [
+      { date: "2026-02-01", type: "sunday_role" },
+      { date: "2026-02-07", type: "saturday_role" },
+    ];
+    const resp = response({
+      total_counts: { Frank: 3 },
+      role_counts: { Frank: { "Sun.Lead": 1, "Sat.Lead": 2 } },
+    });
+    const result = applySolveResponse({
+      response: resp, previousCells: [], columns, rows,
+      sundayDates: FEB_SUNDAYS, activeSatDates: FEB_SATURDAYS, members,
+    });
+    expect(result.counts).toEqual({
+      total_counts: { Frank: 3 },
+      role_counts: { Frank: { "Sun.Lead": 1, "Sat.Lead": 2 } },
+    });
+  });
+
+  it("counts is filtered to the created service types, with total_counts recomputed (D19)", () => {
+    // Domingos unchecked: only saturday_role columns were created.
+    const columns: GridColumn[] = [{ date: "2026-02-07", type: "saturday_role" }];
+    const resp = response({
+      total_counts: { Frank: 5 }, // stale/raw — must NOT pass through
+      role_counts: { Frank: { "Sun.Lead": 3, "Sat.Lead": 2 } },
+    });
+    const result = applySolveResponse({
+      response: resp, previousCells: [], columns, rows,
+      sundayDates: FEB_SUNDAYS, activeSatDates: FEB_SATURDAYS, members,
+    });
+    expect(result.counts).toEqual({
+      total_counts: { Frank: 2 },
+      role_counts: { Frank: { "Sat.Lead": 2 } },
+    });
+  });
+});
+
+describe("mapUnfilledSeats", () => {
+  it("places a Sunday seat on its row and date", () => {
+    const out = mapUnfilledSeats(["W2 Sunday Sun.Choir #2"], FEB_SUNDAYS, FEB_SATURDAYS);
+    expect(out).toEqual([{ date: "2026-02-08", rowId: "coro" }]);
+  });
+
+  it("places a Saturday seat on its row and adjacent date", () => {
+    const out = mapUnfilledSeats(["W2 Saturday Sat.BGV #1"], FEB_SUNDAYS, FEB_SATURDAYS);
+    expect(out).toEqual([{ date: "2026-02-07", rowId: "bgv" }]);
+  });
+
+  it("drops a Saturday seat whose resolved date is not in the selected column set", () => {
+    const out = mapUnfilledSeats(["W2 Saturday Sat.BGV #1"], FEB_SUNDAYS, []); // no Saturdays selected
+    expect(out).toEqual([]);
+  });
+});
+
+// ─── Stability ────────────────────────────────────────────────────────────────
+
+describe("cellsToDrafts — stability", () => {
+  const columns: GridColumn[] = [{ date: "2026-02-01", type: "sunday_role" }];
+
+  it("seeds skipped from existingRoles exactly as buildEmptyDrafts does", () => {
+    const drafts = cellsToDrafts([], columns, new Set(), [], [{ _type: "sunday_role", date: "2026-02-01" }]);
+    expect(drafts[0].skipped).toBe(true);
+    expect(drafts[0].exists).toBe(true);
+  });
+
+  it("preserves localId, creationRequestId, exists and skipped across repeated calls for the same date and type", () => {
+    const first = cellsToDrafts([], columns, new Set(), [], []);
+    const second = cellsToDrafts([], columns, new Set(), first, []);
+    expect(second[0].localId).toBe(first[0].localId);
+    expect(second[0].creationRequestId).toBe(first[0].creationRequestId);
+    expect(second[0].exists).toBe(first[0].exists);
+    expect(second[0].skipped).toBe(first[0].skipped);
+  });
+
+  it("a fresh Auto run (previous: []) mints new ids; an ordinary re-render (previous: prior result) does not", () => {
+    const run1 = cellsToDrafts([], columns, new Set(), [], []);
+    const run2 = cellsToDrafts([], columns, new Set(), [], []); // simulate a second, independent Auto run
+    expect(run2[0].localId).not.toBe(run1[0].localId);
+    expect(run2[0].creationRequestId).not.toBe(run1[0].creationRequestId);
+
+    const rerender = cellsToDrafts([], columns, new Set(), run1, []);
+    expect(rerender[0].localId).toBe(run1[0].localId);
+    expect(rerender[0].creationRequestId).toBe(run1[0].creationRequestId);
+  });
+
+  it("a lost exists (existingRoles not yet refreshed) is recovered from previous", () => {
+    const created = cellsToDrafts([], columns, new Set(), [], []).map((d): DraftCard => ({ ...d, exists: true }));
+    const rerender = cellsToDrafts([], columns, new Set(), created, []); // existingRoles hasn't caught up yet
+    expect(rerender[0].exists).toBe(true);
+  });
+});
