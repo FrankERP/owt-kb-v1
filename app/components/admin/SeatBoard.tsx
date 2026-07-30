@@ -76,13 +76,22 @@ export default function SeatBoard(props: SeatBoardProps) {
     seedSeatNames(initial?.foh?.map((s) => s.role), DEFAULT_FOH_SEATS),
   );
 
+  // A Saturday service has no Coro. Confirmed by the team, and matched by the
+  // data: 0 of 8 stored saturday_role documents carry a Chorus, against 19 of 19
+  // Sundays. The old form offered one Coro picker for every service type, which
+  // is where the stray capability came from.
+  const voiceSeats: SeatDef[] = useMemo(
+    () => VOICE_SEATS.filter((s) => !(s.id === "coro" && type === "saturday_role")),
+    [type],
+  );
+
   const seats: SeatDef[] = useMemo(
     () => [
-      ...VOICE_SEATS,
+      ...voiceSeats,
       ...instrumentSeats.map(instrumentSeatDef),
       ...fohSeats.map(fohSeatDef),
     ],
-    [instrumentSeats, fohSeats],
+    [voiceSeats, instrumentSeats, fohSeats],
   );
 
   const [targetId, setTargetId] = useState(VOICE_SEATS[0].id);
@@ -163,7 +172,9 @@ export default function SeatBoard(props: SeatBoardProps) {
       service_name: serviceName,
       leads: occupancy["lead"] ?? [],
       bgvs: occupancy["bgv"] ?? [],
-      chorus: occupancy["coro"] ?? [],
+      // Belt and braces: hiding the seat stops new picks, but occupancy can
+      // survive a type switch from Sunday, so the write is forced empty too.
+      chorus: type === "saturday_role" ? [] : (occupancy["coro"] ?? []),
       instruments: instrumentSeats.flatMap((label) => {
         const def = instrumentSeatDef(label);
         return (occupancy[def.id] ?? []).map((personId) => ({ instrument: def.label, personId }));
@@ -254,7 +265,7 @@ export default function SeatBoard(props: SeatBoardProps) {
         <div className={`${CARD_STYLE.dialog} min-h-0 min-w-0 overflow-y-auto pr-1`}>
           <SeatGroup
             title="Voces"
-            seats={VOICE_SEATS}
+            seats={voiceSeats}
             occupancy={occupancy}
             targetId={target.id}
             onSelectTarget={setTargetId}

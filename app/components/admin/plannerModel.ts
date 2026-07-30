@@ -186,14 +186,30 @@ export function buildRows(input: { instrumentSeats?: string[]; fohSeats?: string
 }
 
 /**
- * Solvability is a (row, column) predicate, not a row flag: Coro is solvable
- * on Sunday columns and not on Saturday ones, because the solver has no
- * `Sat.Choir` (fact 2, D11). Instrument and FOH rows are always manual (D5).
+ * Whether a row exists at all on a given column.
+ *
+ * **A Saturday service has no Coro.** That is the domain rule, confirmed by the
+ * team and matched by the data: 0 of 8 stored `saturday_role` documents carry a
+ * `Chorus`, against 19 of 19 Sundays. Earlier drafts rendered a Coro row on
+ * Saturday columns as merely non-solvable, on the theory that it preserved a
+ * capability the old UI offered — but that capability was an artifact of
+ * `ServiceForm` showing one Coro picker for every service type, not something
+ * the team ever used. Offering it invites an assignment that should not exist.
+ */
+export function rowAppliesTo(row: GridRow, column: GridColumn): boolean {
+  if (row.id === "coro") return column.type === "sunday_role";
+  return true;
+}
+
+/**
+ * Whether **Auto** fills this cell. A row that does not apply is never solvable;
+ * beyond that, the solver covers Lead and BGV on both service types and Coro on
+ * Sundays only, and instrument and FOH rows are always manual (D5).
  */
 export function isSolvable(row: GridRow, column: GridColumn): boolean {
+  if (!rowAppliesTo(row, column)) return false;
   if (row.category !== "voz") return false;
-  if (row.id === "coro") return column.type === "sunday_role";
-  return row.id === "lead" || row.id === "bgv";
+  return row.id === "lead" || row.id === "bgv" || row.id === "coro";
 }
 
 /**
@@ -629,7 +645,9 @@ export function cellsToDrafts(
 
     const leads = idsFor("lead");
     const bgvs = idsFor("bgv");
-    const chorus = idsFor("coro");
+    // A Saturday service has no Coro, so its chorus is empty whatever the grid
+    // holds — a stray cell can never reach the write.
+    const chorus = column.type === "saturday_role" ? [] : idsFor("coro");
 
     const instruments: DraftInstrumentSlot[] = [];
     const foh: DraftFohSlot[] = [];

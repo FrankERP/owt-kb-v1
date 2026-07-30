@@ -68,6 +68,29 @@ describe("SeatBoard", () => {
     expect(ids).toEqual(["d1", "d2", "d3"]);
   });
 
+  it("offers no Coro seat on a Saturday service, and never writes one", () => {
+    // A Saturday service has no Coro. The old form showed one Coro picker for
+    // every service type, which is where the stray capability came from; 0 of 8
+    // stored saturday_role documents carry a Chorus, against 19 of 19 Sundays.
+    const onSubmit = vi.fn();
+    const { queryAllByText, getByRole } = render(
+      <SeatBoard
+        {...base}
+        onSubmit={onSubmit}
+        initial={{
+          _type: "saturday_role", date: "2026-08-08",
+          leads: [], bgvs: [], chorus: [{ _id: "m2", member_name: "Gaby" }],
+          instruments: [], foh: [],
+        } as never}
+      />,
+    );
+    // No Coro seat is offered...
+    expect(queryAllByText("Coro")).toHaveLength(0);
+    // ...and a chorus that arrived on the stored document is not written back.
+    fireEvent.click(getByRole("button", { name: /guardar/i }));
+    expect(onSubmit.mock.calls[0][0].chorus).toEqual([]);
+  });
+
   it("shows the whole eligible pool at once, not a 4-row window", () => {
     render(<SeatBoard {...base} />);
     // All three voz members are in the document simultaneously.
