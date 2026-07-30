@@ -46,15 +46,16 @@ describe("seat definitions", () => {
     }
   });
 
-  it("makes an instrument seat single-occupant and instrumento-only", () => {
+  it("never caps an instrument seat — two drummers on one Drums seat is real", () => {
     const bass = instrumentSeatDef("BASS");
-    expect(bass).toMatchObject({ label: "Bass", category: "instrumento", max: 1, memberType: "instrumento" });
+    // `max: null` is deliberate — the team runs two drummers on one Drums seat.
+    expect(bass).toMatchObject({ label: "Bass", category: "instrumento", max: null, memberType: "instrumento" });
     expect(bass.id).toBe("instrumento:Bass");
   });
 
-  it("makes a FOH seat single-occupant and foh-only", () => {
+  it("never caps a FOH seat either", () => {
     expect(fohSeatDef("Console")).toMatchObject({
-      id: "foh:Console", label: "Console", category: "foh", max: 1, memberType: "foh",
+      id: "foh:Console", label: "Console", category: "foh", max: null, memberType: "foh",
     });
   });
 

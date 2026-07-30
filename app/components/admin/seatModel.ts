@@ -56,12 +56,19 @@ export function normalizeSeatName(raw: unknown): string {
   return CANONICAL.get(trimmed.toLowerCase()) ?? trimmed;
 }
 
+/**
+ * `max` is null, like the voice seats. It is NOT a mistake that an instrument
+ * seat has no cap: 18 of the team's services run TWO drummers on one `Drums`
+ * seat, and every service from 2026-06-07 to 2026-08-30 does. A cap of 1 made
+ * `SeatBoard.toggle` evict the first occupant on any click, silently losing one
+ * of them. Capacity guidance belongs in the UI, never in a rule that drops data.
+ */
 export function instrumentSeatDef(label: string): SeatDef {
   const name = normalizeSeatName(label);
-  return { id: `instrumento:${name}`, label: name, category: "instrumento", max: 1, memberType: "instrumento" };
+  return { id: `instrumento:${name}`, label: name, category: "instrumento", max: null, memberType: "instrumento" };
 }
 
 export function fohSeatDef(label: string): SeatDef {
   const name = normalizeSeatName(label);
-  return { id: `foh:${name}`, label: name, category: "foh", max: 1, memberType: "foh" };
+  return { id: `foh:${name}`, label: name, category: "foh", max: null, memberType: "foh" };
 }
