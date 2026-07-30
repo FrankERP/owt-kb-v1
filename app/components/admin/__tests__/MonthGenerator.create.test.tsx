@@ -527,6 +527,66 @@ describe("MonthGenerator — create path", () => {
     expect(entriesFor2026_2[0].total_counts).toEqual({ Ana: 2 });
   });
 
+  it("a retried partial-failure batch — first confirm creates some dates and fails others, second confirm creates the rest — records a history entry covering BOTH batches (2026-07-30 retry fix)", async () => {
+    // The defect: deriving the history entry from ONLY `result.createdLocalIds`
+    // of THIS call means a second confirm that retries just the failed subset
+    // recomputes an entry for that subset alone, and `saveHistoryEntry`
+    // replaces by `${year}-${month}` — erasing the first call's counts. The
+    // fix folds in every draft that `exists` (this batch's successes, plus
+    // whatever an earlier confirm already flagged `exists: true`), so the
+    // recompute is idempotent across however many partial retries it takes.
+    const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz"] }];
+    const failingDates = new Set([FEB_2026_SUNDAYS[2], FEB_2026_SUNDAYS[3]]); // 02-15, 02-22
+    const attempts = new Map<string, number>();
+    const fetchMock = vi.fn(async (url: string, init: { body: string }) => {
+      if (url !== "/api/admin/roles") throw new Error(`unexpected fetch to ${url}`);
+      const body = JSON.parse(init.body) as Record<string, unknown>;
+      const date = body.date as string;
+      const attempt = (attempts.get(date) ?? 0) + 1;
+      attempts.set(date, attempt);
+      // The two "failing" dates fail on their FIRST attempt (first confirm,
+      // simulating a partial 500) and succeed on retry (second confirm);
+      // the other two succeed immediately.
+      const ok = !failingDates.has(date) || attempt > 1;
+      return { ok, status: ok ? 200 : 500, json: async () => (ok ? {} : { error: "boom" }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+
+    for (const date of FEB_2026_SUNDAYS) {
+      const cell = container.querySelector(`[data-row-id="lead"][data-date="${date}"]`);
+      fireEvent.click(cell!);
+      fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+      fireEvent.click(screen.getByText("Cerrar"));
+    }
+
+    // First confirm: 2 of 4 dates succeed, 2 fail — dialog stays open.
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+
+    const afterFirst = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    expect(afterFirst.find((h: { key: string }) => h.key === "2026-2").total_counts).toEqual({ Ana: 2 });
+
+    // Retry: only the 2 that failed are re-attempted (with their original
+    // creationRequestId, per the standalone-retry contract above) — this time
+    // they succeed.
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6));
+
+    const afterSecond = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    const entriesFor2026_2 = afterSecond.filter((h: { key: string }) => h.key === "2026-2");
+    expect(entriesFor2026_2).toHaveLength(1); // replaced, not appended
+    // The union covers BOTH batches — all 4 dates now exist. A recompute
+    // derived from only the SECOND call's `createdLocalIds` (the pre-fix
+    // logic) would produce `{ Ana: 2 }` here, silently erasing the first
+    // batch's 2 counts via replace-by-key.
+    expect(entriesFor2026_2[0].total_counts).toEqual({ Ana: 4 });
+  });
+
   // ── Task 4: the live production bug ────────────────────────────────────────
   //
   // Today's `MonthGenerator.tsx:1249-1251` assigns Saturday week indexes

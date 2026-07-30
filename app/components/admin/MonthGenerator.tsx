@@ -1295,16 +1295,25 @@ export default function MonthGenerator({
     // the failed/unknown drafts — with their original request ids.
     const created = new Set(result.createdLocalIds);
     if (created.size) setDrafts(prev => prev.map(d => created.has(d.localId) ? { ...d, exists: true } : d));
-    // Fairness history is recorded from what THIS batch actually committed —
-    // never the whole attempted batch (a failed/skipped draft never happened,
-    // so it must never bias next month's solve). A fully failed batch (empty
-    // `created`) records nothing; `historyEntryFromDrafts` also returns `null`
-    // for an empty list, so this stays a no-op either way.
-    if (created.size) {
-      const createdDrafts = toCreateNow.filter(d => created.has(d.localId));
-      const entry = historyEntryFromDrafts(createdDrafts, members, year, month);
-      if (entry) saveHistoryEntry(entry.year, entry.month, entry.total_counts, entry.role_counts);
-    }
+    // Fairness history is recomputed from the UNION of what exists after this
+    // batch, never from this batch alone: `drafts` here is still the
+    // pre-`setDrafts` state, so `created.has(d.localId) || d.exists` is
+    // "created just now, plus everything already created" — this batch's
+    // successes, an earlier confirm's successes THIS session (already marked
+    // `exists: true`), and anything that existed before this session (whose
+    // seats `cellsToDrafts` zeroes, so it contributes nothing either way).
+    // Deriving from only `result.createdLocalIds` was the defect: a partial
+    // failure leaves the dialog open, the successes get marked `exists`, and
+    // a retry that POSTs only the remaining subset would replace-by-key and
+    // erase the first call's counts. Recomputing the whole month's union on
+    // every confirm and replacing is idempotent — it reconstructs the same
+    // entry a single successful confirm would have written, however many
+    // partial retries it took to get there. A fully failed batch with no
+    // prior successes records nothing; `historyEntryFromDrafts` returns
+    // `null` for an empty list, so this stays a no-op either way.
+    const historyDrafts = drafts.filter(d => created.has(d.localId) || d.exists);
+    const entry = historyEntryFromDrafts(historyDrafts, members, year, month);
+    if (entry) saveHistoryEntry(entry.year, entry.month, entry.total_counts, entry.role_counts);
     // Refresh so the list reflects whatever actually got created.
     onCreated();
     if (result.failed.length === 0) {
