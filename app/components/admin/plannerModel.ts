@@ -23,6 +23,7 @@
 
 import type { SolveRequest, SolveResponse } from "@/app/api/admin/solve/route";
 import { parseUnfilledSeat } from "@/app/utils/unfilledSeats";
+import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import type { RankMember } from "./candidateRanking";
 import {
   DEFAULT_FOH_SEATS,
@@ -679,4 +680,73 @@ export function cellsToDrafts(
   }
 
   return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// ─── Cells ↔ ParticipantRole (D12's ranking union) ───────────────────────────
+
+/** The bare member shape `ParticipantRole`'s seats carry (`computeParticipation.ts:2-10`). */
+interface RolePerson {
+  _id: string;
+  member_name?: string;
+  alias?: string;
+}
+
+/**
+ * Converts `GridCell.memberIds` (strings) into the `ParticipantRole` shape
+ * `rankCandidates` consumes (member objects) — D12's union needs both `PlannerGrid`
+ * calls of `rankCandidates` fed `[...savedWindow, ...cellsToParticipantRoles(...)]`,
+ * and hand-rolling this conversion in the component would duplicate the row-id
+ * convention (`instrumento:`/`foh:` prefixes, one row per seat) that
+ * `cellsToDrafts` already owns above. One `ParticipantRole` per column,
+ * regardless of occupancy, mirroring `cellsToDrafts`'s column-per-draft
+ * contract — an omitted column here would silently under-count that date's
+ * load for every OTHER date's ranking.
+ *
+ * An id absent from `members` (a solver-resolved name that never matched a
+ * canonical member, or simply stale data) still round-trips as a bare `_id`
+ * rather than being dropped — `computeParticipation` keys strictly by `_id`,
+ * so dropping it would undercount that person's load without any signal.
+ */
+export function cellsToParticipantRoles(
+  cells: GridCell[],
+  columns: GridColumn[],
+  members: RankMember[],
+): ParticipantRole[] {
+  const byId = new Map(members.map((mm) => [mm._id, mm]));
+  const toPerson = (id: string): RolePerson => {
+    const found = byId.get(id);
+    return found ? { _id: found._id, member_name: found.member_name, alias: found.alias } : { _id: id };
+  };
+
+  const cellsByDate = new Map<string, GridCell[]>();
+  for (const c of cells) {
+    const list = cellsByDate.get(c.date);
+    if (list) list.push(c);
+    else cellsByDate.set(c.date, [c]);
+  }
+
+  return columns.map((column) => {
+    const dateCells = cellsByDate.get(column.date) ?? [];
+    const idsFor = (rowId: string) => dateCells.find((c) => c.rowId === rowId)?.memberIds ?? [];
+
+    const instruments: { person: RolePerson }[] = [];
+    const foh: { person: RolePerson }[] = [];
+    for (const c of dateCells) {
+      if (c.rowId.startsWith(INSTRUMENT_PREFIX)) {
+        c.memberIds.forEach((id) => instruments.push({ person: toPerson(id) }));
+      } else if (c.rowId.startsWith(FOH_PREFIX)) {
+        c.memberIds.forEach((id) => foh.push({ person: toPerson(id) }));
+      }
+    }
+
+    return {
+      _type: column.type,
+      date: column.date,
+      leads: idsFor("lead").map(toPerson),
+      bgvs: idsFor("bgv").map(toPerson),
+      chorus: idsFor("coro").map(toPerson),
+      instruments,
+      foh,
+    };
+  });
 }
