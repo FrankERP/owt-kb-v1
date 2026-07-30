@@ -617,23 +617,36 @@ export function cellsToDrafts(
     const dateCells = cellsByDate.get(column.date) ?? [];
     const idsFor = (rowId: string) => dateCells.find((c) => c.rowId === rowId)?.memberIds ?? [];
 
-    const leads = idsFor("lead");
-    const bgvs = idsFor("bgv");
+    // A date that already had a service BEFORE this session (`isExisting`) is
+    // always `skipped`, so its seats never reach a create POST — but Auto
+    // solves the WHOLE month unconditionally (D9) and `columns` includes this
+    // date too, so `dateCells` can genuinely hold a solver proposal or a
+    // leftover manual edit for it. Zeroing every seat here, rather than
+    // trusting the grid to stay empty, is what makes `ExistingRoleRef`'s
+    // "no member data" actually true for the resulting `DraftCard` — a fact
+    // `MonthGenerator.handleConfirm`'s history recompute now depends on: it
+    // folds every `exists` draft (this batch's, an earlier batch's, AND a
+    // pre-session one) into the fairness entry, and a pre-session draft must
+    // contribute exactly zero, never whatever the grid happens to hold.
+    const leads = isExisting ? [] : idsFor("lead");
+    const bgvs = isExisting ? [] : idsFor("bgv");
     // A Saturday service has no Coro, so its chorus is empty whatever the grid
     // holds — a stray cell can never reach the write.
-    const chorus = column.type === "saturday_role" ? [] : idsFor("coro");
+    const chorus = isExisting || column.type === "saturday_role" ? [] : idsFor("coro");
 
     const instruments: DraftInstrumentSlot[] = [];
     const foh: DraftFohSlot[] = [];
-    for (const c of dateCells) {
-      if (c.rowId.startsWith(INSTRUMENT_PREFIX)) {
-        const label = c.rowId.slice(INSTRUMENT_PREFIX.length);
-        c.memberIds.forEach((personId, idx) =>
-          instruments.push({ id: `${c.rowId}#${idx}`, instrument: label, personId }),
-        );
-      } else if (c.rowId.startsWith(FOH_PREFIX)) {
-        const label = c.rowId.slice(FOH_PREFIX.length);
-        c.memberIds.forEach((personId, idx) => foh.push({ id: `${c.rowId}#${idx}`, role: label, personId }));
+    if (!isExisting) {
+      for (const c of dateCells) {
+        if (c.rowId.startsWith(INSTRUMENT_PREFIX)) {
+          const label = c.rowId.slice(INSTRUMENT_PREFIX.length);
+          c.memberIds.forEach((personId, idx) =>
+            instruments.push({ id: `${c.rowId}#${idx}`, instrument: label, personId }),
+          );
+        } else if (c.rowId.startsWith(FOH_PREFIX)) {
+          const label = c.rowId.slice(FOH_PREFIX.length);
+          c.memberIds.forEach((personId, idx) => foh.push({ id: `${c.rowId}#${idx}`, role: label, personId }));
+        }
       }
     }
 
@@ -677,9 +690,19 @@ const HISTORY_ROLE_KEYS: Record<ServiceType, { leads: string; bgvs: string; chor
  * that never existed, and a hand-edit after Auto (or a month assigned by hand
  * with no Auto run at all) never showed up in fairness history either way.
  *
- * `createdDrafts` MUST already be filtered to whatever a create batch
- * actually committed (`result.createdLocalIds` in `MonthGenerator`) — a
- * skipped column or a draft that failed to create must never reach here.
+ * `createdDrafts` MUST already be filtered to whatever the caller considers
+ * "happened" — a skipped column or a draft that failed to create must never
+ * reach here. This function deliberately does NOT filter its input itself
+ * (`plannerModel.test.ts` pins that a skipped draft passed in is still
+ * counted): the caller — `MonthGenerator.handleConfirm` — is the one that
+ * knows which drafts this batch just created, which were already `exists`
+ * from an earlier confirm this session or from before it, and which merely
+ * failed or were skipped, so it owns the filtering. Keeping that decision out
+ * of this function keeps it a pure projection of "seats in, counts out",
+ * trivially testable with hand-built `DraftCard`s, and free to be fed any
+ * caller-chosen subset — including the UNION `handleConfirm` now passes to
+ * self-correct a retried partial batch — without a defensive guard here
+ * second-guessing that choice.
  * Returns `null` for an empty `createdDrafts` (the abandoned-run case): no
  * entry is written, rather than an entry with empty counts.
  *
