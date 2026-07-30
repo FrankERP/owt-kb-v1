@@ -391,16 +391,29 @@ describe("MonthGenerator — create path", () => {
   // `weekendWeekIndexes` (D16, plannerModel) drops the positional fallback, so
   // the request never even asks the solver to staff that week — this test
   // proves the create path honours that all the way through to the POST.
+  //
+  // IMPORTANT: the `/api/admin/solve` and `/api/admin/roles` mocks below only
+  // CAPTURE — they never `expect()` inside the mock body. A mock is an async
+  // function; a thrown assertion inside it rejects the promise `handleAuto`/
+  // `handleConfirm` awaits, and both wrap their fetch in try/catch (per
+  // CLAUDE.md's client-mutation invariant) — so the "failure" becomes a
+  // `setAutoError`/`setPushError` toast, not a failing test. A run that can
+  // never fail is worse than no test at all: it looks like coverage in the
+  // diff and in CI, while actually proving nothing. Every assertion here runs
+  // AFTER the interaction has settled (`await waitFor(...)`), against values
+  // captured by the mock, so a regression actually fails the test.
   it("October 2026, only Oct 31 selected: no saturday_role draft for the deselected 2026-10-03, and nothing is POSTed for it", async () => {
     const members = [
       { _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] },
     ];
+    // A plain `let`, reassigned only from inside the mock closure, hits a
+    // TS control-flow quirk that narrows it to `never` at the read site below
+    // — an object property sidesteps it cleanly.
+    const captured: { solveRequest: { weekends_with_saturday: number[] } | null } = { solveRequest: null };
     const fetchMock = vi.fn(async (url: string, init?: { body: string }) => {
       if (url === "/api/admin/solve") {
-        const body = JSON.parse(init!.body) as { weekends_with_saturday: number[] };
-        // The fix, at the request level: week 1's Saturday (Oct 3) is never
-        // addressed, because it isn't the selected Oct 31.
-        expect(body.weekends_with_saturday).toEqual([]);
+        // Capture only — see the note above for why no `expect()` belongs here.
+        captured.solveRequest = JSON.parse(init!.body) as { weekends_with_saturday: number[] };
         return {
           ok: true,
           json: async () => ({
@@ -420,10 +433,6 @@ describe("MonthGenerator — create path", () => {
         };
       }
       if (url === "/api/admin/roles") {
-        const body = JSON.parse(init!.body) as { date: string };
-        // The live-bug assertion: nothing is ever POSTed for the deselected
-        // Saturday, however the create batch is triggered.
-        expect(body.date).not.toBe("2026-10-03");
         return { ok: true, status: 200, json: async () => ({}) };
       }
       throw new Error(`unexpected fetch to ${url}`);
@@ -459,6 +468,12 @@ describe("MonthGenerator — create path", () => {
     fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
     fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/admin/solve", expect.anything()));
+
+    // The fix, at the request level, asserted AFTER the solve call settled:
+    // week 1's Saturday (Oct 3) is never addressed, because it isn't the
+    // selected Oct 31. A mismatch here fails the test directly — nothing
+    // catches or swallows it.
+    expect(captured.solveRequest?.weekends_with_saturday).toEqual([]);
 
     // Even with the (hypothetically buggy) solver having been asked about
     // week 1's Saturday, publish and confirm nothing is ever posted for it.
@@ -572,5 +587,120 @@ describe("MonthGenerator — create path", () => {
     expect(retryAttempt.body.creationRequestId).toBe(originalId);
     // 4 Sundays posted on the first attempt, then only the failed one retried.
     expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+
+  // ── Task 4 fix pass, Finding 2 ──────────────────────────────────────────────
+  //
+  // D9: with Domingos unchecked, the solve still runs on the full Sunday list
+  // (unconditionally, via `sundayDatesFull`), but no Sunday service may be
+  // RENDERED or CREATED — only `sundays`/`columns` gate that. `plannerModel`'s
+  // pure `buildColumns` already pins this; nothing exercised the component
+  // wiring that actually creates services and queues assignment emails.
+  it("D9: with Domingos unchecked, no Sunday column is rendered and no sunday_role is ever POSTed", async () => {
+    const { fetchMock, calls } = stubRolesFetch(() => ({ ok: true }));
+    const { container } = render(
+      <MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    setMonthYear(container, 2, 2026);
+    fireEvent.click(screen.getByLabelText("Domingos")); // uncheck — Sábados stays checked
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+
+    // No column for the first Sunday of the month anywhere in the grid.
+    expect(container.querySelector(`[data-date="${FEB_2026_SUNDAYS[0]}"]`)).toBeNull();
+
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.every((c) => c.body._type !== "sunday_role")).toBe(true);
+  });
+
+  // ── Task 4 fix pass, Finding 3 ──────────────────────────────────────────────
+  //
+  // D17 removed the config step's nested scrollers (`MemberPool`'s `max-h-32`,
+  // `PresenceForm`'s `max-h-28`) so the panel's own width/height would carry a
+  // long list instead of keyholing it. Checked on BOTH axes, matching
+  // `PlannerGrid.test.tsx`'s style — a selector matching only one axis passes
+  // vacuously. Members carry every pool's `memberType` so all three
+  // `MemberPool` lists AND the presence form's list are all long simultaneously.
+  it("the config step has no nested scroll region, even with long member lists and the presence form open", () => {
+    const manyVoz = Array.from({ length: 20 }, (_, i) => ({
+      _id: `v${i}`,
+      member_name: `Miembro ${i}`,
+      memberType: ["voz", "sunday_lead", "saturday_lead", "support"],
+    }));
+    render(
+      <MonthGenerator members={manyVoz} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    // Open the "≥1 Presencia" add-form — its member list is the other one
+    // D17 de-keyholed, and it isn't in the DOM until "adding" it.
+    fireEvent.click(screen.getByRole("button", { name: /Presencia/ }));
+    const scrollers = document.querySelectorAll(".overflow-x-auto, .overflow-y-auto");
+    expect(scrollers.length).toBe(0);
+  });
+
+  // ── Task 4 fix pass, Finding 4 (D10) ────────────────────────────────────────
+  //
+  // The generator moved out of `CueDialog` into a full-width panel, silently
+  // dropping Escape-to-close along with the focus trap and `aria-modal`. D10
+  // required this task to settle the dismissal semantics; restored here to
+  // match `ServiceReadinessCard`'s kebab menu (a `keydown` listener for
+  // Escape). A full focus trap is judged out of scope — see the fix-pass
+  // report for the reasoning (this panel replaces the whole view rather than
+  // overlaying content that must stay untouchable).
+  it("Escape closes the generator, from both the config step and the grid step", () => {
+    const onClose = vi.fn();
+    const { unmount } = render(
+      <MonthGenerator members={noMembers} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
+    );
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    unmount();
+
+    const onClose2 = vi.fn();
+    const { container } = render(
+      <MonthGenerator members={noMembers} existingRoles={[]} onClose={onClose2} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+    fireEvent.keyDown(document, { key: "Enter" }); // a non-Escape key is a no-op
+    expect(onClose2).not.toHaveBeenCalled();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose2).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Task 4 fix pass, Finding 5 ──────────────────────────────────────────────
+  //
+  // `handleColumnSwap` ignored column type: swapping a Sunday column with a
+  // Saturday column moved Coro cells onto a Saturday, which `cellsToDrafts`
+  // zeroes (`chorus: []`) on write (D11) — the assignment vanished under a
+  // success toast with no warning. Now refused, with a Spanish reason.
+  it("refuses to swap a Sunday column with a Saturday column, so a Coro assignment is never silently dropped", () => {
+    const members = [{ _id: "m1", member_name: "Ana", memberType: ["voz"] }];
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    setMonthYear(container, 2, 2026);
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+
+    // Assign Ana to Coro on the first Sunday (2026-02-01).
+    const coroCell = container.querySelector('[data-row-id="coro"][data-date="2026-02-01"]');
+    fireEvent.click(coroCell!);
+    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+    fireEvent.click(screen.getByText("Cerrar"));
+    expect(
+      container.querySelector('[data-row-id="coro"][data-date="2026-02-01"]')?.textContent,
+    ).toContain("Ana");
+
+    // Try to swap that Sunday with the first Saturday of the month (2026-02-07).
+    fireEvent.click(container.querySelector('[data-swap-date="2026-02-01"]')!);
+    fireEvent.click(container.querySelector('[data-swap-date="2026-02-07"]')!);
+
+    expect(screen.getByText(/No se puede intercambiar un Domingo con un Sábado/)).toBeTruthy();
+    // Refused: Ana is still on the Sunday Coro cell, never moved anywhere.
+    expect(
+      container.querySelector('[data-row-id="coro"][data-date="2026-02-01"]')?.textContent,
+    ).toContain("Ana");
+    expect(
+      container.querySelector('[data-row-id="coro"][data-date="2026-02-07"]')?.textContent ?? "",
+    ).not.toContain("Ana");
   });
 });
