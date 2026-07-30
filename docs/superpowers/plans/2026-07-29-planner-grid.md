@@ -31,7 +31,7 @@
 4. **One slot per person per service per week** is enforced internally (`:754-764`), so any client merge of solver output with hand-set cells can produce the same-category double booking `candidateRanking` blocks (`candidateRanking.ts:134-137`).
 5. **People are identified by NAME**; pools must be mutually exclusive (`:452-454`); an unknown name in a DSL rule raises (`:278-280`).
 6. **Response is per-week, 1-based**, Saturdays nested in the week object (`:1131-1169`, `app/api/admin/solve/route.ts:30-33`).
-7. **`weekends_w_sat` is a list of 1-based WEEK INDEXES, not dates** (`:185-194`, `app/api/admin/solve/route.ts:12`).
+7. **`weekends_with_saturday` is a list of 1-based WEEK INDEXES, not dates** (`:185-194`, `app/api/admin/solve/route.ts:12`). The Python dataclass field is `weekends_w_sat` (`owt_solver_v2.py:90`) but the **JSON key is `weekends_with_saturday`**, read at `:1195` as `data.get("weekends_with_saturday", [])` — a **silent `[]` default**, so any drift yields a month with zero Saturday assignments and no error. `buildSolveRequest` must return a literal typed `SolveRequest` so `tsc` catches the drift.
 8. **The Saturday↔week rule is ADJACENCY on Sundays, both directions.** Request: `weekends_with_saturday = [i+1 for each sundayDates[i] whose previous day is a selected Saturday]` (`MonthGenerator.tsx:1242-1252`). Response: week `n`'s Saturday is `subtractDay(sundayDates[n-1])`, kept only if that date is a selected Saturday of the month (`:1364-1377`). There is also a positional fallback at `:1249-1251` that fires when no Saturday is adjacent to any Sunday.
 9. **Creation is preflight-gated and idempotent.** `handleConfirm` (`MonthGenerator.tsx:1404`): filters on `preflight(...)==="creatable"` (`:1411-1414`), **re-observes at confirm time and aborts on any drop** (`:1420-1431`), posts via `runDraftCreateBatch` with stable per-draft `creationRequestId` (`:1440-1459`), marks only confirmed successes `exists` (`:1465-1466`).
 10. **`preflights` is keyed by `draft.localId`** (`:1485-1490`).
@@ -59,12 +59,12 @@
 | D4 | The grid operates only on **uncreated drafts**. Editing existing services is A · Tablero's job. |
 | D5 | Instrument and FOH rows are always manual, and say so persistently, so a blank Bass row after Auto never reads as a solver failure. |
 | D6 | **Capacity is Auto's fill target, never a limit, in any category.** Rows warn above their target and always accept. No cell ever replaces an existing occupant — that behaviour is exactly what evicted a drummer in `c2b2fa7`. An occupant leaves only when someone removes them. |
-| D7 | **Cell density:** a cell renders alias-only (`dn`), at most 2 names, then `+N`. The full list is in the cell's title and in the click-through panel. The original complaint was a cramped window; 9 columns × 3 names is the risk this guards. |
+| D7 | **Cell density:** a cell renders alias-only (`dn`), at most 2 names, then **`+N` as a focusable control that opens the cell** — not a `title` hover hint. The iOS build is an online wrap of the hosted app (`capacitor.config.ts` `server.url`), so `title` never fires on touch and a hover-only affordance hides the very information the user said was hidden. |
 | D8 | The window is the **calendar month**, so `weeks` is always 4 or 5 and `solvableWindow`'s 3–6 guard is a defensive assert, not a reachable path. Resolves spec §12's open item. |
 | D9 | **Unchecking Domingos keeps working exactly as it does today** (fact 12): `sundayDates` is computed for the solve regardless of the toggle, Auto runs, Saturday columns are filled, and Sunday columns are simply not rendered. The previous draft of this plan claimed `weeks` would be 0 and disabled Auto — that contradicted fact 12 and would have removed a working capability. |
-| D10 | **The grid gets its own surface.** `CueDialog` stops at `max-w-4xl` (fact 20), and August 2026 is **10 columns** (Sun 2/9/16/23/30 + Sat 1/8/15/22/29) — about 75 px per column after the row gutter, inside a box that also scrolls vertically. That reproduces the cramped window this whole project exists to fix. Task 4 adds a wider size token to `CueDialog` **or** mounts the generator outside the dialog, and passes `ownScroll` so the body does not scroll behind the grid's own horizontal scroll. A column-width budget for the 10-column case is part of Task 3's acceptance. |
+| D10 | **The grid does not live in the dialog.** `CueDialog` stops at `max-w-4xl` (fact 20) and August 2026 is **10 columns** (Sun 2/9/16/23/30 + Sat 1/8/15/22/29) — roughly 75 px each after the row gutter, in a box that also scrolls vertically. A wider size token was considered and rejected: still too narrow at 10 columns, and widening a shared token risks every other dialog. The generator mounts as a **full-width panel inside the Servicios tab**. This is the decision that answers "I have to scroll through a really small window", so it is settled **before** Task 3, not deferred to Task 4. |
 | D11 | **Row applicability is per column type.** A Coro row renders only on Sunday columns (fact 22 — the solver has no `Sat.Choir`, so a Saturday Coro cell could never be filled and would read as the solver failure D5 exists to prevent). |
-| D12 | **Ranking sees the grid's own drafts.** `rankCandidates` derives load only from `windowRoles` (fact 15), so without this the four columns you just filled are invisible when you fill the fifth and the same person tops the list every time. Task 3 synthesises the in-grid drafts into `ParticipantRole` shape and concatenates them with the saved window. |
+| D12 | **Ranking sees the grid's own drafts — for `load` only.** `rankCandidates` derives both `load` and `recent` from `windowRoles` (fact 15), and `recent` takes `[...new Set(weekKeys)].sort().slice(-weeks)` with `weeks` defaulting to 4 (`candidateRanking.ts:87`, `:104`). Concatenating the grid's 4–5 future weeks onto the history window would make `slice(-4)` return *the grid's own weeks*, and the strip would stop showing history entirely. So: **`load` from the union (saved window + in-grid drafts), `recent` from the saved window only.** |
 
 ---
 
@@ -85,6 +85,8 @@
 Fact 19: there is no `MonthGenerator` test. Everything in fact 9 is safety-critical and about to be disturbed. Pin it **before** touching anything, so later tasks have a net rather than a promise.
 
 **Files:** Create `app/components/admin/__tests__/MonthGenerator.create.test.tsx` (jsdom, mocked `fetch`, injected `preflight`).
+
+Task 4 deletes `DraftCardEditor` and rewrites the preview, and declares this harness its acceptance test. For "must still pass unchanged" to be realizable, these tests query **only** by accessible role/name on affordances that survive the rewrite — `Previsualizar →`, `Crear`, `Crear y publicar`, `Cancelar` — and never by a `DraftCardEditor` internal.
 
 **Tests — each must fail if the behaviour is removed:**
 - Only `creatable` targets are posted; a `blocked` one is not.
@@ -107,11 +109,13 @@ Fact 19: there is no `MonthGenerator` test. Everything in fact 9 is safety-criti
 - `interface GridCell { date: string; rowId: string; memberIds: string[]; origin: CellOrigin }`
 - `interface GridRow { id: string; label: string; category: SeatCategory; solvable: boolean; target: number | null }`
 - `buildRows({ instrumentSeats, fohSeats }): GridRow[]`
+- `seatDefForRow(row: GridRow): SeatDef` — `rankCandidates` takes a `SeatDef` and filters on `seat.memberType` (`candidateRanking.ts:79`, `:127`), which `GridRow` does not carry. Map via `VOICE_SEATS` / `instrumentSeatDef` / `fohSeatDef` rather than re-deriving.
 - `buildSolveRequest({ config, members, sundayDates, activeSatDates, history }): { ok: true; request: SolveRequest } | { ok: false; reason: string }`
-- `applySolveResponse({ response, rows, sundayDates, activeSatDates, members }): { cells: GridCell[]; unresolvedNames: string[]; counts: { total_counts; role_counts } | null }`
-- `cellsToDrafts(cells, previous): DraftCard[]`
+- `applySolveResponse({ response, previousCells, rows, sundayDates, activeSatDates, members }): { cells: GridCell[]; unresolvedNames: string[]; counts: { total_counts; role_counts } | null }` — **takes the current grid and returns the MERGED grid.** Without `previousCells` it has no instrument or FOH cells to preserve, the D5 test below can only assert the absence of an input that never existed, and the natural implementation returns a voice-only grid that wipes every hand-entered Bass/Keys/Drums/Console cell in the month on one Auto press.
+- `cellsToDrafts(cells, previous, existingRoles): DraftCard[]` — `exists` and `skipped` seed from `existingRoles` today (`MonthGenerator.tsx:1208-1209`, `:1355-1356`, `:1370-1371`), and `Props.preflight` is optional (`:70`) with `!d.exists` as the standalone fallback (`:1413`, `:1494`). Without `existingRoles` an already-created date arrives un-skipped and posts again.
 - `solvableWindow(sundayDates): { ok: boolean; weeks: number; reason: string | null }`
 - `unaddressableDates(sundayDates, activeSatDates): string[]`
+- `mapUnfilledSeats(seats, sundayDates, activeSatDates): { date: string; rowId: string }[]` — `summarizeUnfilledSeats` (`unfilledSeats.ts:32-62`) returns `{week, service, labels}` with the role already collapsed to Spanish and no date, so the grid cannot place them. Extend `unfilledSeats.ts` to expose the role rather than re-implementing `SEAT_RE` in the component (CLAUDE.md: don't reinvent shipped utils). Note `SEAT_RE` matches the trailing `#N` without capturing it, so a seat resolves to a row and a date, never to an occupant slot.
 - `weekendWeekIndexes(sundayDates, activeSatDates): number[]`
 - `saturdayForWeek(n, sundayDates, activeSatDates): string | null`
 
@@ -129,7 +133,7 @@ Fact 19: there is no `MonthGenerator` test. Everything in fact 9 is safety-criti
 - The positional fallback (fact 8, `:1249-1251`) is reachable only when the single selected Saturday is a month-final unadjacent one. Assert the concrete outcome rather than characterising it: the fallback asks the solver to staff week 1's Saturday, whose date resolves out of month and is discarded at `:1366` — so fairness is consumed for a service that is never created. The test asserts exactly that, and that `unaddressableDates` reports the date rather than dropping it silently.
 
 *Request construction — fact 11*
-- Every person named in any DSL rule but absent from all three pools is injected into `support`; the default config (whose rules name Frank, Mkz, Gaby, Lucía, Liu, Marianne, Hugo, Niza, Jakey — `MonthGenerator.tsx:160-209`) yields a request the solver accepts. Omitting this is a 422.
+- Every person named in any DSL rule but absent from all three pools is injected into `support`; the default config (whose rules name Frank, Mkz, Gaby, Lucía, Liu, Marianne, Hugo, Niza, Jakey — `MonthGenerator.tsx:160-209`) yields a request in which **every DSL-named person appears in exactly one pool**. That is the shape assertion a unit test can make; "the solver accepts it" cannot be asserted without running the solver. Omitting the injection is a 422 in production.
 - A member unavailable on a Sunday in the window yields `!in week N Sun.*`; the Saturday case yields `Sat.*`.
 - **Only POOL members generate availability rules.** `MonthGenerator.tsx:1288` loops `allPoolIds`; a rule naming a non-pool member makes the solver raise "unknown person" (`gcf/owt_solver_v2.py:278-280`) and 422 the whole month. Test that an unavailable non-pool member produces no rule.
 - Pools are mutually exclusive after construction (fact 5).
@@ -138,11 +142,13 @@ Fact 19: there is no `MonthGenerator` test. Everything in fact 9 is safety-criti
 
 *Response mapping*
 - Only `solvable` rows are written; a response naming a non-solvable row is ignored and reported.
-- Every written cell has `origin: "auto"`; instrument and FOH cells are untouched (D5).
+- Every written cell has `origin: "auto"`.
+- **Instrument and FOH cells survive a run byte-for-byte.** Seat `Drums` with two members on two dates, run `applySolveResponse`, assert both cells return with the same `memberIds` and `origin: "manual"`, and that only voice cells changed. Same failure class as the eviction fixed in `c2b2fa7`, at month scale.
 - An unmatched name leaves the cell empty and appears in `unresolvedNames`.
 - `counts` carries `total_counts`/`role_counts` through, so Task 4 can persist history (fact 11).
 
 *Stability*
+- **A new Auto run mints new `creationRequestId`s**, matching today's behaviour (`handlePreview` mints fresh ids at `:1354`, `:1369`; `monthDraftCreate.ts:8` — "only a genuinely new preview mints new ids"). Reusing an id across a changed roster surfaces as `idempotency_mismatch` (`roleWriteRequest.ts:696-698`). Ordinary re-renders do not mint.
 - `cellsToDrafts` preserves `localId`, `creationRequestId`, `exists` and `skipped` across repeated calls for the same date and type (fact 10 — a fresh `localId` makes every `preflights.get` miss, so nothing is creatable and the result is "0 por crear"; a lost `exists` re-opens an already-created date for posting).
 
 ---
@@ -160,12 +166,15 @@ Fact 19: there is no `MonthGenerator` test. Everything in fact 9 is safety-criti
 - Clicking a cell opens the ranked list via `rankCandidates`, with `assigned` built from **that date's whole column**, so the same-category rule holds per service and fact 17's duplicate detection is carried into the grid.
 - **A member who served recently sorts below one who did not** — the test that would fail if `windowRoles` were passed empty (fact 15's silent failure).
 - **A member assigned earlier in THIS grid sorts below one who was not** — the test that would fail if D12's in-grid synthesis were dropped.
-- **Column-width budget:** with 10 columns (August 2026's worst case) every column is readable without truncating an alias to fewer than its first 8 characters, and the grid scrolls horizontally rather than compressing further.
-- Above `target`, a cell of ANY category warns and still accepts (D6). **No cell ever replaces an existing occupant** — a test seats two people on one `Drums` row, adds a third, and asserts all three survive (fact 14b, and the bug fixed in `c2b2fa7`).
+- **The `recent` strip still shows history, not the grid.** Assert the *contents* of `recent` for a member who served historically but appears nowhere in the grid: their strip is non-empty. Sort-order tests cannot catch this, because ordering is driven by `load` (`candidateRanking.ts:156`), so both tests above pass while the strip is silently wrong.
+- **Column sizing, asserted the way jsdom can.** vitest runs `environment: "node"` with per-file jsdom and no browser mode, and jsdom performs no layout — `getBoundingClientRect`, `offsetWidth`, `clientWidth` are all zero — so a pixel budget is unimplementable as a unit test. Assert instead: the grid container carries `overflow-x-auto`; every column carries a `min-w` class so columns scroll rather than compress; no scroll region is nested inside another (the invariant `SeatBoard.test.tsx:146-156` pins by class containment). The 10-column appearance is checked once by screenshot in Task 4 and the result recorded there.
+- **Warnings fire on solvable rows only.** `target: 1` on an instrument row would warn on the two-drummer setup, i.e. on 18 of 27 services (fact 14b) — a warning that is right two-thirds of the time is noise. Non-solvable rows carry no threshold.
+- Above `target`, a voice cell warns and still accepts (D6). **No cell ever replaces an existing occupant** — a test seats two people on one `Drums` row, adds a third, and asserts all three survive (fact 14b, and the bug fixed in `c2b2fa7`).
 - A Coro row is not rendered on Saturday columns (D11).
 - Cells render alias-only, at most 2 names, then `+N`, with the full list in `title` (D7).
-- **Auto** disabled with a visible reason when `solvableWindow` says no, or when Domingos is unchecked (D9).
-- **Auto confirms first** (D2), naming that it replaces every voice assignment in the window — including columns that cannot be created, since the solver cannot skip a week (fact 2) and will consume fairness budget for them.
+- **Auto** disabled with a visible reason when `solvableWindow` says no.
+- **Domingos unchecked, Saturdays selected: Auto is ENABLED**, the run produces Saturday cells, and no Sunday column renders (D9, fact 12). A positive test, not an absence — an earlier draft disabled Auto here and would have shipped a regression.
+- **Auto confirms first** (D2), naming that it replaces every voice assignment **the solver can address** — an unaddressable Saturday (Feb 28 in Task 2's fixture) is never in the response and its cells are untouched, so the copy must not overstate its reach — including columns that cannot be created, since the solver cannot skip a week (fact 2) and will consume fairness budget for them.
 - After a run, instrument and FOH rows carry a persistent "asignación manual" label (D5).
 - `unresolvedNames` and `unfilled_seats` surface against the row and date they concern (fact 18), not as a bare count.
 - Diagnostics still surfaced: `fairness_relaxed`, `sun_lead_fairness_relaxed`, `sun_bgv_fairness_relaxed`, `history_runs_used`.
