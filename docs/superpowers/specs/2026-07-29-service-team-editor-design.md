@@ -152,10 +152,25 @@ config step (pools + the `Reglas` rule builder) is **kept as-is** and feeds it.
   CONSOLE     Armando  Becca    Armando  Becca    Tay
 ```
 
-- Any cell is editable by hand. A hand-set cell is **pinned** (`●`) and the solver may not
-  move it.
+- Any cell is editable by hand.
 - **Auto** runs the solver over the **voice rows only**, for the 3–6 week window on screen,
-  honouring pinned cells. This is the existing `/api/admin/solve` contract unchanged.
+  and **overwrites every voice cell** — it asks first, naming what it will replace. Hand
+  edits made after a run persist until the next run.
+
+  > **Corrected 2026-07-29 by adversarial review.** This section previously said Auto would
+  > honour *pinned* cells on the existing contract. That is not buildable: `ScheduleConfig`
+  > (`gcf/owt_solver_v2.py:87-107`) has no pre-assignment field, and the DSL supports only
+  > negative and aggregate forms — the exhaustive list is the error text at `:433-439`. There
+  > is no way to express "this person holds this seat in this week". A client-side merge was
+  > rejected too: the solver enforces one slot per person per service internally (`:754-764`),
+  > so merging pins into its output can produce the same-category double booking
+  > `candidateRanking` blocks, and would leave `fairness_relaxed` / `unfilled_seats`
+  > describing a schedule the admin is not looking at.
+  >
+  > Voice seats are also **multi-occupant** — `build_slots` (`:547-561`) emits 2 Leads,
+  > 3 BGVs and 3 Choir per Sunday — so a grid cell holds a list, not one name. The mockups
+  > that illustrated this section showed one name per cell and honoured pins in JavaScript;
+  > both were wrong about the domain.
 - Instrument and FOH rows are filled by hand, with the same ranked candidates as A, plus
   **copy across dates** — the grid-native replacement for today's "copiar instrumentos a
   otro día".
