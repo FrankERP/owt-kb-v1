@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { SolveResponse } from "@/app/api/admin/solve/route";
+import { computeParticipation } from "@/app/utils/computeParticipation";
 import type { RankMember } from "../candidateRanking";
 import {
   applySolveResponse,
@@ -15,6 +16,7 @@ import {
   buildRows,
   buildSolveRequest,
   cellsToDrafts,
+  cellsToParticipantRoles,
   historyForRequest,
   isSolvable,
   rowAppliesTo,
@@ -650,5 +652,94 @@ describe("cellsToDrafts — stability", () => {
     const created = cellsToDrafts([], columns, new Set(), [], []).map((d): DraftCard => ({ ...d, exists: true }));
     const rerender = cellsToDrafts([], columns, new Set(), created, []); // existingRoles hasn't caught up yet
     expect(rerender[0].exists).toBe(true);
+  });
+});
+
+// ─── cellsToParticipantRoles — D12's conversion ──────────────────────────────
+//
+// `rankCandidates` takes `ParticipantRole[]`, whose seats hold member OBJECTS
+// (`computeParticipation.ts:2-10`); `GridCell.memberIds` holds strings. This
+// is the mapping D12's union needs, owned here so `PlannerGrid` (Task 3) does
+// not hand-roll it.
+describe("cellsToParticipantRoles", () => {
+  const members: RankMember[] = [
+    m("m1", "Frank"),
+    m("m2", "Gaby"),
+    m("m3", "Liu"),
+    { ...m("m4", "Samo"), alias: "Sam" },
+  ];
+
+  it("round-trips one column's five seat categories into ParticipantRole member objects", () => {
+    const date = "2026-02-01";
+    const cells: GridCell[] = [
+      { date, rowId: "lead", memberIds: ["m1"], origin: "manual" },
+      { date, rowId: "bgv", memberIds: ["m2"], origin: "manual" },
+      { date, rowId: "coro", memberIds: ["m3"], origin: "manual" },
+      { date, rowId: "instrumento:Drums", memberIds: ["m4"], origin: "manual" },
+      { date, rowId: "foh:Console", memberIds: ["m1"], origin: "manual" },
+    ];
+    const columns: GridColumn[] = [{ date, type: "sunday_role" }];
+    const [role] = cellsToParticipantRoles(cells, columns, members);
+    expect(role._type).toBe("sunday_role");
+    expect(role.date).toBe(date);
+    expect(role.leads).toEqual([{ _id: "m1", member_name: "Frank", alias: undefined }]);
+    expect(role.bgvs).toEqual([{ _id: "m2", member_name: "Gaby", alias: undefined }]);
+    expect(role.chorus).toEqual([{ _id: "m3", member_name: "Liu", alias: undefined }]);
+    expect(role.instruments).toEqual([
+      { person: { _id: "m4", member_name: "Samo", alias: "Sam" } },
+    ]);
+    expect(role.foh).toEqual([{ person: { _id: "m1", member_name: "Frank", alias: undefined } }]);
+  });
+
+  it("one draft per column regardless of occupancy, mirroring cellsToDrafts", () => {
+    const columns: GridColumn[] = [
+      { date: "2026-02-01", type: "sunday_role" },
+      { date: "2026-02-07", type: "saturday_role" },
+    ];
+    const roles = cellsToParticipantRoles([], columns, members);
+    expect(roles).toHaveLength(2);
+    for (const role of roles) {
+      expect(role.leads).toEqual([]);
+      expect(role.bgvs).toEqual([]);
+      expect(role.chorus).toEqual([]);
+      expect(role.instruments).toEqual([]);
+      expect(role.foh).toEqual([]);
+    }
+  });
+
+  it("an unknown member id (not in `members`) still round-trips as a bare _id", () => {
+    const date = "2026-02-01";
+    const cells: GridCell[] = [{ date, rowId: "lead", memberIds: ["ghost"], origin: "manual" }];
+    const columns: GridColumn[] = [{ date, type: "sunday_role" }];
+    const [role] = cellsToParticipantRoles(cells, columns, members);
+    expect(role.leads).toEqual([{ _id: "ghost" }]);
+  });
+
+  it("one Drums cell with two members becomes two separate instrument slots (D3, matching cellsToDrafts)", () => {
+    const date = "2026-02-01";
+    const cells: GridCell[] = [
+      { date, rowId: "instrumento:Drums", memberIds: ["m1", "m2"], origin: "manual" },
+    ];
+    const columns: GridColumn[] = [{ date, type: "sunday_role" }];
+    const [role] = cellsToParticipantRoles(cells, columns, members);
+    expect(role.instruments).toHaveLength(2);
+  });
+
+  it("feeds computeParticipation without throwing and produces a sane total", () => {
+    // The whole point of this conversion: rankCandidates' load signal is
+    // computeParticipation(windowRoles) — this is the integration check that
+    // the shape this function returns is actually consumable by it.
+    const cells: GridCell[] = [
+      { date: "2026-02-01", rowId: "lead", memberIds: ["m1"], origin: "manual" },
+      { date: "2026-02-08", rowId: "lead", memberIds: ["m1"], origin: "auto" },
+    ];
+    const columns: GridColumn[] = [
+      { date: "2026-02-01", type: "sunday_role" },
+      { date: "2026-02-08", type: "sunday_role" },
+    ];
+    const roles = cellsToParticipantRoles(cells, columns, members);
+    const participation = computeParticipation(roles);
+    const frank = participation.find((p) => p.id === "m1");
+    expect(frank?.sunLead).toBe(2);
   });
 });
