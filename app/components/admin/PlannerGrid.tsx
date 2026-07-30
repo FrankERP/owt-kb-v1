@@ -156,7 +156,11 @@ function categoryDuplicatesForDate(cells: GridCell[], rows: GridRow[], date: str
       byCategory.set(e.category, list);
     }
     for (const rowIds of byCategory.values()) {
-      if (rowIds.length > 1) out.set(memberId, rowIds);
+      // ACCUMULATE, never overwrite: a member can be duplicated in two
+      // categories on one date (Lead+BGV and Bass+Guitar). Assigning here would
+      // keep only the last category's rows, silently un-flagging the other
+      // duplicate — the very thing this function exists to catch.
+      if (rowIds.length > 1) out.set(memberId, [...(out.get(memberId) ?? []), ...rowIds]);
     }
   }
   return out;
@@ -250,7 +254,18 @@ export default function PlannerGrid(props: PlannerGridProps) {
     return order.map((c) => ({ ...c, recent: recentById.get(c.id) ?? c.recent }));
   }
 
+  /**
+   * The refusal message survives until an edit could plausibly resolve it.
+   * `activeRemoveError` already hides it once the row empties, but the state
+   * itself lingered — so emptying the row and then re-seating someone made the
+   * message reappear without the user touching Eliminar again.
+   */
+  function clearRemoveError() {
+    if (removeError) setRemoveError(null);
+  }
+
   function toggleCandidate(row: GridRow, date: string, memberId: string, candidates: RankedCandidate[]) {
+    clearRemoveError();
     const current = cellsByKey.get(cellKey(date, row.id))?.memberIds ?? [];
     const blocked = candidates.find((c) => c.id === memberId)?.blockedReason;
     if (blocked && !current.includes(memberId)) return; // refuse a same-category double (D6)
@@ -301,6 +316,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
   }
 
   function copyRowAcrossDates(row: GridRow, sourceDate: string) {
+    clearRemoveError();
     const sourceIds = cellsByKey.get(cellKey(sourceDate, row.id))?.memberIds ?? [];
     let next = cells;
     for (const col of columns) {

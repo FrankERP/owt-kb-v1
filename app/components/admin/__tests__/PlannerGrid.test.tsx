@@ -398,6 +398,44 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
     expect(bassCell.querySelectorAll(".border-red-500\\/50").length).toBe(0);
   });
 
+  it("flags duplicates in BOTH categories when a member is doubled in each", () => {
+    // `categoryDuplicatesForDate` groups by category and must ACCUMULATE across
+    // them. Assigning instead of appending keeps only the last category's rows,
+    // so the voz duplicate silently stops being flagged — the very thing the
+    // function exists to catch.
+    const cells: GridCell[] = [
+      // ONE member doubled in BOTH categories — that is what makes an
+      // overwrite lose a flag. Two different members would never collide.
+      { date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "manual" },
+      { date: "2026-08-09", rowId: "bgv", memberIds: ["m1"], origin: "auto" },
+      { date: "2026-08-09", rowId: "instrumento:Bass", memberIds: ["m1"], origin: "manual" },
+      { date: "2026-08-09", rowId: "instrumento:Keys", memberIds: ["m1"], origin: "manual" },
+    ];
+    const { container } = render(<PlannerGrid {...baseProps({ cells })} />);
+    for (const rowId of ["lead", "bgv", "instrumento:Bass", "instrumento:Keys"]) {
+      expect(
+        within(cellFor(container, rowId, "2026-08-09")).getByText(/⚠/),
+        rowId,
+      ).toBeTruthy();
+    }
+  });
+
+  it("clears the row-removal refusal once a cell is edited again", () => {
+    const cells: GridCell[] = [
+      { date: "2026-08-09", rowId: "instrumento:Bass", memberIds: ["d1"], origin: "manual" },
+    ];
+    const { container, queryByText } = render(<PlannerGrid {...baseProps({ cells })} />);
+    fireEvent.click(screen.getByRole("button", { name: /Eliminar fila Bass/i }));
+    expect(queryByText(/Vacía la fila/)).toBeTruthy();
+    // Target the Bass cell and toggle its occupant off: an edit resolves the
+    // refusal, so the message must not linger. "Samo" also renders as a chip in
+    // the cell, so scope the click to the candidate picker.
+    fireEvent.click(cellFor(container, "instrumento:Bass", "2026-08-09"));
+    const picker = container.querySelector(".overflow-y-auto") as HTMLElement;
+    fireEvent.click(within(picker).getByText("Samo"));
+    expect(queryByText(/Vacía la fila/)).toBeFalsy();
+  });
+
   it("surfaces a duplicate hidden behind +N — the over-target state +N exists for (Finding 2)", () => {
     // Lead's target is 2. Three occupants means the third (m1) is hidden
     // behind "+1". m1 is ALSO in BGV the same date, a real same-category
