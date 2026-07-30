@@ -298,6 +298,27 @@ Expect an **empty saved window in the common case**: the 56-day slice looks back
 - **Spec §8.1 (instrument spellings):** already satisfied in production (fact 30) — no script needed.
 - **Knowingly deferred:** history is persisted at *solve* time, not create time (`MonthGenerator.tsx:1383-1385`). D16 and D19 each close one axis of "counts recorded for services that never existed"; the third — a skipped column, or an Auto run the admin abandons without creating — stays open, and D13 makes it more frequent. Closing it properly means moving persistence to `handleConfirm`, which is a larger change than this plan carries.
 
+## Settled: the untyped members
+
+Eight of 34 members carry no `memberType` (fact 31), so `rankCandidates`
+(`candidateRanking.ts:127`) shows them in no picker. **The user has decided this is
+fine, and the data supports it:** each of the eight — Rex, Yadhyra, Nestor, Goma,
+Milo, Ro Eguiarte, Pato and the `Claude` service account — has been assigned
+**zero times across every seat path in every role document**, verified by GROQ.
+They are directory entries, not people being hidden. Spec §8.2 needs no action,
+and no task is gated on it.
+
+## Open questions for the user
+
+1. The two Task 4 decisions above.
+
+## Settled
+
+- **Pins:** rejected with reasons (D1) — not impossible, but over-constraining and infeasibility-prone.
+- **Soft maximum per seat:** not needed. D6 makes capacity advisory, so nothing is blocked or dropped; `seatModel` keeps `max: null`.
+- **Spec §8.1 (instrument spellings):** already satisfied in production (fact 30) — no script needed.
+- **Knowingly deferred:** history is persisted at *solve* time, not create time (`MonthGenerator.tsx:1383-1385`). D16 and D19 each close one axis of "counts recorded for services that never existed"; the third — a skipped column, or an Auto run the admin abandons without creating — stays open, and D13 makes it more frequent. Closing it properly means moving persistence to `handleConfirm`, which is a larger change than this plan carries.
+
 ## Prerequisite
 
 **Spec §8.2 is NOT satisfied.** Seven real members carry no `memberType` (fact 31) and are therefore invisible in every picker the grid renders. Note this is a **narrowing**, and decide against the real numbers rather than against "seven": `SlotEditor2`'s person `<select>` (`MonthGenerator.tsx:344`) lists **all 34** members unfiltered today, while `rankCandidates` (`candidateRanking.ts:127`) narrows instrument rows to the **11** carrying `instrumento` and FOH rows to the **5** carrying `foh`. They have never appeared in any of the 27 role docs, and the already-merged `SeatBoard` has the same gap — so this is a decision to make, not a blocker the code forces. Each needs a decision — assign a type, or retire the record — **before Task 3 ships**, or the grid launches hiding seven people. This is a data decision for the user, not a code task.
