@@ -110,18 +110,31 @@ export function rankCandidates(input: {
     for (const id of servingIds(role, seat.category)) set.add(id);
   }
 
-  const seatById = new Map(assigned.map((a) => [a.memberId, a]));
+  // A member can hold several seats on one service (D4: voz + instrumento is
+  // real — Frank and Mkz both lead and play). A Map keyed by memberId would
+  // keep only the LAST seat built for that member, and SeatBoard builds
+  // `assigned` in seat order (voces, then instrumentos, then FOH), so an
+  // instrument seat would silently overwrite a voice one and hide the
+  // same-category conflict the block exists to catch. Keep every held seat.
+  const seatsById = new Map<string, AssignedSeat[]>();
+  for (const a of assigned) {
+    const list = seatsById.get(a.memberId);
+    if (list) list.push(a);
+    else seatsById.set(a.memberId, [a]);
+  }
 
   const rows: RankedCandidate[] = (members ?? [])
     .filter((m) => (m.memberType ?? []).includes(seat.memberType))
     .map((m) => {
-      const held = seatById.get(m._id);
+      const heldSeats = seatsById.get(m._id) ?? [];
       // D4: same category is a real conflict (nobody sings Lead and BGV at once);
       // voz + instrumento is what Frank and Mkz actually do, so it only informs.
-      const blockedReason =
-        held && held.category === seat.category && held.seatId !== seat.id
-          ? `Ya asignado en ${labelOfSeatId(held.seatId)}`
-          : null;
+      // The seat being targeted itself never counts as a conflict — a member
+      // already in this exact seat must stay selectable so they can be toggled off.
+      const conflict = heldSeats.find(
+        (held) => held.category === seat.category && held.seatId !== seat.id,
+      );
+      const blockedReason = conflict ? `Ya asignado en ${labelOfSeatId(conflict.seatId)}` : null;
       const strip = weekKeys.map((k) => servedInWeek.get(k)?.has(m._id) ?? false);
       // Pad on the left so every strip is the same width regardless of history.
       const recent = [...Array(Math.max(0, weeks - strip.length)).fill(false), ...strip];
@@ -129,7 +142,7 @@ export function rankCandidates(input: {
         id: m._id,
         name: displayName(m),
         available: !(m.unavailableDates ?? []).includes(date),
-        alreadyAssigned: !!held && held.seatId !== seat.id,
+        alreadyAssigned: heldSeats.some((held) => held.seatId !== seat.id),
         blockedReason,
         load: loadById.get(m._id) ?? 0,
         recent,

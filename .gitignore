@@ -67,6 +67,9 @@ __pycache__/
 # One-off production backfill backups (never committed)
 .backfill-backups/
 
+# scripts/normalize-instrument-names.mjs pre-mutation backup dump (never committed)
+.normalize-instrument-backups/
+
 # Isolated-dataset verification fixture backups (never committed)
 .sr-verification-backups/
 
