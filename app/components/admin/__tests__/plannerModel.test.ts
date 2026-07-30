@@ -17,6 +17,7 @@ import {
   cellsToDrafts,
   historyForRequest,
   isSolvable,
+  rowAppliesTo,
   mapUnfilledSeats,
   saturdayForWeek,
   seatDefForRow,
@@ -53,6 +54,41 @@ const emptyConfig: SolverConfig = {
 };
 
 // ─── Shape ────────────────────────────────────────────────────────────────────
+
+describe("Saturday has no Coro", () => {
+  // The domain rule, confirmed by the team and matched by the data: 0 of 8
+  // stored saturday_role documents carry a Chorus, against 19 of 19 Sundays.
+  const coro = buildRows({ instrumentSeats: [], fohSeats: [] }).find((r) => r.id === "coro")!;
+  const sunday: GridColumn = { date: "2026-08-09", type: "sunday_role" };
+  const saturday: GridColumn = { date: "2026-08-08", type: "saturday_role" };
+
+  it("does not apply the Coro row to a Saturday column", () => {
+    expect(rowAppliesTo(coro, sunday)).toBe(true);
+    expect(rowAppliesTo(coro, saturday)).toBe(false);
+    expect(isSolvable(coro, saturday)).toBe(false);
+  });
+
+  it("writes an empty chorus for a Saturday even if a stray cell holds one", () => {
+    // Belt and braces: a cell could survive a column-type change, so the write
+    // is forced empty rather than trusting the grid to be clean.
+    const cells: GridCell[] = [
+      { date: "2026-08-08", rowId: "coro", memberIds: ["m1", "m2"], origin: "manual" },
+      { date: "2026-08-08", rowId: "lead", memberIds: ["m3"], origin: "manual" },
+    ];
+    const drafts = cellsToDrafts(cells, [saturday], new Set(), [], []);
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0].chorus).toEqual([]);
+    expect(drafts[0].leads).toEqual(["m3"]);
+  });
+
+  it("still writes a Sunday chorus", () => {
+    const cells: GridCell[] = [
+      { date: "2026-08-09", rowId: "coro", memberIds: ["m1", "m2"], origin: "manual" },
+    ];
+    const drafts = cellsToDrafts(cells, [sunday], new Set(), [], []);
+    expect(drafts[0].chorus).toEqual(["m1", "m2"]);
+  });
+});
 
 describe("buildRows", () => {
   it("targets 2/3/3 for Lead/BGV/Coro and 1 for every instrument/FOH row", () => {
