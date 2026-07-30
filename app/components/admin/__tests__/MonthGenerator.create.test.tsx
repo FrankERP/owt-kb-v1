@@ -21,7 +21,7 @@
 //
 // Buttons are matched by their REAL computed labels (`Crear ${n} borrador(es)`
 // pluralised, and the literal "Crear y publicar"): a bare /Crear/ matches both.
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MonthGenerator from "../MonthGenerator";
@@ -303,25 +303,25 @@ describe("MonthGenerator — create path", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  // ── Written now, expected to be REWRITTEN in Task 4 (D13 moves the solve
-  // trigger from `Previsualizar →` to Auto) — kept here because they pin
-  // behaviour that must survive that move. ──────────────────────────────────
+  // ── REWRITTEN for Task 4 (D13 moves the solve trigger from
+  // `Previsualizar →` to Auto, inside `PlannerGrid`). Both pin the SAME
+  // behaviour the Task 1 versions did; only the trigger changed. ────────────
 
-  it('"Debes seleccionar al menos un líder de domingo" refuses before any /api/admin/solve call', () => {
+  it('"Debes seleccionar al menos un líder de domingo" refuses before any /api/admin/solve call', async () => {
     const fetchMock = stubUnreachableFetch();
-    render(
+    const { container } = render(
       <MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
+    goToPreview(container, 2, 2026); // "Previsualizar →" now only builds an empty grid.
 
-    fireEvent.click(screen.getByLabelText(/Auto-asignar con Solver/));
-    // No sunday leads selected — the pool default is empty.
-    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+    // No sunday leads selected — the pool default is empty. Auto requires a
+    // confirmation step (D2) before it calls `onAuto`.
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
 
     expect(
       screen.getByText("Debes seleccionar al menos un líder de domingo."),
     ).toBeTruthy();
-    // Still on the config step: the solve-trigger button is unchanged.
-    expect(screen.getByRole("button", { name: /Previsualizar/ })).toBeTruthy();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -350,28 +350,227 @@ describe("MonthGenerator — create path", () => {
     const { container } = render(
       <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
-    setMonthYear(container, 2, 2026);
-    disableSaturdays();
-    fireEvent.click(screen.getByLabelText(/Auto-asignar con Solver/));
+    // Pools live on step 1 (config); Auto lives on step 2 (grid) — select the
+    // Sunday lead BEFORE building the grid (D17's layout, not a test artifact).
     fireEvent.click(screen.getByLabelText("Ana"));
+    goToPreview(container, 2, 2026);
 
-    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
-    await waitFor(() => expect(screen.getByRole("button", { name: /Volver/ })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     const historyAfterFirst = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
     const entriesFor2026_2 = historyAfterFirst.filter((h: { key: string }) => h.key === "2026-2");
     expect(entriesFor2026_2).toHaveLength(1);
     expect(entriesFor2026_2[0].total_counts).toEqual({ Ana: 1 });
 
-    // Run the same month/year solve again — the entry must be REPLACED, not
+    // Run Auto again for the SAME month — the entry must be REPLACED, not
     // appended, so the fairness window doesn't double-count this month.
-    fireEvent.click(screen.getByRole("button", { name: /Volver/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
-    await waitFor(() => expect(screen.getByRole("button", { name: /Volver/ })).toBeTruthy());
+    // (D13 decouples Auto from the step transition, so there is no "Volver /
+    // Previsualizar" round trip needed to re-run it — a second Auto click on
+    // the same grid is enough.)
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 
     const historyAfterSecond = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
     const entriesAfterSecond = historyAfterSecond.filter((h: { key: string }) => h.key === "2026-2");
     expect(entriesAfterSecond).toHaveLength(1);
     expect(entriesAfterSecond[0].total_counts).toEqual({ Ana: 2 });
+  });
+
+  // ── Task 4: the live production bug ────────────────────────────────────────
+  //
+  // Today's `MonthGenerator.tsx:1249-1251` assigns Saturday week indexes
+  // POSITIONALLY when no selected Saturday is adjacent to any Sunday. On
+  // October 2026 with only Oct 31 selected, that creates a `saturday_role` for
+  // 2026-10-03 — a Saturday the admin explicitly DESELECTED — and
+  // `Crear y publicar` emails the whole team about it. Verified by temporarily
+  // running this exact scenario (in the new Auto-driven shape) against the
+  // pre-Task-4 component: it reproduced a stray "Sábado" draft for day 3.
+  // `weekendWeekIndexes` (D16, plannerModel) drops the positional fallback, so
+  // the request never even asks the solver to staff that week — this test
+  // proves the create path honours that all the way through to the POST.
+  it("October 2026, only Oct 31 selected: no saturday_role draft for the deselected 2026-10-03, and nothing is POSTed for it", async () => {
+    const members = [
+      { _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] },
+    ];
+    const fetchMock = vi.fn(async (url: string, init?: { body: string }) => {
+      if (url === "/api/admin/solve") {
+        const body = JSON.parse(init!.body) as { weekends_with_saturday: number[] };
+        // The fix, at the request level: week 1's Saturday (Oct 3) is never
+        // addressed, because it isn't the selected Oct 31.
+        expect(body.weekends_with_saturday).toEqual([]);
+        return {
+          ok: true,
+          json: async () => ({
+            ok: true,
+            // Even a (hypothetically buggy, or simply a solver that ignores
+            // an empty `weekends_with_saturday`) response carrying Saturday
+            // data for week 1 must never reach a draft: `applySolveResponse`
+            // only ever writes cells for columns actually in the column set,
+            // and week 1's Saturday (Oct 3) never is.
+            schedule: {
+              "1": { Sunday: { Lead: ["Ana"], BGV: [], Choir: [] }, Saturday: { Lead: ["Ana"], BGV: [] } },
+            },
+            total_counts: { Ana: 1 },
+            role_counts: { Ana: { "Sun.Lead": 1 } },
+            unfilled_seats: [],
+          }),
+        };
+      }
+      if (url === "/api/admin/roles") {
+        const body = JSON.parse(init!.body) as { date: string };
+        // The live-bug assertion: nothing is ever POSTed for the deselected
+        // Saturday, however the create batch is triggered.
+        expect(body.date).not.toBe("2026-10-03");
+        return { ok: true, status: 200, json: async () => ({}) };
+      }
+      throw new Error(`unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    setMonthYear(container, 10, 2026);
+    // Deselect every October Saturday, then re-select ONLY the 31st.
+    const satPillLabels = Array.from(container.querySelectorAll("label")).filter((l) =>
+      /de oct/i.test(l.textContent ?? ""),
+    );
+    for (const label of satPillLabels) {
+      fireEvent.click(label.querySelector("input")!);
+    }
+    const oct31 = satPillLabels.find((l) => /31 de oct/i.test(l.textContent ?? ""));
+    fireEvent.click(oct31!.querySelector("input")!);
+
+    // Pools live on step 1; select Ana before building the grid.
+    fireEvent.click(screen.getByLabelText("Ana"));
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+
+    // No stray "Sábado" card for day 3 anywhere in the grid — the deselected
+    // Saturday was never part of the explicit column set (D9/D18) to begin with.
+    const dayEls = Array.from(container.querySelectorAll("p.font-display, span.font-display"));
+    const oct3Card = dayEls
+      .find((el) => el.textContent === "3")
+      ?.closest("div");
+    expect(oct3Card?.textContent ?? "").not.toContain("Sábado");
+
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/admin/solve", expect.anything()));
+
+    // Even with the (hypothetically buggy) solver having been asked about
+    // week 1's Saturday, publish and confirm nothing is ever posted for it.
+    fireEvent.click(screen.getByRole("button", { name: "Crear y publicar" }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([u]) => u === "/api/admin/roles")).toBe(true),
+    );
+    expect(fetchMock.mock.calls.filter(([u]) => u === "/api/admin/roles")).not.toHaveLength(0);
+    expect(
+      fetchMock.mock.calls
+        .filter(([u]) => u === "/api/admin/roles")
+        .map(([, init]) => JSON.parse((init as { body: string }).body).date),
+    ).not.toContain("2026-10-03");
+  });
+
+  // ── Task 4: two items Task 3 could not implement — they live on the wizard
+  // shell (`MonthGenerator`'s own step, not `PlannerGridProps`). ─────────────
+
+  it("Previsualizar → stays disabled when both Domingos and Sábados are unchecked", () => {
+    render(
+      <MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByLabelText("Domingos"));
+    fireEvent.click(screen.getByLabelText("Sábados"));
+    expect(
+      (screen.getByRole("button", { name: /Previsualizar/ }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it("← Volver confirms before discarding, naming how many assignments would be lost", async () => {
+    const members = [
+      { _id: "drum-1", member_name: "Beto", memberType: ["instrumento"] },
+    ];
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+
+    // No confirmation needed when nothing would be lost.
+    fireEvent.click(screen.getByRole("button", { name: /Volver/ }));
+    expect(screen.getByRole("button", { name: /Previsualizar/ })).toBeTruthy();
+
+    // Assign a Drums cell, then try to go back again.
+    goToPreview(container, 2, 2026);
+    const drumsCell = container.querySelector('[data-row-id="instrumento:Drums"][data-date="2026-02-01"]');
+    fireEvent.click(drumsCell!);
+    fireEvent.click(screen.getByText("Beto"));
+    fireEvent.click(screen.getByText("Cerrar"));
+    fireEvent.click(screen.getByRole("button", { name: /Volver/ }));
+
+    expect(screen.getByText(/1 asignaci/i)).toBeTruthy();
+    // Still on the grid step until the discard is confirmed.
+    expect(screen.queryByRole("button", { name: /Previsualizar/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Volver de todos modos/ }));
+    expect(screen.getByRole("button", { name: /Previsualizar/ })).toBeTruthy();
+  });
+
+  // ── Task 4: the seam nothing else covers — cell edit → cellsToDrafts
+  // (previous) → POST. Proven the same way Task 1 proves retry-id stability:
+  // the first POST for a date fails (so it stays retryable, `exists` never
+  // flips), a cell is edited in between, and the retry still carries the
+  // SAME creationRequestId together with the newly assigned member. ────────
+
+  it("assigning a member to a cell and confirming posts that member in the right seat array, preserving the draft's creationRequestId across the edit", async () => {
+    const members = [
+      { _id: "lead-1", member_name: "Ana", memberType: ["voz"] },
+    ];
+    let failFirstSunday = true;
+    const { fetchMock, calls } = stubRolesFetch((date) => {
+      if (date === FEB_2026_SUNDAYS[0] && failFirstSunday) return { ok: false, status: 500 };
+      return { ok: true };
+    });
+
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+
+    // The candidate picker (the only "Ana" match once she's assigned and the
+    // cell chip ALSO reads "Ana") is scoped to its own `<ul>`.
+    const pickAna = () => fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+
+    // Open the Lead cell on the first Sunday and assign Ana.
+    const leadCell = container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]');
+    fireEvent.click(leadCell!);
+    pickAna();
+    fireEvent.click(screen.getByText("Cerrar"));
+
+    fireEvent.click(createButton());
+    await waitFor(() => expect(calls.some((c) => c.date === FEB_2026_SUNDAYS[0])).toBe(true));
+    const firstAttempt = calls.find((c) => c.date === FEB_2026_SUNDAYS[0])!;
+    expect(firstAttempt.body.leads).toEqual(["lead-1"]);
+    const originalId = firstAttempt.body.creationRequestId;
+
+    // Edit the SAME cell again (toggle Ana off and back on) before retrying —
+    // this is the seam: `cellsToDrafts` must thread `previous` through the
+    // edit so the retry still carries the original id.
+    fireEvent.click(leadCell!);
+    pickAna(); // off
+    pickAna(); // on again
+    fireEvent.click(screen.getByText("Cerrar"));
+
+    failFirstSunday = false;
+    fireEvent.click(createButton());
+    await waitFor(() =>
+      expect(calls.filter((c) => c.date === FEB_2026_SUNDAYS[0])).toHaveLength(2),
+    );
+    const retryAttempt = calls.filter((c) => c.date === FEB_2026_SUNDAYS[0])[1];
+    expect(retryAttempt.body.leads).toEqual(["lead-1"]);
+    expect(retryAttempt.body.creationRequestId).toBe(originalId);
+    // 4 Sundays posted on the first attempt, then only the failed one retried.
+    expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 });
