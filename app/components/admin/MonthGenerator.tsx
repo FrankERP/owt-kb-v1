@@ -14,6 +14,7 @@ import {
   buildSolveRequest,
   applySolveResponse,
   cellsToDrafts,
+  historyEntryFromDrafts,
   mapUnfilledSeats,
   unaddressableDates as computeUnaddressableDates,
   type DraftCard,
@@ -1219,9 +1220,11 @@ export default function MonthGenerator({
         history_runs_used: response.history_runs_used,
       });
       setDrafts(prev => cellsToDrafts(applied.cells, columns, skippedDates, prev, existingRoles));
-      if (applied.counts) {
-        saveHistoryEntry(year, month, applied.counts.total_counts, applied.counts.role_counts);
-      }
+      // Fairness history is NOT persisted here — a solve merely proposes a
+      // schedule. Recording it now would count services that may never be
+      // created (close the panel without confirming and next month's solve
+      // would still be penalised for them). `handleConfirm` below persists it
+      // instead, derived from whatever the create batch actually committed.
     } catch {
       setAutoError("Error de red al llamar al solver.");
     } finally {
@@ -1292,6 +1295,16 @@ export default function MonthGenerator({
     // the failed/unknown drafts — with their original request ids.
     const created = new Set(result.createdLocalIds);
     if (created.size) setDrafts(prev => prev.map(d => created.has(d.localId) ? { ...d, exists: true } : d));
+    // Fairness history is recorded from what THIS batch actually committed —
+    // never the whole attempted batch (a failed/skipped draft never happened,
+    // so it must never bias next month's solve). A fully failed batch (empty
+    // `created`) records nothing; `historyEntryFromDrafts` also returns `null`
+    // for an empty list, so this stays a no-op either way.
+    if (created.size) {
+      const createdDrafts = toCreateNow.filter(d => created.has(d.localId));
+      const entry = historyEntryFromDrafts(createdDrafts, members, year, month);
+      if (entry) saveHistoryEntry(entry.year, entry.month, entry.total_counts, entry.role_counts);
+    }
     // Refresh so the list reflects whatever actually got created.
     onCreated();
     if (result.failed.length === 0) {

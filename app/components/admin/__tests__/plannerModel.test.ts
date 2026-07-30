@@ -17,6 +17,7 @@ import {
   buildSolveRequest,
   cellsToDrafts,
   cellsToParticipantRoles,
+  historyEntryFromDrafts,
   historyForRequest,
   isSolvable,
   rowAppliesTo,
@@ -510,41 +511,16 @@ describe("applySolveResponse", () => {
     expect(result.unresolvedNames).toContain("Nadie Conocido");
   });
 
-  it("counts carries total_counts/role_counts out unfiltered when every service type was created", () => {
-    const columns: GridColumn[] = [
-      { date: "2026-02-01", type: "sunday_role" },
-      { date: "2026-02-07", type: "saturday_role" },
-    ];
-    const resp = response({
-      total_counts: { Frank: 3 },
-      role_counts: { Frank: { "Sun.Lead": 1, "Sat.Lead": 2 } },
-    });
-    const result = applySolveResponse({
-      response: resp, previousCells: [], columns, rows,
-      sundayDates: FEB_SUNDAYS, activeSatDates: FEB_SATURDAYS, members,
-    });
-    expect(result.counts).toEqual({
-      total_counts: { Frank: 3 },
-      role_counts: { Frank: { "Sun.Lead": 1, "Sat.Lead": 2 } },
-    });
-  });
-
-  it("counts is filtered to the created service types, with total_counts recomputed (D19)", () => {
-    // Domingos unchecked: only saturday_role columns were created.
-    const columns: GridColumn[] = [{ date: "2026-02-07", type: "saturday_role" }];
-    const resp = response({
-      total_counts: { Frank: 5 }, // stale/raw — must NOT pass through
-      role_counts: { Frank: { "Sun.Lead": 3, "Sat.Lead": 2 } },
-    });
-    const result = applySolveResponse({
-      response: resp, previousCells: [], columns, rows,
-      sundayDates: FEB_SUNDAYS, activeSatDates: FEB_SATURDAYS, members,
-    });
-    expect(result.counts).toEqual({
-      total_counts: { Frank: 2 },
-      role_counts: { Frank: { "Sat.Lead": 2 } },
-    });
-  });
+  // `applySolveResponse` used to also carry a `counts` field (D19: total_counts
+  // recomputed from role_counts filtered to the created service types) and
+  // `handleAuto` persisted THAT to fairness history the instant a solve
+  // returned. That was the 2026-07-30 defect: it recorded what the solver
+  // PROPOSED, not what got created, so an abandoned Auto run still poisoned
+  // next month's solve. `counts` had no other consumer, so it was removed
+  // outright rather than left dead — `historyEntryFromDrafts` below replaces
+  // it, fed only the drafts a create batch actually committed, and keeps the
+  // same "total_counts is the per-person sum of role_counts" rule (D19) that
+  // these two tests used to pin here.
 
   it("Saturday Lead/BGV land on the adjacent column via week-adjacency, and a smuggled Sat.Choir produces no cell (D11's per-cell gate)", () => {
     // 2026-02-07 is week 2's Saturday (adjacent to Sunday 2026-02-08) — see
@@ -741,5 +717,96 @@ describe("cellsToParticipantRoles", () => {
     const participation = computeParticipation(roles);
     const frank = participation.find((p) => p.id === "m1");
     expect(frank?.sunLead).toBe(2);
+  });
+});
+
+describe("historyEntryFromDrafts", () => {
+  const members: RankMember[] = [m("m1", "Frank"), m("m2", "Gaby"), m("m3", "Liu")];
+
+  const draft = (overrides: Partial<DraftCard>): DraftCard => ({
+    localId: overrides.localId ?? `local-${Math.random()}`,
+    creationRequestId: overrides.creationRequestId ?? `req-${Math.random()}`,
+    _type: "sunday_role",
+    date: "2026-02-01",
+    exists: false,
+    skipped: false,
+    leads: [],
+    bgvs: [],
+    chorus: [],
+    instruments: [],
+    foh: [],
+    ...overrides,
+  });
+
+  it("returns null when nothing was created — the abandoned-run case writes nothing", () => {
+    expect(historyEntryFromDrafts([], members, 2026, 2)).toBeNull();
+  });
+
+  it("a Sunday draft's leads/bgvs/chorus become Sun.Lead/Sun.BGV/Sun.Choir, keyed by member NAME", () => {
+    const drafts = [draft({ date: "2026-02-01", leads: ["m1"], bgvs: ["m2"], chorus: ["m3"] })];
+    const entry = historyEntryFromDrafts(drafts, members, 2026, 2);
+    expect(entry).toEqual({
+      key: "2026-2",
+      year: 2026,
+      month: 2,
+      total_counts: { Frank: 1, Gaby: 1, Liu: 1 },
+      role_counts: {
+        Frank: { "Sun.Lead": 1 },
+        Gaby: { "Sun.BGV": 1 },
+        Liu: { "Sun.Choir": 1 },
+      },
+    });
+  });
+
+  it("a Saturday draft's leads/bgvs become Sat.Lead/Sat.BGV — and Sat.Choir is never emitted, even if `chorus` somehow carries a name", () => {
+    const drafts = [
+      draft({
+        _type: "saturday_role",
+        date: "2026-02-07",
+        leads: ["m1"],
+        bgvs: ["m2"],
+        chorus: ["m3"], // shouldn't happen (cellsToDrafts zeroes it) — defend anyway
+      }),
+    ];
+    const entry = historyEntryFromDrafts(drafts, members, 2026, 2);
+    expect(entry?.role_counts).toEqual({
+      Frank: { "Sat.Lead": 1 },
+      Gaby: { "Sat.BGV": 1 },
+    });
+    expect(entry?.role_counts.Liu).toBeUndefined();
+    expect(Object.values(entry?.role_counts ?? {}).some((counts) => "Sat.Choir" in counts)).toBe(false);
+    expect(entry?.total_counts).toEqual({ Frank: 1, Gaby: 1 });
+  });
+
+  it("total_counts is the per-person sum of role_counts across multiple dates and roles", () => {
+    const drafts = [
+      draft({ date: "2026-02-01", leads: ["m1"], bgvs: ["m2"] }),
+      draft({ date: "2026-02-08", leads: ["m1"], chorus: ["m2"] }),
+      draft({ _type: "saturday_role", date: "2026-02-07", bgvs: ["m1"] }),
+    ];
+    const entry = historyEntryFromDrafts(drafts, members, 2026, 2);
+    expect(entry?.role_counts.Frank).toEqual({ "Sun.Lead": 2, "Sat.BGV": 1 });
+    expect(entry?.role_counts.Gaby).toEqual({ "Sun.BGV": 1, "Sun.Choir": 1 });
+    expect(entry?.total_counts).toEqual({ Frank: 3, Gaby: 2 });
+  });
+
+  it("a member id absent from `members` falls back to the raw id, matching buildSolveRequest's own idToName fallback", () => {
+    const drafts = [draft({ leads: ["ghost-id"] })];
+    const entry = historyEntryFromDrafts(drafts, members, 2026, 2);
+    expect(entry?.role_counts["ghost-id"]).toEqual({ "Sun.Lead": 1 });
+  });
+
+  it("a month assigned entirely by hand (no Auto run at all) still records an entry — the function only reads seat contents, never an 'origin' flag", () => {
+    const drafts = [draft({ date: "2026-02-01", leads: ["m1"] })];
+    const entry = historyEntryFromDrafts(drafts, members, 2026, 2);
+    expect(entry?.total_counts).toEqual({ Frank: 1 });
+  });
+
+  it("the caller is responsible for excluding skipped/failed drafts — a caller that (incorrectly) includes a skipped one still counts it, proving MonthGenerator's own filter is what does the excluding", () => {
+    // This function trusts its input; MonthGenerator.tsx's handleConfirm is
+    // the one that must filter to `result.createdLocalIds` before calling it.
+    const skippedButPassedIn = draft({ date: "2026-02-01", leads: ["m1"], skipped: true });
+    const entry = historyEntryFromDrafts([skippedButPassedIn], members, 2026, 2);
+    expect(entry?.total_counts).toEqual({ Frank: 1 });
   });
 });
