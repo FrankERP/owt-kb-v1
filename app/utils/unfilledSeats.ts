@@ -29,6 +29,37 @@ const ROLE_SEVERITY: Record<string, number> = { Lead: 0, BGV: 1, Choir: 2 };
 
 const SEAT_RE = /^W(\d+)\s+(\w+)\s+\w+\.(\w+)\s+#\d+$/;
 
+/** One parsed unfilled-seat string, resolved to a WEEK + SERVICE + ROLE — never
+ * an occupant slot: `SEAT_RE` matches the trailing `#N` without capturing it,
+ * so a seat number cannot be recovered here (fact 25). */
+export interface UnfilledSeatRef {
+  week: number;
+  service: "Sunday" | "Saturday";
+  role: "Lead" | "BGV" | "Choir";
+}
+
+const KNOWN_SERVICES = new Set(["Sunday", "Saturday"]);
+const KNOWN_ROLES = new Set(["Lead", "BGV", "Choir"]);
+
+/**
+ * Parse one `unfilled_seats` entry into its week/service/role, or `null` for a
+ * malformed or unrecognised string. Exposes the same regex `summarizeUnfilledSeats`
+ * already uses, so callers that need to PLACE a seat (on a row + date, e.g.
+ * `plannerModel.mapUnfilledSeats`) don't re-implement `SEAT_RE`.
+ */
+export function parseUnfilledSeat(seat: string): UnfilledSeatRef | null {
+  const m = SEAT_RE.exec(seat.trim());
+  if (!m) return null;
+  const service = m[2];
+  const role = m[3];
+  if (!KNOWN_SERVICES.has(service) || !KNOWN_ROLES.has(role)) return null;
+  return {
+    week: parseInt(m[1], 10),
+    service: service as UnfilledSeatRef["service"],
+    role: role as UnfilledSeatRef["role"],
+  };
+}
+
 export function summarizeUnfilledSeats(seats: string[]): UnfilledSummary[] {
   const groups = new Map<
     string,
