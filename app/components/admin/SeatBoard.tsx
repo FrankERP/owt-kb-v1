@@ -1,13 +1,19 @@
 "use client";
 
-// The service team editor: seats left, the WHOLE eligible roster right, one
-// scroll region between them.
+// The service team editor: seats left, the WHOLE eligible roster right. Each
+// pane scrolls independently, side by side, in a bounded-height dialog; the
+// footer sits outside both as a sibling, never a descendant, so it stays
+// visible and clickable no matter how many seats or roster rows exist.
 //
-// It replaces a sheet that stacked five nested scrollers and showed 4 of 16
-// voices three times over. Nothing here ranks or blocks on its own — the seat
-// vocabulary comes from `seatModel` and the ordering, availability, existing
-// assignment and load all come from `rankCandidates`, so both are table-tested
-// without a DOM.
+// It replaces a sheet that stacked FIVE scroll regions vertically in one
+// narrow column — the modal body, the form, and three ~144px member pickers —
+// showing 4 of 16 voices three times over. That nesting was the defect. Two
+// panes that sit side by side and each scroll on their own is not that
+// defect, as long as neither scroller is nested inside the other and the
+// roster is never reduced to a small keyhole. Nothing here ranks or blocks on
+// its own — the seat vocabulary comes from `seatModel` and the ordering,
+// availability, existing assignment and load all come from `rankCandidates`,
+// so both are table-tested without a DOM.
 
 import { useMemo, useState } from "react";
 
@@ -236,9 +242,16 @@ export default function SeatBoard(props: SeatBoardProps) {
         )}
       </div>
 
-      {/* Two panes, one scroll region: the seat pane never scrolls, the roster does. */}
+      {/* Two panes, side by side, each with its own scroll region — neither
+          nested inside the other. Both `min-h-0` so the single grid row
+          (stretched to the full height of this flex-1 container) actually
+          bounds each pane's height instead of growing to fit content; without
+          it, adding enough instrument/FOH seats on the left would grow this
+          row past the dialog's height and push the footer below out of view
+          (the footer is a sibling of this grid, not a descendant, so a grid
+          that overflows its bounds is the only way that could happen). */}
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-2">
-        <div className={`${CARD_STYLE.dialog} min-w-0`}>
+        <div className={`${CARD_STYLE.dialog} min-h-0 min-w-0 overflow-y-auto pr-1`}>
           <SeatGroup
             title="Voces"
             seats={VOICE_SEATS}
@@ -295,9 +308,11 @@ export default function SeatBoard(props: SeatBoardProps) {
         </div>
       </div>
 
-      {/* Footer: sticky, never scrolls with the roster. Create mode keeps two
-          explicit, always-visible actions (Crear / Crear y publicar) rather than
-          one button plus an easy-to-miss checkbox — matching ServiceForm's
+      {/* Footer: a sibling of the two-pane grid above, not a descendant of
+          either scroll region, so it never scrolls out of reach regardless of
+          how many seats or roster rows exist. Create mode keeps two explicit,
+          always-visible actions (Crear / Crear y publicar) rather than one
+          button plus an easy-to-miss checkbox — matching ServiceForm's
           existing render contract at ServicesPanel.tsx. */}
       <div className="flex items-center gap-3 border-t border-[#00bfff]/10 pt-3">
         <div className="ml-auto flex gap-3">

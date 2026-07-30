@@ -94,6 +94,37 @@ describe("SeatBoard", () => {
     expect(onSubmit.mock.calls[1][0]).toMatchObject({ published: true });
   });
 
+  // Both panes scroll independently (the seat pane now has its own
+  // `overflow-y-auto` alongside the roster's), which is fine — that's not the
+  // defect the old five-stacked-scrollers sheet had. What actually protects
+  // the user is that no scroll region is nested inside another (so the user
+  // never has to scroll a scroller to find the rest of a scroller) and that
+  // the footer's action buttons are never trapped inside one, so they stay
+  // reachable regardless of how many seats or roster rows exist.
+  it("has no scroll region nested inside another", () => {
+    const { container } = render(<SeatBoard {...base} />);
+    const scrollers = Array.from(container.querySelectorAll(".overflow-y-auto"));
+    expect(scrollers.length).toBeGreaterThan(0);
+    for (const outer of scrollers) {
+      for (const inner of scrollers) {
+        if (outer !== inner) expect(outer.contains(inner)).toBe(false);
+      }
+    }
+  });
+
+  it("keeps the footer's submit controls outside every scroll region", () => {
+    const { container } = render(<SeatBoard {...base} />);
+    const scrollers = Array.from(container.querySelectorAll(".overflow-y-auto"));
+    const cancel = screen.getByRole("button", { name: /cancelar/i });
+    const crear = screen.getByRole("button", { name: /^crear$/i });
+    const crearYPublicar = screen.getByRole("button", { name: "Crear y publicar" });
+    for (const scroller of scrollers) {
+      expect(scroller.contains(cancel)).toBe(false);
+      expect(scroller.contains(crear)).toBe(false);
+      expect(scroller.contains(crearYPublicar)).toBe(false);
+    }
+  });
+
   it("rejects a new seat name that only differs from an existing one by case", () => {
     render(<SeatBoard {...base} />);
     const input = screen.getByPlaceholderText("Nuevo instrumento") as HTMLInputElement;
