@@ -177,4 +177,51 @@ describe("rankCandidates", () => {
     expect(tono?.load).toBe(1);
     expect(tono?.recent.filter(Boolean).length).toBe(tono?.load);
   });
+
+  // FINDING C1 (double-duty block bypassed): `seatById` used to be a Map keyed
+  // by memberId, which keeps only the LAST entry for a member holding two
+  // seats. SeatBoard builds `assigned` in seat order — voces, then
+  // instrumentos, then FOH (SeatBoard.tsx) — so an instrument seat always
+  // overwrote a voice one, silently erasing the voice-seat conflict. A member
+  // must keep ALL of their held seats so a same-category conflict is caught
+  // no matter which seat happened to be built last.
+  it("BLOCKS a same-category conflict even when the member ALSO holds a different-category seat built later", () => {
+    const assigned: AssignedSeat[] = [
+      { seatId: "lead", category: "voz", memberId: "m1" },
+      { seatId: "instrumento:EG", category: "instrumento", memberId: "m1" },
+    ];
+    const frank = rankCandidates({ seat: BGV, date: DATE, members: MEMBERS, windowRoles: [], assigned })
+      .find((c) => c.id === "m1");
+    expect(frank?.blockedReason).toBe("Ya asignado en Lead");
+  });
+
+  it("BLOCKS a same-category instrument conflict even when the member ALSO holds a voice seat", () => {
+    const assigned: AssignedSeat[] = [
+      { seatId: "lead", category: "voz", memberId: "m1" },
+      { seatId: "instrumento:EG", category: "instrumento", memberId: "m1" },
+    ];
+    const frank = rankCandidates({ seat: BASS, date: DATE, members: MEMBERS, windowRoles: [], assigned })
+      .find((c) => c.id === "m1");
+    expect(frank?.blockedReason).toBe("Ya asignado en EG");
+  });
+
+  it("never blocks on the seat's own occupant, even while holding an unrelated-category seat too", () => {
+    const assigned: AssignedSeat[] = [
+      { seatId: "lead", category: "voz", memberId: "m1" },
+      { seatId: "instrumento:EG", category: "instrumento", memberId: "m1" },
+    ];
+    const frank = rankCandidates({ seat: LEAD, date: DATE, members: MEMBERS, windowRoles: [], assigned })
+      .find((c) => c.id === "m1");
+    // The seat being targeted is one of Frank's own held seats — excluded from
+    // the conflict search by seatId, regardless of what else he holds.
+    expect(frank?.blockedReason).toBeNull();
+  });
+
+  it("does not report alreadyAssigned for a member whose only held seat IS the seat being targeted", () => {
+    const assigned: AssignedSeat[] = [{ seatId: "lead", category: "voz", memberId: "m1" }];
+    const frank = rankCandidates({ seat: LEAD, date: DATE, members: MEMBERS, windowRoles: [], assigned })
+      .find((c) => c.id === "m1");
+    expect(frank?.blockedReason).toBeNull();
+    expect(frank?.alreadyAssigned).toBe(false);
+  });
 });
