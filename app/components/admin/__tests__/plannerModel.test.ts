@@ -151,7 +151,7 @@ describe("cellsToDrafts — round-trip", () => {
 
 describe("the column set (D9)", () => {
   it("an all-empty grid over 9 columns yields 9 drafts, each with empty seat arrays", () => {
-    // 4 Sundays + 5 Saturdays = 9 columns (August 2026's real shape).
+    // 5 Sundays + 4 Saturdays = 9 columns (August 2026's real shape).
     const sundayDates = ["2026-08-02", "2026-08-09", "2026-08-16", "2026-08-23", "2026-08-30"];
     const activeSatDates = ["2026-08-01", "2026-08-08", "2026-08-15", "2026-08-22"];
     const columns = buildColumns({ sundayDates, activeSatDates });
@@ -233,6 +233,15 @@ describe("Saturday↔week mapping", () => {
     expect(drafts.some((d) => d.date === fallbackWeek1Saturday)).toBe(false);
     expect(drafts.map((d) => d.date)).toContain("2026-10-31");
   });
+
+  it("saturdayForWeek returns null (not a crash) for an out-of-range week number", () => {
+    // Unreachable via a real solve today because `weeks === sundayDates.length`,
+    // but `mapUnfilledSeats` calls this with a solver-supplied week number —
+    // `sundayDates[n-1]` is `undefined` for n=0 or n > sundayDates.length, and
+    // `.slice` on `undefined` used to throw.
+    expect(saturdayForWeek(0, FEB_SUNDAYS)).toBeNull();
+    expect(saturdayForWeek(FEB_SUNDAYS.length + 1, FEB_SUNDAYS)).toBeNull();
+  });
 });
 
 // ─── solvableWindow — defensive assert (D8) ──────────────────────────────────
@@ -258,13 +267,20 @@ describe("buildSolveRequest", () => {
     m("outsider", "Outsider"),
   ];
 
-  it("injects every DSL-named person absent from all pools into support", () => {
+  it("injects every DSL-named person absent from all pools into support, and never duplicates a person already IN a pool (exactly one pool each)", () => {
     const config: SolverConfig = {
       ...emptyConfig,
       sundayLeads: ["frank"],
       restrictions: [
         {
           id: "r1", person: "Mkz", excludedPatterns: ["Sat.*"],
+          fairness: "none", fairnessSlack: 1, weekExclusions: [], caps: [],
+        },
+        // Frank is already a sunday_leads pool member — DSL-naming him too
+        // must NOT also inject him into support (the other direction of
+        // "every DSL-named person appears in exactly one pool").
+        {
+          id: "r2", person: "Frank", excludedPatterns: ["Sat.*"],
           fairness: "none", fairnessSlack: 1, weekExclusions: [], caps: [],
         },
       ],
@@ -276,6 +292,7 @@ describe("buildSolveRequest", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("unreachable");
     expect(result.request.support).toContain("Mkz");
+    expect(result.request.support).not.toContain("Frank");
     expect(result.request.sunday_leads).toEqual(["Frank"]);
   });
 
@@ -351,13 +368,17 @@ describe("buildSolveRequest", () => {
     expect(Object.prototype.hasOwnProperty.call(result.request, "weekends_with_saturday")).toBe(true);
   });
 
-  it("historyForRequest excludes the window's own ${year}-${month} entry, keeping only priors", () => {
+  it("historyForRequest excludes the window's own ${year}-${month} entry, keeping only priors, sorted oldest-first so newest is last (weight 10, fact 9)", () => {
+    // Deliberately out of order: 2026-1 (newer) appears BEFORE 2025-12
+    // (older) in the input. If historyForRequest merely filtered and sliced
+    // without sorting, it would hand this back newest-first — which would
+    // hand the solver's heaviest weight to the OLDER entry.
     const entries: SolverHistoryEntry[] = [
       { key: "2026-1", year: 2026, month: 1, total_counts: { a: 1 }, role_counts: {} },
       { key: "2025-12", year: 2025, month: 12, total_counts: { a: 2 }, role_counts: {} },
       { key: "2026-2", year: 2026, month: 2, total_counts: { a: 99 }, role_counts: {} }, // this month's own run
     ];
-    expect(historyForRequest(entries, 2026, 2).map((h) => h.key)).toEqual(["2026-1", "2025-12"]);
+    expect(historyForRequest(entries, 2026, 2).map((h) => h.key)).toEqual(["2025-12", "2026-1"]);
 
     const config: SolverConfig = { ...emptyConfig, sundayLeads: ["frank"] };
     const result = buildSolveRequest({
@@ -367,8 +388,8 @@ describe("buildSolveRequest", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("unreachable");
     expect(result.request.history).toEqual([
-      { total_counts: { a: 1 }, role_counts: {} },
       { total_counts: { a: 2 }, role_counts: {} },
+      { total_counts: { a: 1 }, role_counts: {} },
     ]);
   });
 });
@@ -389,8 +410,12 @@ describe("applySolveResponse", () => {
       schedule: {
         "1": {
           Sunday: { Lead: ["Frank"], BGV: ["Gaby"], Choir: ["Liu"] },
-          // Cast to smuggle in a Choir key on Saturday, proving isSolvable's
-          // (row, column) gate — not mere field absence — keeps it out.
+          // Cast to smuggle in a Choir key on Saturday too. NOTE: because the
+          // Saturday column itself is excluded from `columns` in this test,
+          // this only shows that a column outside the column set is skipped
+          // entirely (D9) — it does NOT exercise isSolvable's (row, column)
+          // gate, since the Saturday branch never runs at all here. The
+          // dedicated "Saturday path" test below is what pins that gate.
           Saturday: { Lead: ["Frank"], BGV: ["Gaby"], Choir: ["Liu"] } as unknown as { Lead: string[]; BGV: string[] },
         },
       },
@@ -482,6 +507,48 @@ describe("applySolveResponse", () => {
       role_counts: { Frank: { "Sat.Lead": 2 } },
     });
   });
+
+  it("Saturday Lead/BGV land on the adjacent column via week-adjacency, and a smuggled Sat.Choir produces no cell (D11's per-cell gate)", () => {
+    // 2026-02-07 is week 2's Saturday (adjacent to Sunday 2026-02-08) — see
+    // the "Saturday↔week mapping" describe block above. This is the ONLY
+    // test in the suite that feeds a saturday_role column together with
+    // schedule[N].Saturday data: replacing weekForColumn's Saturday branch
+    // with `if (false)` left all other 39 tests green.
+    const columns: GridColumn[] = [{ date: "2026-02-07", type: "saturday_role" }];
+    const resp = response({
+      schedule: {
+        "2": {
+          // No sunday_role column is in `columns` for this test, so Sunday
+          // data is present (required on the wire type) but irrelevant here.
+          Sunday: { Lead: [], BGV: [], Choir: [] },
+          Saturday: {
+            Lead: ["Frank"],
+            BGV: ["Gaby"],
+            // Cast to smuggle a Choir key into a Saturday payload — the
+            // solver never actually sends `Sat.Choir` (fact 2). Unlike the
+            // "writes only solvable rows" test above, the Saturday column
+            // IS present in `columns` here, so this genuinely exercises
+            // isSolvable's (row, column) gate (D11), not mere column-set
+            // exclusion.
+            Choir: ["Liu"],
+          } as unknown as { Lead: string[]; BGV: string[] },
+        },
+      },
+    });
+    const result = applySolveResponse({
+      response: resp, previousCells: [], columns, rows,
+      sundayDates: FEB_SUNDAYS, activeSatDates: FEB_SATURDAYS, members,
+    });
+    const leadCell = result.cells.find((c) => c.rowId === "lead" && c.date === "2026-02-07");
+    const bgvCell = result.cells.find((c) => c.rowId === "bgv" && c.date === "2026-02-07");
+    expect(leadCell).toBeTruthy();
+    expect(leadCell!.memberIds).toEqual(["m1"]);
+    expect(leadCell!.origin).toBe("auto");
+    expect(bgvCell).toBeTruthy();
+    expect(bgvCell!.memberIds).toEqual(["m2"]);
+    expect(bgvCell!.origin).toBe("auto");
+    expect(result.cells.some((c) => c.rowId === "coro" && c.date === "2026-02-07")).toBe(false);
+  });
 });
 
 describe("mapUnfilledSeats", () => {
@@ -513,8 +580,19 @@ describe("cellsToDrafts — stability", () => {
   });
 
   it("preserves localId, creationRequestId, exists and skipped across repeated calls for the same date and type", () => {
-    const first = cellsToDrafts([], columns, new Set(), [], []);
-    const second = cellsToDrafts([], columns, new Set(), first, []);
+    // Non-empty on BOTH calls: with an empty Set on both sides, both results
+    // are trivially `false` and the last assertion below can never detect a
+    // lost skip. Under D18, `skippedDates` — not `previous` — is the single
+    // authority on `skipped`: if the SECOND call's Set omitted this date,
+    // `skipped` would flip back to `false` even though `first[0].skipped`
+    // was `true`. A skip recorded only on the previous draft, and not also
+    // re-supplied via skippedDates, is deliberately NOT preserved — Task 4
+    // must keep re-passing the live skippedDates Set on every call, not rely
+    // on the previous draft to remember a skip for it.
+    const skippedDates = new Set(["2026-02-01"]);
+    const first = cellsToDrafts([], columns, skippedDates, [], []);
+    const second = cellsToDrafts([], columns, skippedDates, first, []);
+    expect(first[0].skipped).toBe(true);
     expect(second[0].localId).toBe(first[0].localId);
     expect(second[0].creationRequestId).toBe(first[0].creationRequestId);
     expect(second[0].exists).toBe(first[0].exists);
