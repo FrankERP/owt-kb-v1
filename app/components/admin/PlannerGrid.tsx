@@ -186,6 +186,20 @@ export default function PlannerGrid(props: PlannerGridProps) {
   const [confirmingAuto, setConfirmingAuto] = useState(false);
   const [removeError, setRemoveError] = useState<{ rowId: string; message: string } | null>(null);
 
+  // Finding 5: `removeError` was never cleared by anything except a
+  // SUCCESSFUL `removeRow` call, so "Vacía la fila antes de eliminarla"
+  // could outlive the condition that produced it — e.g. Auto or a manual
+  // pick empties the row through some path other than `removeRow` itself,
+  // and the stale refusal message keeps showing next to a row that is now
+  // actually empty. Derived at render time from the current `cells` (the
+  // only thing the message's truth depends on) rather than reset via an
+  // effect — the row it names may no longer even exist in `rows`, and the
+  // effect approach also trips `react-hooks/set-state-in-effect`.
+  const activeRemoveError =
+    removeError && cells.some((c) => c.rowId === removeError.rowId && c.memberIds.length > 0)
+      ? removeError
+      : null;
+
   const membersById = useMemo(() => new Map(members.map((m) => [m._id, m])), [members]);
   const memberName = (id: string) => {
     const found = membersById.get(id);
@@ -214,6 +228,18 @@ export default function PlannerGrid(props: PlannerGridProps) {
   }, [unfilled]);
 
   const unaddressableSet = useMemo(() => new Set(unaddressableDates), [unaddressableDates]);
+
+  // Finding 4: `categoryDuplicatesForDate` scans every cell. Called once per
+  // (row, column) pair — as it was via an inline prop callback — that's
+  // ~rows×columns full scans per render. Computed once per distinct date
+  // that actually holds a cell, keyed for O(1) lookup per (row, column) pair.
+  const emptyDuplicates = useMemo(() => new Map<string, string[]>(), []);
+  const duplicatesByDateMap = useMemo(() => {
+    const map = new Map<string, Map<string, string[]>>();
+    const dates = new Set(cells.map((c) => c.date));
+    for (const date of dates) map.set(date, categoryDuplicatesForDate(cells, rows, date));
+    return map;
+  }, [cells, rows]);
 
   function rankFor(row: GridRow, date: string): RankedCandidate[] {
     const seat = seatDefForRow(row);
@@ -387,11 +413,11 @@ export default function PlannerGrid(props: PlannerGridProps) {
               columns={columns}
               cellsByKey={cellsByKey}
               unfilledByKey={unfilledByKey}
-              duplicatesByDate={(date) => categoryDuplicatesForDate(cells, rows, date)}
+              duplicatesByDate={(date) => duplicatesByDateMap.get(date) ?? emptyDuplicates}
               memberName={memberName}
               onOpen={(date) => setOpenCell({ rowId: row.id, date })}
               onRemove={row.category !== "voz" ? () => removeRow(row.id) : undefined}
-              removeError={removeError?.rowId === row.id ? removeError.message : null}
+              removeError={activeRemoveError?.rowId === row.id ? activeRemoveError.message : null}
               onCopy={row.category !== "voz" ? (date) => copyRowAcrossDates(row, date) : undefined}
             />
           ))}
@@ -594,7 +620,13 @@ function GridCellView({
   const target = solvable ? row.target : null;
   const overflow = target != null && memberIds.length > target;
   const visibleIds = overflow ? memberIds.slice(0, target!) : memberIds;
-  const hiddenCount = overflow ? memberIds.length - target! : 0;
+  const hiddenIds = overflow ? memberIds.slice(target!) : [];
+  const hiddenCount = hiddenIds.length;
+  // Finding 2: the `⚠` used to apply only to `visibleIds`, so a duplicate
+  // sitting in the hidden `+N` tail — exactly the over-target state `+N`
+  // exists for — was never surfaced at all. Checked here regardless of
+  // whether the occupant is currently visible.
+  const hiddenHasDuplicate = hiddenIds.some((id) => duplicates.get(id)?.includes(row.id));
 
   return (
     <div
@@ -618,7 +650,14 @@ function GridCellView({
           <span className="font-body text-[11px] italic text-gray-600">Sin asignar</span>
         )}
         {visibleIds.map((id) => {
-          const isDuplicate = duplicates.has(id);
+          // Finding 1: `duplicates` is keyed by member alone across the whole
+          // date, so a member flagged for a same-category conflict (e.g.
+          // Lead+BGV) must NOT also light up on an unrelated row (e.g. Bass)
+          // just because they happen to appear in `duplicates` at all —
+          // legitimate cross-category double duty (voz + instrumento) is
+          // real and must never be flagged. Only flag when THIS row's id is
+          // among the rows that hold the duplicate.
+          const isDuplicate = duplicates.get(id)?.includes(row.id) ?? false;
           return (
             <span
               key={id}
@@ -639,12 +678,25 @@ function GridCellView({
               onOpen();
             }}
             aria-label={`Ver ${hiddenCount} más en ${row.label}`}
-            className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 font-label text-[10px] text-amber-400"
+            className={`rounded-full border px-1.5 py-0.5 font-label text-[10px] ${
+              hiddenHasDuplicate
+                ? "border-red-500/50 bg-red-500/10 text-red-400"
+                : "border-amber-500/40 bg-amber-500/10 text-amber-400"
+            }`}
           >
             +{hiddenCount}
+            {hiddenHasDuplicate && " ⚠"}
           </button>
         )}
       </div>
+      {/* Finding 6: the brief says a solvable cell over target "warns and
+          still accepts" — an amber border alone carries no words, so make
+          the warning legible as Spanish text, not just a color. */}
+      {overflow && (
+        <p className="font-label text-[9px] uppercase tracking-widest text-amber-400">
+          Por encima del objetivo — se acepta de todos modos
+        </p>
+      )}
       {unfilled && (
         <p className="font-label text-[9px] uppercase tracking-widest text-amber-400">Sin cubrir</p>
       )}

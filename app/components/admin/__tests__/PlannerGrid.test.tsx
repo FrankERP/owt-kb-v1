@@ -206,6 +206,15 @@ describe("PlannerGrid — cell density (D7)", () => {
     expect(lead.memberIds.sort()).toEqual(["m1", "m2", "m3", "m4"].sort());
   });
 
+  it("an over-target solvable cell carries a Spanish text warning, not just a border color (Finding 6)", () => {
+    const cells: GridCell[] = [
+      { date: "2026-08-09", rowId: "lead", memberIds: ["m1", "m2", "m3"], origin: "auto" }, // target 2, +1
+    ];
+    const { container } = render(<PlannerGrid {...baseProps({ cells })} />);
+    const cellRoot = cellFor(container, "lead", "2026-08-09");
+    expect(within(cellRoot).getByText(/por encima del objetivo/i)).toBeTruthy();
+  });
+
   it("a non-solvable Drums cell with two occupants never replaces a third addition", () => {
     const cells: GridCell[] = [
       { date: "2026-08-09", rowId: "instrumento:Drums", memberIds: ["d1", "d2"], origin: "manual" },
@@ -231,41 +240,71 @@ describe("PlannerGrid — ranking (D12)", () => {
   });
 
   it("a member who served recently sorts BELOW one who did not (fails if the saved window were empty)", () => {
+    // The tie-break below load is `a.name.localeCompare(b.name, "es")`
+    // (candidateRanking.ts:156). With every load at 0, alphabetical order
+    // and load-driven order are indistinguishable UNLESS the recently-served
+    // member is chosen to be alphabetically FIRST — "Ana" here has history,
+    // "Zoe" does not, so a load-blind implementation (tie -> alphabetical)
+    // would wrongly sort Ana before Zoe, and this assertion would catch it.
+    const localMembers: RankMember[] = [
+      { _id: "ana", member_name: "Ana", memberType: ["voz"] },
+      { _id: "zoe", member_name: "Zoe", memberType: ["voz"] },
+    ];
     const savedWindow: ParticipantRole[] = [
       {
         _type: "sunday_role",
         date: "2026-07-19",
-        leads: [{ _id: "m2", member_name: "Gaby" }],
+        leads: [{ _id: "ana", member_name: "Ana" }],
         bgvs: [],
         chorus: [],
         instruments: [],
         foh: [],
       },
     ];
-    const { container } = render(<PlannerGrid {...baseProps({ savedWindow })} />);
+    const { container } = render(<PlannerGrid {...baseProps({ members: localMembers, savedWindow })} />);
     fireEvent.click(cellFor(container, "lead", "2026-08-09"));
     const items = screen.getAllByRole("button").filter((el) => el.tagName === "LI");
     const names = items.map((el) => el.textContent ?? "");
-    const frankIdx = names.findIndex((n) => n.includes("Frank"));
-    const gabyIdx = names.findIndex((n) => n.includes("Gaby"));
-    expect(frankIdx).toBeGreaterThanOrEqual(0);
-    expect(gabyIdx).toBeGreaterThan(frankIdx);
+    const anaIdx = names.findIndex((n) => n.includes("Ana"));
+    const zoeIdx = names.findIndex((n) => n.includes("Zoe"));
+    expect(zoeIdx).toBeGreaterThanOrEqual(0);
+    expect(anaIdx).toBeGreaterThan(zoeIdx);
   });
 
   it("a member assigned earlier in THIS grid sorts BELOW one who was not (fails if D12's union were dropped)", () => {
+    // Same alphabetical-tie-break trap as above: "Ana" is assigned earlier
+    // in the grid (real load, from `inGridDrafts`) and is alphabetically
+    // FIRST, "Zoe" has none. If D12's union were dropped (order sourced
+    // from `savedWindow` alone, ignoring the grid's own occupancy), both
+    // would read load 0, tie, and the alphabetical fallback would wrongly
+    // put Ana first — this assertion requires the in-grid load to win.
+    const localMembers: RankMember[] = [
+      { _id: "ana", member_name: "Ana", memberType: ["voz"] },
+      { _id: "zoe", member_name: "Zoe", memberType: ["voz"] },
+    ];
     const columns = buildColumns({ sundayDates: ["2026-08-02", "2026-08-09"], activeSatDates: [] });
-    const cells: GridCell[] = [{ date: "2026-08-02", rowId: "lead", memberIds: ["m2"], origin: "auto" }];
-    const { container } = render(<PlannerGrid {...baseProps({ columns, cells })} />);
+    const cells: GridCell[] = [{ date: "2026-08-02", rowId: "lead", memberIds: ["ana"], origin: "auto" }];
+    const { container } = render(<PlannerGrid {...baseProps({ columns, cells, members: localMembers })} />);
     fireEvent.click(cellFor(container, "lead", "2026-08-09"));
     const items = screen.getAllByRole("button").filter((el) => el.tagName === "LI");
     const names = items.map((el) => el.textContent ?? "");
-    const frankIdx = names.findIndex((n) => n.includes("Frank"));
-    const gabyIdx = names.findIndex((n) => n.includes("Gaby"));
-    expect(frankIdx).toBeGreaterThanOrEqual(0);
-    expect(gabyIdx).toBeGreaterThan(frankIdx);
+    const anaIdx = names.findIndex((n) => n.includes("Ana"));
+    const zoeIdx = names.findIndex((n) => n.includes("Zoe"));
+    expect(zoeIdx).toBeGreaterThanOrEqual(0);
+    expect(anaIdx).toBeGreaterThan(zoeIdx);
   });
 
   it("the `recent` strip still shows history for a member who served historically but appears nowhere in the grid", () => {
+    // A single-Sunday column set lets even a wrongly-concatenated
+    // (savedWindow + inGridDrafts) call leave the historical week inside
+    // `slice(-4)` by accident (only 2 distinct weeks total, and 2 <= 4).
+    // Four grid columns push every historical week out of a genuinely
+    // concatenated window, so only a `recent` that is sourced from
+    // `savedWindow` ALONE (D12) keeps showing Liu's history here.
+    const columns = buildColumns({
+      sundayDates: ["2026-08-02", "2026-08-09", "2026-08-16", "2026-08-23"],
+      activeSatDates: [],
+    });
     const savedWindow: ParticipantRole[] = [
       {
         _type: "sunday_role",
@@ -277,8 +316,8 @@ describe("PlannerGrid — ranking (D12)", () => {
         foh: [],
       },
     ];
-    const { container } = render(<PlannerGrid {...baseProps({ savedWindow })} />);
-    fireEvent.click(cellFor(container, "coro", "2026-08-09"));
+    const { container } = render(<PlannerGrid {...baseProps({ columns, savedWindow })} />);
+    fireEvent.click(cellFor(container, "coro", "2026-08-23"));
     const liuRow = candidateLi("Liu");
     const servedMarks = liuRow.querySelectorAll('span[class*="bg-[#00bfff]/70"]');
     expect(servedMarks.length).toBeGreaterThan(0);
@@ -335,6 +374,44 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
     ];
     const { container } = render(<PlannerGrid {...baseProps({ cells })} />);
     expect(container.querySelectorAll(".border-red-500\\/50").length).toBe(0);
+  });
+
+  it("flags a same-category duplicate on its own two rows WITHOUT bleeding onto a legitimate cross-category cell for the same member (Finding 1)", () => {
+    // m1 is hand-assigned to Lead; Auto also placed them in BGV — a real
+    // same-category (voz) duplicate. m1 ALSO holds a Bass seat the same
+    // date — legitimate voz+instrumento double duty (D4) that must never
+    // be flagged. `duplicates` is keyed by member alone across the whole
+    // date, so checking `duplicates.has(id)` without also checking that
+    // THIS row participates would incorrectly paint the Bass chip red too.
+    const cells: GridCell[] = [
+      { date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "manual" },
+      { date: "2026-08-09", rowId: "bgv", memberIds: ["m1"], origin: "auto" },
+      { date: "2026-08-09", rowId: "instrumento:Bass", memberIds: ["m1"], origin: "manual" },
+    ];
+    const { container } = render(<PlannerGrid {...baseProps({ cells })} />);
+    const leadCell = cellFor(container, "lead", "2026-08-09");
+    const bgvCell = cellFor(container, "bgv", "2026-08-09");
+    const bassCell = cellFor(container, "instrumento:Bass", "2026-08-09");
+    expect(within(leadCell).getByText(/⚠/)).toBeTruthy();
+    expect(within(bgvCell).getByText(/⚠/)).toBeTruthy();
+    expect(within(bassCell).queryByText(/⚠/)).toBeNull();
+    expect(bassCell.querySelectorAll(".border-red-500\\/50").length).toBe(0);
+  });
+
+  it("surfaces a duplicate hidden behind +N — the over-target state +N exists for (Finding 2)", () => {
+    // Lead's target is 2. Three occupants means the third (m1) is hidden
+    // behind "+1". m1 is ALSO in BGV the same date, a real same-category
+    // duplicate — but the old code only ever checked `visibleIds`, so a
+    // duplicate sitting in the hidden tail was invisible exactly when +N
+    // exists (an over-target cell).
+    const cells: GridCell[] = [
+      { date: "2026-08-09", rowId: "lead", memberIds: ["m2", "m3", "m1"], origin: "auto" },
+      { date: "2026-08-09", rowId: "bgv", memberIds: ["m1"], origin: "auto" },
+    ];
+    const { container } = render(<PlannerGrid {...baseProps({ cells })} />);
+    const leadCell = cellFor(container, "lead", "2026-08-09");
+    const plusButton = within(leadCell).getByRole("button", { name: /ver 1 más/i });
+    expect(plusButton.textContent).toMatch(/⚠/);
   });
 });
 
@@ -536,6 +613,23 @@ describe("PlannerGrid — row management", () => {
   it("voice rows offer no remove control", () => {
     render(<PlannerGrid {...baseProps()} />);
     expect(screen.queryByRole("button", { name: /eliminar fila lead/i })).toBeNull();
+  });
+
+  it("clears the remove-row error once `cells` changes make the row empty (Finding 5)", () => {
+    // Nothing in the old code ever cleared `removeError` except a
+    // successful `removeRow` call — so once the refusal fires, it outlives
+    // whatever condition caused it if the row is emptied by some OTHER
+    // path (Auto, a manual pick clearing the last occupant, `cells` simply
+    // changing under a controlled re-render).
+    const cells: GridCell[] = [
+      { date: "2026-08-09", rowId: "instrumento:Drums", memberIds: ["d1"], origin: "manual" },
+    ];
+    const { rerender } = render(<PlannerGrid {...baseProps({ cells })} />);
+    fireEvent.click(screen.getByRole("button", { name: /eliminar fila drums/i }));
+    expect(screen.getByText(/vacía la fila/i)).toBeTruthy();
+
+    rerender(<PlannerGrid {...baseProps({ cells: [] })} />);
+    expect(screen.queryByText(/vacía la fila/i)).toBeNull();
   });
 });
 
