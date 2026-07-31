@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { draftTargetKey } from "./plannerModel";
+
 /**
  * The month generator's date picker (E1/E2). Replaces the two Domingos/Sábados
  * checkboxes and the Saturday pill row: every Sunday and Saturday of the month
@@ -43,6 +45,20 @@ export interface MonthCalendarProps {
   selectedSaturdays: string[];
   specials: CalendarSpecial[];
   existingRoles: CalendarExistingRole[];
+  /**
+   * **P2, second surface.** `MonthGenerator`'s session-local created-set —
+   * `draftTargetKey` (`type__date`) for every target THIS dialog instance has
+   * confirmed-created. Read-only here, and optional so the calendar keeps
+   * standing alone (its own tests, and any future caller with no create step).
+   *
+   * Without it the composer accepts a special on a date this session already
+   * created and the refusal only appears one screen later, in the grid, as
+   * "Crear 0 borradores" — the multi-surface disagreement E17 exists to
+   * eliminate. Nothing wrong reaches Sanity either way; the grid gate holds.
+   * What this closes is the composer telling the admin something the next
+   * screen contradicts.
+   */
+  createdTargets?: ReadonlySet<string>;
   /** Toggle one weekend date on/off. Refused here when it holds a special (E3). */
   onToggleWeekend: (date: string) => void;
   onAddSpecial: (date: string, name: string) => void;
@@ -97,21 +113,43 @@ const weekendNoun = (iso: string) => (dayOfWeek(iso) === 0 ? "domingo" : "sábad
  * Order is fixed for determinism, not significance:
  *  1. **E3** — the date already generates a weekend column. One column per date
  *     of any kind; a *deselected* weekend date is fine and falls through.
- *  2. this month's own picks already hold a special on that date.
- *  3. **P2** — a `special_role` already exists in Sanity on that date. The
+ *  2. **P2, this session** — this dialog already CREATED a `special_role` on
+ *     that date (`createdTargets`). Ahead of the two checks below because
+ *     neither can see it: the special may have been removed from `specials`
+ *     (that is exactly the "Quitar → rename → Agregar" walk), and
+ *     `existingRoles` is refreshed asynchronously by `onCreated()` — so on the
+ *     path that matters both are empty and the date looks free. This is also
+ *     the more precise message when `specials` DOES still hold it: "quítalo de
+ *     la lista para cambiarlo" is a lie once the document exists.
+ *  3. this month's own picks already hold a special on that date.
+ *  4. **P2** — a `special_role` already exists in Sanity on that date. The
  *     generator's preflight for a special is name-BLIND (`special_role:<date>`),
  *     so a second special on the same date is refused at the picker rather than
  *     drafted against an observation that cannot tell the two apart.
+ *
+ * Never keyed off a draft's `exists`: that means "this column once matched a
+ * Sanity document", which survives a rename and cannot distinguish this
+ * session's own creations from documents that predate it (see
+ * `MonthGenerator`'s `createdTargets` doc comment). `type__date` — through the
+ * shared `draftTargetKey`, never a hand-rolled template — is the only key both
+ * surfaces can agree on.
  */
 export function refuseSpecialOn(input: {
   date: string;
   weekendSelected: boolean;
   specials: CalendarSpecial[];
   existingRoles: CalendarExistingRole[];
+  /** Optional so every existing caller and test is unaffected. */
+  createdTargets?: ReadonlySet<string>;
 }): string | null {
-  const { date, weekendSelected, specials, existingRoles } = input;
+  const { date, weekendSelected, specials, existingRoles, createdTargets } = input;
   if (weekendSelected) {
     return `El ${longDate(date)} ya genera un servicio de ${weekendNoun(date)}. Quítalo del calendario antes de crear un servicio especial en esa fecha.`;
+  }
+  if (createdTargets?.has(draftTargetKey("special_role", date))) {
+    // Second sentence is `PlannerGrid`'s own wording for this exact state, to
+    // the letter — the two surfaces must not describe one fact two ways.
+    return `El ${longDate(date)} ya tiene un servicio especial. Ya lo creaste en esta sesión.`;
   }
   const already = specials.find((s) => s.date === date);
   if (already) {
@@ -149,6 +187,7 @@ export default function MonthCalendar({
   selectedSaturdays,
   specials,
   existingRoles,
+  createdTargets,
   onToggleWeekend,
   onAddSpecial,
   onRemoveSpecial,
@@ -189,7 +228,13 @@ export default function MonthCalendar({
   const firstFreeDate =
     days.find(
       (d) =>
-        !refuseSpecialOn({ date: d, weekendSelected: weekendSelected(d), specials, existingRoles }),
+        !refuseSpecialOn({
+          date: d,
+          weekendSelected: weekendSelected(d),
+          specials,
+          existingRoles,
+          createdTargets,
+        }),
     ) ?? days[0];
 
   function openComposer(date: string) {
@@ -232,6 +277,7 @@ export default function MonthCalendar({
       weekendSelected: weekendSelected(openDate),
       specials,
       existingRoles,
+      createdTargets,
     });
     if (refusal) {
       setNotice(refusal);

@@ -1614,6 +1614,20 @@ export default function MonthGenerator({
         selectedSaturdays={activeSatDates}
         specials={specials}
         existingRoles={existingRoles}
+        /*
+          E17: the SAME session-local created-set that gates `handleConfirm` and
+          `PlannerGrid`'s per-column reason, so the composer cannot accept a
+          special the next screen will refuse ("Crear 0 borradores"). Read-only
+          on the calendar's side.
+
+          Passing `.current` rather than the ref is deliberate and safe here:
+          this step only renders after `setStep("config")`, and the calendar
+          reads the set during ITS render, so the value it sees is always the
+          one `handleConfirm` last wrote. Nothing here needs a re-render to be
+          triggered BY the mutation — the mutation and the step change happen in
+          the same confirm.
+        */
+        createdTargets={createdTargets.current}
         onToggleWeekend={date => {
           // Local noon, never a bare `new Date(iso)` — a UTC parse day-flips and
           // would route a Sunday's toggle into the Saturday branch.
