@@ -1018,6 +1018,123 @@ describe("MonthGenerator — create path", () => {
     expect(calls.every((c) => c.body._type !== "sunday_role")).toBe(true);
   });
 
+  // ── Task 5 fix pass, Findings 1 & 2: the two UNPINNED E21 call sites ────────
+  //
+  // `MonthGenerator` feeds FOUR consumers the full month's Sunday spine
+  // (`sundayDatesFull`), never the calendar's selection, because the solver's
+  // week number is POSITIONAL over that spine. Two of the four were already
+  // pinned above — `buildSolveRequest` (the Oct-31 `weekends_with_saturday`
+  // test) and `applySolveResponse` (the same test's "no Oct 3 draft"). The
+  // other two were not: swapping `sundayDatesFull` for `selectedSundays` at
+  // either of them left the WHOLE suite green, because `plannerModel.test.ts`
+  // pins the pure functions given correct arguments and nothing pinned that
+  // the component supplies them.
+  //
+  // March 2026 is the fixture for both: it starts on a Sunday (1, 8, 15, 22,
+  // 29) and ends on a Tuesday, so EVERY Saturday (7, 14, 21, 28) has its
+  // adjacent Sunday inside the month and the unaddressable set is empty at
+  // rest. February 2026 cannot serve here — it ends on Saturday the 28th,
+  // whose Sunday is in March, so it is unaddressable before anything is
+  // deselected and the signal would be indistinguishable from the bug.
+
+  it("E21: deselecting a Sunday does not make its adjacent Saturday 'fuera del alcance de Auto'", () => {
+    const { container, unmount } = render(
+      <MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    setMonthYear(container, 3, 2026);
+    // Deselect ONLY the third Sunday. Its adjacent Saturday (2026-03-14) stays
+    // selected and the solver will still staff it — week 3 exists in the
+    // request either way, because the request is built from the full spine.
+    fireEvent.click(container.querySelector('[data-date="2026-03-15"]')!);
+    // Then drop a Saturday that is addressable on any reading (2026-03-28 sits
+    // beside Sunday the 29th). This is ordinary month setup, and it is also
+    // what makes the assertion below load-bearing: `unaddressableDatesList` is
+    // a `useMemo` keyed on [sundayDatesFull, activeSatDates], so a regression
+    // that swapped the ARGUMENT alone would sit behind a stale memo and never
+    // recompute after a Sunday toggle. Touching a Saturday invalidates the
+    // memo, so the wrong spine — however it got there — has to show itself.
+    fireEvent.click(container.querySelector('[data-date="2026-03-28"]')!);
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+
+    // The Saturday's column is rendered...
+    expect(container.querySelector('[data-date="2026-03-14"]')).toBeTruthy();
+    // ...and carries no scope warning, on the header badge...
+    expect(screen.queryByText("Fuera del alcance de Auto")).toBeNull();
+    // ...nor in the Auto confirmation banner, whose sentence only grows the
+    // "N sábado(s) fuera del alcance" clause when the list is non-empty.
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
+    expect(screen.getByText(/Esto reemplazará toda asignación de voz/).textContent).not.toMatch(
+      /fuera del alcance de Auto/,
+    );
+    unmount();
+
+    // CONTROL — the badge and the clause are not simply unrenderable. February
+    // 2026's Saturday the 28th is genuinely unaddressable (its Sunday, March 1,
+    // is outside the month's spine), so both must appear with nothing
+    // deselected at all. Without this half, a `unaddressableDates` that always
+    // returned [] would pass the assertions above.
+    const second = render(
+      <MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    setMonthYear(second.container, 2, 2026);
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+    expect(screen.getByText("Fuera del alcance de Auto")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
+    expect(screen.getByText(/Esto reemplazará toda asignación de voz/).textContent).toMatch(
+      /1 sábado\(s\) fuera del alcance de Auto/,
+    );
+  });
+
+  it("E21: an unfilled seat for week 3 lands on the THIRD Sunday of the month, not the third SELECTED one", async () => {
+    const members = [
+      { _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] },
+    ];
+    // Capture only — never `expect()` inside a mock body (see the note above
+    // the Oct-31 test for why an assertion there cannot fail a run).
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/admin/solve") {
+        return {
+          ok: true,
+          json: async () => ({
+            ok: true,
+            // Empty schedule: this test is about WHERE the unfilled marker
+            // lands, so no cell is filled and "Sin cubrir" is the only signal.
+            schedule: {},
+            total_counts: {},
+            role_counts: {},
+            unfilled_seats: ["W3 Sunday Sun.BGV #1"],
+          }),
+        };
+      }
+      throw new Error(`unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    setMonthYear(container, 3, 2026);
+    deselectAll(container, "saturday");
+    // Drop the FIRST Sunday. The spine is still [01, 08, 15, 22, 29], so week 3
+    // is March 15; the SELECTION is [08, 15, 22, 29], whose third entry is
+    // March 22 — a different, still-rendered column, which is what makes this
+    // discriminating rather than merely "somewhere sensible".
+    fireEvent.click(container.querySelector('[data-date="2026-03-01"]')!);
+
+    fireEvent.click(screen.getByLabelText("Ana"));
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+    await waitFor(() => expect(screen.getByText(/Lugares sin cubrir/)).toBeTruthy());
+
+    expect(
+      container.querySelector('[data-row-id="bgv"][data-date="2026-03-15"]')?.textContent,
+    ).toContain("Sin cubrir");
+    expect(
+      container.querySelector('[data-row-id="bgv"][data-date="2026-03-22"]')?.textContent ?? "",
+    ).not.toContain("Sin cubrir");
+  });
+
   // ── Task 4 fix pass, Finding 3 ──────────────────────────────────────────────
   //
   // D17 removed the config step's nested scrollers (`MemberPool`'s `max-h-32`,
