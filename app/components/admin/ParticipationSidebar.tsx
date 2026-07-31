@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { computeParticipation, type ParticipantRole, type MemberParticipation } from "@/app/utils/computeParticipation";
 
-const COLORS = { lead: "#378ADD", bgv: "#1D9E75", coro: "#7F77DD", instr: "#BA7517", foh: "#888780" };
+const COLORS = { lead: "#378ADD", bgv: "#1D9E75", coro: "#7F77DD", especial: "#D9534F", instr: "#BA7517", foh: "#888780" };
 type View = "voces" | "instrumentos";
 
 export function ParticipationSidebar({ roles, monthLabel }: { roles: ParticipantRole[]; monthLabel: string }) {
@@ -24,7 +24,7 @@ export function ParticipationSidebar({ roles, monthLabel }: { roles: Participant
     : Math.max(1, ...rows.map(r => r.instrWeeks + r.fohWeeks));
 
   const legend: readonly (readonly [string, string])[] = view === "voces"
-    ? [["Líder", COLORS.lead], ["BGV", COLORS.bgv], ["Coro", COLORS.coro]]
+    ? [["Líder", COLORS.lead], ["BGV", COLORS.bgv], ["Coro", COLORS.coro], ["Especial", COLORS.especial]]
     : [["Instr", COLORS.instr], ["FOH", COLORS.foh]];
 
   return (
@@ -75,12 +75,12 @@ function Row({ r, max, view }: { r: MemberParticipation; max: number; view: View
         <div className="text-[13px] font-medium text-[#003572] dark:text-[#C8D8EB] truncate">{r.name}</div>
         <div className="text-xs text-gray-500">
           {view === "voces"
-            ? <>Líder {r.sunLead}·{r.satLead}  ·  BGV {r.sunBGV}·{r.satBGV}  ·  Coro {r.coro}</>
+            ? <>Líder {r.sunLead}·{r.satLead}  ·  BGV {r.sunBGV}·{r.satBGV}  ·  Coro {r.coro}  ·  Especial {r.especial}</>
             : <>Instrumentos {r.instrWeeks} sem  ·  FOH {r.fohWeeks} sem</>}
         </div>
         <div className="mt-1 rounded overflow-hidden flex" style={{ width: 150, background: "rgba(0,191,255,0.08)" }}>
           {view === "voces"
-            ? <>{seg(r.sunLead + r.satLead, COLORS.lead)}{seg(r.sunBGV + r.satBGV, COLORS.bgv)}{seg(r.coro, COLORS.coro)}</>
+            ? <>{seg(r.sunLead + r.satLead, COLORS.lead)}{seg(r.sunBGV + r.satBGV, COLORS.bgv)}{seg(r.coro, COLORS.coro)}{seg(r.especial, COLORS.especial)}</>
             : <>{seg(r.instrWeeks, COLORS.instr)}{seg(r.fohWeeks, COLORS.foh)}</>}
         </div>
       </div>

@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { computeParticipation } from "../computeParticipation";
+import { computeParticipation, serviceWeekKey } from "../computeParticipation";
 
 const M = (id: string, alias?: string) => ({ _id: id, member_name: id, alias });
 const sun = (over: Record<string, unknown> = {}) =>
   ({ _type: "sunday_role" as const, date: "2026-07-26", leads: [], bgvs: [], chorus: [], instruments: [], foh: [], ...over });
 const sat = (over: Record<string, unknown> = {}) =>
   ({ _type: "saturday_role" as const, date: "2026-07-25", leads: [], bgvs: [], chorus: [], instruments: [], foh: [], ...over });
+const special = (over: Record<string, unknown> = {}) =>
+  ({ _type: "special_role" as const, date: "2026-07-22", leads: [], bgvs: [], chorus: [], instruments: [], foh: [], ...over });
 
 describe("computeParticipation", () => {
   it("routes voz appearances to Sun/Sat columns and totals them", () => {
@@ -40,12 +42,44 @@ describe("computeParticipation", () => {
     expect(r).toEqual([]);
   });
 
-  it("counts chorus on a saturday_role and ignores special_role entirely", () => {
+  it("counts chorus on a saturday_role, and routes a special's leads/bgvs/chorus into one especial bucket", () => {
+    // Decision reversal (E12): a special no longer contributes zero. Its
+    // leads, bgvs AND chorus all land in `especial`, never split into
+    // sunLead/satLead/sunBGV/satBGV/coro, so those keep meaning "Sunday/
+    // Saturday voice" and "Sunday choir" respectively regardless of service type.
     const r = computeParticipation([
       sat({ chorus: [M("a")] }),
-      { _type: "special_role", date: "2026-07-20", leads: [M("a")], bgvs: [], chorus: [M("a")], instruments: [], foh: [] },
+      special({ leads: [M("a")], bgvs: [M("a")], chorus: [M("a")] }),
     ]);
-    expect(r.find(x => x.id === "a")).toMatchObject({ coro: 1, total: 1 }); // special contributes nothing
+    const a = r.find(x => x.id === "a")!;
+    expect(a).toMatchObject({
+      coro: 1, especial: 3, sunLead: 0, satLead: 0, sunBGV: 0, satBGV: 0,
+      total: 4, // sum of every field, including the new bucket
+    });
+  });
+
+  it("a special's leads do not land in satLead/satBGV (the compiling-but-wrong-data trap)", () => {
+    const r = computeParticipation([special({ leads: [M("a")], bgvs: [M("b")] })]);
+    expect(r.find(x => x.id === "a")).toMatchObject({ satLead: 0, sunLead: 0, especial: 1, total: 1 });
+    expect(r.find(x => x.id === "b")).toMatchObject({ satBGV: 0, sunBGV: 0, especial: 1, total: 1 });
+  });
+
+  it("a special dated on a Sunday keys to that same Sunday, not the next one", () => {
+    // 2026-07-26 is itself a Sunday; a naive nextSunday() would push it to 08-02.
+    expect(serviceWeekKey(special({ date: "2026-07-26" }))).toBe("2026-07-26");
+  });
+
+  it("a weekday special keys forward to the following Sunday", () => {
+    // 2026-07-22 is a Wednesday; the following Sunday is 2026-07-26.
+    expect(serviceWeekKey(special({ date: "2026-07-22" }))).toBe("2026-07-26");
+  });
+
+  it("a special's instrument/FOH weeks join the same week cell as the following Sunday", () => {
+    const r = computeParticipation([
+      special({ date: "2026-07-22", instruments: [{ person: M("a") }] }),
+      sun({ date: "2026-07-26", instruments: [{ person: M("a") }] }),
+    ]);
+    expect(r.find(x => x.id === "a")).toMatchObject({ instrWeeks: 1 });
   });
 
   it("omits zero-participation members and sorts by total desc", () => {

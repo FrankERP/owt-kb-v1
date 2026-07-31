@@ -1023,11 +1023,11 @@ export function cellsToParticipantRoles(
       // path zeroed it and it never reached Sanity. Ranking against a seat that
       // will never exist is the bug this closes.
       //
-      // It does NOT close the number/strip drift for a special: `_type` is
-      // forwarded above, and `computeParticipation` skips `special_role`
-      // entirely (`:47`), so a special's seats add 0 to `load` while
-      // `serviceWeekKey` still gives it a week and the `recent` strip still
-      // lights. That is work item 5 / E12, and it is not resolved here.
+      // The number/strip drift for a special (E12) is closed in
+      // `computeParticipation`, not here: `_type` is forwarded above, and a
+      // special's leads/bgvs/chorus now land in one `especial` bucket that
+      // counts toward `total`/`load`, matching the week `serviceWeekKey`
+      // already gave it for the `recent` strip.
       chorus: (columnShowsRowId(column.type, "coro") ? idsFor("coro") : []).map(toPerson),
       instruments,
       foh,
