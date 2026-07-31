@@ -293,18 +293,27 @@ export function hasTarget(row: GridRow, column: GridColumn): boolean {
 }
 
 /**
- * The EXPLICIT column set of D9: never inferred from `sundayDates` — the
- * solve may still run on the full Sunday list while zero Sunday columns (and
- * therefore zero Sunday drafts) exist.
+ * The EXPLICIT column set of D9/E21. `sundayDates` here is the admin's
+ * SELECTION, never the month's Sunday spine: exactly one Sunday column per
+ * date passed, and none for any date withheld. The solve keeps running on the
+ * FULL spine, which `MonthGenerator` holds separately as `sundayDatesFull` —
+ * so "no Sundays at all" is an EMPTY `sundayDates` here while
+ * `buildSolveRequest` still receives every one of them.
+ *
+ * There is deliberately NO `includeSundays` flag. It existed for the retired
+ * Domingos checkbox, outlived it as a test-only option with a permissive
+ * `true` default, and offered a second way to say what `sundayDates` already
+ * says — precisely the shape `mapUnfilledSeats` refuses below ("required, not
+ * optional-with-a-permissive-default"). A future caller reaching for it would
+ * be reaching past the selection it was supposed to thread through.
  */
 export function buildColumns(input: {
   sundayDates: string[];
   activeSatDates: string[];
-  includeSundays?: boolean;
   /** Weekday specials (E2), each with the `service_name` it will be created under. */
   specials?: { date: string; name: string }[];
 }): GridColumn[] {
-  const { sundayDates, activeSatDates, includeSundays = true, specials = [] } = input;
+  const { sundayDates, activeSatDates, specials = [] } = input;
 
   // E3: AT MOST ONE COLUMN PER DATE, of any kind — enforced here rather than
   // trusted to the UI (work item 13). The grid is keyed by date alone in every
@@ -330,7 +339,7 @@ export function buildColumns(input: {
     cols.push(col);
   };
 
-  if (includeSundays) for (const d of sundayDates) push({ date: d, type: "sunday_role" });
+  for (const d of sundayDates) push({ date: d, type: "sunday_role" });
   for (const d of activeSatDates) push({ date: d, type: "saturday_role" });
   for (const s of specials) push({ date: s.date, type: "special_role", serviceName: s.name });
 

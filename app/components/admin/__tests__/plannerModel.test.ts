@@ -224,14 +224,38 @@ describe("the column set (D9)", () => {
     expect(toCreate.map((d) => d.date)).toEqual(["2026-02-08"]);
   });
 
-  it("buildColumns({ includeSundays: false }) yields Saturday columns only", () => {
-    const columns = buildColumns({ sundayDates: FEB_SUNDAYS, activeSatDates: FEB_SATURDAYS, includeSundays: false });
+  // These two used to pass `includeSundays: false` alongside a FULLY populated
+  // `sundayDates`. That flag is gone (Task 5 fix pass, Finding 4): it was the
+  // retired Domingos checkbox's mechanism, no production caller passed it, and
+  // its permissive `true` default meant a future caller could re-open the
+  // pre-E21 leak with no type error. Since Task 5, "no Sundays" is expressed
+  // the way `MonthGenerator` expresses it — an EMPTY selection reaching
+  // `buildColumns` while `sundayDatesFull` still reaches `buildSolveRequest`.
+  // Both halves of THAT split are pinned at the component level, where both
+  // values exist, by `MonthGenerator.create.test.tsx`'s D9 test (no Sunday
+  // column, no `sunday_role` POSTed) and its Oct-31 test (the request is still
+  // built over the full spine). What stays here is the pure contract: a Sunday
+  // column exists for exactly the dates handed in.
+
+  it("buildColumns yields Saturday columns only when the Sunday selection is empty", () => {
+    const columns = buildColumns({ sundayDates: [], activeSatDates: FEB_SATURDAYS });
     expect(columns.every((c) => c.type === "saturday_role")).toBe(true);
     expect(columns.map((c) => c.date).sort()).toEqual([...FEB_SATURDAYS].sort());
   });
 
-  it("cellsToDrafts with Sundays excluded yields ZERO sunday_role drafts, even though sundayDates is fully populated for the solve", () => {
-    const columns = buildColumns({ sundayDates: FEB_SUNDAYS, activeSatDates: FEB_SATURDAYS, includeSundays: false });
+  it("buildColumns yields a Sunday column for exactly the selected dates — no more, no fewer", () => {
+    const selection = [FEB_SUNDAYS[0], FEB_SUNDAYS[2]];
+    const columns = buildColumns({ sundayDates: selection, activeSatDates: [] });
+    expect(columns.map((c) => c.date)).toEqual(selection);
+    expect(columns.every((c) => c.type === "sunday_role")).toBe(true);
+    // The withheld Sundays produce nothing at all — this is the guarantee the
+    // removed `includeSundays` flag could have been used to bypass.
+    expect(columns.map((c) => c.date)).not.toContain(FEB_SUNDAYS[1]);
+    expect(columns.map((c) => c.date)).not.toContain(FEB_SUNDAYS[3]);
+  });
+
+  it("cellsToDrafts with Sundays excluded yields ZERO sunday_role drafts", () => {
+    const columns = buildColumns({ sundayDates: [], activeSatDates: FEB_SATURDAYS });
     const drafts = cellsToDrafts([], columns, new Set(), [], []);
     expect(drafts.filter((d) => d._type === "sunday_role")).toHaveLength(0);
     expect(drafts.filter((d) => d._type === "saturday_role")).toHaveLength(FEB_SATURDAYS.length);
