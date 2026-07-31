@@ -335,6 +335,27 @@ describe("buildSolveRequest", () => {
     expect(result.request.sunday_leads).toEqual(["Frank"]);
   });
 
+  it("a rule naming a member absent from `members` still injects the raw name into support AND keeps that raw name in the rule text — resolveToMemberName's fallback (plannerModel.ts:307-313) is what both `support` injection (:414-417) and allRulesToDs/restrictionToDs (:341/:326) resolve through, so they can never disagree about an unknown DSL person", () => {
+    const config: SolverConfig = {
+      ...emptyConfig,
+      sundayLeads: ["frank"],
+      restrictions: [
+        {
+          id: "r1", person: "Ghost Member", excludedPatterns: ["Sat.*"],
+          fairness: "none", fairnessSlack: 0, weekExclusions: [], caps: [],
+        },
+      ],
+    };
+    const result = buildSolveRequest({
+      config, members, sundayDates: FEB_SUNDAYS, activeSatDates: [],
+      historyEntries: [], year: 2026, month: 2,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.request.support).toContain("Ghost Member");
+    expect(result.request.dsl_rules).toContain("Ghost Member !in Sat.*");
+  });
+
   it("a pool member unavailable on a Sunday in the window yields !in week N Sun.*; unavailable on the adjacent Saturday yields Sat.*", () => {
     const config: SolverConfig = {
       ...emptyConfig,
@@ -430,6 +451,52 @@ describe("buildSolveRequest", () => {
       { total_counts: { a: 2 }, role_counts: {} },
       { total_counts: { a: 1 }, role_counts: {} },
     ]);
+  });
+});
+
+// ─── Week spine over a 5-Sunday month (E21) ──────────────────────────────────
+//
+// Every existing fixture above (FEB/OCT) has exactly 4 Sundays. A week-number
+// computation that happens to work only because it silently assumes a
+// 4-week month (e.g. wraps modulo 4) would pass every test above and still
+// misplace the 5th week. August 2026 has 5 Sundays — pin the THIRD one
+// specifically, both on the request side (buildSolveRequest's own `i + 1`
+// loop) and the response side (weekForColumn, exercised through
+// applySolveResponse since it is module-private, plannerModel.ts:460).
+describe("Week spine over a 5-Sunday month (E21)", () => {
+  const AUG_SUNDAYS = ["2026-08-02", "2026-08-09", "2026-08-16", "2026-08-23", "2026-08-30"];
+  const THIRD_SUNDAY = "2026-08-16";
+  const FOURTH_SUNDAY = "2026-08-23";
+
+  it("buildSolveRequest emits '!in week 3 Sun.*' for a pool member unavailable on the third Sunday", () => {
+    const config: SolverConfig = { ...emptyConfig, sundayLeads: ["frank"] };
+    const members: RankMember[] = [{ ...m("frank", "Frank"), unavailableDates: [THIRD_SUNDAY] }];
+    const result = buildSolveRequest({
+      config, members, sundayDates: AUG_SUNDAYS, activeSatDates: [],
+      historyEntries: [], year: 2026, month: 8,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.request.dsl_rules).toContain("Frank !in week 3 Sun.*");
+  });
+
+  it("applySolveResponse maps schedule week 3's Sunday data onto the third Sunday's date, never the fourth", () => {
+    const rows = buildRows();
+    const members: RankMember[] = [m("m1", "Frank")];
+    const columns: GridColumn[] = AUG_SUNDAYS.map((date) => ({ date, type: "sunday_role" as const }));
+    const resp: SolveResponse = {
+      ok: true,
+      schedule: { "3": { Sunday: { Lead: ["Frank"], BGV: [], Choir: [] } } },
+    };
+    const result = applySolveResponse({
+      response: resp, previousCells: [], columns, rows,
+      sundayDates: AUG_SUNDAYS, activeSatDates: [], members,
+    });
+    const onThird = result.cells.find((c) => c.rowId === "lead" && c.date === THIRD_SUNDAY);
+    const onFourth = result.cells.find((c) => c.rowId === "lead" && c.date === FOURTH_SUNDAY);
+    expect(onThird).toBeTruthy();
+    expect(onThird!.memberIds).toEqual(["m1"]);
+    expect(onFourth).toBeUndefined();
   });
 });
 
@@ -624,6 +691,32 @@ describe("cellsToDrafts — stability", () => {
     expect(rerender[0].creationRequestId).toBe(run1[0].creationRequestId);
   });
 
+  it("keys draft identity by (type, date), not date alone — the collision-key split (E19) must keep distinguishing them", () => {
+    // Today `type` and `date` are the only two axes `cellsToDrafts` keys on
+    // (`${_type}__${date}`). A future collision-key split (adding a third
+    // service type sharing a date with these two) must not collapse this
+    // back to a date-only key — this pins that a sunday_role and a
+    // saturday_role column sharing a date already get, and keep, independent
+    // identities.
+    const sharedDateColumns: GridColumn[] = [
+      { date: "2026-02-07", type: "sunday_role" },
+      { date: "2026-02-07", type: "saturday_role" },
+    ];
+    const first = cellsToDrafts([], sharedDateColumns, new Set(), [], []);
+    const firstSunday = first.find((d) => d._type === "sunday_role")!;
+    const firstSaturday = first.find((d) => d._type === "saturday_role")!;
+    expect(firstSunday.localId).not.toBe(firstSaturday.localId);
+    expect(firstSunday.creationRequestId).not.toBe(firstSaturday.creationRequestId);
+
+    const second = cellsToDrafts([], sharedDateColumns, new Set(), first, []);
+    const secondSunday = second.find((d) => d._type === "sunday_role")!;
+    const secondSaturday = second.find((d) => d._type === "saturday_role")!;
+    expect(secondSunday.localId).toBe(firstSunday.localId);
+    expect(secondSunday.creationRequestId).toBe(firstSunday.creationRequestId);
+    expect(secondSaturday.localId).toBe(firstSaturday.localId);
+    expect(secondSaturday.creationRequestId).toBe(firstSaturday.creationRequestId);
+  });
+
   it("a lost exists (existingRoles not yet refreshed) is recovered from previous", () => {
     const created = cellsToDrafts([], columns, new Set(), [], []).map((d): DraftCard => ({ ...d, exists: true }));
     const rerender = cellsToDrafts([], columns, new Set(), created, []); // existingRoles hasn't caught up yet
@@ -776,6 +869,19 @@ describe("historyEntryFromDrafts", () => {
     expect(entry?.role_counts.Liu).toBeUndefined();
     expect(Object.values(entry?.role_counts ?? {}).some((counts) => "Sat.Choir" in counts)).toBe(false);
     expect(entry?.total_counts).toEqual({ Frank: 1, Gaby: 1 });
+  });
+
+  it("a full weekend (Sunday + its adjacent Saturday) produces Sun.Lead/Sat.Lead/Sun.Choir together — the CURRENT baseline (E9/E20) Task 6 must leave untouched while adding the special exclusion", () => {
+    const drafts = [
+      draft({ _type: "sunday_role", date: "2026-02-08", leads: ["m1"], chorus: ["m3"] }),
+      draft({ _type: "saturday_role", date: "2026-02-07", leads: ["m1"] }),
+    ];
+    const entry = historyEntryFromDrafts(drafts, members, 2026, 2);
+    expect(entry?.role_counts).toEqual({
+      Frank: { "Sun.Lead": 1, "Sat.Lead": 1 },
+      Liu: { "Sun.Choir": 1 },
+    });
+    expect(entry?.total_counts).toEqual({ Frank: 2, Liu: 1 });
   });
 
   it("total_counts is the per-person sum of role_counts across multiple dates and roles", () => {

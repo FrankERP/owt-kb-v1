@@ -35,6 +35,11 @@ describe("draftToDayCardProps", () => {
     expect(draftToDayCardProps({ ...baseDraft, _type: "saturday_role" }, members).day).toBe("Sábado");
   });
 
+  it("pins the label mapping explicitly (fact 26): sunday_role -> Domingo, saturday_role -> Sábado", () => {
+    expect(draftToDayCardProps({ ...baseDraft, _type: "sunday_role" }, members).day).toBe("Domingo");
+    expect(draftToDayCardProps({ ...baseDraft, _type: "saturday_role" }, members).day).toBe("Sábado");
+  });
+
   it("prefers the alias over the full name in every pre-resolved string", () => {
     // `bgvs`/`chorus` stay OBJECTS and let `DayCard` apply the same rule, so only
     // these three carry a resolved display name.
