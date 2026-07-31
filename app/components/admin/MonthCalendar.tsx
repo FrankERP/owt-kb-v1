@@ -181,6 +181,17 @@ export default function MonthCalendar({
     return false;
   };
 
+  // Where the composer starts when it is opened from the button rather than
+  // from a day cell. Day 1 would be a guaranteed E3 refusal in any month
+  // starting on a weekend, so it starts on the first date that could actually
+  // take a special; `days[0]` only when every date is already claimed (and then
+  // the refusal is the honest answer).
+  const firstFreeDate =
+    days.find(
+      (d) =>
+        !refuseSpecialOn({ date: d, weekendSelected: weekendSelected(d), specials, existingRoles }),
+    ) ?? days[0];
+
   function openComposer(date: string) {
     setNotice(null);
     setDraftName("");
@@ -240,7 +251,7 @@ export default function MonthCalendar({
         día para crear un servicio especial.
       </p>
 
-      <div className="grid grid-cols-7 gap-1" data-testid="month-calendar">
+      <div className="grid grid-cols-7 gap-1">
         {WEEKDAY_HEADERS.map((h) => (
           <span
             key={h}
@@ -311,7 +322,7 @@ export default function MonthCalendar({
 
       <button
         type="button"
-        onClick={() => openComposer(openDate ?? days[0])}
+        onClick={() => openComposer(openDate ?? firstFreeDate)}
         className="min-h-[44px] w-full rounded-lg border border-[#a78bfa]/30 px-3 font-label text-[11px] uppercase tracking-widest text-[#a78bfa] hover:bg-[#a78bfa]/10 transition-colors"
       >
         + Servicio especial
