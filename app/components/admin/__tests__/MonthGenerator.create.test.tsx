@@ -98,6 +98,20 @@ function renameSpecial(container: HTMLElement, date: string, nextName: string) {
   addSpecial(container, date, nextName);
 }
 
+/**
+ * A rename attempted IN PLACE: the composer is opened from its own button and
+ * pointed at a date that is still held, so nothing is removed first. Used where
+ * a test needs the pending special to SURVIVE the attempt — `renameSpecial`'s
+ * Quitar is destructive, and the re-add that used to follow it is now refused
+ * by the calendar itself (the session created-set reaches `refuseSpecialOn`).
+ */
+function attemptRenameInPlace(date: string, nextName: string) {
+  fireEvent.click(screen.getByRole("button", { name: /\+ Servicio especial/ }));
+  fireEvent.change(screen.getByLabelText("Fecha del servicio especial"), { target: { value: date } });
+  fireEvent.change(screen.getByLabelText("Nombre del servicio especial"), { target: { value: nextName } });
+  fireEvent.click(screen.getByRole("button", { name: "Agregar" }));
+}
+
 /** A month whose ONLY columns are the specials the test adds. */
 function specialsOnly(container: HTMLElement, month: number, year: number) {
   setMonthYear(container, month, year);
@@ -1327,10 +1341,20 @@ describe("MonthGenerator — create path", () => {
     fireEvent.click(createButton());
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    // Back to the config step and rename the special (remove-then-add), then
-    // preview again — the exact walk that re-mints the draft.
+    // Back to the config step and rename the special, then preview again — the
+    // exact walk that re-mints the draft.
+    //
+    // The rename is now REFUSED at its source: the follow-up fix threads the
+    // session created-set into the calendar, so neither ordering of a rename
+    // reaches the grid any more (remove-then-add is pinned in "the calendar
+    // itself refuses to re-add…" below; this is the in-place ordering). The
+    // pending special therefore survives the attempt, which is what lets this
+    // test keep pinning the GRID gate — the second, independent lock. It still
+    // walks the whole re-mint: `handlePreview` rebuilds with `previous: []`, so
+    // every `localId` is new and nothing on the draft remembers the create.
     fireEvent.click(screen.getByRole("button", { name: /Volver/ }));
-    renameSpecial(container, SPECIAL_DATE, "Vigilia de Oración");
+    attemptRenameInPlace(SPECIAL_DATE, "Vigilia de Oración");
+    expect(screen.getByText(/Ya lo creaste en esta sesión\./)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
 
     // Both Crear buttons are dead, the count is honest, and the column says why
@@ -1392,6 +1416,79 @@ describe("MonthGenerator — create path", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     expect(calls[2].date).toBe(failingSunday);
     // The special was posted exactly once across both confirms.
+    expect(calls.filter((c) => c.date === SPECIAL_DATE)).toHaveLength(1);
+  });
+
+  it("the calendar itself refuses to re-add a special this session already created — the composer no longer accepts what the grid will refuse", async () => {
+    // The reviewer's walk, exactly: a partial-failure confirm leaves the dialog
+    // open → "← Volver" → "Quitar servicio especial" → type a NEW name on the
+    // SAME date → "Agregar". That used to be accepted with no warning: the date
+    // rendered as an ordinary free weekday and the refusal only appeared one
+    // screen later, in the grid, as "Crear 0 borradores". No wrong data reached
+    // Sanity — the grid gate held — but the composer was telling the admin
+    // something the next screen contradicted, which is the multi-surface
+    // disagreement E17 exists to eliminate.
+    //
+    // A partial failure is what makes this reachable in production at all: a
+    // fully successful confirm calls `onClose()`. `existingRoles` is never
+    // refreshed here, on purpose — `onCreated()` is not awaited, so on this
+    // path the prop is still empty and `specials` was just emptied by the
+    // Quitar. BOTH inputs the composer used to consult say "free". Only the
+    // session set, keyed `type__date`, knows better.
+    //
+    // Mutation: drop `createdTargets` from `refuseSpecialOn`'s inputs (or stop
+    // passing the prop from `MonthGenerator`) and this goes red at the notice —
+    // `onAddSpecial` fires, the special comes back, and the create count says 2.
+    const failingSunday = FEB_2026_SUNDAYS[0];
+    const { fetchMock, calls } = stubRolesFetch((date) =>
+      date === failingSunday ? { ok: false, status: 500 } : { ok: true },
+    );
+    const { container } = render(
+      <MonthGenerator
+        members={noMembers}
+        existingRoles={[]}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+        preflight={makePreflight(() => "creatable")}
+      />,
+    );
+    setMonthYear(container, 2, 2026);
+    deselectAll(container, "saturday");
+    for (const date of FEB_2026_SUNDAYS.slice(1)) {
+      fireEvent.click(container.querySelector(`[data-date="${date}"]`)!);
+    }
+    addSpecial(container, SPECIAL_DATE, "Vigilia");
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(screen.getByText(/No se pudieron crear 1 de 2 servicios/)).toBeTruthy(),
+    );
+
+    // ← Volver, remove the special, re-add it under a NEW name on the SAME date.
+    fireEvent.click(screen.getByRole("button", { name: /Volver/ }));
+    renameSpecial(container, SPECIAL_DATE, "Vigilia de Oración");
+
+    // The composer refuses, on the spot, in the calendar's own notice line —
+    // and in the SAME words the grid uses for this state.
+    const notice = screen.getByRole("status");
+    expect(notice.textContent).toMatch(/^El 11 de febrero ya tiene un servicio especial\./);
+    expect(notice.textContent).toMatch(/Ya lo creaste en esta sesión\.$/);
+
+    // And it is a refusal, not a warning: nothing was added back. No entry in
+    // the specials list, and the day cell carries no special.
+    expect(screen.queryByRole("button", { name: /^Quitar servicio especial/ })).toBeNull();
+    expect(
+      container.querySelector(`[data-date="${SPECIAL_DATE}"]`)!.getAttribute("data-special"),
+    ).toBeNull();
+
+    // Downstream agrees rather than contradicting: the grid offers only the
+    // weekend date that failed, and the retry posts only that.
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+    expect(createButton().textContent).toMatch(/^Crear 1 borrador/);
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(calls[2].date).toBe(failingSunday);
     expect(calls.filter((c) => c.date === SPECIAL_DATE)).toHaveLength(1);
   });
 

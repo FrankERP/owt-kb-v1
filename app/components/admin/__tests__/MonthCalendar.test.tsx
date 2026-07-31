@@ -19,6 +19,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MonthCalendar, { refuseSpecialOn, refuseWeekendOn } from "../MonthCalendar";
 import MonthGenerator from "../MonthGenerator";
+// The SHARED key builder, never a hand-rolled `${type}__${date}` — a second
+// copy in the tests could drift from the one both surfaces read.
+import { draftTargetKey } from "../plannerModel";
 
 afterEach(() => {
   cleanup();
@@ -211,6 +214,58 @@ describe("MonthCalendar — P2 refuses a second special on a stored one's date",
     composeSpecial(WEDNESDAY, "Boda");
     expect(onAddSpecial).not.toHaveBeenCalled();
     expect(screen.getByText(/ya tiene un servicio especial guardado: «Bautizos»/)).toBeTruthy();
+  });
+
+  // The session-local created-set (`MonthGenerator`'s `createdTargets`) is the
+  // THIRD input to this refusal, and the only one that survives the walk that
+  // matters: after "Quitar", `specials` no longer holds the date, and
+  // `existingRoles` is refreshed asynchronously by `onCreated()`, so both say
+  // "free" on exactly the path where a second document would be created.
+  // Mutation: drop `createdTargets` from `refuseSpecialOn`'s inputs and both of
+  // these go red.
+  it("refuses a special on a date THIS SESSION already created, in the grid's own words", () => {
+    const { onAddSpecial } = renderCalendar({
+      createdTargets: new Set([draftTargetKey("special_role", WEDNESDAY)]),
+    });
+    composeSpecial(WEDNESDAY, "Boda");
+    expect(onAddSpecial).not.toHaveBeenCalled();
+    expect(screen.getByRole("status").textContent).toBe(
+      "El 12 de agosto ya tiene un servicio especial. Ya lo creaste en esta sesión.",
+    );
+  });
+
+  it("the created-set is keyed by TYPE and date — a created weekend target does not block a special", () => {
+    // `type__date`, never the bare date: a `saturday_role` this session created
+    // on a date the admin then deselected leaves that date free for a special,
+    // exactly as a stored `saturday_role` does two tests down.
+    const { onAddSpecial } = renderCalendar({
+      selectedSaturdays: AUG_SATURDAYS.filter((d) => d !== "2026-08-15"),
+      createdTargets: new Set([draftTargetKey("saturday_role", "2026-08-15")]),
+    });
+    composeSpecial("2026-08-15", "Boda");
+    expect(onAddSpecial).toHaveBeenCalledWith("2026-08-15", "Boda");
+  });
+
+  it("the pure predicate reports the session-created refusal, and defaults to not refusing", () => {
+    const createdTargets = new Set([draftTargetKey("special_role", WEDNESDAY)]);
+    expect(
+      refuseSpecialOn({ date: WEDNESDAY, weekendSelected: false, specials: [], existingRoles: [], createdTargets }),
+    ).toMatch(/Ya lo creaste en esta sesión\./);
+    // Ahead of the pending-list branch: "quítalo de la lista para cambiarlo" is
+    // a lie once the document exists, so the created reason must win.
+    expect(
+      refuseSpecialOn({
+        date: WEDNESDAY,
+        weekendSelected: false,
+        specials: [{ date: WEDNESDAY, name: "Bautizos" }],
+        existingRoles: [],
+        createdTargets,
+      }),
+    ).toMatch(/Ya lo creaste en esta sesión\./);
+    // Omitted entirely — every caller that predates the set is unaffected.
+    expect(
+      refuseSpecialOn({ date: WEDNESDAY, weekendSelected: false, specials: [], existingRoles: [] }),
+    ).toBeNull();
   });
 
   it("an existing WEEKEND role on a deselected date does not block a special there", () => {
