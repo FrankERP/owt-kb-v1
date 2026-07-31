@@ -21,7 +21,7 @@
 //
 // Buttons are matched by their REAL computed labels (`Crear ${n} borrador(es)`
 // pluralised, and the literal "Crear y publicar"): a bare /Crear/ matches both.
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MonthGenerator from "../MonthGenerator";
@@ -303,44 +303,53 @@ describe("MonthGenerator — create path", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  // ── Written now, expected to be REWRITTEN in Task 4 (D13 moves the solve
-  // trigger from `Previsualizar →` to Auto) — kept here because they pin
-  // behaviour that must survive that move. ──────────────────────────────────
+  // ── REWRITTEN for Task 4 (D13 moves the solve trigger from
+  // `Previsualizar →` to Auto, inside `PlannerGrid`). Both pin the SAME
+  // behaviour the Task 1 versions did; only the trigger changed. ────────────
 
-  it('"Debes seleccionar al menos un líder de domingo" refuses before any /api/admin/solve call', () => {
+  it('"Debes seleccionar al menos un líder de domingo" refuses before any /api/admin/solve call', async () => {
     const fetchMock = stubUnreachableFetch();
-    render(
+    const { container } = render(
       <MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
+    goToPreview(container, 2, 2026); // "Previsualizar →" now only builds an empty grid.
 
-    fireEvent.click(screen.getByLabelText(/Auto-asignar con Solver/));
-    // No sunday leads selected — the pool default is empty.
-    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+    // No sunday leads selected — the pool default is empty. Auto requires a
+    // confirmation step (D2) before it calls `onAuto`.
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
 
     expect(
       screen.getByText("Debes seleccionar al menos un líder de domingo."),
     ).toBeTruthy();
-    // Still on the config step: the solve-trigger button is unchanged.
-    expect(screen.getByRole("button", { name: /Previsualizar/ })).toBeTruthy();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("a successful solve writes one fairness-history entry under `${year}-${month}`, replacing rather than appending", async () => {
+  // ── Fairness-history persistence (2026-07-30 fix) ──────────────────────────
+  //
+  // History used to be written the instant a solve returned (`handleAuto`,
+  // the OLD version of this describe block ran two Auto+Confirmar cycles and
+  // checked localStorage without ever creating anything). That recorded
+  // services that might never exist: closing the panel after a disliked Auto
+  // run still penalised people next month, and a hand-edit after Auto (or a
+  // month assigned entirely by hand) never changed — or even reached —
+  // fairness history at all. Persistence now happens in `handleConfirm`,
+  // derived from `result.createdLocalIds` (`historyEntryFromDrafts` in
+  // `plannerModel.ts`), so every test below drives an actual create.
+
+  it("Auto runs and is confirmed, but the panel is closed WITHOUT creating anything — no history entry is written", async () => {
     const members = [
       { _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] },
     ];
-    let solveCallCount = 0;
     const fetchMock = vi.fn(async (url: string) => {
       if (url !== "/api/admin/solve") throw new Error(`unexpected fetch to ${url}`);
-      solveCallCount += 1;
-      const anaCount = solveCallCount; // 1st call -> 1, 2nd call -> 2
       return {
         ok: true,
         json: async () => ({
           ok: true,
           schedule: { "1": { Sunday: { Lead: ["Ana"], BGV: [], Choir: [] } } },
-          total_counts: { Ana: anaCount },
-          role_counts: { Ana: { "Sun.Lead": anaCount } },
+          total_counts: { Ana: 1 },
+          role_counts: { Ana: { "Sun.Lead": 1 } },
           unfilled_seats: [],
         }),
       };
@@ -350,28 +359,739 @@ describe("MonthGenerator — create path", () => {
     const { container } = render(
       <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
-    setMonthYear(container, 2, 2026);
-    disableSaturdays();
-    fireEvent.click(screen.getByLabelText(/Auto-asignar con Solver/));
     fireEvent.click(screen.getByLabelText("Ana"));
+    goToPreview(container, 2, 2026);
 
-    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
-    await waitFor(() => expect(screen.getByRole("button", { name: /Volver/ })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    const historyAfterFirst = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
-    const entriesFor2026_2 = historyAfterFirst.filter((h: { key: string }) => h.key === "2026-2");
+    // The abandoned-run case: a real solve happened, produced real counts,
+    // but nothing was ever posted to /api/admin/roles. If the old
+    // `saveHistoryEntry(...)` call in `handleAuto` were restored, this would
+    // find a "2026-2" entry with `{ Ana: 1 }` here — that is the exact
+    // mutation this test exists to catch.
+    const history = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    expect(history.filter((h: { key: string }) => h.key === "2026-2")).toHaveLength(0);
+  });
+
+  it("creating after Auto writes a history entry matching the CREATED drafts, not the solver's raw response", async () => {
+    const members = [
+      { _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] },
+      { _id: "lead-2", member_name: "Beto", memberType: ["voz"] },
+    ];
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/admin/solve") {
+        return {
+          ok: true,
+          json: async () => ({
+            ok: true,
+            schedule: { "1": { Sunday: { Lead: ["Ana"], BGV: [], Choir: [] } } },
+            total_counts: { Ana: 1 },
+            role_counts: { Ana: { "Sun.Lead": 1 } },
+            unfilled_seats: [],
+          }),
+        };
+      }
+      if (url === "/api/admin/roles") return { ok: true, status: 200, json: async () => ({}) };
+      throw new Error(`unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByLabelText("Ana"));
+    goToPreview(container, 2, 2026);
+
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/admin/solve", expect.anything()));
+
+    // Hand-edit the exact cell Auto just filled: swap Ana for Beto before
+    // creating — the fixture diverges deliberately so the test can tell
+    // "what the solver proposed" from "what actually got created" apart.
+    const leadCell = container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]');
+    fireEvent.click(leadCell!);
+    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana")); // off
+    fireEvent.click(within(container.querySelector("ul")!).getByText("Beto")); // on
+    fireEvent.click(screen.getByText("Cerrar"));
+
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => u === "/api/admin/roles")).toBe(true));
+
+    const history = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    const entry = history.find((h: { key: string }) => h.key === "2026-2");
+    expect(entry).toBeTruthy();
+    // Beto, who was hand-assigned, is recorded — Ana, whom the solver
+    // proposed but who was removed before create, is not.
+    expect(entry.role_counts).toEqual({ Beto: { "Sun.Lead": 1 } });
+    expect(entry.total_counts).toEqual({ Beto: 1 });
+  });
+
+  it("a month assigned entirely by hand, with no Auto run at all, still records a fairness-history entry after create", async () => {
+    const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz"] }];
+    const { fetchMock } = stubRolesFetch(() => ({ ok: true }));
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+
+    const leadCell = container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]');
+    fireEvent.click(leadCell!);
+    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+    fireEvent.click(screen.getByText("Cerrar"));
+
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    const history = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    const entry = history.find((h: { key: string }) => h.key === "2026-2");
+    expect(entry).toBeTruthy();
+    expect(entry.total_counts).toEqual({ Ana: 1 });
+    expect(entry.role_counts).toEqual({ Ana: { "Sun.Lead": 1 } });
+  });
+
+  it("never counts a service that existed BEFORE this session, even though Auto fills its column", async () => {
+    // This is the test that separates the session-scoped union from `d.exists`.
+    // Auto solves the WHOLE month (D9) and `columns` covers every date, so a
+    // date that already had a service gets grid cells like any other. Its draft
+    // is `skipped`, so it is never POSTed — but `d.exists` is true for it, and
+    // a union keyed on `d.exists` would fold its occupants into the fairness
+    // entry. This generator did not create that service; it must not take
+    // credit for its seats.
+    const members = [
+      { _id: "lead-1", member_name: "Ana", memberType: ["voz"] },
+      { _id: "lead-2", member_name: "Beto", memberType: ["voz"] },
+    ];
+    const preExisting = FEB_2026_SUNDAYS[0]; // 2026-02-01, already has a service
+    const fresh = FEB_2026_SUNDAYS[1];       // 2026-02-08, this session creates it
+    const { fetchMock } = stubRolesFetch(() => ({ ok: true }));
+
+    const { container } = render(
+      <MonthGenerator
+        members={members}
+        existingRoles={[{ _type: "sunday_role", date: preExisting }] as never}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+      />,
+    );
+    goToPreview(container, 2, 2026);
+
+    // Beto lands in the pre-existing date's column; Ana in the one we create.
+    for (const [date, name] of [[preExisting, "Beto"], [fresh, "Ana"]] as const) {
+      const cell = container.querySelector(`[data-row-id="lead"][data-date="${date}"]`);
+      fireEvent.click(cell!);
+      fireEvent.click(within(container.querySelector("ul")!).getByText(name));
+      fireEvent.click(screen.getByText("Cerrar"));
+    }
+
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    const history = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    const entry = history.find((h: { key: string }) => h.key === "2026-2");
+    expect(entry).toBeTruthy();
+    // Ana only. Beto sits on a service this session did not create.
+    expect(entry.total_counts).toEqual({ Ana: 1 });
+    expect(entry.role_counts).toEqual({ Ana: { "Sun.Lead": 1 } });
+  });
+
+  it("a skipped date and a date that failed to create are both excluded from the history counts", async () => {
+    const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz"] }];
+    const failingDate = FEB_2026_SUNDAYS[2]; // 2026-02-15
+    const skippedDate = FEB_2026_SUNDAYS[1]; // 2026-02-08
+    const { fetchMock } = stubRolesFetch((date) =>
+      date === failingDate ? { ok: false, status: 500 } : { ok: true },
+    );
+
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+
+    // Assign Ana as Lead on all four Sundays.
+    for (const date of FEB_2026_SUNDAYS) {
+      const cell = container.querySelector(`[data-row-id="lead"][data-date="${date}"]`);
+      fireEvent.click(cell!);
+      fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+      fireEvent.click(screen.getByText("Cerrar"));
+    }
+
+    fireEvent.click(screen.getByLabelText(`Omitir ${skippedDate}`));
+
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3)); // 4 - 1 skipped = 3 attempted
+
+    const history = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    const entry = history.find((h: { key: string }) => h.key === "2026-2");
+    expect(entry).toBeTruthy();
+    // 4 dates assigned, 1 skipped (never posted) and 1 failed to create — only
+    // the 2 that actually committed count.
+    expect(entry.total_counts).toEqual({ Ana: 2 });
+  });
+
+  it("re-creating the same month replaces the fairness-history entry rather than appending", async () => {
+    const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz"] }];
+
+    const first = stubRolesFetch(() => ({ ok: true }));
+    const { container, unmount } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+    const firstCell = container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]');
+    fireEvent.click(firstCell!);
+    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+    fireEvent.click(screen.getByText("Cerrar"));
+    fireEvent.click(createButton());
+    await waitFor(() => expect(first.fetchMock).toHaveBeenCalled());
+
+    const afterFirst = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    expect(afterFirst.find((h: { key: string }) => h.key === "2026-2").total_counts).toEqual({ Ana: 1 });
+    unmount();
+
+    // The month is regenerated from scratch (e.g. the drafts were discarded
+    // and the wizard re-run) — this time Ana is assigned on TWO Sundays.
+    const second = stubRolesFetch(() => ({ ok: true }));
+    const { container: container2 } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container2, 2, 2026);
+    for (const date of [FEB_2026_SUNDAYS[0], FEB_2026_SUNDAYS[1]]) {
+      const cell = container2.querySelector(`[data-row-id="lead"][data-date="${date}"]`);
+      fireEvent.click(cell!);
+      fireEvent.click(within(container2.querySelector("ul")!).getByText("Ana"));
+      fireEvent.click(screen.getByText("Cerrar"));
+    }
+    fireEvent.click(createButton());
+    await waitFor(() => expect(second.fetchMock).toHaveBeenCalled());
+
+    const afterSecond = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    const entriesFor2026_2 = afterSecond.filter((h: { key: string }) => h.key === "2026-2");
+    expect(entriesFor2026_2).toHaveLength(1); // replaced, not appended
+    expect(entriesFor2026_2[0].total_counts).toEqual({ Ana: 2 });
+  });
+
+  it("a retried partial-failure batch — first confirm creates some dates and fails others, second confirm creates the rest — records a history entry covering BOTH batches (2026-07-30 retry fix)", async () => {
+    // The defect: deriving the history entry from ONLY `result.createdLocalIds`
+    // of THIS call means a second confirm that retries just the failed subset
+    // recomputes an entry for that subset alone, and `saveHistoryEntry`
+    // replaces by `${year}-${month}` — erasing the first call's counts. The
+    // fix folds in every draft that `exists` (this batch's successes, plus
+    // whatever an earlier confirm already flagged `exists: true`), so the
+    // recompute is idempotent across however many partial retries it takes.
+    const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz"] }];
+    const failingDates = new Set([FEB_2026_SUNDAYS[2], FEB_2026_SUNDAYS[3]]); // 02-15, 02-22
+    const attempts = new Map<string, number>();
+    const fetchMock = vi.fn(async (url: string, init: { body: string }) => {
+      if (url !== "/api/admin/roles") throw new Error(`unexpected fetch to ${url}`);
+      const body = JSON.parse(init.body) as Record<string, unknown>;
+      const date = body.date as string;
+      const attempt = (attempts.get(date) ?? 0) + 1;
+      attempts.set(date, attempt);
+      // The two "failing" dates fail on their FIRST attempt (first confirm,
+      // simulating a partial 500) and succeed on retry (second confirm);
+      // the other two succeed immediately.
+      const ok = !failingDates.has(date) || attempt > 1;
+      return { ok, status: ok ? 200 : 500, json: async () => (ok ? {} : { error: "boom" }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+
+    for (const date of FEB_2026_SUNDAYS) {
+      const cell = container.querySelector(`[data-row-id="lead"][data-date="${date}"]`);
+      fireEvent.click(cell!);
+      fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+      fireEvent.click(screen.getByText("Cerrar"));
+    }
+
+    // First confirm: 2 of 4 dates succeed, 2 fail — dialog stays open.
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+
+    const afterFirst = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    expect(afterFirst.find((h: { key: string }) => h.key === "2026-2").total_counts).toEqual({ Ana: 2 });
+
+    // Retry: only the 2 that failed are re-attempted (with their original
+    // creationRequestId, per the standalone-retry contract above) — this time
+    // they succeed.
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6));
+
+    const afterSecond = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    const entriesFor2026_2 = afterSecond.filter((h: { key: string }) => h.key === "2026-2");
+    expect(entriesFor2026_2).toHaveLength(1); // replaced, not appended
+    // The union covers BOTH batches — all 4 dates now exist. A recompute
+    // derived from only the SECOND call's `createdLocalIds` (the pre-fix
+    // logic) would produce `{ Ana: 2 }` here, silently erasing the first
+    // batch's 2 counts via replace-by-key.
+    expect(entriesFor2026_2[0].total_counts).toEqual({ Ana: 4 });
+  });
+
+  it("a session-scoped confirm survives an existingRoles prop refresh mid-session — the critical regression this session's own creations must never be zeroed out by a stale `exists` derivation (2026-07-30 session-scoped-union fix)", async () => {
+    // The defect this pins: `ServicesPanel` passes `existingRoles={roles}`, and
+    // `onCreated()` → `loadSources()` → `setRoles(...)` means a partial
+    // failure's dialog-stays-open window sees `existingRoles` refresh to
+    // include the dates THIS session just created. Any subsequent grid
+    // interaction re-runs `cellsToDrafts` with that refreshed prop, so those
+    // dates become `isExisting` too — indistinguishable, on the resulting
+    // `DraftCard`, from a date that existed before this session ever started.
+    // Deriving the history union from `d.exists` (the pre-fix logic) cannot
+    // tell them apart. Deriving it from a session-scoped ref of confirmed
+    // `localId`s can, because that ref is never touched by the prop refresh.
+    const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz"] }];
+    const failingDates = new Set([FEB_2026_SUNDAYS[2], FEB_2026_SUNDAYS[3]]); // 02-15, 02-22
+    const attempts = new Map<string, number>();
+    const fetchMock = vi.fn(async (url: string, init: { body: string }) => {
+      if (url !== "/api/admin/roles") throw new Error(`unexpected fetch to ${url}`);
+      const body = JSON.parse(init.body) as Record<string, unknown>;
+      const date = body.date as string;
+      const attempt = (attempts.get(date) ?? 0) + 1;
+      attempts.set(date, attempt);
+      const ok = !failingDates.has(date) || attempt > 1;
+      return { ok, status: ok ? 200 : 500, json: async () => (ok ? {} : { error: "boom" }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container, rerender } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+
+    for (const date of FEB_2026_SUNDAYS) {
+      const cell = container.querySelector(`[data-row-id="lead"][data-date="${date}"]`);
+      fireEvent.click(cell!);
+      fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+      fireEvent.click(screen.getByText("Cerrar"));
+    }
+
+    // First confirm: 2 of 4 succeed (02-01, 02-08), 2 fail (02-15, 02-22) —
+    // dialog stays open.
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    const afterFirst = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    expect(afterFirst.find((h: { key: string }) => h.key === "2026-2").total_counts).toEqual({ Ana: 2 });
+
+    // The prop refresh `onCreated → loadSources → setRoles` would produce in
+    // production: the two dates THIS session just created now come back as
+    // `existingRoles` from the server.
+    rerender(
+      <MonthGenerator
+        members={members}
+        existingRoles={[
+          { _id: "r1", _type: "sunday_role", date: FEB_2026_SUNDAYS[0] },
+          { _id: "r2", _type: "sunday_role", date: FEB_2026_SUNDAYS[1] },
+        ]}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+      />,
+    );
+
+    // A grid interaction — re-runs cellsToDrafts with the refreshed prop.
+    fireEvent.click(screen.getByLabelText(`Omitir ${FEB_2026_SUNDAYS[0]}`));
+
+    // Retry: the 2 that failed are re-attempted and succeed this time.
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6));
+
+    const afterSecond = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    const entriesFor2026_2 = afterSecond.filter((h: { key: string }) => h.key === "2026-2");
     expect(entriesFor2026_2).toHaveLength(1);
-    expect(entriesFor2026_2[0].total_counts).toEqual({ Ana: 1 });
+    // Both batches must be covered: 4 dates total. A `d.exists`-keyed union
+    // would see the first batch's 2 dates as `isExisting` after the refresh
+    // and either drop them from the count entirely (if `cellsToDrafts` still
+    // zeroed their seats) or, at minimum, could no longer distinguish them
+    // from a pre-session service — this assertion is the one that catches it.
+    expect(entriesFor2026_2[0].total_counts).toEqual({ Ana: 4 });
+  });
 
-    // Run the same month/year solve again — the entry must be REPLACED, not
-    // appended, so the fairness window doesn't double-count this month.
-    fireEvent.click(screen.getByRole("button", { name: /Volver/ }));
+  // ── Task 4: the live production bug ────────────────────────────────────────
+  //
+  // Today's `MonthGenerator.tsx:1249-1251` assigns Saturday week indexes
+  // POSITIONALLY when no selected Saturday is adjacent to any Sunday. On
+  // October 2026 with only Oct 31 selected, that creates a `saturday_role` for
+  // 2026-10-03 — a Saturday the admin explicitly DESELECTED — and
+  // `Crear y publicar` emails the whole team about it. Verified by temporarily
+  // running this exact scenario (in the new Auto-driven shape) against the
+  // pre-Task-4 component: it reproduced a stray "Sábado" draft for day 3.
+  // `weekendWeekIndexes` (D16, plannerModel) drops the positional fallback, so
+  // the request never even asks the solver to staff that week — this test
+  // proves the create path honours that all the way through to the POST.
+  //
+  // IMPORTANT: the `/api/admin/solve` and `/api/admin/roles` mocks below only
+  // CAPTURE — they never `expect()` inside the mock body. A mock is an async
+  // function; a thrown assertion inside it rejects the promise `handleAuto`/
+  // `handleConfirm` awaits, and both wrap their fetch in try/catch (per
+  // CLAUDE.md's client-mutation invariant) — so the "failure" becomes a
+  // `setAutoError`/`setPushError` toast, not a failing test. A run that can
+  // never fail is worse than no test at all: it looks like coverage in the
+  // diff and in CI, while actually proving nothing. Every assertion here runs
+  // AFTER the interaction has settled (`await waitFor(...)`), against values
+  // captured by the mock, so a regression actually fails the test.
+  it("October 2026, only Oct 31 selected: no saturday_role draft for the deselected 2026-10-03, and nothing is POSTed for it", async () => {
+    const members = [
+      { _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] },
+    ];
+    // A plain `let`, reassigned only from inside the mock closure, hits a
+    // TS control-flow quirk that narrows it to `never` at the read site below
+    // — an object property sidesteps it cleanly.
+    const captured: { solveRequest: { weekends_with_saturday: number[] } | null } = { solveRequest: null };
+    const fetchMock = vi.fn(async (url: string, init?: { body: string }) => {
+      if (url === "/api/admin/solve") {
+        // Capture only — see the note above for why no `expect()` belongs here.
+        captured.solveRequest = JSON.parse(init!.body) as { weekends_with_saturday: number[] };
+        return {
+          ok: true,
+          json: async () => ({
+            ok: true,
+            // Even a (hypothetically buggy, or simply a solver that ignores
+            // an empty `weekends_with_saturday`) response carrying Saturday
+            // data for week 1 must never reach a draft: `applySolveResponse`
+            // only ever writes cells for columns actually in the column set,
+            // and week 1's Saturday (Oct 3) never is.
+            schedule: {
+              "1": { Sunday: { Lead: ["Ana"], BGV: [], Choir: [] }, Saturday: { Lead: ["Ana"], BGV: [] } },
+            },
+            total_counts: { Ana: 1 },
+            role_counts: { Ana: { "Sun.Lead": 1 } },
+            unfilled_seats: [],
+          }),
+        };
+      }
+      if (url === "/api/admin/roles") {
+        return { ok: true, status: 200, json: async () => ({}) };
+      }
+      throw new Error(`unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    setMonthYear(container, 10, 2026);
+    // Deselect every October Saturday, then re-select ONLY the 31st.
+    const satPillLabels = Array.from(container.querySelectorAll("label")).filter((l) =>
+      /de oct/i.test(l.textContent ?? ""),
+    );
+    for (const label of satPillLabels) {
+      fireEvent.click(label.querySelector("input")!);
+    }
+    const oct31 = satPillLabels.find((l) => /31 de oct/i.test(l.textContent ?? ""));
+    fireEvent.click(oct31!.querySelector("input")!);
+
+    // Pools live on step 1; select Ana before building the grid.
+    fireEvent.click(screen.getByLabelText("Ana"));
     fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
-    await waitFor(() => expect(screen.getByRole("button", { name: /Volver/ })).toBeTruthy());
 
-    const historyAfterSecond = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
-    const entriesAfterSecond = historyAfterSecond.filter((h: { key: string }) => h.key === "2026-2");
-    expect(entriesAfterSecond).toHaveLength(1);
-    expect(entriesAfterSecond[0].total_counts).toEqual({ Ana: 2 });
+    // No stray "Sábado" card for day 3 anywhere in the grid — the deselected
+    // Saturday was never part of the explicit column set (D9/D18) to begin with.
+    const dayEls = Array.from(container.querySelectorAll("p.font-display, span.font-display"));
+    const oct3Card = dayEls
+      .find((el) => el.textContent === "3")
+      ?.closest("div");
+    expect(oct3Card?.textContent ?? "").not.toContain("Sábado");
+
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/admin/solve", expect.anything()));
+
+    // The fix, at the request level, asserted AFTER the solve call settled:
+    // week 1's Saturday (Oct 3) is never addressed, because it isn't the
+    // selected Oct 31. A mismatch here fails the test directly — nothing
+    // catches or swallows it.
+    expect(captured.solveRequest?.weekends_with_saturday).toEqual([]);
+
+    // Even with the (hypothetically buggy) solver having been asked about
+    // week 1's Saturday, publish and confirm nothing is ever posted for it.
+    fireEvent.click(screen.getByRole("button", { name: "Crear y publicar" }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([u]) => u === "/api/admin/roles")).toBe(true),
+    );
+    expect(fetchMock.mock.calls.filter(([u]) => u === "/api/admin/roles")).not.toHaveLength(0);
+    expect(
+      fetchMock.mock.calls
+        .filter(([u]) => u === "/api/admin/roles")
+        .map(([, init]) => JSON.parse((init as { body: string }).body).date),
+    ).not.toContain("2026-10-03");
+  });
+
+  // ── Task 4: two items Task 3 could not implement — they live on the wizard
+  // shell (`MonthGenerator`'s own step, not `PlannerGridProps`). ─────────────
+
+  it("Previsualizar → stays disabled when both Domingos and Sábados are unchecked", () => {
+    render(
+      <MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByLabelText("Domingos"));
+    fireEvent.click(screen.getByLabelText("Sábados"));
+    expect(
+      (screen.getByRole("button", { name: /Previsualizar/ }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it("← Volver confirms before discarding, naming how many assignments would be lost", async () => {
+    const members = [
+      { _id: "drum-1", member_name: "Beto", memberType: ["instrumento"] },
+    ];
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+
+    // No confirmation needed when nothing would be lost.
+    fireEvent.click(screen.getByRole("button", { name: /Volver/ }));
+    expect(screen.getByRole("button", { name: /Previsualizar/ })).toBeTruthy();
+
+    // Assign a Drums cell, then try to go back again.
+    goToPreview(container, 2, 2026);
+    const drumsCell = container.querySelector('[data-row-id="instrumento:Drums"][data-date="2026-02-01"]');
+    fireEvent.click(drumsCell!);
+    fireEvent.click(screen.getByText("Beto"));
+    fireEvent.click(screen.getByText("Cerrar"));
+    fireEvent.click(screen.getByRole("button", { name: /Volver/ }));
+
+    expect(screen.getByText(/1 asignaci/i)).toBeTruthy();
+    // Still on the grid step until the discard is confirmed.
+    expect(screen.queryByRole("button", { name: /Previsualizar/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Volver de todos modos/ }));
+    expect(screen.getByRole("button", { name: /Previsualizar/ })).toBeTruthy();
+  });
+
+  // ── Task 4 fix pass, Finding (Important) ────────────────────────────────────
+  //
+  // Escape-to-close (Finding 4 above) called `onClose()` unconditionally, so
+  // one keystroke could silently discard a full month of hand-assigned cells
+  // — exactly what "← Volver"'s confirmation exists to prevent. Escape must
+  // route through the SAME `pendingDiscard` guard, sharing `assignmentCount`
+  // with "← Volver" rather than growing a second, divergence-prone check.
+  it("Escape with assignments present shows the discard confirmation and does not call onClose", () => {
+    const members = [
+      { _id: "drum-1", member_name: "Beto", memberType: ["instrumento"] },
+    ];
+    const onClose = vi.fn();
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+    const drumsCell = container.querySelector('[data-row-id="instrumento:Drums"][data-date="2026-02-01"]');
+    fireEvent.click(drumsCell!);
+    fireEvent.click(screen.getByText("Beto"));
+    fireEvent.click(screen.getByText("Cerrar"));
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.getByText(/1 asignaci/i)).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("confirming the Escape discard prompt closes the generator", () => {
+    const members = [
+      { _id: "drum-1", member_name: "Beto", memberType: ["instrumento"] },
+    ];
+    const onClose = vi.fn();
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+    const drumsCell = container.querySelector('[data-row-id="instrumento:Drums"][data-date="2026-02-01"]');
+    fireEvent.click(drumsCell!);
+    fireEvent.click(screen.getByText("Beto"));
+    fireEvent.click(screen.getByText("Cerrar"));
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.click(screen.getByRole("button", { name: /Cerrar de todos modos/ }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("Escape with an empty grid closes immediately, no confirmation", () => {
+    const onClose = vi.fn();
+    const { container } = render(
+      <MonthGenerator members={noMembers} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/descarta/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Cerrar de todos modos/ })).toBeNull();
+  });
+
+  // ── Task 4: the seam nothing else covers — cell edit → cellsToDrafts
+  // (previous) → POST. Proven the same way Task 1 proves retry-id stability:
+  // the first POST for a date fails (so it stays retryable, `exists` never
+  // flips), a cell is edited in between, and the retry still carries the
+  // SAME creationRequestId together with the newly assigned member. ────────
+
+  it("assigning a member to a cell and confirming posts that member in the right seat array, preserving the draft's creationRequestId across the edit", async () => {
+    const members = [
+      { _id: "lead-1", member_name: "Ana", memberType: ["voz"] },
+    ];
+    let failFirstSunday = true;
+    const { fetchMock, calls } = stubRolesFetch((date) => {
+      if (date === FEB_2026_SUNDAYS[0] && failFirstSunday) return { ok: false, status: 500 };
+      return { ok: true };
+    });
+
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+
+    // The candidate picker (the only "Ana" match once she's assigned and the
+    // cell chip ALSO reads "Ana") is scoped to its own `<ul>`.
+    const pickAna = () => fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+
+    // Open the Lead cell on the first Sunday and assign Ana.
+    const leadCell = container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]');
+    fireEvent.click(leadCell!);
+    pickAna();
+    fireEvent.click(screen.getByText("Cerrar"));
+
+    fireEvent.click(createButton());
+    await waitFor(() => expect(calls.some((c) => c.date === FEB_2026_SUNDAYS[0])).toBe(true));
+    const firstAttempt = calls.find((c) => c.date === FEB_2026_SUNDAYS[0])!;
+    expect(firstAttempt.body.leads).toEqual(["lead-1"]);
+    const originalId = firstAttempt.body.creationRequestId;
+
+    // Edit the SAME cell again (toggle Ana off and back on) before retrying —
+    // this is the seam: `cellsToDrafts` must thread `previous` through the
+    // edit so the retry still carries the original id.
+    fireEvent.click(leadCell!);
+    pickAna(); // off
+    pickAna(); // on again
+    fireEvent.click(screen.getByText("Cerrar"));
+
+    failFirstSunday = false;
+    fireEvent.click(createButton());
+    await waitFor(() =>
+      expect(calls.filter((c) => c.date === FEB_2026_SUNDAYS[0])).toHaveLength(2),
+    );
+    const retryAttempt = calls.filter((c) => c.date === FEB_2026_SUNDAYS[0])[1];
+    expect(retryAttempt.body.leads).toEqual(["lead-1"]);
+    expect(retryAttempt.body.creationRequestId).toBe(originalId);
+    // 4 Sundays posted on the first attempt, then only the failed one retried.
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+
+  // ── Task 4 fix pass, Finding 2 ──────────────────────────────────────────────
+  //
+  // D9: with Domingos unchecked, the solve still runs on the full Sunday list
+  // (unconditionally, via `sundayDatesFull`), but no Sunday service may be
+  // RENDERED or CREATED — only `sundays`/`columns` gate that. `plannerModel`'s
+  // pure `buildColumns` already pins this; nothing exercised the component
+  // wiring that actually creates services and queues assignment emails.
+  it("D9: with Domingos unchecked, no Sunday column is rendered and no sunday_role is ever POSTed", async () => {
+    const { fetchMock, calls } = stubRolesFetch(() => ({ ok: true }));
+    const { container } = render(
+      <MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    setMonthYear(container, 2, 2026);
+    fireEvent.click(screen.getByLabelText("Domingos")); // uncheck — Sábados stays checked
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+
+    // No column for the first Sunday of the month anywhere in the grid.
+    expect(container.querySelector(`[data-date="${FEB_2026_SUNDAYS[0]}"]`)).toBeNull();
+
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.every((c) => c.body._type !== "sunday_role")).toBe(true);
+  });
+
+  // ── Task 4 fix pass, Finding 3 ──────────────────────────────────────────────
+  //
+  // D17 removed the config step's nested scrollers (`MemberPool`'s `max-h-32`,
+  // `PresenceForm`'s `max-h-28`) so the panel's own width/height would carry a
+  // long list instead of keyholing it. Checked on BOTH axes, matching
+  // `PlannerGrid.test.tsx`'s style — a selector matching only one axis passes
+  // vacuously. Members carry every pool's `memberType` so all three
+  // `MemberPool` lists AND the presence form's list are all long simultaneously.
+  it("the config step has no nested scroll region, even with long member lists and the presence form open", () => {
+    const manyVoz = Array.from({ length: 20 }, (_, i) => ({
+      _id: `v${i}`,
+      member_name: `Miembro ${i}`,
+      memberType: ["voz", "sunday_lead", "saturday_lead", "support"],
+    }));
+    render(
+      <MonthGenerator members={manyVoz} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    // Open the "≥1 Presencia" add-form — its member list is the other one
+    // D17 de-keyholed, and it isn't in the DOM until "adding" it.
+    fireEvent.click(screen.getByRole("button", { name: /Presencia/ }));
+    const scrollers = document.querySelectorAll(".overflow-x-auto, .overflow-y-auto");
+    expect(scrollers.length).toBe(0);
+  });
+
+  // ── Task 4 fix pass, Finding 4 (D10) ────────────────────────────────────────
+  //
+  // The generator moved out of `CueDialog` into a full-width panel, silently
+  // dropping Escape-to-close along with the focus trap and `aria-modal`. D10
+  // required this task to settle the dismissal semantics; restored here to
+  // match `ServiceReadinessCard`'s kebab menu (a `keydown` listener for
+  // Escape). A full focus trap is judged out of scope — see the fix-pass
+  // report for the reasoning (this panel replaces the whole view rather than
+  // overlaying content that must stay untouchable).
+  it("Escape closes the generator, from both the config step and the grid step", () => {
+    const onClose = vi.fn();
+    const { unmount } = render(
+      <MonthGenerator members={noMembers} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
+    );
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    unmount();
+
+    const onClose2 = vi.fn();
+    const { container } = render(
+      <MonthGenerator members={noMembers} existingRoles={[]} onClose={onClose2} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+    fireEvent.keyDown(document, { key: "Enter" }); // a non-Escape key is a no-op
+    expect(onClose2).not.toHaveBeenCalled();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose2).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Task 4 fix pass, Finding 5 ──────────────────────────────────────────────
+  //
+  // `handleColumnSwap` ignored column type: swapping a Sunday column with a
+  // Saturday column moved Coro cells onto a Saturday, which `cellsToDrafts`
+  // zeroes (`chorus: []`) on write (D11) — the assignment vanished under a
+  // success toast with no warning. Now refused, with a Spanish reason.
+  it("refuses to swap a Sunday column with a Saturday column, so a Coro assignment is never silently dropped", () => {
+    const members = [{ _id: "m1", member_name: "Ana", memberType: ["voz"] }];
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    setMonthYear(container, 2, 2026);
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+
+    // Assign Ana to Coro on the first Sunday (2026-02-01).
+    const coroCell = container.querySelector('[data-row-id="coro"][data-date="2026-02-01"]');
+    fireEvent.click(coroCell!);
+    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+    fireEvent.click(screen.getByText("Cerrar"));
+    expect(
+      container.querySelector('[data-row-id="coro"][data-date="2026-02-01"]')?.textContent,
+    ).toContain("Ana");
+
+    // Try to swap that Sunday with the first Saturday of the month (2026-02-07).
+    fireEvent.click(container.querySelector('[data-swap-date="2026-02-01"]')!);
+    fireEvent.click(container.querySelector('[data-swap-date="2026-02-07"]')!);
+
+    expect(screen.getByText(/No se puede intercambiar un Domingo con un Sábado/)).toBeTruthy();
+    // Refused: Ana is still on the Sunday Coro cell, never moved anywhere.
+    expect(
+      container.querySelector('[data-row-id="coro"][data-date="2026-02-01"]')?.textContent,
+    ).toContain("Ana");
+    expect(
+      container.querySelector('[data-row-id="coro"][data-date="2026-02-07"]')?.textContent ?? "",
+    ).not.toContain("Ana");
   });
 });

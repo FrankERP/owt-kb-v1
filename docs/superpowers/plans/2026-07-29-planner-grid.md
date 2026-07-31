@@ -150,7 +150,7 @@ Query only by accessible role and name, using the **real** labels (fact 20): mat
 - `buildColumns({ sundayDates, activeSatDates, includeSundays }): GridColumn[]` — **the explicit column set of D9.**
 - `seatDefForRow(row): SeatDef` — `rankCandidates` needs a `SeatDef` and filters on `memberType` (fact 24), which `GridRow` lacks. Map via `VOICE_SEATS` / `instrumentSeatDef` / `fohSeatDef`.
 - `buildSolveRequest({ config, members, sundayDates, activeSatDates, historyEntries, year, month }): { ok: true; request: SolveRequest } | { ok: false; reason: string }` — it applies `historyForRequest` **internally**. Taking a pre-filtered list would leave D14 enforced only by the caller remembering, which is the convention-over-types failure fact 7 warns about.
-- `applySolveResponse({ response, previousCells, columns, rows, sundayDates, activeSatDates, members }): { cells; unresolvedNames; counts }` — **takes the current grid and the column set; returns the MERGED grid.**
+- `applySolveResponse({ response, previousCells, columns, rows, sundayDates, activeSatDates, members }): { cells; unresolvedNames }` — **takes the current grid and the column set; returns the MERGED grid.** It returns no `counts`: fairness history is derived from created drafts, not from the solver's response.
 - `cellsToDrafts(cells, columns, skippedDates, previous, existingRoles): DraftCard[]` — `skippedDates: Set<string>` is D18's explicit channel; `DraftCard.skipped` is the single authority `handleConfirm` filters on (`MonthGenerator.tsx:1412`), and the grid's `skipped` prop is a projection of it. Emits **one draft per column regardless of occupancy**, with `skipped` set from `skippedDates`. Generating an empty month skeleton is the generator's primary use today (`buildEmptyDrafts`, `:1202-1222`), and an omitted column would also have no `localId`, so `preflights.get` would miss (fact 18) and Task 3's per-column preflight badge would have nothing to show.
 - `solvableWindow(sundayDates)`, `unaddressableDates(sundayDates, activeSatDates)`, `weekendWeekIndexes(...)`, `saturdayForWeek(n, ...)`
 - `mapUnfilledSeats(seats, sundayDates, activeSatDates): { date: string; rowId: string }[]`
@@ -190,8 +190,7 @@ Query only by accessible role and name, using the **real** labels (fact 20): mat
 - Every written cell has `origin: "auto"`.
 - **Instrument and FOH cells survive byte-for-byte:** seat `Drums` with two members on two dates, run `applySolveResponse`, assert both cells return with the same `memberIds` and `origin: "manual"`, and that only voice cells changed. Without `previousCells` this test would assert the absence of an input that never existed.
 - An unmatched name leaves the cell empty and appears in `unresolvedNames`.
-- `counts` carries `total_counts`/`role_counts` out so Task 4 can persist history.
-- **`counts` is filtered to the created service types, with `total_counts` recomputed** (D19): with Domingos unchecked, the returned entry contains only `Sat.*` role counts and a `total_counts` equal to their per-person sum. Filtering `role_counts` while passing `total_counts` through unchanged is the failure this test exists to catch.
+- **Superseded 2026-07-30:** `applySolveResponse` no longer returns a `counts` field at all — it lost its only consumer when fairness history moved from *solve* time to *create* time (see the `## Settled` note below) and was removed rather than left dead. `historyEntryFromDrafts` (`plannerModel.ts`) derives the entry instead, from whichever `DraftCard`s `MonthGenerator.handleConfirm` decides actually happened — never from anything `applySolveResponse` returns. `AppliedSolveResult` is now just `{ cells; unresolvedNames }`.
 - `mapUnfilledSeats` places each seat on a row and a date. It resolves to a row, never an occupant slot — `SEAT_RE` does not capture `#N` (fact 25). Extend `unfilledSeats.ts` to expose the role rather than re-implementing the regex.
 
 *Stability*
@@ -223,12 +222,12 @@ interface PlannerGridProps {
   onCellsChange: (next: GridCell[]) => void;
   onRowsChange: (next: GridRow[]) => void;  // add/remove instrument and FOH rows
   onToggleSkip: (date: string) => void;
-  onAuto: () => void;                      // MonthGenerator owns the fetch + counts
+  onAuto: () => void;                      // MonthGenerator owns the fetch
   autoState: { pending: boolean; error: string | null; disabledReason: string | null };
   diagnostics: SolveDiagnostics | null;
 }
 ```
-`cells` and `counts` live in `MonthGenerator` so Task 4 can persist history and derive drafts with `previous` threaded — the grid never holds the authoritative copy.
+`cells` live in `MonthGenerator` so Task 4 can derive drafts with `previous` threaded — the grid never holds the authoritative copy.
 
 **Ranking (D12).** Two `rankCandidates` calls, merged: one with `[...savedWindow, ...inGridDrafts]` supplying order and `load`, one with `savedWindow` alone supplying `recent`. `candidateRanking.ts` is not modified.
 
@@ -253,7 +252,7 @@ Expect an **empty saved window in the common case**: the 56-day slice looks back
 - **Auto confirms first** (D2), naming that it replaces every voice assignment **the solver can address** — an unaddressable Saturday is never in the response and its cells are untouched, so the copy must not overstate its reach.
 - After a run, instrument and FOH rows carry a persistent "asignación manual" label (D5).
 - **Manual picks REFUSE a same-category double** (D6), exactly as `SeatBoard` does — the picker's `blockedReason` disables the row and gives the reason.
-- **Duplicates are re-checked and SURFACED after every Auto run, per column** — Auto is not a manual pick, so it cannot be refused at pick time. `blockedReason` (`candidateRanking.ts:134-137`) only fires at pick time, and there is no server-side validation (`roleWriteRequest.ts`), so a hand-assigned Saturday Coro member (non-solvable, untouched by D1) whom the solver then places in `Sat.Lead` would be double-booked on one service with nothing to catch it — especially if Task 4 drops `Vista`, today's only detector (fact 27). Surface any duplicate against both cells.
+- **Duplicates are re-checked and SURFACED after every Auto run, per column.** `blockedReason` (`candidateRanking.ts:134-137`) refuses only at *manual pick* time, and Auto is not a manual pick. So a hand-assigned Lead whom the solver then places in BGV on the same date is double-booked within one category, with nothing to catch it: there is no server-side validation (`roleWriteRequest.ts`), and Task 4 may retire `Vista`, today's only detector (fact 27). Surface any duplicate against both cells. (Cross-category — `voz` + `instrumento` — is legitimate double duty and must NOT be flagged.)
 - `unresolvedNames` and `mapUnfilledSeats` output surface against the row and date they concern.
 - Diagnostics still surfaced: `fairness_relaxed`, `sun_lead_fairness_relaxed`, `sun_bgv_fairness_relaxed`, `history_runs_used`.
 - **Each date column shows its `TargetPreflight` state and reasons** (`PREFLIGHT_COPY`, `describePreflightReason`) — `handleConfirm`'s abort says "revisa la vista previa", which points at nothing without per-column state.
@@ -286,16 +285,16 @@ Expect an **empty saved window in the common case**: the 56-day slice looks back
 - **Auto becomes the only caller of `/api/admin/solve`** (D13). `Previsualizar →` builds an empty grid; retire the `useSolver` toggle; `gateBlocked` guards Auto. `gateBlocked` must **also still refuse `Previsualizar →`** as it does today (`:1226-1228` — "never build a roster/date preview from an incomplete inventory"); say so explicitly rather than letting it lapse.
 - **`SolverConfigPanel` must render unconditionally.** It is shown only under `useSolver` today (`:1557`), which D13 retires — and Auto is unusable without pools. Give it its own disclosure if the config step gets crowded.
 - Preserve the degradation explainer "El líder siempre se asigna; primero queda vacío el coro, luego BGV." (`:1657-1659`) alongside the unfilled-seat surface.
-- Persist the fairness-history entry from `applySolveResponse`'s `counts`, keyed `${year}-${month}`, replacing on re-run. The entry is already filtered to the created service types with `total_counts` recomputed (D19), and `buildSolveRequest` applies D14's exclusion internally — never hand it a raw history list.
+- **Superseded 2026-07-30:** persist the fairness-history entry via `historyEntryFromDrafts` (`plannerModel.ts`), called from `handleConfirm` — never from `applySolveResponse`, which carries no `counts` field. `handleConfirm` feeds it the UNION of drafts this confirm just created and drafts that already `exist` (an earlier confirm this session, or before it), not only `result.createdLocalIds` from this one call: a partial-failure retry that derived the entry from its own call alone would replace-by-key and erase an earlier successful batch's counts. Recomputing the whole month's union on every confirm and replacing, keyed `${year}-${month}`, is idempotent regardless of how many partial retries it took. The union is keyed on a session-scoped ref of created `localId`s, **not** on `d.exists`: `onCreated()` → `loadSources()` refreshes `existingRoles` mid-dialog, so `d.exists` conflates "this session created it" with "it was already there" and the generator would take credit for seats it never created. `buildSolveRequest` applies D14's exclusion internally — never hand it a raw history list.
 - Thread `windowRoles` from `ServicesPanel` (fact 24) as a 56-day slice anchored at the month's first Sunday.
 - The "No disponibles este mes" notices still render (fact 14).
 - **Task 1's harness must still pass**, except its two solver-driven tests, which are rewritten to drive Auto instead of `Previsualizar →` (D13). Show that the rewritten versions pin the same behaviour.
 - Record the 10-column screenshot (Task 3) here.
 - **One end-to-end test of the seam nothing else covers:** assign a member to a cell, confirm, and assert the POSTed body carries that member in the right seat array **and** the draft's original `creationRequestId`. Task 1 never asserts seat content, Task 2 is pure and Task 3 never POSTs, so `cell edit → cellsToDrafts(previous) → POST` is otherwise untested — exactly where a fresh `localId` makes every `preflights.get` miss (fact 18) and the footer silently reads "0 por crear".
 
-**Decide with the user, and record here before starting:**
-- Whether the grid replaces the `Vista` (DayCard) preview or sits beside it. If `Vista` goes, fact 27's duplicate detection is already covered by Task 3's per-column `assigned`.
-- Whether whole-day swap (`handleCardSwap`) becomes a column swap or is dropped. Do not drop it silently.
+**Decided with the user 2026-07-30 — both capabilities are KEPT:**
+- **`Vista` stays beside the grid.** `Editar` becomes the grid; `Vista` keeps rendering `DayCard`. They answer different questions — the grid is where you assign, `Vista` is what the team will actually see before you publish — and `DayCard` remains an independent duplicate detector (fact 27) alongside the grid's own post-Auto check.
+- **Whole-day swap becomes a COLUMN swap.** `handleCardSwap` is carried over, not dropped: pick two date columns and exchange their assignments.
 
 ---
 
@@ -308,7 +307,7 @@ Expect an **empty saved window in the common case**: the 56-day slice looks back
 - **Pins:** rejected with reasons (D1) — not impossible, but over-constraining and infeasibility-prone.
 - **Soft maximum per seat:** not needed. D6 makes capacity advisory, so nothing is blocked or dropped; `seatModel` keeps `max: null`.
 - **Spec §8.1 (instrument spellings):** already satisfied in production (fact 30) — no script needed.
-- **Knowingly deferred:** history is persisted at *solve* time, not create time (`MonthGenerator.tsx:1383-1385`). D16 and D19 each close one axis of "counts recorded for services that never existed"; the third — a skipped column, or an Auto run the admin abandons without creating — stays open, and D13 makes it more frequent. Closing it properly means moving persistence to `handleConfirm`, which is a larger change than this plan carries.
+- **Fixed 2026-07-30, then again 2026-07-30:** history used to be persisted at *solve* time (`handleAuto`), recording whatever the solver proposed — including a schedule the admin closed without ever creating, and never reflecting a hand-edit made after Auto or a month assigned entirely by hand. Persistence now happens in `handleConfirm`, derived from `historyEntryFromDrafts` (`plannerModel.ts`). It was first fed only `result.createdLocalIds` (the drafts THIS create batch committed), but that erased an earlier batch's counts on a partial-failure retry — the retried subset's recompute replaced the whole month's entry. `handleConfirm` now feeds it the union of this batch's successes and every draft that already `exists` (tracked in a session-scoped ref; a second attempt keyed this on `d.exists` and had to be reverted, because `existingRoles` refreshes mid-dialog and the generator then counted services it never created), so every confirm recomputes and replaces the WHOLE month idempotently. A skipped column or a draft that failed to create and was never retried still contributes nothing.
 
 ## Settled: the untyped members
 
@@ -329,7 +328,7 @@ and no task is gated on it.
 - **Pins:** rejected with reasons (D1) — not impossible, but over-constraining and infeasibility-prone.
 - **Soft maximum per seat:** not needed. D6 makes capacity advisory, so nothing is blocked or dropped; `seatModel` keeps `max: null`.
 - **Spec §8.1 (instrument spellings):** already satisfied in production (fact 30) — no script needed.
-- **Knowingly deferred:** history is persisted at *solve* time, not create time (`MonthGenerator.tsx:1383-1385`). D16 and D19 each close one axis of "counts recorded for services that never existed"; the third — a skipped column, or an Auto run the admin abandons without creating — stays open, and D13 makes it more frequent. Closing it properly means moving persistence to `handleConfirm`, which is a larger change than this plan carries.
+- **Fixed 2026-07-30, then again 2026-07-30:** history used to be persisted at *solve* time (`handleAuto`), recording whatever the solver proposed — including a schedule the admin closed without ever creating, and never reflecting a hand-edit made after Auto or a month assigned entirely by hand. Persistence now happens in `handleConfirm`, derived from `historyEntryFromDrafts` (`plannerModel.ts`). It was first fed only `result.createdLocalIds` (the drafts THIS create batch committed), but that erased an earlier batch's counts on a partial-failure retry — the retried subset's recompute replaced the whole month's entry. `handleConfirm` now feeds it the union of this batch's successes and every draft that already `exists` (tracked in a session-scoped ref; a second attempt keyed this on `d.exists` and had to be reverted, because `existingRoles` refreshes mid-dialog and the generator then counted services it never created), so every confirm recomputes and replaces the WHOLE month idempotently. A skipped column or a draft that failed to create and was never retried still contributes nothing.
 
 ## Prerequisite
 

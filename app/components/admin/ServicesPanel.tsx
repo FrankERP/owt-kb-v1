@@ -394,6 +394,19 @@ export default function ServicesPanel() {
 
   // Month generator
   const [showGenerator, setShowGenerator] = useState(false);
+  // D10: the generator is a full-width panel that replaces this whole view
+  // rather than an overlay on top of it, so its own trigger button unmounts
+  // while it's open. Escape-to-close lives in `MonthGenerator` itself; focus
+  // restoration on close has to live here, since it's this ref — not anything
+  // inside `MonthGenerator` — that still exists once the panel is dismissed.
+  const generatorTriggerRef = useRef<HTMLButtonElement>(null);
+  const wasShowingGeneratorRef = useRef(false);
+  useEffect(() => {
+    if (wasShowingGeneratorRef.current && !showGenerator) {
+      generatorTriggerRef.current?.focus();
+    }
+    wasShowingGeneratorRef.current = showGenerator;
+  }, [showGenerator]);
 
   // Setlist
   const [setlistRole, setSetlistRole] = useState<ServiceRole | null>(null);
@@ -1221,6 +1234,45 @@ export default function ServicesPanel() {
   );
   const availabilityUnverified = sources.members !== "ready";
 
+  // ── The month generator — a full-width panel, not a dialog (D10) ─────────
+  //
+  // While open, it REPLACES the whole two-column layout below (sidebar
+  // included), not just the card list: `lg:grid-cols-[320px_1fr]` leaves only
+  // ~1048px of a 1440px viewport for the list, barely better than the old
+  // `CueDialog`'s `max-w-4xl` (~75px columns on a 10-column month) and still
+  // short of the width the grid needs. `CueDialog` has no size above `lg` and
+  // widening that shared token risks every other dialog in the app, so the
+  // generator leaves `Modal`/`CueDialog` entirely instead.
+  if (showGenerator) {
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center justify-between">
+          <h1 className="font-display text-2xl uppercase tracking-wide">Generar mes</h1>
+        </div>
+        <MonthGenerator
+          members={members}
+          existingRoles={roles}
+          // `ServiceRole` is a structural superset of `ParticipantRole` (richer
+          // `leads`/`bgvs`/`chorus`/`instruments`/`foh` member shape, same
+          // `_type`/`date`), so no cast is needed — and none should be added
+          // back: if `ServiceRole` ever drifts out of that superset relationship,
+          // this is meant to be a `tsc` error, not a silent narrowing that lets
+          // `savedWindow` (D12, inside `MonthGenerator`) degrade to a blank
+          // "sin historial reciente" strip.
+          allRoles={roles}
+          // Re-checked at preview and at confirmation, not just at open.
+          capability={{ enabled: generateGate.enabled, reason: generateGate.reason }}
+          // Per-target A1/A2 preflight: only proven-`creatable` targets are posted.
+          preflight={preflightTarget}
+          onClose={() => setShowGenerator(false)}
+          onCreated={async () => {
+            showToast(mutationOutcomeMessage("Servicios generados.", await loadSources()));
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
 
@@ -1272,7 +1324,7 @@ export default function ServicesPanel() {
               Publicar listos ({counters.readyToPublish})
             </button>
           )}
-          <button onClick={openGenerator}
+          <button ref={generatorTriggerRef} onClick={openGenerator}
             disabled={!generateGate.enabled}
             title={generateGate.reason ?? undefined}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#003572]/20 dark:border-[#00bfff]/15 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff]/30 transition-colors disabled:opacity-40">
@@ -1709,22 +1761,8 @@ export default function ServicesPanel() {
         </Modal>
       )}
 
-      {showGenerator && (
-        <Modal title="Generar mes" onClose={() => setShowGenerator(false)} wide>
-          <MonthGenerator
-            members={members}
-            existingRoles={roles}
-            // Re-checked at preview and at confirmation, not just at open.
-            capability={{ enabled: generateGate.enabled, reason: generateGate.reason }}
-            // Per-target A1/A2 preflight: only proven-`creatable` targets are posted.
-            preflight={preflightTarget}
-            onClose={() => setShowGenerator(false)}
-            onCreated={async () => {
-              showToast(mutationOutcomeMessage("Servicios generados.", await loadSources()));
-            }}
-          />
-        </Modal>
-      )}
+      {/* `showGenerator` is handled by an early return above (D10: full-width
+          panel, not a dialog) — this tab body never renders alongside it. */}
       {setlistRole && (() => {
         const r = setlistRole;
         const type = r._type === "sunday_role" ? "sunday" : r._type === "saturday_role" ? "saturday" : "special";
