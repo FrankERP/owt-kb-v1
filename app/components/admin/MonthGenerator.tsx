@@ -1,17 +1,31 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import type { SolveRequest, SolveResponse } from "@/app/api/admin/solve/route";
-import { summarizeUnfilledSeats } from "@/app/utils/unfilledSeats";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { SolveResponse } from "@/app/api/admin/solve/route";
 import { DayCard } from "@/app/components/DayCard";
 import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
-import { newCreationRequestId, runDraftCreateBatch } from "@/app/utils/monthDraftCreate";
+import { runDraftCreateBatch } from "@/app/utils/monthDraftCreate";
 import { creatableTargets, type TargetPreflight } from "./serviceReadiness";
+import type { ParticipantRole } from "@/app/utils/computeParticipation";
+import PlannerGrid, { type AutoState, type SolveDiagnostics } from "./PlannerGrid";
 import {
-  PREFLIGHT_COPY,
-  TONE_CLASS,
-  describePreflightReason,
-} from "./serviceCardModel";
+  buildColumns,
+  buildRows,
+  buildSolveRequest,
+  applySolveResponse,
+  cellsToDrafts,
+  historyEntryFromDrafts,
+  mapUnfilledSeats,
+  unaddressableDates as computeUnaddressableDates,
+  type DraftCard,
+  type GridCell,
+  type GridRow,
+  type PersonRestriction,
+  type ConflictRule,
+  type PresenceRule,
+  type SolverConfig,
+  type SolverHistoryEntry,
+} from "./plannerModel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,29 +35,7 @@ interface MemberOption { _id: string; member_name: string; alias?: string; membe
 
 const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;
 
-interface ExistingRole  { _id: string; _type: string; date: string; }
-interface InstrSlot     { id: string; instrument: string; personId: string; }
-interface FohSlot       { id: string; role: string; personId: string; }
-
-interface DraftCard {
-  localId: string;
-  /**
-   * Opaque per-draft creation idempotency key (A2 §2). Minted once, when this
-   * preview draft is first constructed, and preserved across edits, swaps,
-   * partial batches, refreshes, and retries — distinct from the short UI
-   * `localId`. Only a newly generated preview mints new ids.
-   */
-  creationRequestId: string;
-  _type: ServiceType;
-  date: string;
-  exists: boolean;
-  skipped: boolean;
-  leads: string[];
-  bgvs: string[];
-  chorus: string[];
-  instruments: InstrSlot[];
-  foh: FohSlot[];
-}
+interface ExistingRole { _id: string; _type: string; date: string; }
 
 interface Props {
   members: MemberOption[];
@@ -68,45 +60,16 @@ interface Props {
    * falls back to the plain `existingRoles` date check.
    */
   preflight?: (type: ServiceType, date: string) => TargetPreflight;
-}
-
-// ─── Rule types ───────────────────────────────────────────────────────────────
-
-interface PersonRestriction {
-  id: string;
-  person: string;
-  excludedPatterns: string[];
-  fairness: "none" | "exempt" | "slack";
-  fairnessSlack: number;
-  weekExclusions: Array<{ id: string; week: number; pattern: string }>;
-  caps: Array<{
-    id: string; pattern: string; op: "<=" | ">=" | "==";
-    value: number;
-    relative: boolean;  // true → serialize as {weeks-relOffset}
-    relOffset: number;
-  }>;
-}
-
-interface ConflictRule {
-  id: string;
-  personA: string;
-  personB: string;
-  pattern: string;
-}
-
-interface PresenceRule {
-  id: string;
-  persons: string[];
-  pattern: string;
-}
-
-interface SolverConfig {
-  sundayLeads: string[];
-  saturdayLeads: string[];
-  support: string[];
-  restrictions: PersonRestriction[];
-  conflicts: ConflictRule[];
-  presence: PresenceRule[];
+  /**
+   * Full role history (with resolved assignments), for D12's `savedWindow` —
+   * `recent` and (unioned with the in-grid drafts) `load` both derive from it.
+   * `MonthGenerator` slices this to 56 days anchored at the target month's
+   * first Sunday once year/month are chosen (fact 24) — `ServicesPanel` cannot
+   * pre-slice it, since it does not know which month will be picked until the
+   * config step runs. Optional so the dialog still renders standalone with an
+   * empty (honest "sin historial reciente") window.
+   */
+  allRoles?: ParticipantRole[];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -147,13 +110,8 @@ const STORAGE_KEY   = "owt_solver_config_v3";
 const HISTORY_KEY   = "owt_solver_history_v2";
 const MAX_HISTORY   = 6;
 
-interface SolverHistoryEntry {
-  key: string;   // "YYYY-M"
-  year: number;
-  month: number;
-  total_counts: Record<string, number>;
-  role_counts:  Record<string, Record<string, number>>;
-}
+/** 56 days — matches `ServicesPanel`'s `CANDIDATE_LOAD_WINDOW_DAYS` for SeatBoard. */
+const SAVED_WINDOW_DAYS = 56;
 
 // Pre-loaded defaults — mirrors the production rules in CGPT_owt_roles.py.
 // Used on first open (no localStorage). Subsequent opens load from localStorage.
@@ -246,112 +204,23 @@ function buildUnavailabilityNotices(
   return out.sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
 }
 
-function subtractDay(iso: string): string {
-  const d = new Date(iso + "T12:00:00");
-  d.setDate(d.getDate() - 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-}
-
-function nameToId(name: string, members: MemberOption[]): string | null {
-  const lo = name.toLowerCase().trim();
-  return members.find(m =>
-    m.member_name.toLowerCase().trim() === lo ||
-    (m.alias?.trim().toLowerCase() === lo)
-  )?._id ?? null;
-}
-
-function resolveToMemberName(name: string, members: MemberOption[]): string {
-  const lo = name.toLowerCase().trim();
-  const m = members.find(m =>
-    m.member_name.toLowerCase().trim() === lo ||
-    (m.alias?.trim().toLowerCase() === lo)
-  );
-  return m?.member_name ?? name;
-}
-
-// ─── DSL serialization ────────────────────────────────────────────────────────
-
-function restrictionToDs(r: PersonRestriction): string | null {
-  if (!r.person) return null;
-  const clauses: string[] = [];
-  for (const pat of r.excludedPatterns)  clauses.push(`!in ${pat}`);
-  for (const we of r.weekExclusions)     clauses.push(`!in week ${we.week} ${we.pattern}`);
-  for (const cap of r.caps) {
-    const val = cap.relative ? `{weeks-${cap.relOffset}}` : String(cap.value);
-    clauses.push(`${cap.pattern} ${cap.op} ${val}`);
-  }
-  if (r.fairness === "exempt")           clauses.push("fairness_exempt");
-  if (r.fairness === "slack" && r.fairnessSlack > 0) clauses.push(`fairness_slack ${r.fairnessSlack}`);
-  if (clauses.length === 0) return null;
-  return `${r.person} ${clauses.join(" & ")}`;
-}
-
-function allRulesToDs(config: SolverConfig, members: MemberOption[]): string[] {
-  const res = (name: string) => resolveToMemberName(name, members);
-  const out: string[] = [];
-  for (const r of config.restrictions) {
-    const resolved = { ...r, person: res(r.person) };
-    const ds = restrictionToDs(resolved);
-    if (ds) out.push(ds);
-  }
-  for (const r of config.conflicts)
-    out.push(`${res(r.personA)} !with ${res(r.personB)} on ${r.pattern}`);
-  for (const r of config.presence)
-    out.push(`any_of(${r.persons.map(res).join(",")}) on ${r.pattern} each_week`);
-  return out;
-}
-
-// ─── Shared sub-components ────────────────────────────────────────────────────
-
-const sel2Cls = "w-full px-2 py-1.5 rounded border border-[#00bfff]/15 bg-[#0a1929] font-body text-xs focus:outline-none focus:border-[#00bfff]";
-const in2Cls  = "w-full px-2 py-1.5 rounded border border-[#00bfff]/15 bg-transparent font-body text-xs focus:outline-none focus:border-[#00bfff]";
-
-function MemberCheckboxes({ label, members, selected, onChange }: {
-  label: string; members: MemberOption[]; selected: string[];
-  onChange: (ids: string[]) => void;
-}) {
-  const toggle = (id: string) =>
-    onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]);
-  return (
-    <div>
-      <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 mb-1">{label}</p>
-      <div className="max-h-24 overflow-y-auto rounded border border-[#00bfff]/10 divide-y divide-[#00bfff]/5">
-        {members.map(m => (
-          <label key={m._id} className={`flex items-center gap-2 px-2 py-1 cursor-pointer text-xs transition-colors ${selected.includes(m._id) ? "bg-[#00bfff]/10" : "hover:bg-[#00bfff]/5"}`}>
-            <input type="checkbox" checked={selected.includes(m._id)} onChange={() => toggle(m._id)} className="accent-[#00bfff]" />
-            <span className="font-body">{dn(m)}</span>
-          </label>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SlotEditor2({ label, nameKey, slots, members, onChange }: {
-  label: string; nameKey: "instrument" | "role";
-  slots: (InstrSlot | FohSlot)[]; members: MemberOption[];
-  onChange: (s: any[]) => void;
-}) {
-  return (
-    <div>
-      <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 mb-1">{label}</p>
-      <div className="space-y-1">
-        {slots.map(s => (
-          <div key={s.id} className="flex gap-1.5">
-            <input className={`${in2Cls} flex-1`} placeholder={nameKey === "instrument" ? "Instrumento" : "Rol"} value={(s as any)[nameKey] ?? ""} onChange={e => onChange(slots.map(x => x.id === s.id ? { ...x, [nameKey]: e.target.value } : x))} />
-            <select className={`${sel2Cls} flex-1`} value={s.personId} onChange={e => onChange(slots.map(x => x.id === s.id ? { ...x, personId: e.target.value } : x))}>
-              <option value="">— Persona —</option>
-              {members.map(m => <option key={m._id} value={m._id}>{dn(m)}</option>)}
-            </select>
-            <button type="button" onClick={() => onChange(slots.filter(x => x.id !== s.id))} className="text-gray-500 hover:text-red-400 transition-colors px-1 text-sm">×</button>
-          </div>
-        ))}
-        <button type="button" onClick={() => onChange([...slots, { id: uid(), [nameKey]: "", personId: "" }])} className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]/50 hover:text-[#00bfff] transition-colors">
-          + {nameKey === "instrument" ? "Instrumento" : "Rol"}
-        </button>
-      </div>
-    </div>
-  );
+/**
+ * `allRoles` bounded to `SAVED_WINDOW_DAYS` days ending at the target month's
+ * first Sunday (D12's `savedWindow`, fact 24) — both compared at local noon.
+ * Empty when the month has no first Sunday (defensive; `getDates` always
+ * returns at least one for a real calendar month) or when the caller has no
+ * history to offer.
+ */
+function savedWindowFor(year: number, month: number, allRoles: ParticipantRole[]): ParticipantRole[] {
+  const firstSunday = getDates(year, month, 0)[0];
+  if (!firstSunday) return [];
+  const noon = (iso: string) => new Date(iso.slice(0, 10) + "T12:00:00").getTime();
+  const anchor = noon(firstSunday);
+  const start = anchor - SAVED_WINDOW_DAYS * 86_400_000;
+  return allRoles.filter(r => {
+    const t = noon(r.date);
+    return t >= start && t <= anchor;
+  });
 }
 
 // ─── MemberPool — extracted to module level to prevent scroll-reset on remount ──
@@ -386,7 +255,12 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
         className="w-full px-2 py-1 mb-1 rounded border border-[#00bfff]/15 bg-transparent font-body text-xs focus:outline-none focus:border-[#00bfff] placeholder-gray-600"
         placeholder="Buscar..." value={search} onChange={e => onSearch(e.target.value)}
       />
-      <div className="max-h-32 overflow-y-auto rounded border border-[#00bfff]/10 divide-y divide-[#00bfff]/5">
+      {/*
+        D17: this list used to be `max-h-32 overflow-y-auto` — a keyhole onto up
+        to 10 members. The full-width panel D10 buys has room for the whole
+        list without a nested scroller.
+      */}
+      <div className="rounded border border-[#00bfff]/10 divide-y divide-[#00bfff]/5">
         {visible.length === 0 && <p className="px-2 py-1 font-body text-xs text-gray-600 italic">Sin resultados</p>}
         {visible.map(m => (
           <label key={m._id} className={`flex items-center gap-2 px-2 py-1 cursor-pointer text-xs transition-colors ${config[field].includes(m._id) ? "bg-[#00bfff]/10" : "hover:bg-[#00bfff]/5"}`}>
@@ -736,7 +610,11 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
     <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-3 space-y-2">
       <div>
         <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Al menos uno de (mín. 2)</p>
-        <div className="max-h-28 overflow-y-auto rounded border border-[#00bfff]/10 divide-y divide-[#00bfff]/5">
+        {/*
+          D17: this list used to be `max-h-28 overflow-y-auto` — the one that
+          keyholed all 16 `voz` members. Same fix as `MemberPool` above.
+        */}
+        <div className="rounded border border-[#00bfff]/10 divide-y divide-[#00bfff]/5">
           {members.map(m => {
             const name    = dn(m);
             const checked = selected.includes(name);
@@ -941,102 +819,6 @@ function AddRuleButton({ label, title, tone, disabled, onClick }: {
   );
 }
 
-// ─── Draft card editor ────────────────────────────────────────────────────────
-
-function DraftCardEditor({ draft, members, onChange, onToggleSkip, swapSelected, onSwapSelect, preflight }: {
-  draft: DraftCard; members: MemberOption[];
-  onChange: (d: DraftCard) => void; onToggleSkip: () => void;
-  swapSelected: boolean; onSwapSelect: () => void;
-  /** A1/A2 observation for this exact target, when the panel supplied one. */
-  preflight?: TargetPreflight | null;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const isSun = draft._type === "sunday_role";
-  const vozMembers = members.filter(m => m.memberType?.includes("voz"));
-  const badgeCls = isSun
-    ? "bg-orange-500/15 text-orange-400 border border-orange-500/30"
-    : "bg-yellow-500/15 text-yellow-400 border border-yellow-400/30";
-
-  const total = draft.leads.length + draft.bgvs.length + draft.chorus.length +
-    draft.instruments.filter(s => s.personId).length + draft.foh.filter(s => s.personId).length;
-
-  return (
-    <div className={`rounded-xl border transition-all ${
-      draft.skipped ? "border-gray-700/30 opacity-40" :
-      swapSelected ? "border-[#00bfff] ring-1 ring-[#00bfff]/30 bg-[#00bfff]/5 dark:bg-[#00bfff]/5" :
-      "border-[#003572]/15 dark:border-[#00bfff]/10 bg-[#003572]/5 dark:bg-[#00bfff]/5"
-    }`}>
-      <div className="flex items-center gap-3 px-4 py-3">
-        <div className="shrink-0 text-center min-w-[36px]">
-          <p className="font-display text-lg leading-none">{new Date(draft.date + "T12:00:00").getDate()}</p>
-          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">
-            {new Date(draft.date + "T12:00:00").toLocaleDateString("es-MX", { month: "short" })}
-          </p>
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full ${badgeCls}`}>
-              {isSun ? "Domingo" : "Sábado"}
-            </span>
-            {/* The A1/A2 target state, when observed; else the plain date check. */}
-            {preflight ? (
-              <span
-                className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full border ${TONE_CLASS[PREFLIGHT_COPY[preflight.state].tone]}`}
-              >
-                {PREFLIGHT_COPY[preflight.state].text}
-              </span>
-            ) : (
-              draft.exists && (
-                <span className="font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-500 border border-yellow-500/30">
-                  Ya existe
-                </span>
-              )
-            )}
-          </div>
-          <p className="font-label text-[11px] uppercase tracking-widest text-gray-600 mt-0.5">
-            {total > 0 ? `${total} asignado${total !== 1 ? "s" : ""}` : "Sin asignar"}
-          </p>
-          {preflight && preflight.state !== "creatable" && preflight.reasons.length > 0 && (
-            <p className="font-body text-[11px] text-gray-400 mt-0.5 [overflow-wrap:anywhere]">
-              {preflight.reasons.map(describePreflightReason).join(" · ")}
-              {preflight.ids.length > 0 && ` — ${preflight.ids.join(" · ")}`}
-            </p>
-          )}
-        </div>
-
-        <div className="flex items-center gap-1 shrink-0">
-          {!draft.skipped && (
-            <button type="button" onClick={onSwapSelect} title="Intercambiar equipo"
-              className={`px-2 py-1 rounded font-label text-xs transition-colors ${swapSelected ? "bg-[#00bfff]/20 text-[#00bfff]" : "text-gray-500 hover:text-[#00bfff] hover:bg-[#00bfff]/10"}`}
-            >⇄</button>
-          )}
-          {!draft.exists && (
-            <button type="button" onClick={onToggleSkip}
-              className={`px-2 py-1 rounded font-label text-[11px] uppercase tracking-widest transition-colors ${draft.skipped ? "text-[#00bfff] hover:bg-[#00bfff]/10" : "text-gray-500 hover:text-red-400 hover:bg-red-500/10"}`}
-            >{draft.skipped ? "+ Incluir" : "Omitir"}</button>
-          )}
-          {!draft.skipped && (
-            <button type="button" onClick={() => setExpanded(v => !v)} className="px-1.5 py-1 rounded text-gray-500 hover:text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors text-xs">
-              {expanded ? "▲" : "▼"}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {expanded && !draft.skipped && (
-        <div className="px-4 pb-4 pt-2 space-y-3 border-t border-[#00bfff]/10">
-          <MemberCheckboxes label="Líderes"   members={vozMembers} selected={draft.leads}  onChange={leads  => onChange({ ...draft, leads  })} />
-          <MemberCheckboxes label="BGVs"      members={vozMembers} selected={draft.bgvs}   onChange={bgvs   => onChange({ ...draft, bgvs   })} />
-          <MemberCheckboxes label="Coro"      members={vozMembers} selected={draft.chorus} onChange={chorus => onChange({ ...draft, chorus })} />
-          <SlotEditor2 label="Instrumentos"   nameKey="instrument" slots={draft.instruments} members={members} onChange={s => onChange({ ...draft, instruments: s })} />
-          <SlotEditor2 label="FOH / Técnicos" nameKey="role"       slots={draft.foh}         members={members} onChange={s => onChange({ ...draft, foh: s })} />
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Solver config panel ──────────────────────────────────────────────────────
 
 function SolverConfigPanel({ members, config, onChange, history, onRemoveHistory }: {
@@ -1129,33 +911,96 @@ function SolverConfigPanel({ members, config, onChange, history, onRemoveHistory
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function MonthGenerator({ members, existingRoles, onClose, onCreated, capability, preflight }: Props) {
+export default function MonthGenerator({
+  members, existingRoles, onClose, onCreated, capability, preflight, allRoles,
+}: Props) {
   const gateBlocked = capability && !capability.enabled ? capability.reason ?? "Datos incompletos." : null;
   const now = new Date();
-  const [step, setStep]           = useState<"config" | "preview">("config");
+  const [step, setStep]           = useState<"config" | "grid">("config");
   const [year, setYear]           = useState(now.getFullYear());
   const [month, setMonth]         = useState(now.getMonth() + 1);
   const [sundays, setSundays]     = useState(true);
   const [saturdays, setSaturdays] = useState(true);
-  const [drafts, setDrafts]       = useState<DraftCard[]>([]);
-  const [swapSel, setSwapSel]     = useState<string | null>(null);
-  const [viewMode, setViewMode]   = useState<"edit" | "view">("edit");
-  const [pushing, setPushing]     = useState(false);
-  const [pushError, setPushError] = useState<string | null>(null);
-  const [swapToast, setSwapToast] = useState<string | null>(null);
-  const [useSolver, setUseSolver] = useState(false);
-  const [solving, setSolving]     = useState(false);
-  const [solverError, setSolverError] = useState<string | null>(null);
-  const [solverConfig, setSolverConfig] = useState<SolverConfig>(DEFAULT_SOLVER_CONFIG);
   const [activeSatDates, setActiveSatDates] = useState<string[]>([]);
+  const [solverConfig, setSolverConfig] = useState<SolverConfig>(DEFAULT_SOLVER_CONFIG);
   const [solverHistory, setSolverHistory] = useState<SolverHistoryEntry[]>([]);
   const [unavailabilityNotices, setUnavailabilityNotices] = useState<{ name: string; date: string; service: string }[]>([]);
-  const [unfilledSeats, setUnfilledSeats] = useState<string[]>([]);
+
+  // ── Grid state (Task 2/3's shape; `MonthGenerator` owns it per the brief) ──
+  const [rows, setRows]           = useState<GridRow[]>(() => buildRows());
+  const [cells, setCells]         = useState<GridCell[]>([]);
+  const [skippedDates, setSkippedDates] = useState<Set<string>>(new Set());
+  const [drafts, setDrafts]       = useState<DraftCard[]>([]);
+  // `localId`s this session has itself confirmed-created, across every confirm
+  // this dialog instance makes. Session-scoped (not persisted, not derived
+  // from props) so it can never be polluted by `existingRoles` refreshing
+  // after `onCreated()` — see `handleConfirm`'s history derivation below.
+  const createdThisSession = useRef<Set<string>>(new Set());
+  const [unresolvedNames, setUnresolvedNames] = useState<string[]>([]);
+  const [unfilled, setUnfilled]   = useState<{ date: string; rowId: string }[]>([]);
+  const [diagnostics, setDiagnostics] = useState<SolveDiagnostics | null>(null);
+  const [autoPending, setAutoPending] = useState(false);
+  const [autoError, setAutoError]     = useState<string | null>(null);
+
+  const [viewMode, setViewMode]   = useState<"edit" | "view">("edit");
+  const [swapSel, setSwapSel]     = useState<string | null>(null);
+  const [swapToast, setSwapToast] = useState<string | null>(null);
+  // Shared by "← Volver" and Escape (below): the ONE state that gates
+  // discarding grid work, naming which action is pending so the two exits
+  // can never end up with different rules about what counts as "unsaved" —
+  // see `assignmentCount` and the effect below.
+  const [pendingDiscard, setPendingDiscard] = useState<"back" | "close" | null>(null);
+  const [pushing, setPushing]     = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
+
+  /**
+   * Total occupied seats across the whole grid — what "← Volver" (and Escape,
+   * via the shared `pendingDiscard` guard below) would discard. Counted as
+   * assignment SLOTS (one person in two seats counts twice), matching what
+   * the admin would actually have to redo. Computed up here, ahead of both
+   * effects that read it, rather than down near the JSX that used to be its
+   * only reader.
+   */
+  const assignmentCount = cells.reduce((n, c) => n + c.memberIds.length, 0);
 
   useEffect(() => {
     if (!saturdays) { setActiveSatDates([]); return; }
     setActiveSatDates(getDates(year, month, 6));
   }, [year, month, saturdays]);
+
+  /**
+   * D10: moving out of `CueDialog` into a full-width panel silently dropped
+   * Escape-to-close (along with the focus trap and `aria-modal`, which
+   * `CueDialog` also provided). Escape-to-close is restored here, matching
+   * `ServiceReadinessCard`'s kebab menu (`document.addEventListener("keydown", …)`).
+   * A full focus trap is judged OUT OF SCOPE: `CueDialog` traps focus because
+   * it is an overlay stacked on top of still-present page content the user
+   * must not tab into; this panel instead REPLACES the whole `ServicesPanel`
+   * view (see the early `return` in `ServicesPanel.tsx`), so there is no
+   * "content behind it" a trap would be protecting against — the only thing
+   * above it in the tab order is the app's own header/nav, same as any other
+   * full page. Focus-return-to-opener is handled by `ServicesPanel`, which
+   * owns the "Generar mes" trigger button this panel itself has no reference to.
+   *
+   * Escape must NOT bypass the same discard guard "← Volver" uses: pools and
+   * rules live on the config step while Auto lives on the grid step, so the
+   * config<->grid round trip is common, and the grid holds real manual
+   * effort. `ServicesPanel` unmounts this component on `onClose`, so a bare
+   * `onClose()` here would let one keystroke silently destroy a month of
+   * hand-assigned cells — the exact loss "← Volver" confirms before allowing.
+   * Gated on `step === "grid"` because `assignmentCount` only reflects real,
+   * currently-visible grid work while on that step; on "config" there is
+   * nothing on screen for Escape to discard.
+   */
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (step === "grid" && assignmentCount > 0) { setPendingDiscard("close"); return; }
+      onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose, step, assignmentCount]);
 
   useEffect(() => {
     try {
@@ -1176,12 +1021,12 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(solverConfig)); } catch {}
   }, [solverConfig]);
 
-  function saveHistoryEntry(year: number, month: number, total_counts: Record<string, number>, role_counts: Record<string, Record<string, number>>) {
-    const key = `${year}-${month}`;
+  function saveHistoryEntry(y: number, m: number, total_counts: Record<string, number>, role_counts: Record<string, Record<string, number>>) {
+    const key = `${y}-${m}`;
     setSolverHistory(prev => {
       const next = [
         ...prev.filter(h => h.key !== key),
-        { key, year, month, total_counts, role_counts },
+        { key, year: y, month: m, total_counts, role_counts },
       ].slice(-MAX_HISTORY);
       try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch {}
       return next;
@@ -1199,206 +1044,197 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
   const inCls  = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
   const selCls = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-[#0a1929] font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
 
-  function buildEmptyDrafts(): DraftCard[] {
-    const existing = new Set(existingRoles.map(r => `${r._type}__${r.date}`));
-    const all: DraftCard[] = [];
-    if (sundays) {
-      getDates(year, month, 0).forEach(date => all.push({
-        localId: uid(), creationRequestId: newCreationRequestId(), _type: "sunday_role", date,
-        exists: existing.has(`sunday_role__${date}`),
-        skipped: existing.has(`sunday_role__${date}`),
-        leads: [], bgvs: [], chorus: [], instruments: [], foh: [],
-      }));
-    }
-    if (saturdays) {
-      getDates(year, month, 6).filter(d => activeSatDates.includes(d)).forEach(date => all.push({
-        localId: uid(), creationRequestId: newCreationRequestId(), _type: "saturday_role", date,
-        exists: existing.has(`saturday_role__${date}`),
-        skipped: existing.has(`saturday_role__${date}`),
-        leads: [], bgvs: [], chorus: [], instruments: [], foh: [],
-      }));
-    }
-    return all.sort((a, b) => a.date.localeCompare(b.date));
+  // Unconditional (D9): the solve always addresses the full month's Sundays —
+  // only RENDERING/CREATION is gated by `sundays`/`columns` below.
+  const sundayDatesFull = useMemo(() => getDates(year, month, 0), [year, month]);
+
+  // D9's EXPLICIT column set — never inferred from `sundayDatesFull`.
+  const columns = useMemo(
+    () => buildColumns({ sundayDates: sundayDatesFull, activeSatDates, includeSundays: sundays }),
+    [sundayDatesFull, activeSatDates, sundays],
+  );
+
+  const unaddressableDatesList = useMemo(
+    () => computeUnaddressableDates(sundayDatesFull, activeSatDates),
+    [sundayDatesFull, activeSatDates],
+  );
+
+  const savedWindow = useMemo(
+    () => savedWindowFor(year, month, allRoles ?? []),
+    [year, month, allRoles],
+  );
+
+  /**
+   * Per-target A1/A2 observation for every drafted target, snapshotted at
+   * render time. This is a SNAPSHOT, not a live lookup: it only recomputes
+   * when `drafts` (or the `preflight` function identity) changes, so a source
+   * that fails while this dialog is open and no React render has happened
+   * since (e.g. between "Previsualizar →" and the very next click) is caught
+   * by `handleConfirm`'s explicit FRESH re-check below, not silently reflected
+   * here. Losing this snapshot (calling `preflight` live everywhere) would
+   * make the confirm-time re-check a no-op — the "preview-time" and
+   * "confirm-time" observations would always be identical, since a plain
+   * function call has no notion of when it was last read.
+   */
+  const preflights = useMemo(() => {
+    const map = new Map<string, TargetPreflight>();
+    if (!preflight) return map;
+    for (const draft of drafts) map.set(draft.localId, preflight(draft._type, draft.date));
+    return map;
+  }, [drafts, preflight]);
+
+  function requestBack() {
+    if (assignmentCount > 0) { setPendingDiscard("back"); return; }
+    goBackToConfig();
   }
 
-  async function handlePreview() {
-    setSolverError(null);
+  function goBackToConfig() {
+    setPendingDiscard(null);
+    setStep("config");
+    setSwapSel(null);
+  }
+
+  function handlePreview() {
     // Preview re-check: never build a roster/date preview from an incomplete
-    // inventory (a missing source is not "no existing service").
-    if (gateBlocked) { setSolverError(gateBlocked); return; }
+    // inventory (a missing source is not "no existing service"). Mirrors
+    // today's guard at the old `handlePreview` (:1226-1228) — Auto is not the
+    // only thing `gateBlocked` refuses.
+    if (gateBlocked) return;
+    if (!sundays && !saturdays) return;
 
-    if (!useSolver) {
-      const sunDates = sundays ? getDates(year, month, 0) : [];
-      setUnavailabilityNotices(buildUnavailabilityNotices(sunDates, saturdays ? activeSatDates : [], members));
-      setDrafts(buildEmptyDrafts());
-      setStep("preview");
+    setUnavailabilityNotices(
+      buildUnavailabilityNotices(sundays ? sundayDatesFull : [], saturdays ? activeSatDates : [], members),
+    );
+    setRows(buildRows());
+    setCells([]);
+    setSkippedDates(new Set());
+    setUnresolvedNames([]);
+    setUnfilled([]);
+    setDiagnostics(null);
+    setAutoError(null);
+    setDrafts(cellsToDrafts([], columns, new Set(), [], existingRoles));
+    setStep("grid");
+  }
+
+  function handleCellsChange(next: GridCell[]) {
+    setCells(next);
+    setDrafts(prev => cellsToDrafts(next, columns, skippedDates, prev, existingRoles));
+  }
+
+  function handleToggleSkip(date: string) {
+    setSkippedDates(prev => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date); else next.add(date);
+      setDrafts(prevDrafts => cellsToDrafts(cells, columns, next, prevDrafts, existingRoles));
+      return next;
+    });
+  }
+
+  /** Whole-day swap, carried over as a COLUMN swap (2026-07-30 decision):
+   *  pick two date columns and exchange every row's cell between them. */
+  function handleColumnSwap(date: string) {
+    if (!swapSel) { setSwapSel(date); return; }
+    if (swapSel === date) { setSwapSel(null); return; }
+    const a = swapSel;
+    const b = date;
+    // A Sunday column and a Saturday column have different seats (a Saturday
+    // has no Coro row at all in the write path — `cellsToDrafts` zeroes
+    // `chorus` for `saturday_role` unconditionally). Swapping across types
+    // would carry a Coro cell onto a Saturday and lose it silently on create,
+    // under a success toast with no warning. Refuse instead.
+    const typeOf = (d: string) => columns.find(c => c.date === d)?.type;
+    if (typeOf(a) !== typeOf(b)) {
+      setSwapSel(null);
+      setSwapToast("No se puede intercambiar un Domingo con un Sábado.");
+      setTimeout(() => setSwapToast(null), 2500);
+      return;
+    }
+    const byRowA = new Map(cells.filter(c => c.date === a).map(c => [c.rowId, c]));
+    const byRowB = new Map(cells.filter(c => c.date === b).map(c => [c.rowId, c]));
+    const rowIds = new Set([...byRowA.keys(), ...byRowB.keys()]);
+    const next = cells.filter(c => c.date !== a && c.date !== b);
+    for (const rowId of rowIds) {
+      const ca = byRowA.get(rowId);
+      const cb = byRowB.get(rowId);
+      if (cb) next.push({ ...cb, date: a });
+      if (ca) next.push({ ...ca, date: b });
+    }
+    setCells(next);
+    setDrafts(prev => cellsToDrafts(next, columns, skippedDates, prev, existingRoles));
+    setSwapSel(null);
+    setSwapToast(`⇄ ${fmtDate(a)} ↔ ${fmtDate(b)}`);
+    setTimeout(() => setSwapToast(null), 2500);
+  }
+
+  /**
+   * Auto — the ONLY caller of `/api/admin/solve` (D13). Owns the fetch per
+   * CLAUDE.md's client-mutation invariant: try/catch/finally, check `res.ok`,
+   * reset the loading flag in `finally`, never close-as-success on failure. A
+   * short-staffed month returning `ok:false` is the solver's NORMAL failure
+   * (D15), not an edge case.
+   */
+  async function handleAuto() {
+    const built = buildSolveRequest({
+      config: solverConfig,
+      members,
+      sundayDates: sundayDatesFull,
+      activeSatDates,
+      historyEntries: solverHistory,
+      year,
+      month,
+    });
+    if (!built.ok) {
+      // Pre-flight refusal (fact 14) — never reaches the network.
+      setAutoError(built.reason);
       return;
     }
 
-    const sundayDates   = getDates(year, month, 0);
-    const saturdayDates = getDates(year, month, 6);
-    const weeks         = sundayDates.length;
-
-    const weekendsWithSaturday: number[] = [];
-    if (saturdays && activeSatDates.length > 0) {
-      sundayDates.forEach((sunDate, i) => {
-        const prevDay = subtractDay(sunDate);
-        if (activeSatDates.includes(prevDay)) weekendsWithSaturday.push(i + 1);
-      });
-      // Fallback: if no Saturday is adjacent to a Sunday, assign by position
-      if (weekendsWithSaturday.length === 0) {
-        activeSatDates.forEach((_, i) => weekendsWithSaturday.push(i + 1));
-      }
-    }
-
-    const idToName = (id: string) => members.find(m => m._id === id)?.member_name ?? id;
-
-    // Deduplicate pools: sunday_leads takes priority, then saturday_leads, then support.
-    // The solver requires mutual exclusivity; sunday_leads members are already eligible
-    // for Saturday lead slots (see solver pool definition), so removing duplicates is safe.
-    const sundayLeadNames   = solverConfig.sundayLeads.map(idToName);
-    const sundaySet         = new Set(sundayLeadNames);
-    const saturdayLeadNames = solverConfig.saturdayLeads.map(idToName).filter(n => !sundaySet.has(n));
-    const satSet            = new Set([...sundayLeadNames, ...saturdayLeadNames]);
-    const supportNames      = solverConfig.support.map(idToName).filter(n => !satSet.has(n));
-    const poolNames         = new Set([...sundayLeadNames, ...saturdayLeadNames, ...supportNames]);
-
-    // Any person referenced in a DSL rule but not in any pool must be added to support
-    // so the solver knows about them. The solver validates all DSL persons against known people.
-    const extraSupport: string[] = [];
-    const allDslPersons = [
-      ...solverConfig.restrictions.map(r => r.person),
-      ...solverConfig.conflicts.flatMap(r => [r.personA, r.personB]),
-      ...solverConfig.presence.flatMap(r => r.persons),
-    ];
-    for (const name of allDslPersons) {
-      const resolved = resolveToMemberName(name, members);
-      if (!poolNames.has(resolved) && !extraSupport.includes(resolved)) {
-        extraSupport.push(resolved);
-      }
-    }
-
-    // Auto-generate week-exclusion DSL rules from member unavailableDates
-    const availabilityRules: string[] = [];
-    const allPoolIds = new Set([
-      ...solverConfig.sundayLeads,
-      ...solverConfig.saturdayLeads,
-      ...solverConfig.support,
-    ]);
-    for (const memberId of allPoolIds) {
-      const m = members.find(x => x._id === memberId);
-      if (!m?.unavailableDates?.length) continue;
-      const unavailable = new Set(m.unavailableDates);
-      sundayDates.forEach((sunDate, i) => {
-        const weekNum = i + 1;
-        if (unavailable.has(sunDate)) {
-          availabilityRules.push(`${m.member_name} !in week ${weekNum} Sun.*`);
-        }
-        const prevDay = subtractDay(sunDate);
-        if (unavailable.has(prevDay)) {
-          availabilityRules.push(`${m.member_name} !in week ${weekNum} Sat.*`);
-        }
-      });
-    }
-
-    const payload: SolveRequest = {
-      weeks,
-      weekends_with_saturday: weekendsWithSaturday,
-      sunday_leads:   sundayLeadNames,
-      saturday_leads: saturdayLeadNames,
-      support:        [...supportNames, ...extraSupport],
-      dsl_rules:      [...allRulesToDs(solverConfig, members), ...availabilityRules],
-      history: solverHistory.slice(-3).map(h => ({
-        total_counts: h.total_counts,
-        role_counts:  h.role_counts,
-      })),
-    };
-
-    if (!payload.sunday_leads.length) {
-      setSolverError("Debes seleccionar al menos un líder de domingo.");
-      return;
-    }
-
-    setSolving(true);
-    let result: SolveResponse;
+    setAutoPending(true);
+    setAutoError(null);
     try {
       const res = await fetch("/api/admin/solve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(built.request),
       });
-      result = await res.json();
+      let response: SolveResponse | null = null;
+      if (res.ok) {
+        response = await res.json();
+      }
+      if (!res.ok || !response || !response.ok || !response.schedule) {
+        setAutoError(response?.error ?? "El solver no encontró solución.");
+        return;
+      }
+
+      const applied = applySolveResponse({
+        response,
+        previousCells: cells,
+        columns,
+        rows,
+        sundayDates: sundayDatesFull,
+        activeSatDates,
+        members,
+      });
+      setCells(applied.cells);
+      setUnresolvedNames(applied.unresolvedNames);
+      setUnfilled(mapUnfilledSeats(response.unfilled_seats ?? [], sundayDatesFull, activeSatDates));
+      setDiagnostics({
+        fairness_relaxed: response.fairness_relaxed,
+        sun_lead_fairness_relaxed: response.sun_lead_fairness_relaxed,
+        sun_bgv_fairness_relaxed: response.sun_bgv_fairness_relaxed,
+        history_runs_used: response.history_runs_used,
+      });
+      setDrafts(prev => cellsToDrafts(applied.cells, columns, skippedDates, prev, existingRoles));
+      // Fairness history is NOT persisted here — a solve merely proposes a
+      // schedule. Recording it now would count services that may never be
+      // created (close the panel without confirming and next month's solve
+      // would still be penalised for them). `handleConfirm` below persists it
+      // instead, derived from whatever the create batch actually committed.
     } catch {
-      setSolverError("Error de red al llamar al solver.");
-      setSolving(false);
-      return;
+      setAutoError("Error de red al llamar al solver.");
+    } finally {
+      setAutoPending(false);
     }
-    setSolving(false);
-
-    if (!result.ok || !result.schedule) {
-      setSolverError(result.error ?? "El solver no encontró solución.");
-      return;
-    }
-
-    const existing  = new Set(existingRoles.map(r => `${r._type}__${r.date}`));
-    const allDrafts: DraftCard[] = [];
-
-    for (let w = 1; w <= weeks; w++) {
-      const weekData = result.schedule[String(w)];
-      if (!weekData) continue;
-      const sunDate = sundayDates[w - 1];
-
-      if (sundays && sunDate) {
-        const sun = weekData.Sunday ?? { Lead: [], BGV: [], Choir: [] };
-        allDrafts.push({
-          localId: uid(), creationRequestId: newCreationRequestId(), _type: "sunday_role", date: sunDate,
-          exists:  existing.has(`sunday_role__${sunDate}`),
-          skipped: existing.has(`sunday_role__${sunDate}`),
-          leads:  sun.Lead.map(n => nameToId(n, members)).filter(Boolean) as string[],
-          bgvs:   sun.BGV.map(n  => nameToId(n, members)).filter(Boolean) as string[],
-          chorus: sun.Choir.map(n => nameToId(n, members)).filter(Boolean) as string[],
-          instruments: [], foh: [],
-        });
-      }
-
-      if (saturdays && weekData.Saturday) {
-        const satDate = subtractDay(sunDate);
-        if (saturdayDates.includes(satDate)) {
-          const sat = weekData.Saturday;
-          allDrafts.push({
-            localId: uid(), creationRequestId: newCreationRequestId(), _type: "saturday_role", date: satDate,
-            exists:  existing.has(`saturday_role__${satDate}`),
-            skipped: existing.has(`saturday_role__${satDate}`),
-            leads: sat.Lead.map(n => nameToId(n, members)).filter(Boolean) as string[],
-            bgvs:  sat.BGV.map(n  => nameToId(n, members)).filter(Boolean) as string[],
-            chorus: [], instruments: [], foh: [],
-          });
-        }
-      }
-    }
-
-    setUnavailabilityNotices(buildUnavailabilityNotices(sundayDates, activeSatDates, members));
-    setUnfilledSeats(result.unfilled_seats ?? []);
-    setDrafts(allDrafts.sort((a, b) => a.date.localeCompare(b.date)));
-    if (result.total_counts && result.role_counts) {
-      saveHistoryEntry(year, month, result.total_counts, result.role_counts);
-    }
-    setStep("preview");
-  }
-
-  function handleCardSwap(localId: string) {
-    if (!swapSel) { setSwapSel(localId); return; }
-    if (swapSel === localId) { setSwapSel(null); return; }
-    const a = drafts.find(d => d.localId === swapSel)!;
-    const b = drafts.find(d => d.localId === localId)!;
-    setDrafts(drafts.map(d => {
-      if (d.localId === swapSel)  return { ...d, leads: b.leads, bgvs: b.bgvs, chorus: b.chorus, instruments: b.instruments, foh: b.foh };
-      if (d.localId === localId)  return { ...d, leads: a.leads, bgvs: a.bgvs, chorus: a.chorus, instruments: a.instruments, foh: a.foh };
-      return d;
-    }));
-    setSwapSel(null);
-    setSwapToast(`⇄ ${fmtDate(a.date)} ↔ ${fmtDate(b.date)}`);
-    setTimeout(() => setSwapToast(null), 2500);
   }
 
   async function handleConfirm(publish: boolean) {
@@ -1412,7 +1248,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
       !d.skipped &&
       (preflight ? preflights.get(d.localId)?.state === "creatable" : !d.exists),
     );
-    let toCreate = candidates;
+    let toCreateNow = candidates;
     if (preflight) {
       // Re-observe every candidate NOW: a target that stopped being `creatable`
       // while this dialog was open is never posted, and a changed observation
@@ -1421,8 +1257,8 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
       const stillCreatable = new Set(
         creatableTargets(fresh.map(f => f.result)).map(r => r.targetKey),
       );
-      toCreate = fresh.filter(f => stillCreatable.has(f.result.targetKey)).map(f => f.draft);
-      const dropped = candidates.length - toCreate.length;
+      toCreateNow = fresh.filter(f => stillCreatable.has(f.result.targetKey)).map(f => f.draft);
+      const dropped = candidates.length - toCreateNow.length;
       if (dropped > 0) {
         setPushError(
           `${dropped} fecha(s) dejaron de estar disponibles para crear. Revisa la vista previa y vuelve a intentar.`,
@@ -1430,7 +1266,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
         return;
       }
     }
-    if (!toCreate.length) return;
+    if (!toCreateNow.length) return;
     setPushing(true);
     setPushError(null);
     let result;
@@ -1438,7 +1274,7 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
       // Each draft POSTs its own stable creationRequestId, so a retry after a
       // lost response replays idempotently instead of creating a duplicate.
       result = await runDraftCreateBatch({
-        drafts: toCreate,
+        drafts: toCreateNow,
         published: publish,
         post: async (body) => {
           const res = await fetch("/api/admin/roles", {
@@ -1464,6 +1300,34 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
     // the failed/unknown drafts — with their original request ids.
     const created = new Set(result.createdLocalIds);
     if (created.size) setDrafts(prev => prev.map(d => created.has(d.localId) ? { ...d, exists: true } : d));
+    // Accumulate this confirm's successes into the SESSION-scoped ref (not
+    // just this call's `created`) so a later confirm in the same dialog still
+    // recognises them even after `onCreated()` below refreshes `existingRoles`.
+    for (const localId of created) createdThisSession.current.add(localId);
+    // Fairness history is recomputed from the UNION of what this batch just
+    // created and what this dialog session has created across ALL its
+    // confirms — never from `d.exists`. `d.exists` conflates two different
+    // things: "created by this session" (should count) and "existed before
+    // this session, surfaced via the `existingRoles` prop" (must not count —
+    // this generator didn't create it, so it must never take credit for its
+    // seats). Those look identical on a `DraftCard` once `onCreated()` →
+    // `loadSources()` → `setRoles(...)` refreshes `existingRoles`: a partial
+    // failure leaves the dialog open, the prop refresh lands mid-session, and
+    // the dates THIS session just created become `isExisting` too. A grid
+    // interaction after that re-runs `cellsToDrafts` with the refreshed prop
+    // and `d.exists` is then true for both old and new dates alike — there is
+    // no way to tell them apart from the draft alone. `createdThisSession` is
+    // the one signal that survives the refresh, because it is never derived
+    // from props: it only grows when THIS component instance's own confirms
+    // succeed. Recomputing the whole month's union on every confirm and
+    // replacing is idempotent — it reconstructs the same entry a single
+    // successful confirm would have written, however many partial retries it
+    // took to get there. A fully failed batch with no prior successes records
+    // nothing; `historyEntryFromDrafts` returns `null` for an empty list, so
+    // this stays a no-op either way.
+    const historyDrafts = drafts.filter(d => created.has(d.localId) || createdThisSession.current.has(d.localId));
+    const entry = historyEntryFromDrafts(historyDrafts, members, year, month);
+    if (entry) saveHistoryEntry(entry.year, entry.month, entry.total_counts, entry.role_counts);
     // Refresh so the list reflects whatever actually got created.
     onCreated();
     if (result.failed.length === 0) {
@@ -1473,29 +1337,21 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
       // as if the whole month was created successfully.
       const conflicts = result.failed.filter(f => f.status === 409).length;
       setPushError(
-        `No se pudieron crear ${result.failed.length} de ${toCreate.length} servicios.` +
+        `No se pudieron crear ${result.failed.length} de ${toCreateNow.length} servicios.` +
         (conflicts ? " Alguien más cambió esas fechas: recarga y revisa." : " Intenta de nuevo."),
       );
     }
   }
 
-  // Per-target A1/A2 observation for every previewed draft. Recomputed whenever the
-  // drafts or the observed bundle change, so a source failing while the dialog is
-  // open flips the label to `unknown` instead of silently reading as vacant.
-  const preflights = useMemo(() => {
-    const map = new Map<string, TargetPreflight>();
-    if (!preflight) return map;
-    for (const draft of drafts) map.set(draft.localId, preflight(draft._type, draft.date));
-    return map;
-  }, [drafts, preflight]);
+  const toCreate = drafts.filter(d =>
+    !d.skipped && (preflight ? preflights.get(d.localId)?.state === "creatable" : !d.exists),
+  );
+  const skippedCount = drafts.filter(d => d.skipped).length;
+  const notCreatable = drafts.filter(d =>
+    !d.skipped && (preflight ? preflights.get(d.localId)?.state !== "creatable" : d.exists),
+  ).length;
 
-  const toCreate = preflight
-    ? drafts.filter(d => !d.skipped && preflights.get(d.localId)?.state === "creatable")
-    : drafts.filter(d => !d.skipped && !d.exists);
-  const skipped  = drafts.filter(d => d.skipped).length;
-  const notCreatable = preflight
-    ? drafts.filter(d => !d.skipped && preflights.get(d.localId)?.state !== "creatable").length
-    : drafts.filter(d => !d.skipped && d.exists).length;
+  const autoState: AutoState = { pending: autoPending, error: autoError, disabledReason: gateBlocked };
 
   // ── Step 1: Configure ────────────────────────────────────────────────────────
   if (step === "config") return (
@@ -1549,36 +1405,36 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
         )}
       </div>
 
-      <div className="space-y-3">
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input type="checkbox" checked={useSolver} onChange={e => setUseSolver(e.target.checked)} className="accent-[#00bfff] w-4 h-4" />
-          <span className="font-body text-sm">🤖 Auto-asignar con Solver</span>
-        </label>
-        {useSolver && (
-          <SolverConfigPanel members={members} config={solverConfig} onChange={setSolverConfig} history={solverHistory} onRemoveHistory={removeHistoryEntry} />
-        )}
-      </div>
+      {/*
+        D13: the `useSolver` toggle is retired — the grid always offers Auto,
+        so `SolverConfigPanel` renders unconditionally. Auto is unusable
+        without pools, and gating this panel behind an opt-in left every admin
+        who wanted Auto meeting the keyholed panel D17 fixes for the first time.
+      */}
+      <SolverConfigPanel members={members} config={solverConfig} onChange={setSolverConfig} history={solverHistory} onRemoveHistory={removeHistoryEntry} />
 
       {gateBlocked && (
         <p className="font-body text-xs text-amber-400 bg-amber-500/10 rounded-lg px-3 py-2">{gateBlocked}</p>
-      )}
-
-      {solverError && (
-        <p className="font-body text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{solverError}</p>
       )}
 
       <div className="flex gap-3">
         <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
           Cancelar
         </button>
-        <button type="button" onClick={handlePreview} disabled={(!sundays && !saturdays) || solving || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
-          {solving ? "Calculando..." : "Previsualizar →"}
+        <button
+          type="button"
+          onClick={handlePreview}
+          disabled={(!sundays && !saturdays) || !!gateBlocked}
+          title={gateBlocked ?? undefined}
+          className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+        >
+          Previsualizar →
         </button>
       </div>
     </div>
   );
 
-  // ── Step 2: Preview ──────────────────────────────────────────────────────────
+  // ── Step 2: Grid ─────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -1586,19 +1442,49 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
           <p className="font-label text-xs uppercase tracking-widest text-gray-500">{MONTHS[month - 1]} {year}</p>
           <p className="font-body text-sm">
             <span className="text-[#00bfff] font-semibold">{toCreate.length}</span> por crear
-            {skipped > 0 && <span className="text-gray-500"> · {skipped} omitido{skipped !== 1 ? "s" : ""}</span>}
+            {skippedCount > 0 && <span className="text-gray-500"> · {skippedCount} omitido{skippedCount !== 1 ? "s" : ""}</span>}
             {notCreatable > 0 && (
               <span className="text-amber-400"> · {notCreatable} no disponible{notCreatable !== 1 ? "s" : ""}</span>
             )}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          {swapSel && <span className="font-label text-[11px] uppercase tracking-widest text-[#00bfff] animate-pulse">Selecciona otro ⇄</span>}
-          <button type="button" onClick={() => { setStep("config"); setSwapSel(null); }} className="font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] transition-colors">
-            ← Volver
-          </button>
-        </div>
+        <button type="button" onClick={requestBack} className="font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] transition-colors">
+          ← Volver
+        </button>
       </div>
+
+      {/*
+        Task 3 could not implement this — it lives on the wizard shell, not on
+        `PlannerGridProps`. D13 makes "Auto failed → fix the pools → go back"
+        a common round trip (pools/rules live on step 1, Auto lives on step
+        2), so silently rebuilding an empty grid on every "← Volver" would lose
+        real work far more often than the old preview ever did.
+
+        One `pendingDiscard` state (and this one banner) serves BOTH "← Volver"
+        and Escape — see the guard's doc comment near the top of the
+        component. Sharing the state, not just the `assignmentCount > 0`
+        check, means the two exits can never drift into asking different
+        questions or discarding different things.
+      */}
+      {pendingDiscard && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 space-y-2">
+          <p className="font-body text-xs text-amber-300">
+            {pendingDiscard === "back" ? "Volver a configuración" : "Cerrar"} descarta {assignmentCount} asignación{assignmentCount !== 1 ? "es" : ""} en este mes. ¿Continuar?
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={pendingDiscard === "back" ? goBackToConfig : onClose}
+              className="min-h-[44px] rounded-lg bg-[#003572] px-3 font-label text-xs uppercase tracking-widest dark:bg-[#00bfff]/20"
+            >
+              {pendingDiscard === "back" ? "Volver de todos modos" : "Cerrar de todos modos"}
+            </button>
+            <button type="button" onClick={() => setPendingDiscard(null)} className="min-h-[44px] rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="flex justify-center">
         <div className="flex rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 overflow-hidden">
@@ -1614,6 +1500,28 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
           </button>
         </div>
       </div>
+
+      {viewMode === "edit" && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">⇄ Intercambiar columnas:</span>
+          {columns.map(col => (
+            <button
+              key={col.date}
+              type="button"
+              data-swap-date={col.date}
+              onClick={() => handleColumnSwap(col.date)}
+              className={`min-h-[44px] px-2 py-1 rounded-full border text-[10px] font-label uppercase tracking-widest transition-colors ${
+                swapSel === col.date
+                  ? "border-[#00bfff] bg-[#00bfff]/20 text-[#00bfff]"
+                  : "border-[#00bfff]/15 text-gray-500 hover:text-[#00bfff]"
+              }`}
+            >
+              {fmtDate(col.date)}
+            </button>
+          ))}
+          {swapSel && <span className="font-label text-[11px] uppercase tracking-widest text-[#00bfff] animate-pulse">Selecciona otra columna ⇄</span>}
+        </div>
+      )}
 
       {swapToast && (
         <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff] text-center bg-[#00bfff]/10 rounded-lg py-1.5">{swapToast}</p>
@@ -1642,39 +1550,32 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
         );
       })()}
 
-      {unfilledSeats.length > 0 && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 space-y-1.5">
-          <p className="font-label text-[11px] uppercase tracking-widest text-amber-400">
-            Lugares sin cubrir (faltó gente)
-          </p>
-          {summarizeUnfilledSeats(unfilledSeats).map(s => (
-            <p key={`${s.week}-${s.service}`} className="font-body text-xs text-gray-400">
-              <span className="text-amber-300 font-semibold">Semana {s.week} · {s.service}</span>
-              {" — "}
-              {s.labels.join(", ")}
-            </p>
-          ))}
-          <p className="font-body text-xs text-gray-500 italic">
-            El líder siempre se asigna; primero queda vacío el coro, luego BGV.
-          </p>
-        </div>
-      )}
-
       {viewMode === "edit" ? (
-        <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-0.5">
-          {drafts.map(d => (
-            <DraftCardEditor
-              key={d.localId} draft={d} members={members}
-              onChange={updated => setDrafts(drafts.map(x => x.localId === updated.localId ? updated : x))}
-              onToggleSkip={() => setDrafts(drafts.map(x => x.localId === d.localId ? { ...x, skipped: !x.skipped } : x))}
-              swapSelected={swapSel === d.localId}
-              onSwapSelect={() => handleCardSwap(d.localId)}
-              preflight={preflights.get(d.localId) ?? null}
-            />
-          ))}
-        </div>
+        <PlannerGrid
+          rows={rows}
+          columns={columns}
+          cells={cells}
+          members={members}
+          savedWindow={savedWindow}
+          preflightFor={col => (preflight ? preflight(col.type, col.date) : null)}
+          skipped={skippedDates}
+          unaddressableDates={unaddressableDatesList}
+          unresolvedNames={unresolvedNames}
+          unfilled={unfilled}
+          onCellsChange={handleCellsChange}
+          onRowsChange={setRows}
+          onToggleSkip={handleToggleSkip}
+          onAuto={handleAuto}
+          autoState={autoState}
+          diagnostics={diagnostics}
+        />
       ) : (
-        <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-0.5">
+        // D17/D10: this used to be `max-h-[50vh] overflow-y-auto` — a keyhole
+        // sized for the old `CueDialog` overlay. The full-width panel this
+        // section now lives in has no competing content to keep on screen, so
+        // it uses the page's own scroll like the rest of the panel, instead of
+        // nesting a second scroller inside it.
+        <div className="space-y-3 pr-0.5">
           {drafts.filter(d => !d.skipped).map(d => {
             const p = draftToDayCardProps(d, members);
             return <DayCard key={d.localId} day={p.day} date={p.date} leads={p.leads}
@@ -1683,7 +1584,9 @@ export default function MonthGenerator({ members, existingRoles, onClose, onCrea
         </div>
       )}
 
-      {gateBlocked && (
+      {/* In "edit" mode `PlannerGrid` already surfaces this via `autoState.disabledReason`
+          next to Auto — showing it again here would duplicate the same text. */}
+      {gateBlocked && viewMode === "view" && (
         <p className="font-body text-xs text-amber-400 bg-amber-500/10 rounded-lg px-3 py-2">{gateBlocked}</p>
       )}
 

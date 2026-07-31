@@ -170,11 +170,13 @@ Legend: **[C]** client, **[S]** server.
 | Component | Purpose |
 |-----------|---------|
 | `AdminPanel` | Root admin shell: tabs + member management (Fuse.js search, add/edit modal, role-gated). |
-| `ServicesPanel` | Per-week roster editor (assign seats, medley-aware setlist). Embeds `ParticipationSidebar` + `MonthGenerator` + `SeatBoard`. (~79 KB, the biggest surface.) |
+| `ServicesPanel` | Per-week roster editor (assign seats, medley-aware setlist). Embeds `ParticipationSidebar` + `MonthGenerator` + `SeatBoard`. (~79 KB, the biggest surface.) When `MonthGenerator` is open it **replaces** this tab's whole two-column layout with a full-width panel (D10) — it is not a dialog. |
 | `SeatBoard` | The service team editor: seats + full roster, one scroll region. Decides nothing — see `seatModel` / `candidateRanking`. |
 | `seatModel` | Canonical seat names and categories; one spelling per seat. Pure. |
 | `candidateRanking` | Seat candidates ordered by availability, existing assignment and recent load. Pure; never calls the solver. |
-| `MonthGenerator` | Auto-scheduler UI — sends `SolveRequest` to `/api/admin/solve`, previews draft `DayCard`s (`draftToDayCardProps`), summarizes short-staffing (`summarizeUnfilledSeats`). |
+| `plannerModel` | Pure: the month-grid's rows/columns/cells and BOTH translations to/from the solver's wire format (`buildSolveRequest`/`applySolveResponse`), plus `cellsToDrafts`/`cellsToParticipantRoles`. Owns Saturday↔week adjacency (never position) and D11's Sunday-only Coro row. |
+| `PlannerGrid` | Renders the month grid `plannerModel` computes — dates across, seats down, every cell editable. Decides nothing; `MonthGenerator` owns `cells`/`counts` state and the Auto fetch. |
+| `MonthGenerator` | Config step (solver pools/rules, `SolverConfigPanel`, unconditional since the `useSolver` toggle was retired) + grid step (`PlannerGrid`, plus `Vista`'s `DayCard` list). **Auto** (inside the grid) is the only caller of `/api/admin/solve`; `Previsualizar →` only builds an empty grid. Owns the create-path POST to `/api/admin/roles` and the solver fairness-history persistence (`localStorage`, replace-not-append per month). |
 | `SetlistEditor` | Inline setlist builder (reorder/remove, play-key, medley via `normalizeMedleyTags`). |
 | `SongFormModal` | Song create/edit form + reusable `Modal`. Exports `Modal`, `SongForm`, `blankForm`, `songToForm`, `buildPayload`. |
 | `ContentPanel` | Song-library CRUD (via `SongForm`). |
