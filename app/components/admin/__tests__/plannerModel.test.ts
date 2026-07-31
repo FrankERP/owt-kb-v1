@@ -467,6 +467,7 @@ describe("Week spine over a 5-Sunday month (E21)", () => {
   const AUG_SUNDAYS = ["2026-08-02", "2026-08-09", "2026-08-16", "2026-08-23", "2026-08-30"];
   const THIRD_SUNDAY = "2026-08-16";
   const FOURTH_SUNDAY = "2026-08-23";
+  const FIFTH_SUNDAY = "2026-08-30";
 
   it("buildSolveRequest emits '!in week 3 Sun.*' for a pool member unavailable on the third Sunday", () => {
     const config: SolverConfig = { ...emptyConfig, sundayLeads: ["frank"] };
@@ -478,6 +479,22 @@ describe("Week spine over a 5-Sunday month (E21)", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("unreachable");
     expect(result.request.dsl_rules).toContain("Frank !in week 3 Sun.*");
+  });
+
+  // A week formula that wraps modulo 4 (e.g. `(i % 4) + 1`) coincides with
+  // `i + 1` at the third Sunday (i=2 either way) but diverges at the fifth
+  // (i=4 gives week 1 under a mod-4 wrap, vs. the correct week 5) — this is
+  // the case the test above cannot catch on its own.
+  it("buildSolveRequest emits '!in week 5 Sun.*' for a pool member unavailable on the fifth Sunday", () => {
+    const config: SolverConfig = { ...emptyConfig, sundayLeads: ["frank"] };
+    const members: RankMember[] = [{ ...m("frank", "Frank"), unavailableDates: [FIFTH_SUNDAY] }];
+    const result = buildSolveRequest({
+      config, members, sundayDates: AUG_SUNDAYS, activeSatDates: [],
+      historyEntries: [], year: 2026, month: 8,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.request.dsl_rules).toContain("Frank !in week 5 Sun.*");
   });
 
   it("applySolveResponse maps schedule week 3's Sunday data onto the third Sunday's date, never the fourth", () => {
@@ -497,6 +514,28 @@ describe("Week spine over a 5-Sunday month (E21)", () => {
     expect(onThird).toBeTruthy();
     expect(onThird!.memberIds).toEqual(["m1"]);
     expect(onFourth).toBeUndefined();
+  });
+
+  // Response-side counterpart of the mod-4 wrap check above: week 5's roster
+  // must land on the fifth Sunday's column, not get folded back onto the
+  // first (which is what `(i % 4) + 1` would do for i=4).
+  it("applySolveResponse maps schedule week 5's Sunday data onto the fifth Sunday's date, never the first", () => {
+    const rows = buildRows();
+    const members: RankMember[] = [m("m1", "Frank")];
+    const columns: GridColumn[] = AUG_SUNDAYS.map((date) => ({ date, type: "sunday_role" as const }));
+    const resp: SolveResponse = {
+      ok: true,
+      schedule: { "5": { Sunday: { Lead: ["Frank"], BGV: [], Choir: [] } } },
+    };
+    const result = applySolveResponse({
+      response: resp, previousCells: [], columns, rows,
+      sundayDates: AUG_SUNDAYS, activeSatDates: [], members,
+    });
+    const onFifth = result.cells.find((c) => c.rowId === "lead" && c.date === FIFTH_SUNDAY);
+    const onFirst = result.cells.find((c) => c.rowId === "lead" && c.date === AUG_SUNDAYS[0]);
+    expect(onFifth).toBeTruthy();
+    expect(onFifth!.memberIds).toEqual(["m1"]);
+    expect(onFirst).toBeUndefined();
   });
 });
 
