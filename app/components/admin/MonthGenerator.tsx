@@ -8,6 +8,8 @@ import { runDraftCreateBatch } from "@/app/utils/monthDraftCreate";
 import { creatableTargets, type TargetPreflight } from "./serviceReadiness";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import PlannerGrid, { type AutoState, type SolveDiagnostics } from "./PlannerGrid";
+import MonthCalendar from "./MonthCalendar";
+import { SERVICE_LABEL } from "./serviceCardModel";
 import {
   buildColumns,
   buildRows,
@@ -194,9 +196,19 @@ function fmtDate(iso: string) {
   });
 }
 
+/**
+ * Who is unavailable on a date this month will actually GENERATE.
+ *
+ * Fed the SELECTED Sundays (never `sundayDatesFull`) plus the specials, per
+ * work item 6: once Sundays are individually deselectable, the full spine would
+ * report notices for dates that produce no column at all — and a special, which
+ * does produce one, would go unreported. The rule is "one entry per column",
+ * which is why the three arguments here mirror `buildColumns`' three inputs.
+ */
 function buildUnavailabilityNotices(
   sundayDates: string[],
   activeSatDates: string[],
+  specials: { date: string; name: string }[],
   allMembers: MemberOption[]
 ): { name: string; date: string; service: string }[] {
   const out: { name: string; date: string; service: string }[] = [];
@@ -206,6 +218,7 @@ function buildUnavailabilityNotices(
     const name = m.alias?.trim() || m.member_name;
     for (const d of sundayDates)    if (unavailable.has(d)) out.push({ name, date: d, service: "Dom" });
     for (const d of activeSatDates) if (unavailable.has(d)) out.push({ name, date: d, service: "Sáb" });
+    for (const s of specials)       if (unavailable.has(s.date)) out.push({ name, date: s.date, service: s.name });
   }
   return out.sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
 }
@@ -946,9 +959,19 @@ export default function MonthGenerator({
   const [step, setStep]           = useState<"config" | "grid">("config");
   const [year, setYear]           = useState(now.getFullYear());
   const [month, setMonth]         = useState(now.getMonth() + 1);
-  const [sundays, setSundays]     = useState(true);
-  const [saturdays, setSaturdays] = useState(true);
+  /**
+   * E1's per-date Sunday picker, stored as DESELECTIONS rather than as the
+   * selected dates. Two reasons, both bugs the other shape invites:
+   *  - a stale date from a month the admin navigated away from can never leak
+   *    into `columns` — the selection is always DERIVED by filtering the month's
+   *    own `sundayDatesFull` (work item 1a's hazard, from the Sunday side);
+   *  - "nothing deselected" is the default without an effect having to seed it.
+   * Reset on month change anyway (below), so the two guards are independent.
+   */
+  const [deselectedSundays, setDeselectedSundays] = useState<string[]>([]);
   const [activeSatDates, setActiveSatDates] = useState<string[]>([]);
+  /** E2's weekday specials for THIS month — reset whenever year/month changes. */
+  const [specials, setSpecials] = useState<{ date: string; name: string }[]>([]);
   const [solverConfig, setSolverConfig] = useState<SolverConfig>(DEFAULT_SOLVER_CONFIG);
   const [solverHistory, setSolverHistory] = useState<SolverHistoryEntry[]>([]);
   const [unavailabilityNotices, setUnavailabilityNotices] = useState<{ name: string; date: string; service: string }[]>([]);
@@ -990,10 +1013,24 @@ export default function MonthGenerator({
    */
   const assignmentCount = cells.reduce((n, c) => n + c.memberIds.length, 0);
 
+  /**
+   * Every per-date pick is scoped to ONE (year, month) and is dropped when
+   * either changes (work item 1a). The shipped code already guarded exactly
+   * this for Saturdays; the calendar adds two more date-bearing states and both
+   * need the same treatment.
+   *
+   * Without the `specials` reset: pick August, add "Bautizos" on 2026-08-12,
+   * switch to September — `buildColumns` emits an August-dated column among the
+   * September ones, INVISIBLE on the now-September calendar, and `handleConfirm`
+   * posts it. The date is well-formed so the server accepts it and a
+   * `special_role` is created for a month the admin navigated away from.
+   * `buildColumns`' dedupe is per-date and does not catch it; nothing does.
+   */
   useEffect(() => {
-    if (!saturdays) { setActiveSatDates([]); return; }
     setActiveSatDates(getDates(year, month, 6));
-  }, [year, month, saturdays]);
+    setDeselectedSundays([]);
+    setSpecials([]);
+  }, [year, month]);
 
   /**
    * D10: moving out of `CueDialog` into a full-width panel silently dropped
@@ -1071,14 +1108,29 @@ export default function MonthGenerator({
   const inCls  = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
   const selCls = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-[#0a1929] font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
 
-  // Unconditional (D9): the solve always addresses the full month's Sundays —
-  // only RENDERING/CREATION is gated by `sundays`/`columns` below.
+  // Unconditional (D9/E21): the solve always addresses the full month's
+  // Sundays — only RENDERING/CREATION is gated by `columns` below.
   const sundayDatesFull = useMemo(() => getDates(year, month, 0), [year, month]);
+
+  /**
+   * **E21's whole point.** The calendar's Sunday picks feed `buildColumns` and
+   * NOTHING else: `buildSolveRequest`, `applySolveResponse`,
+   * `computeUnaddressableDates` and `ruleEnforcement` all keep receiving
+   * `sundayDatesFull`, because the week number is POSITIONAL over the full
+   * month's Sunday list. Feed the selected subset to the spine and week 3 stops
+   * meaning the third Sunday: the seeded week-1/week-3 exclusions land on the
+   * wrong dates and produce rosters that silently violate stated rules, or the
+   * solve 400s outright below three Sundays.
+   */
+  const selectedSundays = useMemo(
+    () => sundayDatesFull.filter(d => !deselectedSundays.includes(d)),
+    [sundayDatesFull, deselectedSundays],
+  );
 
   // D9's EXPLICIT column set — never inferred from `sundayDatesFull`.
   const columns = useMemo(
-    () => buildColumns({ sundayDates: sundayDatesFull, activeSatDates, includeSundays: sundays }),
-    [sundayDatesFull, activeSatDates, sundays],
+    () => buildColumns({ sundayDates: selectedSundays, activeSatDates, specials }),
+    [selectedSundays, activeSatDates, specials],
   );
 
   const unaddressableDatesList = useMemo(
@@ -1127,10 +1179,15 @@ export default function MonthGenerator({
     // today's guard at the old `handlePreview` (:1226-1228) — Auto is not the
     // only thing `gateBlocked` refuses.
     if (gateBlocked) return;
-    if (!sundays && !saturdays) return;
+    // "NO COLUMNS AT ALL" — not "no Sundays and no Saturdays". A month whose
+    // only service is a weekday special is exactly what E2 exists for, and a
+    // weekend-only predicate here (or on the button below) would leave that
+    // capability dead on the main gate with no message. `columns` already
+    // counts specials, so the two gates ask the same question the grid answers.
+    if (columns.length === 0) return;
 
     setUnavailabilityNotices(
-      buildUnavailabilityNotices(sundays ? sundayDatesFull : [], saturdays ? activeSatDates : [], members),
+      buildUnavailabilityNotices(selectedSundays, activeSatDates, specials, members),
     );
     setRows(buildRows());
     setCells([]);
@@ -1170,9 +1227,16 @@ export default function MonthGenerator({
     // would carry a Coro cell onto a Saturday and lose it silently on create,
     // under a success toast with no warning. Refuse instead.
     const typeOf = (d: string) => columns.find(c => c.date === d)?.type;
-    if (typeOf(a) !== typeOf(b)) {
+    const typeA = typeOf(a);
+    const typeB = typeOf(b);
+    if (typeA !== typeB) {
       setSwapSel(null);
-      setSwapToast("No se puede intercambiar un Domingo con un Sábado.");
+      // Named from the shared `SERVICE_LABEL`, not hardcoded: specials are
+      // columns now, so "Domingo con un Sábado" was about to become wrong copy
+      // on a real refusal. For the Sunday/Saturday pair it reads identically.
+      setSwapToast(
+        `No se puede intercambiar un ${typeA ? SERVICE_LABEL[typeA] : "servicio"} con un ${typeB ? SERVICE_LABEL[typeB] : "servicio"}.`,
+      );
       setTimeout(() => setSwapToast(null), 2500);
       return;
     }
@@ -1244,7 +1308,13 @@ export default function MonthGenerator({
       });
       setCells(applied.cells);
       setUnresolvedNames(applied.unresolvedNames);
-      setUnfilled(mapUnfilledSeats(response.unfilled_seats ?? [], sundayDatesFull, activeSatDates));
+      // `sundayDatesFull` resolves the solver's positional week number (E21);
+      // `selectedSundays` then filters the result down to columns that exist —
+      // otherwise an unfilled marker from a week that was never staffed renders
+      // on a date the admin deselected, or on a column that is now a special.
+      setUnfilled(
+        mapUnfilledSeats(response.unfilled_seats ?? [], sundayDatesFull, activeSatDates, selectedSundays),
+      );
       setDiagnostics({
         fairness_relaxed: response.fairness_relaxed,
         sun_lead_fairness_relaxed: response.sun_lead_fairness_relaxed,
@@ -1396,41 +1466,37 @@ export default function MonthGenerator({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <label className="font-label text-xs uppercase tracking-widest text-gray-500">Generar</label>
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input type="checkbox" checked={sundays} onChange={e => setSundays(e.target.checked)} className="accent-[#00bfff] w-4 h-4" />
-          <span className="font-body text-sm">Domingos</span>
-        </label>
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input type="checkbox" checked={saturdays} onChange={e => setSaturdays(e.target.checked)} className="accent-[#00bfff] w-4 h-4" />
-          <span className="font-body text-sm">Sábados</span>
-        </label>
-        {saturdays && (
-          <div className="ml-7 flex flex-wrap gap-1.5">
-            {getDates(year, month, 6).map(date => {
-              const active = activeSatDates.includes(date);
-              return (
-                <label key={date} className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] cursor-pointer transition-colors font-label uppercase tracking-widest ${
-                  active
-                    ? "border-yellow-400/50 bg-yellow-400/10 text-yellow-400"
-                    : "border-[#00bfff]/15 text-gray-500 hover:border-yellow-400/30 hover:text-yellow-400/60"
-                }`}>
-                  <input
-                    type="checkbox"
-                    checked={active}
-                    onChange={() => setActiveSatDates(prev =>
-                      active ? prev.filter(d => d !== date) : [...prev, date]
-                    )}
-                    className="accent-yellow-400 w-3 h-3"
-                  />
-                  {fmtDate(date)}
-                </label>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {/*
+        E1/E2/P3: the calendar REPLACES the Domingos/Sábados checkboxes and the
+        Saturday pill row, and lives on this setup step only. `key` remounts it
+        per month so no composer state (or refusal notice) can survive a month
+        change and offer a date that is no longer on screen.
+      */}
+      <MonthCalendar
+        key={`${year}-${month}`}
+        year={year}
+        month={month}
+        selectedSundays={selectedSundays}
+        selectedSaturdays={activeSatDates}
+        specials={specials}
+        existingRoles={existingRoles}
+        onToggleWeekend={date => {
+          // Local noon, never a bare `new Date(iso)` — a UTC parse day-flips and
+          // would route a Sunday's toggle into the Saturday branch.
+          const dow = new Date(date.slice(0, 10) + "T12:00:00").getDay();
+          if (dow === 0) {
+            setDeselectedSundays(prev =>
+              prev.includes(date) ? prev.filter(d => d !== date) : [...prev, date],
+            );
+          } else {
+            setActiveSatDates(prev =>
+              prev.includes(date) ? prev.filter(d => d !== date) : [...prev, date],
+            );
+          }
+        }}
+        onAddSpecial={(date, name) => setSpecials(prev => [...prev.filter(s => s.date !== date), { date, name }])}
+        onRemoveSpecial={date => setSpecials(prev => prev.filter(s => s.date !== date))}
+      />
 
       {/*
         D13: the `useSolver` toggle is retired — the grid always offers Auto,
@@ -1448,10 +1514,17 @@ export default function MonthGenerator({
         <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
           Cancelar
         </button>
+        {/*
+          `disabled` uses the SAME predicate as `handlePreview`'s own gate: no
+          columns at all, specials included. A weekend-only predicate
+          (`!selectedSundays.length && !activeSatDates.length`) would disable
+          this button on a specials-only month — the headline capability of E2 —
+          with nothing shown to explain why.
+        */}
         <button
           type="button"
           onClick={handlePreview}
-          disabled={(!sundays && !saturdays) || !!gateBlocked}
+          disabled={columns.length === 0 || !!gateBlocked}
           title={gateBlocked ?? undefined}
           className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
         >

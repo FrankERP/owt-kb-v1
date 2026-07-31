@@ -674,19 +674,44 @@ describe("applySolveResponse", () => {
 });
 
 describe("mapUnfilledSeats", () => {
+  // The 4th argument is the SELECTED Sundays. Passing `FEB_SUNDAYS` twice is
+  // the explicit "all of them" these three pre-existing cases always meant.
   it("places a Sunday seat on its row and date", () => {
-    const out = mapUnfilledSeats(["W2 Sunday Sun.Choir #2"], FEB_SUNDAYS, FEB_SATURDAYS);
+    const out = mapUnfilledSeats(["W2 Sunday Sun.Choir #2"], FEB_SUNDAYS, FEB_SATURDAYS, FEB_SUNDAYS);
     expect(out).toEqual([{ date: "2026-02-08", rowId: "coro" }]);
   });
 
   it("places a Saturday seat on its row and adjacent date", () => {
-    const out = mapUnfilledSeats(["W2 Saturday Sat.BGV #1"], FEB_SUNDAYS, FEB_SATURDAYS);
+    const out = mapUnfilledSeats(["W2 Saturday Sat.BGV #1"], FEB_SUNDAYS, FEB_SATURDAYS, FEB_SUNDAYS);
     expect(out).toEqual([{ date: "2026-02-07", rowId: "bgv" }]);
   });
 
   it("drops a Saturday seat whose resolved date is not in the selected column set", () => {
-    const out = mapUnfilledSeats(["W2 Saturday Sat.BGV #1"], FEB_SUNDAYS, []); // no Saturdays selected
+    const out = mapUnfilledSeats(["W2 Saturday Sat.BGV #1"], FEB_SUNDAYS, [], FEB_SUNDAYS); // no Saturdays selected
     expect(out).toEqual([]);
+  });
+
+  // Work item 7: the Sunday branch resolved unconditionally while Saturday
+  // already filtered. Deleting the `selectedSun.has(...)` guard turns both of
+  // these green-to-red — nothing else in the suite notices.
+  it("drops a Sunday seat whose week resolves to a DESELECTED Sunday", () => {
+    const selected = FEB_SUNDAYS.filter((d) => d !== "2026-02-08");
+    const out = mapUnfilledSeats(["W2 Sunday Sun.Choir #2"], FEB_SUNDAYS, FEB_SATURDAYS, selected);
+    expect(out).toEqual([]);
+  });
+
+  // The dangerous shape of the same bug: a deselected Sunday that now carries a
+  // weekday special. Without the filter, week 2's unfilled Lead renders on a
+  // `special_role` column the solver was never asked about.
+  it("still resolves the week POSITIONALLY over the full spine — only the render is filtered", () => {
+    const selected = FEB_SUNDAYS.filter((d) => d !== "2026-02-01");
+    const out = mapUnfilledSeats(
+      ["W1 Sunday Sun.Lead #1", "W2 Sunday Sun.Lead #1"],
+      FEB_SUNDAYS,
+      [],
+      selected,
+    );
+    expect(out).toEqual([{ date: "2026-02-08", rowId: "lead" }]);
   });
 });
 
