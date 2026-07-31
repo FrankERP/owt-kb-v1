@@ -990,8 +990,13 @@ export function cellsToParticipantRoles(
       // stale Saturday `coro` cell — one that survived a column-type switch —
       // counted toward in-grid `load` in the candidate ranking while the write
       // path zeroed it and it never reached Sanity. Ranking against a seat that
-      // will never exist is exactly the number/strip drift `candidateRanking`
-      // exists to prevent.
+      // will never exist is the bug this closes.
+      //
+      // It does NOT close the number/strip drift for a special: `_type` is
+      // forwarded above, and `computeParticipation` skips `special_role`
+      // entirely (`:47`), so a special's seats add 0 to `load` while
+      // `serviceWeekKey` still gives it a week and the `recent` strip still
+      // lights. That is work item 5 / E12, and it is not resolved here.
       chorus: (columnShowsRowId(column.type, "coro") ? idsFor("coro") : []).map(toPerson),
       instruments,
       foh,

@@ -1025,7 +1025,9 @@ describe("a special column HAS a Coro row (E18)", () => {
     ];
     const drafts = cellsToDrafts([], columns, new Set(), [], []);
     expect(drafts.find((d) => d._type === "special_role")!.service_name).toBe("Vigilia de Oración");
-    expect(drafts.find((d) => d._type === "sunday_role")!.service_name).toBeUndefined();
+    // `in`, not `toBeUndefined()`: the key must be ABSENT, not present-and-undefined.
+    // `toBeUndefined()` passes either way, so it could not fail an unconditional spread.
+    expect("service_name" in drafts.find((d) => d._type === "sunday_role")!).toBe(false);
   });
 });
 
@@ -1141,11 +1143,15 @@ describe("a special contributes nothing to fairness history (E9/E20)", () => {
     expect(entry.total_counts).toEqual({});
   });
 
-  it("all three seat arrays are guarded, not just chorus — leads and bgvs are populated above and still count zero", () => {
+  it("all three seat arrays are guarded, not just chorus — the special's PEOPLE appear nowhere in the entry", () => {
+    // Asserted on the PERSON keys, not on the role-key strings: deleting the
+    // `leads`/`bgvs` guards bumps under the literal key `"null"`, which contains
+    // none of "Lead"/"BGV"/"Choir" — so a `not.toContain` on the serialized
+    // counts would pass through exactly the mutation this test names.
+    expect(specialDraft.leads.length + specialDraft.bgvs.length + specialDraft.chorus.length).toBe(4);
     const entry = historyEntryFromDrafts([specialDraft], members, 2026, 2)!;
-    expect(JSON.stringify(entry.role_counts)).not.toContain("Lead");
-    expect(JSON.stringify(entry.role_counts)).not.toContain("BGV");
-    expect(JSON.stringify(entry.role_counts)).not.toContain("Choir");
+    expect(Object.keys(entry.role_counts)).toEqual([]);
+    expect(Object.keys(entry.total_counts)).toEqual([]);
   });
 
   it("a Sunday in the same batch is unaffected — only the special's seats vanish", () => {
@@ -1313,10 +1319,21 @@ describe("buildColumns dedupes by date, weekend-first (E3, work item 13)", () =>
     expect(cols.find((c) => c.type === "special_role")!.serviceName).toBe("Vigilia");
   });
 
-  it("omitting `specials` entirely leaves the weekend-only behaviour byte-for-byte unchanged", () => {
-    expect(buildColumns({ sundayDates: FEB_SUNDAYS, activeSatDates: FEB_SATURDAYS })).toEqual(
-      buildColumns({ sundayDates: FEB_SUNDAYS, activeSatDates: FEB_SATURDAYS, specials: [] }),
-    );
+  it("omitting `specials` leaves the weekend-only output byte-for-byte what it was before the third input existed", () => {
+    // A GOLDEN list, not a comparison of the same call to itself: `specials = []`
+    // is the default, so comparing the two forms could only ever fail if the
+    // default were deleted. February 2026, all four Saturdays selected — Feb 28
+    // is a Saturday with no Sunday of its own in-month, and still gets a column.
+    expect(buildColumns({ sundayDates: FEB_SUNDAYS, activeSatDates: FEB_SATURDAYS })).toEqual([
+      { date: "2026-02-01", type: "sunday_role" },
+      { date: "2026-02-07", type: "saturday_role" },
+      { date: "2026-02-08", type: "sunday_role" },
+      { date: "2026-02-14", type: "saturday_role" },
+      { date: "2026-02-15", type: "sunday_role" },
+      { date: "2026-02-21", type: "saturday_role" },
+      { date: "2026-02-22", type: "sunday_role" },
+      { date: "2026-02-28", type: "saturday_role" },
+    ]);
   });
 });
 
