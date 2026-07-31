@@ -35,6 +35,7 @@ import {
   roleCreationReceiptsForRoleQuery,
   roleTargetLocksByIdsQuery,
 } from "@/app/utils/serviceReadQueries";
+import { normalizeServiceName } from "./normalizeLabel";
 import {
   canonicalGroupState,
   validateRole,
@@ -382,13 +383,15 @@ export async function loadTargetOccupancy(input: {
         : rawRoleDraftsForTargetQuery(input.roleType, input.date),
     ),
   ]);
-  const normalize = (v: unknown) =>
-    typeof v === "string" ? v.normalize("NFC").trim().replace(/\s+/g, " ") : "";
-  const wanted = normalize(input.serviceName);
+  // `normalizeServiceName` is the SHARED definition (`normalizeLabel.ts`) — the
+  // same one `roleCreationReceipt` fingerprints with and the same one the client
+  // planner grid keys its collision check with. It used to be re-implemented
+  // inline here, one silent edit away from letting a duplicate special through.
+  const wanted = normalizeServiceName(input.serviceName);
   return {
     canonicalRoleIds: rows
       .filter((r) => r._id !== input.excludeRoleId)
-      .filter((r) => !special || normalize(r.service_name) === wanted)
+      .filter((r) => !special || normalizeServiceName(r.service_name) === wanted)
       .map((r) => r._id),
     rawDraftIds: drafts.map((d) => d._id),
   };

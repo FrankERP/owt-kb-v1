@@ -30,6 +30,13 @@ const WEEKEND: GridColumn[] = buildColumns({
   activeSatDates: ["2026-08-08"],
 });
 
+// 2026-08-12 is a Wednesday — a weekday special (E2), no weekend column on it.
+const SPECIAL_ONLY: GridColumn[] = buildColumns({
+  sundayDates: [],
+  activeSatDates: [],
+  specials: [{ date: "2026-08-12", name: "Vigilia" }],
+});
+
 const members: RankMember[] = [
   { _id: "m1", member_name: "Frank", memberType: ["voz"] },
   { _id: "m2", member_name: "Gaby", memberType: ["voz"] },
@@ -132,6 +139,13 @@ describe("PlannerGrid — shape", () => {
     expect(container.querySelector('[data-row-id="coro"][data-date="2026-08-08"]')).toBeNull();
     expect(container.querySelector('[data-row-id="coro"][data-date="2026-08-09"]')).toBeTruthy();
   });
+
+  it("a special column header reads 'Especial', never 'Sábado' — the old ternary labelled every non-Sunday column Sábado", () => {
+    render(<PlannerGrid {...baseProps({ columns: SPECIAL_ONLY })} />);
+    expect(screen.getByText("Especial")).toBeTruthy();
+    expect(screen.queryByText("Sábado")).toBeNull();
+    expect(screen.queryByText("Domingo")).toBeNull();
+  });
 });
 
 describe("PlannerGrid — Domingos unchecked (D9)", () => {
@@ -179,6 +193,23 @@ describe("PlannerGrid — cell density (D7)", () => {
     expect(cellRoot.getAttribute("title")).toBeNull();
     fireEvent.click(plusButton);
     expect(screen.getByText(/Candidatos para Lead/)).toBeTruthy();
+  });
+
+  it("a SPECIAL column keeps the target cap and the +N — the P5 outcome `hasTarget` exists to protect", () => {
+    // `isSolvable` is false for every row on a special (E4/E5). Gating the cap
+    // on it — as this component used to — would silently drop both the cap and
+    // the amber over-target warning on every special column.
+    const cells: GridCell[] = [
+      { date: "2026-08-12", rowId: "lead", memberIds: ["m1", "m2", "m3"], origin: "manual" }, // target 2, +1
+    ];
+    const { container } = render(<PlannerGrid {...baseProps({ columns: SPECIAL_ONLY, cells })} />);
+    const cellRoot = cellFor(container, "lead", "2026-08-12");
+    expect(within(cellRoot).getByRole("button", { name: /ver 1 más/i })).toBeTruthy();
+  });
+
+  it("a special column renders an interactive Coro cell, unlike a Saturday (E18)", () => {
+    const { container } = render(<PlannerGrid {...baseProps({ columns: SPECIAL_ONLY })} />);
+    expect(container.querySelector('[data-row-id="coro"][data-date="2026-08-12"]')).not.toBeNull();
   });
 
   it("on a non-solvable row (Drums), TWO occupants render both names and no +N", () => {

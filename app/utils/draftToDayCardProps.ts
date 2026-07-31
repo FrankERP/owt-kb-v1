@@ -1,3 +1,5 @@
+import { SERVICE_LABEL } from "@/app/components/admin/serviceCardModel";
+
 export interface MemberLike { _id: string; member_name?: string; alias?: string }
 export interface DraftCardLike {
   _type: "sunday_role" | "saturday_role" | "special_role";
@@ -9,7 +11,19 @@ export interface DraftCardLike {
   foh: { role: string; personId: string }[];
 }
 export interface DayCardData {
-  day: "Domingo" | "Sábado";
+  /**
+   * The service-type label, from the shared `SERVICE_LABEL` record — so
+   * "Especial" is now a possible value and the union has widened to `string`.
+   *
+   * **Safe, deliberately, not dodged.** `DayCard`'s own prop is already
+   * `day: string` (`app/components/DayCard.tsx:14`), and both selectors that
+   * read it fall back for an unrecognised label: the theme to `SPECIAL_THEME`
+   * and the setlist type to `"special"` (`:79`, `:81-82`). Narrowing this back
+   * to a two-member union, or adding a third hardcoded ternary below to keep it
+   * narrow, would re-introduce exactly the label duplication `SERVICE_LABEL`
+   * exists to remove.
+   */
+  day: string;
   date: string;
   leads: string[];
   bgvs: { member_name: string; alias?: string }[];
@@ -44,7 +58,7 @@ export function draftToDayCardProps(draft: DraftCardLike, members: MemberLike[])
   const present = <T,>(x: T | undefined): x is T => x !== undefined;
 
   return {
-    day: draft._type === "saturday_role" ? "Sábado" : "Domingo",
+    day: SERVICE_LABEL[draft._type],
     date: draft.date,
     leads: draft.leads.map(name).filter(present),
     bgvs: draft.bgvs.map(obj).filter(present),

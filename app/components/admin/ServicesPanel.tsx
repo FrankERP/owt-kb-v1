@@ -66,6 +66,7 @@ import {
   type PublishOverrideLine,
   type ServiceCardModel,
   type ServiceRole,
+  type ServiceType,
   type SwapSource,
 } from "./serviceCardModel";
 import ServiceReadinessCard, {
@@ -1153,7 +1154,7 @@ export default function ServicesPanel() {
 
   /** Per-target month/create preflight over the currently observed bundle. */
   const preflightTarget = useCallback(
-    (type: "sunday_role" | "saturday_role", date: string) =>
+    (type: ServiceType, date: string) =>
       monthTargetPreflight({ sources, summaries, queue, type, date }),
     [sources, summaries, queue],
   );

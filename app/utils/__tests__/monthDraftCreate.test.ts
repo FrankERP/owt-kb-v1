@@ -136,3 +136,39 @@ describe("runDraftCreateBatch", () => {
     expect(attempts).toEqual(["req-draft-00000001", "req-draft-00000001"]);
   });
 });
+
+describe("draftCreateBody — special services", () => {
+  it("sends `service_name` for a special: without it `canonicalizeCreatePayload` raises issue \"service_name\" and every special 400s", () => {
+    const body = draftCreateBody(
+      draft({ _type: "special_role", service_name: "Vigilia de Oración" }),
+      false,
+    );
+    expect(body).toMatchObject({ _type: "special_role", service_name: "Vigilia de Oración" });
+  });
+
+  it("omits the key entirely for a weekend draft — a weekend role stores no service_name", () => {
+    expect("service_name" in draftCreateBody(draft({ _type: "sunday_role" }), false)).toBe(false);
+    expect("service_name" in draftCreateBody(draft({ _type: "saturday_role" }), false)).toBe(false);
+  });
+
+  it("sends an empty string rather than dropping the key for a nameless special — the server must see it and refuse", () => {
+    // Silently omitting it would make the 400 read as a malformed request
+    // instead of the missing name it actually is.
+    const body = draftCreateBody(draft({ _type: "special_role" }), false);
+    expect(body).toMatchObject({ service_name: "" });
+  });
+
+  it("carries a special through the batch like any other draft", async () => {
+    const bodies: unknown[] = [];
+    const result = await runDraftCreateBatch({
+      drafts: [draft({ localId: "s1", _type: "special_role", service_name: "Vigilia" })],
+      published: false,
+      post: async (body) => {
+        bodies.push(body);
+        return { ok: true } satisfies DraftPostOutcome;
+      },
+    });
+    expect(result.createdLocalIds).toEqual(["s1"]);
+    expect(bodies[0]).toMatchObject({ service_name: "Vigilia" });
+  });
+});

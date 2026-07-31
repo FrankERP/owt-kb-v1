@@ -19,6 +19,7 @@
 // differently (that is `409 idempotency_mismatch`, never a silent overwrite).
 
 import { createHash } from "node:crypto";
+import { normalizeLabel } from "@/app/utils/normalizeLabel";
 import { ROLE_TYPES, type RoleType } from "@/app/utils/serviceReadModel";
 import { serviceDayKey } from "@/app/utils/serviceReadSelect";
 
@@ -77,12 +78,12 @@ function nonEmptyString(v: unknown): v is string {
   return typeof v === "string" && v.length > 0;
 }
 
-/** NFC + trim + collapse internal whitespace. Case and accents are meaningful. */
-function normalizeLabel(v: unknown): string | null {
-  if (typeof v !== "string") return null;
-  const out = v.normalize("NFC").trim().replace(/\s+/g, " ");
-  return out.length ? out : null;
-}
+// `normalizeLabel` (NFC + trim + collapse internal whitespace; case and accents
+// meaningful) used to be defined here, hand-copied in `roleWriteRequest.ts` and
+// re-implemented inline in `roleWriteOps.ts`. It now lives in
+// `@/app/utils/normalizeLabel` so the CLIENT planner grid can key a special's
+// collision check with the identical function — this module is server-only
+// (`node:crypto` above) and must never be imported from a client bundle.
 
 /** Member ids as a sorted multiset: blanks dropped, genuine duplicates kept. */
 function canonicalRefs(v: unknown): string[] {

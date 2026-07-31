@@ -1052,6 +1052,191 @@ describe("month target preflight", () => {
       expect(PREFLIGHT_COPY[state].tone).toBeTruthy();
     }
   });
+
+  // ── The special branch (fact 7, work item 2) ──────────────────────────────
+  //
+  // A special's canonical key is its DOCUMENT ID, so the weekend `targetKey`
+  // lookup can never match it and `role` would default to "none" — always
+  // `creatable`, wrong in the dangerous direction. And it cannot be made
+  // name-aware: `RoleTarget` carries no `service_name`. So the branch is
+  // name-blind and E17's collision key in `cellsToDrafts` is the sole existence
+  // authority.
+
+  const SPECIAL_DAY = "2026-08-12"; // a Wednesday
+
+  it("keys a special by `special_role:<date>` and is creatable when every source is proven", () => {
+    const result = monthTargetPreflight({
+      sources: READY,
+      summaries: emptySummaries(),
+      queue: emptyQueue,
+      type: "special_role",
+      date: SPECIAL_DAY,
+    });
+    expect(result).toMatchObject({ state: "creatable", targetKey: `special_role:${SPECIAL_DAY}` });
+  });
+
+  it("never reaches `weekendProposalTargetKey` — a special on a Saturday's date is NOT blocked by that Saturday's proposal", () => {
+    // The trap the narrow signature exists to make impossible: widening
+    // `weekendProposalTargetKey` would key this to `saturday:<date>` and collide
+    // with the real Saturday target on the same day.
+    const saturdayDate = "2026-08-08";
+    const sums = emptySummaries();
+    sums.proposals = {
+      records: [
+        {
+          id: "prop-1",
+          targetKey: `saturday:${saturdayDate}`,
+          serviceRef: null,
+          state: "open",
+        } as unknown as NonNullable<CardSourceSummaries["proposals"]>["records"][number],
+      ],
+      serviceRefConflicts: [],
+      targetKeyConflicts: [],
+      recordIssues: [],
+      draftIds: [],
+    };
+    const asSaturday = monthTargetPreflight({
+      sources: READY,
+      summaries: sums,
+      queue: emptyQueue,
+      type: "saturday_role",
+      date: saturdayDate,
+    });
+    expect(asSaturday.state).toBe("blocked");
+    expect(asSaturday.reasons).toContain("proposal_history");
+
+    const asSpecial = monthTargetPreflight({
+      sources: READY,
+      summaries: sums,
+      queue: emptyQueue,
+      type: "special_role",
+      date: saturdayDate,
+    });
+    expect(asSpecial.state).toBe("creatable");
+  });
+
+  it("is name-blind: a canonical role recorded on the same DATE does not make it `exists`", () => {
+    const sums = emptySummaries();
+    sums.roles = {
+      targets: [
+        {
+          targetKey: `special_role:${SPECIAL_DAY}`,
+          type: "special_role",
+          canonicalCount: 1,
+          canonicalIds: ["role-1"],
+          canonicalState: "single",
+          publicState: "single",
+          memberVisibleCount: 1,
+          draftIds: [],
+          records: [],
+          expectsLock: false,
+          lock: null,
+          lockIssues: [],
+        },
+      ],
+      recordIssues: [],
+      lockIssues: [],
+    } as unknown as NonNullable<CardSourceSummaries["roles"]>;
+    const result = monthTargetPreflight({
+      sources: READY,
+      summaries: sums,
+      queue: emptyQueue,
+      type: "special_role",
+      date: SPECIAL_DAY,
+    });
+    // A SECOND, differently-named special on that date is legitimately
+    // creatable (E17), so reporting `exists` here would be wrong.
+    expect(result.state).toBe("creatable");
+  });
+
+  it("takes no weekend lock: a lock issue filed at its own target key never blocks it", () => {
+    // `LOCKABLE_ROLE_TYPES` excludes `special_role` (`roleTargetLock.ts:28`) and
+    // the write path takes no lock for one (`roleWriteRequest.ts:256-257`), so a
+    // lock issue naming this key is not a reason to refuse. The weekend path
+    // WOULD block on it — which is what makes the early return load-bearing.
+    const sums = emptySummaries();
+    sums.roles = {
+      targets: [],
+      recordIssues: [],
+      lockIssues: [
+        {
+          kind: "orphan_lock",
+          targetKey: `special_role:${SPECIAL_DAY}`,
+          lockId: `roleTargetLock.special_role.${SPECIAL_DAY}`,
+          roleId: "role-9",
+        },
+      ],
+    };
+    expect(
+      monthTargetPreflight({
+        sources: READY,
+        summaries: sums,
+        queue: emptyQueue,
+        type: "special_role",
+        date: SPECIAL_DAY,
+      }).state,
+    ).toBe("creatable");
+
+    // The same-shaped issue on a WEEKEND target still blocks — proving the
+    // assertion above is about `expectsLock`, not about the fixture being inert.
+    const weekendSums = emptySummaries();
+    weekendSums.roles = {
+      targets: [],
+      recordIssues: [],
+      lockIssues: [
+        {
+          kind: "orphan_lock",
+          targetKey: `sunday_role:${WEEK}`,
+          lockId: `roleTargetLock.sunday_role.${WEEK}`,
+          roleId: "role-9",
+        },
+      ],
+    };
+    expect(
+      monthTargetPreflight({
+        sources: READY,
+        summaries: weekendSums,
+        queue: emptyQueue,
+        type: "sunday_role",
+        date: WEEK,
+      }).state,
+    ).toBe("blocked");
+  });
+
+  it("stays SOURCE-GATED: a loading domain is `checking` and a failed one `unknown`, exactly as for a weekend target", () => {
+    expect(
+      monthTargetPreflight({
+        sources: { ...READY, proposals: "loading" },
+        summaries: emptySummaries(),
+        queue: emptyQueue,
+        type: "special_role",
+        date: SPECIAL_DAY,
+      }).state,
+    ).toBe("checking");
+
+    expect(
+      monthTargetPreflight({
+        sources: { ...READY, setlistTargets: "error" },
+        summaries: { ...emptySummaries(), setlists: null },
+        queue: emptyQueue,
+        type: "special_role",
+        date: SPECIAL_DAY,
+      }).state,
+    ).toBe("unknown");
+  });
+
+  it("stays `unknown` when a source is ready but its inventory is unproven — never silently creatable", () => {
+    for (const domain of ["roles", "setlists", "proposals"] as const) {
+      const result = monthTargetPreflight({
+        sources: READY,
+        summaries: { ...emptySummaries(), [domain]: null },
+        queue: emptyQueue,
+        type: "special_role",
+        date: SPECIAL_DAY,
+      });
+      expect(result.state, domain).toBe("unknown");
+    }
+  });
 });
 
 // ── 10. Narrow-viewport class invariants ─────────────────────────────────────

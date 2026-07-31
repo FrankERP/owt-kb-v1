@@ -101,7 +101,10 @@ function stubUnreachableFetch() {
 }
 
 function makePreflight(stateFor: (date: string) => TargetPreflightState) {
-  return (type: "sunday_role" | "saturday_role", date: string): TargetPreflight => ({
+  // Widened with `ColumnType`: the `preflight` prop is function-typed, so under
+  // `strict: true` a narrow parameter here is a contravariance error, and `tsc`
+  // checks this file (`tsconfig.json` includes `**/*.tsx`, no test exclusion).
+  return (type: "sunday_role" | "saturday_role" | "special_role", date: string): TargetPreflight => ({
     targetKey: `${type}__${date}`,
     state: stateFor(date),
     reasons: [],
