@@ -16,8 +16,10 @@ import {
   buildSolveRequest,
   applySolveResponse,
   cellsToDrafts,
+  draftTargetKey,
   historyEntryFromDrafts,
   mapUnfilledSeats,
+  namelessSpecial,
   unaddressableDates as computeUnaddressableDates,
   type DraftCard,
   type GridCell,
@@ -981,11 +983,28 @@ export default function MonthGenerator({
   const [cells, setCells]         = useState<GridCell[]>([]);
   const [skippedDates, setSkippedDates] = useState<Set<string>>(new Set());
   const [drafts, setDrafts]       = useState<DraftCard[]>([]);
-  // `localId`s this session has itself confirmed-created, across every confirm
-  // this dialog instance makes. Session-scoped (not persisted, not derived
-  // from props) so it can never be polluted by `existingRoles` refreshing
-  // after `onCreated()` — see `handleConfirm`'s history derivation below.
-  const createdThisSession = useRef<Set<string>>(new Set());
+  /**
+   * **P2: the one thing standing between a rename and a duplicate
+   * `special_role`.** The TARGETS (`draftTargetKey` — `type__date`, the same
+   * string `cellsToDrafts` keys identity by) this dialog instance has itself
+   * confirmed-created, across every confirm it makes.
+   *
+   * Session-scoped: never persisted, never derived from props, so an
+   * `existingRoles` refresh after `onCreated()` can neither pollute it nor
+   * erase it.
+   *
+   * **Keyed by target, NOT by `localId`.** `handlePreview` rebuilds the drafts
+   * with `previous: []`, which re-mints every `localId`, so a `localId`-keyed
+   * set goes blind the moment the admin walks "← Volver → rename → Previsualizar
+   * →" — precisely the path that produces a second document on the same date.
+   *
+   * **And never `d.exists`.** `exists` survives a rename while `isExisting`
+   * does not, and after `onCreated()` refreshes `existingRoles` a date this
+   * session created is indistinguishable from one that predates it. Reading
+   * either here would refuse a legitimately-new special ("Crear 0 borradores",
+   * no error, no explanation) or miss the duplicate outright.
+   */
+  const createdTargets = useRef<Set<string>>(new Set());
   const [unresolvedNames, setUnresolvedNames] = useState<string[]>([]);
   const [unfilled, setUnfilled]   = useState<{ date: string; rowId: string }[]>([]);
   const [diagnostics, setDiagnostics] = useState<SolveDiagnostics | null>(null);
@@ -1172,6 +1191,38 @@ export default function MonthGenerator({
     return map;
   }, [drafts, preflight]);
 
+  /**
+   * **THE create-gate predicate — one definition, three consumers.** It used to
+   * be written out three times (`candidates` in `handleConfirm`, `toCreate` and
+   * `notCreatable` at render), which is how a fix can land on the post path and
+   * miss the buttons: `toCreate` gates BOTH "Crear N borrador(es)" (its label
+   * AND its disabled state) and "Crear y publicar", so a draft this dialog has
+   * already created but which still passes `toCreate` produces a live button
+   * offering to create something `handleConfirm` will then decline to post —
+   * and `handleConfirm`'s `if (!toCreateNow.length) return` sets no
+   * `pushError`, so the admin is told nothing at all. Three surfaces, three
+   * different answers. Deriving all three from this one function is what makes
+   * that state unrepresentable.
+   *
+   * The three refusals, in order:
+   *  - `skipped`: the admin's own Omitir toggle, or a stored document already
+   *    occupying this exact target (`cellsToDrafts`).
+   *  - `createdTargets`: THIS session already created this target. The only
+   *    signal that survives a rename (`previous: []` re-mints `localId`) and an
+   *    `existingRoles` refresh (`exists`/`isExisting` both go untrustworthy),
+   *    and the only defence against a second `special_role` on a date — the
+   *    preflight's special branch is name-blind and can answer nothing but
+   *    `creatable` (`serviceCardModel.ts`).
+   *  - the A1/A2 preflight when there is one; `!d.exists` only as the
+   *    standalone dialog's fallback, where it also carries the retry semantics
+   *    (a failed draft keeps `exists: false` and stays postable).
+   */
+  function isCreatable(d: DraftCard): boolean {
+    if (d.skipped) return false;
+    if (createdTargets.current.has(draftTargetKey(d._type, d.date))) return false;
+    return preflight ? preflights.get(d.localId)?.state === "creatable" : !d.exists;
+  }
+
   function requestBack() {
     if (assignmentCount > 0) { setPendingDiscard("back"); return; }
     goBackToConfig();
@@ -1239,6 +1290,19 @@ export default function MonthGenerator({
     const typeOf = (d: string) => columns.find(c => c.date === d)?.type;
     const typeA = typeOf(a);
     const typeB = typeOf(b);
+    // P4: a special is never swappable, not even with another special. The swap
+    // exchanges CELLS between two date columns and moves nothing else — the
+    // `service_name` stays with its date (it comes from `specials`, which this
+    // handler does not touch). So "swap Bautizos with Vigilia" would silently
+    // leave each roster under the other service's name, which is the opposite
+    // of what the admin just asked for. Checked BEFORE the cross-type refusal
+    // below so a special↔weekend attempt names the more specific reason.
+    if (typeA === "special_role" || typeB === "special_role") {
+      setSwapSel(null);
+      setSwapToast("No se puede intercambiar un servicio especial: su nombre se queda en su fecha.");
+      setTimeout(() => setSwapToast(null), 2500);
+      return;
+    }
     if (typeA !== typeB) {
       setSwapSel(null);
       // Named from the shared `SERVICE_LABEL`, not hardcoded: specials are
@@ -1349,12 +1413,29 @@ export default function MonthGenerator({
     // whole post rather than creating against a stale observation.
     if (gateBlocked) { setPushError(gateBlocked); return; }
 
-    // With a preflight the observed target state is the ONLY authority on what may
-    // be created; the local `exists` flag is a fallback for the standalone dialog.
-    const candidates = drafts.filter(d =>
-      !d.skipped &&
-      (preflight ? preflights.get(d.localId)?.state === "creatable" : !d.exists),
-    );
+    // The SHARED predicate — same one `toCreate` and `notCreatable` use below,
+    // so the button's label, the button's enabled state and what actually gets
+    // posted can never disagree.
+    const candidates = drafts.filter(isCreatable);
+
+    // Work item 9: a nameless special is a guaranteed `400 invalid_request`
+    // (`canonicalizeCreatePayload` files issue "service_name" for a
+    // `special_role` whose name normalizes to empty), and `runDraftCreateBatch`
+    // would report it as an anonymous "no se pudo crear" among the rest. The
+    // admin can fix it in one action — name it — so say that instead of posting
+    // it. Normalized through the SAME `normalizeLabel` the server validates
+    // with, never a bare `.trim()`, so client and server agree on what "empty"
+    // means. A second lock: `MonthCalendar`'s composer already refuses to ADD a
+    // nameless special (`submitSpecial`), which is why this guard is stated as
+    // a pure predicate and pinned there rather than through the calendar.
+    const nameless = candidates.filter(namelessSpecial);
+    if (nameless.length > 0) {
+      setPushError(
+        `${nameless.length} servicio(s) especial(es) no tienen nombre. Ponles nombre antes de crear.`,
+      );
+      return;
+    }
+
     let toCreateNow = candidates;
     if (preflight) {
       // Re-observe every candidate NOW: a target that stopped being `creatable`
@@ -1373,6 +1454,13 @@ export default function MonthGenerator({
         return;
       }
     }
+    // Silent by design, and now UNREACHABLE from an enabled button: `candidates`
+    // and `toCreate` are the same predicate, so an empty `candidates` means both
+    // Crear buttons were already disabled and this handler was never entered by
+    // a click. The only way past it is the preflight re-check above, which
+    // returns with its own `pushError` first. This used to be the exit for
+    // "the button offered a create the confirm path had already ruled out" —
+    // pressed, told nothing, given nothing.
     if (!toCreateNow.length) return;
     setPushing(true);
     setPushError(null);
@@ -1407,10 +1495,13 @@ export default function MonthGenerator({
     // the failed/unknown drafts — with their original request ids.
     const created = new Set(result.createdLocalIds);
     if (created.size) setDrafts(prev => prev.map(d => created.has(d.localId) ? { ...d, exists: true } : d));
-    // Accumulate this confirm's successes into the SESSION-scoped ref (not
-    // just this call's `created`) so a later confirm in the same dialog still
-    // recognises them even after `onCreated()` below refreshes `existingRoles`.
-    for (const localId of created) createdThisSession.current.add(localId);
+    // Accumulate this confirm's successes into the SESSION-scoped ref, keyed by
+    // TARGET (see `createdTargets`). This is the write that closes P2: from
+    // here on `isCreatable` refuses every one of these targets, so no second
+    // confirm — and no rename in between — can post them again.
+    for (const draft of toCreateNow) {
+      if (created.has(draft.localId)) createdTargets.current.add(draftTargetKey(draft._type, draft.date));
+    }
     // Fairness history is recomputed from the UNION of what this batch just
     // created and what this dialog session has created across ALL its
     // confirms — never from `d.exists`. `d.exists` conflates two different
@@ -1423,7 +1514,7 @@ export default function MonthGenerator({
     // the dates THIS session just created become `isExisting` too. A grid
     // interaction after that re-runs `cellsToDrafts` with the refreshed prop
     // and `d.exists` is then true for both old and new dates alike — there is
-    // no way to tell them apart from the draft alone. `createdThisSession` is
+    // no way to tell them apart from the draft alone. `createdTargets` is
     // the one signal that survives the refresh, because it is never derived
     // from props: it only grows when THIS component instance's own confirms
     // succeed. Recomputing the whole month's union on every confirm and
@@ -1432,7 +1523,21 @@ export default function MonthGenerator({
     // took to get there. A fully failed batch with no prior successes records
     // nothing; `historyEntryFromDrafts` returns `null` for an empty list, so
     // this stays a no-op either way.
-    const historyDrafts = drafts.filter(d => created.has(d.localId) || createdThisSession.current.has(d.localId));
+    //
+    // **P1's SECOND LOCK: no `special_role` ever reaches the fairness history.**
+    // The first is `HISTORY_ROLE_KEYS`' all-null entry for `special_role`
+    // (`plannerModel.ts`), which zeroes a special's seats. That alone is not
+    // enough: `historyEntryFromDrafts` only returns `null` for an EMPTY list, so
+    // a special-only confirm hands it a non-empty list and gets back a real
+    // entry with empty counts — and `saveHistoryEntry` replaces by
+    // `${year}-${month}`, so creating one Vigilia would WIPE that month's real
+    // Sunday counts and consume one of the six `MAX_HISTORY` slots
+    // `buildSolveRequest` feeds the solver. Filtering here means
+    // `saveHistoryEntry` is not called at all on a special-only confirm.
+    const historyDrafts = drafts.filter(d =>
+      d._type !== "special_role" &&
+      (created.has(d.localId) || createdTargets.current.has(draftTargetKey(d._type, d.date))),
+    );
     const entry = historyEntryFromDrafts(historyDrafts, members, year, month);
     if (entry) saveHistoryEntry(entry.year, entry.month, entry.total_counts, entry.role_counts);
     // Refresh so the list reflects whatever actually got created.
@@ -1450,13 +1555,32 @@ export default function MonthGenerator({
     }
   }
 
-  const toCreate = drafts.filter(d =>
-    !d.skipped && (preflight ? preflights.get(d.localId)?.state === "creatable" : !d.exists),
-  );
+  // All three derive from `isCreatable` — see its doc comment for why writing
+  // the predicate out again here is the specific bug this shape prevents.
+  // `toCreate` gates both footer buttons AND the "Crear N borrador(es)" label;
+  // `notCreatable` is its exact complement among non-skipped drafts, so nothing
+  // can fall between them and go uncounted.
+  const toCreate = drafts.filter(isCreatable);
   const skippedCount = drafts.filter(d => d.skipped).length;
-  const notCreatable = drafts.filter(d =>
-    !d.skipped && (preflight ? preflights.get(d.localId)?.state !== "creatable" : d.exists),
-  ).length;
+  const notCreatable = drafts.filter(d => !d.skipped && !isCreatable(d)).length;
+
+  /**
+   * E17's missing channel. `PlannerGrid` gets `skipped: Set<string>` (the
+   * admin's own toggle) and `preflightFor` — and neither can say "this column
+   * will not be created because something already occupies it". The preflight
+   * cannot: its special branch is name-blind and answers `creatable` for a date
+   * that already holds that very special. `skippedDates` cannot: the
+   * exists-driven skip never enters it, so the checkbox rendered UNCHECKED
+   * while `handleConfirm` posted nothing. Both reasons are carried on the draft
+   * (`isExisting`) or in this session's own ref, so they are resolved here and
+   * handed over as one explicit answer per column.
+   */
+  const draftByTarget = new Map(drafts.map(d => [draftTargetKey(d._type, d.date), d]));
+  const createBlockFor = (col: { type: ServiceType; date: string }): "existing" | "created" | null => {
+    const key = draftTargetKey(col.type, col.date);
+    if (createdTargets.current.has(key)) return "created";
+    return draftByTarget.get(key)?.isExisting ? "existing" : null;
+  };
 
   const autoState: AutoState = { pending: autoPending, error: autoError, disabledReason: gateBlocked };
 
@@ -1668,6 +1792,7 @@ export default function MonthGenerator({
           members={members}
           savedWindow={savedWindow}
           preflightFor={col => (preflight ? preflight(col.type, col.date) : null)}
+          createBlockFor={createBlockFor}
           skipped={skippedDates}
           unaddressableDates={unaddressableDatesList}
           unresolvedNames={unresolvedNames}

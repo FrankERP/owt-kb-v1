@@ -88,6 +88,21 @@ export interface PlannerGridProps {
   /** D12: `recent` comes from this alone. */
   savedWindow: ParticipantRole[];
   preflightFor: (c: GridColumn) => TargetPreflight | null;
+  /**
+   * E17: why this column will NOT be created, when the reason is not the
+   * admin's own "Omitir" toggle — `"existing"` (a stored service already
+   * occupies this exact target, name included for a special) or `"created"`
+   * (this generator session already created it). `null` when it is creatable
+   * as far as this channel knows.
+   *
+   * Neither reason is derivable here. `preflightFor` cannot see them (its
+   * special branch is name-blind and reports `creatable` for a date that
+   * already holds that same special), and `skipped` never contains them. Before
+   * this prop the header lied twice on a special that already existed: the
+   * checkbox rendered unchecked and the badge read "Se puede crear", while
+   * `handleConfirm` quietly posted nothing.
+   */
+  createBlockFor: (c: GridColumn) => "existing" | "created" | null;
   /** By column date. */
   skipped: Set<string>;
   /**
@@ -180,6 +195,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
     members,
     savedWindow,
     preflightFor,
+    createBlockFor,
     skipped,
     unaddressableDates,
     unresolvedNames,
@@ -465,6 +481,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
               key={column.date}
               column={column}
               preflight={preflightFor(column)}
+              createBlock={createBlockFor(column)}
               skipped={skipped.has(column.date)}
               unaddressable={unaddressableSet.has(column.date)}
               onToggleSkip={() => onToggleSkip(column.date)}
@@ -533,15 +550,30 @@ export default function PlannerGrid(props: PlannerGridProps) {
 
 // ── Column header ────────────────────────────────────────────────────────────
 
+/**
+ * Spanish reasons for the two states `createBlockFor` reports. Named per
+ * column TYPE for `"existing"` because "ya existe un servicio especial con ese
+ * nombre" is a different fact from "ya existe un servicio ese día": a second,
+ * differently-named special on the same date IS creatable, and copy that said
+ * otherwise would send the admin looking for a conflict that isn't there.
+ */
+const CREATE_BLOCK_COPY = {
+  created: "Ya lo creaste en esta sesión.",
+  existingSpecial: "Ya existe un servicio especial con este nombre en esta fecha.",
+  existingWeekend: "Ya existe un servicio en esta fecha.",
+} as const;
+
 function ColumnHeader({
   column,
   preflight,
+  createBlock,
   skipped,
   unaddressable,
   onToggleSkip,
 }: {
   column: GridColumn;
   preflight: TargetPreflight | null;
+  createBlock: "existing" | "created" | null;
   skipped: boolean;
   unaddressable: boolean;
   onToggleSkip: () => void;
@@ -552,19 +584,43 @@ function ColumnHeader({
   // The shared `Record<ServiceType, string>` — not a third hardcoded ternary.
   // The old one read "Sábado" on every special column.
   const typeLabel = SERVICE_LABEL[column.type];
+  const blockCopy =
+    createBlock === "created"
+      ? CREATE_BLOCK_COPY.created
+      : createBlock === "existing"
+        ? column.type === "special_role"
+          ? CREATE_BLOCK_COPY.existingSpecial
+          : CREATE_BLOCK_COPY.existingWeekend
+        : null;
 
   return (
-    <div className={`min-w-[150px] space-y-1 px-1 ${skipped ? "opacity-40" : ""}`}>
+    <div className={`min-w-[150px] space-y-1 px-1 ${skipped || blockCopy ? "opacity-40" : ""}`}>
       <div className="flex items-center gap-1.5">
         <span className="font-display text-sm leading-none">{day}</span>
         <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">{month}</span>
       </div>
       <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">{typeLabel}</span>
+      {/* A blocked column is skipped whatever the toggle says, so the checkbox
+          shows it as skipped and refuses the toggle instead of offering an
+          un-skip that changes nothing. */}
       <label className="flex items-center gap-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
-        <input type="checkbox" checked={skipped} onChange={onToggleSkip} aria-label={`Omitir ${column.date}`} />
+        <input
+          type="checkbox"
+          checked={skipped || blockCopy !== null}
+          disabled={blockCopy !== null}
+          onChange={onToggleSkip}
+          aria-label={`Omitir ${column.date}`}
+        />
         Omitir
       </label>
-      {preflight && (
+      {blockCopy && (
+        <p className={`font-body text-[10px] text-amber-400 ${CARD_STYLE.longText}`}>{blockCopy}</p>
+      )}
+      {/* Suppressed while blocked: the preflight's special branch is name-blind,
+          so its badge would read "Se puede crear" right beside the reason this
+          column will not be created. A genuinely blocked/unknown preflight
+          still has something to say and is rendered below. */}
+      {preflight && !(blockCopy && preflight.state === "creatable") && (
         <div>
           <span
             className={`inline-flex rounded-full border px-1.5 py-0.5 font-label text-[10px] uppercase tracking-widest ${TONE_CLASS[PREFLIGHT_COPY[preflight.state].tone]}`}
