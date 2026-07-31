@@ -16,6 +16,8 @@ import {
   type ParticipantRole,
 } from "@/app/utils/computeParticipation";
 import type { SeatCategory, SeatDef } from "./seatModel";
+import { evaluate } from "./ruleEnforcement";
+import type { GridColumn, SolverConfig } from "./plannerModel";
 
 export interface RankMember {
   _id: string;
@@ -41,6 +43,24 @@ export interface RankedCandidate {
   alreadyAssigned: boolean;
   /** Non-null = may NOT be selected, with the Spanish reason. */
   blockedReason: string | null;
+  /**
+   * Non-null = a HARD solver rule refuses ADDING this member here, with the
+   * Spanish reason (E6). **A separate field from `blockedReason` on purpose**:
+   * the two are different refusals with different copy, and the picker has to be
+   * able to say which one it is. Task 8/9's manual-pick refusal reads BOTH.
+   * Always `null` when no `config` is passed.
+   */
+  ruleBlockedReason: string | null;
+  /**
+   * The FILLER's composite verdict (P7/P8) — `¬blockedReason ∧
+   * ¬ruleBlockedReason ∧ available`. **The manual picker must NOT read this.**
+   * It folds in `available`, and availability is a `+10` sort penalty for a
+   * human clicking, never a block (fact 19, a stated non-goal): wiring the UI
+   * to `eligible` would turn unavailability into a hard block on two shipped
+   * surfaces. A person can override a penalty knowingly; Task 7's loop cannot,
+   * which is why the loop gets the stricter predicate.
+   */
+  eligible: boolean;
   /** Services in the window, on the participation week rule. */
   load: number;
   /** One cell per week, oldest first. */
@@ -82,8 +102,23 @@ export function rankCandidates(input: {
   windowRoles: ParticipantRole[];
   assigned: AssignedSeat[];
   weeks?: number;
+  /**
+   * The column being edited. **Optional** — `SeatBoard` called this with no
+   * column for two shipped releases and must keep compiling. Without it no
+   * pattern's service half can be matched, so every rule is out of scope and
+   * `ruleBlockedReason` stays `null`.
+   */
+  column?: GridColumn;
+  /** The month's full Sunday spine; only week exclusions need it (E7, E21). */
+  sundayDates?: string[];
+  /**
+   * The rules. **Optional** — `SeatBoard` has no access to the solver config
+   * (fact 25) until Task 9 moves it to Sanity, so its behaviour is provably
+   * unchanged until then.
+   */
+  config?: SolverConfig;
 }): RankedCandidate[] {
-  const { seat, date, members, windowRoles, assigned } = input;
+  const { seat, date, members, windowRoles, assigned, column, sundayDates, config } = input;
   const weeks = input.weeks ?? 4;
 
   // Load comes from the shipped counter so the week rule (Saturday counts toward
@@ -138,17 +173,35 @@ export function rankCandidates(input: {
       const strip = weekKeys.map((k) => servedInWeek.get(k)?.has(m._id) ?? false);
       // Pad on the left so every strip is the same width regardless of history.
       const recent = [...Array(Math.max(0, weeks - strip.length)).fill(false), ...strip];
+      const available = !(m.unavailableDates ?? []).includes(date);
+      // `seat` crosses as the row: for every voice seat `seat.id === row.id`,
+      // and the rules only ever bind voice rows.
+      const verdict = evaluate({ member: m, row: seat, column, sundayDates, assigned, members, config });
+      const ruleBlockedReason = verdict.blocked ? verdict.reason : null;
       return {
         id: m._id,
         name: displayName(m),
-        available: !(m.unavailableDates ?? []).includes(date),
+        available,
         alreadyAssigned: heldSeats.some((held) => held.seatId !== seat.id),
         blockedReason,
+        ruleBlockedReason,
+        eligible: !blockedReason && !ruleBlockedReason && available,
         load: loadById.get(m._id) ?? 0,
         recent,
       };
     });
 
+  // THE SORT IS DELIBERATELY UNCHANGED (P7b), in two respects:
+  //
+  //  • No fairness term. The user settled this: "I don't want them necessarily
+  //    buried, just not pushed up top always, if it's just visual then it
+  //    doesn't matter." Ordering here is visual, so the smallest correct change
+  //    is none. The filler's `effectiveLoad` (Task 7) is the only place exempt
+  //    and slack members move, and it never touches `load`, which is rendered.
+  //  • `ruleBlockedReason` is NOT a sort key. A rule-blocked candidate keeps its
+  //    load-ordered position and renders disabled with the rule named — E6
+  //    accepts that the people a rule protects sit at the top of every list;
+  //    that is precisely WHY the rule has to be hard rather than a nudge.
   const rank = (c: RankedCandidate) =>
     (c.blockedReason ? 100 : 0) + (c.available ? 0 : 10) + (c.alreadyAssigned ? 1 : 0);
 

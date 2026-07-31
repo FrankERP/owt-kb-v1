@@ -109,9 +109,15 @@ export default function SeatBoard(props: SeatBoardProps) {
     [seats, occupancy],
   );
 
+  // `column` scopes any rule's service half. Passing it now changes NOTHING —
+  // no `config` reaches this surface until Task 9 moves the rules out of
+  // `MonthGenerator`'s localStorage (fact 25), and with no config
+  // `ruleBlockedReason` is always `null`. It is threaded here so Task 9 adds a
+  // config and nothing else. Note the standing asymmetry: this board has no
+  // Sunday spine, so week exclusions (E7) stay unevaluable here even then.
   const candidates = useMemo(
-    () => rankCandidates({ seat: target, date, members, windowRoles, assigned }),
-    [target, date, members, windowRoles, assigned],
+    () => rankCandidates({ seat: target, date, members, windowRoles, assigned, column: { date, type } }),
+    [target, date, type, members, windowRoles, assigned],
   );
 
   function toggle(memberId: string) {
