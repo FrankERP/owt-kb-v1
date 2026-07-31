@@ -6,6 +6,11 @@
 // returns and decides nothing; `MonthGenerator` (Task 4) owns the fetch, the
 // `cells` state, and threading `previous` across calls.
 //
+// ONE deliberate exception to "pure": `buildColumns` logs a `console.warn` when
+// it drops a duplicate-date column. Reaching that line is already a bug (E3),
+// and a silent structural dedupe is exactly the kind of correction that hides
+// the defect it corrects. Nothing reads the warning; it is not a return value.
+//
 // Six things adversarial review found broken in the code this replaces —
 // every test in the sibling `__tests__/plannerModel.test.ts` exists because
 // one of these was verified, not guessed:
@@ -40,6 +45,7 @@ import {
   type SeatDef,
 } from "./seatModel";
 import { newCreationRequestId } from "@/app/utils/monthDraftCreate";
+import { normalizeServiceName } from "@/app/utils/normalizeLabel";
 
 // ─── Grid shape ───────────────────────────────────────────────────────────────
 
@@ -60,11 +66,22 @@ export interface GridRow {
   target: number | null;
 }
 
-export type ColumnType = "sunday_role" | "saturday_role";
+export type ColumnType = "sunday_role" | "saturday_role" | "special_role";
 
 export interface GridColumn {
   date: string;
   type: ColumnType;
+  /**
+   * SPECIALS ONLY — the `service_name` a `special_role` document is identified
+   * by, alongside its date (`roleCreationReceipt`'s
+   * `special_role:${date}:${name}`). Never set on a weekend column: a weekend
+   * role stores no `service_name` and a stray one would not change its
+   * fingerprint anyway.
+   *
+   * It is deliberately NOT part of draft IDENTITY (E19) — see `cellsToDrafts`,
+   * where it feeds the collision key and nothing else.
+   */
+  serviceName?: string;
 }
 
 // ─── Draft cards (the create-path shape `MonthGenerator` already posts) ──────
@@ -89,6 +106,8 @@ export interface DraftCard {
   creationRequestId: string;
   _type: ServiceType;
   date: string;
+  /** Specials only — carried through to the POST body as `service_name`. */
+  service_name?: string;
   exists: boolean;
   skipped: boolean;
   leads: string[];
@@ -101,6 +120,13 @@ export interface DraftCard {
 export interface ExistingRoleRef {
   _type: string;
   date: string;
+  /**
+   * Present on `special_role` documents only. Without it, ONE special stored on
+   * a date would mark EVERY special column on that date `skipped: true` (E17) —
+   * never posted, and silently, since the "Omitir" checkbox renders
+   * `skippedDates` alone.
+   */
+  service_name?: string;
 }
 
 // ─── Solver config + fairness history (mirrors `MonthGenerator`'s local types
@@ -192,7 +218,7 @@ export function buildRows(input: { instrumentSeats?: string[]; fohSeats?: string
 }
 
 /**
- * Whether a row exists at all on a given column.
+ * Row ids a column type does NOT show, keyed by column type.
  *
  * **A Saturday service has no Coro.** That is the domain rule, confirmed by the
  * team and matched by the data: 0 of 8 stored `saturday_role` documents carry a
@@ -201,21 +227,69 @@ export function buildRows(input: { instrumentSeats?: string[]; fohSeats?: string
  * capability the old UI offered — but that capability was an artifact of
  * `ServiceForm` showing one Coro picker for every service type, not something
  * the team ever used. Offering it invites an assignment that should not exist.
+ *
+ * **A special DOES have a Coro** (E18), matching `SeatBoard`, which already
+ * creates specials with Coro, instruments and FOH (`SeatBoard.tsx:219`, `:241`,
+ * `:83-86`) — only `saturday_role` drops it there too.
+ *
+ * A `Record<ColumnType, …>` rather than a chain of `===`: a fourth column type
+ * is then a `tsc` error here instead of silently inheriting "shows everything".
  */
+const HIDDEN_ROW_IDS: Record<ColumnType, readonly string[]> = {
+  sunday_role: [],
+  saturday_role: ["coro"],
+  special_role: [],
+};
+
+/**
+ * Whether a column type shows a given row id at all. The ONE authority — both
+ * `rowAppliesTo` (what the grid renders) and `cellsToDrafts` (what the write
+ * commits) go through it, so E18's standing requirement that the two agree is
+ * structural rather than two conditions someone has to keep in step.
+ * `cellsToDrafts` receives no `rows`, which is why this takes a bare row id.
+ */
+export function columnShowsRowId(type: ColumnType, rowId: string): boolean {
+  return !HIDDEN_ROW_IDS[type].includes(rowId);
+}
+
+/** Whether a row exists at all on a given column. */
 export function rowAppliesTo(row: GridRow, column: GridColumn): boolean {
-  if (row.id === "coro") return column.type === "sunday_role";
-  return true;
+  return columnShowsRowId(column.type, row.id);
 }
 
 /**
- * Whether **Auto** fills this cell. A row that does not apply is never solvable;
- * beyond that, the solver covers Lead and BGV on both service types and Coro on
- * Sundays only, and instrument and FOH rows are always manual (D5).
+ * Whether **Auto** (the CP-SAT solve) fills this cell. A row that does not apply
+ * is never solvable; beyond that, the solver covers Lead and BGV on both
+ * WEEKEND service types and Coro on Sundays only, and instrument and FOH rows
+ * are always manual (D5).
+ *
+ * **Specials are never solvable** (E4/E5): they are never sent to the solver, so
+ * nothing in a response can name one. `weekForColumn` returning `null` for a
+ * special is the real defense on the response side — this exclusion is belt and
+ * braces, and it is stated rather than left implied, because the pre-widening
+ * version had no column-type test at all and would have answered `true`.
  */
 export function isSolvable(row: GridRow, column: GridColumn): boolean {
+  if (column.type === "special_role") return false;
   if (!rowAppliesTo(row, column)) return false;
   if (row.category !== "voz") return false;
   return row.id === "lead" || row.id === "bgv" || row.id === "coro";
+}
+
+/**
+ * Whether D7's `target` cap and the amber over-target `+N` apply to this cell.
+ *
+ * Separated from `isSolvable`, whose name hid this second, unrelated consumer
+ * (`PlannerGrid.tsx`'s `GridCellView`). They agree exactly on weekend columns —
+ * a voice row carrying a `target` is precisely a solvable one there — and
+ * diverge on a special, which must keep the cap and the `+N` while being
+ * unsolvable. Overloading `isSolvable` for both would have silently dropped
+ * both on every special column.
+ */
+export function hasTarget(row: GridRow, column: GridColumn): boolean {
+  if (!rowAppliesTo(row, column)) return false;
+  if (row.category !== "voz") return false;
+  return row.target != null;
 }
 
 /**
@@ -227,11 +301,39 @@ export function buildColumns(input: {
   sundayDates: string[];
   activeSatDates: string[];
   includeSundays?: boolean;
+  /** Weekday specials (E2), each with the `service_name` it will be created under. */
+  specials?: { date: string; name: string }[];
 }): GridColumn[] {
-  const { sundayDates, activeSatDates, includeSundays = true } = input;
+  const { sundayDates, activeSatDates, includeSundays = true, specials = [] } = input;
+
+  // E3: AT MOST ONE COLUMN PER DATE, of any kind — enforced here rather than
+  // trusted to the UI (work item 13). The grid is keyed by date alone in every
+  // site of fact 10, so two columns on one date would share ONE roster,
+  // `cellsToDrafts` would emit two drafts built from the same cells, and
+  // `PlannerGrid` would render duplicate React keys in three places.
+  //
+  // Precedence is WEEKEND-WINS: a weekend column is the one the solver can
+  // fill, so dropping it in favour of a special would cost strictly more.
+  // Reaching this line is already a bug (the UI refuses the overlap with a
+  // stated reason), so the drop is LOGGED, never silent.
   const cols: GridColumn[] = [];
-  if (includeSundays) for (const d of sundayDates) cols.push({ date: d, type: "sunday_role" });
-  for (const d of activeSatDates) cols.push({ date: d, type: "saturday_role" });
+  const claimed = new Map<string, ColumnType>();
+  const push = (col: GridColumn) => {
+    const held = claimed.get(col.date);
+    if (held) {
+      console.warn(
+        `buildColumns: dropped a ${col.type} column on ${col.date} — that date already has a ${held} column (E3: one column per date).`,
+      );
+      return;
+    }
+    claimed.set(col.date, col.type);
+    cols.push(col);
+  };
+
+  if (includeSundays) for (const d of sundayDates) push({ date: d, type: "sunday_role" });
+  for (const d of activeSatDates) push({ date: d, type: "saturday_role" });
+  for (const s of specials) push({ date: s.date, type: "special_role", serviceName: s.name });
+
   return cols.sort((a, b) => a.date.localeCompare(b.date));
 }
 
@@ -457,7 +559,21 @@ export function buildSolveRequest(input: {
 
 const ROLE_FIELD: Record<string, "Lead" | "BGV" | "Choir"> = { lead: "Lead", bgv: "BGV", coro: "Choir" };
 
-function weekForColumn(column: GridColumn, sundayDates: string[]): number | null {
+/**
+ * The 1-based solver week a column belongs to, or `null` for a column the
+ * solver has no concept of.
+ *
+ * **A special is ALWAYS `null`** (E4). Without this it would fall into the
+ * Saturday branch below and — for a weekday special dated the day before a
+ * selected Sunday — resolve to a real week, so `applySolveResponse` would write
+ * that Saturday's roster into it. E4 governs what the REQUEST contains; nothing
+ * governed the response mapping until this line.
+ *
+ * Exported so it can be pinned directly rather than only through
+ * `applySolveResponse`'s observable output.
+ */
+export function weekForColumn(column: GridColumn, sundayDates: string[]): number | null {
+  if (column.type === "special_role") return null;
   if (column.type === "sunday_role") {
     const i = sundayDates.indexOf(column.date);
     return i === -1 ? null : i + 1;
@@ -514,6 +630,9 @@ export function applySolveResponse(input: {
   const schedule = response.schedule ?? {};
 
   for (const column of columns) {
+    // `weekForColumn` returns null for a special (E4), so a special column is
+    // skipped here before anything can be read for it — the ternary below never
+    // sees one, and `isSolvable` refuses every one of its rows besides.
     const week = weekForColumn(column, sundayDates);
     if (week == null) continue;
     const weekData = schedule[String(week)];
@@ -575,6 +694,50 @@ const INSTRUMENT_PREFIX = "instrumento:";
 const FOH_PREFIX = "foh:";
 
 /**
+ * TWO KEYS, NOT ONE (E19). The single `${_type}__${date}` string used to serve
+ * both jobs, so the obvious fix for one breaks the other.
+ *
+ * **Identity** — `type__date`, and NEVER name-bearing. It feeds `prevByKey`,
+ * and through it `localId`, `creationRequestId` and `exists`. If identity
+ * carried the name, editing a special's name after a successful confirm would
+ * miss `prevByKey`, re-mint both ids, reset `exists` to `false` — and
+ * `handleConfirm` would post a SECOND `special_role` on the same date. The
+ * server would accept it (occupancy is filtered by normalized `service_name`,
+ * so the new name finds no occupant and no 409 fires), orphaning the first
+ * document in silence, and the draft would also fall out of
+ * `createdThisSession`, losing its seats from the fairness-history union.
+ *
+ * E3 keeps two columns off one date, so `type__date` stays unique across the
+ * rendered column set.
+ */
+function identityKey(type: string, date: string): string {
+  return `${type}__${date}`;
+}
+
+/**
+ * **Collision** — what a Sanity document on this target would occupy. For a
+ * special that is `type__date__name`, matching the server's own identity
+ * `special_role:${date}:${name}` (`roleCreationReceipt`) and its occupancy
+ * filter (`roleWriteOps`). Weekend types keep the bare `type__date`: they store
+ * no `service_name` at all.
+ *
+ * The name is normalized through the SHARED `normalizeServiceName` — NFC + trim
+ * + collapse internal whitespace, and nothing else. **No `.toLowerCase()`, no
+ * accent folding**: case and accents are meaningful to the server, so folding
+ * them here would make the client claim a collision the server does not see,
+ * and (worse, in the other direction) the two definitions would drift.
+ *
+ * E3 does NOT make this redundant: the collision arrives from Sanity via
+ * `existingRoles`, not from two columns in the grid, and `SeatBoard` can
+ * already have created a special on that date.
+ */
+function collisionKey(type: string, date: string, serviceName?: string): string {
+  return type === "special_role"
+    ? `${type}__${date}__${normalizeServiceName(serviceName)}`
+    : identityKey(type, date);
+}
+
+/**
  * One draft per column REGARDLESS of occupancy (an omitted column would have
  * no `localId`, so `preflights.get` would miss). `skippedDates` (D18) is the
  * single explicit channel for a user-toggled skip; a date already `exists`
@@ -594,8 +757,10 @@ export function cellsToDrafts(
   previous: DraftCard[],
   existingRoles: ExistingRoleRef[],
 ): DraftCard[] {
-  const existing = new Set(existingRoles.map((r) => `${r._type}__${r.date}`));
-  const prevByKey = new Map(previous.map((d) => [`${d._type}__${d.date}`, d]));
+  const existing = new Set(
+    existingRoles.map((r) => collisionKey(r._type, r.date, r.service_name)),
+  );
+  const prevByKey = new Map(previous.map((d) => [identityKey(d._type, d.date), d]));
 
   const cellsByDate = new Map<string, GridCell[]>();
   for (const c of cells) {
@@ -606,11 +771,10 @@ export function cellsToDrafts(
 
   const out: DraftCard[] = [];
   for (const column of columns) {
-    const key = `${column.type}__${column.date}`;
-    const prevDraft = prevByKey.get(key);
+    const prevDraft = prevByKey.get(identityKey(column.type, column.date));
     const localId = prevDraft?.localId ?? uid();
     const creationRequestId = prevDraft?.creationRequestId ?? newCreationRequestId();
-    const isExisting = existing.has(key);
+    const isExisting = existing.has(collisionKey(column.type, column.date, column.serviceName));
     const skipped = skippedDates.has(column.date) || isExisting;
     const exists = isExisting || prevDraft?.exists === true;
 
@@ -619,9 +783,13 @@ export function cellsToDrafts(
 
     const leads = idsFor("lead");
     const bgvs = idsFor("bgv");
-    // A Saturday service has no Coro, so its chorus is empty whatever the grid
-    // holds — a stray cell can never reach the write.
-    const chorus = column.type === "saturday_role" ? [] : idsFor("coro");
+    // E18: `chorus` is written when and only when the grid SHOWED a Coro row —
+    // derived from the same `columnShowsRowId` the render goes through, never
+    // re-stated as a second condition that could drift out of step. A Saturday
+    // therefore writes an empty chorus whatever the grid holds: `cellsByDate` is
+    // keyed by date alone, so a stale cell can survive a column-type switch, and
+    // a row the grid never showed must never reach Sanity.
+    const chorus = columnShowsRowId(column.type, "coro") ? idsFor("coro") : [];
 
     const instruments: DraftInstrumentSlot[] = [];
     const foh: DraftFohSlot[] = [];
@@ -642,6 +810,7 @@ export function cellsToDrafts(
       creationRequestId,
       _type: column.type,
       date: column.date,
+      ...(column.serviceName !== undefined ? { service_name: column.serviceName } : {}),
       exists,
       skipped,
       leads,
@@ -663,10 +832,24 @@ export function cellsToDrafts(
  * Saturday draft's `chorus` is ignored rather than inventing a key the solver
  * would not recognise (`cellsToDrafts` already zeroes it on write, but this
  * stays defensive rather than assuming that always holds upstream).
+ *
+ * **`special_role` is all-null, and that is E9/E20's mechanism, not a
+ * placeholder.** The `Record` forces an ENTRY for every column type; it cannot
+ * force an EXCLUSION, and the cheapest type-satisfying entry would have been a
+ * pair of real solver keys — which would write `Sun.Lead`/`Sat.Lead` counts for
+ * specials into the persisted `owt_solver_history_v2`, and `buildSolveRequest`
+ * would then feed them to CP-SAT every following month. Exactly what E10 warns
+ * against. So the value type is `string | null` on ALL THREE fields and
+ * `historyEntryFromDrafts` guards all three bumps: a special contributes
+ * nothing, by construction rather than by a caller remembering to filter.
  */
-const HISTORY_ROLE_KEYS: Record<ServiceType, { leads: string; bgvs: string; chorus: string | null }> = {
+const HISTORY_ROLE_KEYS: Record<
+  ServiceType,
+  { leads: string | null; bgvs: string | null; chorus: string | null }
+> = {
   sunday_role: { leads: "Sun.Lead", bgvs: "Sun.BGV", chorus: "Sun.Choir" },
   saturday_role: { leads: "Sat.Lead", bgvs: "Sat.BGV", chorus: null },
+  special_role: { leads: null, bgvs: null, chorus: null },
 };
 
 /**
@@ -694,9 +877,11 @@ const HISTORY_ROLE_KEYS: Record<ServiceType, { leads: string; bgvs: string; chor
  * entry is written, rather than an entry with empty counts.
  *
  * Only voice seats count (`leads`/`bgvs`/`chorus`) — those are the only roles
- * the solver balances; instrument/FOH slots and `special_role` services (not
- * even representable as a `DraftCard` — `ServiceType` has no third member)
- * have no solver concept and contribute nothing.
+ * the solver balances; instrument/FOH slots and `special_role` services have no
+ * solver concept and contribute nothing. `special_role` IS representable as a
+ * `DraftCard` now (`ServiceType` has a third member); what keeps it out of the
+ * history is its all-null `HISTORY_ROLE_KEYS` entry plus the guard on each of
+ * the three bumps below — see E20.
  *
  * People are keyed by NAME, not id (`gcf/owt_solver_v2.py:454`, `:280`), via
  * `memberIdToName` — the same resolution `buildSolveRequest` uses for pools,
@@ -724,8 +909,8 @@ export function historyEntryFromDrafts(
 
   for (const draft of createdDrafts) {
     const keys = HISTORY_ROLE_KEYS[draft._type];
-    for (const id of draft.leads) bump(id, keys.leads);
-    for (const id of draft.bgvs) bump(id, keys.bgvs);
+    if (keys.leads) for (const id of draft.leads) bump(id, keys.leads);
+    if (keys.bgvs) for (const id of draft.bgvs) bump(id, keys.bgvs);
     if (keys.chorus) for (const id of draft.chorus) bump(id, keys.chorus);
   }
 
@@ -799,7 +984,15 @@ export function cellsToParticipantRoles(
       date: column.date,
       leads: idsFor("lead").map(toPerson),
       bgvs: idsFor("bgv").map(toPerson),
-      chorus: idsFor("coro").map(toPerson),
+      // Aligned with `cellsToDrafts` through the same `columnShowsRowId`. This
+      // is a LIVE behaviour change for SATURDAY too, not only for specials: this
+      // call used to pass `idsFor("coro")` unguarded for every column type, so a
+      // stale Saturday `coro` cell — one that survived a column-type switch —
+      // counted toward in-grid `load` in the candidate ranking while the write
+      // path zeroed it and it never reached Sanity. Ranking against a seat that
+      // will never exist is exactly the number/strip drift `candidateRanking`
+      // exists to prevent.
+      chorus: (columnShowsRowId(column.type, "coro") ? idsFor("coro") : []).map(toPerson),
       instruments,
       foh,
     };

@@ -5,7 +5,7 @@
 // (docs/superpowers/plans/2026-07-29-planner-grid.md). They are the point of
 // this file, not decoration — see the file header comment in `plannerModel.ts`
 // for the six load-bearing facts they pin.
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { SolveResponse } from "@/app/api/admin/solve/route";
 import { computeParticipation } from "@/app/utils/computeParticipation";
@@ -17,6 +17,7 @@ import {
   buildSolveRequest,
   cellsToDrafts,
   cellsToParticipantRoles,
+  hasTarget,
   historyEntryFromDrafts,
   historyForRequest,
   isSolvable,
@@ -26,6 +27,7 @@ import {
   seatDefForRow,
   solvableWindow,
   unaddressableDates,
+  weekForColumn,
   weekendWeekIndexes,
   type DraftCard,
   type GridCell,
@@ -960,5 +962,397 @@ describe("historyEntryFromDrafts", () => {
     const skippedButPassedIn = draft({ date: "2026-02-01", leads: ["m1"], skipped: true });
     const entry = historyEntryFromDrafts([skippedButPassedIn], members, 2026, 2);
     expect(entry?.total_counts).toEqual({ Frank: 1 });
+  });
+});
+
+// ─── Specials (Task 2 — the widened `ColumnType`) ─────────────────────────────
+//
+// The type change itself is nearly inert (fact 6): every weekend/special
+// distinction that mattered was an `===` comparison that kept compiling and
+// silently took the Sunday-or-Saturday path. Each test below pins one of those
+// sites, and each was proved to discriminate by inverting the behaviour and
+// watching it fail before being restored.
+
+describe("a special column HAS a Coro row (E18)", () => {
+  const rows = buildRows();
+  const coro = rows.find((r) => r.id === "coro")!;
+  const special: GridColumn = { date: "2026-02-11", type: "special_role", serviceName: "Vigilia" };
+  const saturday: GridColumn = { date: "2026-02-07", type: "saturday_role" };
+
+  it("applies the Coro row to a special, unlike a Saturday", () => {
+    expect(rowAppliesTo(coro, special)).toBe(true);
+    expect(rowAppliesTo(coro, saturday)).toBe(false);
+  });
+
+  it("writes the Coro occupants of a special straight through to `chorus`", () => {
+    const cells: GridCell[] = [
+      { date: "2026-02-11", rowId: "coro", memberIds: ["m1", "m2"], origin: "manual" },
+      { date: "2026-02-11", rowId: "lead", memberIds: ["m3"], origin: "manual" },
+    ];
+    const drafts = cellsToDrafts(cells, [special], new Set(), [], []);
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]._type).toBe("special_role");
+    expect(drafts[0].chorus).toEqual(["m1", "m2"]);
+    expect(drafts[0].leads).toEqual(["m3"]);
+  });
+
+  it("keeps `rowAppliesTo` and the write in step for every column type — a row the grid never showed never reaches Sanity", () => {
+    // E18's standing requirement, checked as a property rather than as three
+    // separate hand-written expectations: whatever `rowAppliesTo` says about the
+    // Coro row on a column type, `cellsToDrafts` must write exactly that.
+    const columns: GridColumn[] = [
+      { date: "2026-02-01", type: "sunday_role" },
+      { date: "2026-02-07", type: "saturday_role" },
+      { date: "2026-02-11", type: "special_role", serviceName: "Vigilia" },
+    ];
+    const cells: GridCell[] = columns.map((c) => ({
+      date: c.date,
+      rowId: "coro",
+      memberIds: ["m1"],
+      origin: "manual" as const,
+    }));
+    const drafts = cellsToDrafts(cells, columns, new Set(), [], []);
+    for (const column of columns) {
+      const written = drafts.find((d) => d.date === column.date)!.chorus;
+      expect(written, `${column.type} chorus`).toEqual(rowAppliesTo(coro, column) ? ["m1"] : []);
+    }
+  });
+
+  it("carries `service_name` from the column onto the draft, and never onto a weekend draft", () => {
+    const columns: GridColumn[] = [
+      { date: "2026-02-11", type: "special_role", serviceName: "Vigilia de Oración" },
+      { date: "2026-02-01", type: "sunday_role" },
+    ];
+    const drafts = cellsToDrafts([], columns, new Set(), [], []);
+    expect(drafts.find((d) => d._type === "special_role")!.service_name).toBe("Vigilia de Oración");
+    expect(drafts.find((d) => d._type === "sunday_role")!.service_name).toBeUndefined();
+  });
+});
+
+describe("a special is never solvable, but keeps its target cap (E4/E5, P5)", () => {
+  const rows = buildRows();
+  const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+  const special: GridColumn = { date: "2026-02-11", type: "special_role", serviceName: "Vigilia" };
+  const sunday: GridColumn = { date: "2026-02-01", type: "sunday_role" };
+
+  it("isSolvable is false for every row on a special column", () => {
+    for (const row of rows) expect(isSolvable(row, special), row.id).toBe(false);
+    // …while the same rows are still solvable on a Sunday, so the assertion
+    // above is about the COLUMN, not about the rows being unsolvable anyway.
+    expect(isSolvable(byId["lead"], sunday)).toBe(true);
+    expect(isSolvable(byId["coro"], sunday)).toBe(true);
+  });
+
+  it("hasTarget still holds on a special's voice rows — the D7 cap and the amber +N survive", () => {
+    expect(hasTarget(byId["lead"], special)).toBe(true);
+    expect(hasTarget(byId["bgv"], special)).toBe(true);
+    expect(hasTarget(byId["coro"], special)).toBe(true);
+  });
+
+  it("hasTarget agrees with isSolvable on every weekend cell — the split changes nothing there", () => {
+    const weekend: GridColumn[] = [
+      { date: "2026-02-01", type: "sunday_role" },
+      { date: "2026-02-07", type: "saturday_role" },
+    ];
+    for (const column of weekend) {
+      for (const row of rows) {
+        expect(hasTarget(row, column), `${column.type}/${row.id}`).toBe(isSolvable(row, column));
+      }
+    }
+  });
+
+  it("hasTarget is false for instrument and FOH rows on a special — they still render every occupant", () => {
+    for (const row of rows) {
+      if (row.category !== "voz") expect(hasTarget(row, special), row.id).toBe(false);
+    }
+  });
+});
+
+describe("weekForColumn returns null for a special (E4)", () => {
+  // 2026-02-07 is the Saturday ADJACENT to Sunday 2026-02-08 (week 2). E3 lets a
+  // deselected Saturday become a special, so this exact date is reachable — and
+  // it is precisely the date that used to fall into the Saturday branch and get
+  // that weekend's roster written into it.
+  const asSaturday: GridColumn = { date: "2026-02-07", type: "saturday_role" };
+  const asSpecial: GridColumn = { date: "2026-02-07", type: "special_role", serviceName: "Vigilia" };
+
+  it("the identical date resolves to week 2 as a Saturday and to null as a special", () => {
+    expect(weekForColumn(asSaturday, FEB_SUNDAYS)).toBe(2);
+    expect(weekForColumn(asSpecial, FEB_SUNDAYS)).toBeNull();
+  });
+
+  it("a special dated ON a Sunday in the window is still null, not that Sunday's week", () => {
+    expect(weekForColumn({ date: "2026-02-15", type: "special_role" }, FEB_SUNDAYS)).toBeNull();
+    expect(weekForColumn({ date: "2026-02-15", type: "sunday_role" }, FEB_SUNDAYS)).toBe(3);
+  });
+
+  it("applySolveResponse writes NOTHING onto a special column, while the same response fills the real Saturday", () => {
+    const rows = buildRows({ instrumentSeats: [], fohSeats: [] });
+    const response: SolveResponse = {
+      status: "ok",
+      schedule: { "2": { Saturday: { Lead: ["Frank"], BGV: ["Gaby"] } } },
+    } as unknown as SolveResponse;
+    const members: RankMember[] = [m("m1", "Frank"), m("m2", "Gaby")];
+
+    const filled = applySolveResponse({
+      response,
+      previousCells: [],
+      columns: [asSaturday],
+      rows,
+      sundayDates: FEB_SUNDAYS,
+      activeSatDates: ["2026-02-07"],
+      members,
+    });
+    expect(filled.cells.map((c) => c.rowId).sort()).toEqual(["bgv", "lead"]);
+
+    const asSpecialResult = applySolveResponse({
+      response,
+      previousCells: [],
+      columns: [asSpecial],
+      rows,
+      sundayDates: FEB_SUNDAYS,
+      activeSatDates: ["2026-02-07"],
+      members,
+    });
+    expect(asSpecialResult.cells).toEqual([]);
+  });
+});
+
+describe("a special contributes nothing to fairness history (E9/E20)", () => {
+  const members: RankMember[] = [m("m1", "Frank"), m("m2", "Gaby")];
+  const specialDraft: DraftCard = {
+    localId: "l1",
+    creationRequestId: "r1",
+    _type: "special_role",
+    date: "2026-02-11",
+    service_name: "Vigilia",
+    exists: false,
+    skipped: false,
+    leads: ["m1"],
+    bgvs: ["m2"],
+    chorus: ["m1", "m2"],
+    instruments: [],
+    foh: [],
+  };
+
+  it("a special-only batch writes an entry with EMPTY counts — no Sun.*/Sat.* keys are invented", () => {
+    const entry = historyEntryFromDrafts([specialDraft], members, 2026, 2)!;
+    expect(entry.role_counts).toEqual({});
+    expect(entry.total_counts).toEqual({});
+  });
+
+  it("all three seat arrays are guarded, not just chorus — leads and bgvs are populated above and still count zero", () => {
+    const entry = historyEntryFromDrafts([specialDraft], members, 2026, 2)!;
+    expect(JSON.stringify(entry.role_counts)).not.toContain("Lead");
+    expect(JSON.stringify(entry.role_counts)).not.toContain("BGV");
+    expect(JSON.stringify(entry.role_counts)).not.toContain("Choir");
+  });
+
+  it("a Sunday in the same batch is unaffected — only the special's seats vanish", () => {
+    const sundayDraft: DraftCard = {
+      ...specialDraft,
+      localId: "l2",
+      creationRequestId: "r2",
+      _type: "sunday_role",
+      date: "2026-02-01",
+      service_name: undefined,
+    };
+    const entry = historyEntryFromDrafts([specialDraft, sundayDraft], members, 2026, 2)!;
+    expect(entry.role_counts).toEqual({
+      Frank: { "Sun.Lead": 1, "Sun.Choir": 1 },
+      Gaby: { "Sun.BGV": 1, "Sun.Choir": 1 },
+    });
+    expect(entry.total_counts).toEqual({ Frank: 2, Gaby: 2 });
+  });
+});
+
+describe("two keys, not one: identity vs collision (E17/E19)", () => {
+  const columnNamed = (name: string): GridColumn => ({
+    date: "2026-02-11",
+    type: "special_role",
+    serviceName: name,
+  });
+
+  it("renaming a special preserves localId, creationRequestId and exists — identity is NEVER name-bearing", () => {
+    // If identity carried the name, the rename would miss `prevByKey`, re-mint
+    // both ids and reset `exists` — and `handleConfirm` would post a SECOND
+    // special_role on the same date, orphaning the first in silence.
+    const first = cellsToDrafts([], [columnNamed("Vigilia")], new Set(), [], []);
+    const created = first.map((d): DraftCard => ({ ...d, exists: true }));
+    const renamed = cellsToDrafts([], [columnNamed("Noche de Alabanza")], new Set(), created, []);
+    expect(renamed[0].localId).toBe(first[0].localId);
+    expect(renamed[0].creationRequestId).toBe(first[0].creationRequestId);
+    expect(renamed[0].exists).toBe(true);
+    expect(renamed[0].service_name).toBe("Noche de Alabanza");
+  });
+
+  it("an existing SAME-named special on the date collides; a differently-named one does not", () => {
+    const stored = [{ _type: "special_role", date: "2026-02-11", service_name: "Vigilia" }];
+
+    const same = cellsToDrafts([], [columnNamed("Vigilia")], new Set(), [], stored);
+    expect(same[0].exists).toBe(true);
+    expect(same[0].skipped).toBe(true);
+
+    const different = cellsToDrafts([], [columnNamed("Noche de Alabanza")], new Set(), [], stored);
+    expect(different[0].exists).toBe(false);
+    expect(different[0].skipped).toBe(false);
+  });
+
+  it("two names differing only in CASE do NOT collide — the server's identity is case-sensitive", () => {
+    // `normalizeLabel`'s own contract: "Case and accents are meaningful."
+    // A `.toLowerCase()` here would claim a collision the server does not see,
+    // and the two definitions would silently diverge.
+    const stored = [{ _type: "special_role", date: "2026-02-11", service_name: "Vigilia" }];
+    const lower = cellsToDrafts([], [columnNamed("vigilia")], new Set(), [], stored);
+    expect(lower[0].exists).toBe(false);
+    expect(lower[0].skipped).toBe(false);
+  });
+
+  it("two names differing only in accents do NOT collide either", () => {
+    const stored = [{ _type: "special_role", date: "2026-02-11", service_name: "Oración" }];
+    const unaccented = cellsToDrafts([], [columnNamed("Oracion")], new Set(), [], stored);
+    expect(unaccented[0].exists).toBe(false);
+  });
+
+  it("names differing ONLY in whitespace DO collide — NFC + trim + collapse, exactly as the server normalizes", () => {
+    const stored = [{ _type: "special_role", date: "2026-02-11", service_name: "  Vigilia   de  Oración " }];
+    const collapsed = cellsToDrafts([], [columnNamed("Vigilia de Oración")], new Set(), [], stored);
+    expect(collapsed[0].exists).toBe(true);
+  });
+
+  it("a stored special does NOT mark a weekend column on the same date as existing, and vice versa", () => {
+    const storedSpecial = [{ _type: "special_role", date: "2026-02-01", service_name: "Vigilia" }];
+    const sunday = cellsToDrafts([], [{ date: "2026-02-01", type: "sunday_role" }], new Set(), [], storedSpecial);
+    expect(sunday[0].exists).toBe(false);
+
+    const storedSunday = [{ _type: "sunday_role", date: "2026-02-01" }];
+    const special = cellsToDrafts(
+      [],
+      [{ date: "2026-02-01", type: "special_role", serviceName: "Vigilia" }],
+      new Set(),
+      [],
+      storedSunday,
+    );
+    expect(special[0].exists).toBe(false);
+  });
+
+  it("a weekend collision key still ignores a stray service_name — a weekend role stores none", () => {
+    const stored = [{ _type: "sunday_role", date: "2026-02-01", service_name: "ruido" }];
+    const drafts = cellsToDrafts([], [{ date: "2026-02-01", type: "sunday_role" }], new Set(), [], stored);
+    expect(drafts[0].exists).toBe(true);
+  });
+});
+
+describe("buildColumns dedupes by date, weekend-first (E3, work item 13)", () => {
+  it("drops a special that collides with a Sunday, keeping the Sunday", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const cols = buildColumns({
+      sundayDates: ["2026-02-08"],
+      activeSatDates: [],
+      specials: [{ date: "2026-02-08", name: "Vigilia" }],
+    });
+    expect(cols).toEqual([{ date: "2026-02-08", type: "sunday_role" }]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain("2026-02-08");
+    warn.mockRestore();
+  });
+
+  it("drops a special that collides with a Saturday, keeping the Saturday", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const cols = buildColumns({
+      sundayDates: [],
+      activeSatDates: ["2026-02-07"],
+      specials: [{ date: "2026-02-07", name: "Vigilia" }],
+    });
+    expect(cols).toEqual([{ date: "2026-02-07", type: "saturday_role" }]);
+    warn.mockRestore();
+  });
+
+  it("keeps a special on a DESELECTED Saturday — the deselected date holds no weekend column to lose to", () => {
+    const cols = buildColumns({
+      sundayDates: ["2026-02-08"],
+      activeSatDates: [],
+      specials: [{ date: "2026-02-07", name: "Vigilia" }],
+    });
+    expect(cols).toEqual([
+      { date: "2026-02-07", type: "special_role", serviceName: "Vigilia" },
+      { date: "2026-02-08", type: "sunday_role" },
+    ]);
+  });
+
+  it("drops the SECOND of two specials on one date — one column per date, of any kind", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const cols = buildColumns({
+      sundayDates: [],
+      activeSatDates: [],
+      specials: [
+        { date: "2026-02-11", name: "Vigilia" },
+        { date: "2026-02-11", name: "Noche de Alabanza" },
+      ],
+    });
+    expect(cols).toHaveLength(1);
+    expect(cols[0].serviceName).toBe("Vigilia");
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it("threads each special's name onto its column, sorted into the weekend columns by date", () => {
+    const cols = buildColumns({
+      sundayDates: FEB_SUNDAYS,
+      activeSatDates: ["2026-02-07"],
+      specials: [{ date: "2026-02-11", name: "Vigilia" }],
+    });
+    expect(cols.map((c) => `${c.date}:${c.type}`)).toEqual([
+      "2026-02-01:sunday_role",
+      "2026-02-07:saturday_role",
+      "2026-02-08:sunday_role",
+      "2026-02-11:special_role",
+      "2026-02-15:sunday_role",
+      "2026-02-22:sunday_role",
+    ]);
+    expect(cols.find((c) => c.type === "special_role")!.serviceName).toBe("Vigilia");
+  });
+
+  it("omitting `specials` entirely leaves the weekend-only behaviour byte-for-byte unchanged", () => {
+    expect(buildColumns({ sundayDates: FEB_SUNDAYS, activeSatDates: FEB_SATURDAYS })).toEqual(
+      buildColumns({ sundayDates: FEB_SUNDAYS, activeSatDates: FEB_SATURDAYS, specials: [] }),
+    );
+  });
+});
+
+describe("cellsToParticipantRoles agrees with the write path about Coro", () => {
+  const members: RankMember[] = [m("m1", "Frank"), m("m2", "Gaby")];
+  const staleCoro: GridCell[] = [{ date: "2026-02-07", rowId: "coro", memberIds: ["m1"], origin: "manual" }];
+
+  it("a stale Saturday `coro` cell no longer counts toward in-grid load — a LIVE change for Saturday, not only for specials", () => {
+    // `cellsByDate` is keyed by date alone, so a `coro` cell can survive a
+    // column-type switch. The write path has always zeroed it (`chorus: []`);
+    // this call used to forward it unguarded, so the ranker counted a seat that
+    // would never exist.
+    const [role] = cellsToParticipantRoles(
+      staleCoro,
+      [{ date: "2026-02-07", type: "saturday_role" }],
+      members,
+    );
+    expect(role.chorus).toEqual([]);
+    const [written] = cellsToDrafts(staleCoro, [{ date: "2026-02-07", type: "saturday_role" }], new Set(), [], []);
+    expect(written.chorus).toEqual([]);
+  });
+
+  it("a special's Coro DOES count — it is a real seat there (E18)", () => {
+    const cells: GridCell[] = [{ date: "2026-02-11", rowId: "coro", memberIds: ["m1"], origin: "manual" }];
+    const [role] = cellsToParticipantRoles(
+      cells,
+      [{ date: "2026-02-11", type: "special_role", serviceName: "Vigilia" }],
+      members,
+    );
+    expect(role.chorus.map((p) => p._id)).toEqual(["m1"]);
+    expect(role._type).toBe("special_role");
+  });
+
+  it("a Sunday's Coro is untouched by the alignment", () => {
+    const cells: GridCell[] = [{ date: "2026-02-01", rowId: "coro", memberIds: ["m1", "m2"], origin: "manual" }];
+    const [role] = cellsToParticipantRoles(cells, [{ date: "2026-02-01", type: "sunday_role" }], members);
+    expect(role.chorus.map((p) => p._id)).toEqual(["m1", "m2"]);
   });
 });

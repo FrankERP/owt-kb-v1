@@ -25,8 +25,15 @@ export interface CreatableDraft {
   localId: string;
   /** Opaque, stable per logical draft. Never the short UI `localId`. */
   creationRequestId: string;
-  _type: "sunday_role" | "saturday_role";
+  _type: "sunday_role" | "saturday_role" | "special_role";
   date: string;
+  /**
+   * SPECIALS ONLY. `canonicalizeCreatePayload` raises issue `"service_name"`
+   * for a nameless special (`roleCreationReceipt.ts`) → `400 invalid_request`,
+   * so without this field on the body every special would fail to create. A
+   * weekend role never stores it.
+   */
+  service_name?: string;
   leads: string[];
   bgvs: string[];
   chorus: string[];
@@ -51,6 +58,11 @@ export function draftCreateBody(draft: CreatableDraft, published: boolean) {
     creationRequestId: draft.creationRequestId,
     _type: draft._type,
     date: draft.date,
+    // Only ever emitted for a special. Sending it on a weekend body would be
+    // harmless (the receipt ignores a stray `service_name` on a weekend type)
+    // but would still be a lie about what gets stored — the key is omitted
+    // entirely instead.
+    ...(draft._type === "special_role" ? { service_name: draft.service_name ?? "" } : {}),
     leads: draft.leads,
     bgvs: draft.bgvs,
     chorus: draft.chorus,

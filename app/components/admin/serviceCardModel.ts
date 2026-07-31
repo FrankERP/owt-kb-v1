@@ -1154,7 +1154,17 @@ export function describeAcknowledgedBlockers(
 
 // ── Per-target create/month preflight ────────────────────────────────────────
 
-/** `sunday:<date>` / `saturday:<date>` — A1's own proposal target key format. */
+/**
+ * `sunday:<date>` / `saturday:<date>` — A1's own proposal target key format.
+ *
+ * **Deliberately NOT widened to `ServiceType`.** Its body is a silent ternary,
+ * so a widened signature would key a special's proposal lookup to
+ * `saturday:<date>` and collide with a real Saturday target on that date —
+ * precisely the "keeps compiling, takes the Saturday path" class the widening
+ * exists to eliminate. `monthTargetPreflight` returns above this call for a
+ * special, so the narrow type is what makes that early return mandatory rather
+ * than optional.
+ */
 function weekendProposalTargetKey(type: "sunday_role" | "saturday_role", date: string): string {
   return `${type === "sunday_role" ? "sunday" : "saturday"}:${date}`;
 }
@@ -1175,18 +1185,55 @@ function weekendProposalTargetKey(type: "sunday_role" | "saturday_role", date: s
  *  - setlist/proposal history: canonical + raw ids observed at the same target,
  *    looked up by A1's own reported target keys.
  *  - targetIssues: global queue entries A1/A2 filed against this exact target.
+ *
+ * **A special takes a different branch entirely** (fact 7). Its canonical key is
+ * its DOCUMENT ID (`serviceReadModel.ts:44-56`), so the weekend `targetKey`
+ * lookup below can never match and `role` would default to `"none"` — always
+ * `creatable`, wrong in the dangerous direction. And the branch cannot be made
+ * name-aware to compensate: `RoleTarget`/`RoleTargetRecord`
+ * (`serviceReadSummary.ts:58-69`, `:83-104`) carry `targetKey`/`type`/
+ * `serviceDate` but no `service_name`, so it could only key by date — which
+ * would report `exists` for a legitimately-creatable SECOND special on that
+ * date and contradict E17. So the special branch is **name-blind**, and E17's
+ * `existing` collision key in `cellsToDrafts` is the sole existence authority.
  */
 export function monthTargetPreflight(input: {
   sources: ServiceSourceStates;
   summaries: CardSourceSummaries;
   queue: IntegrityQueue | null;
-  type: "sunday_role" | "saturday_role";
+  type: ServiceType;
   date: string;
 }): TargetPreflight {
+  const { roles, setlists, proposals } = input.summaries;
+
+  if (input.type === "special_role") {
+    // Returns ABOVE both `canonicalSetlistTargetKey` and
+    // `weekendProposalTargetKey`. The first takes a `string` and would happily
+    // answer `""` for a special (`serviceReadModel.ts:67-76`), matching every
+    // other empty key; the second is narrow on purpose (see above) and would
+    // key this to `saturday:<date>`. Neither is reached.
+    //
+    // Still SOURCE-GATED — an unready or failed domain blocks exactly as it does
+    // for a weekend target — but name-blind within that: no role lookup (there
+    // is nothing to look one up by that would not be wrong), `expectsLock: false`
+    // because a special takes no weekend lock (`roleTargetLock.ts:28`;
+    // `roleWriteRequest.ts:256-257`), and proven-but-EMPTY setlist/proposal
+    // history rather than `null`, which would report `unknown` forever.
+    return deriveTargetPreflight({
+      targetKey: `${input.type}:${input.date}`,
+      sources: input.sources,
+      role: roles ? "none" : null,
+      expectsLock: false,
+      lock: null,
+      setlistHistory: setlists ? { canonicalIds: [], draftIds: [] } : null,
+      proposalHistory: proposals ? { canonicalIds: [], draftIds: [] } : null,
+      targetIssues: [],
+    });
+  }
+
   const targetKey = `${input.type}:${input.date}`;
   const setlistKey = canonicalSetlistTargetKey(input.type, input.date, "");
   const proposalKey = weekendProposalTargetKey(input.type, input.date);
-  const { roles, setlists, proposals } = input.summaries;
 
   const roleTarget = roles
     ? ((roles.targets ?? []).find((t) => t?.targetKey === targetKey)?.publicState ?? "none")

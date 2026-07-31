@@ -15,6 +15,7 @@
 //     done with a weekend lock, and whether a Content Lake failure was a genuine
 //     mutation conflict (never a blind retry).
 
+import { normalizeLabel } from "./normalizeLabel";
 import { ROLE_TYPES, isValidServiceDate, type RoleType } from "./serviceReadModel";
 import { serviceDayKey } from "./serviceReadSelect";
 import {
@@ -96,11 +97,11 @@ function normalizeRefs(value: unknown): string[] {
   return value.filter(nonEmptyString);
 }
 
-function normalizeLabel(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const out = value.normalize("NFC").trim().replace(/\s+/g, " ");
-  return out.length ? out : null;
-}
+// `normalizeLabel` is imported from `@/app/utils/normalizeLabel` — one
+// definition shared with `roleCreationReceipt` (which fingerprints against it),
+// `roleWriteOps` (which filters special occupancy by it) and the client planner
+// grid (which keys a special's collision check by it). It used to be
+// hand-copied here.
 
 /**
  * Seats in the ORDER the request supplied them, with blanks and malformed slots

@@ -29,13 +29,19 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ServiceType = "sunday_role" | "saturday_role";
+// A local shadow with exactly one use — the `preflight` prop below. The
+// GOVERNING declaration is `ColumnType` in `plannerModel.ts`; widening this line
+// alone changes nothing at all.
+type ServiceType = "sunday_role" | "saturday_role" | "special_role";
 
 interface MemberOption { _id: string; member_name: string; alias?: string; memberType?: string[]; unavailableDates?: string[]; }
 
 const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;
 
-interface ExistingRole { _id: string; _type: string; date: string; }
+// `service_name` is what `cellsToDrafts` needs to tell one stored special on a
+// date from another (E17). `ServiceRole` — what `ServicesPanel` actually passes
+// — already carries it; this local shape used to drop it on the floor.
+interface ExistingRole { _id: string; _type: string; date: string; service_name?: string; }
 
 interface Props {
   members: MemberOption[];

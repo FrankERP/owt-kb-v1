@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { SERVICE_LABEL } from "@/app/components/admin/serviceCardModel";
 import { draftToDayCardProps } from "../draftToDayCardProps";
 
 const members = [
@@ -38,6 +39,19 @@ describe("draftToDayCardProps", () => {
   it("pins the label mapping explicitly (fact 26): sunday_role -> Domingo, saturday_role -> Sábado", () => {
     expect(draftToDayCardProps({ ...baseDraft, _type: "sunday_role" }, members).day).toBe("Domingo");
     expect(draftToDayCardProps({ ...baseDraft, _type: "saturday_role" }, members).day).toBe("Sábado");
+  });
+
+  it("labels special_role as Especial, NOT Domingo — the old ternary called every non-Saturday draft a Sunday", () => {
+    // `DayCard` reads this as a plain `string` and falls back to SPECIAL_THEME /
+    // setlist type "special" for an unrecognised label, so widening the union is
+    // safe (see `DayCardData.day`).
+    expect(draftToDayCardProps({ ...baseDraft, _type: "special_role" }, members).day).toBe("Especial");
+  });
+
+  it("comes from the shared SERVICE_LABEL record, so all three labels agree with the rest of the app", () => {
+    for (const type of ["sunday_role", "saturday_role", "special_role"] as const) {
+      expect(draftToDayCardProps({ ...baseDraft, _type: type }, members).day).toBe(SERVICE_LABEL[type]);
+    }
   });
 
   it("prefers the alias over the full name in every pre-resolved string", () => {

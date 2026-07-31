@@ -22,7 +22,7 @@
 //     bug. A manual pick still refuses a same-category double, exactly like
 //     `SeatBoard`.
 //  4. A Saturday column has no Coro row at all — gated by `rowAppliesTo`, not
-//     just `isSolvable`.
+//     just solvability. (A special DOES have one — E18.)
 //  5. Unchecking Domingos still enables Auto and renders no Sunday column.
 //  6. `unaddressableDates` is a prop computed from `sundayDates`, never
 //     derived here from `columns` (D9's columns can hold zero Sundays).
@@ -34,7 +34,7 @@ import { useMemo, useState } from "react";
 
 import {
   cellsToParticipantRoles,
-  isSolvable,
+  hasTarget,
   rowAppliesTo,
   seatDefForRow,
   type GridCell,
@@ -56,7 +56,13 @@ import {
 } from "./seatModel";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import type { TargetPreflight } from "./serviceReadiness";
-import { CARD_STYLE, PREFLIGHT_COPY, TONE_CLASS, describePreflightReason } from "./serviceCardModel";
+import {
+  CARD_STYLE,
+  PREFLIGHT_COPY,
+  SERVICE_LABEL,
+  TONE_CLASS,
+  describePreflightReason,
+} from "./serviceCardModel";
 
 // `SolveDiagnostics` is not part of `plannerModel`'s exports (Task 2's scope
 // was the wire translation, not presentation) — it is the narrow slice of
@@ -536,7 +542,9 @@ function ColumnHeader({
   const date = new Date(column.date.slice(0, 10) + "T12:00:00");
   const day = date.getDate();
   const month = date.toLocaleDateString("es-MX", { month: "short" });
-  const typeLabel = column.type === "sunday_role" ? "Domingo" : "Sábado";
+  // The shared `Record<ServiceType, string>` — not a third hardcoded ternary.
+  // The old one read "Sábado" on every special column.
+  const typeLabel = SERVICE_LABEL[column.type];
 
   return (
     <div className={`min-w-[150px] space-y-1 px-1 ${skipped ? "opacity-40" : ""}`}>
@@ -676,12 +684,16 @@ function GridCellView({
   onOpen: () => void;
   onCopy?: () => void;
 }) {
-  const solvable = isSolvable(row, column);
-  // D7: solvable rows cap at `target`, then a focusable `+N`. Non-solvable
-  // rows always render every occupant and never show `+N` — two people on one
-  // Drums seat is the normal case on 18 of 27 services, and `target: 1` is
+  // D7: rows that CARRY a target cap at it, then a focusable `+N`. Rows that
+  // do not always render every occupant and never show `+N` — two people on
+  // one Drums seat is the normal case on 18 of 27 services, and `target: 1` is
   // not a real threshold there.
-  const target = solvable ? row.target : null;
+  //
+  // Gated on `hasTarget`, NOT on `isSolvable`: the two agree on every weekend
+  // column, but a special is deliberately unsolvable (E4/E5) while still being
+  // a voice row with a real target. Reading `isSolvable` here would silently
+  // drop both the cap and the amber `+N` on every special column.
+  const target = hasTarget(row, column) ? row.target : null;
   const overflow = target != null && memberIds.length > target;
   const visibleIds = overflow ? memberIds.slice(0, target!) : memberIds;
   const hiddenIds = overflow ? memberIds.slice(target!) : [];
