@@ -406,12 +406,43 @@ export function unaddressableDates(sundayDates: string[], activeSatDates: string
 
 // ─── Request construction ─────────────────────────────────────────────────────
 
-function resolveToMemberName(name: string, members: RankMember[]): string {
+export type NameResolution = { resolved: string } | { unresolved: string };
+
+/**
+ * A rule's person text -> the canonical `member_name`, matching **alias OR
+ * `member_name`** — the reason `memberIdToName` must never be used for rule
+ * matching (E11, fact 12). Every seeded rule name is an alias whose
+ * `member_name` differs, so an id->`member_name` resolver would match nobody.
+ *
+ * **Resolve-or-report, not a bare string** (E11). It used to return the raw
+ * input on a miss, which is exactly what made a miss invisible: a caller
+ * comparing the result against `member_name` matched nobody and never learned.
+ * `ruleEnforcement.unresolvedRuleNames` is the surfacing half of this shape.
+ *
+ * `resolvedNameOrRaw` below keeps the old fallback for the two callers that
+ * genuinely want it — see there.
+ */
+export function resolveToMemberName(name: string, members: RankMember[]): NameResolution {
   const lo = name.toLowerCase().trim();
   const m = members.find(
     (mm) => mm.member_name.toLowerCase().trim() === lo || mm.alias?.trim().toLowerCase() === lo,
   );
-  return m?.member_name ?? name;
+  return m ? { resolved: m.member_name } : { unresolved: name };
+}
+
+/**
+ * The canonical name, or the RAW input when nothing matches.
+ *
+ * The solve REQUEST wants this, not a report: `buildSolveRequest` injects every
+ * DSL-named person absent from all pools into `support`, and an unmatched name
+ * must go in under the same spelling `allRulesToDs` writes into `dsl_rules` —
+ * omitting it is a documented 422. So the two paths deliberately share this one
+ * fallback and can never disagree about an unknown DSL person. Pinned in
+ * `plannerModel.test.ts` ("a rule naming a member absent from `members` …").
+ */
+function resolvedNameOrRaw(name: string, members: RankMember[]): string {
+  const r = resolveToMemberName(name, members);
+  return "resolved" in r ? r.resolved : r.unresolved;
 }
 
 /**
@@ -441,7 +472,7 @@ function restrictionToDs(r: PersonRestriction): string | null {
 }
 
 function allRulesToDs(config: SolverConfig, members: RankMember[]): string[] {
-  const res = (name: string) => resolveToMemberName(name, members);
+  const res = (name: string) => resolvedNameOrRaw(name, members);
   const out: string[] = [];
   for (const r of config.restrictions) {
     const resolved: PersonRestriction = { ...r, person: res(r.person) };
@@ -514,7 +545,7 @@ export function buildSolveRequest(input: {
     ...config.presence.flatMap((r) => r.persons),
   ];
   for (const name of allDslPersons) {
-    const resolved = resolveToMemberName(name, members);
+    const resolved = resolvedNameOrRaw(name, members);
     if (!poolNames.has(resolved) && !extraSupport.includes(resolved)) extraSupport.push(resolved);
   }
 

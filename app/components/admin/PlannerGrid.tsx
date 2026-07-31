@@ -234,6 +234,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
   );
   const unionRoles = useMemo(() => [...savedWindow, ...inGridRoles], [savedWindow, inGridRoles]);
 
+  const columnByDate = useMemo(() => new Map(columns.map((c) => [c.date, c])), [columns]);
+
   const cellsByKey = useMemo(() => {
     const map = new Map<string, GridCell>();
     for (const c of cells) map.set(cellKey(c.date, c.rowId), c);
@@ -263,8 +265,13 @@ export default function PlannerGrid(props: PlannerGridProps) {
   function rankFor(row: GridRow, date: string): RankedCandidate[] {
     const seat = seatDefForRow(row);
     const assigned = assignedForDate(cells, rows, date);
-    const order = rankCandidates({ seat, date, members, windowRoles: unionRoles, assigned });
-    const recentOnly = rankCandidates({ seat, date, members, windowRoles: savedWindow, assigned });
+    // At most one column per date (E3), so the date identifies the column.
+    // Passed to BOTH calls: the merge below keeps only `recent` from the second,
+    // so its verdict is discarded and cannot disagree — but a later change to
+    // what the merge keeps would make a divergence here a real hazard.
+    const column = columnByDate.get(date);
+    const order = rankCandidates({ seat, date, members, windowRoles: unionRoles, assigned, column });
+    const recentOnly = rankCandidates({ seat, date, members, windowRoles: savedWindow, assigned, column });
     const recentById = new Map(recentOnly.map((c) => [c.id, c.recent]));
     return order.map((c) => ({ ...c, recent: recentById.get(c.id) ?? c.recent }));
   }
