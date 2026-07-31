@@ -189,13 +189,55 @@ describe("unresolvedRuleNames", () => {
     expect(unresolvedRuleNames(config, MEMBERS)).toEqual(["Fantasma", "Otro Ausente"]);
   });
 
+  it("reports BOTH sides of a conflict when conflicts are the ONLY rules in the config", () => {
+    // Conflicts are the rule kind the user actually asked for ("exclude two
+    // people from being together") and the one kind no other surface detects:
+    // on a special no solve runs, so `applySolveResponse`'s accidental
+    // name-miss report never happens. A config carrying conflicts alone — no
+    // restriction, no presence — is the only shape that proves this loop runs.
+    const config: SolverConfig = {
+      ...emptyConfig,
+      conflicts: [
+        { id: "c1", personA: "Fantasma", personB: "Frank", pattern: "*.Lead" },
+        { id: "c2", personA: "Lucía", personB: "Otro Ausente", pattern: "*.BGV" },
+        { id: "c3", personA: "Fantasma", personB: "Otro Ausente", pattern: "*.*" },
+      ],
+    };
+    // personA and personB both reach the report, deduplicated, as written.
+    expect(unresolvedRuleNames(config, MEMBERS)).toEqual(["Fantasma", "Otro Ausente"]);
+  });
+
   it("reports nothing for the seeded config against this member list", () => {
     expect(unresolvedRuleNames(SEEDED, MEMBERS)).toEqual([]);
   });
 
   it("would report EVERY seeded name if the resolver only knew member_name (the shipped-doing-nothing bug)", () => {
     const aliasless = MEMBERS.map(({ alias: _alias, ...rest }) => rest);
-    expect(unresolvedRuleNames(SEEDED, aliasless).length).toBeGreaterThan(0);
+    const reported = unresolvedRuleNames(SEEDED, aliasless);
+    expect(reported.length).toBeGreaterThan(0);
+    // EVERY name, not merely one: the six restriction persons AND the three
+    // people named only by a conflict. Asserting the exact list is what makes
+    // "every" true — `length > 0` is satisfied by the restrictions alone, and
+    // would stay green with the conflicts unread.
+    expect(reported).toEqual([
+      "Frank",
+      "Mkz",
+      "Gaby",
+      "Lucía",
+      "Liu",
+      "Marianne",
+      "Niza",
+      "Hugo",
+      "Jakey",
+    ]);
+    expect(reported).toHaveLength(9);
+    // Niza, Hugo and Jakey are named by NO restriction — they exist in this
+    // report only because the conflicts (and, for Hugo/Jakey, presence) loops
+    // ran. Named explicitly so the reason the count is 9 cannot rot silently.
+    for (const conflictOnly of ["Niza", "Hugo", "Jakey"]) {
+      expect(SEEDED.restrictions.some((r) => r.person === conflictOnly)).toBe(false);
+      expect(reported).toContain(conflictOnly);
+    }
   });
 
   it("returns [] with no config, and ignores a blank person", () => {
@@ -276,6 +318,82 @@ describe("conflicts", () => {
 
   it("does not fire when the other person is not seated on this column", () => {
     expect(check({ member: member("lucia"), row: BGV, column: SPECIAL_WED, assigned: [] }).blocked).toBe(false);
+  });
+
+  it("scopes the OCCUPANT's row by the pattern too, not just the candidate's", () => {
+    // Hugo/Lucía is `*.Lead`, which binds the `lead` row and nothing else. Both
+    // SIDES of a conflict live inside that scope: a rule about who sings Lead
+    // says nothing about who plays bass or stands in the Coro. Hugo parked in a
+    // row the pattern does not bind must therefore leave Lucía's Lead free.
+    //
+    // Widening the occupant side is invisible from the candidate side alone —
+    // every other case here varies only the row Lucía is offered — and it would
+    // hard-refuse her from Lead, with no override, because Hugo happens to be on
+    // an instrument.
+    expect(
+      check({
+        member: member("lucia"),
+        row: LEAD,
+        column: SPECIAL_WED,
+        assigned: [seat("instrumento:Bass", "hugo")],
+      }).blocked,
+    ).toBe(false);
+    expect(
+      check({
+        member: member("lucia"),
+        row: LEAD,
+        column: SPECIAL_WED,
+        assigned: [seat("coro", "hugo")],
+      }).blocked,
+    ).toBe(false);
+    // The control: the SAME rule, the same candidate, Hugo moved into the one
+    // row `*.Lead` does bind — so the two above are scope, not a dead rule.
+    expect(
+      check({
+        member: member("lucia"),
+        row: LEAD,
+        column: SPECIAL_WED,
+        assigned: [seat("lead", "hugo")],
+      }).blocked,
+    ).toBe(true);
+  });
+
+  it("a self-naming conflict binds NOBODY — both sides resolving to one person is degenerate", () => {
+    // An admin can write the same person twice without noticing, because the two
+    // sides need not be spelled the same: "Hugo" is the alias, "Hugo Alberto
+    // Peña" the member_name, and both resolve to one member. The solver's
+    // `sum(lt) + sum(rt) <= 1` would count that member's variable twice and
+    // refuse a single legal seat; this must not either.
+    const config: SolverConfig = {
+      ...emptyConfig,
+      conflicts: [{ id: "c", personA: "Hugo", personB: "Hugo Alberto Peña", pattern: "*.LeadBGV" }],
+    };
+    // Hugo seated in BGV, offered Lead: `*.LeadBGV` binds both rows, so without
+    // the self-exemption he would be refused for coinciding with himself.
+    expect(
+      check({
+        member: member("hugo"),
+        row: LEAD,
+        column: SPECIAL_WED,
+        assigned: [seat("bgv", "hugo")],
+        config,
+      }).blocked,
+    ).toBe(false);
+    // The control: the same rule with a genuinely different second person does
+    // fire, so the case above is the self-naming guard and not an inert config.
+    const real: SolverConfig = {
+      ...emptyConfig,
+      conflicts: [{ id: "c", personA: "Hugo", personB: "Jakey", pattern: "*.LeadBGV" }],
+    };
+    expect(
+      check({
+        member: member("hugo"),
+        row: LEAD,
+        column: SPECIAL_WED,
+        assigned: [seat("bgv", "jakey")],
+        config: real,
+      }).blocked,
+    ).toBe(true);
   });
 
   it("fires on Sunday and Saturday columns too — `*.` covers every service", () => {
@@ -488,6 +606,42 @@ describe("rankCandidates with rules", () => {
     const gaby = ranked.findIndex((c) => c.id === "gaby");
     expect(ranked[lucia].ruleBlockedReason).not.toBeNull();
     expect(lucia).toBeLessThan(gaby);
+  });
+
+  it("threads `sundayDates` through, so a WEEK exclusion reaches the weekend grid", () => {
+    // Every other case in this block edits a Wednesday special, where
+    // `weekForColumn` is `null` and the spine is never consulted — so none of
+    // them can tell whether `rankCandidates` forwards `sundayDates` at all.
+    // `rankCandidates` is the boundary the picker consumes, and losing the
+    // spine here would turn the seeded week exclusions into nothing, silently.
+    const weekend = {
+      ...base,
+      seat: LEAD,
+      date: SUN_W3.date,
+      assigned: [] as AssignedSeat[],
+      column: SUN_W3,
+      config: SEEDED,
+    };
+    const lucia = rankCandidates({ ...weekend, sundayDates: SUNDAYS }).find((c) => c.id === "lucia");
+    expect(lucia?.ruleBlockedReason).toContain("semana 3");
+    expect(lucia?.eligible).toBe(false);
+    // The control (E7/E21): no spine, no week, so the SAME call blocks nobody —
+    // which is what a dropped passthrough would look like everywhere.
+    const noSpine = rankCandidates(weekend).find((c) => c.id === "lucia");
+    expect(noSpine?.ruleBlockedReason).toBeNull();
+    expect(noSpine?.eligible).toBe(true);
+  });
+
+  it("`eligible` folds in the DOUBLE-DUTY block as well — the term nothing else here reads", () => {
+    // Niza already holds Lead of this service while BGV is being ranked, so she
+    // carries a real `blockedReason` and no rule reason at all. Task 7's filler
+    // consumes `eligible`; without this term it would seat one person in two
+    // voice seats of the same service.
+    const niza = rankCandidates(base).find((c) => c.id === "niza");
+    expect(niza?.blockedReason).toBe("Ya asignado en Lead");
+    expect(niza?.ruleBlockedReason).toBeNull();
+    expect(niza?.available).toBe(true);
+    expect(niza?.eligible).toBe(false);
   });
 
   it("`eligible` also folds in availability, which `blockedReason` never does (P8)", () => {
