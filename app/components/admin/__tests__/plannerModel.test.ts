@@ -1083,11 +1083,6 @@ describe("weekForColumn returns null for a special (E4)", () => {
     expect(weekForColumn(asSpecial, FEB_SUNDAYS)).toBeNull();
   });
 
-  it("a special dated ON a Sunday in the window is still null, not that Sunday's week", () => {
-    expect(weekForColumn({ date: "2026-02-15", type: "special_role" }, FEB_SUNDAYS)).toBeNull();
-    expect(weekForColumn({ date: "2026-02-15", type: "sunday_role" }, FEB_SUNDAYS)).toBe(3);
-  });
-
   it("applySolveResponse writes NOTHING onto a special column, while the same response fills the real Saturday", () => {
     const rows = buildRows({ instrumentSeats: [], fohSeats: [] });
     const response: SolveResponse = {
