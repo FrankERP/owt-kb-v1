@@ -1113,14 +1113,24 @@ export default function MonthGenerator({
   const sundayDatesFull = useMemo(() => getDates(year, month, 0), [year, month]);
 
   /**
-   * **E21's whole point.** The calendar's Sunday picks feed `buildColumns` and
-   * NOTHING else: `buildSolveRequest`, `applySolveResponse`,
-   * `computeUnaddressableDates` and `ruleEnforcement` all keep receiving
-   * `sundayDatesFull`, because the week number is POSITIONAL over the full
-   * month's Sunday list. Feed the selected subset to the spine and week 3 stops
-   * meaning the third Sunday: the seeded week-1/week-3 exclusions land on the
-   * wrong dates and produce rosters that silently violate stated rules, or the
-   * solve 400s outright below three Sundays.
+   * **E21's whole point.** The calendar's Sunday picks are a RENDER/CREATE
+   * filter, never a spine. Exactly one consumer takes them as its Sunday list
+   * — `buildColumns` — plus `mapUnfilledSeats`, which takes them as a separate
+   * FOURTH argument purely to discard markers for columns that aren't on
+   * screen. All four spine consumers keep receiving `sundayDatesFull`:
+   * `buildSolveRequest`, `applySolveResponse`, `computeUnaddressableDates` and
+   * `mapUnfilledSeats`' 2nd argument. (`ruleEnforcement` used to be named here
+   * and never belonged: it is reached only from `candidateRanking`, is not
+   * imported by this file, and takes no Sunday list at all.)
+   *
+   * The reason is that the week number is POSITIONAL over the full month's
+   * Sunday list. Feed the selected subset to the spine and week 3 stops meaning
+   * the third Sunday: the seeded week-1/week-3 exclusions land on the wrong
+   * dates and produce rosters that silently violate stated rules, or the solve
+   * 400s outright below three Sundays.
+   *
+   * All four are pinned in `MonthGenerator.create.test.tsx` — swapping any one
+   * of them for `selectedSundays` fails a test there.
    */
   const selectedSundays = useMemo(
     () => sundayDatesFull.filter(d => !deselectedSundays.includes(d)),
