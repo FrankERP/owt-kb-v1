@@ -122,9 +122,10 @@ export function rankCandidates(input: {
   const weeks = input.weeks ?? 4;
 
   // Load comes from the shipped counter so the week rule (Saturday counts toward
-  // the following Sunday) cannot drift between this and the participation sidebar.
-  // computeParticipation keeps `total` VOICE-ONLY (sunLead+satLead+sunBGV+satBGV+coro)
-  // and tracks instrument/FOH history in separate fields, so the figure read here
+  // the following Sunday, a special counts toward the next Sunday on or after it)
+  // cannot drift between this and the participation sidebar. computeParticipation
+  // keeps `total` VOICE-ONLY (sunLead+satLead+sunBGV+satBGV+coro+especial) and
+  // tracks instrument/FOH history in separate fields, so the figure read here
   // must match the seat's own category — otherwise instrumento/foh seats (the ones
   // the solver can't touch at all, and where this fairness signal matters most)
   // always read load 0. The `recent` strip below is built by `servingIds` filtered
