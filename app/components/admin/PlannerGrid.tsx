@@ -187,6 +187,15 @@ export default function PlannerGrid(props: PlannerGridProps) {
   } = props;
 
   const [openCell, setOpenCell] = useState<{ rowId: string; date: string } | null>(null);
+  // D-defect-3: candidate ORDER only, captured the moment a cell opens. Each
+  // row's own live state (load, recent strip, `Ya asignado`, blocked reason,
+  // selected) still comes from a fresh `rankFor` every render — only the
+  // sequence the ids are rendered in is pinned. Without this, picking someone
+  // changes their `load` (and can change `alreadyAssigned`), which changes
+  // `rankCandidates`' sort key, so the row you just clicked — and everyone
+  // around it — jumps to a different position under the cursor. Cleared on
+  // close so reopening (even the same cell) recomputes the order fresh.
+  const [openOrder, setOpenOrder] = useState<string[] | null>(null);
   const [confirmingAuto, setConfirmingAuto] = useState(false);
   const [removeError, setRemoveError] = useState<{ rowId: string; message: string } | null>(null);
 
@@ -273,6 +282,17 @@ export default function PlannerGrid(props: PlannerGridProps) {
     onCellsChange(withUpdatedCell(cells, row.id, date, next));
   }
 
+  /** Opens the picker and freezes the candidate ORDER as of right now. */
+  function openPicker(row: GridRow, date: string) {
+    setOpenOrder(rankFor(row, date).map((c) => c.id));
+    setOpenCell({ rowId: row.id, date });
+  }
+
+  function closePicker() {
+    setOpenCell(null);
+    setOpenOrder(null);
+  }
+
   function handleAutoClick() {
     if (autoState.disabledReason || autoState.pending) return;
     setConfirmingAuto(true);
@@ -328,7 +348,23 @@ export default function PlannerGrid(props: PlannerGridProps) {
   }
 
   const openRow = openCell ? rows.find((r) => r.id === openCell.rowId) ?? null : null;
-  const openCandidates = openCell && openRow ? rankFor(openRow, openCell.date) : [];
+  // Live data (load, recent, alreadyAssigned, blockedReason, selected all
+  // stay current) — only the SEQUENCE is pinned to `openOrder`, captured once
+  // by `openPicker` when the cell was opened. Ids `rankFor` returns that
+  // aren't in `openOrder` (shouldn't happen — the candidate pool for a given
+  // row/date doesn't change while it's open) sort after everything frozen,
+  // stably, rather than disappearing.
+  const liveCandidates = openCell && openRow ? rankFor(openRow, openCell.date) : [];
+  const openCandidates = openOrder
+    ? [...liveCandidates].sort((a, b) => {
+        const ia = openOrder.indexOf(a.id);
+        const ib = openOrder.indexOf(b.id);
+        if (ia === -1 && ib === -1) return 0;
+        if (ia === -1) return 1;
+        if (ib === -1) return -1;
+        return ia - ib;
+      })
+    : liveCandidates;
 
   return (
     <div className="space-y-4">
@@ -408,9 +444,9 @@ export default function PlannerGrid(props: PlannerGridProps) {
       <div className="overflow-x-auto">
         <div
           className="grid"
-          style={{ gridTemplateColumns: `160px repeat(${columns.length}, minmax(150px, 1fr))` }}
+          style={{ gridTemplateColumns: `minmax(176px, max-content) repeat(${columns.length}, minmax(150px, 1fr))` }}
         >
-          <div className="min-w-[160px]" />
+          <div className="min-w-[176px]" />
           {columns.map((column) => (
             <ColumnHeader
               key={column.date}
@@ -431,7 +467,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
               unfilledByKey={unfilledByKey}
               duplicatesByDate={(date) => duplicatesByDateMap.get(date) ?? emptyDuplicates}
               memberName={memberName}
-              onOpen={(date) => setOpenCell({ rowId: row.id, date })}
+              onOpen={(date) => openPicker(row, date)}
               onRemove={row.category !== "voz" ? () => removeRow(row.id) : undefined}
               removeError={activeRemoveError?.rowId === row.id ? activeRemoveError.message : null}
               onCopy={row.category !== "voz" ? (date) => copyRowAcrossDates(row, date) : undefined}
@@ -455,7 +491,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             </span>
             <button
               type="button"
-              onClick={() => setOpenCell(null)}
+              onClick={closePicker}
               className="min-h-[44px] min-w-[44px] font-label text-xs uppercase tracking-widest text-[#C8D8EB]/60 hover:text-white"
             >
               Cerrar
@@ -563,9 +599,21 @@ function RowGroup({
 }) {
   return (
     <>
-      <div className="min-w-[160px] px-1 py-1">
-        <div className="flex items-center gap-1.5">
-          <span className="font-label text-xs uppercase tracking-widest text-[#C8D8EB]/70">{row.label}</span>
+      {/*
+        D-defect-2: the label, "asignación manual" tag, and Eliminar used to
+        share one `flex items-center` line with Eliminar pushed via
+        `ml-auto` — for long labels (BASS, CONSOLE) the three pieces
+        exceeded 160px and Eliminar spilled into the first grid cell. Each
+        piece now gets its own line so none of them can compete for the
+        same horizontal space; the column track itself grows to fit the
+        longest label instead of clipping (`minmax(176px, max-content)`
+        above). The accessible name (`Eliminar fila {label}`) is unchanged.
+      */}
+      <div className="min-w-[176px] px-1 py-1">
+        <div className="flex flex-col items-start gap-0.5">
+          <span className="font-label text-xs uppercase tracking-widest text-[#C8D8EB]/70 break-words">
+            {row.label}
+          </span>
           {row.category !== "voz" && (
             <span className="font-label text-[9px] uppercase tracking-widest text-gray-500">
               asignación manual
@@ -576,7 +624,7 @@ function RowGroup({
               type="button"
               onClick={onRemove}
               aria-label={`Eliminar fila ${row.label}`}
-              className="ml-auto font-label text-[10px] uppercase tracking-widest text-red-400/70 hover:text-red-400"
+              className="font-label text-[10px] uppercase tracking-widest text-red-400/70 hover:text-red-400"
             >
               Eliminar
             </button>

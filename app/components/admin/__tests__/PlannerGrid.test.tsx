@@ -324,6 +324,82 @@ describe("PlannerGrid — ranking (D12)", () => {
   });
 });
 
+describe("PlannerGrid — candidate order frozen while the picker is open", () => {
+  // Picking a candidate changes THEIR `load` (they now occupy a seat in this
+  // grid) which, unfrozen, changes `rankCandidates`' sort key and reshuffles
+  // the whole list under the cursor — the bug report was "elements on the
+  // list change places depending on if you choose them or not". Three equal
+  // (load 0) candidates, alphabetical to start, and picking the ALPHABETICALLY
+  // FIRST one is the case that actually moves under the unfrozen sort (load
+  // ascending, then name) — picking the last one wouldn't visibly reorder.
+  const localMembers: RankMember[] = [
+    { _id: "ana", member_name: "Ana", memberType: ["voz"] },
+    { _id: "ben", member_name: "Ben", memberType: ["voz"] },
+    { _id: "cat", member_name: "Cat", memberType: ["voz"] },
+  ];
+
+  // Order of KNOWN candidate names only — `li.textContent` also carries the
+  // live `load` number and the `Ya asignado` badge, both of which are
+  // expected to change live; only the SEQUENCE of names must not.
+  function names(): string[] {
+    return screen
+      .getAllByRole("button")
+      .filter((el) => el.tagName === "LI")
+      .map((el) => (el.textContent ?? "").trim())
+      .map((text) => ["Ana", "Ben", "Cat"].find((n) => text.includes(n)) ?? text);
+  }
+
+  it("keeps the rendered order stable after a pick, while the picked row's own state (selected) still updates live", () => {
+    let cells: GridCell[] = [];
+    const onCellsChange = vi.fn((next: GridCell[]) => {
+      cells = next;
+    });
+    const { container, rerender } = render(
+      <PlannerGrid {...baseProps({ members: localMembers, cells, onCellsChange })} />,
+    );
+    fireEvent.click(cellFor(container, "lead", "2026-08-09"));
+
+    const before = names();
+    expect(before.length).toBe(3);
+    expect(before[0]).toContain("Ana"); // alphabetical tie-break, all load 0
+
+    fireEvent.click(candidateLi("Ana"));
+    expect(onCellsChange).toHaveBeenCalledTimes(1);
+    rerender(<PlannerGrid {...baseProps({ members: localMembers, cells, onCellsChange })} />);
+
+    const after = names();
+    // Order is UNCHANGED: without the fix, Ana's load goes 0 -> 1 and she
+    // sorts back below Ben/Cat, reordering the list under the cursor.
+    expect(after).toEqual(before);
+    // Ana's OWN row state still updates live — she now reads as selected.
+    const anaRow = candidateLi("Ana");
+    expect(anaRow.className).toContain("border-[#00bfff] bg-[#00bfff]/10");
+  });
+
+  it("reopening the picker (a fresh cell) recomputes the order from scratch", () => {
+    let cells: GridCell[] = [];
+    const onCellsChange = vi.fn((next: GridCell[]) => {
+      cells = next;
+    });
+    const { container, rerender } = render(
+      <PlannerGrid {...baseProps({ members: localMembers, cells, onCellsChange })} />,
+    );
+    fireEvent.click(cellFor(container, "lead", "2026-08-09"));
+    fireEvent.click(candidateLi("Ana"));
+    rerender(<PlannerGrid {...baseProps({ members: localMembers, cells, onCellsChange })} />);
+    fireEvent.click(screen.getByRole("button", { name: /cerrar/i }));
+
+    fireEvent.click(cellFor(container, "bgv", "2026-08-09"));
+    // Fresh order for the NEW cell: Ana now carries real load from Lead, so a
+    // freshly-opened BGV picker (not the frozen Lead-picker order) sorts her
+    // below Ben/Cat.
+    const reopened = names();
+    const anaIdx = reopened.findIndex((n) => n.includes("Ana"));
+    const benIdx = reopened.findIndex((n) => n.includes("Ben"));
+    expect(anaIdx).toBeGreaterThan(benIdx);
+  });
+});
+
 describe("PlannerGrid — manual pick blocking (D6)", () => {
   it("REFUSES a same-category double, exactly as SeatBoard does", () => {
     const cells: GridCell[] = [{ date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "manual" }];

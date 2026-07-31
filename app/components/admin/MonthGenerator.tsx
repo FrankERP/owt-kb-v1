@@ -441,16 +441,30 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
         <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Semanas excluidas</p>
         <div className="space-y-1">
           {weekEx.map(we => (
-            <div key={we.id} className="flex gap-1.5 items-center">
+            <div key={we.id} className="flex flex-wrap gap-1.5 items-center">
+              {/*
+                `rbSel` bakes in `w-full` for its many full-width callers
+                elsewhere in this file. Tailwind emits `.w-full` AFTER `.w-20`
+                in the generated stylesheet, so on equal specificity `w-full`
+                silently wins the cascade and this select renders at
+                container width — an explicit `max-w` is required to actually
+                pin it narrow (same reasoning as the pattern selects' cap).
+              */}
               <select
-                className={`${rbSel} w-20 flex-none`}
+                className={`${rbSel} w-20 max-w-[80px] flex-none`}
                 value={we.week}
                 onChange={e => setWeekEx(ws => ws.map(x => x.id === we.id ? { ...x, week: Number(e.target.value) } : x))}
               >
                 {[1,2,3,4,5].map(n => <option key={n} value={n}>Sem {n}</option>)}
               </select>
+              {/*
+                D-defect-1: this used to be `flex-1` with no cap, so at the
+                full-width panel it absorbed all free space and pushed the
+                delete button off the card's right edge. Capped and allowed
+                to wrap instead — same fix as the Caps row below.
+              */}
               <select
-                className={`${rbSel} flex-1`}
+                className={`${rbSel} flex-1 min-w-[140px] max-w-[220px]`}
                 value={we.pattern}
                 onChange={e => setWeekEx(ws => ws.map(x => x.id === we.id ? { ...x, pattern: e.target.value } : x))}
               >
@@ -474,16 +488,23 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
         <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Caps</p>
         <div className="space-y-1">
           {caps.map(cap => (
-            <div key={cap.id} className="flex gap-1.5 items-center">
+            // D-defect-1: at full panel width an unconstrained `flex-1` on the
+            // pattern select absorbed all free space, clipping the number
+            // input and pushing the sem/delete controls past the card's right
+            // edge (no `flex-wrap` either). Capped and wrapped instead of
+            // truncated — the row now folds onto a second line rather than
+            // spilling out of the card.
+            <div key={cap.id} className="flex flex-wrap gap-1.5 items-center">
               <select
-                className={`${rbSel} flex-1`}
+                className={`${rbSel} flex-1 min-w-[140px] max-w-[220px]`}
                 value={cap.pattern}
                 onChange={e => setCaps(cs => cs.map(x => x.id === cap.id ? { ...x, pattern: e.target.value } : x))}
               >
                 {PATTERNS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
+              {/* Same `w-full`-vs-fixed-width cascade issue as the week select above. */}
               <select
-                className={`${rbSel} w-14 flex-none`}
+                className={`${rbSel} w-14 max-w-[56px] flex-none`}
                 value={cap.op}
                 onChange={e => setCaps(cs => cs.map(x => x.id === cap.id ? { ...x, op: e.target.value as any } : x))}
               >
