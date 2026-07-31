@@ -694,12 +694,28 @@ export function applySolveResponse(input: {
 /** Places each solver `unfilled_seats` string on a row and a date. */
 const ROLE_TO_ROW_ID: Record<string, string> = { Lead: "lead", BGV: "bgv", Choir: "coro" };
 
+/**
+ * `sundayDates` is the FULL month spine — it is what resolves the solver's
+ * positional week number (E21) and must never be narrowed to the selection.
+ * `selectedSundays` then filters the RESULT: the Sunday branch used to resolve
+ * unconditionally while the Saturday branch already filtered against
+ * `activeSatDates`, so once Sundays became individually deselectable an
+ * unfilled marker for a week the admin removed would render on a column that no
+ * longer exists — or, since a deselected Sunday may carry a weekday special
+ * instead, on a `special_role` column the solver was never asked about.
+ *
+ * Required, not optional-with-a-permissive-default: every caller has to state
+ * which Sundays it actually rendered, and passing `sundayDates` twice is the
+ * explicit way to say "all of them".
+ */
 export function mapUnfilledSeats(
   seats: string[],
   sundayDates: string[],
   activeSatDates: string[],
+  selectedSundays: string[],
 ): { date: string; rowId: string }[] {
   const activeSat = new Set(activeSatDates);
+  const selectedSun = new Set(selectedSundays);
   const out: { date: string; rowId: string }[] = [];
   for (const seat of seats) {
     const parsed = parseUnfilledSeat(seat);
@@ -707,7 +723,8 @@ export function mapUnfilledSeats(
     const rowId = ROLE_TO_ROW_ID[parsed.role];
     let date: string | null = null;
     if (parsed.service === "Sunday") {
-      date = sundayDates[parsed.week - 1] ?? null;
+      const sunDate = sundayDates[parsed.week - 1] ?? null;
+      date = sunDate && selectedSun.has(sunDate) ? sunDate : null;
     } else {
       const satDate = saturdayForWeek(parsed.week, sundayDates);
       date = satDate && activeSat.has(satDate) ? satDate : null;

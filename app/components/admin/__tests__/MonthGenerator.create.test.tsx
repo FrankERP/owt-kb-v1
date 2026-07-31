@@ -55,14 +55,27 @@ function setMonthYear(container: HTMLElement, month: number, year: number) {
   fireEvent.change(yearInput, { target: { value: String(year) } });
 }
 
-function disableSaturdays() {
-  const cb = screen.getByLabelText("Sábados") as HTMLInputElement;
-  if (cb.checked) fireEvent.click(cb);
+/**
+ * Task 5 replaced the Domingos/Sábados checkboxes and the Saturday pill row
+ * with `MonthCalendar`, so "turn Saturdays off" is now a tap per Saturday cell.
+ * Only the INTERACTION moved — every assertion in this file is unchanged.
+ *
+ * Dates are collected first and each cell re-queried inside the loop, so a
+ * React re-render between clicks can never leave this iterating stale nodes.
+ */
+function deselectAll(container: HTMLElement, kind: "sunday" | "saturday") {
+  const dates = Array.from(container.querySelectorAll(`[data-day-kind="${kind}"]`)).map((el) =>
+    el.getAttribute("data-date"),
+  );
+  for (const date of dates) {
+    const cell = container.querySelector(`[data-date="${date}"]`);
+    if (cell?.getAttribute("data-selected") === "true") fireEvent.click(cell);
+  }
 }
 
 function goToPreview(container: HTMLElement, month: number, year: number) {
   setMonthYear(container, month, year);
-  disableSaturdays();
+  deselectAll(container, "saturday");
   fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
 }
 
@@ -776,15 +789,9 @@ describe("MonthGenerator — create path", () => {
       <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     setMonthYear(container, 10, 2026);
-    // Deselect every October Saturday, then re-select ONLY the 31st.
-    const satPillLabels = Array.from(container.querySelectorAll("label")).filter((l) =>
-      /de oct/i.test(l.textContent ?? ""),
-    );
-    for (const label of satPillLabels) {
-      fireEvent.click(label.querySelector("input")!);
-    }
-    const oct31 = satPillLabels.find((l) => /31 de oct/i.test(l.textContent ?? ""));
-    fireEvent.click(oct31!.querySelector("input")!);
+    // Deselect every October Saturday on the calendar, then re-select ONLY the 31st.
+    deselectAll(container, "saturday");
+    fireEvent.click(container.querySelector('[data-date="2026-10-31"]')!);
 
     // Pools live on step 1; select Ana before building the grid.
     fireEvent.click(screen.getByLabelText("Ana"));
@@ -825,12 +832,15 @@ describe("MonthGenerator — create path", () => {
   // ── Task 4: two items Task 3 could not implement — they live on the wizard
   // shell (`MonthGenerator`'s own step, not `PlannerGridProps`). ─────────────
 
-  it("Previsualizar → stays disabled when both Domingos and Sábados are unchecked", () => {
-    render(
+  // Task 5 restated the predicate as "no columns at all" (specials counted),
+  // which is what this gate always meant; the interaction moved from two
+  // checkboxes to per-date calendar cells. The assertion is unchanged.
+  it("Previsualizar → stays disabled when the calendar has no date selected at all", () => {
+    const { container } = render(
       <MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
-    fireEvent.click(screen.getByLabelText("Domingos"));
-    fireEvent.click(screen.getByLabelText("Sábados"));
+    deselectAll(container, "sunday");
+    deselectAll(container, "saturday");
     expect(
       (screen.getByRole("button", { name: /Previsualizar/ }) as HTMLButtonElement).disabled,
     ).toBe(true);
@@ -996,7 +1006,7 @@ describe("MonthGenerator — create path", () => {
       <MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     setMonthYear(container, 2, 2026);
-    fireEvent.click(screen.getByLabelText("Domingos")); // uncheck — Sábados stays checked
+    deselectAll(container, "sunday"); // Saturdays stay selected
     fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
 
     // No column for the first Sunday of the month anywhere in the grid.
