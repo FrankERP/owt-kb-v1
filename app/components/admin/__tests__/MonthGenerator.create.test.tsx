@@ -79,6 +79,32 @@ function goToPreview(container: HTMLElement, month: number, year: number) {
   fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
 }
 
+/**
+ * Adds a weekday special through the REAL composer (tap the day cell, type the
+ * name, "Agregar") — never by reaching into state. Task 6's duplicate test only
+ * means anything if it walks the same path an admin does: `handlePreview`
+ * rebuilds the drafts with `previous: []`, so a test that shortcuts around the
+ * calendar and the wizard never sees the path where the ids are re-minted.
+ */
+function addSpecial(container: HTMLElement, date: string, name: string) {
+  fireEvent.click(container.querySelector(`[data-date="${date}"]`)!);
+  fireEvent.change(screen.getByLabelText("Nombre del servicio especial"), { target: { value: name } });
+  fireEvent.click(screen.getByRole("button", { name: "Agregar" }));
+}
+
+/** Renaming a special is remove-then-add on the config step (Task 5). */
+function renameSpecial(container: HTMLElement, date: string, nextName: string) {
+  fireEvent.click(screen.getByRole("button", { name: /^Quitar servicio especial/ }));
+  addSpecial(container, date, nextName);
+}
+
+/** A month whose ONLY columns are the specials the test adds. */
+function specialsOnly(container: HTMLElement, month: number, year: number) {
+  setMonthYear(container, month, year);
+  deselectAll(container, "saturday");
+  deselectAll(container, "sunday");
+}
+
 const createButton = () => screen.getByRole("button", { name: /^Crear \d+ borrador/ });
 const publishButton = () => screen.getByRole("button", { name: "Crear y publicar" });
 
@@ -1223,5 +1249,296 @@ describe("MonthGenerator — create path", () => {
     expect(
       container.querySelector('[data-row-id="coro"][data-date="2026-02-07"]')?.textContent ?? "",
     ).not.toContain("Ana");
+  });
+
+  // ── Task 6: specials through the WRITE path ────────────────────────────────
+  //
+  // The only part of this feature that can put a wrong document in Sanity, and
+  // its failure modes are silent ones: a duplicate `special_role` nobody
+  // notices, or a create that reports success and does nothing. Every test
+  // below drives the real wizard — calendar composer, Previsualizar, the footer
+  // buttons — against a mocked `fetch`, because the defects live in the wiring
+  // between them and not in any one pure function.
+  //
+  // 2026-02-11 is a Wednesday and 2026-02-12 a Thursday: weekday dates, so a
+  // special on either never contends with a weekend column (E3).
+  const SPECIAL_DATE = "2026-02-11";
+
+  it("creates a special end-to-end: the POSTed body carries service_name, and the type and date of the special", async () => {
+    // Without `service_name` on the body, `canonicalizeCreatePayload` files
+    // issue "service_name" and EVERY special comes back 400 — the capability
+    // would be dead on arrival with only a generic "no se pudieron crear".
+    const { fetchMock, calls } = stubRolesFetch(() => ({ ok: true }));
+    const { container } = render(
+      <MonthGenerator
+        members={noMembers}
+        existingRoles={[]}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+        preflight={makePreflight(() => "creatable")}
+      />,
+    );
+    specialsOnly(container, 2, 2026);
+    addSpecial(container, SPECIAL_DATE, "Vigilia de Oración");
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+
+    expect(createButton().textContent).toMatch(/^Crear 1 borrador/);
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    expect(calls[0].body).toMatchObject({
+      _type: "special_role",
+      date: SPECIAL_DATE,
+      service_name: "Vigilia de Oración",
+      published: false,
+    });
+  });
+
+  it("a special created this session cannot be created a SECOND time after a rename, with existingRoles left deliberately stale", async () => {
+    // THE round-1 blocker. `onCreated()` is not awaited (:1353), so in
+    // production `existingRoles` may not have refreshed by the time the admin
+    // is back on the config step — and even when it has, the rename changes the
+    // collision key, so `cellsToDrafts` would see no collision either way.
+    // `handlePreview` then rebuilds with `previous: []`, re-minting every
+    // `localId` and resetting `exists` to the (absent) collision. Nothing on
+    // the draft remembers the create. The session-local set keyed by
+    // `type__date` is the only thing that does.
+    //
+    // `existingRoles` is NEVER refreshed here, on purpose: refreshing it in the
+    // harness would paper over exactly the race this pins. And a unit test on
+    // `cellsToDrafts` cannot reach this path at all, because `handlePreview`
+    // hands it `previous: []`.
+    const { fetchMock, calls } = stubRolesFetch(() => ({ ok: true }));
+    const { container } = render(
+      <MonthGenerator
+        members={noMembers}
+        existingRoles={[]}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+        // The production preflight: its special branch is NAME-BLIND
+        // (`monthTargetPreflight`), so it can only ever answer `creatable` for
+        // a special — it is structurally incapable of catching this.
+        preflight={makePreflight(() => "creatable")}
+      />,
+    );
+    specialsOnly(container, 2, 2026);
+    addSpecial(container, SPECIAL_DATE, "Vigilia");
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    // Back to the config step and rename the special (remove-then-add), then
+    // preview again — the exact walk that re-mints the draft.
+    fireEvent.click(screen.getByRole("button", { name: /Volver/ }));
+    renameSpecial(container, SPECIAL_DATE, "Vigilia de Oración");
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+
+    // Both Crear buttons are dead, the count is honest, and the column says why
+    // — the three surfaces that used to disagree.
+    expect(createButton().textContent).toMatch(/^Crear 0 borrador/);
+    expect((createButton() as HTMLButtonElement).disabled).toBe(true);
+    expect((publishButton() as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/1 no disponible/)).toBeTruthy();
+    expect(screen.getByText("Ya lo creaste en esta sesión.")).toBeTruthy();
+
+    fireEvent.click(createButton());
+    fireEvent.click(publishButton());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(calls.filter((c) => c.date === SPECIAL_DATE)).toHaveLength(1);
+  });
+
+  it("after a PARTIAL failure leaves the dialog open, the created special drops out of both Crear buttons and states why — the retry re-posts only the failed weekend date", async () => {
+    // Both round-6 reviewers found this independently: the create-gate
+    // predicate used to be written out three times, and `toCreate` gates both
+    // buttons AND the "Crear N borrador(es)" label. Wire the session set into
+    // `handleConfirm`'s filter alone and the button keeps offering the special
+    // — either re-posting it (a duplicate document) or, once the confirm path
+    // drops it, returning early with no `pushError` at all: pressed, told
+    // nothing, given nothing.
+    const failingSunday = FEB_2026_SUNDAYS[0];
+    const { fetchMock, calls } = stubRolesFetch((date) =>
+      date === failingSunday ? { ok: false, status: 500 } : { ok: true },
+    );
+    const { container } = render(
+      <MonthGenerator
+        members={noMembers}
+        existingRoles={[]}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+        preflight={makePreflight(() => "creatable")}
+      />,
+    );
+    setMonthYear(container, 2, 2026);
+    deselectAll(container, "saturday");
+    for (const date of FEB_2026_SUNDAYS.slice(1)) {
+      fireEvent.click(container.querySelector(`[data-date="${date}"]`)!);
+    }
+    addSpecial(container, SPECIAL_DATE, "Vigilia");
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+    expect(createButton().textContent).toMatch(/^Crear 2 borrador/);
+
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(screen.getByText(/No se pudieron crear 1 de 2 servicios/)).toBeTruthy(),
+    );
+
+    // ONE draft is still creatable: the Sunday that failed. Not two.
+    expect(createButton().textContent).toMatch(/^Crear 1 borrador/);
+    expect((createButton() as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByText("Ya lo creaste en esta sesión.")).toBeTruthy();
+
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(calls[2].date).toBe(failingSunday);
+    // The special was posted exactly once across both confirms.
+    expect(calls.filter((c) => c.date === SPECIAL_DATE)).toHaveLength(1);
+  });
+
+  it("a special-only confirm does not call saveHistoryEntry AT ALL — a pre-existing entry for the month survives byte-for-byte", async () => {
+    // P1's second lock. `historyEntryFromDrafts` only returns `null` for an
+    // EMPTY list, so a special-only confirm hands it a NON-empty list and gets
+    // back a real entry whose counts are empty (`HISTORY_ROLE_KEYS` zeroes a
+    // special's seats — the first lock). `saveHistoryEntry` replaces by
+    // `${year}-${month}`, so that entry would WIPE this month's real Sunday
+    // counts and burn one of the six slots `buildSolveRequest` feeds the solver.
+    //
+    // Asserted as "the seeded entry is untouched" rather than "no entry was
+    // written": with the two locks in place the observable is that
+    // `saveHistoryEntry` never runs, and only a pre-seeded value can show that.
+    // (The brief's warning applies: with a weekend draft in the fixture,
+    // removing the `special_role` filter alone produces byte-identical output,
+    // so this fixture is deliberately special-ONLY.)
+    const seeded = [
+      { key: "2026-2", year: 2026, month: 2, total_counts: { Ana: 3 }, role_counts: { Ana: { "Sun.Lead": 3 } } },
+    ];
+    localStorage.setItem("owt_solver_history_v2", JSON.stringify(seeded));
+
+    const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz"] }];
+    const { fetchMock } = stubRolesFetch(() => ({ ok: true }));
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    specialsOnly(container, 2, 2026);
+    addSpecial(container, SPECIAL_DATE, "Vigilia");
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+
+    // Ana takes a real seat on the special, so the entry the unfiltered code
+    // would write is not empty by accident — it is empty because a special
+    // contributes nothing, and it must not be written at all.
+    const leadCell = container.querySelector(`[data-row-id="lead"][data-date="${SPECIAL_DATE}"]`);
+    fireEvent.click(leadCell!);
+    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+    fireEvent.click(screen.getByText("Cerrar"));
+
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    expect(JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]")).toEqual(seeded);
+  });
+
+  it("refuses to swap two SPECIAL columns — the name stays with its date, so the swap would file each roster under the other service", () => {
+    // The cross-type refusal already covers special↔weekend; special↔special is
+    // the case it lets through, because both columns have the same type.
+    const members = [{ _id: "m1", member_name: "Ana", memberType: ["voz"] }];
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    specialsOnly(container, 2, 2026);
+    addSpecial(container, SPECIAL_DATE, "Vigilia");
+    addSpecial(container, "2026-02-12", "Bautizos");
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+
+    const leadCell = container.querySelector(`[data-row-id="lead"][data-date="${SPECIAL_DATE}"]`);
+    fireEvent.click(leadCell!);
+    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+    fireEvent.click(screen.getByText("Cerrar"));
+
+    fireEvent.click(container.querySelector(`[data-swap-date="${SPECIAL_DATE}"]`)!);
+    fireEvent.click(container.querySelector('[data-swap-date="2026-02-12"]')!);
+
+    expect(screen.getByText(/No se puede intercambiar un servicio especial/)).toBeTruthy();
+    expect(
+      container.querySelector(`[data-row-id="lead"][data-date="${SPECIAL_DATE}"]`)?.textContent,
+    ).toContain("Ana");
+    expect(
+      container.querySelector('[data-row-id="lead"][data-date="2026-02-12"]')?.textContent ?? "",
+    ).not.toContain("Ana");
+  });
+
+  it("a special that turned out to be already stored is skipped WITH a stated reason, its Omitir checkbox refuses the toggle, and the misleading 'Se puede crear' badge is gone", () => {
+    // E17: all three surfaces used to disagree — the "Omitir" checkbox rendered
+    // UNCHECKED, the preflight badge said "Se puede crear" (its special branch
+    // is name-blind and structurally cannot say otherwise), and `handleConfirm`
+    // posted nothing. The admin's own Omitir toggle and "a document already
+    // occupies this target" are different facts and now read differently.
+    //
+    // Reached the way production reaches it: the special is composed while
+    // `existingRoles` is STALE (Task 5's picker refuses a date it can already
+    // see holds a special, so this is the only way in), and the refresh lands
+    // before "Previsualizar →" — which is what re-runs `cellsToDrafts`.
+    const fetchMock = stubUnreachableFetch();
+    const { container, rerender } = render(
+      <MonthGenerator
+        members={noMembers}
+        existingRoles={[]}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+        preflight={makePreflight(() => "creatable")}
+      />,
+    );
+    specialsOnly(container, 2, 2026);
+    addSpecial(container, SPECIAL_DATE, "Vigilia");
+
+    rerender(
+      <MonthGenerator
+        members={noMembers}
+        existingRoles={[
+          { _id: "sp1", _type: "special_role", date: SPECIAL_DATE, service_name: "Vigilia" },
+        ]}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+        preflight={makePreflight(() => "creatable")}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+
+    expect(screen.getByText("Ya existe un servicio especial con este nombre en esta fecha.")).toBeTruthy();
+    const omitir = screen.getByLabelText(`Omitir ${SPECIAL_DATE}`) as HTMLInputElement;
+    expect(omitir.checked).toBe(true);
+    expect(omitir.disabled).toBe(true);
+    expect(screen.queryByText("Se puede crear")).toBeNull();
+    expect(createButton().textContent).toMatch(/^Crear 0 borrador/);
+    expect((createButton() as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(createButton());
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("the 'ya existe' reason is written for the column's own TYPE — a stored Sunday does not claim a name clash", async () => {
+    // The copy branch, and the control for the test above: "ya existe un
+    // servicio especial CON ESTE NOMBRE" is a claim about a name, and a second
+    // differently-named special on the same date is a real, creatable thing —
+    // so saying it on a weekend column would send the admin hunting for a name
+    // conflict that cannot exist there.
+    const stored = FEB_2026_SUNDAYS[0];
+    const { fetchMock, calls } = stubRolesFetch(() => ({ ok: true }));
+    const { container } = render(
+      <MonthGenerator
+        members={noMembers}
+        existingRoles={[{ _id: "r1", _type: "sunday_role", date: stored }]}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+      />,
+    );
+    goToPreview(container, 2, 2026);
+
+    expect(screen.getByText("Ya existe un servicio en esta fecha.")).toBeTruthy();
+    expect(screen.queryByText(/con este nombre/)).toBeNull();
+    expect((screen.getByLabelText(`Omitir ${stored}`) as HTMLInputElement).disabled).toBe(true);
+
+    expect(createButton().textContent).toMatch(/^Crear 3 borrador/);
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(calls.some((c) => c.date === stored)).toBe(false);
   });
 });

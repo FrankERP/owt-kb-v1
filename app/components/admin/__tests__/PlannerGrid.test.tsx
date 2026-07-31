@@ -56,6 +56,7 @@ function baseProps(overrides: Partial<PlannerGridProps> = {}): PlannerGridProps 
     members,
     savedWindow: [],
     preflightFor: () => null,
+    createBlockFor: () => null,
     skipped: new Set(),
     unaddressableDates: [],
     unresolvedNames: [],

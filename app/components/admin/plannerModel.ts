@@ -45,7 +45,7 @@ import {
   type SeatDef,
 } from "./seatModel";
 import { newCreationRequestId } from "@/app/utils/monthDraftCreate";
-import { normalizeServiceName } from "@/app/utils/normalizeLabel";
+import { normalizeLabel, normalizeServiceName } from "@/app/utils/normalizeLabel";
 
 // ─── Grid shape ───────────────────────────────────────────────────────────────
 
@@ -108,7 +108,28 @@ export interface DraftCard {
   date: string;
   /** Specials only — carried through to the POST body as `service_name`. */
   service_name?: string;
+  /**
+   * **"This column once matched a Sanity document", NOT "this name exists".**
+   * `cellsToDrafts` computes it as `isExisting || previous.exists`, so it
+   * SURVIVES a rename: rename a special that collided and `isExisting` goes
+   * back to false while this stays true. It exists to keep a draft's
+   * created/occupied state across a re-render and a partial-batch retry (a
+   * confirmed create sets it), which is exactly why it must never be read as
+   * "there is a document with this name" — see `isExisting` below, and
+   * `MonthGenerator`'s `createdTargets`.
+   */
   exists: boolean;
+  /**
+   * **"A Sanity document occupies this exact target RIGHT NOW"** — the raw
+   * collision-key hit against `existingRoles`, name-bearing for a special, with
+   * no memory of previous calls folded in. The reason channel E17 needs: it is
+   * the difference between "skipped because a stored service already occupies
+   * this date" and "skipped because the admin ticked Omitir", which
+   * `skippedDates` alone cannot tell apart (`PlannerGrid`'s `ColumnHeader`
+   * rendered the checkbox UNCHECKED for the former and the badge still said
+   * "Se puede crear").
+   */
+  isExisting: boolean;
   skipped: boolean;
   leads: string[];
   bgvs: string[];
@@ -766,8 +787,14 @@ const FOH_PREFIX = "foh:";
  *
  * E3 keeps two columns off one date, so `type__date` stays unique across the
  * rendered column set.
+ *
+ * EXPORTED because `MonthGenerator`'s session-local created-set is keyed by the
+ * very same string (P2), and a second hand-rolled `${type}__${date}` there
+ * could drift from this one without anything failing — the set would simply
+ * stop matching and start letting duplicates through, silently. One definition,
+ * two readers.
  */
-function identityKey(type: string, date: string): string {
+export function draftTargetKey(type: string, date: string): string {
   return `${type}__${date}`;
 }
 
@@ -791,7 +818,7 @@ function identityKey(type: string, date: string): string {
 function collisionKey(type: string, date: string, serviceName?: string): string {
   return type === "special_role"
     ? `${type}__${date}__${normalizeServiceName(serviceName)}`
-    : identityKey(type, date);
+    : draftTargetKey(type, date);
 }
 
 /**
@@ -817,7 +844,7 @@ export function cellsToDrafts(
   const existing = new Set(
     existingRoles.map((r) => collisionKey(r._type, r.date, r.service_name)),
   );
-  const prevByKey = new Map(previous.map((d) => [identityKey(d._type, d.date), d]));
+  const prevByKey = new Map(previous.map((d) => [draftTargetKey(d._type, d.date), d]));
 
   const cellsByDate = new Map<string, GridCell[]>();
   for (const c of cells) {
@@ -828,11 +855,17 @@ export function cellsToDrafts(
 
   const out: DraftCard[] = [];
   for (const column of columns) {
-    const prevDraft = prevByKey.get(identityKey(column.type, column.date));
+    const prevDraft = prevByKey.get(draftTargetKey(column.type, column.date));
     const localId = prevDraft?.localId ?? uid();
     const creationRequestId = prevDraft?.creationRequestId ?? newCreationRequestId();
     const isExisting = existing.has(collisionKey(column.type, column.date, column.serviceName));
     const skipped = skippedDates.has(column.date) || isExisting;
+    // THE TWO ARE NOT THE SAME QUESTION, and only `isExisting` answers the one
+    // its name asks. `exists` folds in `previous`, so a special that collided,
+    // was created, and was then RENAMED keeps `exists: true` with
+    // `isExisting: false`. Anything that means "a document with this name is
+    // there" must read `isExisting`; anything that means "don't lose what this
+    // draft already achieved" must read `exists`.
     const exists = isExisting || prevDraft?.exists === true;
 
     const dateCells = cellsByDate.get(column.date) ?? [];
@@ -869,6 +902,7 @@ export function cellsToDrafts(
       date: column.date,
       ...(column.serviceName !== undefined ? { service_name: column.serviceName } : {}),
       exists,
+      isExisting,
       skipped,
       leads,
       bgvs,
@@ -879,6 +913,23 @@ export function cellsToDrafts(
   }
 
   return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * A `special_role` draft whose `service_name` normalizes to empty — the exact
+ * payload `canonicalizeCreatePayload` files issue `"service_name"` for
+ * (`roleCreationReceipt.ts`), which the create route answers with
+ * `400 invalid_request`. `handleConfirm` refuses the whole confirm on one of
+ * these rather than sending it and reporting an anonymous failure afterwards.
+ *
+ * Normalized with the SERVER's own `normalizeLabel` — NFC + trim + collapse —
+ * not a bare `.trim()`: the two must agree on what "empty" means, or the client
+ * refuses a name the server would have taken (or, worse, waves through one it
+ * rejects). A weekend draft is never nameless by this definition; it stores no
+ * `service_name` at all.
+ */
+export function namelessSpecial(draft: Pick<DraftCard, "_type" | "service_name">): boolean {
+  return draft._type === "special_role" && normalizeLabel(draft.service_name) === null;
 }
 
 // ─── Fairness history from CREATED drafts ────────────────────────────────────

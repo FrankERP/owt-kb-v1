@@ -23,6 +23,7 @@ import {
   isSolvable,
   rowAppliesTo,
   mapUnfilledSeats,
+  namelessSpecial,
   saturdayForWeek,
   seatDefForRow,
   solvableWindow,
@@ -912,6 +913,7 @@ describe("historyEntryFromDrafts", () => {
     _type: "sunday_role",
     date: "2026-02-01",
     exists: false,
+    isExisting: false,
     skipped: false,
     leads: [],
     bgvs: [],
@@ -1173,6 +1175,7 @@ describe("a special contributes nothing to fairness history (E9/E20)", () => {
     date: "2026-02-11",
     service_name: "Vigilia",
     exists: false,
+    isExisting: false,
     skipped: false,
     leads: ["m1"],
     bgvs: ["m2"],
@@ -1290,6 +1293,55 @@ describe("two keys, not one: identity vs collision (E17/E19)", () => {
     const stored = [{ _type: "sunday_role", date: "2026-02-01", service_name: "ruido" }];
     const drafts = cellsToDrafts([], [{ date: "2026-02-01", type: "sunday_role" }], new Set(), [], stored);
     expect(drafts[0].exists).toBe(true);
+  });
+
+  it("`exists` SURVIVES a rename and `isExisting` does not — they answer different questions", () => {
+    // The trap Task 6's create-gate must not walk into. After a rename,
+    // `exists` still says "this column once matched a document" while
+    // `isExisting` correctly says "nothing with THIS name is stored". A gate
+    // that read `exists` here would refuse a legitimately-new special;
+    // `PlannerGrid`'s "ya existe" reason must read `isExisting` for the same
+    // reason, or it would tell the admin a document exists that does not.
+    const stored = [{ _type: "special_role", date: "2026-02-11", service_name: "Vigilia" }];
+    const first = cellsToDrafts([], [columnNamed("Vigilia")], new Set(), [], stored);
+    expect(first[0].exists).toBe(true);
+    expect(first[0].isExisting).toBe(true);
+
+    const renamed = cellsToDrafts([], [columnNamed("Bautizos")], new Set(), first, stored);
+    expect(renamed[0].exists).toBe(true); // memory of the collision
+    expect(renamed[0].isExisting).toBe(false); // no document holds THIS name
+    expect(renamed[0].skipped).toBe(false); // so it is postable again
+  });
+});
+
+describe("namelessSpecial — work item 9's client-side refusal", () => {
+  const special = (service_name?: string): Pick<DraftCard, "_type" | "service_name"> => ({
+    _type: "special_role",
+    service_name,
+  });
+
+  it("a special with no name at all is nameless", () => {
+    expect(namelessSpecial(special(undefined))).toBe(true);
+    expect(namelessSpecial(special(""))).toBe(true);
+  });
+
+  it("a whitespace-only name is nameless — normalized exactly as the server does", () => {
+    // `canonicalizeCreatePayload` runs the same `normalizeLabel`, so these are
+    // precisely the payloads that come back `400 invalid_request` with issue
+    // "service_name". A bare `.trim()` here would agree on these two but could
+    // drift from the server on anything the shared normalizer changes.
+    expect(namelessSpecial(special("   "))).toBe(true);
+    expect(namelessSpecial(special(" \t\n"))).toBe(true);
+  });
+
+  it("a real name is not nameless, even one that only normalization tidies", () => {
+    expect(namelessSpecial(special("Vigilia"))).toBe(false);
+    expect(namelessSpecial(special("  Vigilia   de  Oración "))).toBe(false);
+  });
+
+  it("a weekend draft is NEVER nameless — it stores no service_name to begin with", () => {
+    expect(namelessSpecial({ _type: "sunday_role", service_name: undefined })).toBe(false);
+    expect(namelessSpecial({ _type: "saturday_role", service_name: "   " })).toBe(false);
   });
 });
 
