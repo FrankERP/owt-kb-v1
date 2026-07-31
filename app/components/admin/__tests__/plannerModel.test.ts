@@ -593,28 +593,6 @@ describe("cellsToDrafts — stability", () => {
     expect(drafts[0].exists).toBe(true);
   });
 
-  it("a pre-session existing date's seats stay EMPTY even when the grid holds cells for it (a whole-month Auto solve, or a leftover manual edit) — MonthGenerator's history recompute relies on this to safely include `exists` drafts wholesale", () => {
-    // `columns` covers the whole month unconditionally (D9), so a solve or a
-    // manual edit CAN populate cells for a date that already had a service
-    // before this session — `existingRoles` carries no member data at all, so
-    // nothing upstream guarantees the grid stays empty for it. cellsToDrafts
-    // itself must be the one that zeroes it.
-    const cells: GridCell[] = [
-      { date: "2026-02-01", rowId: "lead", memberIds: ["m1"], origin: "auto" },
-      { date: "2026-02-01", rowId: "bgv", memberIds: ["m2"], origin: "auto" },
-      { date: "2026-02-01", rowId: "coro", memberIds: ["m3"], origin: "auto" },
-      { date: "2026-02-01", rowId: "instrumento:Batería", memberIds: ["m4"], origin: "auto" },
-      { date: "2026-02-01", rowId: "foh:Sonido", memberIds: ["m5"], origin: "auto" },
-    ];
-    const [draft] = cellsToDrafts(cells, columns, new Set(), [], [{ _type: "sunday_role", date: "2026-02-01" }]);
-    expect(draft.exists).toBe(true);
-    expect(draft.leads).toEqual([]);
-    expect(draft.bgvs).toEqual([]);
-    expect(draft.chorus).toEqual([]);
-    expect(draft.instruments).toEqual([]);
-    expect(draft.foh).toEqual([]);
-  });
-
   it("preserves localId, creationRequestId, exists and skipped across repeated calls for the same date and type", () => {
     // Non-empty on BOTH calls: with an empty Set on both sides, both results
     // are trivially `false` and the last assertion below can never detect a
@@ -827,11 +805,13 @@ describe("historyEntryFromDrafts", () => {
   it("the caller is responsible for excluding skipped/failed drafts — a caller that (incorrectly) includes a skipped one still counts it, proving MonthGenerator's own filter is what does the excluding", () => {
     // Deliberate: this function trusts its input and never filters on
     // `skipped`/`exists` itself (see the docstring above). MonthGenerator's
-    // handleConfirm owns that decision — today a union of "created this
-    // batch" and "already exists" (self-correcting a retried partial batch),
-    // never a raw, unfiltered `drafts` array — and this pin exists so a
-    // future change can't silently start relying on this function to guard
-    // against a skipped/failed draft slipping through instead.
+    // handleConfirm owns that decision — a session-scoped union of "created
+    // this batch" and "created by an earlier confirm this session" (tracked
+    // in a ref, never derived from `d.exists`, so a retried partial batch
+    // self-corrects without ever crediting a pre-session service), never a
+    // raw, unfiltered `drafts` array — and this pin exists so a future change
+    // can't silently start relying on this function to guard against a
+    // skipped/failed draft slipping through instead.
     const skippedButPassedIn = draft({ date: "2026-02-01", leads: ["m1"], skipped: true });
     const entry = historyEntryFromDrafts([skippedButPassedIn], members, 2026, 2);
     expect(entry?.total_counts).toEqual({ Frank: 1 });

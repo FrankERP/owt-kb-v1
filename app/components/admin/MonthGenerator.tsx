@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SolveResponse } from "@/app/api/admin/solve/route";
 import { DayCard } from "@/app/components/DayCard";
 import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
@@ -931,6 +931,11 @@ export default function MonthGenerator({
   const [cells, setCells]         = useState<GridCell[]>([]);
   const [skippedDates, setSkippedDates] = useState<Set<string>>(new Set());
   const [drafts, setDrafts]       = useState<DraftCard[]>([]);
+  // `localId`s this session has itself confirmed-created, across every confirm
+  // this dialog instance makes. Session-scoped (not persisted, not derived
+  // from props) so it can never be polluted by `existingRoles` refreshing
+  // after `onCreated()` — see `handleConfirm`'s history derivation below.
+  const createdThisSession = useRef<Set<string>>(new Set());
   const [unresolvedNames, setUnresolvedNames] = useState<string[]>([]);
   const [unfilled, setUnfilled]   = useState<{ date: string; rowId: string }[]>([]);
   const [diagnostics, setDiagnostics] = useState<SolveDiagnostics | null>(null);
@@ -1295,23 +1300,32 @@ export default function MonthGenerator({
     // the failed/unknown drafts — with their original request ids.
     const created = new Set(result.createdLocalIds);
     if (created.size) setDrafts(prev => prev.map(d => created.has(d.localId) ? { ...d, exists: true } : d));
-    // Fairness history is recomputed from the UNION of what exists after this
-    // batch, never from this batch alone: `drafts` here is still the
-    // pre-`setDrafts` state, so `created.has(d.localId) || d.exists` is
-    // "created just now, plus everything already created" — this batch's
-    // successes, an earlier confirm's successes THIS session (already marked
-    // `exists: true`), and anything that existed before this session (whose
-    // seats `cellsToDrafts` zeroes, so it contributes nothing either way).
-    // Deriving from only `result.createdLocalIds` was the defect: a partial
-    // failure leaves the dialog open, the successes get marked `exists`, and
-    // a retry that POSTs only the remaining subset would replace-by-key and
-    // erase the first call's counts. Recomputing the whole month's union on
-    // every confirm and replacing is idempotent — it reconstructs the same
-    // entry a single successful confirm would have written, however many
-    // partial retries it took to get there. A fully failed batch with no
-    // prior successes records nothing; `historyEntryFromDrafts` returns
-    // `null` for an empty list, so this stays a no-op either way.
-    const historyDrafts = drafts.filter(d => created.has(d.localId) || d.exists);
+    // Accumulate this confirm's successes into the SESSION-scoped ref (not
+    // just this call's `created`) so a later confirm in the same dialog still
+    // recognises them even after `onCreated()` below refreshes `existingRoles`.
+    for (const localId of created) createdThisSession.current.add(localId);
+    // Fairness history is recomputed from the UNION of what this batch just
+    // created and what this dialog session has created across ALL its
+    // confirms — never from `d.exists`. `d.exists` conflates two different
+    // things: "created by this session" (should count) and "existed before
+    // this session, surfaced via the `existingRoles` prop" (must not count —
+    // this generator didn't create it, so it must never take credit for its
+    // seats). Those look identical on a `DraftCard` once `onCreated()` →
+    // `loadSources()` → `setRoles(...)` refreshes `existingRoles`: a partial
+    // failure leaves the dialog open, the prop refresh lands mid-session, and
+    // the dates THIS session just created become `isExisting` too. A grid
+    // interaction after that re-runs `cellsToDrafts` with the refreshed prop
+    // and `d.exists` is then true for both old and new dates alike — there is
+    // no way to tell them apart from the draft alone. `createdThisSession` is
+    // the one signal that survives the refresh, because it is never derived
+    // from props: it only grows when THIS component instance's own confirms
+    // succeed. Recomputing the whole month's union on every confirm and
+    // replacing is idempotent — it reconstructs the same entry a single
+    // successful confirm would have written, however many partial retries it
+    // took to get there. A fully failed batch with no prior successes records
+    // nothing; `historyEntryFromDrafts` returns `null` for an empty list, so
+    // this stays a no-op either way.
+    const historyDrafts = drafts.filter(d => created.has(d.localId) || createdThisSession.current.has(d.localId));
     const entry = historyEntryFromDrafts(historyDrafts, members, year, month);
     if (entry) saveHistoryEntry(entry.year, entry.month, entry.total_counts, entry.role_counts);
     // Refresh so the list reflects whatever actually got created.

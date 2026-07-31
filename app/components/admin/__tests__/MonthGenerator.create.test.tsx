@@ -452,6 +452,51 @@ describe("MonthGenerator — create path", () => {
     expect(entry.role_counts).toEqual({ Ana: { "Sun.Lead": 1 } });
   });
 
+  it("never counts a service that existed BEFORE this session, even though Auto fills its column", async () => {
+    // This is the test that separates the session-scoped union from `d.exists`.
+    // Auto solves the WHOLE month (D9) and `columns` covers every date, so a
+    // date that already had a service gets grid cells like any other. Its draft
+    // is `skipped`, so it is never POSTed — but `d.exists` is true for it, and
+    // a union keyed on `d.exists` would fold its occupants into the fairness
+    // entry. This generator did not create that service; it must not take
+    // credit for its seats.
+    const members = [
+      { _id: "lead-1", member_name: "Ana", memberType: ["voz"] },
+      { _id: "lead-2", member_name: "Beto", memberType: ["voz"] },
+    ];
+    const preExisting = FEB_2026_SUNDAYS[0]; // 2026-02-01, already has a service
+    const fresh = FEB_2026_SUNDAYS[1];       // 2026-02-08, this session creates it
+    const { fetchMock } = stubRolesFetch(() => ({ ok: true }));
+
+    const { container } = render(
+      <MonthGenerator
+        members={members}
+        existingRoles={[{ _type: "sunday_role", date: preExisting }] as never}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+      />,
+    );
+    goToPreview(container, 2, 2026);
+
+    // Beto lands in the pre-existing date's column; Ana in the one we create.
+    for (const [date, name] of [[preExisting, "Beto"], [fresh, "Ana"]] as const) {
+      const cell = container.querySelector(`[data-row-id="lead"][data-date="${date}"]`);
+      fireEvent.click(cell!);
+      fireEvent.click(within(container.querySelector("ul")!).getByText(name));
+      fireEvent.click(screen.getByText("Cerrar"));
+    }
+
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    const history = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    const entry = history.find((h: { key: string }) => h.key === "2026-2");
+    expect(entry).toBeTruthy();
+    // Ana only. Beto sits on a service this session did not create.
+    expect(entry.total_counts).toEqual({ Ana: 1 });
+    expect(entry.role_counts).toEqual({ Ana: { "Sun.Lead": 1 } });
+  });
+
   it("a skipped date and a date that failed to create are both excluded from the history counts", async () => {
     const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz"] }];
     const failingDate = FEB_2026_SUNDAYS[2]; // 2026-02-15
@@ -584,6 +629,83 @@ describe("MonthGenerator — create path", () => {
     // derived from only the SECOND call's `createdLocalIds` (the pre-fix
     // logic) would produce `{ Ana: 2 }` here, silently erasing the first
     // batch's 2 counts via replace-by-key.
+    expect(entriesFor2026_2[0].total_counts).toEqual({ Ana: 4 });
+  });
+
+  it("a session-scoped confirm survives an existingRoles prop refresh mid-session — the critical regression this session's own creations must never be zeroed out by a stale `exists` derivation (2026-07-30 session-scoped-union fix)", async () => {
+    // The defect this pins: `ServicesPanel` passes `existingRoles={roles}`, and
+    // `onCreated()` → `loadSources()` → `setRoles(...)` means a partial
+    // failure's dialog-stays-open window sees `existingRoles` refresh to
+    // include the dates THIS session just created. Any subsequent grid
+    // interaction re-runs `cellsToDrafts` with that refreshed prop, so those
+    // dates become `isExisting` too — indistinguishable, on the resulting
+    // `DraftCard`, from a date that existed before this session ever started.
+    // Deriving the history union from `d.exists` (the pre-fix logic) cannot
+    // tell them apart. Deriving it from a session-scoped ref of confirmed
+    // `localId`s can, because that ref is never touched by the prop refresh.
+    const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz"] }];
+    const failingDates = new Set([FEB_2026_SUNDAYS[2], FEB_2026_SUNDAYS[3]]); // 02-15, 02-22
+    const attempts = new Map<string, number>();
+    const fetchMock = vi.fn(async (url: string, init: { body: string }) => {
+      if (url !== "/api/admin/roles") throw new Error(`unexpected fetch to ${url}`);
+      const body = JSON.parse(init.body) as Record<string, unknown>;
+      const date = body.date as string;
+      const attempt = (attempts.get(date) ?? 0) + 1;
+      attempts.set(date, attempt);
+      const ok = !failingDates.has(date) || attempt > 1;
+      return { ok, status: ok ? 200 : 500, json: async () => (ok ? {} : { error: "boom" }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container, rerender } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+
+    for (const date of FEB_2026_SUNDAYS) {
+      const cell = container.querySelector(`[data-row-id="lead"][data-date="${date}"]`);
+      fireEvent.click(cell!);
+      fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+      fireEvent.click(screen.getByText("Cerrar"));
+    }
+
+    // First confirm: 2 of 4 succeed (02-01, 02-08), 2 fail (02-15, 02-22) —
+    // dialog stays open.
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    const afterFirst = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    expect(afterFirst.find((h: { key: string }) => h.key === "2026-2").total_counts).toEqual({ Ana: 2 });
+
+    // The prop refresh `onCreated → loadSources → setRoles` would produce in
+    // production: the two dates THIS session just created now come back as
+    // `existingRoles` from the server.
+    rerender(
+      <MonthGenerator
+        members={members}
+        existingRoles={[
+          { _id: "r1", _type: "sunday_role", date: FEB_2026_SUNDAYS[0] },
+          { _id: "r2", _type: "sunday_role", date: FEB_2026_SUNDAYS[1] },
+        ]}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+      />,
+    );
+
+    // A grid interaction — re-runs cellsToDrafts with the refreshed prop.
+    fireEvent.click(screen.getByLabelText(`Omitir ${FEB_2026_SUNDAYS[0]}`));
+
+    // Retry: the 2 that failed are re-attempted and succeed this time.
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6));
+
+    const afterSecond = JSON.parse(localStorage.getItem("owt_solver_history_v2") ?? "[]");
+    const entriesFor2026_2 = afterSecond.filter((h: { key: string }) => h.key === "2026-2");
+    expect(entriesFor2026_2).toHaveLength(1);
+    // Both batches must be covered: 4 dates total. A `d.exists`-keyed union
+    // would see the first batch's 2 dates as `isExisting` after the refresh
+    // and either drop them from the count entirely (if `cellsToDrafts` still
+    // zeroed their seats) or, at minimum, could no longer distinguish them
+    // from a pre-session service — this assertion is the one that catches it.
     expect(entriesFor2026_2[0].total_counts).toEqual({ Ana: 4 });
   });
 
