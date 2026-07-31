@@ -149,7 +149,12 @@ describe("PlannerGrid — shape", () => {
 });
 
 describe("PlannerGrid — Domingos unchecked (D9)", () => {
-  const satOnly = buildColumns({ sundayDates: ["2026-08-09"], activeSatDates: ["2026-08-08"], includeSundays: false });
+  // An EMPTY Sunday selection, which is how `MonthGenerator` says this now
+  // that `includeSundays` is gone (Task 5 fix pass, Finding 4). The Sunday
+  // 2026-08-09 still exists for the solve — but only in `sundayDatesFull`,
+  // which never reaches `buildColumns` and so is not this file's business;
+  // the assertions below (no Sunday column, Auto still enabled) are unchanged.
+  const satOnly = buildColumns({ sundayDates: [], activeSatDates: ["2026-08-08"] });
 
   it("Auto is ENABLED, produces Saturday cells, and renders no Sunday column", () => {
     const cells: GridCell[] = [{ date: "2026-08-08", rowId: "lead", memberIds: ["m1"], origin: "auto" }];
