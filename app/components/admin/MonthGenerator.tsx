@@ -12,6 +12,7 @@ import MonthCalendar from "./MonthCalendar";
 import { SERVICE_LABEL } from "./serviceCardModel";
 import { fillColumn } from "./localFill";
 import { unresolvedRuleNames } from "./ruleEnforcement";
+import { SOLVER_CONFIG_STORAGE_KEY, readStoredSolverConfig } from "./solverConfigStorage";
 import {
   buildColumns,
   buildRows,
@@ -118,7 +119,6 @@ const PAT_LABEL: Record<string, string> = {
   "*.Lead": "*.Lead",  "*.BGV": "*.BGV",       "*.LeadBGV": "*.LeadBGV",
 };
 
-const STORAGE_KEY   = "owt_solver_config_v3";
 const HISTORY_KEY   = "owt_solver_history_v2";
 const MAX_HISTORY   = 6;
 
@@ -842,29 +842,39 @@ function RuleBuilder({ config, onChange, members }: {
         Where the rules live, and how far they actually reach — said plainly,
         because both are easy to assume wrongly and expensive to discover late.
 
-        1. `localStorage`, this browser, this admin. Another admin's generator
-           reads a different set, and clearing site data loses them.
-        2. Exclusions, weeks and conflicts ARE hard everywhere the grid can
-           refuse a pick. Caps and presence are NOT: they reach CP-SAT for
-           Sundays and Saturdays and nothing checks them anywhere else — a
-           special never goes to the solver, and neither does a manual pick.
-           Stated because a rule that looks enforced and is not is worse than
-           one that is plainly not offered (`ruleEnforcement.ts` lists both as
-           deliberate non-goals).
+        1. STILL `localStorage`, this browser, this admin. Task 9 built the
+           shared Sanity document, the admin-gated route and the seed script,
+           but the CUTOVER has not run: seeding it needs the live rules captured
+           out of this browser first, and until that lands this key is the only
+           copy. Do not soften this sentence ahead of the seed — an admin told
+           their rules are shared, while they are not, is exactly how a second
+           admin's month gets built against rules nobody else has.
+        2. Exclusions and conflicts ARE hard on BOTH surfaces now: the planner
+           grid and the Tablero's service editor, which reads this same key.
+           Week exclusions are hard on the grid ONLY — the Tablero edits one
+           service at a time and has no Sunday spine, so there is no week to
+           match (`ruleEnforcement.ts`, `weekForColumn`). Caps and presence are
+           not hard anywhere: they reach CP-SAT for Sundays and Saturdays and
+           nothing checks them elsewhere — a special never goes to the solver,
+           and neither does a manual pick. Stated because a rule that looks
+           enforced and is not is worse than one that is plainly not offered
+           (`ruleEnforcement.ts` lists both as deliberate non-goals).
 
-        The first sentence is TRUE ONLY UNTIL the rules move to Sanity — decided,
-        pending, and recorded in
-        `docs/adr/0010-specials-fill-locally-not-in-the-solver.md`. Revise
-        this copy in the same change that lands the move; do not pre-announce it
-        here, since until it lands this is the accurate warning.
+        Revise sentence 1 in the same change that lands the cutover
+        (`docs/adr/0010-specials-fill-locally-not-in-the-solver.md`), never
+        before it.
       */}
       <p className="font-body text-[11px] text-gray-500 px-1 pt-1">
-        Las reglas se guardan solo en <span className="text-amber-400">este navegador</span>: otro
-        administrador no las verá, y se pierden si borras los datos del sitio.
+        Las reglas se guardan todavía solo en <span className="text-amber-400">este navegador</span>:
+        otro administrador no las verá, y se pierden si borras los datos del sitio.
       </p>
       <p className="font-body text-[11px] text-gray-500 px-1">
-        Se aplican como bloqueo duro los patrones excluidos, las semanas excluidas y los conflictos
-        entre dos personas. Los <span className="text-gray-400">topes</span> y la{" "}
+        Se aplican como bloqueo duro los patrones excluidos y los conflictos entre dos personas,
+        tanto aquí como al editar un servicio en el{" "}
+        <span className="text-gray-400">Tablero</span>. Las{" "}
+        <span className="text-gray-400">semanas excluidas</span> solo se verifican aquí: el editor
+        del Tablero trabaja sobre un servicio suelto y no sabe en qué semana del mes cae. Los{" "}
+        <span className="text-gray-400">topes</span> y la{" "}
         <span className="text-gray-400">presencia</span> solo los resuelve el solver en domingos y
         sábados: en servicios especiales y al asignar a mano no se verifican.
       </p>
@@ -1118,39 +1128,19 @@ export default function MonthGenerator({
   }, [onClose, step, assignmentCount]);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (!saved) return;
-      const parsed = JSON.parse(saved) as SolverConfig;
-      if (Array.isArray(parsed.sundayLeads) && Array.isArray(parsed.restrictions)) {
-        // NORMALISED, not trusted — and DO NOT DELETE THIS. This guard has only
-        // ever checked two of the six fields, and `conflicts`/`presence` were
-        // added to `SolverConfig` after this key was first written, so a config
-        // persisted before then is still sitting in an admin's browser with
-        // those fields `undefined` while the type asserts they are arrays.
-        //
-        // Normalising here is the ONLY thing standing between that value and a
-        // white screen on the CONFIG STEP'S OWN FIRST RENDER — before any grid
-        // exists, before anything is clicked. `MemberPool` reads
-        // `config[field].length` and `.includes` (`:264`, `:289`, `:290`,
-        // `:295`) for `saturdayLeads`/`support`, and `RuleBuilder` reads
-        // `config.restrictions/conflicts/presence` at `:727` and `:802`/`:814`/
-        // `:826`. Both iterate the raw prop; `ruleEnforcement`'s `ruleLists`
-        // guards its OWN reads and is on neither path, so it is not a second
-        // lock behind this one. (The grid path — `rankCandidates` during render,
-        // E6 — is guarded there as well; the config step is not guarded
-        // anywhere else.)
-        setSolverConfig({
-          ...parsed,
-          sundayLeads: parsed.sundayLeads ?? [],
-          saturdayLeads: parsed.saturdayLeads ?? [],
-          support: parsed.support ?? [],
-          restrictions: parsed.restrictions ?? [],
-          conflicts: parsed.conflicts ?? [],
-          presence: parsed.presence ?? [],
-        });
-      }
-    } catch {}
+    // NORMALISED, not trusted — and DO NOT DELETE THE NORMALISER. It now lives in
+    // `solverConfigStorage.ts` (unchanged in behaviour, including the two-field
+    // `Array.isArray` acceptance test), because `ServicesPanel` reads the SAME
+    // key to feed `SeatBoard`, and a second hand-rolled copy of this guard is
+    // exactly how a legacy `conflicts`/`presence`-less value white-screens one
+    // surface and not the other. That module's header states in full what this
+    // protects and why nothing else is a second lock behind it.
+    //
+    // `null` means "this browser holds no rules", NOT "use the defaults": state
+    // is already seeded from `DEFAULT_SOLVER_CONFIG`, and overwriting it here
+    // would be the same write by another name.
+    const stored = readStoredSolverConfig();
+    if (stored) setSolverConfig(stored);
     try {
       const hist = localStorage.getItem(HISTORY_KEY);
       if (hist) setSolverHistory(JSON.parse(hist) as SolverHistoryEntry[]);
@@ -1158,7 +1148,7 @@ export default function MonthGenerator({
   }, []);
 
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(solverConfig)); } catch {}
+    try { localStorage.setItem(SOLVER_CONFIG_STORAGE_KEY, JSON.stringify(solverConfig)); } catch {}
   }, [solverConfig]);
 
   function saveHistoryEntry(y: number, m: number, total_counts: Record<string, number>, role_counts: Record<string, Record<string, number>>) {

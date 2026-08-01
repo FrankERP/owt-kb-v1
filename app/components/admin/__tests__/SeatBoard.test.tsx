@@ -263,3 +263,183 @@ describe("SeatBoard", () => {
     expect(payload.bgvs).not.toContain("m1");
   });
 });
+
+// ── P6: the shared rule set, enforced on this surface too ───────────────────
+//
+// Until Task 9 the Tablero enforced NOTHING: `rankCandidates` was called with no
+// `config`, so a pair the planner grid refuses could be seated here without a
+// word. These pin the hard block newly appearing on a shipped surface — and they
+// use data where alias ≠ member_name deliberately, because every seeded rule
+// names people by ALIAS (fact 12/E11). Resolving rule names through
+// `member_name` alone would make every rule match nobody and ship enforcing
+// nothing with every test green.
+describe("SeatBoard — hard rules (P6)", () => {
+  const aliased = [
+    { _id: "m1", member_name: "Francisco Rocha", alias: "Frank", memberType: ["voz"] },
+    { _id: "m2", member_name: "Gabriela Núñez", alias: "Gaby", memberType: ["voz"] },
+    { _id: "m3", member_name: "Lucía Herrera", alias: "Lucía", memberType: ["voz"] },
+  ];
+
+  const config = {
+    sundayLeads: [],
+    saturdayLeads: [],
+    support: [],
+    restrictions: [
+      {
+        id: "r-frank",
+        person: "Frank", // an ALIAS, exactly as the rules are written
+        excludedPatterns: ["Sun.BGV"],
+        fairness: "none" as const,
+        fairnessSlack: 1,
+        weekExclusions: [{ id: "w1", week: 3, pattern: "*.*" }],
+        caps: [],
+      },
+    ],
+    conflicts: [{ id: "c1", personA: "Gaby", personB: "Lucía", pattern: "*.Lead" }],
+    presence: [],
+  };
+
+  /** The roster <li> for a member. The roster renders the ALIAS (`displayName`),
+   *  which is also how the rules name people — while `evaluate` compares against
+   *  `member_name` internally, so a resolver that only knew `member_name` would
+   *  match nobody here and every one of these tests would go green enforcing
+   *  nothing. That asymmetry is the point of the alias-bearing fixture. */
+  const rosterRow = (name: string) =>
+    screen
+      .getAllByText(name)
+      .map((el) => el.closest("li"))
+      .find((li): li is HTMLLIElement => li !== null)!;
+
+  it("refuses a pair the planner grid refuses, all the way to the payload", () => {
+    // `Gaby !with Lucía on *.Lead` — the exact rule shape the user asked for
+    // ("exclude two people from being together"), which a special never gets
+    // from the solver because a special is never solved.
+    const onSubmit = vi.fn();
+    render(
+      <SeatBoard
+        {...base}
+        members={aliased}
+        config={config}
+        onSubmit={onSubmit}
+        initial={{ _type: "special_role", date: "2026-08-14", service_name: "Vigilia" } as never}
+      />,
+    );
+
+    fireEvent.click(rosterRow("Gaby")); // seats Gaby on Lead
+    const blocked = rosterRow("Lucía");
+    expect(blocked.getAttribute("aria-disabled")).toBe("true");
+    expect(blocked.getAttribute("title")).toMatch(/no puede coincidir con Gaby/);
+
+    // The click must not seat her — the disabled attribute alone proves nothing.
+    fireEvent.click(blocked);
+    fireEvent.click(screen.getByRole("button", { name: /guardar/i }));
+    expect(onSubmit.mock.calls[0][0].leads).toEqual(["m2"]);
+  });
+
+  it("enforces nothing at all without a config — the surface's original behaviour", () => {
+    // The same two clicks, no config. This is what makes the test above
+    // discriminating rather than a description of `rankCandidates`.
+    const onSubmit = vi.fn();
+    render(
+      <SeatBoard
+        {...base}
+        members={aliased}
+        onSubmit={onSubmit}
+        initial={{ _type: "special_role", date: "2026-08-14" } as never}
+      />,
+    );
+    fireEvent.click(rosterRow("Gaby"));
+    fireEvent.click(rosterRow("Lucía"));
+    fireEvent.click(screen.getByRole("button", { name: /guardar/i }));
+    expect(onSubmit.mock.calls[0][0].leads).toEqual(["m2", "m3"]);
+  });
+
+  it("scopes an exclusion by the pattern's SERVICE half, not by the rule alone", () => {
+    // `Frank !in Sun.BGV`. On a Sunday BGV seat he is refused; on a special he is
+    // not, because a special answers to `*` and nothing else (E15) — passing the
+    // column is what makes that true, and dropping it would block him everywhere.
+    const { unmount } = render(
+      <SeatBoard
+        {...base}
+        members={aliased}
+        config={config}
+        initial={{ _type: "sunday_role", date: "2026-08-09" } as never}
+      />,
+    );
+    fireEvent.click(screen.getByText("BGV"));
+    expect(rosterRow("Frank").getAttribute("aria-disabled")).toBe("true");
+    unmount();
+
+    render(
+      <SeatBoard
+        {...base}
+        members={aliased}
+        config={config}
+        initial={{ _type: "special_role", date: "2026-08-14" } as never}
+      />,
+    );
+    fireEvent.click(screen.getByText("BGV"));
+    expect(rosterRow("Frank").getAttribute("aria-disabled")).toBeNull();
+  });
+
+  it("leaves week exclusions unevaluated here — this board has no month spine", () => {
+    // `Frank !in week 3 *.*`. 2026-08-16 is the third Sunday of August 2026, so
+    // the planner grid refuses him there. This board edits ONE service and cannot
+    // know which week that is, so the rule simply does not fire. Stated as a
+    // pinned property rather than left as an accident: `Math.ceil(day / 7)` is
+    // the tempting wrong answer (E21) and it lands a hard rule on wrong dates.
+    render(
+      <SeatBoard
+        {...base}
+        members={aliased}
+        config={config}
+        initial={{ _type: "sunday_role", date: "2026-08-16" } as never}
+      />,
+    );
+    expect(rosterRow("Frank").getAttribute("aria-disabled")).toBeNull();
+  });
+
+  it("still refuses a same-category double booking when a config is present", () => {
+    // The two refusal channels are separate fields on purpose; reading only the
+    // rule verdict would have silently dropped this one.
+    render(
+      <SeatBoard
+        {...base}
+        members={aliased}
+        config={config}
+        initial={{ _type: "sunday_role", date: "2026-08-09" } as never}
+      />,
+    );
+    fireEvent.click(rosterRow("Gaby")); // Lead
+    fireEvent.click(screen.getByText("BGV"));
+    const row = rosterRow("Gaby");
+    expect(row.getAttribute("aria-disabled")).toBe("true");
+    expect(row.getAttribute("title")).toMatch(/Lead/);
+  });
+
+  it("names every rule person who resolves to nobody, so a silent no-op cannot hide", () => {
+    // A rule naming someone who does not exist enforces NOTHING, and on a special
+    // there is no solve to surface it. This warning is the only safeguard.
+    render(
+      <SeatBoard
+        {...base}
+        members={aliased}
+        config={{
+          ...config,
+          conflicts: [{ id: "c9", personA: "Gaby", personB: "Fantasma", pattern: "*.Lead" }],
+          presence: [{ id: "p9", persons: ["Nadie"], pattern: "Sun.BGV" }],
+        }}
+      />,
+    );
+    const warning = screen.getByRole("status");
+    expect(warning.textContent).toContain("Fantasma");
+    expect(warning.textContent).toContain("Nadie");
+    // Resolvable names are NOT reported.
+    expect(warning.textContent).not.toContain("Gaby");
+  });
+
+  it("shows no unresolved-names warning when every rule name resolves", () => {
+    render(<SeatBoard {...base} members={aliased} config={config} />);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+});

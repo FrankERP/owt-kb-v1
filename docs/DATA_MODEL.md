@@ -11,11 +11,11 @@ exact strings used in GROQ `_type` filters.
 
 ---
 
-## Registered document types (13)
+## Registered document types (16)
 
 `post`, `tag`, `author`, `featuredSongs`, `saturdarSongs`, `saturday_role`, `sunday_role`,
-`teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, and two **internal coordination**
-types never authored by hand: `roleTargetLock`, `roleCreationReceipt`.
+`teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, and four **internal** types never
+authored by hand: `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `solverConfig`.
 
 **Not registered** (present but intentionally unused — do not wire in):
 - `sanity/schemas/youtubeType/youtubeType.ts` — object type `youtube`.
@@ -257,6 +257,37 @@ recreating the service. Full replay semantics:
 
 ---
 
+## `solverConfig` — the shared planner rule set (singleton)
+
+One document, always at `_id: "solverConfig"`
+([`solverConfig.ts`](../sanity/schemas/solverConfig.ts)). It holds the rules the planner
+enforces — the pools (`sundayLeads`, `saturdayLeads`, `support`), `restrictions[]` (with nested
+`weekExclusions[]` and `caps[]`), `conflicts[]` and `presence[]` — plus `updatedAt` / `updatedBy`.
+Shape mirrors `SolverConfig` in `app/components/admin/plannerModel.ts`.
+
+The `_id` is fixed and deterministic because two rules depend on there being exactly one document:
+
+- **`app/api/admin/solver-config` may only UPDATE it, never create it.** A POST against an absent
+  document is `404 not_found`. Otherwise the first save from a browser holding no rules would mint
+  the shared document out of the client's built-in defaults.
+- **`scripts/seed-solver-config.ts` is the only writer that may create it, and it refuses if the
+  document already exists**, printing a diff instead of overwriting.
+
+Every array-of-object item carries a `_key` **equal to the rule's own `id`** — the `id` the UI's
+`uid()` already assigned, not a second identifier. Minting happens in
+[`app/utils/solverConfigWriteRequest.ts`](../app/utils/solverConfigWriteRequest.ts), which both the
+route and the seed script go through so the two cannot drift.
+
+Hidden and read-only in the Studio, and deliberately **not** in `PROTECTED_STUDIO_TYPES`: unlike
+`notificationOutbox` there is no legitimate hand-pruning operation, so being reachable nowhere in
+the Studio is the intended posture rather than a gap.
+
+**Status:** as of this writing the document is not yet seeded and `localStorage`
+(`owt_solver_config_v3`) is still the authoritative rule set. See
+[ADR-0010](adr/0010-specials-fill-locally-not-in-the-solver.md).
+
+---
+
 ## `tag`, `author` — Taxonomies
 
 - **`tag`** ([`tag.ts`](../sanity/schemas/tag.ts)): `{ name, slug }`. Referenced by `post.tags[]`.
@@ -291,6 +322,11 @@ actually work.
 | `tutorial` | `{ title, url }` | `post.tutorials2` |
 | `referenceLink` | `{ label, url }` | `post.referenceLinks` |
 | `contributor` | `{ person→teamMembers }` | `setlistProposal.contributors` |
+| `solverRestriction` | `{ id, person, excludedPatterns[], fairness, fairnessSlack, weekExclusions[], caps[] }` | `solverConfig.restrictions` |
+| `solverWeekExclusion` | `{ id, week, pattern }` | `solverConfig.restrictions[].weekExclusions` |
+| `solverCap` | `{ id, pattern, op, value, relative, relOffset }` | `solverConfig.restrictions[].caps` |
+| `solverConflict` | `{ id, personA, personB, pattern }` | `solverConfig.conflicts` |
+| `solverPresence` | `{ id, persons[], pattern }` | `solverConfig.presence` |
 
 **Every array-of-object write must include a unique `_key` per item and the correct `_type`.**
 The API routes generate keys with `Math.random().toString(36).slice(2,9)` and attach the right

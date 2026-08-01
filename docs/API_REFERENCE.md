@@ -343,6 +343,21 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   (`gcf/owt_solver_v2.py --json-mode`, 120s hard kill). Body is a `SolveRequest`; requires
   `sunday_leads`. Returns a `SolveResponse` — **200 if `ok`, else 422**. No Sanity writes. See
   [SOLVER_AND_INFRA.md](SOLVER_AND_INFRA.md).
+- **`GET /api/admin/solver-config`** — the shared planner rule set (`_id: solverConfig`).
+  Returns `{ present, rev, config }`. **`present: false` with `config: null` means the document
+  does not exist**, which is a different answer from a failed read (an HTTP error, no body):
+  absent ⇒ the client may fall back to its built-in defaults **in memory only**; failed ⇒ it must
+  refuse to save. Collapsing the two into one `?? DEFAULT` is how a transient failure overwrites
+  the real rules.
+- **`POST /api/admin/solver-config`** — replace the rule set. Body `{ rev, config }`.
+  **UPDATE only: it can never create the document** — a POST while it is absent is `404 not_found`
+  with `details.detail = "create_not_allowed_here"`, because only `scripts/seed-solver-config.ts`
+  may mint it. A `rev` that is missing is `400 invalid_request`; one that does not match is
+  `409 stale_revision` (checked before the patch and again by `ifRevisionId`). Every array item is
+  written with a `_key` minted from the rule's own `id` by
+  `app/utils/solverConfigWriteRequest.ts` — the same module the seed script uses. **No
+  `revalidate*` call applies**: the document backs no ISR surface, it is read only through this
+  route inside the dynamic admin tree.
 
 ---
 
