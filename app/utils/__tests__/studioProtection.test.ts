@@ -2,7 +2,7 @@
 // without a browser.
 //
 // The point of these tests: "we configured the Studio" is not evidence. The
-// policy is code, so every capability of every one of the nine protected types
+// policy is code, so every capability of every one of the ten protected types
 // is asserted here, plus the wiring in `sanity.config.ts` / `sanity/structure.ts`
 // that actually installs it — and the fact that the v5-inert
 // `__experimental_actions` is used nowhere.
@@ -58,7 +58,7 @@ function gitTracked(): string[] {
 // ── The policy ──────────────────────────────────────────────────────────────
 
 describe("studio protection policy", () => {
-  it("covers exactly the nine protected types, keeping the saturdarSongs typo", () => {
+  it("covers exactly the ten protected types, keeping the saturdarSongs typo", () => {
     expect([...PROTECTED_STUDIO_TYPES]).toEqual([
       "sunday_role",
       "saturday_role",
@@ -69,6 +69,10 @@ describe("studio protection policy", () => {
       "roleTargetLock",
       "roleCreationReceipt",
       "notificationOutbox",
+      // The shared planner rule set. `hidden` + `readOnly` left `delete`,
+      // `duplicate`, `restore` and `unpublish` reachable by direct URL — a
+      // second write path around the `_rev`-checked admin route.
+      "solverConfig",
     ]);
     expect(PROTECTED_STUDIO_TYPES).toContain("saturdarSongs");
     expect(PROTECTED_STUDIO_TYPES as readonly string[]).not.toContain("saturdaySongs");
@@ -82,6 +86,7 @@ describe("studio protection policy", () => {
       "setlistProposal",
       "roleTargetLock",
       "roleCreationReceipt",
+      "solverConfig",
     ]);
   });
 
@@ -152,7 +157,12 @@ describe("studio protection policy", () => {
   });
 
   it("marks the coordination types as internal, with an extra create mechanism", () => {
-    expect([...INTERNAL_STUDIO_TYPES]).toEqual(["roleTargetLock", "roleCreationReceipt", "notificationOutbox"]);
+    expect([...INTERNAL_STUDIO_TYPES]).toEqual([
+      "roleTargetLock",
+      "roleCreationReceipt",
+      "notificationOutbox",
+      "solverConfig",
+    ]);
     for (const type of INTERNAL_STUDIO_TYPES) {
       expect(isInternalStudioType(type)).toBe(true);
       expect(studioCapability(type, "create").mechanism).toContain("hidden");
@@ -214,7 +224,7 @@ describe("delete-only studio policy (loginEvent)", () => {
     expect(isGovernedStudioType("loginEvent")).toBe(true);
     expect(isGovernedStudioType("sunday_role")).toBe(true);
     expect(isGovernedStudioType("post")).toBe(false);
-    // It is NOT one of the eight fully protected types.
+    // It is NOT one of the nine fully protected types.
     expect(isProtectedStudioType("loginEvent")).toBe(false);
     expect(PROTECTED_STUDIO_TYPES as readonly string[]).not.toContain("loginEvent");
   });
@@ -389,6 +399,7 @@ describe("studio config installs the policy", () => {
       "sanity/schemas/roleTargetLock.ts",
       "sanity/schemas/roleCreationReceipt.ts",
       "sanity/schemas/notificationOutbox.ts",
+      "sanity/schemas/solverConfig.ts",
     ];
     const tracked = new Set(gitTracked());
     for (const file of owned) {
@@ -403,7 +414,7 @@ describe("studio config installs the policy", () => {
     expect(structure).toContain("PROTECTED_STUDIO_TYPES");
   });
 
-  it("marks all nine protected schema types read-only", () => {
+  it("marks all ten protected schema types read-only", () => {
     const files: Record<string, string> = {
       sunday_role: "sanity/schemas/sunRole.ts",
       saturday_role: "sanity/schemas/satRole.ts",
@@ -414,6 +425,7 @@ describe("studio config installs the policy", () => {
       roleTargetLock: "sanity/schemas/roleTargetLock.ts",
       roleCreationReceipt: "sanity/schemas/roleCreationReceipt.ts",
       notificationOutbox: "sanity/schemas/notificationOutbox.ts",
+      solverConfig: "sanity/schemas/solverConfig.ts",
     };
     expect(Object.keys(files).sort()).toEqual([...PROTECTED_STUDIO_TYPES].sort());
     for (const type of PROTECTED_STUDIO_TYPES) {
@@ -438,6 +450,7 @@ describe("studio config installs the policy", () => {
       "sanity/schemas/roleTargetLock.ts",
       "sanity/schemas/roleCreationReceipt.ts",
       "sanity/schemas/notificationOutbox.ts",
+      "sanity/schemas/solverConfig.ts",
     ]) {
       const src = read(file);
       expect(src, `${file} must be a hidden type`).toMatch(/^\s*hidden:\s*true,\s*$/m);
@@ -452,6 +465,7 @@ describe("studio config installs the policy", () => {
         "roleTargetLock",
         "roleCreationReceipt",
         "notificationOutbox",
+        "solverConfig",
       ].sort(),
     );
   });
