@@ -35,7 +35,12 @@
  *   document and every later save can drift on `_key` minting and validation.
  *   That module is TypeScript, and `moduleResolution: "bundler"` means its import
  *   here carries no file extension — which bare `node --experimental-strip-types`
- *   cannot resolve. `scripts/import-schedule.ts` already runs this way.
+ *   cannot resolve. `scripts/import-schedule.ts` already runs this way, and `tsx`
+ *   is in `node_modules/.bin`, so `npx` resolves it locally with no download.
+ *
+ *   Verified to run: `npx tsx scripts/seed-solver-config.ts` with no argument
+ *   prints the usage line and exits 1, and an invalid capture is rejected with
+ *   its issue paths — both BEFORE any Sanity client is constructed.
  *
  * ─── What it refuses to do ───────────────────────────────────────────────────
  *
@@ -64,19 +69,6 @@ import {
   solverConfigFromDocument,
 } from "../app/utils/solverConfigWriteRequest";
 
-const args = process.argv.slice(2);
-const apply = args.includes("--apply");
-const capturePath = args.find((a) => !a.startsWith("--"));
-
-if (!capturePath) {
-  console.error(
-    "Usage: node --env-file=.env.local scripts/seed-solver-config.ts <capture.json> [--apply]",
-  );
-  process.exit(1);
-}
-
-const raw = readFileSync(path.resolve(process.cwd(), capturePath), "utf8");
-
 /**
  * The capture is the RAW `localStorage` string, so it may be either the JSON
  * object itself or a JSON string CONTAINING it (`copy()` on a `getItem` result
@@ -87,26 +79,6 @@ function parseCapture(text: string): unknown {
   const once: unknown = JSON.parse(text);
   return typeof once === "string" ? JSON.parse(once) : once;
 }
-
-const parsed = parseSolverConfigWrite(parseCapture(raw));
-if (!parsed.ok) {
-  console.error("The capture is not a valid rule set. Nothing was written.");
-  for (const issue of parsed.issues) console.error(`  · ${issue}`);
-  process.exit(1);
-}
-const { config } = parsed.value;
-
-const client = createClient({
-  projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || "ebb8vcnk",
-  dataset: process.env.NEXT_PUBLIC_SANITY_DATASET || "production",
-  apiVersion: "2024-01-01",
-  token: process.env.SANITY_WRITE_TOKEN,
-  useCdn: false,
-});
-
-const existing = await client.fetch<Record<string, unknown> | null>(`*[_id == $id][0]`, {
-  id: SOLVER_CONFIG_DOC_ID,
-});
 
 function summarize(label: string, c: ReturnType<typeof solverConfigFromDocument>) {
   console.log(`\n${label}`);
@@ -130,34 +102,90 @@ function summarize(label: string, c: ReturnType<typeof solverConfigFromDocument>
   }
 }
 
-if (existing) {
-  console.error(
-    `\nREFUSING: ${SOLVER_CONFIG_DOC_ID} already exists (_rev ${String(existing._rev)}).`,
+/**
+ * Everything, in an async function rather than at the top level.
+ *
+ * Not style: the package has no `"type": "module"`, so a top-level `await` in a
+ * `.ts` file here is transformed to CJS and fails to even parse
+ * ("Top-level await is currently not supported with the cjs output format").
+ * That failure happens before argument parsing, so the script would have blown
+ * up in the operator's hands on its very first run — which for a one-shot
+ * production seed is the worst possible moment to discover it.
+ *
+ * Returns the process exit code; nothing here calls `process.exit` mid-flow, so
+ * every path has one visible ending.
+ */
+async function main(): Promise<number> {
+  const args = process.argv.slice(2);
+  const apply = args.includes("--apply");
+  const capturePath = args.find((a) => !a.startsWith("--"));
+
+  if (!capturePath) {
+    console.error(
+      "Usage: npx tsx --env-file=.env.local scripts/seed-solver-config.ts <capture.json> [--apply]",
+    );
+    return 1;
+  }
+
+  const raw = readFileSync(path.resolve(process.cwd(), capturePath), "utf8");
+  const parsed = parseSolverConfigWrite(parseCapture(raw));
+  if (!parsed.ok) {
+    console.error("The capture is not a valid rule set. Nothing was written.");
+    for (const issue of parsed.issues) console.error(`  · ${issue}`);
+    return 1;
+  }
+  const { config } = parsed.value;
+
+  const client = createClient({
+    projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || "ebb8vcnk",
+    dataset: process.env.NEXT_PUBLIC_SANITY_DATASET || "production",
+    apiVersion: "2024-01-01",
+    token: process.env.SANITY_WRITE_TOKEN,
+    useCdn: false,
+  });
+
+  const existing = await client.fetch<Record<string, unknown> | null>(`*[_id == $id][0]`, {
+    id: SOLVER_CONFIG_DOC_ID,
+  });
+
+  if (existing) {
+    console.error(
+      `\nREFUSING: ${SOLVER_CONFIG_DOC_ID} already exists (_rev ${String(existing._rev)}).`,
+    );
+    console.error(
+      "This script is the only writer allowed to create it, so something else did —\n" +
+        "either an unguarded write, or the admin route after the create guard was weakened.\n" +
+        "Nothing was written. Compare the two below and decide by hand.",
+    );
+    summarize("STORED (already in Sanity):", solverConfigFromDocument(existing));
+    summarize("CAPTURE (this file):", config);
+    return 2;
+  }
+
+  const doc = buildSolverConfigDocument({ config, now: new Date().toISOString() });
+  summarize("Would create:", config);
+  console.log(
+    `\n_id=${SOLVER_CONFIG_DOC_ID} · ${config.restrictions.length} restrictions · ` +
+      `${config.conflicts.length} conflicts · ${config.presence.length} presence`,
   );
-  console.error(
-    "This script is the only writer allowed to create it, so something else did —\n" +
-      "either an unguarded write, or the admin route after the create guard was weakened.\n" +
-      "Nothing was written. Compare the two below and decide by hand.",
-  );
-  summarize("STORED (already in Sanity):", solverConfigFromDocument(existing));
-  summarize("CAPTURE (this file):", config);
-  process.exit(2);
+
+  if (!apply) {
+    console.log("\nDry run. Review the rules above against the browser, then re-run with --apply.");
+    return 0;
+  }
+
+  // `create`, never `createIfNotExists`/`createOrReplace`: the id collision IS
+  // the guard, so a document that appeared between the check above and this line
+  // fails the write instead of silently winning or losing.
+  await client.create(doc as { _id: string; _type: string } & Record<string, unknown>);
+  console.log(`\nCreated ${SOLVER_CONFIG_DOC_ID}.`);
+  return 0;
 }
 
-const doc = buildSolverConfigDocument({ config, now: new Date().toISOString() });
-summarize("Would create:", config);
-console.log(
-  `\n_id=${SOLVER_CONFIG_DOC_ID} · ${config.restrictions.length} restrictions · ` +
-    `${config.conflicts.length} conflicts · ${config.presence.length} presence`,
+main().then(
+  (code) => { process.exitCode = code; },
+  (err) => {
+    console.error(err);
+    process.exitCode = 1;
+  },
 );
-
-if (!apply) {
-  console.log("\nDry run. Review the rules above against the browser, then re-run with --apply.");
-  process.exit(0);
-}
-
-// `create`, never `createIfNotExists`/`createOrReplace`: the id collision IS the
-// guard, so a document that appeared between the check above and this line fails
-// the write instead of silently winning or losing.
-await client.create(doc as { _id: string; _type: string } & Record<string, unknown>);
-console.log(`\nCreated ${SOLVER_CONFIG_DOC_ID}.`);
