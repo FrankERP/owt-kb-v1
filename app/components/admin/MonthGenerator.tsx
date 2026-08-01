@@ -10,6 +10,7 @@ import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import PlannerGrid, { type AutoState, type SolveDiagnostics } from "./PlannerGrid";
 import MonthCalendar from "./MonthCalendar";
 import { SERVICE_LABEL } from "./serviceCardModel";
+import { fillColumn } from "./localFill";
 import {
   buildColumns,
   buildRows,
@@ -1332,11 +1333,70 @@ export default function MonthGenerator({
   }
 
   /**
+   * E5's LOCAL fill for every `special_role` column, merged into all three
+   * pieces of grid state.
+   *
+   * A special is never sent to CP-SAT (E4/E5), so this is the ONLY thing that
+   * auto-fills one — and the only thing that keeps a forbidden pair apart while
+   * doing it (`localFill.ts`). It is a different mechanism from the solver, not
+   * an extension of it: greedy, single-column, no caps, no backtracking.
+   *
+   * **All three setters, at every exit.** `handleAuto` writes cells directly
+   * rather than routing through `handleCellsChange`, so a caller that sets
+   * `cells` and forgets `drafts` renders a populated special in the grid while
+   * posting an EMPTY document. And `setUnfilled` must MERGE: `mapUnfilledSeats`
+   * resolves a date only through the Sunday spine or `saturdayForWeek`, so a
+   * weekday special's date is unreachable through it by construction — the
+   * filler's own report is the only channel a special's empty seat has.
+   *
+   * @param baseCells the array the fill starts from. On the SUCCESS path this
+   *   must be `applied.cells` — passing the pre-solve `cells` here discards the
+   *   entire weekend solve that was just committed.
+   * @param solverUnfilled the solve's own unfilled seats, present on the success
+   *   path only. Absent ⇒ this is a failure exit, and the previous run's
+   *   special entries are dropped (by date) before the new ones are appended, so
+   *   pressing Auto twice cannot double-count the same empty seat.
+   */
+  function applySpecialFill(baseCells: GridCell[], solverUnfilled?: { date: string; rowId: string }[]) {
+    const specialDates = new Set(
+      columns.filter(c => c.type === "special_role").map(c => c.date),
+    );
+    let next = baseCells;
+    const filled: { date: string; rowId: string }[] = [];
+    for (const column of columns) {
+      if (column.type !== "special_role") continue;
+      // Fed the ACCUMULATED cells, so the second special of a month ranks
+      // against the load the first one just created (`cellsToParticipantRoles`
+      // iterates `columns`), instead of re-picking the same people.
+      const out = fillColumn({
+        column,
+        columns,
+        rows,
+        cells: next,
+        members,
+        savedWindow,
+        config: solverConfig,
+      });
+      next = out.cells;
+      filled.push(...out.unfilled);
+    }
+    setCells(next);
+    setUnfilled(prev => [
+      ...(solverUnfilled ?? prev.filter(u => !specialDates.has(u.date))),
+      ...filled,
+    ]);
+    setDrafts(prev => cellsToDrafts(next, columns, skippedDates, prev, existingRoles));
+  }
+
+  /**
    * Auto — the ONLY caller of `/api/admin/solve` (D13). Owns the fetch per
    * CLAUDE.md's client-mutation invariant: try/catch/finally, check `res.ok`,
    * reset the loading flag in `finally`, never close-as-success on failure. A
    * short-staffed month returning `ok:false` is the solver's NORMAL failure
    * (D15), not an edge case.
+   *
+   * It is also the only caller of `applySpecialFill`, which runs at EVERY exit
+   * — the solve failing has no bearing on a special, which was never sent.
    */
   async function handleAuto() {
     const built = buildSolveRequest({
@@ -1349,8 +1409,11 @@ export default function MonthGenerator({
       month,
     });
     if (!built.ok) {
-      // Pre-flight refusal (fact 14) — never reaches the network.
+      // Pre-flight refusal (fact 14) — never reaches the network. EXIT 1, and
+      // the one E5 names outright: "a month with no Sunday leads must still
+      // fill its specials". The specials never needed the solver.
       setAutoError(built.reason);
+      applySpecialFill(cells);
       return;
     }
 
@@ -1367,7 +1430,10 @@ export default function MonthGenerator({
         response = await res.json();
       }
       if (!res.ok || !response || !response.ok || !response.schedule) {
+        // EXIT 2 — the solver answered, and said no. A short-staffed month is
+        // the solver's NORMAL failure (D15); the specials still fill.
         setAutoError(response?.error ?? "El solver no encontró solución.");
+        applySpecialFill(cells);
         return;
       }
 
@@ -1380,29 +1446,37 @@ export default function MonthGenerator({
         activeSatDates,
         members,
       });
-      setCells(applied.cells);
       setUnresolvedNames(applied.unresolvedNames);
-      // `sundayDatesFull` resolves the solver's positional week number (E21);
-      // `selectedSundays` then filters the result down to columns that exist —
-      // otherwise an unfilled marker from a week that was never staffed renders
-      // on a date the admin deselected, or on a column that is now a special.
-      setUnfilled(
-        mapUnfilledSeats(response.unfilled_seats ?? [], sundayDatesFull, activeSatDates, selectedSundays),
-      );
       setDiagnostics({
         fairness_relaxed: response.fairness_relaxed,
         sun_lead_fairness_relaxed: response.sun_lead_fairness_relaxed,
         sun_bgv_fairness_relaxed: response.sun_bgv_fairness_relaxed,
         history_runs_used: response.history_runs_used,
       });
-      setDrafts(prev => cellsToDrafts(applied.cells, columns, skippedDates, prev, existingRoles));
+      // EXIT 3 — success. `applied.cells`, never the pre-solve `cells`: the
+      // latter would throw away the weekend roster this call just produced.
+      // `applySpecialFill` owns all three of `setCells`/`setUnfilled`/`setDrafts`
+      // from here, so the special seats and the solver's own cannot diverge.
+      //
+      // `sundayDatesFull` resolves the solver's positional week number (E21);
+      // `selectedSundays` then filters the result down to columns that exist —
+      // otherwise an unfilled marker from a week that was never staffed renders
+      // on a date the admin deselected, or on a column that is now a special.
+      applySpecialFill(
+        applied.cells,
+        mapUnfilledSeats(response.unfilled_seats ?? [], sundayDatesFull, activeSatDates, selectedSundays),
+      );
       // Fairness history is NOT persisted here — a solve merely proposes a
       // schedule. Recording it now would count services that may never be
       // created (close the panel without confirming and next month's solve
       // would still be penalised for them). `handleConfirm` below persists it
       // instead, derived from whatever the create batch actually committed.
     } catch {
+      // EXIT 4 — the network threw. A throw is a solve failure like any other,
+      // and E5 says the specials fill even when the solve fails; exits 1 and 2
+      // both satisfy a loosely-written test and neither reaches this line.
       setAutoError("Error de red al llamar al solver.");
+      applySpecialFill(cells);
     } finally {
       setAutoPending(false);
     }
