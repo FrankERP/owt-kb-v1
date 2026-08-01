@@ -39,8 +39,14 @@
  *   is in `node_modules/.bin`, so `npx` resolves it locally with no download.
  *
  *   Verified to run: `npx tsx scripts/seed-solver-config.ts` with no argument
- *   prints the usage line and exits 1, and an invalid capture is rejected with
- *   its issue paths — both BEFORE any Sanity client is constructed.
+ *   prints the usage line and exits 1, a missing `SANITY_WRITE_TOKEN` is
+ *   reported up front (on the dry run too — a dry run rehearses the credentials
+ *   as well as the diff), and an invalid capture is rejected with its issue
+ *   paths — all three BEFORE any Sanity client is constructed.
+ *
+ *   Every run prints its resolved target (project · dataset · dry-run/apply)
+ *   before it reads anything: both ids fall back to a default, so without that
+ *   line the output cannot be attributed to a dataset.
  *
  * ─── What it refuses to do ───────────────────────────────────────────────────
  *
@@ -127,6 +133,19 @@ async function main(): Promise<number> {
     return 1;
   }
 
+  // UP FRONT, and on the dry run too. The token is the last thing a write needs
+  // and the first thing that is missing: checked at the commit instead, the
+  // operator gets a clean-looking dry run, decides to apply on the strength of
+  // it, and only then discovers the run never had credentials — with the whole
+  // review to redo. A dry run is a rehearsal; it rehearses this as well.
+  if (!process.env.SANITY_WRITE_TOKEN) {
+    console.error(
+      "SANITY_WRITE_TOKEN is not set. Re-run with `--env-file=.env.local` (or export it).\n" +
+        "Nothing was read and nothing was written.",
+    );
+    return 1;
+  }
+
   const raw = readFileSync(path.resolve(process.cwd(), capturePath), "utf8");
   const parsed = parseSolverConfigWrite(parseCapture(raw));
   if (!parsed.ok) {
@@ -136,13 +155,24 @@ async function main(): Promise<number> {
   }
   const { config } = parsed.value;
 
+  const projectId = process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || "ebb8vcnk";
+  const dataset = process.env.NEXT_PUBLIC_SANITY_DATASET || "production";
+
   const client = createClient({
-    projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || "ebb8vcnk",
-    dataset: process.env.NEXT_PUBLIC_SANITY_DATASET || "production",
+    projectId,
+    dataset,
     apiVersion: "2024-01-01",
     token: process.env.SANITY_WRITE_TOKEN,
     useCdn: false,
   });
+
+  // Printed BEFORE anything is read, so every line below is attributable to a
+  // named target. Both ids fall back to a default, so "which dataset did that
+  // dry run actually describe?" is otherwise unanswerable from the output — and
+  // this is a one-shot, irreversible production create.
+  console.log(
+    `Target: project ${projectId} · dataset ${dataset} · ${apply ? "APPLY (writes)" : "dry run (writes nothing)"}`,
+  );
 
   const existing = await client.fetch<Record<string, unknown> | null>(`*[_id == $id][0]`, {
     id: SOLVER_CONFIG_DOC_ID,
