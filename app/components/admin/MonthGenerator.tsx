@@ -853,7 +853,8 @@ function RuleBuilder({ config, onChange, members }: {
            deliberate non-goals).
 
         The first sentence is TRUE ONLY UNTIL the rules move to Sanity — decided,
-        pending, and recorded in `docs/adr/0010-specials-fill-locally.md`. Revise
+        pending, and recorded in
+        `docs/adr/0010-specials-fill-locally-not-in-the-solver.md`. Revise
         this copy in the same change that lands the move; do not pre-announce it
         here, since until it lands this is the accurate warning.
       */}
