@@ -1349,6 +1349,31 @@ export default function MonthGenerator({
    * weekday special's date is unreachable through it by construction — the
    * filler's own report is the only channel a special's empty seat has.
    *
+   * **Every `special_role` column, `skippedDates` and `isExisting` included —
+   * deliberately, and reviewed.** A skipped or already-existing special is
+   * filled like any other, so the grid renders auto seats for a service that
+   * will never be created and those seats count as load against the month's
+   * OTHER specials (`cellsToParticipantRoles` iterates every column). Weighed
+   * and kept, for four reasons:
+   *
+   *  1. `applySolveResponse` writes the solver's roster into every weekend
+   *     column with a week, skipped and existing alike (`plannerModel.ts:693`).
+   *     Guarding here alone would make Auto behave differently for a skipped
+   *     Sunday than for a skipped special, with nothing on screen to explain it.
+   *  2. Nothing wrong reaches Sanity: `cellsToDrafts` marks the draft `skipped`
+   *     for both reasons and `handleConfirm` posts no skipped draft. The column
+   *     header is dimmed and already says *why* it will not be created.
+   *  3. The load argument does not favour skipping. An existing mid-month
+   *     service's REAL assignments are unavailable to the grid — `savedWindowFor`
+   *     ends at the month's FIRST SUNDAY and `existingRoles` carries collision
+   *     refs, no people — so skipping trades "five invented people carry load"
+   *     for "nobody carries load". A different wrong number, not a right one.
+   *  4. `skippedDates` is a live toggle and this runs once, at Auto. A guard
+   *     would only bite on skips made BEFORE Auto; a skip made after would leave
+   *     the seats standing anyway. A half-working guard reads as a bug.
+   *
+   * If the weekend path ever learns to respect a skip, this must follow it.
+   *
    * @param baseCells the array the fill starts from. On the SUCCESS path this
    *   must be `applied.cells` — passing the pre-solve `cells` here discards the
    *   entire weekend solve that was just committed.

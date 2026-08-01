@@ -460,12 +460,64 @@ describe("effectiveLoad", () => {
     expect(ordered.find((c) => c.id === "gaby")!.load).toBe(2);
   });
 
+  it("takes the LOWER of the two middles, never the upper", () => {
+    // Non-exempt eligible loads 2, 3, 4, 5 — an EVEN pool, which is the only
+    // shape the two middles disagree on and the common one on a real roster.
+    // Lower middle 3, upper middle 4. Frank is exempt at raw load 9, so his
+    // incoming index is LAST and the assertion below cannot be satisfied by a
+    // tiebreak: at the lower middle his key of 3 beats Carla's 4 outright,
+    // while at the upper middle he ties Carla and loses on index. The lower is
+    // what the brief specifies and what keeps the result a load a real
+    // candidate actually carries.
+    const members = pick("frank", "ana", "beto", "carla", "dora");
+    const order = orderedNames(members, { frank: 9, ana: 2, beto: 3, carla: 4, dora: 5 });
+    expect(order).toEqual(["Ana", "Beto", "Frank", "Carla", "Dora"]);
+  });
+
   it("orders a plain pool by raw load, ascending", () => {
     expect(orderedNames(pick("ana", "beto", "carla"), { ana: 9, beto: 1, carla: 5 })).toEqual([
       "Beto",
       "Carla",
       "Ana",
     ]);
+  });
+});
+
+// ─── Fairness THROUGH the fill (P7b, wired) ──────────────────────────────────
+
+describe("fairness reaches the seats", () => {
+  /**
+   * The assertions above all call `orderByEffectiveLoad` directly. That proves
+   * the comparator and nothing about `fillColumn`, which is what the user
+   * actually gets: strip the `fairnessByMemberId` call out of `fillColumn` and
+   * every one of them stays green while the filler seats by RAW load — and
+   * seating by raw load is verbatim the failure the user described, "it will
+   * always choose people like Frank, Mkz or Gaby who tend to have 1 or 2
+   * participations a month".
+   *
+   * The exempt case is asserted against `median − 1` and `median + 1`, never
+   * against the median-holder: an exempt member TIES the holder by construction,
+   * so a seat assertion there would decay into a fixture-name assertion. Neither
+   * neighbour ties.
+   */
+  it("does not seat an EXEMPT member ahead of a candidate at median − 1, and still seats her ahead of median + 1", () => {
+    // Non-exempt eligible loads 2, 3, 4 → median 3. Frank is exempt at load 0,
+    // so raw load would seat him FIRST; the median puts him behind Ana (2) and
+    // ahead of Carla (4) — Lead's two seats, then BGV's.
+    const members = pick("frank", "ana", "beto", "carla");
+    const out = fill({ members, loads: { frank: 0, ana: 2, beto: 3, carla: 4 } });
+    expect(idsIn(out.cells, "lead")).toEqual(["ana", "frank"]);
+    expect(idsIn(out.cells, "bgv")).toEqual(["beto", "carla"]);
+  });
+
+  it("moves a SLACK member behind the tie she would otherwise win, in the seats and not just the comparator", () => {
+    // Gaby and Zoe both carry load 2 and `rankCandidates` puts Gaby first
+    // ("Gaby" < "Zoe"). `slack 1` hands Lead's second seat to Zoe and drops Gaby
+    // to BGV. Without the fairness map Gaby takes the Lead seat.
+    const members = pick("gaby", "zoe", "ana");
+    const out = fill({ members, loads: { gaby: 2, zoe: 2, ana: 1 } });
+    expect(idsIn(out.cells, "lead")).toEqual(["ana", "zoe"]);
+    expect(idsIn(out.cells, "bgv")).toEqual(["gaby"]);
   });
 });
 
