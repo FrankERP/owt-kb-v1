@@ -413,7 +413,10 @@ export default function ServicesPanel() {
    * `null` ⇒ no rules in this browser ⇒ `undefined` to `SeatBoard` ⇒ it enforces
    * nothing, exactly as it always has. Never `DEFAULT_SOLVER_CONFIG`: a browser
    * that has never opened the generator must not start hard-blocking picks
-   * against a rule set nobody on this team wrote.
+   * against a rule set nobody on this team wrote — and neither must one that
+   * merely opened it, which is why `readStoredSolverConfig` answers `null` for a
+   * stored value that is still the untouched first-run seed rather than trusting
+   * the key's mere presence.
    */
   const [solverConfig, setSolverConfig] = useState<SolverConfig | null>(null);
   const [editError, setEditError] = useState<string | null>(null);

@@ -1762,3 +1762,35 @@ describe("MonthGenerator — unresolved RULE names", () => {
     expect(line).toContain("Fulanito");
   });
 });
+
+// ─── Opening the generator is not writing a rule ─────────────────────────────
+//
+// This panel persists `solverConfig` on every change, and its state STARTS as
+// the shipped first-run seed. While that write was unconditional, merely opening
+// "Generar mes" left six restrictions, five conflicts and a presence rule in
+// `owt_solver_config_v3` — and `ServicesPanel` reads that same key to decide
+// what `SeatBoard` HARD-BLOCKS on. So every admin who had ever opened this panel
+// would have had the Tablero start refusing picks against rules nobody on the
+// team wrote, on the strength of "a key exists".
+describe("MonthGenerator — persisting the rule set", () => {
+  const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] }];
+
+  it("writes nothing to `owt_solver_config_v3` just for being opened", () => {
+    render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    expect(localStorage.getItem("owt_solver_config_v3")).toBeNull();
+  });
+
+  it("writes as soon as the admin actually changes something", () => {
+    // The guard is "the untouched seed", not "never persist": one deliberate
+    // edit and the rules are this browser's again.
+    render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole("checkbox", { name: "Ana" }));
+    const saved = localStorage.getItem("owt_solver_config_v3");
+    expect(saved, "a deliberate pool change must persist").not.toBeNull();
+    expect(JSON.parse(saved!).sundayLeads).toEqual(["lead-1"]);
+  });
+});

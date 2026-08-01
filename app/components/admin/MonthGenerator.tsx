@@ -12,7 +12,11 @@ import MonthCalendar from "./MonthCalendar";
 import { SERVICE_LABEL } from "./serviceCardModel";
 import { fillColumn } from "./localFill";
 import { unresolvedRuleNames } from "./ruleEnforcement";
-import { SOLVER_CONFIG_STORAGE_KEY, readStoredSolverConfig } from "./solverConfigStorage";
+import {
+  DEFAULT_SOLVER_CONFIG,
+  SOLVER_CONFIG_STORAGE_KEY,
+  readStoredSolverConfig,
+} from "./solverConfigStorage";
 import {
   buildColumns,
   buildRows,
@@ -124,59 +128,6 @@ const MAX_HISTORY   = 6;
 
 /** 56 days — matches `ServicesPanel`'s `CANDIDATE_LOAD_WINDOW_DAYS` for SeatBoard. */
 const SAVED_WINDOW_DAYS = 56;
-
-// Pre-loaded defaults — mirrors the production rules in CGPT_owt_roles.py.
-// Used on first open (no localStorage). Subsequent opens load from localStorage.
-const DEFAULT_SOLVER_CONFIG: SolverConfig = {
-  sundayLeads: [], saturdayLeads: [], support: [],
-  restrictions: [
-    {
-      id: "d-frank", person: "Frank",
-      excludedPatterns: ["Sat.*", "Sun.BGV", "Sun.Choir"],
-      fairness: "exempt", fairnessSlack: 1,
-      weekExclusions: [], caps: [],
-    },
-    {
-      id: "d-mkz", person: "Mkz",
-      excludedPatterns: ["Sat.*", "Sun.BGV", "Sun.Choir"],
-      fairness: "exempt", fairnessSlack: 1,
-      weekExclusions: [], caps: [],
-    },
-    {
-      id: "d-gaby", person: "Gaby",
-      // Merges both Gaby lines: !in Sat.* + !in Sun.Choir + slack 1 + Sun.BGV <= {weeks-2}
-      excludedPatterns: ["Sat.*", "Sun.Choir"],
-      fairness: "slack", fairnessSlack: 1,
-      weekExclusions: [],
-      caps: [{ id: "d-gaby-cap", pattern: "Sun.BGV", op: "<=", value: 0, relative: true, relOffset: 2 }],
-    },
-    {
-      id: "d-lucia-week", person: "Lucía",
-      excludedPatterns: [], fairness: "none", fairnessSlack: 1,
-      weekExclusions: [{ id: "d-lucia-w3", week: 3, pattern: "*.*" }], caps: [],
-    },
-    {
-      id: "d-liu-week", person: "Liu",
-      excludedPatterns: [], fairness: "none", fairnessSlack: 1,
-      weekExclusions: [{ id: "d-liu-w3", week: 3, pattern: "*.*" }], caps: [],
-    },
-    {
-      id: "d-marianne-week", person: "Marianne",
-      excludedPatterns: [], fairness: "none", fairnessSlack: 1,
-      weekExclusions: [{ id: "d-marianne-w1", week: 1, pattern: "*.*" }], caps: [],
-    },
-  ],
-  conflicts: [
-    { id: "d-lucia-niza",     personA: "Lucía", personB: "Niza",  pattern: "*.LeadBGV" },
-    { id: "d-hugo-lucia",     personA: "Hugo",  personB: "Lucía", pattern: "*.Lead"    },
-    { id: "d-niza-hugo",      personA: "Niza",  personB: "Hugo",  pattern: "*.Lead"    },
-    { id: "d-jakey-hugo-bgv", personA: "Jakey", personB: "Hugo",  pattern: "*.BGV"     },
-    { id: "d-jakey-hugo-lead",personA: "Jakey", personB: "Hugo",  pattern: "*.Lead"    },
-  ],
-  presence: [
-    { id: "d-hugo-jakey", persons: ["Hugo", "Jakey"], pattern: "Sun.BGV" },
-  ],
-};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1138,7 +1089,9 @@ export default function MonthGenerator({
     //
     // `null` means "this browser holds no rules", NOT "use the defaults": state
     // is already seeded from `DEFAULT_SOLVER_CONFIG`, and overwriting it here
-    // would be the same write by another name.
+    // would be the same write by another name. A stored value that is still the
+    // untouched seed also reads as `null` — which changes nothing on this
+    // surface, since the state it would have set is that same seed.
     const stored = readStoredSolverConfig();
     if (stored) setSolverConfig(stored);
     try {
@@ -1148,6 +1101,20 @@ export default function MonthGenerator({
   }, []);
 
   useEffect(() => {
+    // **The untouched seed is never written.** This effect used to fire on mount
+    // with `solverConfig` still `DEFAULT_SOLVER_CONFIG`, so merely OPENING this
+    // panel persisted six restrictions, five conflicts and a presence rule that
+    // nobody on this team had chosen — and `ServicesPanel` then handed them to
+    // `SeatBoard` as hard blocks, on the strength of "a key exists". The
+    // reference test is exact: state is this very object only while nothing has
+    // touched it, so the first real edit (or a hydrated stored value, which is
+    // always a fresh object) writes normally — including an edit that lands back
+    // on the seed's content, which must still replace what is stored.
+    //
+    // `readStoredSolverConfig` treats an ALREADY-persisted seed as "no rules"
+    // for the same reason; this guard is what stops new browsers from adding to
+    // the pile.
+    if (solverConfig === DEFAULT_SOLVER_CONFIG) return;
     try { localStorage.setItem(SOLVER_CONFIG_STORAGE_KEY, JSON.stringify(solverConfig)); } catch {}
   }, [solverConfig]);
 
