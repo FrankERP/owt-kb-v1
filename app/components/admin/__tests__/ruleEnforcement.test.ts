@@ -678,7 +678,8 @@ const violations = (over: {
   column?: GridColumn;
   assigned: AssignedSeat[];
   config?: SolverConfig;
-  overridden?: Set<string>;
+  /** `violationKey` → the exact reason that override waived (P10). */
+  overridden?: Map<string, string>;
   sundayDates?: string[];
 }) =>
   ruleViolationsForColumn({
@@ -741,7 +742,7 @@ describe("ruleViolationsForColumn", () => {
     const assigned = [seat("lead", "niza"), seat("bgv", "lucia")];
     const found = violations({
       assigned,
-      overridden: new Set([violationKey("bgv", "lucia")]),
+      overridden: new Map([[violationKey("bgv", "lucia"), "Regla: no puede coincidir con Niza"]]),
     });
     // Lucía keeps her entry — the reason is what the persistent marker names —
     // but marked sanctioned, so nothing renders it as a live violation.
@@ -760,10 +761,88 @@ describe("ruleViolationsForColumn", () => {
     const found = violations({
       column: SUN_W3,
       assigned: [seat("bgv", "lucia"), seat("lead", "lucia")],
-      overridden: new Set([violationKey("bgv", "lucia")]),
+      overridden: new Map([[violationKey("bgv", "lucia"), "Regla: excluido en la semana 3 (*.*)"]]),
     });
     expect(found.get(violationKey("bgv", "lucia"))?.overridden).toBe(true);
     expect(found.get(violationKey("lead", "lucia"))?.overridden).toBe(false);
+  });
+
+  // ─── An override waives ONE RULE, not a person ─────────────────────────────
+  //
+  // Keyed by (row, member) alone, an override is inherited by every rule written
+  // afterwards: the admin waives `Lucía !with Niza`, adds `Lucía !in *.BGV` a
+  // week later, and the cell reports "Regla anulada — Lucía: Regla: excluido de
+  // *.BGV" — an exception nobody made, presented as one they did. E13's own
+  // promise is that a rule edited after seating flags what is already there;
+  // that promise held for every seated member EXCEPT an overridden one.
+
+  const WAIVED_CONFLICT = "Regla: no puede coincidir con Niza";
+
+  /** `SEEDED` plus a fresh exclusion that also catches Lucía in BGV. */
+  const SEEDED_PLUS_BGV_BAN: SolverConfig = {
+    ...SEEDED,
+    restrictions: [
+      ...SEEDED.restrictions,
+      restriction({ id: "new-lucia-bgv", person: "Lucía", excludedPatterns: ["*.BGV"] }),
+    ],
+  };
+
+  it("flags a DIFFERENT rule fresh instead of inheriting the sanction", () => {
+    const assigned = [seat("lead", "niza"), seat("bgv", "lucia")];
+    const overridden = new Map([[violationKey("bgv", "lucia"), WAIVED_CONFLICT]]);
+
+    // Before the new rule: the waived conflict, and nothing else, is sanctioned.
+    expect(violations({ assigned, overridden }).get(violationKey("bgv", "lucia"))).toEqual({
+      reason: WAIVED_CONFLICT,
+      overridden: true,
+    });
+
+    // The admin now writes `Lucía !in *.BGV`. Same seating, same override.
+    const after = violations({ assigned, overridden, config: SEEDED_PLUS_BGV_BAN });
+    expect(after.get(violationKey("bgv", "lucia"))).toEqual({
+      reason: "Regla: excluido de *.BGV",
+      overridden: false,
+    });
+    // And the stale sanction stops covering the seating from the other end too:
+    // Niza is an ordinary occupant again, so the pair she is half of re-flags.
+    expect(after.get(violationKey("lead", "niza"))?.overridden).toBe(false);
+  });
+
+  it("does not hide a new rule behind a waived one that sorts ahead of it", () => {
+    // The reverse order: the EXCLUSION was waived, and the conflict arrives
+    // afterwards. `evaluate` reports exclusions before conflicts, so a check that
+    // compared only the first reason would answer "the waived one" forever.
+    const assigned = [seat("lead", "niza"), seat("bgv", "lucia")];
+    const found = violations({
+      assigned,
+      config: SEEDED_PLUS_BGV_BAN,
+      overridden: new Map([[violationKey("bgv", "lucia"), "Regla: excluido de *.BGV"]]),
+    });
+    expect(found.get(violationKey("bgv", "lucia"))).toEqual({
+      reason: WAIVED_CONFLICT,
+      overridden: false,
+    });
+  });
+
+  it("keeps sanctioning when the rule that fires is still the one that was waived", () => {
+    // The control for both tests above: nothing changed, so nothing re-flags.
+    // Without it, "scoped to the rule" could be satisfied by never sanctioning.
+    const found = violations({
+      assigned: [seat("lead", "niza"), seat("bgv", "lucia")],
+      overridden: new Map([[violationKey("bgv", "lucia"), WAIVED_CONFLICT]]),
+    });
+    expect(found.get(violationKey("bgv", "lucia"))?.overridden).toBe(true);
+    expect(found.has(violationKey("lead", "niza"))).toBe(false);
+  });
+
+  it("sanctions nothing when the override records no rule at all", () => {
+    // Fails CLOSED: an entry with a reason no rule produces waives nothing, so
+    // the violation shows in red rather than as an exception nobody can trace.
+    const found = violations({
+      assigned: [seat("lead", "niza"), seat("bgv", "lucia")],
+      overridden: new Map([[violationKey("bgv", "lucia"), ""]]),
+    });
+    expect(found.get(violationKey("bgv", "lucia"))?.overridden).toBe(false);
   });
 
   it("ignores a seat whose row or member it cannot resolve", () => {
@@ -776,11 +855,16 @@ describe("ruleViolationsForColumn", () => {
 // `MonthGenerator` hydrates `owt_solver_config_v3` from `localStorage` checking
 // only that `sundayLeads` and `restrictions` are arrays, so a value written
 // before those two fields were added arrives with them `undefined` while the
-// `SolverConfig` type asserts otherwise. Until Task 8 that only threw inside
-// `buildSolveRequest`, on an explicit Auto click. The config now reaches
-// `rankCandidates` during RENDER, where an unguarded `for (const c of
-// config.conflicts)` is a white screen on the planner — from a value already
-// sitting in an admin's browser.
+// `SolverConfig` type asserts otherwise. The config reaches `rankCandidates`
+// during RENDER, where an unguarded `for (const c of config.conflicts)` is a
+// white screen on the planner — from a value already sitting in an admin's
+// browser.
+//
+// What is pinned below is THIS module's own iteration and nothing more. The
+// generator's config step reads the raw config on its own first render
+// (`MemberPool`, `RuleBuilder`) and never comes through here, so `ruleLists` is
+// not a backstop for it: `MonthGenerator`'s hydration normaliser is the only
+// guard that screen has.
 
 const LEGACY_CONFIG = {
   sundayLeads: [],

@@ -77,6 +77,24 @@ export interface GridCell {
    * deliberate exception, the automation may not.
    */
   overrides?: string[];
+  /**
+   * P10 — which RULE each entry in `overrides` waived: member id → the exact
+   * reason `evaluate` gave at the moment the admin clicked "Asignar de todos
+   * modos".
+   *
+   * Without it an override is scoped to (date, row, member) and silently
+   * pre-sanctions rules the admin never saw: waive `Frank !with Gaby`, add
+   * `Gaby !in *.Lead` a week later, and the cell reports an exception nobody
+   * made. `ruleViolationsForColumn` compares this against the rule firing NOW,
+   * so a different one flags fresh.
+   *
+   * A sibling field rather than a richer `overrides` on purpose: every existing
+   * reader wants the plain id list, and `localFill`'s pass-through and
+   * `cellsToDrafts`' indifference both stay literally unchanged. `withUpdatedCell`
+   * is the single writer and keeps the two in lockstep — an id here with no
+   * reason waives nothing, which fails CLOSED (the violation shows in red).
+   */
+  overrideReasons?: Record<string, string>;
 }
 
 export interface GridRow {
