@@ -336,10 +336,10 @@ export function evaluate(input: EvaluateInput): RuleVerdict {
  * Kept private, and separate from `evaluate`, for exactly one caller:
  * `ruleViolationsForColumn` has to answer "is the rule this seat was overridden
  * past still the ONLY rule that refuses it?" (P10). A single first-match verdict
- * cannot answer that — waive a conflict, then add an exclusion that sorts ahead
- * of it, and the only reason ever reported would be the waived one, so the new
- * rule would never surface. The order below is still what decides which single
- * reason the picker shows.
+ * cannot answer that — waive an exclusion, then add a conflict that arrives
+ * afterwards. Exclusions sort ahead (exclusions precede conflicts in `evaluate`'s
+ * order), so first-match keeps returning the waived reason and masks the new
+ * rule. The order below is still what decides which single reason the picker shows.
  */
 function blockingReasons(input: EvaluateInput): string[] {
   const { member, row, column, sundayDates, assigned, members, config } = input;
