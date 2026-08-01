@@ -13,7 +13,9 @@ import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_SOLVER_CONFIG,
   SOLVER_CONFIG_STORAGE_KEY,
+  isFirstRunSolverSeed,
   normalizeStoredSolverConfig,
   readStoredSolverConfig,
 } from "../solverConfigStorage";
@@ -91,6 +93,52 @@ describe("readStoredSolverConfig", () => {
     );
     expect(readStoredSolverConfig()?.conflicts).toEqual([]);
     expect(readStoredSolverConfig()?.sundayLeads).toEqual(["Frank"]);
+  });
+
+  it("reads a persisted first-run SEED as `null`, not as this team's rules", () => {
+    // The load-bearing one. `MonthGenerator` used to write its whole state on
+    // mount, and that state starts as `DEFAULT_SOLVER_CONFIG` — so the key is
+    // already sitting in every browser that ever opened "Generar mes", holding
+    // six restrictions, five conflicts and a presence rule nobody chose. If mere
+    // presence counted as "this team's rules", `ServicesPanel` would hand them
+    // to `SeatBoard` and the Tablero would start HARD-BLOCKING picks against
+    // them — a new silent refusal, on every admin's browser at once.
+    localStorage.setItem(SOLVER_CONFIG_STORAGE_KEY, JSON.stringify(DEFAULT_SOLVER_CONFIG));
+    expect(readStoredSolverConfig()).toBeNull();
+    // Field order is not what makes it the seed.
+    const reordered = {
+      presence: DEFAULT_SOLVER_CONFIG.presence,
+      conflicts: DEFAULT_SOLVER_CONFIG.conflicts,
+      restrictions: DEFAULT_SOLVER_CONFIG.restrictions,
+      support: DEFAULT_SOLVER_CONFIG.support,
+      saturdayLeads: DEFAULT_SOLVER_CONFIG.saturdayLeads,
+      sundayLeads: DEFAULT_SOLVER_CONFIG.sundayLeads,
+    };
+    localStorage.setItem(SOLVER_CONFIG_STORAGE_KEY, JSON.stringify(reordered));
+    expect(readStoredSolverConfig()).toBeNull();
+  });
+
+  it("reads ONE deliberate edit away from the seed as this team's rules", () => {
+    // The other half: the gate must not swallow real rules. A single added
+    // person in a pool is enough to make the stored value somebody's decision.
+    const edited = { ...DEFAULT_SOLVER_CONFIG, sundayLeads: ["Frank"] };
+    localStorage.setItem(SOLVER_CONFIG_STORAGE_KEY, JSON.stringify(edited));
+    expect(readStoredSolverConfig()?.sundayLeads).toEqual(["Frank"]);
+    expect(readStoredSolverConfig()?.restrictions.length).toBe(
+      DEFAULT_SOLVER_CONFIG.restrictions.length,
+    );
+    // And a deletion counts just as much as an addition.
+    localStorage.setItem(
+      SOLVER_CONFIG_STORAGE_KEY,
+      JSON.stringify({ ...DEFAULT_SOLVER_CONFIG, conflicts: [] }),
+    );
+    expect(readStoredSolverConfig()?.conflicts).toEqual([]);
+  });
+
+  it("names the seed by content, not by identity", () => {
+    expect(isFirstRunSolverSeed(DEFAULT_SOLVER_CONFIG)).toBe(true);
+    expect(isFirstRunSolverSeed(JSON.parse(JSON.stringify(DEFAULT_SOLVER_CONFIG)))).toBe(true);
+    expect(isFirstRunSolverSeed({ ...DEFAULT_SOLVER_CONFIG, support: ["Niza"] })).toBe(false);
   });
 
   it("reads the key `MonthGenerator` has always written", () => {
