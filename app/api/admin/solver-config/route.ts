@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireActiveManager } from "@/app/utils/authGuards";
+import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
 import { serviceError } from "@/app/utils/serviceMutation";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { writeClient } from "@/sanity/lib/serverClient";
@@ -160,9 +161,18 @@ export async function POST(req: NextRequest) {
         updatedBy: session.user.sanityId ?? "",
       })
       .commit();
-  } catch {
-    // The pre-read above narrows the window; `ifRevisionId` closes it. A commit
-    // that fails after both is a lost race, reported as exactly that.
+  } catch (err) {
+    // ONLY a genuine Content Lake 409 is a lost race. Everything else — an
+    // expired or missing `SANITY_WRITE_TOKEN`, a network fault, a validation
+    // complaint — must surface as itself.
+    //
+    // Reporting all of them as `stale_revision` is not a harmless
+    // approximation: the message is "Alguien más lo cambió primero. Recarga y
+    // reintenta.", so the admin reloads, gets the SAME `_rev` back (nothing
+    // changed — nothing was written), retries, and fails identically, forever,
+    // with the real cause swallowed by a `catch` that did not even log it. Same
+    // classifier, same reason, as `app/api/admin/roles/[id]/route.ts:283`.
+    if (!sanityConflictKind(err)) throw err;
     return reject(
       serviceError("stale_revision", {
         details: { id: SOLVER_CONFIG_DOC_ID, observed: rev, detail: "commit_conflict" },

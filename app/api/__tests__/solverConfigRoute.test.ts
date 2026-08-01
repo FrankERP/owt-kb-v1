@@ -81,6 +81,17 @@ function config(overrides: Record<string, unknown> = {}) {
 /** A stored document as the route's own read would return it. */
 const STORED = { _id: "solverConfig", _type: "solverConfig", _rev: "rev-1", ...config() };
 
+/** A real lost race, in the shape the Content Lake actually throws it. */
+function contentLakeConflict() {
+  return Object.assign(new Error("conflict"), {
+    statusCode: 409,
+    details: {
+      type: "mutationError",
+      items: [{ error: { type: "documentRevisionIDDoesNotMatchError" } }],
+    },
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   h.sets.length = 0;
@@ -182,11 +193,30 @@ describe("POST — revisions", () => {
     expect(h.revisions).toEqual(["rev-1"]);
   });
 
-  it("reports a lost commit race as a stale revision, not a 500", async () => {
-    h.commit.mockRejectedValue(new Error("conflict"));
+  it("reports a lost commit race — a GENUINE 409 — as a stale revision, not a 500", async () => {
+    h.commit.mockRejectedValue(contentLakeConflict());
     const res = await POST(req({ rev: "rev-1", config: config() }));
     expect(res.status).toBe(409);
     expect((await res.json()).error).toBe("stale_revision");
+  });
+
+  it("does NOT dress a non-conflict failure up as a stale revision", async () => {
+    // This is the difference between one bad save and an unbreakable loop. A
+    // missing or expired `SANITY_WRITE_TOKEN`, a network fault or a validation
+    // complaint reported as `stale_revision` tells the admin "Alguien más lo
+    // cambió primero. Recarga y reintenta." — so they reload, get the SAME
+    // `_rev` back (nothing was written), retry, and fail identically, with the
+    // real cause swallowed. Only `sanityConflictKind` may produce that answer;
+    // everything else propagates. Same rule as `roles/[id]/route.ts:283`.
+    for (const err of [
+      Object.assign(new Error("Unauthorized"), { statusCode: 401 }),
+      new Error("network"),
+      // A 409 that is NOT a mutation conflict is still not a lost race.
+      Object.assign(new Error("nope"), { statusCode: 409, details: { type: "somethingElse" } }),
+    ]) {
+      h.commit.mockRejectedValue(err);
+      await expect(POST(req({ rev: "rev-1", config: config() }))).rejects.toThrow();
+    }
   });
 });
 
