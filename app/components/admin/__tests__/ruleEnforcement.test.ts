@@ -16,7 +16,15 @@ import { describe, expect, it } from "vitest";
 import { instrumentSeatDef, VOICE_SEATS } from "../seatModel";
 import { rankCandidates, type AssignedSeat, type RankMember } from "../candidateRanking";
 import { resolveToMemberName, type GridColumn, type SolverConfig } from "../plannerModel";
-import { evaluate, parsePattern, patternMatches, unresolvedRuleNames } from "../ruleEnforcement";
+import {
+  evaluate,
+  parsePattern,
+  patternMatches,
+  ruleViolationsForColumn,
+  unresolvedRuleNames,
+  violationKey,
+  type RuleRow,
+} from "../ruleEnforcement";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 
 const LEAD = VOICE_SEATS[0];
@@ -654,5 +662,168 @@ describe("rankCandidates with rules", () => {
     expect(gaby?.blockedReason).toBeNull();
     expect(gaby?.ruleBlockedReason).toBeNull();
     expect(gaby?.eligible).toBe(false);
+  });
+});
+
+// ─── E13: the post-fill re-check ─────────────────────────────────────────────
+//
+// `evaluate` answers "may I ADD this person?" and exempts a cell's own
+// occupants so a violating pair can be un-seated (E6's trap). Everything below
+// is about the OTHER question — "is what is already seated legal?" — which the
+// exemption makes `evaluate` structurally unable to answer.
+
+const ROWS: RuleRow[] = [{ id: "lead" }, { id: "bgv" }, { id: "coro" }, { id: "instrumento:Bass" }];
+
+const violations = (over: {
+  column?: GridColumn;
+  assigned: AssignedSeat[];
+  config?: SolverConfig;
+  overridden?: Set<string>;
+  sundayDates?: string[];
+}) =>
+  ruleViolationsForColumn({
+    column: over.column ?? SPECIAL_WED,
+    rows: ROWS,
+    assigned: over.assigned,
+    members: MEMBERS,
+    sundayDates: over.sundayDates ?? SUNDAYS,
+    config: over.config ?? SEEDED,
+    overridden: over.overridden,
+  });
+
+describe("ruleViolationsForColumn", () => {
+  it("flags a forbidden pair the SOLVER seated — BOTH parties, each naming the rule", () => {
+    // Nothing here was picked by hand: this is a committed column, exactly the
+    // shape `applySolveResponse` writes. `evaluate` alone reports both as fine.
+    const assigned = [seat("lead", "niza"), seat("bgv", "lucia")];
+    const found = violations({ assigned });
+    expect(found.get(violationKey("lead", "niza"))?.reason).toContain("Lucía");
+    expect(found.get(violationKey("bgv", "lucia"))?.reason).toContain("Niza");
+    expect([...found.values()].every((v) => v.overridden === false)).toBe(true);
+    // The mutation this guards: drop the "remove this occupant's own seat" step
+    // and `evaluate`'s self-exemption answers "fine" for both, forever.
+    for (const s of assigned) {
+      expect(
+        evaluate({
+          member: member(s.memberId),
+          row: { id: s.seatId },
+          column: SPECIAL_WED,
+          sundayDates: SUNDAYS,
+          assigned,
+          members: MEMBERS,
+          config: SEEDED,
+        }).blocked,
+      ).toBe(false);
+    }
+  });
+
+  it("flags a WEEK exclusion the solver seated, on the spine's numbering", () => {
+    expect(
+      violations({ column: SUN_W3, assigned: [seat("lead", "lucia")] }).get(violationKey("lead", "lucia"))
+        ?.reason,
+    ).toContain("semana 3");
+    expect(violations({ column: SUN_W2, assigned: [seat("lead", "lucia")] }).size).toBe(0);
+  });
+
+  it("flags nobody a rule does not name, and nothing at all without a config", () => {
+    expect(violations({ assigned: [seat("lead", "frank"), seat("bgv", "gaby")] }).size).toBe(0);
+    expect(
+      ruleViolationsForColumn({
+        column: SPECIAL_WED,
+        rows: ROWS,
+        assigned: [seat("lead", "niza"), seat("bgv", "lucia")],
+        members: MEMBERS,
+      }).size,
+    ).toBe(0);
+  });
+
+  it("an OVERRIDDEN seat is reported as sanctioned, and stops flagging its partner too (P10)", () => {
+    const assigned = [seat("lead", "niza"), seat("bgv", "lucia")];
+    const found = violations({
+      assigned,
+      overridden: new Set([violationKey("bgv", "lucia")]),
+    });
+    // Lucía keeps her entry — the reason is what the persistent marker names —
+    // but marked sanctioned, so nothing renders it as a live violation.
+    expect(found.get(violationKey("bgv", "lucia"))).toEqual({
+      reason: "Regla: no puede coincidir con Niza",
+      overridden: true,
+    });
+    // And Niza is clean: one override covers the seating from BOTH ends. Drop
+    // the `sanctionFree` pool and the exception re-appears through its partner,
+    // in red, beside a marker saying it was allowed.
+    expect(found.has(violationKey("lead", "niza"))).toBe(false);
+  });
+
+  it("an override on ONE row does not sanction the same person on another", () => {
+    // Lucía overridden in BGV; she is separately week-3 excluded from Lead.
+    const found = violations({
+      column: SUN_W3,
+      assigned: [seat("bgv", "lucia"), seat("lead", "lucia")],
+      overridden: new Set([violationKey("bgv", "lucia")]),
+    });
+    expect(found.get(violationKey("bgv", "lucia"))?.overridden).toBe(true);
+    expect(found.get(violationKey("lead", "lucia"))?.overridden).toBe(false);
+  });
+
+  it("ignores a seat whose row or member it cannot resolve", () => {
+    expect(violations({ assigned: [seat("ghost-row", "lucia"), seat("lead", "ghost-member")] }).size).toBe(0);
+  });
+});
+
+// ─── A config persisted before `conflicts`/`presence` existed ────────────────
+//
+// `MonthGenerator` hydrates `owt_solver_config_v3` from `localStorage` checking
+// only that `sundayLeads` and `restrictions` are arrays, so a value written
+// before those two fields were added arrives with them `undefined` while the
+// `SolverConfig` type asserts otherwise. Until Task 8 that only threw inside
+// `buildSolveRequest`, on an explicit Auto click. The config now reaches
+// `rankCandidates` during RENDER, where an unguarded `for (const c of
+// config.conflicts)` is a white screen on the planner — from a value already
+// sitting in an admin's browser.
+
+const LEGACY_CONFIG = {
+  sundayLeads: [],
+  saturdayLeads: [],
+  support: [],
+  restrictions: [restriction({ id: "d-frank", person: "Frank", excludedPatterns: ["Sun.BGV"] })],
+} as unknown as SolverConfig;
+
+describe("a legacy config missing `conflicts` and `presence`", () => {
+  it("evaluates without throwing, and still enforces the rules it DOES carry", () => {
+    expect(check({ member: member("frank"), row: BGV, column: SUN_W2, config: LEGACY_CONFIG }).blocked).toBe(
+      true,
+    );
+    expect(check({ member: member("gaby"), row: BGV, column: SUN_W2, config: LEGACY_CONFIG }).blocked).toBe(
+      false,
+    );
+  });
+
+  it("reports unresolved names without throwing", () => {
+    expect(unresolvedRuleNames(LEGACY_CONFIG, MEMBERS)).toEqual([]);
+    expect(
+      unresolvedRuleNames(
+        { ...LEGACY_CONFIG, restrictions: [restriction({ person: "Nadie" })] } as SolverConfig,
+        MEMBERS,
+      ),
+    ).toEqual(["Nadie"]);
+  });
+
+  it("re-checks seated occupants without throwing", () => {
+    expect(violations({ assigned: [seat("lead", "niza")], config: LEGACY_CONFIG }).size).toBe(0);
+  });
+
+  it("ranks candidates without throwing — the render-path white screen", () => {
+    const ranked = rankCandidates({
+      seat: BGV,
+      date: SUN_W2.date,
+      members: MEMBERS,
+      windowRoles: [],
+      assigned: [],
+      column: SUN_W2,
+      sundayDates: SUNDAYS,
+      config: LEGACY_CONFIG,
+    });
+    expect(ranked.find((c) => c.id === "frank")?.ruleBlockedReason).toContain("Sun.BGV");
   });
 });

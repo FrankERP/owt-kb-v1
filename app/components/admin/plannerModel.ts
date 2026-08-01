@@ -56,6 +56,27 @@ export interface GridCell {
   rowId: string;
   memberIds: string[];
   origin: CellOrigin;
+  /**
+   * P10 — member ids a HUMAN deliberately seated here despite a hard rule
+   * refusing them, one entry per explicit "Asignar de todos modos".
+   *
+   * **Recorded on the cell, not in component state**, for the same reason
+   * `origin` is: the cell is the thing that survives a re-render, a step
+   * round-trip and a re-solve, and an override that evaporated on re-render
+   * would silently become a violation again. Nothing downstream has to learn
+   * about it — `cellsToDrafts` reads `date`/`rowId`/`memberIds` only, so this
+   * costs the create path nothing, exactly as `origin` already proves.
+   *
+   * Read by `PlannerGrid` alone, for two things: suppressing E13's post-fill
+   * re-flag for this member, and rendering the persistent "regla anulada"
+   * marker that keeps the exception visible instead of silent. Removing the
+   * member from `memberIds` clears their entry.
+   *
+   * **The auto-filler never writes this** (`localFill.ts` neither sets nor
+   * reads it) — that asymmetry IS the requirement: a person may make a
+   * deliberate exception, the automation may not.
+   */
+  overrides?: string[];
 }
 
 export interface GridRow {

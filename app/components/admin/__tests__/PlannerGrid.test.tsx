@@ -9,7 +9,14 @@ import { fireEvent, render, cleanup, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import PlannerGrid, { type PlannerGridProps, type SolveDiagnostics } from "../PlannerGrid";
-import { buildColumns, buildRows, type GridCell, type GridColumn, type GridRow } from "../plannerModel";
+import {
+  buildColumns,
+  buildRows,
+  type GridCell,
+  type GridColumn,
+  type GridRow,
+  type SolverConfig,
+} from "../plannerModel";
 import type { RankMember } from "../candidateRanking";
 import type { TargetPreflight } from "../serviceReadiness";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
@@ -798,5 +805,288 @@ describe("PlannerGrid — copy across dates (fact 26, grid-only)", () => {
     const next: GridCell[] = onCellsChange.mock.calls[0][0];
     const copied = next.find((c) => c.rowId === "instrumento:Drums" && c.date === "2026-08-09");
     expect(copied?.memberIds.sort()).toEqual(["d1", "d2"]);
+  });
+});
+
+// ─── E6 / E13 / P10: the rules on the grid ───────────────────────────────────
+//
+// Until Task 8 no `config` reached this component, so `ruleEnforcement` enforced
+// nothing in production however well it was unit-tested. Everything below is the
+// wiring, and the two-interaction shape of the override.
+//
+// SPECIAL_ONLY is a Wednesday special: nothing else in this codebase enforces a
+// rule there — a special never reaches the solver — so it is the surface the
+// user's requirement actually lands on.
+
+const SPECIAL_DATE = "2026-08-12";
+
+/** `Frank !with Gaby on *.Lead`, and nothing else, so one rule is under test. */
+const CONFLICT_CONFIG: SolverConfig = {
+  sundayLeads: [],
+  saturdayLeads: [],
+  support: [],
+  restrictions: [],
+  conflicts: [{ id: "c1", personA: "Frank", personB: "Gaby", pattern: "*.Lead" }],
+  presence: [],
+};
+
+const FRANK_ON_LEAD: GridCell[] = [
+  { date: SPECIAL_DATE, rowId: "lead", memberIds: ["m1"], origin: "manual" },
+];
+
+const specialProps = (over: Partial<PlannerGridProps> = {}) =>
+  baseProps({ columns: SPECIAL_ONLY, config: CONFLICT_CONFIG, ...over });
+
+/** The picker's secondary override action, if the open picker offers one. */
+const overrideButtons = () => screen.queryAllByRole("button", { name: "Asignar de todos modos" });
+
+describe("PlannerGrid — a special column identifies itself (E18)", () => {
+  it("renders the special's NAME alongside the Especial label", () => {
+    render(<PlannerGrid {...baseProps({ columns: SPECIAL_ONLY })} />);
+    expect(screen.getByText("Especial")).toBeTruthy();
+    // Two specials can share a date, and the header's own "ya existe un servicio
+    // especial con este nombre" copy points at a name the admin cannot see
+    // without this.
+    expect(screen.getByText("Vigilia")).toBeTruthy();
+  });
+});
+
+describe("PlannerGrid — E6 hard blocks on a manual pick", () => {
+  it("refuses a rule-blocked candidate on ADDING, inert and with the rule named", () => {
+    const onCellsChange = vi.fn();
+    const { container } = render(<PlannerGrid {...specialProps({ cells: FRANK_ON_LEAD, onCellsChange })} />);
+    fireEvent.click(cellFor(container, "lead", SPECIAL_DATE));
+    const gaby = candidateLi("Gaby");
+    // Inert: no pointer target, no keyboard target, and the reason on screen.
+    expect(gaby.getAttribute("aria-disabled")).toBe("true");
+    expect(gaby.getAttribute("tabindex")).toBe("-1");
+    expect(within(gaby).getByText("Regla: no puede coincidir con Frank")).toBeTruthy();
+    fireEvent.click(gaby);
+    fireEvent.keyDown(gaby, { key: "Enter" });
+    fireEvent.keyDown(gaby, { key: " " });
+    expect(onCellsChange).not.toHaveBeenCalled();
+  });
+
+  it("passes the config through — the same pick is free when no rules are supplied", () => {
+    // The mutation this catches is the whole task: drop the `config` prop and
+    // every test above still passes on a component that enforces nothing.
+    const onCellsChange = vi.fn();
+    const { container } = render(
+      <PlannerGrid {...baseProps({ columns: SPECIAL_ONLY, cells: FRANK_ON_LEAD, onCellsChange })} />,
+    );
+    fireEvent.click(cellFor(container, "lead", SPECIAL_DATE));
+    const gaby = candidateLi("Gaby");
+    expect(gaby.getAttribute("aria-disabled")).toBeNull();
+    fireEvent.click(gaby);
+    expect(onCellsChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks on ADDING only — the cell's own occupant stays selectable (E6's trap)", () => {
+    const onCellsChange = vi.fn();
+    const { container } = render(<PlannerGrid {...specialProps({ cells: FRANK_ON_LEAD, onCellsChange })} />);
+    fireEvent.click(cellFor(container, "lead", SPECIAL_DATE));
+    const frank = candidateLi("Frank");
+    expect(frank.getAttribute("aria-disabled")).toBeNull();
+    fireEvent.click(frank);
+    expect(onCellsChange.mock.calls[0][0].find((c: GridCell) => c.rowId === "lead").memberIds).toEqual([]);
+  });
+
+  it("threads `sundayDates`, so a WEEK exclusion reaches the weekend grid", () => {
+    // 2026-08-09 is the second Sunday of August 2026 (spine below), and the rule
+    // bars Gaby from week 2. Without the spine `weekForColumn` cannot answer and
+    // week exclusions are simply not evaluated — so this fails if the prop goes.
+    const weekConfig: SolverConfig = {
+      ...CONFLICT_CONFIG,
+      conflicts: [],
+      restrictions: [
+        {
+          id: "r1",
+          person: "Gaby",
+          excludedPatterns: [],
+          fairness: "none",
+          fairnessSlack: 0,
+          weekExclusions: [{ id: "w", week: 2, pattern: "*.*" }],
+          caps: [],
+        },
+      ],
+    };
+    const spine = ["2026-08-02", "2026-08-09", "2026-08-16", "2026-08-23", "2026-08-30"];
+    const { container, unmount } = render(
+      <PlannerGrid {...baseProps({ config: weekConfig, sundayDates: spine })} />,
+    );
+    fireEvent.click(cellFor(container, "lead", "2026-08-09"));
+    expect(candidateLi("Gaby").getAttribute("aria-disabled")).toBe("true");
+    unmount();
+
+    const bare = render(<PlannerGrid {...baseProps({ config: weekConfig })} />);
+    fireEvent.click(cellFor(bare.container, "lead", "2026-08-09"));
+    expect(candidateLi("Gaby").getAttribute("aria-disabled")).toBeNull();
+  });
+
+  it("does NOT read `eligible` — an unavailable member is a penalty, never a block (fact 19)", () => {
+    // `eligible` is the FILLER's composite and folds in availability. Wiring the
+    // picker to it would turn "marked this date unavailable" into a hard refusal
+    // on a shipped surface, dressed up as rule enforcement.
+    const away: RankMember[] = members.map((mm) =>
+      mm._id === "m2" ? { ...mm, unavailableDates: [SPECIAL_DATE] } : mm,
+    );
+    const onCellsChange = vi.fn();
+    const { container } = render(
+      <PlannerGrid {...specialProps({ members: away, cells: [], onCellsChange })} />,
+    );
+    fireEvent.click(cellFor(container, "lead", SPECIAL_DATE));
+    const gaby = candidateLi("Gaby");
+    expect(within(gaby).getByText("No disp.")).toBeTruthy();
+    expect(gaby.getAttribute("aria-disabled")).toBeNull();
+    expect(overrideButtons()).toHaveLength(0);
+    fireEvent.click(gaby);
+    expect(onCellsChange).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("PlannerGrid — P10, the override takes a second, deliberate action", () => {
+  it("seats the blocked member and records them, only via 'Asignar de todos modos'", () => {
+    const onCellsChange = vi.fn();
+    const { container } = render(<PlannerGrid {...specialProps({ cells: FRANK_ON_LEAD, onCellsChange })} />);
+    fireEvent.click(cellFor(container, "lead", SPECIAL_DATE));
+
+    // The primary row first: it must do nothing at all.
+    fireEvent.click(candidateLi("Gaby"));
+    expect(onCellsChange).not.toHaveBeenCalled();
+
+    // Exactly one candidate offers the override — the rule-blocked one.
+    const buttons = overrideButtons();
+    expect(buttons).toHaveLength(1);
+    expect(within(candidateLi("Gaby")).getByRole("button", { name: "Asignar de todos modos" })).toBeTruthy();
+
+    fireEvent.click(buttons[0]);
+    expect(onCellsChange).toHaveBeenCalledTimes(1);
+    const cell = onCellsChange.mock.calls[0][0].find((c: GridCell) => c.rowId === "lead");
+    expect(cell.memberIds).toEqual(["m1", "m2"]);
+    expect(cell.overrides).toEqual(["m2"]);
+  });
+
+  it("offers NO override for a same-category double — D6 is not a judgement call", () => {
+    // Frank holds Lead; the BGV picker refuses him as a double. That refusal is
+    // a data error on two shipped surfaces, not something to wave through.
+    const { container } = render(<PlannerGrid {...specialProps({ cells: FRANK_ON_LEAD })} />);
+    fireEvent.click(cellFor(container, "bgv", SPECIAL_DATE));
+    expect(candidateLi("Frank").getAttribute("aria-disabled")).toBe("true");
+    expect(overrideButtons()).toHaveLength(0);
+  });
+
+  it("renders a persistent 'regla anulada' marker naming the rule, and does NOT re-flag (E13)", () => {
+    const cells: GridCell[] = [
+      { date: SPECIAL_DATE, rowId: "lead", memberIds: ["m1", "m2"], origin: "manual", overrides: ["m2"] },
+    ];
+    const { container } = render(<PlannerGrid {...specialProps({ cells })} />);
+    const cell = cellFor(container, "lead", SPECIAL_DATE);
+    expect(within(cell).getByText(/Regla anulada — Gaby: Regla: no puede coincidir con Frank/)).toBeTruthy();
+    // Neither party is flagged: one override covers the seating from both ends.
+    expect(within(cell).queryByText(/⚠/)).toBeNull();
+  });
+
+  it("clears the record when the member is removed", () => {
+    const cells: GridCell[] = [
+      { date: SPECIAL_DATE, rowId: "lead", memberIds: ["m1", "m2"], origin: "manual", overrides: ["m2"] },
+    ];
+    const onCellsChange = vi.fn();
+    const { container } = render(<PlannerGrid {...specialProps({ cells, onCellsChange })} />);
+    fireEvent.click(cellFor(container, "lead", SPECIAL_DATE));
+    fireEvent.click(candidateLi("Gaby"));
+    const next = onCellsChange.mock.calls[0][0].find((c: GridCell) => c.rowId === "lead");
+    expect(next.memberIds).toEqual(["m1"]);
+    // A stale entry would silence E13 if the same person were ever re-seated.
+    expect(next.overrides).toEqual([]);
+  });
+});
+
+describe("PlannerGrid — E13 re-checks what is already seated", () => {
+  /** The shape `applySolveResponse` writes: seated by the solver, not by hand. */
+  const SOLVER_PAIR: GridCell[] = [
+    { date: SPECIAL_DATE, rowId: "lead", memberIds: ["m1", "m2"], origin: "auto" },
+  ];
+
+  it("flags a violating pair the SOLVER produced, naming the rule for both", () => {
+    const { container } = render(<PlannerGrid {...specialProps({ cells: SOLVER_PAIR })} />);
+    const cell = cellFor(container, "lead", SPECIAL_DATE);
+    expect(within(cell).getByText(/⚠ Frank: Regla: no puede coincidir con Gaby/)).toBeTruthy();
+    expect(within(cell).getByText(/⚠ Gaby: Regla: no puede coincidir con Frank/)).toBeTruthy();
+  });
+
+  it("lets the flagged pair still be UN-SEATED — the trap the self-exemption exists for", () => {
+    // `CandidateRow` guards onClick and onKeyDown on `!blocked`, so if the rules
+    // refused a cell's own occupants the admin's only escape from a solver-made
+    // violation would be discarding the month.
+    const onCellsChange = vi.fn();
+    const { container } = render(<PlannerGrid {...specialProps({ cells: SOLVER_PAIR, onCellsChange })} />);
+    fireEvent.click(cellFor(container, "lead", SPECIAL_DATE));
+    const gaby = candidateLi("Gaby");
+    expect(gaby.getAttribute("aria-disabled")).toBeNull();
+    fireEvent.click(gaby);
+    expect(onCellsChange.mock.calls[0][0].find((c: GridCell) => c.rowId === "lead").memberIds).toEqual(["m1"]);
+  });
+
+  it("flags a violation created by EDITING the rules after the month was seated", () => {
+    // Same cells throughout — only the config arrives. Nothing re-runs Auto.
+    const { container, rerender } = render(
+      <PlannerGrid {...baseProps({ columns: SPECIAL_ONLY, cells: SOLVER_PAIR })} />,
+    );
+    expect(within(cellFor(container, "lead", SPECIAL_DATE)).queryByText(/⚠/)).toBeNull();
+    rerender(<PlannerGrid {...specialProps({ cells: SOLVER_PAIR })} />);
+    expect(within(cellFor(container, "lead", SPECIAL_DATE)).getByText(/⚠ Gaby/)).toBeTruthy();
+  });
+
+  it("surfaces a violation hidden behind +N, like a duplicate", () => {
+    const cells: GridCell[] = [
+      { date: SPECIAL_DATE, rowId: "lead", memberIds: ["m3", "m1", "m2"], origin: "auto" },
+    ];
+    const { container } = render(<PlannerGrid {...specialProps({ cells })} />);
+    const cell = cellFor(container, "lead", SPECIAL_DATE);
+    // Lead's target is 2, so Gaby sits in the hidden tail.
+    const more = within(cell).getByRole("button", { name: /Ver 1 más/ });
+    expect(more.textContent).toContain("⚠");
+  });
+
+  it("does not flag an unrelated pairing", () => {
+    const cells: GridCell[] = [
+      { date: SPECIAL_DATE, rowId: "lead", memberIds: ["m1", "m3"], origin: "auto" },
+    ];
+    const { container } = render(<PlannerGrid {...specialProps({ cells })} />);
+    expect(within(cellFor(container, "lead", SPECIAL_DATE)).queryByText(/⚠/)).toBeNull();
+  });
+});
+
+describe("PlannerGrid — a config persisted before `conflicts`/`presence` existed", () => {
+  // `MonthGenerator` hydrates `owt_solver_config_v3` checking only that
+  // `sundayLeads` and `restrictions` are arrays. A value written before those
+  // two fields were added sets state with them `undefined` — and it is sitting
+  // in an admin's browser right now. Passing it to `rankCandidates` reads it
+  // DURING RENDER, so an unguarded iteration is a white screen on the planner.
+  const LEGACY = {
+    sundayLeads: [],
+    saturdayLeads: [],
+    support: [],
+    restrictions: [
+      {
+        id: "r1",
+        person: "Gaby",
+        excludedPatterns: ["*.Lead"],
+        fairness: "none",
+        fairnessSlack: 0,
+        weekExclusions: [],
+        caps: [],
+      },
+    ],
+  } as unknown as PlannerGridProps["config"];
+
+  it("renders the grid and the picker, and still enforces the rules it does carry", () => {
+    const { container } = render(
+      <PlannerGrid {...baseProps({ columns: SPECIAL_ONLY, config: LEGACY })} />,
+    );
+    expect(screen.getByText("Lead")).toBeTruthy();
+    fireEvent.click(cellFor(container, "lead", SPECIAL_DATE));
+    expect(candidateLi("Gaby").getAttribute("aria-disabled")).toBe("true");
+    expect(candidateLi("Frank").getAttribute("aria-disabled")).toBeNull();
   });
 });

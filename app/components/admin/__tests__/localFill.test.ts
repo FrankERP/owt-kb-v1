@@ -670,3 +670,71 @@ describe("the fill itself", () => {
     );
   });
 });
+
+// ─── P10: the asymmetry ──────────────────────────────────────────────────────
+//
+// A HUMAN may set a hard rule aside for one pick, explicitly, and the exception
+// is recorded on the cell (`GridCell.overrides`) and rendered forever after.
+// The AUTOMATION may not — and that asymmetry is the user's requirement, not an
+// implementation detail: what they rejected was the solver quietly preferring
+// the people a rule protects, never a person making a deliberate exception.
+//
+// So the filler must have NO PATH to an override. It neither writes one nor
+// reads one, and these tests fail the moment it grows either.
+
+describe("the filler never overrides a rule", () => {
+  /**
+   * Lucía and Niza are the seeded `*.LeadBGV` conflict AND the two lowest-load
+   * candidates — the exact pull toward seating them both. Lead's target is 2.
+   */
+  const MEMBERS = pick("lucia", "niza", "ana", "beto", "carla", "dora", "elsa");
+  const LOADS = { lucia: 0, niza: 0, ana: 3, beto: 4, carla: 5, dora: 6, elsa: 7 };
+
+  it("emits no `overrides` on any cell it touches, having really filled them", () => {
+    const out = fill({ members: MEMBERS, loads: LOADS });
+    // The filler ran: Lead and BGV are at target, so "no overrides" is not
+    // vacuously true because nothing was seated.
+    expect(idsIn(out.cells, "lead")).toHaveLength(rowOf("lead").target!);
+    expect(idsIn(out.cells, "bgv")).toHaveLength(rowOf("bgv").target!);
+    for (const cell of out.cells) expect(cell.overrides ?? []).toEqual([]);
+    // And it refused the pair rather than overriding its way past them.
+    const voices = [...idsIn(out.cells, "lead"), ...idsIn(out.cells, "bgv")];
+    expect(voices.includes("lucia") && voices.includes("niza")).toBe(false);
+  });
+
+  it("leaves a HUMAN's override untouched on a cell it TOPS UP, and never adds itself", () => {
+    // Lucía was overridden onto Lead, deliberately, and Lead's target is 2 — so
+    // the filler really does rewrite this cell rather than skipping it (which is
+    // what made an earlier version of this test unable to fail). It must neither
+    // drop the record — the marker would vanish and E13 would re-flag a
+    // sanctioned seat on the next render — nor add one of its own.
+    const seeded: GridCell[] = [
+      {
+        date: SPECIAL.date,
+        rowId: "lead",
+        memberIds: ["lucia"],
+        origin: "manual",
+        overrides: ["lucia"],
+      },
+    ];
+    const out = fill({ members: MEMBERS, loads: LOADS, cells: seeded });
+    const lead = out.cells.find((c) => c.rowId === "lead" && c.date === SPECIAL.date);
+    expect(lead?.memberIds).toHaveLength(2);
+    expect(lead?.memberIds[0]).toBe("lucia");
+    expect(lead?.overrides).toEqual(["lucia"]);
+    // BGV was filled around it, and carries no override of its own.
+    expect(idsIn(out.cells, "bgv")).toHaveLength(rowOf("bgv").target!);
+    expect(out.cells.find((c) => c.rowId === "bgv")?.overrides ?? []).toEqual([]);
+  });
+
+  it("does not treat an existing override as permission to seat that pair elsewhere", () => {
+    // Niza is overridden onto Lead. BGV is still being filled, and the same
+    // `*.LeadBGV` conflict still refuses Lucía there — an override is per pick,
+    // never a standing exemption the filler can lean on.
+    const seeded: GridCell[] = [
+      { date: SPECIAL.date, rowId: "lead", memberIds: ["niza"], origin: "manual", overrides: ["niza"] },
+    ];
+    const out = fill({ members: MEMBERS, loads: LOADS, cells: seeded });
+    expect(idsIn(out.cells, "bgv")).not.toContain("lucia");
+  });
+});

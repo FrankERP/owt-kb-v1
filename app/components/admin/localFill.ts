@@ -42,7 +42,10 @@
 //
 // ─── What this is NOT ────────────────────────────────────────────────────────
 //
-// Not the solver, and it must never be described as one in the UI. It is greedy,
+// Not the solver, and it must never be described as one in the UI. Extending
+// CP-SAT to specials was weighed, costed and turned down — see
+// `docs/adr/0010-specials-fill-locally-not-in-the-solver.md` before "fixing"
+// this by pointing it at the solver. It is greedy,
 // single-column, and one-pass: it approximates fairness through `effectiveLoad`
 // (P7b) and enforces NO count caps and no presence rules (both stated non-goals
 // of `ruleEnforcement`). It never backtracks — a seat with no eligible candidate
@@ -130,7 +133,11 @@ export function fairnessByMemberId(
 ): Map<string, Fairness> {
   const out = new Map<string, Fairness>();
   if (!config) return out;
-  for (const r of config.restrictions) {
+  // `?? []` for the same reason `ruleEnforcement`'s `ruleLists` exists: a config
+  // persisted before a field existed arrives with it `undefined`, and the type
+  // says otherwise. `restrictions` is the one field the hydration guard already
+  // checks, so this is the cheap half of the same lock, not a second mechanism.
+  for (const r of config.restrictions ?? []) {
     const resolved = resolveToMemberName(r.person, members);
     if (!("resolved" in resolved)) continue;
     const member = members.find((m) => m.member_name === resolved.resolved);
