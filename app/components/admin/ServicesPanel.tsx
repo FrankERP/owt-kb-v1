@@ -5,6 +5,8 @@ import { newCreationRequestId } from "@/app/utils/monthDraftCreate";
 import MonthGenerator from "./MonthGenerator";
 import SeatBoard from "./SeatBoard";
 import { applyRefreshedRole, refreshedRoleFromResponse } from "./applyRefreshedRole";
+import { readStoredSolverConfig } from "./solverConfigStorage";
+import type { SolverConfig } from "./plannerModel";
 import {
   SERVICE_SOURCE_KEYS,
   selectServiceCapabilities,
@@ -391,6 +393,29 @@ export default function ServicesPanel() {
   // Edit / delete modal
   type EditModal = { type: "add" } | { type: "edit"; role: ServiceRole } | { type: "delete"; role: ServiceRole } | null;
   const [editModal, setEditModal] = useState<EditModal>(null);
+  /**
+   * The rule set `SeatBoard` enforces (P6).
+   *
+   * **Read from `localStorage`, because `localStorage` is still where the rules
+   * live.** Task 9 built the shared Sanity document and
+   * `/api/admin/solver-config`, but the cutover — capture the live rules out of
+   * the one browser that holds them, seed, then retire this key — has not run.
+   * Reading the same key `MonthGenerator` reads is what makes the Tablero
+   * enforce EXACTLY what the planner grid enforces instead of a second, older
+   * rule set; when the cutover lands, this and the generator swap to the fetch
+   * together, in one change.
+   *
+   * Refreshed in `openEditModal` rather than by an effect: the generator lives
+   * in this same panel, so rules edited there must be the rules the next
+   * "Editar servicio" refuses on — and the modal opening is the exact moment
+   * that matters, with no cascading render to pay for it.
+   *
+   * `null` ⇒ no rules in this browser ⇒ `undefined` to `SeatBoard` ⇒ it enforces
+   * nothing, exactly as it always has. Never `DEFAULT_SOLVER_CONFIG`: a browser
+   * that has never opened the generator must not start hard-blocking picks
+   * against a rule set nobody on this team wrote.
+   */
+  const [solverConfig, setSolverConfig] = useState<SolverConfig | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
 
   // Month generator
@@ -531,6 +556,8 @@ export default function ServicesPanel() {
     setEditError(null);
     if (next.type === "add") addRequest.current = null;
     if (next.type !== "add") openSnapshot(next.type, control, [next.role]);
+    // The rules the seat board will enforce, re-read now (see `solverConfig`).
+    if (next.type === "add" || next.type === "edit") setSolverConfig(readStoredSolverConfig());
     setEditModal(next);
   };
 
@@ -1546,12 +1573,14 @@ export default function ServicesPanel() {
       {editModal?.type === "add" && (
         <Modal title="Nuevo servicio" wide ownScroll onClose={closeEditModal} status={editError}>
           <SeatBoard members={members} windowRoles={seatWindowRoles} onSubmit={handleAdd} onClose={closeEditModal} loading={submitting}
+            config={solverConfig ?? undefined}
             submitBlockedReason={createGate.reason} />
         </Modal>
       )}
       {editModal?.type === "edit" && (
         <Modal title="Editar servicio" wide ownScroll onClose={closeEditModal} status={editError ?? staleModes.edit?.message}>
           <SeatBoard initial={editModal.role} members={members} windowRoles={seatWindowRoles} onSubmit={handleEdit} onClose={closeEditModal} loading={submitting}
+            config={solverConfig ?? undefined}
             dateLockedReason={gate("changeServiceDate").reason}
             submitBlockedReason={staleModes.edit?.message ?? cardGates.editTeam.reason} />
           {staleModes.edit && (

@@ -34,6 +34,8 @@ import {
   type RankMember,
 } from "./candidateRanking";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
+import { unresolvedRuleNames } from "./ruleEnforcement";
+import type { SolverConfig } from "./plannerModel";
 import {
   CARD_STYLE,
   SERVICE_BADGE,
@@ -51,6 +53,22 @@ export interface SeatBoardProps {
   loading: boolean;
   dateLockedReason?: string | null;
   submitBlockedReason?: string | null;
+  /**
+   * The shared rule set (P6). **Optional, and absent means "no rules here"** —
+   * never "use the defaults". A browser holding no rules must keep this board's
+   * original behaviour exactly (`rankCandidates` answers `ruleBlockedReason:
+   * null` with no config), rather than start hard-blocking picks against a rule
+   * set nobody on this team wrote.
+   *
+   * **Standing asymmetry, by construction:** this board edits ONE service and
+   * has no Sunday spine, so `evaluate` gets no `sundayDates` and WEEK exclusions
+   * (E7) are unevaluable here. Person exclusions and pairwise conflicts do
+   * apply. That is a property of the surface, not a gap to fill later — the
+   * board genuinely does not know which week of the month a date falls in
+   * (`weekForColumn` needs the month's full spine, and `Math.ceil(day / 7)` is
+   * E21's wrong answer).
+   */
+  config?: SolverConfig;
 }
 
 const inputCls =
@@ -59,7 +77,7 @@ const selectCls =
   "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-[#0a1929] font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
 
 export default function SeatBoard(props: SeatBoardProps) {
-  const { initial, members, windowRoles, loading } = props;
+  const { initial, members, windowRoles, loading, config } = props;
 
   const [type, setType] = useState(initial?._type ?? "sunday_role");
   const [date, setDate] = useState(initial?.date?.slice(0, 10) ?? "");
@@ -109,21 +127,46 @@ export default function SeatBoard(props: SeatBoardProps) {
     [seats, occupancy],
   );
 
-  // `column` scopes any rule's service half. Passing it now changes NOTHING —
-  // no `config` reaches this surface until Task 9 moves the rules out of
-  // `MonthGenerator`'s localStorage (fact 25), and with no config
-  // `ruleBlockedReason` is always `null`. It is threaded here so Task 9 adds a
-  // config and nothing else. Note the standing asymmetry: this board has no
-  // Sunday spine, so week exclusions (E7) stay unevaluable here even then.
+  // `column` scopes any rule's service half — without it every pattern's service
+  // half is unmatchable and `Sat.*` would apply to a special. `config` is what
+  // turns the rules on here at all (P6): with none, `ruleBlockedReason` is always
+  // `null` and this board behaves exactly as it did for its first two releases.
+  // No `sundayDates`: see the `config` prop's doc — week exclusions are
+  // unevaluable on a surface that edits one service and has no month spine.
   const candidates = useMemo(
-    () => rankCandidates({ seat: target, date, members, windowRoles, assigned, column: { date, type } }),
-    [target, date, type, members, windowRoles, assigned],
+    () =>
+      rankCandidates({
+        seat: target,
+        date,
+        members,
+        windowRoles,
+        assigned,
+        column: { date, type },
+        config,
+      }),
+    [target, date, type, members, windowRoles, assigned, config],
   );
+
+  /**
+   * Rules that resolve to NOBODY (E11/fact 12). Reported HERE and not only in
+   * the generator because this is now a surface where a rule HARD-BLOCKS: an
+   * unmatched conflict name means the pair the admin named is seated together
+   * while the board reports a perfectly normal, successful assignment. On a
+   * special no solve runs at all, so there is no second detector — this warning
+   * is the only safeguard.
+   */
+  const unresolved = useMemo(() => unresolvedRuleNames(config, members), [config, members]);
 
   function toggle(memberId: string) {
     const current = occupancy[target.id] ?? [];
-    const blocked = candidates.find((c) => c.id === memberId)?.blockedReason;
-    if (blocked && !current.includes(memberId)) return; // refuse a same-category double
+    // BOTH refusals. `blockedReason` (a same-category double booking) and
+    // `ruleBlockedReason` (a hard rule) are separate fields on purpose — Task 3
+    // keeps the rule verdict out of the double-booking channel so each can be
+    // worded and sorted on its own — so reading only the first silently let
+    // every rule through while the roster row drew it as blocked.
+    const candidate = candidates.find((c) => c.id === memberId);
+    const blocked = candidate?.blockedReason ?? candidate?.ruleBlockedReason;
+    if (blocked && !current.includes(memberId)) return;
     const next = current.includes(memberId)
       ? current.filter((x) => x !== memberId)
       : target.max !== null && current.length >= target.max
@@ -307,6 +350,16 @@ export default function SeatBoard(props: SeatBoardProps) {
             </span>
             <span className="font-label text-[11px] text-gray-500">{candidates.length}</span>
           </div>
+          {unresolved.length > 0 && (
+            <p
+              role="status"
+              className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 font-body text-[11px] text-amber-400"
+            >
+              Estas reglas nombran a alguien que no existe en el equipo y por lo tanto no bloquean
+              nada: <span className="font-semibold">{unresolved.join(", ")}</span>. Corrige el
+              nombre en las reglas del generador.
+            </p>
+          )}
           <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
             {candidates.map((candidate) => (
               <RosterRow
@@ -558,13 +611,18 @@ function RosterRow({
   selected: boolean;
   onToggle: (id: string) => void;
 }) {
-  const blocked = !!candidate.blockedReason;
+  // Both refusal channels disable the row and both are shown. `blockedReason`
+  // (already assigned in another seat of the same category) wins the wording
+  // when they collide, matching `toggle`'s own order so the row the admin
+  // cannot click always names the reason `toggle` will refuse on.
+  const reason = candidate.blockedReason ?? candidate.ruleBlockedReason;
+  const blocked = !!reason;
   return (
     <li
       role="button"
       tabIndex={blocked ? -1 : 0}
       aria-disabled={blocked ? "true" : undefined}
-      title={candidate.blockedReason ?? undefined}
+      title={reason ?? undefined}
       onClick={() => {
         if (!blocked) onToggle(candidate.id);
       }}
@@ -598,7 +656,7 @@ function RosterRow({
         </div>
         <span className="font-label text-[10px] text-gray-500">{candidate.load}</span>
       </div>
-      {blocked && <p className="mt-1 font-body text-[11px] text-red-400">{candidate.blockedReason}</p>}
+      {blocked && <p className="mt-1 font-body text-[11px] text-red-400">{reason}</p>}
     </li>
   );
 }
