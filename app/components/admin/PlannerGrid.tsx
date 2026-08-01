@@ -33,6 +33,7 @@
 import { useMemo, useState } from "react";
 
 import {
+  assignedForDate,
   cellsToParticipantRoles,
   hasTarget,
   rowAppliesTo,
@@ -44,7 +45,6 @@ import {
 import {
   displayName,
   rankCandidates,
-  type AssignedSeat,
   type RankedCandidate,
   type RankMember,
 } from "./candidateRanking";
@@ -134,18 +134,6 @@ function withUpdatedCell(cells: GridCell[], rowId: string, date: string, memberI
   const next = [...cells];
   next[idx] = { ...next[idx], memberIds, origin: "manual" };
   return next;
-}
-
-function assignedForDate(cells: GridCell[], rows: GridRow[], date: string): AssignedSeat[] {
-  const rowById = new Map(rows.map((r) => [r.id, r]));
-  const out: AssignedSeat[] = [];
-  for (const c of cells) {
-    if (c.date !== date) continue;
-    const row = rowById.get(c.rowId);
-    if (!row) continue;
-    for (const memberId of c.memberIds) out.push({ seatId: c.rowId, category: row.category, memberId });
-  }
-  return out;
 }
 
 /**
@@ -265,6 +253,12 @@ export default function PlannerGrid(props: PlannerGridProps) {
   }, [unfilled]);
 
   const unaddressableSet = useMemo(() => new Set(unaddressableDates), [unaddressableDates]);
+
+  /** Whether Auto will run the LOCAL filler at all (E5) — see the confirm copy. */
+  const hasSpecialColumn = useMemo(
+    () => columns.some((c) => c.type === "special_role"),
+    [columns],
+  );
 
   // Finding 4: `categoryDuplicatesForDate` scans every cell. Called once per
   // (row, column) pair — as it was via an inline prop callback — that's
@@ -421,6 +415,19 @@ export default function PlannerGrid(props: PlannerGridProps) {
             {unaddressableDates.length > 0 &&
               ` ${unaddressableDates.length} sábado(s) fuera del alcance de Auto no se tocarán.`}
           </p>
+          {/* E5: a special never goes to the solver, so its fill is a DIFFERENT
+              mechanism and has to be named as one — greedy, local, rules-first,
+              and it only completes what is missing instead of replacing. Said
+              here rather than on the button because this is where the admin is
+              told what Auto is about to do. */}
+          {hasSpecialColumn && (
+            <p className="font-body text-xs text-amber-300">
+              Los servicios especiales no pasan por el solver: se completan aquí mismo, solo Lead y
+              BGV, respetando las reglas duras (nunca juntan a quienes una regla separa) y
+              equilibrando la carga. Lo ya asignado a mano se conserva; si no queda nadie elegible,
+              el lugar se deja vacío y se marca «Sin cubrir».
+            </p>
+          )}
           <div className="flex gap-2">
             <button
               type="button"

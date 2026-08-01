@@ -34,7 +34,7 @@
 import type { SolveRequest, SolveResponse } from "@/app/api/admin/solve/route";
 import { parseUnfilledSeat } from "@/app/utils/unfilledSeats";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
-import type { RankMember } from "./candidateRanking";
+import type { AssignedSeat, RankMember } from "./candidateRanking";
 import {
   DEFAULT_FOH_SEATS,
   DEFAULT_INSTRUMENT_SEATS,
@@ -1028,6 +1028,37 @@ export function historyEntryFromDrafts(
   }
 
   return { key: `${year}-${month}`, year, month, total_counts, role_counts };
+}
+
+// ─── Cells → AssignedSeat (who is already on this date) ──────────────────────
+
+/**
+ * Everyone seated on `date`, in the `AssignedSeat` shape `rankCandidates` and
+ * `ruleEnforcement.evaluate` both consume. **`seatId` IS the row id** — the same
+ * convention `cellsToDrafts` reads above, and the one `evaluate`'s
+ * self-exemption (`a.seatId === row.id`) and its conflict scan
+ * (`parsed.rows.includes(x.seatId)`) are written against.
+ *
+ * Module-private inside `PlannerGrid` until Task 7. It moved here because the
+ * filler (`localFill.ts`) is pure and must not import from a React component
+ * module, and because re-deriving the `seatId === rowId` convention in a second
+ * place is exactly how two implementations drift — `cellsToDrafts` and this
+ * function share it, so they live together.
+ *
+ * A cell whose `rowId` is not in `rows` contributes nothing: without its row we
+ * cannot know its category, and a guessed one would make the same-category
+ * double-duty block either fire or stay silent at random.
+ */
+export function assignedForDate(cells: GridCell[], rows: GridRow[], date: string): AssignedSeat[] {
+  const rowById = new Map(rows.map((r) => [r.id, r]));
+  const out: AssignedSeat[] = [];
+  for (const c of cells) {
+    if (c.date !== date) continue;
+    const row = rowById.get(c.rowId);
+    if (!row) continue;
+    for (const memberId of c.memberIds) out.push({ seatId: c.rowId, category: row.category, memberId });
+  }
+  return out;
 }
 
 // ─── Cells ↔ ParticipantRole (D12's ranking union) ───────────────────────────
