@@ -289,6 +289,80 @@ describe("Auto when the solve fails on the network", () => {
   });
 });
 
+// ─── Exit 2: the solver answered, and said no ────────────────────────────────
+
+describe("Auto when the solver refuses the month", () => {
+  /**
+   * A short-staffed month returning `ok: false` is the solver's NORMAL failure
+   * (D15) — not an edge case — and the specials were never sent to it, so they
+   * must still fill. Exits 1, 3 and 4 each had a killing test; this one had
+   * none, so deleting `applySpecialFill(cells)` from the `!res.ok ||
+   * !response.ok` branch left the whole suite green.
+   */
+  function setup(solve: () => unknown) {
+    const { fetchMock } = stubFetch(solve);
+    const view = render(
+      <MonthGenerator
+        members={[ANA, LUCIA, NIZA, BETO]}
+        existingRoles={[]}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+      />,
+    );
+    setMonthYear(view.container, 3, 2026);
+    deselectAll(view.container, "saturday");
+    selectSundayLead(view.container, "Ana");
+    addSpecial(view.container, SPECIAL_DATE, "Vigilia");
+    preview();
+    return { ...view, fetchMock };
+  }
+
+  /** The seats `fillColumn` produces for this pool — asserted at both exits. */
+  function expectSpecialFilled(container: HTMLElement) {
+    const lead = cellAt(container, "lead", SPECIAL_DATE);
+    expect(lead.textContent).toContain("Ana");
+    expect(lead.textContent).toContain("Beto");
+    // The conflict still holds on the refusal path.
+    expect(cellAt(container, "bgv", SPECIAL_DATE).textContent).toContain("Lucía");
+    expect(cellAt(container, "bgv", SPECIAL_DATE).textContent).not.toContain("Niza");
+    expect(lead.textContent).not.toContain("Niza");
+  }
+
+  it("fills the special when the solver replies `ok: false` — the `!response.ok` half", async () => {
+    const { container, fetchMock } = setup(() => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: false, error: "El solver no encontró solución." }),
+    }));
+
+    runAuto();
+
+    await waitFor(() =>
+      expect(screen.getByText("El solver no encontró solución.")).toBeTruthy(),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expectSpecialFilled(container);
+  });
+
+  it("fills the special when the ROUTE itself fails — the `!res.ok` half, where no body is read", async () => {
+    const { container, fetchMock } = setup(() => ({
+      ok: false,
+      status: 500,
+      json: async () => {
+        throw new Error("the body must not be read on a non-ok response");
+      },
+    }));
+
+    runAuto();
+
+    await waitFor(() =>
+      expect(screen.getByText("El solver no encontró solución.")).toBeTruthy(),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expectSpecialFilled(container);
+  });
+});
+
 // ─── Exit 3: the success path ────────────────────────────────────────────────
 
 describe("Auto when the solve succeeds", () => {
