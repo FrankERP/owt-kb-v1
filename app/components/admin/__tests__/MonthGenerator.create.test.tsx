@@ -1682,6 +1682,13 @@ describe("MonthGenerator — unresolved RULE names", () => {
     // `buildSolveRequest` iterates all three, and it runs BEFORE `handleAuto`'s
     // try/catch — so without normalisation at hydration this click throws and
     // Auto is dead for that admin until they clear site data.
+    //
+    // The click is not even the first casualty: `MemberPool` reads
+    // `config.saturdayLeads.length` on the CONFIG STEP'S OWN RENDER, so removing
+    // the normaliser fails this test at `render`, with
+    // `TypeError: Cannot read properties of undefined (reading 'length')` at
+    // `MonthGenerator.tsx:295` — a white screen the moment the generator opens.
+    // Nothing in `ruleEnforcement` guards that path.
     const fetchMock = vi.fn(async (url: string) => {
       if (url !== "/api/admin/solve") throw new Error(`unexpected fetch to ${url}`);
       return { ok: true, json: async () => ({ ok: false, error: "sin solución" }) };
