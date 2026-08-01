@@ -1123,17 +1123,23 @@ export default function MonthGenerator({
       if (!saved) return;
       const parsed = JSON.parse(saved) as SolverConfig;
       if (Array.isArray(parsed.sundayLeads) && Array.isArray(parsed.restrictions)) {
-        // NORMALISED, not trusted. This guard has only ever checked two of the
-        // six fields, and `conflicts`/`presence` were added to `SolverConfig`
-        // after this key was first written — so a config persisted before then
-        // is still sitting in an admin's browser with those fields `undefined`,
-        // while the type asserts they are arrays. Until now that only threw
-        // inside `buildSolveRequest`, on an explicit Auto click; the config now
-        // also reaches `rankCandidates` DURING RENDER (E6), where the same
-        // shape would white-screen the whole planner. Filled in here so every
-        // consumer sees the type it was promised, at the one point the untyped
-        // value enters the app. `ruleEnforcement` guards its own iteration too,
-        // for callers that do not come through this door.
+        // NORMALISED, not trusted — and DO NOT DELETE THIS. This guard has only
+        // ever checked two of the six fields, and `conflicts`/`presence` were
+        // added to `SolverConfig` after this key was first written, so a config
+        // persisted before then is still sitting in an admin's browser with
+        // those fields `undefined` while the type asserts they are arrays.
+        //
+        // Normalising here is the ONLY thing standing between that value and a
+        // white screen on the CONFIG STEP'S OWN FIRST RENDER — before any grid
+        // exists, before anything is clicked. `MemberPool` reads
+        // `config[field].length` and `.includes` (`:264`, `:289`, `:290`,
+        // `:295`) for `saturdayLeads`/`support`, and `RuleBuilder` reads
+        // `config.restrictions/conflicts/presence` at `:727` and `:802`/`:814`/
+        // `:826`. Both iterate the raw prop; `ruleEnforcement`'s `ruleLists`
+        // guards its OWN reads and is on neither path, so it is not a second
+        // lock behind this one. (The grid path — `rankCandidates` during render,
+        // E6 — is guarded there as well; the config step is not guarded
+        // anywhere else.)
         setSolverConfig({
           ...parsed,
           sundayLeads: parsed.sundayLeads ?? [],
