@@ -11,7 +11,7 @@ exact strings used in GROQ `_type` filters.
 
 ---
 
-## Registered document types (16)
+## Registered document types (15)
 
 `post`, `tag`, `author`, `featuredSongs`, `saturdarSongs`, `saturday_role`, `sunday_role`,
 `teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, and four **internal** types never
@@ -278,9 +278,12 @@ Every array-of-object item carries a `_key` **equal to the rule's own `id`** —
 [`app/utils/solverConfigWriteRequest.ts`](../app/utils/solverConfigWriteRequest.ts), which both the
 route and the seed script go through so the two cannot drift.
 
-Hidden and read-only in the Studio, and deliberately **not** in `PROTECTED_STUDIO_TYPES`: unlike
-`notificationOutbox` there is no legitimate hand-pruning operation, so being reachable nowhere in
-the Studio is the intended posture rather than a gap.
+Hidden and read-only in the Studio, **and** in `PROTECTED_STUDIO_TYPES` / `INTERNAL_STUDIO_TYPES`.
+`hidden` only removes the affordance and `readOnly` only freezes the form, so a hand-typed
+`/studio/structure/...` or intent URL still offered `delete`, `duplicate`, `restore` and
+`unpublish` — a second write path around the `_rev`-checked route. `document.actions` is what
+applies however the pane was reached, and it applies only to a governed type. Unlike
+`notificationOutbox` nothing here is prunable by hand: its inspection pane is for diagnosis only.
 
 **Status:** as of this writing the document is not yet seeded and `localStorage`
 (`owt_solver_config_v3`) is still the authoritative rule set. See
@@ -501,11 +504,11 @@ require a Studio deploy to appear in the Studio UI (the app reads/writes via GRO
 
 The Studio is a *second* writer into the same dataset, so it would otherwise bypass every guard in
 [API_REFERENCE → the protected mutation contract](API_REFERENCE.md#the-protected-mutation-contract).
-**Eight** types are closed to it — the six protected service types **plus** the two internal
-coordination types:
+**Ten** types are closed to it — the six protected service types **plus** the four internal types
+(`notificationOutbox` keeps `delete` alone, so an operator can prune a stray entry):
 
 `sunday_role`, `saturday_role`, `special_role`, `featuredSongs`, `saturdarSongs`, `setlistProposal`,
-`roleTargetLock`, `roleCreationReceipt`.
+`roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `solverConfig`.
 
 The rules are pure and unit-tested in
 [`app/utils/studioProtection.ts`](../app/utils/studioProtection.ts) (`PROTECTED_STUDIO_TYPES`,

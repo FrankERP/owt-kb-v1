@@ -36,13 +36,20 @@ import { defineType } from "sanity";
  *
  * ─── Studio posture ──────────────────────────────────────────────────────────
  *
- * `hidden` + `readOnly`: the Studio is an alternate write path with no `_rev`
- * check and no validation, straight into the one document that governs hard
- * enforcement for every admin on both surfaces. Being reachable NOWHERE in the
- * Studio is the correct answer here — unlike `notificationOutbox`, there is no
- * legitimate "prune a stray entry by hand" operation to preserve, so this type
- * deliberately does NOT join `PROTECTED_STUDIO_TYPES` (whose only effect would
- * be to give it a read-only inspection pane it does not need).
+ * `hidden` + `readOnly` is where this started, and it was NOT enough. `hidden`
+ * only removes the create/list affordance and `readOnly` only freezes the FORM;
+ * a Studio user who reaches the document by a hand-typed
+ * `/studio/structure/...` or intent URL still got `delete`, `duplicate`,
+ * `restore` (history revert) and `unpublish` — an unguarded second write path,
+ * with no `_rev` check and no `_key` minting, into the one document that governs
+ * hard enforcement for every admin on both surfaces.
+ *
+ * `document.actions` is the only mechanism that applies however the pane was
+ * reached (`app/utils/studioProtection.ts:16-22`), and it applies only to a
+ * GOVERNED type. So this type is now in `PROTECTED_STUDIO_TYPES` and
+ * `INTERNAL_STUDIO_TYPES`: every mutating action is stripped, and the read-only
+ * inspection pane that membership brings is a diagnosis surface, not a write
+ * path — unlike `notificationOutbox`, nothing here is prunable by hand.
  *
  * The Content Lake is schemaless, so this file governs STUDIO VISIBILITY ONLY
  * and gates nothing at runtime — see `docs/DATA_MODEL.md:499-501`. Reading and

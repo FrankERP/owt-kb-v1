@@ -1,4 +1,4 @@
-// Studio protection policy for the nine protected stored types
+// Studio protection policy for the ten protected stored types
 // (Service Readiness A2 §8 / A3 §4) — pure, exported, and unit-testable.
 //
 // WHY a code-owned policy instead of UI configuration alone: the Studio is an
@@ -11,7 +11,7 @@
 // is inert dead config there and is deliberately NOT used anywhere in this repo.
 // Protection is built from the supported v5 mechanisms only:
 //
-//   create      -> `document.newDocumentOptions` drops the template, and the two
+//   create      -> `document.newDocumentOptions` drops the template, and the four
 //                  internal types are additionally `hidden: true` in the schema
 //   update      -> `readOnly: true` on the document type (whole form read-only)
 //   every other -> `document.actions` resolves to an EMPTY action list, which
@@ -24,7 +24,7 @@
 // look at a lock, a receipt, or a malformed role while diagnosing.
 
 /**
- * The nine protected stored types. `saturdarSongs` is a deliberate stored typo —
+ * The ten protected stored types. `saturdarSongs` is a deliberate stored typo —
  * never rename.
  *
  * Membership here is what earns a type a pane in `sanity/structure.ts`'s
@@ -52,6 +52,7 @@ export const PROTECTED_STUDIO_TYPES = [
   "roleTargetLock",
   "roleCreationReceipt",
   "notificationOutbox",
+  "solverConfig",
 ] as const;
 
 export type ProtectedStudioType = (typeof PROTECTED_STUDIO_TYPES)[number];
@@ -114,12 +115,27 @@ const DELETE_ONLY_REASONS: Readonly<Record<DeleteOnlyStudioType, { read: string;
   });
 
 /**
- * Internal coordination types: never authored by hand at all, so they are also
+ * The four internal types: never authored by hand at all, so they are also
  * `hidden: true` in the schema and never appear in any create affordance.
  * `notificationOutbox` is additionally delete-only (above) — it is the one type
  * governed by both lists at once.
+ *
+ * `solverConfig` (the shared planner rule set, P6) is here because `hidden:
+ * true` + `readOnly: true` is NOT protection: `hidden` only removes the
+ * affordance, and `readOnly` freezes the FORM. Reaching the document by a
+ * hand-typed `/studio/structure/...` or intent URL still offered `delete`,
+ * `duplicate`, `restore` and `unpublish` — a second, `_rev`-less write path
+ * around `app/api/admin/solver-config`, into the one document that governs hard
+ * enforcement for every admin on both planner surfaces. `document.actions` is
+ * the mechanism that applies however the pane was reached, and only a GOVERNED
+ * type gets it.
  */
-export const INTERNAL_STUDIO_TYPES = ["roleTargetLock", "roleCreationReceipt", "notificationOutbox"] as const;
+export const INTERNAL_STUDIO_TYPES = [
+  "roleTargetLock",
+  "roleCreationReceipt",
+  "notificationOutbox",
+  "solverConfig",
+] as const;
 
 /**
  * Fields owned by the guarded writers and never hand-authored: the lock's
@@ -130,9 +146,9 @@ export const INTERNAL_STUDIO_TYPES = ["roleTargetLock", "roleCreationReceipt", "
  * both:
  *   · on the three role types the listed fields are `hidden: true` FIELDS inside
  *     an otherwise operator-visible document;
- *   · `roleTargetLock` / `roleCreationReceipt` / `notificationOutbox` are
- *     `hidden: true` TYPES, so every field is off the authoring surface with
- *     them.
+ *   · `roleTargetLock` / `roleCreationReceipt` / `notificationOutbox` /
+ *     `solverConfig` are `hidden: true` TYPES, so every field is off the
+ *     authoring surface with them.
  * The read-only inspection group in `sanity/structure.ts` is the one deliberate
  * place these are visible, and it cannot write. That statement holds only
  * because every one of them is also in {@link PROTECTED_STUDIO_TYPES}, which is
@@ -160,6 +176,20 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
     "deadline",
     "status",
     "claimedAt",
+  ],
+  // Every field of the rule set: it is written wholesale by
+  // `app/api/admin/solver-config` (and, once, by the seed script), under an
+  // `_rev` check and with a `_key` per array item. There is no field of it a
+  // hand edit could set legitimately.
+  solverConfig: [
+    "sundayLeads",
+    "saturdayLeads",
+    "support",
+    "restrictions",
+    "conflicts",
+    "presence",
+    "updatedAt",
+    "updatedBy",
   ],
 });
 
@@ -230,7 +260,7 @@ export function isDeleteOnlyStudioType(typeName: unknown): typeName is DeleteOnl
 }
 
 /**
- * Any type this policy governs at all — the eight fully protected types plus the
+ * Any type this policy governs at all — the nine fully protected types plus the
  * delete-only ones. The config resolvers branch on THIS, so a delete-only type
  * cannot escape the policy just because it is not "protected".
  */
@@ -412,4 +442,5 @@ export const PROTECTED_STUDIO_TITLES: Readonly<Record<ProtectedStudioType, strin
   roleTargetLock: "Locks internos (solo lectura)",
   roleCreationReceipt: "Recibos internos (solo lectura)",
   notificationOutbox: "Cola de avisos (solo lectura)",
+  solverConfig: "Reglas del planificador (solo lectura)",
 });
