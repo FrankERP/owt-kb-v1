@@ -41,7 +41,9 @@ import {
   type GridCell,
   type GridColumn,
   type GridRow,
+  type SolverConfig,
 } from "./plannerModel";
+import { ruleViolationsForColumn, violationKey, type SeatedViolation } from "./ruleEnforcement";
 import {
   displayName,
   rankCandidates,
@@ -122,17 +124,54 @@ export interface PlannerGridProps {
   onAuto: () => void;
   autoState: AutoState;
   diagnostics: SolveDiagnostics | null;
+  /**
+   * The admin's solver rules (E6). **Optional and, until Task 8, never passed** —
+   * without it `rankCandidates` leaves `ruleBlockedReason` null for everyone and
+   * this surface behaves exactly as it shipped.
+   *
+   * It may arrive with `conflicts`/`presence` `undefined` despite the type: see
+   * `ruleEnforcement`'s `ruleLists`. Nothing here may iterate it directly.
+   */
+  config?: SolverConfig;
+  /**
+   * The month's FULL Sunday spine, positional and 1-based — `sundayDatesFull`,
+   * never the admin's selection (E21). Week exclusions are the only rules that
+   * need it; without it they are simply not evaluated.
+   */
+  sundayDates?: string[];
 }
 
 const cellKey = (date: string, rowId: string) => `${date}|${rowId}`;
 
-function withUpdatedCell(cells: GridCell[], rowId: string, date: string, memberIds: string[]): GridCell[] {
+/**
+ * Writes `memberIds` into one cell, and keeps `overrides` (P10) honest:
+ * an id no longer seated cannot stay overridden, so removing a member clears
+ * their entry — the alternative is a stale exception that would silence E13's
+ * re-flag if the same person were ever seated here again.
+ *
+ * `addOverride` is the ONLY way an entry is created, and it is reachable from
+ * exactly one place: the picker's secondary "Asignar de todos modos" action.
+ */
+function withUpdatedCell(
+  cells: GridCell[],
+  rowId: string,
+  date: string,
+  memberIds: string[],
+  addOverride?: string,
+): GridCell[] {
   const idx = cells.findIndex((c) => c.date === date && c.rowId === rowId);
+  const seated = new Set(memberIds);
+  const prior = idx === -1 ? [] : (cells[idx].overrides ?? []);
+  const kept = prior.filter((id) => seated.has(id));
+  const overrides =
+    addOverride && seated.has(addOverride) && !kept.includes(addOverride)
+      ? [...kept, addOverride]
+      : kept;
   if (idx === -1) {
-    return [...cells, { date, rowId, memberIds, origin: "manual" }];
+    return [...cells, { date, rowId, memberIds, origin: "manual", overrides }];
   }
   const next = [...cells];
-  next[idx] = { ...next[idx], memberIds, origin: "manual" };
+  next[idx] = { ...next[idx], memberIds, origin: "manual", overrides };
   return next;
 }
 
@@ -194,6 +233,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
     onAuto,
     autoState,
     diagnostics,
+    config,
+    sundayDates,
   } = props;
 
   const [openCell, setOpenCell] = useState<{ rowId: string; date: string } | null>(null);
@@ -272,6 +313,48 @@ export default function PlannerGrid(props: PlannerGridProps) {
     return map;
   }, [cells, rows]);
 
+  /**
+   * E13 — the rules re-checked against everyone ALREADY SEATED, every render,
+   * per column. Not "after Auto": a re-check wired to the Auto handler would
+   * miss a rule edited after the month was seated, and would miss a config that
+   * changed while the grid was open. Computed from `cells` + `config`, so it is
+   * a function of what is on screen and cannot fall out of date.
+   *
+   * `evaluate` alone cannot answer this — it exempts a cell's own occupants so
+   * a violating pair can be un-seated (E6's trap). `ruleViolationsForColumn`
+   * re-asks with the occupant's own seat removed.
+   */
+  const emptyViolations = useMemo(() => new Map<string, SeatedViolation>(), []);
+  const violationsByDate = useMemo(() => {
+    const map = new Map<string, Map<string, SeatedViolation>>();
+    if (!config) return map;
+    // P10's record, read straight off the cells — the only reader there is.
+    // Keyed BY DATE as well as by `violationKey`: an override is a decision
+    // about one seating on one day, and a set shared across the month would let
+    // overriding Gaby on the 12th silently sanction her on the 19th too.
+    const overriddenByDate = new Map<string, Set<string>>();
+    for (const c of cells) {
+      for (const id of c.overrides ?? []) {
+        const set = overriddenByDate.get(c.date) ?? new Set<string>();
+        set.add(violationKey(c.rowId, id));
+        overriddenByDate.set(c.date, set);
+      }
+    }
+    for (const column of columns) {
+      const found = ruleViolationsForColumn({
+        column,
+        rows,
+        assigned: assignedForDate(cells, rows, column.date),
+        members,
+        sundayDates,
+        config,
+        overridden: overriddenByDate.get(column.date),
+      });
+      if (found.size > 0) map.set(column.date, found);
+    }
+    return map;
+  }, [cells, rows, columns, members, sundayDates, config]);
+
   function rankFor(row: GridRow, date: string): RankedCandidate[] {
     const seat = seatDefForRow(row);
     const assigned = assignedForDate(cells, rows, date);
@@ -280,8 +363,26 @@ export default function PlannerGrid(props: PlannerGridProps) {
     // so its verdict is discarded and cannot disagree — but a later change to
     // what the merge keeps would make a divergence here a real hazard.
     const column = columnByDate.get(date);
-    const order = rankCandidates({ seat, date, members, windowRoles: unionRoles, assigned, column });
-    const recentOnly = rankCandidates({ seat, date, members, windowRoles: savedWindow, assigned, column });
+    const order = rankCandidates({
+      seat,
+      date,
+      members,
+      windowRoles: unionRoles,
+      assigned,
+      column,
+      sundayDates,
+      config,
+    });
+    const recentOnly = rankCandidates({
+      seat,
+      date,
+      members,
+      windowRoles: savedWindow,
+      assigned,
+      column,
+      sundayDates,
+      config,
+    });
     const recentById = new Map(recentOnly.map((c) => [c.id, c.recent]));
     return order.map((c) => ({ ...c, recent: recentById.get(c.id) ?? c.recent }));
   }
@@ -296,13 +397,68 @@ export default function PlannerGrid(props: PlannerGridProps) {
     if (removeError) setRemoveError(null);
   }
 
+  /**
+   * The manual pick, and both of its refusals.
+   *
+   * TWO predicates, read separately and never merged into one: `blockedReason`
+   * is D6's same-category double, `ruleBlockedReason` is E6's hard solver rule.
+   * They carry different copy and only one of them is overridable, so the
+   * picker has to keep them apart.
+   *
+   * **`eligible` is deliberately NOT read here.** It is the FILLER's composite
+   * (`candidateRanking.ts`) and folds in `available`, which for a human is a
+   * documented `+10` sort penalty and never a block (fact 19). Reading it would
+   * turn "marked this date unavailable" into a hard refusal on a shipped
+   * surface — a change nobody asked for, dressed as rule enforcement.
+   *
+   * On REMOVING, neither predicate applies: a rule refuses adding, never
+   * un-seating, or a violating pair the solver produced could not be undone.
+   *
+   * **Both refusals below are backstops, not the enforcement.** `CandidateRow`
+   * blocks its own `onClick`/`onKeyDown`, so neither line is reachable through
+   * the UI — verified by mutation: deleting either one fails no test, while
+   * loosening `CandidateRow`'s guard fails three. They are kept because this
+   * function is the single write path into a cell and the cost is two lines;
+   * the line that must never be weakened is `CandidateRow`'s.
+   */
   function toggleCandidate(row: GridRow, date: string, memberId: string, candidates: RankedCandidate[]) {
     clearRemoveError();
     const current = cellsByKey.get(cellKey(date, row.id))?.memberIds ?? [];
-    const blocked = candidates.find((c) => c.id === memberId)?.blockedReason;
-    if (blocked && !current.includes(memberId)) return; // refuse a same-category double (D6)
-    const next = current.includes(memberId) ? current.filter((id) => id !== memberId) : [...current, memberId];
-    onCellsChange(withUpdatedCell(cells, row.id, date, next));
+    if (current.includes(memberId)) {
+      onCellsChange(withUpdatedCell(cells, row.id, date, current.filter((id) => id !== memberId)));
+      return;
+    }
+    const candidate = candidates.find((c) => c.id === memberId);
+    if (candidate?.blockedReason) return; // refuse a same-category double (D6)
+    if (candidate?.ruleBlockedReason) return; // refuse a hard rule (E6) — see `overrideCandidate`
+    onCellsChange(withUpdatedCell(cells, row.id, date, [...current, memberId]));
+  }
+
+  /**
+   * P10 — seat a RULE-blocked member anyway, deliberately, and record it.
+   *
+   * A SECOND, separate interaction: the candidate row itself stays inert while
+   * blocked (`CandidateRow` guards `onClick` and `onKeyDown` on `!blocked`), so
+   * this cannot be reached by the mis-click that would otherwise seat exactly
+   * the pair the admin wrote a rule to keep apart.
+   *
+   * Only ever a RULE block. D6's same-category double is not overridable — that
+   * refusal is a shipped invariant on two surfaces, and a person in two voice
+   * seats of one service is a data error, not a judgement call. Nor is an
+   * already-seated member: there is nothing to override.
+   *
+   * **The auto-filler has no path here.** `fillColumn` neither calls this nor
+   * reads `overrides`; a person may make a deliberate exception, the automation
+   * may not. That asymmetry is the requirement, not an implementation detail.
+   */
+  function overrideCandidate(row: GridRow, date: string, memberId: string, candidates: RankedCandidate[]) {
+    clearRemoveError();
+    const candidate = candidates.find((c) => c.id === memberId);
+    if (!candidate?.ruleBlockedReason) return;
+    if (candidate.blockedReason) return;
+    const current = cellsByKey.get(cellKey(date, row.id))?.memberIds ?? [];
+    if (current.includes(memberId)) return;
+    onCellsChange(withUpdatedCell(cells, row.id, date, [...current, memberId], memberId));
   }
 
   /** Opens the picker and freezes the candidate ORDER as of right now. */
@@ -503,6 +659,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
               cellsByKey={cellsByKey}
               unfilledByKey={unfilledByKey}
               duplicatesByDate={(date) => duplicatesByDateMap.get(date) ?? emptyDuplicates}
+              violationsByDate={(date) => violationsByDate.get(date) ?? emptyViolations}
               memberName={memberName}
               onOpen={(date) => openPicker(row, date)}
               onRemove={row.category !== "voz" ? () => removeRow(row.id) : undefined}
@@ -543,6 +700,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
                   candidate.id,
                 )}
                 onToggle={(id) => toggleCandidate(openRow, openCell.date, id, openCandidates)}
+                onOverride={(id) => overrideCandidate(openRow, openCell.date, id, openCandidates)}
               />
             ))}
             {openCandidates.length === 0 && (
@@ -607,6 +765,16 @@ function ColumnHeader({
         <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">{month}</span>
       </div>
       <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">{typeLabel}</span>
+      {/* E6/E18 — a special is identified by date AND name (`special_role:date:name`),
+          and two differently-named specials can share a date. Without the name
+          on screen the two columns are indistinguishable, and the header's own
+          "ya existe un servicio especial con este nombre" copy points at a name
+          the admin cannot see. Weekend columns carry no `serviceName` at all. */}
+      {column.serviceName && (
+        <span className={`block font-body text-[11px] text-[#C8D8EB]/80 ${CARD_STYLE.longText}`}>
+          {column.serviceName}
+        </span>
+      )}
       {/* A blocked column is skipped whatever the toggle says, so the checkbox
           shows it as skipped and refuses the toggle instead of offering an
           un-skip that changes nothing. */}
@@ -658,6 +826,7 @@ function RowGroup({
   cellsByKey,
   unfilledByKey,
   duplicatesByDate,
+  violationsByDate,
   memberName,
   onOpen,
   onRemove,
@@ -669,6 +838,8 @@ function RowGroup({
   cellsByKey: Map<string, GridCell>;
   unfilledByKey: Set<string>;
   duplicatesByDate: (date: string) => Map<string, string[]>;
+  /** E13, by `violationKey(rowId, memberId)` — that date's whole column. */
+  violationsByDate: (date: string) => Map<string, SeatedViolation>;
   memberName: (id: string) => string;
   onOpen: (date: string) => void;
   onRemove?: () => void;
@@ -725,6 +896,7 @@ function RowGroup({
             memberIds={memberIds}
             memberName={memberName}
             duplicates={duplicates}
+            violations={violationsByDate(column.date)}
             unfilled={unfilledByKey.has(cellKey(column.date, row.id))}
             onOpen={() => onOpen(column.date)}
             onCopy={onCopy ? () => onCopy(column.date) : undefined}
@@ -741,6 +913,7 @@ function GridCellView({
   memberIds,
   memberName,
   duplicates,
+  violations,
   unfilled,
   onOpen,
   onCopy,
@@ -750,6 +923,7 @@ function GridCellView({
   memberIds: string[];
   memberName: (id: string) => string;
   duplicates: Map<string, string[]>;
+  violations: Map<string, SeatedViolation>;
   unfilled: boolean;
   onOpen: () => void;
   onCopy?: () => void;
@@ -773,6 +947,18 @@ function GridCellView({
   // exists for — was never surfaced at all. Checked here regardless of
   // whether the occupant is currently visible.
   const hiddenHasDuplicate = hiddenIds.some((id) => duplicates.get(id)?.includes(row.id));
+
+  // E13 + P10, split. A violation the admin overrode renders as a NAMED
+  // exception; one they did not renders as a refusal still to be fixed. Both are
+  // computed over every occupant, `+N`'s hidden tail included — the same
+  // Finding-2 hole the duplicate flag once had.
+  const ruleOf = (id: string) => violations.get(violationKey(row.id, id)) ?? null;
+  const seatedRules = memberIds
+    .map((id) => ({ id, v: ruleOf(id) }))
+    .filter((x): x is { id: string; v: SeatedViolation } => x.v !== null);
+  const flagged = seatedRules.filter((x) => !x.v.overridden);
+  const overridden = seatedRules.filter((x) => x.v.overridden);
+  const hiddenHasViolation = hiddenIds.some((id) => ruleOf(id)?.overridden === false);
 
   return (
     <div
@@ -804,15 +990,18 @@ function GridCellView({
           // real and must never be flagged. Only flag when THIS row's id is
           // among the rows that hold the duplicate.
           const isDuplicate = duplicates.get(id)?.includes(row.id) ?? false;
+          const ruleBroken = ruleOf(id)?.overridden === false;
           return (
             <span
               key={id}
               className={`rounded-full border px-1.5 py-0.5 font-label text-[10px] text-[#C8D8EB] ${CARD_STYLE.longText} ${
-                isDuplicate ? "border-red-500/50 bg-red-500/10" : "border-[#00bfff]/25 bg-[#00bfff]/10"
+                isDuplicate || ruleBroken
+                  ? "border-red-500/50 bg-red-500/10"
+                  : "border-[#00bfff]/25 bg-[#00bfff]/10"
               }`}
             >
               {memberName(id)}
-              {isDuplicate && " ⚠"}
+              {(isDuplicate || ruleBroken) && " ⚠"}
             </span>
           );
         })}
@@ -825,13 +1014,13 @@ function GridCellView({
             }}
             aria-label={`Ver ${hiddenCount} más en ${row.label}`}
             className={`rounded-full border px-1.5 py-0.5 font-label text-[10px] ${
-              hiddenHasDuplicate
+              hiddenHasDuplicate || hiddenHasViolation
                 ? "border-red-500/50 bg-red-500/10 text-red-400"
                 : "border-amber-500/40 bg-amber-500/10 text-amber-400"
             }`}
           >
             +{hiddenCount}
-            {hiddenHasDuplicate && " ⚠"}
+            {(hiddenHasDuplicate || hiddenHasViolation) && " ⚠"}
           </button>
         )}
       </div>
@@ -843,6 +1032,23 @@ function GridCellView({
           Por encima del objetivo — se acepta de todos modos
         </p>
       )}
+      {/* E13 — a seated person a hard rule now refuses. Named in words, not just
+          a red border: the admin has to know WHICH rule to go and look at, and
+          the fix (open the cell, toggle them off) is only obvious once they do.
+          `evaluate`'s self-exemption is what keeps that toggle-off possible. */}
+      {flagged.map((x) => (
+        <p key={x.id} className={`font-body text-[9px] text-red-400 ${CARD_STYLE.longText}`}>
+          ⚠ {memberName(x.id)}: {x.v.reason}
+        </p>
+      ))}
+      {/* P10 — the persistent marker. An override is a deliberate exception, so
+          E13 stops re-flagging it; this is what keeps it VISIBLE rather than
+          silent, and it names the rule that was set aside. */}
+      {overridden.map((x) => (
+        <p key={x.id} className={`font-body text-[9px] text-amber-400 ${CARD_STYLE.longText}`}>
+          Regla anulada — {memberName(x.id)}: {x.v.reason}
+        </p>
+      ))}
       {unfilled && (
         <p className="font-label text-[9px] uppercase tracking-widest text-amber-400">Sin cubrir</p>
       )}
@@ -868,18 +1074,26 @@ function CandidateRow({
   candidate,
   selected,
   onToggle,
+  onOverride,
 }: {
   candidate: RankedCandidate;
   selected: boolean;
   onToggle: (id: string) => void;
+  /** P10 — seat this rule-blocked candidate anyway. */
+  onOverride: (id: string) => void;
 }) {
-  const blocked = !!candidate.blockedReason;
+  // TWO refusals, read as two predicates and never as `eligible` (which folds
+  // in availability and belongs to the filler alone — see `toggleCandidate`).
+  const blocked = !!candidate.blockedReason || !!candidate.ruleBlockedReason;
+  // Only a RULE block is overridable, and only while the member is not already
+  // seated here. A same-category double is a data error, not a judgement call.
+  const overridable = !!candidate.ruleBlockedReason && !candidate.blockedReason && !selected;
   return (
     <li
       role="button"
       tabIndex={blocked ? -1 : 0}
       aria-disabled={blocked ? "true" : undefined}
-      title={candidate.blockedReason ?? undefined}
+      title={candidate.blockedReason ?? candidate.ruleBlockedReason ?? undefined}
       onClick={() => {
         if (!blocked) onToggle(candidate.id);
       }}
@@ -921,7 +1135,36 @@ function CandidateRow({
         </div>
         <span className="font-label text-[10px] text-gray-500">{candidate.load}</span>
       </div>
-      {blocked && <p className="mt-1 font-body text-[11px] text-red-400">{candidate.blockedReason}</p>}
+      {candidate.blockedReason && (
+        <p className="mt-1 font-body text-[11px] text-red-400">{candidate.blockedReason}</p>
+      )}
+      {candidate.ruleBlockedReason && (
+        <p className="mt-1 font-body text-[11px] text-red-400">{candidate.ruleBlockedReason}</p>
+      )}
+      {/*
+        P10 — the override, as a SEPARATE, secondary action.
+
+        The row above stays inert while blocked, so this button is the only way
+        to seat a rule-blocked person: two distinct interactions, and neither
+        one is the mis-click that seats exactly the pair a rule exists to keep
+        apart. `stopPropagation` is belt-and-braces (the row's own handler
+        already returns early while blocked) — it keeps the button working if
+        that guard is ever loosened, instead of firing both paths.
+
+        Only a human reaches this. `fillColumn` has no path to it at all.
+      */}
+      {overridable && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOverride(candidate.id);
+          }}
+          className="mt-1.5 min-h-[44px] w-full rounded-lg border border-amber-500/40 px-2 font-label text-[10px] uppercase tracking-widest text-amber-400 hover:bg-amber-500/10"
+        >
+          Asignar de todos modos
+        </button>
+      )}
     </li>
   );
 }

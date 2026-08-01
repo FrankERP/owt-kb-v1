@@ -11,6 +11,7 @@ import PlannerGrid, { type AutoState, type SolveDiagnostics } from "./PlannerGri
 import MonthCalendar from "./MonthCalendar";
 import { SERVICE_LABEL } from "./serviceCardModel";
 import { fillColumn } from "./localFill";
+import { unresolvedRuleNames } from "./ruleEnforcement";
 import {
   buildColumns,
   buildRows,
@@ -837,6 +838,35 @@ function RuleBuilder({ config, onChange, members }: {
         <p className="font-body text-xs text-gray-600 italic px-1">Sin reglas configuradas</p>
       )}
 
+      {/*
+        Where the rules live, and how far they actually reach — said plainly,
+        because both are easy to assume wrongly and expensive to discover late.
+
+        1. `localStorage`, this browser, this admin. Another admin's generator
+           reads a different set, and clearing site data loses them.
+        2. Exclusions, weeks and conflicts ARE hard everywhere the grid can
+           refuse a pick. Caps and presence are NOT: they reach CP-SAT for
+           Sundays and Saturdays and nothing checks them anywhere else — a
+           special never goes to the solver, and neither does a manual pick.
+           Stated because a rule that looks enforced and is not is worse than
+           one that is plainly not offered (`ruleEnforcement.ts` lists both as
+           deliberate non-goals).
+
+        The first sentence is TRUE ONLY UNTIL the rules move to Sanity — decided,
+        pending, and recorded in `docs/adr/0010-specials-fill-locally.md`. Revise
+        this copy in the same change that lands the move; do not pre-announce it
+        here, since until it lands this is the accurate warning.
+      */}
+      <p className="font-body text-[11px] text-gray-500 px-1 pt-1">
+        Las reglas se guardan solo en <span className="text-amber-400">este navegador</span>: otro
+        administrador no las verá, y se pierden si borras los datos del sitio.
+      </p>
+      <p className="font-body text-[11px] text-gray-500 px-1">
+        Se aplican como bloqueo duro los patrones excluidos, las semanas excluidas y los conflictos
+        entre dos personas. Los <span className="text-gray-400">topes</span> y la{" "}
+        <span className="text-gray-400">presencia</span> solo los resuelve el solver en domingos y
+        sábados: en servicios especiales y al asignar a mano no se verifican.
+      </p>
     </div>
   );
 }
@@ -1092,7 +1122,26 @@ export default function MonthGenerator({
       if (!saved) return;
       const parsed = JSON.parse(saved) as SolverConfig;
       if (Array.isArray(parsed.sundayLeads) && Array.isArray(parsed.restrictions)) {
-        setSolverConfig(parsed);
+        // NORMALISED, not trusted. This guard has only ever checked two of the
+        // six fields, and `conflicts`/`presence` were added to `SolverConfig`
+        // after this key was first written — so a config persisted before then
+        // is still sitting in an admin's browser with those fields `undefined`,
+        // while the type asserts they are arrays. Until now that only threw
+        // inside `buildSolveRequest`, on an explicit Auto click; the config now
+        // also reaches `rankCandidates` DURING RENDER (E6), where the same
+        // shape would white-screen the whole planner. Filled in here so every
+        // consumer sees the type it was promised, at the one point the untyped
+        // value enters the app. `ruleEnforcement` guards its own iteration too,
+        // for callers that do not come through this door.
+        setSolverConfig({
+          ...parsed,
+          sundayLeads: parsed.sundayLeads ?? [],
+          saturdayLeads: parsed.saturdayLeads ?? [],
+          support: parsed.support ?? [],
+          restrictions: parsed.restrictions ?? [],
+          conflicts: parsed.conflicts ?? [],
+          presence: parsed.presence ?? [],
+        });
       }
     } catch {}
     try {
@@ -1172,6 +1221,37 @@ export default function MonthGenerator({
     () => savedWindowFor(year, month, allRoles ?? []),
     [year, month, allRoles],
   );
+
+  /**
+   * Two independent sources of "this name matches nobody", MERGED — never one
+   * replacing the other.
+   *
+   *  • `unresolvedNames` (state) is what the SOLVER's response named and
+   *    `applySolveResponse` could not resolve. It exists only after a solve.
+   *  • `unresolvedRuleNames` reads the admin's own rules, right now, with no
+   *    solve having run at all.
+   *
+   * The second is the only one a SPECIAL ever gets: no solve runs there, so a
+   * conflict naming a person who no longer exists would enforce nothing, seat
+   * the pair the admin wrote a rule to separate, and report a perfectly normal
+   * auto-fill. Replacing rather than merging would also mean a solve wiped the
+   * rule report, or the rule report hid the solver's — each hiding the other on
+   * exactly the screen that needs both.
+   *
+   * Deduplicated case-insensitively, solver names first (they belong to the run
+   * the admin just triggered), each string kept as it was written.
+   */
+  const allUnresolvedNames = useMemo(() => {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const name of [...unresolvedNames, ...unresolvedRuleNames(solverConfig, members)]) {
+      const key = name.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(name);
+    }
+    return out;
+  }, [unresolvedNames, solverConfig, members]);
 
   /**
    * Per-target A1/A2 observation for every drafted target, snapshotted at
@@ -1908,7 +1988,7 @@ export default function MonthGenerator({
           createBlockFor={createBlockFor}
           skipped={skippedDates}
           unaddressableDates={unaddressableDatesList}
-          unresolvedNames={unresolvedNames}
+          unresolvedNames={allUnresolvedNames}
           unfilled={unfilled}
           onCellsChange={handleCellsChange}
           onRowsChange={setRows}
@@ -1916,6 +1996,8 @@ export default function MonthGenerator({
           onAuto={handleAuto}
           autoState={autoState}
           diagnostics={diagnostics}
+          config={solverConfig}
+          sundayDates={sundayDatesFull}
         />
       ) : (
         // D17/D10: this used to be `max-h-[50vh] overflow-y-auto` — a keyhole

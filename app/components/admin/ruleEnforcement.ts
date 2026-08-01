@@ -32,6 +32,10 @@
 //
 // A later reader must not assume coverage this module does not claim.
 //
+// Why the rules are enforced here at all rather than by CP-SAT, why they are
+// moving to Sanity, and why a human may override a hard block while the filler
+// may not: `docs/adr/0010-specials-fill-locally-not-in-the-solver.md`.
+//
 // ─── The trap this module was written around ─────────────────────────────────
 //
 // **Rules name people by ALIAS, not by `member_name`.** Every seeded rule name
@@ -232,13 +236,44 @@ export function unresolvedRuleNames(
     seen.add(key);
     out.push(r.unresolved);
   };
-  for (const r of config.restrictions) check(r.person);
-  for (const c of config.conflicts) {
+  const { restrictions, conflicts, presence } = ruleLists(config);
+  for (const r of restrictions) check(r.person);
+  for (const c of conflicts) {
     check(c.personA);
     check(c.personB);
   }
-  for (const p of config.presence) for (const n of p.persons) check(n);
+  for (const p of presence) for (const n of p.persons) check(n);
   return out;
+}
+
+/**
+ * The three rule arrays, each guaranteed to BE an array.
+ *
+ * Not defensive habit — a specific, live shape. `MonthGenerator` hydrates the
+ * persisted config from `localStorage` checking only that `sundayLeads` and
+ * `restrictions` are arrays (`MonthGenerator.tsx:~1097`), and `conflicts` /
+ * `presence` were added to `SolverConfig` after that key was first written. A
+ * config persisted before then sets state with those fields `undefined`, and the
+ * `SolverConfig` type says otherwise, so nothing on the type side catches it.
+ *
+ * Until Task 8 that shape only threw inside `buildSolveRequest`, on an explicit
+ * Auto click. The moment the config reaches `rankCandidates` it is read DURING
+ * RENDER instead — an unguarded `for (const c of config.conflicts)` there is a
+ * white screen on the planner, produced by a value already sitting in an admin's
+ * browser. `MonthGenerator` now also normalises on hydration, which fixes the
+ * stored value; this keeps the render path safe for any other caller, since
+ * `config` is an ordinary prop that anything may pass.
+ */
+function ruleLists(config: SolverConfig): {
+  restrictions: SolverConfig["restrictions"];
+  conflicts: SolverConfig["conflicts"];
+  presence: SolverConfig["presence"];
+} {
+  return {
+    restrictions: config.restrictions ?? [],
+    conflicts: config.conflicts ?? [],
+    presence: config.presence ?? [],
+  };
 }
 
 // ─── The verdict ─────────────────────────────────────────────────────────────
@@ -296,9 +331,10 @@ export function evaluate(input: EvaluateInput): RuleVerdict {
 
   const me = member.member_name;
   const canonical = (raw: string) => ruleNameToCanonical(raw, members);
+  const { restrictions, conflicts } = ruleLists(config);
 
   // 1. Person exclusions (E15) — the service half must match.
-  for (const r of config.restrictions) {
+  for (const r of restrictions) {
     if (canonical(r.person) !== me) continue;
     for (const pattern of r.excludedPatterns) {
       if (patternMatches(pattern, column, row)) {
@@ -312,7 +348,7 @@ export function evaluate(input: EvaluateInput): RuleVerdict {
   //    spine's own answer rather than a second, drift-prone column-type test.
   const week = column && sundayDates ? weekForColumn(column, sundayDates) : null;
   if (week !== null) {
-    for (const r of config.restrictions) {
+    for (const r of restrictions) {
       if (canonical(r.person) !== me) continue;
       for (const we of r.weekExclusions) {
         if (we.week === week && patternMatches(we.pattern, column, row)) {
@@ -328,7 +364,7 @@ export function evaluate(input: EvaluateInput): RuleVerdict {
   //    `*.LeadBGV`/`*.*` bind across rows within the same COLUMN. E14's "same
   //    column" is the outer bound; the pattern narrows it. A Saturday and its
   //    adjacent Sunday are one week but two columns, and never conflict.
-  for (const c of config.conflicts) {
+  for (const c of conflicts) {
     const a = canonical(c.personA);
     const b = canonical(c.personB);
     if (a === null || b === null) continue;
@@ -353,3 +389,108 @@ export function evaluate(input: EvaluateInput): RuleVerdict {
 
   return NOT_BLOCKED;
 }
+
+// ─── E13: the post-fill re-check ─────────────────────────────────────────────
+
+/** `${rowId}|${memberId}` — the same convention `PlannerGrid`'s `cellKey` uses. */
+export const violationKey = (rowId: string, memberId: string) => `${rowId}|${memberId}`;
+
+export interface SeatedViolation {
+  /** The same Spanish reason `evaluate` gives for refusing the pick. */
+  reason: string;
+  /** True ⇒ a human seated this person here deliberately (P10). */
+  overridden: boolean;
+}
+
+/**
+ * Every ALREADY-SEATED occupant of one column that a hard rule refuses, keyed by
+ * `violationKey`, each marked as either a live violation or a sanctioned one.
+ *
+ * **Why this is not just `evaluate` again.** `evaluate` answers "may I ADD this
+ * person here?", and it exempts the cell's own occupants outright (its E6/P9
+ * guard) so that a violating pair can always be un-seated. Asking it about
+ * someone already seated therefore always answers "fine" — the exemption is
+ * doing its job. This re-asks with THAT occupant's own seat removed, so the
+ * rules see the column as it looked the instant before they were placed.
+ *
+ * The three ways a violation exists with no manual pick having produced it: the
+ * SOLVER seated the pair (a special never reaches CP-SAT, but a weekend column
+ * does, through a different rule path that can disagree with this one); a rule
+ * was EDITED after the month was seated; or the month was seated in a browser
+ * holding different rules. Task 7's filler cannot produce one — it refuses a
+ * rule-blocked candidate per placement — so on a special this is a net under the
+ * enforcement, never the enforcement itself.
+ *
+ * ─── What `overridden` changes, and why it is decided HERE ───────────────────
+ *
+ * An overridden seat is SANCTIONED, so it is removed from the pool every OTHER
+ * occupant is judged against. Without that, a pairwise conflict would re-appear
+ * through its other party: override Gaby onto a Lead row Frank already holds and
+ * the rule still refuses *Frank*, so the exception the admin just made would
+ * light up in red next to a marker saying it was allowed. One override covers
+ * one seating, from both ends.
+ *
+ * The overridden occupant is still evaluated — against the FULL column, its
+ * partner included — because its `reason` is what the persistent "regla anulada"
+ * marker names. Skipping it outright would make the exception silent, which is
+ * the failure mode the marker exists to prevent.
+ *
+ * Pure and column-scoped: E14's conflicts are bounded by the column, and week
+ * and person exclusions are per (row, column) too, so no second column can
+ * contribute.
+ */
+export function ruleViolationsForColumn(input: {
+  column: GridColumn;
+  /** Every row the column can hold; only ids are read. */
+  rows: RuleRow[];
+  /** Everyone seated on this column — `assignedForDate`'s output. */
+  assigned: AssignedSeat[];
+  members: RankMember[];
+  sundayDates?: string[];
+  config?: SolverConfig;
+  /** `violationKey`s a human overrode (P10). */
+  overridden?: ReadonlySet<string>;
+}): Map<string, SeatedViolation> {
+  const { column, rows, assigned, members, sundayDates, config } = input;
+  const overridden = input.overridden ?? EMPTY_KEYS;
+  const out = new Map<string, SeatedViolation>();
+  if (!config) return out;
+
+  const rowById = new Map(rows.map((r) => [r.id, r]));
+  const memberById = new Map(members.map((m) => [m._id, m]));
+  const sanctionFree = assigned.filter((x) => !overridden.has(violationKey(x.seatId, x.memberId)));
+
+  for (const seat of assigned) {
+    const row = rowById.get(seat.seatId);
+    const member = memberById.get(seat.memberId);
+    if (!row || !member) continue;
+    const key = violationKey(seat.seatId, seat.memberId);
+    const isOverridden = overridden.has(key);
+    // This occupant's own seat removed — and ONLY this one. A member holding the
+    // same row twice (a duplicate `canonicalRefs` would collapse) still sees
+    // their other copy, which is right: that copy is a real occupant as far as a
+    // pairwise rule naming them is concerned.
+    let dropped = false;
+    const others = (isOverridden ? assigned : sanctionFree).filter((x) => {
+      if (dropped) return true;
+      if (x.seatId === seat.seatId && x.memberId === seat.memberId) {
+        dropped = true;
+        return false;
+      }
+      return true;
+    });
+    const verdict = evaluate({
+      member,
+      row,
+      column,
+      sundayDates,
+      assigned: others,
+      members,
+      config,
+    });
+    if (verdict.blocked) out.set(key, { reason: verdict.reason, overridden: isOverridden });
+  }
+  return out;
+}
+
+const EMPTY_KEYS: ReadonlySet<string> = new Set<string>();

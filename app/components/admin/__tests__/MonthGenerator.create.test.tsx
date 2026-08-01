@@ -1639,3 +1639,119 @@ describe("MonthGenerator — create path", () => {
     expect(calls.some((c) => c.date === stored)).toBe(false);
   });
 });
+
+// ─── Rule names that match nobody, reported with NO solve having run ─────────
+//
+// On the weekend path there is an accidental detector: an unmatched DSL name is
+// injected into the solver's `support` and `applySolveResponse` reports it back.
+// **On a special no solve runs at all** (E4/E5), so a conflict naming somebody
+// who is no longer on the team would enforce nothing, seat the pair the admin
+// wrote the rule to separate, and report a perfectly normal auto-fill. This
+// report is the only thing that says so — which is why it has to be visible
+// before, and independently of, any solve.
+describe("MonthGenerator — unresolved RULE names", () => {
+  const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] }];
+
+  /** The persisted rules an admin's browser hands back on open. */
+  function seedConfig(config: Record<string, unknown>) {
+    localStorage.setItem("owt_solver_config_v3", JSON.stringify(config));
+  }
+
+  it("reports a conflict naming a nonexistent person, with fetch never called", () => {
+    const fetchMock = stubUnreachableFetch();
+    seedConfig({
+      sundayLeads: ["lead-1"],
+      saturdayLeads: [],
+      support: [],
+      restrictions: [],
+      conflicts: [{ id: "c1", personA: "Ana", personB: "Fulanito", pattern: "*.Lead" }],
+      presence: [],
+    });
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+    expect(screen.getByText(/Nombres no reconocidos: .*Fulanito/)).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("a config persisted before `conflicts`/`presence` existed still reaches the solver", async () => {
+    // The hydration guard has only ever checked `sundayLeads` and
+    // `restrictions`, so a value written before those two fields were added
+    // arrives with them `undefined` while `SolverConfig` asserts otherwise.
+    // `buildSolveRequest` iterates all three, and it runs BEFORE `handleAuto`'s
+    // try/catch — so without normalisation at hydration this click throws and
+    // Auto is dead for that admin until they clear site data.
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url !== "/api/admin/solve") throw new Error(`unexpected fetch to ${url}`);
+      return { ok: true, json: async () => ({ ok: false, error: "sin solución" }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    seedConfig({ sundayLeads: ["lead-1"], restrictions: [] });
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  });
+
+  it("says nothing when every rule name resolves", () => {
+    stubUnreachableFetch();
+    seedConfig({
+      sundayLeads: ["lead-1"],
+      saturdayLeads: [],
+      support: [],
+      restrictions: [],
+      conflicts: [{ id: "c1", personA: "Ana", personB: "Ana", pattern: "*.Lead" }],
+      presence: [],
+    });
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+    expect(screen.queryByText(/Nombres no reconocidos/)).toBeNull();
+  });
+
+  it("MERGES with the solver's own report rather than replacing it", async () => {
+    // The solver answers with a name that matches nobody either. Both channels
+    // must survive: a solve that wiped the rule report, or a rule report that
+    // hid the solver's, would each hide a real problem on the one screen that
+    // needs both.
+    seedConfig({
+      sundayLeads: ["lead-1"],
+      saturdayLeads: [],
+      support: [],
+      restrictions: [],
+      conflicts: [{ id: "c1", personA: "Ana", personB: "Fulanito", pattern: "*.Lead" }],
+      presence: [],
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url !== "/api/admin/solve") throw new Error(`unexpected fetch to ${url}`);
+        return {
+          ok: true,
+          json: async () => ({
+            ok: true,
+            schedule: { "1": { Sunday: { Lead: ["Menganito"], BGV: [], Choir: [] } } },
+            total_counts: {},
+            role_counts: {},
+            unfilled_seats: [],
+          }),
+        };
+      }),
+    );
+    const { container } = render(
+      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+    await waitFor(() => expect(screen.getByText(/Menganito/)).toBeTruthy());
+    const line = screen.getByText(/Nombres no reconocidos/).textContent ?? "";
+    expect(line).toContain("Menganito");
+    expect(line).toContain("Fulanito");
+  });
+});
