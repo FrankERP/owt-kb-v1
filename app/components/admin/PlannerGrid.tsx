@@ -151,27 +151,37 @@ const cellKey = (date: string, rowId: string) => `${date}|${rowId}`;
  *
  * `addOverride` is the ONLY way an entry is created, and it is reachable from
  * exactly one place: the picker's secondary "Asignar de todos modos" action.
+ * It carries the RULE that was waived, not just the person: the two fields are
+ * written and pruned together here, so `overrideReasons` can never outlive the
+ * seating it describes. See `GridCell.overrideReasons`.
  */
 function withUpdatedCell(
   cells: GridCell[],
   rowId: string,
   date: string,
   memberIds: string[],
-  addOverride?: string,
+  addOverride?: { memberId: string; reason: string },
 ): GridCell[] {
   const idx = cells.findIndex((c) => c.date === date && c.rowId === rowId);
   const seated = new Set(memberIds);
   const prior = idx === -1 ? [] : (cells[idx].overrides ?? []);
+  const priorReasons = idx === -1 ? {} : (cells[idx].overrideReasons ?? {});
   const kept = prior.filter((id) => seated.has(id));
-  const overrides =
-    addOverride && seated.has(addOverride) && !kept.includes(addOverride)
-      ? [...kept, addOverride]
-      : kept;
+  const add =
+    addOverride && seated.has(addOverride.memberId) && !kept.includes(addOverride.memberId)
+      ? addOverride
+      : null;
+  const overrides = add ? [...kept, add.memberId] : kept;
+  const overrideReasons: Record<string, string> = {};
+  for (const id of overrides) {
+    const reason = id === add?.memberId ? add.reason : priorReasons[id];
+    if (reason !== undefined) overrideReasons[id] = reason;
+  }
   if (idx === -1) {
-    return [...cells, { date, rowId, memberIds, origin: "manual", overrides }];
+    return [...cells, { date, rowId, memberIds, origin: "manual", overrides, overrideReasons }];
   }
   const next = [...cells];
-  next[idx] = { ...next[idx], memberIds, origin: "manual", overrides };
+  next[idx] = { ...next[idx], memberIds, origin: "manual", overrides, overrideReasons };
   return next;
 }
 
@@ -330,14 +340,18 @@ export default function PlannerGrid(props: PlannerGridProps) {
     if (!config) return map;
     // P10's record, read straight off the cells — the only reader there is.
     // Keyed BY DATE as well as by `violationKey`: an override is a decision
-    // about one seating on one day, and a set shared across the month would let
-    // overriding Gaby on the 12th silently sanction her on the 19th too.
-    const overriddenByDate = new Map<string, Set<string>>();
+    // about one seating on one day, and a map shared across the month would let
+    // overriding Gaby on the 12th silently sanction her on the 19th too. The
+    // VALUE is the rule that was waived, so it cannot sanction a rule added or
+    // edited since either — see `ruleViolationsForColumn`.
+    const overriddenByDate = new Map<string, Map<string, string>>();
     for (const c of cells) {
       for (const id of c.overrides ?? []) {
-        const set = overriddenByDate.get(c.date) ?? new Set<string>();
-        set.add(violationKey(c.rowId, id));
-        overriddenByDate.set(c.date, set);
+        const reason = c.overrideReasons?.[id];
+        if (reason === undefined) continue;
+        const map = overriddenByDate.get(c.date) ?? new Map<string, string>();
+        map.set(violationKey(c.rowId, id), reason);
+        overriddenByDate.set(c.date, map);
       }
     }
     for (const column of columns) {
@@ -416,10 +430,11 @@ export default function PlannerGrid(props: PlannerGridProps) {
    *
    * **Both refusals below are backstops, not the enforcement.** `CandidateRow`
    * blocks its own `onClick`/`onKeyDown`, so neither line is reachable through
-   * the UI — verified by mutation: deleting either one fails no test, while
-   * loosening `CandidateRow`'s guard fails three. They are kept because this
-   * function is the single write path into a cell and the cost is two lines;
-   * the line that must never be weakened is `CandidateRow`'s.
+   * the UI — verified by mutation: deleting BOTH of them together fails no
+   * test, while neutering `CandidateRow`'s `blocked` fails six. They are kept
+   * because this function is the single write path into a cell and the cost is
+   * two lines; the line that must never be weakened is `CandidateRow`'s
+   * `blocked`, which is also what renders `aria-disabled` and the red state.
    */
   function toggleCandidate(row: GridRow, date: string, memberId: string, candidates: RankedCandidate[]) {
     clearRemoveError();
@@ -444,8 +459,11 @@ export default function PlannerGrid(props: PlannerGridProps) {
    *
    * Only ever a RULE block. D6's same-category double is not overridable — that
    * refusal is a shipped invariant on two surfaces, and a person in two voice
-   * seats of one service is a data error, not a judgement call. Nor is an
-   * already-seated member: there is nothing to override.
+   * seats of one service is a data error, not a judgement call.
+   *
+   * The waived rule is recorded WITH the seating, from the same
+   * `ruleBlockedReason` the admin just read on the row — an override sanctions
+   * that rule and no other (see `ruleViolationsForColumn`).
    *
    * **The auto-filler has no path here.** `fillColumn` neither calls this nor
    * reads `overrides`; a person may make a deliberate exception, the automation
@@ -457,8 +475,19 @@ export default function PlannerGrid(props: PlannerGridProps) {
     if (!candidate?.ruleBlockedReason) return;
     if (candidate.blockedReason) return;
     const current = cellsByKey.get(cellKey(date, row.id))?.memberIds ?? [];
+    // A BACKSTOP, not the enforcement. Nobody already seated here can reach this
+    // line: `evaluate` exempts a cell's own occupants outright (E6/P9,
+    // `ruleEnforcement.ts`'s self-exemption), so their `ruleBlockedReason` is
+    // `null` and the guard above has already returned. Deleting this line fails
+    // no test. It is kept because "an override adds a seat" is what the line
+    // below assumes, and re-stating it costs one line.
     if (current.includes(memberId)) return;
-    onCellsChange(withUpdatedCell(cells, row.id, date, [...current, memberId], memberId));
+    onCellsChange(
+      withUpdatedCell(cells, row.id, date, [...current, memberId], {
+        memberId,
+        reason: candidate.ruleBlockedReason,
+      }),
+    );
   }
 
   /** Opens the picker and freezes the candidate ORDER as of right now. */
@@ -1085,8 +1114,15 @@ function CandidateRow({
   // TWO refusals, read as two predicates and never as `eligible` (which folds
   // in availability and belongs to the filler alone — see `toggleCandidate`).
   const blocked = !!candidate.blockedReason || !!candidate.ruleBlockedReason;
-  // Only a RULE block is overridable, and only while the member is not already
-  // seated here. A same-category double is a data error, not a judgement call.
+  // Only a RULE block is overridable: a same-category double is a data error,
+  // not a judgement call.
+  //
+  // `!selected` is a BACKSTOP, not the enforcement. A seated member is exempted
+  // by `evaluate` itself (E6/P9's self-exemption in `ruleEnforcement.ts`), so
+  // their `ruleBlockedReason` is already `null` and this expression is already
+  // false — deleting `!selected` fails no test. What actually keeps a rule hard
+  // is `blocked` below: neutering it fails six. `!selected` stays as a local
+  // statement of intent, one term wide.
   const overridable = !!candidate.ruleBlockedReason && !candidate.blockedReason && !selected;
   return (
     <li

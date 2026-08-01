@@ -964,6 +964,9 @@ describe("PlannerGrid — P10, the override takes a second, deliberate action", 
     const cell = onCellsChange.mock.calls[0][0].find((c: GridCell) => c.rowId === "lead");
     expect(cell.memberIds).toEqual(["m1", "m2"]);
     expect(cell.overrides).toEqual(["m2"]);
+    // And WHICH rule was waived, recorded with the seating: an override that
+    // only knows "Gaby, here" is inherited by every rule written afterwards.
+    expect(cell.overrideReasons).toEqual({ m2: "Regla: no puede coincidir con Frank" });
   });
 
   it("offers NO override for a same-category double — D6 is not a judgement call", () => {
@@ -975,10 +978,20 @@ describe("PlannerGrid — P10, the override takes a second, deliberate action", 
     expect(overrideButtons()).toHaveLength(0);
   });
 
+  /** Gaby seated past `Frank !with Gaby on *.Lead`, the waived rule recorded. */
+  const OVERRIDDEN_PAIR: GridCell[] = [
+    {
+      date: SPECIAL_DATE,
+      rowId: "lead",
+      memberIds: ["m1", "m2"],
+      origin: "manual",
+      overrides: ["m2"],
+      overrideReasons: { m2: "Regla: no puede coincidir con Frank" },
+    },
+  ];
+
   it("renders a persistent 'regla anulada' marker naming the rule, and does NOT re-flag (E13)", () => {
-    const cells: GridCell[] = [
-      { date: SPECIAL_DATE, rowId: "lead", memberIds: ["m1", "m2"], origin: "manual", overrides: ["m2"] },
-    ];
+    const cells = OVERRIDDEN_PAIR;
     const { container } = render(<PlannerGrid {...specialProps({ cells })} />);
     const cell = cellFor(container, "lead", SPECIAL_DATE);
     expect(within(cell).getByText(/Regla anulada — Gaby: Regla: no puede coincidir con Frank/)).toBeTruthy();
@@ -987,9 +1000,7 @@ describe("PlannerGrid — P10, the override takes a second, deliberate action", 
   });
 
   it("clears the record when the member is removed", () => {
-    const cells: GridCell[] = [
-      { date: SPECIAL_DATE, rowId: "lead", memberIds: ["m1", "m2"], origin: "manual", overrides: ["m2"] },
-    ];
+    const cells = OVERRIDDEN_PAIR;
     const onCellsChange = vi.fn();
     const { container } = render(<PlannerGrid {...specialProps({ cells, onCellsChange })} />);
     fireEvent.click(cellFor(container, "lead", SPECIAL_DATE));
@@ -998,6 +1009,39 @@ describe("PlannerGrid — P10, the override takes a second, deliberate action", 
     expect(next.memberIds).toEqual(["m1"]);
     // A stale entry would silence E13 if the same person were ever re-seated.
     expect(next.overrides).toEqual([]);
+    expect(next.overrideReasons).toEqual({});
+  });
+
+  it("flags a rule ADDED AFTER the override fresh, instead of pre-sanctioning it", () => {
+    // The walked failure: the admin overrides Gaby onto Lead past
+    // `Frank !with Gaby`; a week later they add `Gaby !in *.Lead`. Scoped to
+    // (date, row, member), the override covers the new rule too and the cell
+    // reads "Regla anulada — Gaby: Regla: excluido de *.Lead" — an exception the
+    // admin never made, presented as one they did. Nothing re-runs Auto and no
+    // cell changes here; only the config does.
+    const withNewRule: SolverConfig = {
+      ...CONFLICT_CONFIG,
+      restrictions: [
+        {
+          id: "r-gaby-lead",
+          person: "Gaby",
+          excludedPatterns: ["*.Lead"],
+          fairness: "none",
+          fairnessSlack: 0,
+          weekExclusions: [],
+          caps: [],
+        },
+      ],
+    };
+    const { container, rerender } = render(<PlannerGrid {...specialProps({ cells: OVERRIDDEN_PAIR })} />);
+    expect(
+      within(cellFor(container, "lead", SPECIAL_DATE)).getByText(/Regla anulada — Gaby/),
+    ).toBeTruthy();
+
+    rerender(<PlannerGrid {...specialProps({ cells: OVERRIDDEN_PAIR, config: withNewRule })} />);
+    const cell = cellFor(container, "lead", SPECIAL_DATE);
+    expect(within(cell).getByText(/⚠ Gaby: Regla: excluido de \*\.Lead/)).toBeTruthy();
+    expect(within(cell).queryByText(/Regla anulada/)).toBeNull();
   });
 });
 
@@ -1063,6 +1107,12 @@ describe("PlannerGrid — a config persisted before `conflicts`/`presence` exist
   // two fields were added sets state with them `undefined` — and it is sitting
   // in an admin's browser right now. Passing it to `rankCandidates` reads it
   // DURING RENDER, so an unguarded iteration is a white screen on the planner.
+  //
+  // These tests cover the GRID's render path only. The generator's own config
+  // step crashes FIRST and harder on the same value — `MemberPool` and
+  // `RuleBuilder` iterate the raw config on their first render — and nothing in
+  // `ruleEnforcement` is on that path. `MonthGenerator`'s hydration normaliser
+  // is the sole guard there; see the comment at its `STORAGE_KEY` read.
   const LEGACY = {
     sundayLeads: [],
     saturdayLeads: [],

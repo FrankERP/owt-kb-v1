@@ -251,18 +251,20 @@ export function unresolvedRuleNames(
  *
  * Not defensive habit — a specific, live shape. `MonthGenerator` hydrates the
  * persisted config from `localStorage` checking only that `sundayLeads` and
- * `restrictions` are arrays (`MonthGenerator.tsx:~1097`), and `conflicts` /
+ * `restrictions` are arrays (`MonthGenerator.tsx:~1120`), and `conflicts` /
  * `presence` were added to `SolverConfig` after that key was first written. A
  * config persisted before then sets state with those fields `undefined`, and the
  * `SolverConfig` type says otherwise, so nothing on the type side catches it.
  *
- * Until Task 8 that shape only threw inside `buildSolveRequest`, on an explicit
- * Auto click. The moment the config reaches `rankCandidates` it is read DURING
- * RENDER instead — an unguarded `for (const c of config.conflicts)` there is a
- * white screen on the planner, produced by a value already sitting in an admin's
- * browser. `MonthGenerator` now also normalises on hydration, which fixes the
- * stored value; this keeps the render path safe for any other caller, since
- * `config` is an ordinary prop that anything may pass.
+ * **This guard covers THIS module's own iteration and nothing else, and it is
+ * not what keeps the planner on screen.** The generator's own config step reads
+ * those fields raw, during its first render, before any grid exists:
+ * `MemberPool` (`MonthGenerator.tsx:264/289/290/295`) and `RuleBuilder`
+ * (`MonthGenerator.tsx:727`, `:802/:814/:826`). Nothing here is on that path.
+ * The hydration normaliser in `MonthGenerator` is the SOLE guard for it —
+ * deleting it white-screens an admin holding a legacy `localStorage` value the
+ * moment they open the generator. Do not read this function as a second lock
+ * behind it.
  */
 function ruleLists(config: SolverConfig): {
   restrictions: SolverConfig["restrictions"];
@@ -323,23 +325,42 @@ export interface EvaluateInput {
  * it cannot lean on this verdict, or it would re-pick the member it just placed.
  */
 export function evaluate(input: EvaluateInput): RuleVerdict {
+  const reasons = blockingReasons(input);
+  return reasons.length > 0 ? { blocked: true, reason: reasons[0] } : NOT_BLOCKED;
+}
+
+/**
+ * EVERY hard rule that refuses this pick, in `evaluate`'s own fixed order,
+ * deduplicated — `evaluate` is this list's first element and nothing else.
+ *
+ * Kept private, and separate from `evaluate`, for exactly one caller:
+ * `ruleViolationsForColumn` has to answer "is the rule this seat was overridden
+ * past still the ONLY rule that refuses it?" (P10). A single first-match verdict
+ * cannot answer that — waive a conflict, then add an exclusion that sorts ahead
+ * of it, and the only reason ever reported would be the waived one, so the new
+ * rule would never surface. The order below is still what decides which single
+ * reason the picker shows.
+ */
+function blockingReasons(input: EvaluateInput): string[] {
   const { member, row, column, sundayDates, assigned, members, config } = input;
-  if (!config) return NOT_BLOCKED;
+  if (!config) return [];
 
   // E6/P9 — the occupant of the cell being edited, before any rule runs.
-  if (assigned.some((a) => a.seatId === row.id && a.memberId === member._id)) return NOT_BLOCKED;
+  if (assigned.some((a) => a.seatId === row.id && a.memberId === member._id)) return [];
 
   const me = member.member_name;
   const canonical = (raw: string) => ruleNameToCanonical(raw, members);
   const { restrictions, conflicts } = ruleLists(config);
+  const out: string[] = [];
+  const add = (reason: string) => {
+    if (!out.includes(reason)) out.push(reason);
+  };
 
   // 1. Person exclusions (E15) — the service half must match.
   for (const r of restrictions) {
     if (canonical(r.person) !== me) continue;
     for (const pattern of r.excludedPatterns) {
-      if (patternMatches(pattern, column, row)) {
-        return { blocked: true, reason: `Regla: excluido de ${pattern}` };
-      }
+      if (patternMatches(pattern, column, row)) add(`Regla: excluido de ${pattern}`);
     }
   }
 
@@ -352,7 +373,7 @@ export function evaluate(input: EvaluateInput): RuleVerdict {
       if (canonical(r.person) !== me) continue;
       for (const we of r.weekExclusions) {
         if (we.week === week && patternMatches(we.pattern, column, row)) {
-          return { blocked: true, reason: `Regla: excluido en la semana ${week} (${we.pattern})` };
+          add(`Regla: excluido en la semana ${week} (${we.pattern})`);
         }
       }
     }
@@ -382,12 +403,11 @@ export function evaluate(input: EvaluateInput): RuleVerdict {
       // Named with the RULE's own wording (an alias, as the admin typed it),
       // not the occupant's `member_name` — the message has to point at the rule
       // the admin can go and edit.
-      const otherAsWritten = a === me ? c.personB : c.personA;
-      return { blocked: true, reason: `Regla: no puede coincidir con ${otherAsWritten}` };
+      add(`Regla: no puede coincidir con ${a === me ? c.personB : c.personA}`);
     }
   }
 
-  return NOT_BLOCKED;
+  return out;
 }
 
 // ─── E13: the post-fill re-check ─────────────────────────────────────────────
@@ -398,7 +418,11 @@ export const violationKey = (rowId: string, memberId: string) => `${rowId}|${mem
 export interface SeatedViolation {
   /** The same Spanish reason `evaluate` gives for refusing the pick. */
   reason: string;
-  /** True ⇒ a human seated this person here deliberately (P10). */
+  /**
+   * True ⇒ a human waived THIS rule for this seating, deliberately (P10). False
+   * with an override on the seat means a different rule refuses it now, and
+   * `reason` is that other rule — never the waived one.
+   */
   overridden: boolean;
 }
 
@@ -423,12 +447,23 @@ export interface SeatedViolation {
  *
  * ─── What `overridden` changes, and why it is decided HERE ───────────────────
  *
- * An overridden seat is SANCTIONED, so it is removed from the pool every OTHER
+ * **An override waives ONE RULE, not a person.** It is keyed by `violationKey`
+ * and carries the exact reason `evaluate` gave when the admin set it aside, and
+ * a seat stays sanctioned only while every rule that still refuses it is that
+ * same one. Keying it by (date, row, member) alone — the shape this had first —
+ * pre-sanctions rules the admin never saw: override Gaby onto Lead past
+ * `Frank !with Gaby`, add `Gaby !in *.Lead` a week later, and her cell would
+ * read "Regla anulada — Gaby: Regla: excluido de *.Lead", an exception nobody
+ * made, presented as one they did. A DIFFERENT rule must flag fresh; that is
+ * the whole point of E13 catching "a rule edited after seating".
+ *
+ * A seat whose sanction still stands is removed from the pool every OTHER
  * occupant is judged against. Without that, a pairwise conflict would re-appear
  * through its other party: override Gaby onto a Lead row Frank already holds and
  * the rule still refuses *Frank*, so the exception the admin just made would
  * light up in red next to a marker saying it was allowed. One override covers
- * one seating, from both ends.
+ * one seating, from both ends — and once it goes stale it covers neither end,
+ * so a newly forbidden pair flags on both.
  *
  * The overridden occupant is still evaluated — against the FULL column, its
  * partner included — because its `reason` is what the persistent "regla anulada"
@@ -448,30 +483,36 @@ export function ruleViolationsForColumn(input: {
   members: RankMember[];
   sundayDates?: string[];
   config?: SolverConfig;
-  /** `violationKey`s a human overrode (P10). */
-  overridden?: ReadonlySet<string>;
+  /**
+   * P10 — `violationKey` → the EXACT reason that override waived, as
+   * `evaluate` worded it at the moment the admin clicked "Asignar de todos
+   * modos". A key with any other reason attached is not a sanction for the rule
+   * firing now, so an entry whose rule has since been edited away simply stops
+   * covering anything.
+   */
+  overridden?: ReadonlyMap<string, string>;
 }): Map<string, SeatedViolation> {
   const { column, rows, assigned, members, sundayDates, config } = input;
-  const overridden = input.overridden ?? EMPTY_KEYS;
+  const overridden = input.overridden ?? EMPTY_WAIVERS;
   const out = new Map<string, SeatedViolation>();
   if (!config) return out;
 
   const rowById = new Map(rows.map((r) => [r.id, r]));
   const memberById = new Map(members.map((m) => [m._id, m]));
-  const sanctionFree = assigned.filter((x) => !overridden.has(violationKey(x.seatId, x.memberId)));
 
-  for (const seat of assigned) {
+  /**
+   * Every rule refusing `seat`, judged against `pool` with this occupant's own
+   * seat removed — and ONLY this one. A member holding the same row twice (a
+   * duplicate `canonicalRefs` would collapse) still sees their other copy, which
+   * is right: that copy is a real occupant as far as a pairwise rule naming them
+   * is concerned. `null` ⇒ the seat names a row or member that does not exist.
+   */
+  const reasonsFor = (seat: AssignedSeat, pool: AssignedSeat[]): string[] | null => {
     const row = rowById.get(seat.seatId);
     const member = memberById.get(seat.memberId);
-    if (!row || !member) continue;
-    const key = violationKey(seat.seatId, seat.memberId);
-    const isOverridden = overridden.has(key);
-    // This occupant's own seat removed — and ONLY this one. A member holding the
-    // same row twice (a duplicate `canonicalRefs` would collapse) still sees
-    // their other copy, which is right: that copy is a real occupant as far as a
-    // pairwise rule naming them is concerned.
+    if (!row || !member) return null;
     let dropped = false;
-    const others = (isOverridden ? assigned : sanctionFree).filter((x) => {
+    const others = pool.filter((x) => {
       if (dropped) return true;
       if (x.seatId === seat.seatId && x.memberId === seat.memberId) {
         dropped = true;
@@ -479,18 +520,41 @@ export function ruleViolationsForColumn(input: {
       }
       return true;
     });
-    const verdict = evaluate({
-      member,
-      row,
-      column,
-      sundayDates,
-      assigned: others,
-      members,
-      config,
-    });
-    if (verdict.blocked) out.set(key, { reason: verdict.reason, overridden: isOverridden });
+    return blockingReasons({ member, row, column, sundayDates, assigned: others, members, config });
+  };
+
+  // Pass 1 — which sanctions still stand. An overridden seat is judged against
+  // the FULL column (see above), so this answer never depends on the pool the
+  // pass below builds from it, and there is no circularity to unpick.
+  const liveForOverridden = new Map<string, string[]>();
+  const standing = new Set<string>();
+  for (const seat of assigned) {
+    const key = violationKey(seat.seatId, seat.memberId);
+    const waived = overridden.get(key);
+    if (waived === undefined) continue;
+    const reasons = reasonsFor(seat, assigned);
+    if (!reasons) continue;
+    liveForOverridden.set(key, reasons);
+    if (reasons.every((r) => r === waived)) standing.add(key);
+  }
+  const sanctionFree = assigned.filter((x) => !standing.has(violationKey(x.seatId, x.memberId)));
+
+  for (const seat of assigned) {
+    const key = violationKey(seat.seatId, seat.memberId);
+    const waived = overridden.get(key);
+    const reasons = liveForOverridden.get(key) ?? reasonsFor(seat, sanctionFree);
+    if (!reasons || reasons.length === 0) continue;
+    // A rule OTHER than the waived one is a violation the admin never sanctioned,
+    // and it is the one worth naming: report it in red, not the stale marker.
+    const fresh = reasons.find((r) => r !== waived);
+    out.set(
+      key,
+      fresh !== undefined
+        ? { reason: fresh, overridden: false }
+        : { reason: reasons[0], overridden: true },
+    );
   }
   return out;
 }
 
-const EMPTY_KEYS: ReadonlySet<string> = new Set<string>();
+const EMPTY_WAIVERS: ReadonlyMap<string, string> = new Map<string, string>();
