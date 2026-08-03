@@ -965,10 +965,17 @@ function SolverConfigSaveBar({ config, rules }: {
   rules: SolverConfigController;
 }) {
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [stale, setStale] = useState(false);
+  const [failure, setFailure] = useState<
+    { message: string; stale: boolean; against: SolverConfigSource } | null
+  >(null);
 
   const source = rules.source;
+  // A failure describes ONE attempt against ONE observed document. Once the
+  // source moves — a reload, or a later successful save — that message is about
+  // a world that no longer exists, and leaving "alguien más lo cambió primero"
+  // on screen beside a freshly reloaded rule set is its own small lie. Derived
+  // rather than cleared in an effect, so there is no render where both are true.
+  const error = failure && failure.against === source ? failure : null;
   const rev = source.status === "ready" ? source.rev : null;
   const savedConfig = editableConfig(source);
   // By CONTENT: an edit undone by hand settles back to "Guardado" instead of
@@ -978,14 +985,10 @@ function SolverConfigSaveBar({ config, rules }: {
   const onSave = async () => {
     if (rev === null) return;
     setSaving(true);
-    setError(null);
-    setStale(false);
+    setFailure(null);
     try {
       const result = await rules.save(config, rev);
-      if (!result.ok) {
-        setError(result.message);
-        setStale(result.stale);
-      }
+      if (!result.ok) setFailure({ ...result, against: source });
     } finally {
       setSaving(false);
     }
@@ -995,10 +998,10 @@ function SolverConfigSaveBar({ config, rules }: {
     <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
       {error && (
         <p role="alert" className="font-body text-[11px] text-red-400 mr-auto">
-          {error}
+          {error.message}
         </p>
       )}
-      {stale && (
+      {error?.stale && (
         <button
           type="button"
           onClick={rules.reload}
@@ -1200,8 +1203,16 @@ export default function MonthGenerator({
   /**
    * The last thing the SERVER said, by identity — a new object on load and on
    * every successful save, and only then. Syncing on it means a save's
-   * canonical round trip lands on screen, without a re-render of the panel
-   * silently reverting an edit in progress.
+   * canonical round trip lands on screen (the write path de-duplicates pools
+   * and drops blanks, so what is stored is not always what was typed), without
+   * a re-render of the panel silently reverting an edit in progress.
+   *
+   * **A reload therefore DISCARDS unsaved edits, and that is the stated
+   * contract.** It is reachable from exactly two buttons: "Reintentar", in a
+   * state where nothing is on screen to lose, and "Recargar reglas" after a
+   * lost race — whose message says "recarga las reglas y vuelve a aplicar tu
+   * cambio" for this reason. Merging two rule sets is not something to invent
+   * silently under an admin who is being told someone else wrote first.
    */
   const loadedConfig = editableConfig(rules.source);
   useEffect(() => {

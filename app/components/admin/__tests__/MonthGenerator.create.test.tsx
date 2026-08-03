@@ -1889,6 +1889,35 @@ describe("MonthGenerator — saving the rule set", () => {
     fireEvent.click(screen.getByRole("button", { name: "Recargar reglas" }));
     expect(rules.reload).toHaveBeenCalledTimes(1);
   });
+
+  it("drops the conflict message once the reload actually lands", async () => {
+    // A failure describes ONE attempt against ONE observed document. Leaving
+    // "alguien más cambió las reglas primero" beside a freshly reloaded rule set
+    // tells the admin their retry failed when it was never made.
+    const rules = readyRules(DEFAULT_SOLVER_CONFIG, {
+      rev: "rev-1",
+      save: async () => ({ ok: false, message: SAVE_STALE_MESSAGE, stale: true }),
+    });
+    const members2 = members;
+    const { rerender } = render(
+      <Gen members={members2} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />,
+    );
+    fireEvent.click(screen.getByRole("checkbox", { name: "Ana" }));
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+    // The reload lands: a new source carrying a new config OBJECT, which is what
+    // the hook always produces (`solverConfigFromDocument` builds a fresh one per
+    // read) and what the panel's identity-keyed sync is keyed on.
+    const reloaded = readyRules({ ...DEFAULT_SOLVER_CONFIG }, { rev: "rev-2" });
+    rerender(
+      <Gen members={members2} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={reloaded} />,
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Recargar reglas" })).toBeNull();
+    // And the reloaded document, not the discarded edit, is what is on screen —
+    // which is why the conflict message says "vuelve a aplicar tu cambio".
+    expect((screen.getByRole("checkbox", { name: "Ana" }) as HTMLInputElement).checked).toBe(false);
+  });
 });
 
 // ─── A failed read REFUSES, it does not offer the defaults ───────────────────
