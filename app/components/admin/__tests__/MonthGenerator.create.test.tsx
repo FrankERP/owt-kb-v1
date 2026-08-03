@@ -2026,6 +2026,125 @@ describe("MonthGenerator — what the rule panel claims about the Tablero", () =
   });
 });
 
+// ─── `ready → error`: the read failed UNDER a panel that already had rules ───
+//
+// The transition none of the harnesses above reach, and the one where the
+// absent/error collapse survived the cutover. `solverConfig` is never set back
+// to `null`, so a panel that was `ready` keeps its rule set and does NOT fall
+// back to `SolverConfigUnavailable` — right on the data (a transient GET is no
+// reason to discard unsaved work), and until this block existed, completely
+// silent on the copy: every `status !== "ready"` branch printed the `absent`
+// sentence, which says of a document that exists that it does not.
+//
+// The path is not hypothetical. It is the one the app's own message walks an
+// admin down: lose a `_rev` race → take the "Recargar reglas" the conflict
+// message offers → the GET fails.
+describe("MonthGenerator — the rules failed to RELOAD", () => {
+  const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] }];
+  const saveButton = () => screen.getByRole("button", { name: /Guardar reglas|Guardando|Guardado/ });
+  const PARITY = /tanto aquí como al editar un servicio en el/;
+
+  it("makes a failed 'Recargar reglas' visible instead of reading as resolved", async () => {
+    const rules = readyRules(DEFAULT_SOLVER_CONFIG, {
+      rev: "rev-1",
+      save: async () => ({ ok: false, message: SAVE_STALE_MESSAGE, stale: true }),
+    });
+    const { container, rerender } = render(
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />,
+    );
+    fireEvent.click(screen.getByRole("checkbox", { name: "Ana" }));
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe(SAVE_STALE_MESSAGE));
+    fireEvent.click(screen.getByRole("button", { name: "Recargar reglas" }));
+    expect(rules.reload).toHaveBeenCalledTimes(1);
+
+    // …and the reload the admin was just told to take FAILS.
+    const failed = failedRules();
+    rerender(
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={failed} />,
+    );
+    // The conflict message is gone, correctly — it described an attempt against
+    // a document we no longer hold. What must not happen is it going quiet:
+    // with nothing in its place the failed reload reads as a successful one.
+    expect(container.textContent).not.toContain(SAVE_STALE_MESSAGE);
+    expect(screen.getByRole("alert").textContent).toBe(READ_FAILED_MESSAGE);
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+    expect(failed.reload).toHaveBeenCalledTimes(1);
+    // And the draft is still on screen: the notice is what this state owes the
+    // admin, not a discard.
+    expect((screen.getByRole("checkbox", { name: "Ana" }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("says the READ failed — never that the shared rules do not exist", () => {
+    const { container, rerender } = render(
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={readyRules()} />,
+    );
+    rerender(
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={failedRules()} />,
+    );
+    expect(container.textContent).toContain(
+      "No se pudieron cargar las reglas compartidas del servidor.",
+    );
+    // The `absent` sentence, in every load-bearing clause it has. Printing it
+    // here is the false claim: the document is there, the READ failed — and an
+    // admin told their team's rules do not exist may reasonably re-run the seed
+    // script or retype the whole rule set over a document sitting there intact.
+    expect(container.textContent).not.toMatch(/Todavía no hay reglas compartidas en el servidor/);
+    expect(container.textContent).not.toMatch(/ejemplo/);
+    expect(container.textContent).not.toMatch(/no se pueden\s+guardar desde aquí/);
+    // Nor the `ready` sentence: nothing on screen is backed by a read we trust.
+    expect(container.textContent).not.toMatch(PARITY);
+  });
+
+  it("branches the save button's tooltip on WHY it is dead, not merely that it is", () => {
+    // `rev === null` is one predicate and three different facts. The tooltip was
+    // the second place the `absent` claim was made about a failed read.
+    const { rerender } = render(
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={absentRules()} />,
+    );
+    expect(saveButton().getAttribute("title")).toMatch(/solo el script de siembra puede crearlas/);
+    rerender(
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={failedRules()} />,
+    );
+    expect(saveButton().getAttribute("title")).toMatch(/No se pudieron cargar las reglas compartidas/);
+    expect(saveButton().getAttribute("title")).not.toMatch(/script de siembra/);
+    expect((saveButton() as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("does not flash the 'no shared rules' claim through every ordinary reload", () => {
+    // `loading` hit the same branch, so the false sentence appeared for a frame
+    // on EVERY reload — including the successful ones.
+    const { container, rerender } = render(
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={readyRules()} />,
+    );
+    rerender(
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={loadingRules()} />,
+    );
+    expect(container.textContent).toContain("Se están cargando las reglas compartidas del servidor.");
+    expect(container.textContent).not.toMatch(/Todavía no hay reglas compartidas en el servidor/);
+    expect(container.textContent).not.toMatch(/ejemplo/);
+    // A reload in flight is not a failure: no alert, no retry to press.
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reintentar" })).toBeNull();
+  });
+
+  it("still lets the month be built on the rules it already holds", () => {
+    // The deliberate half of the decision: `rulesBlocked` is keyed on
+    // `solverConfig`, not on `source.status`, so a failed reload does not lock
+    // the admin out of the grid with a month of work in it. What changes is
+    // that the panel now SAYS the read failed while they carry on.
+    const { rerender } = render(
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={readyRules()} />,
+    );
+    rerender(
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={failedRules()} />,
+    );
+    const preview = screen.getByRole("button", { name: /Previsualizar/ }) as HTMLButtonElement;
+    expect(preview.disabled).toBe(false);
+    expect(preview.getAttribute("title")).toBeNull();
+  });
+});
+
 // ─── The year field never hands out a half-typed year ────────────────────────
 //
 // `min`/`max` on a number input stop no keystroke. Retyping the year walked the

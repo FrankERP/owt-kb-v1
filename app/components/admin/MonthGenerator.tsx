@@ -661,15 +661,20 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
 
 // ─── Rule builder — main orchestrator ────────────────────────────────────────
 
-function RuleBuilder({ config, onChange, members, shared }: {
+function RuleBuilder({ config, onChange, members, source }: {
   config: SolverConfig;
   onChange: (c: SolverConfig) => void;
   members: MemberOption[];
   /**
-   * Does a shared document back these rules? `SolverConfigSource.status ===
-   * "ready"`, and nothing else — see the copy at the foot of this component.
+   * The WHOLE source state, not a `shared` boolean.
+   *
+   * A boolean here was the last place `absent` and `error` still collapsed into
+   * one another: "no document exists" and "we could not read the document" both
+   * answered `false` and both printed the `absent` sentence — which claims, of a
+   * document that does exist, that it does not. See the copy at the foot of this
+   * component: four states, three sentences, and no state borrowing another's.
    */
-  shared: boolean;
+  source: SolverConfigSource;
 }) {
   const [adding,    setAdding]    = useState<"restriction" | "conflict" | "presence" | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -831,13 +836,23 @@ function RuleBuilder({ config, onChange, members, shared }: {
            looks enforced and is not is worse than one that is plainly not
            offered (`ruleEnforcement.ts` lists both as deliberate non-goals).
 
-        The `shared` branch is NOT the old per-browser one wearing new clothes:
-        it is `SolverConfigSource.status === "ready"`, i.e. the document exists.
+        The branch is NOT the old per-browser one wearing new clothes: it is
+        `SolverConfigSource`, i.e. what we actually know about the document.
         With no document there is nothing to share and nothing to save, and the
         Tablero enforces nothing (`enforceableConfig`) — so that state gets its
         own sentence rather than a softened version of the other.
+
+        THREE sentences, not two, and this is the point of taking the whole
+        source rather than a `shared` boolean: `absent` ("there is no shared
+        document") and `error`/`loading` ("we could not read the shared
+        document") are different facts, and printing the first while the second
+        is true tells an admin their team's rules do not exist — an invitation
+        to re-run the seed script or retype the rule set over a document that is
+        sitting there intact. `loading` shares the sentence because it is the
+        same claim in the present tense, and because it is the state EVERY
+        reload passes through: the `absent` copy used to flash there too.
       */}
-      {shared ? (
+      {source.status === "ready" ? (
         <>
           <p className="font-body text-[11px] text-gray-500 px-1 pt-1">
             Las reglas se guardan en el <span className="text-[#00bfff]">servidor</span> y las
@@ -853,13 +868,29 @@ function RuleBuilder({ config, onChange, members, shared }: {
             del Tablero trabaja sobre un servicio suelto y no sabe en qué semana del mes cae.
           </p>
         </>
-      ) : (
+      ) : source.status === "absent" ? (
         <p className="font-body text-[11px] text-gray-500 px-1 pt-1">
           Todavía no hay reglas compartidas en el servidor: estas son las de{" "}
           <span className="text-amber-400">ejemplo</span> con las que llega la app y no se pueden
           guardar desde aquí. Mientras tanto, los patrones excluidos y los conflictos se aplican
           como bloqueo duro <span className="text-amber-400">solo aquí</span> — al editar un servicio
           en el <span className="text-gray-400">Tablero</span> no bloquean nada. Las{" "}
+          <span className="text-gray-400">semanas excluidas</span> solo se verifican aquí en
+          cualquier caso: el editor del Tablero trabaja sobre un servicio suelto y no sabe en qué
+          semana del mes cae.
+        </p>
+      ) : (
+        <p className="font-body text-[11px] text-gray-500 px-1 pt-1">
+          <span className="text-amber-400">
+            {source.status === "error"
+              ? "No se pudieron cargar las reglas compartidas del servidor."
+              : "Se están cargando las reglas compartidas del servidor."}
+          </span>{" "}
+          Estas son las reglas que quedaron en pantalla, no necesariamente las que el servidor
+          tiene ahora, y no se pueden guardar hasta que vuelvan a cargar. Mientras tanto, los
+          patrones excluidos y los conflictos se aplican como bloqueo duro{" "}
+          <span className="text-amber-400">solo aquí</span> — al editar un servicio en el{" "}
+          <span className="text-gray-400">Tablero</span> no bloquean nada. Las{" "}
           <span className="text-gray-400">semanas excluidas</span> solo se verifican aquí en
           cualquier caso: el editor del Tablero trabaja sobre un servicio suelto y no sabe en qué
           semana del mes cae.
@@ -986,6 +1017,13 @@ function SolverConfigSaveBar({ config, rules }: {
     if (rev === null) return;
     setSaving(true);
     setFailure(null);
+    // `useSolverConfig.save` owns its own try/catch and RESOLVES on every
+    // failure, so this `try` is an unreachable backstop, not the guard — verified
+    // by mutation: unwrapping it (plain `await`, then `setSaving(false)`) fails
+    // no test, while deleting the `finally`'s reset fails "reports a FAILURE as a
+    // failure". It is kept because CLAUDE.md's client-mutation invariant says the
+    // loading flag resets in a `finally`, and a controller that ever rejected
+    // would otherwise park this button on "Guardando…" for good.
     try {
       const result = await rules.save(config, rev);
       if (!result.ok) setFailure({ ...result, against: source });
@@ -1014,12 +1052,22 @@ function SolverConfigSaveBar({ config, rules }: {
         type="button"
         onClick={onSave}
         disabled={rev === null || !dirty || saving}
+        // `rev === null` is ONE reason the button is dead and THREE different
+        // facts about the world. Saying "solo el script de siembra puede
+        // crearlas" while a read is merely failing tells an admin the team's
+        // rules do not exist, which is how a seed script gets re-run over a
+        // document that is sitting there intact. Same distinction the copy at
+        // the foot of `RuleBuilder` makes, on the control that acts on it.
         title={
-          rev === null
+          source.status === "absent"
             ? "Todavía no hay reglas compartidas en el servidor; solo el script de siembra puede crearlas."
-            : dirty
-              ? "Guardar estas reglas para todos los administradores"
-              : undefined
+            : source.status === "error"
+              ? "No se pudieron cargar las reglas compartidas; no se puede guardar hasta que vuelvan a cargar."
+              : source.status === "loading"
+                ? "Cargando las reglas compartidas…"
+                : dirty
+                  ? "Guardar estas reglas para todos los administradores"
+                  : undefined
         }
         className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-[#00bfff]/40 text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
       >
@@ -1063,6 +1111,45 @@ function SolverConfigUnavailable({ source, onReload }: {
   );
 }
 
+/**
+ * A read that failed (or is in flight) UNDER a panel that already has rules on
+ * screen — the state `SolverConfigUnavailable` never sees.
+ *
+ * Once `solverConfig` holds a rule set it is never dropped back to `null`, so a
+ * panel that was `ready` does not fall back to `SolverConfigUnavailable` when a
+ * later read fails; it keeps the admin's draft, which is the right call (a
+ * transient GET is no reason to discard unsaved work) and was, until this
+ * notice existed, completely silent. The concrete path: lose a `_rev` race →
+ * take the "Recargar reglas" the conflict message itself offers → the GET fails
+ * → the conflict message disappears (correctly — it described a world that is
+ * gone) and NOTHING replaces it. The reload reads as having worked.
+ *
+ * So: an alert, and the retry, above the retained draft.
+ */
+function SolverConfigReloadNotice({ source, onReload }: {
+  source: SolverConfigSource;
+  onReload: () => void;
+}) {
+  if (source.status !== "error" && source.status !== "loading") return null;
+  if (source.status === "loading") {
+    return <p className="font-body text-xs text-gray-500">Cargando las reglas compartidas…</p>;
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <p role="alert" className="font-body text-xs text-red-400 mr-auto">
+        {source.message}
+      </p>
+      <button
+        type="button"
+        onClick={onReload}
+        className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-[#00bfff]/30 text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors"
+      >
+        Reintentar
+      </button>
+    </div>
+  );
+}
+
 function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory }: {
   members: MemberOption[];
   config: SolverConfig;
@@ -1097,6 +1184,8 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
     <div className="space-y-3 p-3 rounded-xl border border-[#00bfff]/20 bg-[#00bfff]/5">
       <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">Configuración del Solver</p>
 
+      <SolverConfigReloadNotice source={rules.source} onReload={rules.reload} />
+
       <div className="grid grid-cols-3 gap-3">
         <MemberPool
           field="sundayLeads" label="Líderes Domingo"
@@ -1128,7 +1217,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         config={config}
         onChange={onChange}
         members={members.filter(m => m.memberType?.includes("voz"))}
-        shared={rules.source.status === "ready"}
+        source={rules.source}
       />
 
       {/*
@@ -1227,6 +1316,14 @@ export default function MonthGenerator({
    * refuse that — but the grid is the surface where a rule becomes a hard
    * refusal, and entering it with none would enforce nothing while looking
    * exactly like enforcing everything.
+   *
+   * Keyed on `solverConfig`, NOT on `source.status`, and that is the difference
+   * between "we have no rules" and "we could not re-read the rules". A panel
+   * that was `ready` keeps its rule set through a failed reload, so the grid
+   * still has something real to enforce and is still entered — a transient GET
+   * is no reason to discard a month's work. What that state owes the admin is
+   * to SAY the read failed (`SolverConfigReloadNotice`, and the third branch of
+   * the copy in `RuleBuilder`), not to lock the surface.
    */
   const rulesBlocked =
     solverConfig === null
@@ -1724,11 +1821,21 @@ export default function MonthGenerator({
    * — the solve failing has no bearing on a special, which was never sent.
    */
   async function handleAuto() {
-    // The rules must be LOADED before anything solves or fills. Reachable only
-    // by a save-shaped race (the config step gates "Previsualizar →" on the same
-    // value), and the honest answer is a refusal: an Auto run against no rules
-    // seats people a hard block exists to keep apart, under a normal success
-    // toast — the exact silent-degradation the cutover is built to avoid.
+    // The rules must be LOADED before anything solves or fills.
+    //
+    // **This refusal is an UNREACHABLE BACKSTOP, not the enforcement.**
+    // `solverConfig` starts at `editableConfig(rules.source)` and is only ever
+    // re-set to a non-null value, so it never returns to `null` once it holds a
+    // rule set; and while it IS `null`, `rulesBlocked` disables "Previsualizar
+    // →" and `handlePreview` re-checks it at handler entry, so the grid this
+    // button lives on cannot be reached. Verified by mutation: replacing the
+    // whole branch with `solverConfig ?? DEFAULT_SOLVER_CONFIG` fails no test.
+    // It is kept because this function is the only caller of
+    // `/api/admin/solve` and of `applySpecialFill`, and the alternative it
+    // guards against is the cutover's headline failure — an Auto run against
+    // rules nobody has seen, seating people a hard block exists to keep apart,
+    // under a normal success toast. The line that must never be weakened is
+    // `rulesBlocked`, which is what actually keeps the grid shut.
     const config = solverConfig;
     if (!config) {
       setAutoError("No se pudieron cargar las reglas compartidas. Recárgalas antes de usar Auto.");
