@@ -808,15 +808,45 @@ describe("the stated rail thresholds match MIN_WIDTH", () => {
     expect(stated?.[2]).toBe(minWidth![2]);
   });
 
-  it("MIN_WIDTH is what the exported constant says", () => {
-    expect(Number(minWidth![1])).toBe(MIN_WIDTH.panel);
-    expect(Number(minWidth![2])).toBe(MIN_WIDTH.dialog);
-  });
-
   it("the class the rail renders is the width the arithmetic is stated in", () => {
     // `w-[216px]` is a Tailwind literal and cannot be built from `RAIL_WIDTH` at
     // runtime, so the two can drift. This is the only thing that stops them.
     expect(railSrc).toMatch(new RegExp(`w-\\[${RAIL_WIDTH}px\\]`));
+  });
+});
+
+/**
+ * `MIN_WIDTH` versus `RAIL_WIDTH`, through the formula the header comment
+ * actually derives it by — not the regex-vs-import duplicate this replaces,
+ * which compared the same declaration to itself and could not fail short of
+ * the regex breaking (that failure mode belongs to "extracts both widths…"
+ * above).
+ *
+ * The header states: the rail needs `RAIL_WIDTH` + 8px (`left-2`) + 8px of air
+ * clear of the container's content before the container's first pixel — 232px
+ * today. That clearance feeds both thresholds:
+ *   • panel:  (W - 1280) / 2 + 24 >= clearance   (max-w-7xl, `px-6` inset)
+ *   • dialog: (W -  896) / 2      >= clearance   (max-w-4xl, no inset)
+ * 1280, 896 and 24 are page-layout facts (`admin/page.tsx`'s `max-w-7xl` +
+ * `px-6`, `CueDialog.tsx`'s `max-w-4xl`), not part of this pair — they don't
+ * move when the rail's own width does, so they're fixed here rather than
+ * re-derived. `RAIL_WIDTH` is the one input that can change (it did, in the
+ * commit that stacked the sidebar's header row), and each `MIN_WIDTH` must
+ * stay at least the minimum that formula demands for whatever `RAIL_WIDTH`
+ * currently is. A widened rail with a stale `MIN_WIDTH` is exactly the 47px
+ * overlap the header's own history names.
+ */
+describe("MIN_WIDTH still clears the gutter RAIL_WIDTH actually needs", () => {
+  const clearance = RAIL_WIDTH + 8 /* left-2 */ + 8 /* air */;
+  const panelMinRequired = 1280 + 2 * (clearance - 24);
+  const dialogMinRequired = 896 + 2 * clearance;
+
+  it("the panel threshold clears (W - 1280) / 2 + 24 >= RAIL_WIDTH + 16", () => {
+    expect(MIN_WIDTH.panel).toBeGreaterThanOrEqual(panelMinRequired);
+  });
+
+  it("the dialog threshold clears (W - 896) / 2 >= RAIL_WIDTH + 16", () => {
+    expect(MIN_WIDTH.dialog).toBeGreaterThanOrEqual(dialogMinRequired);
   });
 });
 
