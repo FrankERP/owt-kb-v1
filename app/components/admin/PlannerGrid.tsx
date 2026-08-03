@@ -795,11 +795,16 @@ function ColumnHeader({
 
   return (
     <div className={`min-w-[150px] space-y-1 px-1 ${skipped || blockCopy ? "opacity-40" : ""}`}>
+      {/* Legibility pass: the header's date, month and service type were
+          `text-sm`/`text-[10px]` — small enough on a real 10-column month that
+          the admin had to lean in to tell one column from another. Bumped one
+          step each. Deliberately scoped to THIS grid: the participation chart
+          and the rest of the admin screens are unchanged. */}
       <div className="flex items-center gap-1.5">
-        <span className="font-display text-sm leading-none">{day}</span>
-        <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">{month}</span>
+        <span className="font-display text-base leading-none">{day}</span>
+        <span className="font-label text-xs uppercase tracking-widest text-gray-500">{month}</span>
       </div>
-      <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">{typeLabel}</span>
+      <span className="font-label text-xs uppercase tracking-widest text-gray-500">{typeLabel}</span>
       {/* E6/E18 — a special is identified by date AND name (`special_role:date:name`),
           and two differently-named specials can share a date. Without the name
           on screen the two columns are indistinguishable, and the header's own
@@ -895,7 +900,11 @@ function RowGroup({
       */}
       <div className="min-w-[176px] px-1 py-1">
         <div className="flex flex-col items-start gap-0.5">
-          <span className="font-label text-xs uppercase tracking-widest text-[#C8D8EB]/70 break-words">
+          {/* Legibility pass — one step up from `text-xs`. The track is
+              `minmax(176px, max-content)` and the label already wraps
+              (`break-words`), so a wider word grows the track instead of
+              spilling into the first cell (D-defect-2). */}
+          <span className="font-label text-sm uppercase tracking-widest text-[#C8D8EB]/70 break-words">
             {row.label}
           </span>
           {row.category !== "voz" && (
@@ -1014,7 +1023,7 @@ function GridCellView({
     >
       <div className="flex flex-wrap gap-1">
         {visibleIds.length === 0 && memberIds.length === 0 && (
-          <span className="font-body text-[11px] italic text-gray-600">Sin asignar</span>
+          <span className="font-body text-xs italic text-gray-600">Sin asignar</span>
         )}
         {visibleIds.map((id) => {
           // Finding 1: `duplicates` is keyed by member alone across the whole
@@ -1029,7 +1038,10 @@ function GridCellView({
           return (
             <span
               key={id}
-              className={`rounded-full border px-1.5 py-0.5 font-label text-[10px] text-[#C8D8EB] ${CARD_STYLE.longText} ${
+              // Legibility pass — the member chip is the thing the admin
+              // actually reads across the whole month, and `text-[10px]` was
+              // the smallest type on the surface. One step up, to `text-xs`.
+              className={`rounded-full border px-1.5 py-0.5 font-label text-xs text-[#C8D8EB] ${CARD_STYLE.longText} ${
                 isDuplicate || ruleBroken
                   ? "border-red-500/50 bg-red-500/10"
                   : "border-[#00bfff]/25 bg-[#00bfff]/10"
@@ -1048,7 +1060,8 @@ function GridCellView({
               onOpen();
             }}
             aria-label={`Ver ${hiddenCount} más en ${row.label}`}
-            className={`rounded-full border px-1.5 py-0.5 font-label text-[10px] ${
+            // Sized with the member chips it stands in for.
+            className={`rounded-full border px-1.5 py-0.5 font-label text-xs ${
               hiddenHasDuplicate || hiddenHasViolation
                 ? "border-red-500/50 bg-red-500/10 text-red-400"
                 : "border-amber-500/40 bg-amber-500/10 text-amber-400"
