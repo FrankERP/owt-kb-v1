@@ -12,6 +12,7 @@ import MonthCalendar from "./MonthCalendar";
 import { SERVICE_LABEL } from "./serviceCardModel";
 import { fillColumn } from "./localFill";
 import { unresolvedRuleNames } from "./ruleEnforcement";
+import { ParticipationRail } from "./ParticipationRail";
 import {
   editableConfig,
   sameSolverConfig,
@@ -28,6 +29,7 @@ import {
   historyEntryFromDrafts,
   mapUnfilledSeats,
   namelessSpecial,
+  plannerParticipationRoles,
   unaddressableDates as computeUnaddressableDates,
   type DraftCard,
   type GridCell,
@@ -1539,6 +1541,38 @@ export default function MonthGenerator({
   );
 
   /**
+   * The SAVED half of the participation rail: D12's lookback window PLUS
+   * anything already stored in the month being planned.
+   *
+   * `savedWindow` on its own is the wrong baseline here, even though it is the
+   * right one for ranking. It ends AT the month's first Sunday, so services the
+   * admin saved earlier in this same month — half a month generated last week,
+   * a special created by hand — would be invisible to a panel whose whole job is
+   * "is this month's load fair". Ranking can afford that (it measures a rolling
+   * recent load); a fairness read-out cannot.
+   *
+   * Filtered from `allRoles` in ONE pass and compared by object identity against
+   * `savedWindow`, rather than concatenating two lists and de-duplicating them:
+   * `ParticipantRole` has no `_id` and no `service_name`, so any key built from
+   * its fields would collapse two same-day specials into one.
+   */
+  const participationSaved = useMemo(() => {
+    const inWindow = new Set(savedWindow);
+    const prefix = `${year}-${String(month).padStart(2, "0")}`;
+    return (allRoles ?? []).filter(r => inWindow.has(r) || r.date.slice(0, 7) === prefix);
+  }, [allRoles, savedWindow, year, month]);
+
+  /**
+   * Saved + the drafts on screen, recomputed on every cell change — the live
+   * total the rail exists to show. See `plannerParticipationRoles` for why a
+   * service present on both sides is counted once, from the draft side.
+   */
+  const participationRoles = useMemo(
+    () => plannerParticipationRoles({ saved: participationSaved, columns, cells, members }),
+    [participationSaved, columns, cells, members],
+  );
+
+  /**
    * Two independent sources of "this name matches nobody", MERGED — never one
    * replacing the other.
    *
@@ -2378,6 +2412,24 @@ export default function MonthGenerator({
           })}
         </div>
       )}
+
+      {/*
+        The participation rail. Mounted HERE, inside the generator's own step-2
+        column, rather than beside `MonthGenerator` in `ServicesPanel`: the
+        counts have to move with `cells`, and `cells` is this component's state.
+        Lifting it to the panel to gain a layout slot would export the grid's
+        draft state to a component that has no other use for it.
+
+        It costs the grid no width. Above 1780px it is `position: fixed` in the
+        page's left gutter (`ParticipationRail`), so D10's full-width panel is
+        exactly as wide as it was; below that it stacks here, under the grid.
+        Placed before the footer so the confirm buttons stay last in tab order.
+      */}
+      <ParticipationRail
+        placement="panel"
+        roles={participationRoles}
+        monthLabel={`${MONTHS[month - 1]} ${year} · incluye borradores`}
+      />
 
       {/* In "edit" mode `PlannerGrid` already surfaces this via `autoState.disabledReason`
           next to Auto — showing it again here would duplicate the same text. */}
