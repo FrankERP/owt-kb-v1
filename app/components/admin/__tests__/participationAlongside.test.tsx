@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import MonthGenerator from "../MonthGenerator";
 import SeatBoard, { boardParticipationRoles } from "../SeatBoard";
-import { buildColumns, plannerParticipationRoles, type GridCell } from "../plannerModel";
+import { buildColumns, plannerParticipationRoles, type GridCell, type SavedRole } from "../plannerModel";
 import { computeParticipation, type ParticipantRole } from "@/app/utils/computeParticipation";
 import type { AssignedSeat, RankMember } from "../candidateRanking";
 import type { ServiceRole } from "../serviceCardModel";
@@ -47,6 +47,20 @@ function savedSunday(date: string, leadId: string, extra: Partial<ParticipantRol
     instruments: [],
     foh: [],
     ...extra,
+  };
+}
+
+/** A saved special on `date`, named `name`, whose Lead is `leadId`. */
+function savedSpecial(date: string, name: string, leadId: string): SavedRole {
+  return {
+    _type: "special_role",
+    date,
+    service_name: name,
+    leads: [person(leadId)],
+    bgvs: [],
+    chorus: [],
+    instruments: [],
+    foh: [],
   };
 }
 
@@ -124,6 +138,90 @@ describe("plannerParticipationRoles — saved + drafts, each service once", () =
     expect(totals.find((r) => r.name === "Gaby")!.total).toBe(1); // the truth survives
     expect(totals.find((r) => r.name === "Frank")).toBeUndefined(); // the invention does not
   });
+
+  // ── Two specials, one date ────────────────────────────────────────────────
+  //
+  // A special's identity on the server is `special_role:${date}:${name}`
+  // (`roleCreationReceipt.ts`), so a date can legitimately hold two of them and
+  // the grid can plan the second while the first is already stored. A dedup key
+  // of `_type|date` alone cannot tell them apart, and the populated draft wins:
+  // the whole saved roster disappears from a chart whose only job is to say who
+  // has served. That is the same failure the `creatableColumns` fix closed, one
+  // layer down.
+
+  it("keeps a saved special when the grid plans a DIFFERENTLY NAMED one on the same date", () => {
+    // The reviewer's case, verbatim. "Vigilia" is stored on 2026-02-11 with Gaby
+    // leading; the admin adds "Retiro" on the same date (a different name, so
+    // not `isExisting`, so creatable) and seats Frank.
+    const specialColumns = buildColumns({
+      sundayDates: [],
+      activeSatDates: [],
+      specials: [{ date: "2026-02-11", name: "Retiro" }],
+    });
+    const cells: GridCell[] = [
+      { date: "2026-02-11", rowId: "lead", memberIds: ["m1"], origin: "manual" },
+    ];
+    const totals = computeParticipation(
+      plannerParticipationRoles({
+        saved: [savedSpecial("2026-02-11", "Vigilia", "m2")],
+        creatableColumns: specialColumns,
+        cells,
+        members,
+      }),
+    );
+    // Both served, on two different services. With a name-blind key Gaby is
+    // absent entirely — a person who served reading as never having served.
+    expect(totals.find((r) => r.name === "Gaby")!.especial).toBe(1);
+    expect(totals.find((r) => r.name === "Gaby")!.total).toBe(1);
+    expect(totals.find((r) => r.name === "Frank")!.total).toBe(1);
+  });
+
+  it("still counts a re-planned special ONCE when the name is the same", () => {
+    // The other direction, and why widening the key is not "never dedup a
+    // special": same date AND same name is the same service, so the draft
+    // replaces the stored copy exactly as it does for a Sunday.
+    const specialColumns = buildColumns({
+      sundayDates: [],
+      activeSatDates: [],
+      specials: [{ date: "2026-02-11", name: "Vigilia" }],
+    });
+    const cells: GridCell[] = [
+      { date: "2026-02-11", rowId: "lead", memberIds: ["m1"], origin: "manual" },
+    ];
+    const totals = computeParticipation(
+      plannerParticipationRoles({
+        saved: [savedSpecial("2026-02-11", "Vigilia", "m2")],
+        creatableColumns: specialColumns,
+        cells,
+        members,
+      }),
+    );
+    expect(totals.find((r) => r.name === "Frank")!.total).toBe(1);
+    expect(totals.find((r) => r.name === "Gaby")).toBeUndefined();
+  });
+
+  it("matches the name the way the SERVER does — normalized, never lowercased", () => {
+    // `normalizeServiceName` collapses whitespace and NFC-normalizes, so the
+    // admin retyping "  Vigilia   de  Oración " is still the same service; a
+    // `.toLowerCase()` would make "vigilia" the same service too, and the
+    // server (`roleWriteOps.ts`) says it is not.
+    const columnsFor = (name: string) =>
+      buildColumns({ sundayDates: [], activeSatDates: [], specials: [{ date: "2026-02-11", name }] });
+    const cells: GridCell[] = [
+      { date: "2026-02-11", rowId: "lead", memberIds: ["m1"], origin: "manual" },
+    ];
+    const saved = [savedSpecial("2026-02-11", "Vigilia de Oración", "m2")];
+
+    const collapsed = computeParticipation(
+      plannerParticipationRoles({ saved, creatableColumns: columnsFor("  Vigilia   de  Oración "), cells, members }),
+    );
+    expect(collapsed.find((r) => r.name === "Gaby")).toBeUndefined(); // one service
+
+    const otherCase = computeParticipation(
+      plannerParticipationRoles({ saved, creatableColumns: columnsFor("vigilia de oración"), cells, members }),
+    );
+    expect(otherCase.find((r) => r.name === "Gaby")!.total).toBe(1); // two services
+  });
 });
 
 // ─── The Tablero's arithmetic, without a DOM ─────────────────────────────────
@@ -167,6 +265,63 @@ describe("boardParticipationRoles — the edited service, live", () => {
     const totals = computeParticipation(roles);
     expect(totals.find((r) => r.name === "Gaby")!.total).toBe(1);
     expect(totals.find((r) => r.name === "Frank")!.total).toBe(1);
+  });
+
+  it("counts the Coro seat and the FOH seat, not only Lead and instruments", () => {
+    // `inSeat("coro")` and `inCategory("foh")` were the two lines in
+    // `boardParticipationRoles` that no test touched: replacing either with `[]`
+    // left the whole suite green while the rail silently under-counted the
+    // people in those seats.
+    const roles = boardParticipationRoles({
+      saved: [],
+      type: "sunday_role",
+      date: "2026-02-08",
+      assigned: [
+        { seatId: "coro", category: "voz", memberId: "m3" },
+        { seatId: "foh:Sonido", category: "foh", memberId: "d1" },
+      ],
+      members,
+    });
+    const totals = computeParticipation(roles);
+    expect(totals.find((r) => r.name === "Liu")!.coro).toBe(1);
+    expect(totals.find((r) => r.name === "Liu")!.total).toBe(1);
+    expect(totals.find((r) => r.name === "Samo")!.fohWeeks).toBe(1);
+  });
+
+  it("drops the edited service by _id, not by date — the board can MOVE the date", () => {
+    // The date input is editable, so the live role's date is not the stored
+    // one's. A date match would keep the stored copy and count Gaby twice.
+    const roles = boardParticipationRoles({
+      saved: [{ ...savedSunday("2026-02-08", "m2"), _id: "role-1" }],
+      savedId: "role-1",
+      type: "sunday_role",
+      date: "2026-02-15",
+      assigned,
+      members,
+    });
+    const totals = computeParticipation(roles);
+    expect(totals.find((r) => r.name === "Gaby")).toBeUndefined();
+    expect(totals.find((r) => r.name === "Frank")!.total).toBe(1);
+  });
+
+  it("keeps the OTHER special saved on the date the edited one shares", () => {
+    // Two specials can share a date (`special_role:${date}:${name}`). Matching
+    // on date would drop both and erase a roster nobody is editing.
+    const roles = boardParticipationRoles({
+      saved: [
+        { ...savedSpecial("2026-02-11", "Vigilia", "m2"), _id: "role-1" },
+        { ...savedSpecial("2026-02-11", "Retiro", "m3"), _id: "role-2" },
+      ],
+      savedId: "role-1",
+      type: "special_role",
+      date: "2026-02-11",
+      assigned,
+      members,
+    });
+    const totals = computeParticipation(roles);
+    expect(totals.find((r) => r.name === "Liu")!.total).toBe(1); // Retiro, untouched
+    expect(totals.find((r) => r.name === "Gaby")).toBeUndefined(); // Vigilia's stored Lead, swapped out
+    expect(totals.find((r) => r.name === "Frank")!.total).toBe(1); // the live seats
   });
 
   it("round-trips an id with no member record rather than dropping the person", () => {
@@ -290,6 +445,22 @@ describe("the planner grid's rail counts the drafts being built", () => {
   });
 });
 
+describe("the picker's load figure is labelled, so it cannot pose as the rail's total", () => {
+  // `rankCandidates` reads `load` out of `computeParticipation` — the same
+  // counter the rail renders — but over a different set of services (`unionRoles`
+  // vs `plannerParticipationRoles`). With the rail now in the gutter beside the
+  // picker, an admin sees both at once and they legitimately disagree. Neither
+  // number is wrong; the bare 10px figure was.
+  it("names the measure beside every candidate in the grid's picker", () => {
+    const { container } = goToGrid([savedSunday("2026-01-04", "m1")]);
+    fireEvent.click(container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]')!);
+    const labelled = screen.getAllByText(/Carga para ordenar/);
+    expect(labelled.length).toBeGreaterThan(0);
+    // Frank's one January service, under a label that says what it counts.
+    expect(labelled.some((el) => el.textContent === "Carga para ordenar: 1")).toBe(true);
+  });
+});
+
 // ─── The Tablero, end to end ─────────────────────────────────────────────────
 
 /**
@@ -384,6 +555,15 @@ describe("the Tablero's rail counts the seats being edited", () => {
     fireEvent.click(rosterRow("Gaby"));
     expect(railTotal(container, "Gaby")).toBeNull();
     expect(railTotal(container, "Frank")).toBe(2);
+  });
+
+  it("labels the board picker's load figure too — its drift is the mirror image", () => {
+    // Here the picker still counts the STORED copy of the service being edited
+    // (`rankCandidates` gets `windowRoles` untouched) while the rail swaps it for
+    // the live seats. Same screen, same person, two honest numbers.
+    stubWideViewport();
+    renderBoard();
+    expect(screen.getAllByText(/Carga para ordenar/).length).toBeGreaterThan(0);
   });
 
   it("counts a seat added to a service that has no saved copy yet", () => {

@@ -918,7 +918,21 @@ function RosterRow({
             <span key={i} className={`h-1.5 w-3 rounded-sm ${served ? "bg-[#00bfff]/70" : "bg-gray-700"}`} />
           ))}
         </div>
-        <span className="font-label text-[10px] text-gray-500">{candidate.load}</span>
+        {/*
+          LABELLED for the same reason as `PlannerGrid`'s copy of this row, and
+          the drift here is the mirror image: `rankCandidates` is given
+          `windowRoles` untouched, so this figure still counts the STORED copy of
+          the service being edited, while the rail beside it swaps that copy for
+          the live seats (`boardParticipationRoles`). Both are right about their
+          own question; an unlabelled 10px number beside a chart of totals is
+          what makes them look like one measure that cannot add up.
+        */}
+        <span
+          className="font-label text-[10px] text-gray-500"
+          title="Carga que ordena esta lista: solo lo ya guardado en las últimas semanas. No es el total de Participaciones, que ya incluye los puestos que estás editando aquí."
+        >
+          Carga para ordenar: {candidate.load}
+        </span>
       </div>
       {blocked && <p className="mt-1 font-body text-[11px] text-red-400">{reason}</p>}
       {/*

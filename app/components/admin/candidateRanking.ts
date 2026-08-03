@@ -127,9 +127,28 @@ export function rankCandidates(input: {
   const { seat, date, members, windowRoles, assigned, column, sundayDates, config } = input;
   const weeks = input.weeks ?? 4;
 
-  // Load comes from the shipped counter so the week rule (Saturday counts toward
+  // Load comes from the shipped counter so the WEEK RULE (Saturday counts toward
   // the following Sunday, a special counts toward the next Sunday on or after it)
-  // cannot drift between this and the participation sidebar. computeParticipation
+  // cannot drift between this and the participation sidebar.
+  //
+  // **That is the only thing shared, and the sentence used to claim more.** The
+  // rule is shared; the SET of services it is applied to is not, and since the
+  // participation rail landed beside both pickers the two numbers are on one
+  // screen and legitimately disagree. `PlannerGrid` passes `unionRoles` — the
+  // ranking lookback plus every draft on the grid, including columns that will
+  // never be created — while the rail counts the month's saved services plus
+  // only the creatable drafts (`plannerParticipationRoles`). `SeatBoard` passes
+  // `windowRoles` untouched, still counting the STORED copy of the service being
+  // edited, while its rail swaps that copy for the live seats
+  // (`boardParticipationRoles`). Both sides are right about their own question,
+  // and the rail is the more truthful about "has this month been fair" — so the
+  // divergence is not a bug to arithmetic away. It is why both pickers now
+  // LABEL this figure instead of rendering a bare number next to a chart of
+  // totals. Do not "reconcile" them by feeding one the other's roles: the
+  // picker's union is deliberate (a person seated three times earlier in this
+  // grid must rank lower for the fourth seat, before anything is saved).
+  //
+  // computeParticipation
   // keeps `total` VOICE-ONLY (sunLead+satLead+sunBGV+satBGV+coro+especial) and
   // tracks instrument/FOH history in separate fields, so the figure read here
   // must match the seat's own category — otherwise instrumento/foh seats (the ones
