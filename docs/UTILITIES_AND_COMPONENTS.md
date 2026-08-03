@@ -184,7 +184,7 @@ Legend: **[C]** client, **[S]** server.
 | `AvailabilityPanel` | Team availability vs. scheduled services. |
 | `ActivityPanel` | Member activity / last-login ("Hoy"/"Ayer" calendar-day labels). |
 | `ParticipationSidebar` | Participation bar chart (`computeParticipation`); Voces/Instrumentos toggle. |
-| `ParticipationRail` | Placement only — puts `ParticipationSidebar` in the page's empty side gutter (`position: fixed`) beside the planner grid (≥1780px) and the Tablero (≥1400px), so neither surface loses width. Below the threshold the grid's copy stacks inline; the Tablero's renders nothing (that dialog exists to avoid a third scroll region). Counts come from the callers: `plannerParticipationRoles` and `boardParticipationRoles` each union the SAVED history with the drafts/seats currently on screen, so the totals move as the admin assigns. |
+| `ParticipationRail` | Placement only — puts `ParticipationSidebar` in the page's empty side gutter (`position: fixed`) beside the planner grid (≥1700px) and the Tablero (≥1380px), so neither surface loses width. Below the threshold the grid's copy stacks inline; the Tablero's renders nothing (that dialog exists to avoid a third scroll region). Counts come from the callers: `plannerParticipationRoles` and `boardParticipationRoles` each union the SAVED history with the drafts/seats currently on screen, so the totals move as the admin assigns. |
 
 #### Service-readiness card layer
 

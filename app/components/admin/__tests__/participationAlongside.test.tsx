@@ -9,6 +9,9 @@
 // one was checked against a deliberately broken build (drop the draft half of
 // the union / drop the saved half / stop excluding the edited service) before
 // being kept.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -574,5 +577,52 @@ describe("the Tablero's rail counts the seats being edited", () => {
 
     fireEvent.click(rosterRow("Liu"));
     expect(railTotal(container, "Liu")).toBe(1);
+  });
+});
+
+// ─── The gutter thresholds, as STATED vs as coded ────────────────────────────
+
+/**
+ * `ParticipationRail` owns the two widths, and three other places describe them
+ * in prose: the mount-site comments in `MonthGenerator` and `SeatBoard`, and the
+ * component table in `UTILITIES_AND_COMPONENTS.md`. When the widths last moved,
+ * `MIN_WIDTH` and the rail's own header were updated and all three of those were
+ * not — leaving a reader who derives the gutter arithmetic from a comment with
+ * the wrong answer, in a repo where the comments are the design record.
+ *
+ * A static-analysis sync guard, in the shape `routeMatcher.test.ts` already uses
+ * for the middleware matcher: nothing here renders, it just refuses to let the
+ * prose and the constant disagree again.
+ */
+describe("the stated rail thresholds match MIN_WIDTH", () => {
+  const root = process.cwd();
+  const read = (p: string) => readFileSync(join(root, p), "utf8");
+  const railSrc = read("app/components/admin/ParticipationRail.tsx");
+  const minWidth = railSrc.match(/MIN_WIDTH[^=]*=\s*\{\s*panel:\s*(\d+),\s*dialog:\s*(\d+)\s*\}/);
+
+  it("extracts both widths from the rail (the guard is worthless if this fails)", () => {
+    expect(minWidth, "could not extract MIN_WIDTH from ParticipationRail.tsx").toBeTruthy();
+  });
+
+  it("MonthGenerator's mount comment states the panel width", () => {
+    const stated = read("app/components/admin/MonthGenerator.tsx").match(
+      /Above (\d+)px it is `position: fixed`/,
+    );
+    expect(stated?.[1]).toBe(minWidth![1]);
+  });
+
+  it("SeatBoard's mount comment states the dialog width", () => {
+    const stated = read("app/components/admin/SeatBoard.tsx").match(
+      /Below (\d+)px there is no gutter/,
+    );
+    expect(stated?.[1]).toBe(minWidth![2]);
+  });
+
+  it("UTILITIES_AND_COMPONENTS.md states both", () => {
+    const stated = read("docs/UTILITIES_AND_COMPONENTS.md").match(
+      /planner grid \(≥(\d+)px\) and the Tablero \(≥(\d+)px\)/,
+    );
+    expect(stated?.[1]).toBe(minWidth![1]);
+    expect(stated?.[2]).toBe(minWidth![2]);
   });
 });
