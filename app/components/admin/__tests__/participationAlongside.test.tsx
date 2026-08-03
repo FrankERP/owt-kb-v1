@@ -9,6 +9,15 @@
 // one was checked against a deliberately broken build (drop the draft half of
 // the union / drop the saved half / stop excluding the edited service) before
 // being kept.
+//
+// The second thing, and the reason the grid's fixtures below carry a service
+// from a month nobody is planning: the grid's rail is SCOPED TO THE MONTH BEING
+// GENERATED (`participationSaved` in `MonthGenerator`) — the drafts on screen
+// plus everything already saved in that month, and nothing from any other. The
+// Tablero is deliberately NOT month-scoped: it edits one service on one date and
+// its `windowRoles` is a rolling 56-day window anchored at that date
+// (`ServicesPanel.recentRolesWindow`), which is the right baseline for a
+// one-service decision and the wrong one for "is this month fair".
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -16,6 +25,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import MonthGenerator from "../MonthGenerator";
+import { MIN_WIDTH, RAIL_WIDTH } from "../ParticipationRail";
 import SeatBoard, { boardParticipationRoles } from "../SeatBoard";
 import { buildColumns, plannerParticipationRoles, type GridCell, type SavedRole } from "../plannerModel";
 import { computeParticipation, type ParticipantRole } from "@/app/utils/computeParticipation";
@@ -342,6 +352,41 @@ describe("boardParticipationRoles — the edited service, live", () => {
 // ─── The planner grid, end to end ────────────────────────────────────────────
 
 /**
+ * A wide (or deliberately narrow) viewport.
+ *
+ * The rail chooses its placement from `matchMedia` (`ParticipationRail`), and
+ * jsdom neither implements `matchMedia` nor lays anything out — so a test that
+ * does not stub it exercises the FALLBACK placement and nothing else. Both
+ * surfaces need this, for opposite reasons: the Tablero renders no rail at all
+ * below its threshold, while the grid's rail renders inline. Every `goToGrid`
+ * test in this file predates the stub and therefore only ever rendered the
+ * inline branch — which is how a select that overflowed the fixed rail by 47px
+ * shipped under a green suite. The gutter branch is covered explicitly below.
+ *
+ * `queries` records what the component ASKED for, so a test can prove which
+ * threshold a surface used rather than inferring it from the answer.
+ */
+function stubWideViewport(wide = true, queries: string[] = []) {
+  vi.stubGlobal(
+    "matchMedia",
+    (query: string) => {
+      queries.push(query);
+      return {
+        matches: wide,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      };
+    },
+  );
+  return queries;
+}
+
+/**
  * `MonthGenerator` step 1 → step 2, on a month with a single Sunday column so
  * the grid is small enough to reason about. February 2026 starts on a Sunday.
  */
@@ -391,8 +436,12 @@ function seatLead(container: HTMLElement, date: string, name: string) {
 
 describe("the planner grid's rail counts the drafts being built", () => {
   it("raises a member's total the moment they are seated in the grid", () => {
-    // One saved January Sunday led by Frank, inside D12's 56-day lookback.
-    const { container } = goToGrid([savedSunday("2026-01-04", "m1")]);
+    // Two saved Sundays led by Frank: one INSIDE the month being generated
+    // (counts) and one in January, inside D12's 56-day ranking lookback but
+    // outside the month (does not). The numbers below are the same ones this
+    // test has always asserted; the January service is here so that restoring
+    // the lookback to `participationSaved` makes them 2 and 3 instead.
+    const { container } = goToGrid([savedSunday("2026-02-08", "m1"), savedSunday("2026-01-04", "m1")]);
 
     expect(railTotal(container, "Frank")).toBe(1); // saved only
     seatLead(container, "2026-02-01", "Frank");
@@ -402,7 +451,9 @@ describe("the planner grid's rail counts the drafts being built", () => {
   });
 
   it("shows a member who exists only in a draft, and one who exists only in history", () => {
-    const { container } = goToGrid([savedSunday("2026-01-04", "m2")]);
+    // "History" is now history WITHIN the month: Gaby's 15-Feb service counts,
+    // her January one does not. Restoring the lookback puts her at 2 below.
+    const { container } = goToGrid([savedSunday("2026-02-15", "m2"), savedSunday("2026-01-04", "m2")]);
 
     expect(railTotal(container, "Gaby")).toBe(1); // history only
     expect(railTotal(container, "Liu")).toBeNull(); // nowhere yet
@@ -415,8 +466,8 @@ describe("the planner grid's rail counts the drafts being built", () => {
     // `savedWindowFor` ends AT the month's first Sunday, so a 22-Feb service is
     // outside the ranking window entirely. For ranking that is right; for "is
     // this month fair" it is a hole — half a month generated last week would be
-    // invisible. This is the `|| date.slice(0,7) === prefix` half of
-    // `participationSaved`, and it is the only thing that makes Gaby appear.
+    // invisible. `participationSaved` filters `allRoles` by the month's prefix,
+    // and that is the only thing that makes Gaby appear.
     const { container } = goToGrid([savedSunday("2026-02-22", "m2")]);
     expect(railTotal(container, "Gaby")).toBe(1);
   });
@@ -448,6 +499,160 @@ describe("the planner grid's rail counts the drafts being built", () => {
   });
 });
 
+// ─── The scope: the month being generated, and only it ───────────────────────
+//
+// "It should show the participations for the month that is being created" —
+// and yes, services already SAVED in that month count. The rail used to add
+// D12's rolling 56-day lookback on top, which answers a different question than
+// the one the admin is holding: a chart headed "Febrero" carrying January's
+// load cannot be read against the February grid beside it, and an empty grid
+// never started from zero.
+//
+// Every test here was checked against a build with the lookback restored
+// (`inWindow.has(r) ||` back in `participationSaved`); each one fails there.
+
+describe("the grid's rail is scoped to the month being generated", () => {
+  it("reads everyone at ZERO on an empty grid, however busy the weeks before were", () => {
+    // Both services are inside the 56-day window ending at 2026-02-01, so with
+    // the lookback restored Frank reads 1 and Gaby reads 1 right here — the
+    // starting line the admin expects to be clean is not.
+    const { container } = goToGrid([savedSunday("2026-01-04", "m1"), savedSunday("2026-01-25", "m2")]);
+
+    expect(railTotal(container, "Frank")).toBeNull();
+    expect(railTotal(container, "Gaby")).toBeNull();
+    // Zero as the chart's ANSWER, not as its absence: the rail is mounted and
+    // says so in Spanish.
+    expect(container.querySelector("[data-participation-rail]")).not.toBeNull();
+    expect(screen.getByText("Sin participaciones en voces.")).toBeTruthy();
+  });
+
+  it("counts a service saved in the month even though it is NOT on screen", () => {
+    // The second-pass case, and the reason saved-in-month counts at all:
+    // generate February, create some services, come back and generate the rest.
+    // Only 2026-02-01 is selected here, so 2026-02-15 has no column — it is not
+    // a draft, it is not re-planned, and it is still February's load.
+    const { container } = goToGrid([savedSunday("2026-02-15", "m2")]);
+    expect(railTotal(container, "Gaby")).toBe(1);
+  });
+
+  it("ignores a saved service from an adjacent month, either side", () => {
+    // 2026-01-25 is a week before the month starts and 2026-03-01 the day after
+    // it ends — the two dates a month-prefix filter gets wrong if it is ever
+    // rewritten as a date-range comparison.
+    const { container } = goToGrid([savedSunday("2026-01-25", "m1"), savedSunday("2026-03-01", "m2")]);
+    expect(railTotal(container, "Frank")).toBeNull();
+    expect(railTotal(container, "Gaby")).toBeNull();
+  });
+
+  it("counts a service that is BOTH saved in the month and re-planned in the grid, once", () => {
+    // The de-duplication, end to end rather than only in `plannerParticipationRoles`:
+    // now that the whole month is in scope, every saved service the grid re-plans
+    // is a collision. Dropping the dedup key double-counts Frank to 2 here.
+    const { container } = goToGrid([savedSunday("2026-02-01", "m1")]);
+
+    expect(railTotal(container, "Frank")).toBe(1); // the saved copy, column empty
+    seatLead(container, "2026-02-01", "Frank");
+    expect(railTotal(container, "Frank")).toBe(1); // the draft copy — still ONE service
+  });
+
+  it("re-scopes when the admin changes the month, without a remount", () => {
+    // `participationSaved` is memoised on `[allRoles, year, month]`. Keyed on
+    // `allRoles` alone (or on a `savedWindow` that no longer feeds it) February's
+    // roster would still be on screen while the grid shows March.
+    const { container } = goToGrid([savedSunday("2026-02-08", "m1"), savedSunday("2026-03-08", "m2")]);
+    expect(railTotal(container, "Frank")).toBe(1);
+    expect(railTotal(container, "Gaby")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Volver/ }));
+    fireEvent.change(container.querySelector("select") as HTMLSelectElement, { target: { value: "3" } });
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+
+    expect(railTotal(container, "Frank")).toBeNull();
+    expect(railTotal(container, "Gaby")).toBe(1);
+  });
+});
+
+// ─── The grid's rail in the gutter — the branch no test had ever rendered ────
+//
+// `stubWideViewport` existed only for the Tablero, so every `goToGrid` test above
+// runs against jsdom's absent `matchMedia` and exercises the INLINE fallback.
+// The `fixed left-2 z-40 w-[216px] top-24` path — the whole reason the rail is a
+// component — had never been rendered by a test, and a visible layout defect
+// shipped with a green suite because of it.
+//
+// WHAT THIS CANNOT DO: jsdom has no layout engine. `getBoundingClientRect` is all
+// zeroes and `scrollWidth` is 0, so nothing here can prove the rail does not
+// overlap the grid, or that its content fits inside 216px. What is assertable is
+// the CONTRACT that produces the fit: which branch was taken, which threshold was
+// asked for, the classes that place and size the element, and the `w-full` that
+// stops the select from setting the rail's width. A real-browser measurement is
+// still the only thing that can catch an overflow.
+
+describe("the grid's rail placement, on a viewport wide enough for the gutter", () => {
+  it("takes the fixed-gutter branch, at the width the arithmetic derives", () => {
+    stubWideViewport();
+    const { container } = goToGrid([savedSunday("2026-02-08", "m1")]);
+    const rail = container.querySelector('[data-participation-rail="panel"]') as HTMLElement;
+
+    expect(rail).not.toBeNull();
+    expect(rail.getAttribute("data-rail-placement")).toBe("gutter");
+    for (const cls of ["fixed", "left-2", "z-40", `w-[${RAIL_WIDTH}px]`, "top-24"]) {
+      expect(rail.className.split(/\s+/)).toContain(cls);
+    }
+    // `top-20` is the dialog's offset. One component serves both surfaces, and
+    // the panel taking the dialog's value would tuck the rail under the page
+    // header rather than under the panel's own.
+    expect(rail.className.split(/\s+/)).not.toContain("top-20");
+    // Placement only: the chart still counts, in the branch that had never run.
+    expect(railTotal(container, "Frank")).toBe(1);
+    seatLead(container, "2026-02-01", "Frank");
+    expect(railTotal(container, "Frank")).toBe(2);
+  });
+
+  it("asks for the PANEL threshold, never the dialog's", () => {
+    // The two surfaces have different gutters (`MIN_WIDTH`), and the rail picks
+    // by `placement`. Hard-coding either query, or reading `placement` backwards,
+    // puts the grid's rail in the gutter ~320px before there is one.
+    const queries = stubWideViewport();
+    goToGrid([]);
+    expect(queries).toContain(`(min-width: ${MIN_WIDTH.panel}px)`);
+    expect(queries).not.toContain(`(min-width: ${MIN_WIDTH.dialog}px)`);
+  });
+
+  it("keeps the Voces/Instrumentos select from setting the rail's width", () => {
+    // The defect, as close as jsdom can get to it. Beside the title the select
+    // demanded its widest option ("Instrumentos", 112px) ON TOP of the title's
+    // ~131px, and the header overflowed the fixed 216px box by 47px onto the
+    // grid. Stacked and `w-full`, it is capped by the rail instead.
+    stubWideViewport();
+    const { container } = goToGrid([]);
+    const rail = container.querySelector('[data-participation-rail="panel"]') as HTMLElement;
+    const header = rail.querySelector("[data-rail-header]") as HTMLElement;
+    const select = rail.querySelector("select") as HTMLSelectElement;
+
+    expect(header).not.toBeNull();
+    expect(header.contains(select)).toBe(true);
+    expect(select.className.split(/\s+/)).toContain("w-full");
+    // A flex row is what made the two widths ADD. A block header makes the
+    // demand the wider of the two.
+    expect(header.className.split(/\s+/)).not.toContain("flex");
+    expect(header.className).not.toContain("justify-between");
+  });
+
+  it("falls back to the in-flow placement below the threshold, with no fixed positioning", () => {
+    // The inline branch every other grid test above runs in, asserted on purpose
+    // for once: it must NOT be positioned, or it would leave the flow on a
+    // viewport with no gutter to leave it into.
+    stubWideViewport(false);
+    const { container } = goToGrid([]);
+    const rail = container.querySelector('[data-participation-rail="panel"]') as HTMLElement;
+
+    expect(rail).not.toBeNull();
+    expect(rail.getAttribute("data-rail-placement")).toBe("inline");
+    expect(rail.getAttribute("class")).toBeNull();
+  });
+});
+
 describe("the picker's load figure is labelled, so it cannot pose as the rail's total", () => {
   // `rankCandidates` reads `load` out of `computeParticipation` — the same
   // counter the rail renders — but over a different set of services (`unionRoles`
@@ -465,29 +670,6 @@ describe("the picker's load figure is labelled, so it cannot pose as the rail's 
 });
 
 // ─── The Tablero, end to end ─────────────────────────────────────────────────
-
-/**
- * The rail is gutter-only (`ParticipationRail`), and jsdom's `matchMedia`
- * reports `matches: false` for everything — so a Tablero test has to say it is
- * on a wide screen. Stubbing it is also what proves the narrow case: without
- * this the board renders no rail at all, which is exactly what the other 40-odd
- * `SeatBoard` tests observe.
- */
-function stubWideViewport(wide = true) {
-  vi.stubGlobal(
-    "matchMedia",
-    (query: string) => ({
-      matches: wide,
-      media: query,
-      onchange: null,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      addListener: () => {},
-      removeListener: () => {},
-      dispatchEvent: () => false,
-    }),
-  );
-}
 
 /**
  * The roster pane's row for a name. Once someone is seated their name also
@@ -624,5 +806,52 @@ describe("the stated rail thresholds match MIN_WIDTH", () => {
     );
     expect(stated?.[1]).toBe(minWidth![1]);
     expect(stated?.[2]).toBe(minWidth![2]);
+  });
+
+  it("MIN_WIDTH is what the exported constant says", () => {
+    expect(Number(minWidth![1])).toBe(MIN_WIDTH.panel);
+    expect(Number(minWidth![2])).toBe(MIN_WIDTH.dialog);
+  });
+
+  it("the class the rail renders is the width the arithmetic is stated in", () => {
+    // `w-[216px]` is a Tailwind literal and cannot be built from `RAIL_WIDTH` at
+    // runtime, so the two can drift. This is the only thing that stops them.
+    expect(railSrc).toMatch(new RegExp(`w-\\[${RAIL_WIDTH}px\\]`));
+  });
+});
+
+/**
+ * The width FLOOR, against the chart that actually has to fit inside it.
+ *
+ * `RAIL_WIDTH` is derived from the widest row in `ParticipationSidebar`, and that
+ * derivation lives in a comment in a different file from the numbers it derives
+ * from — which is exactly how the header row got left out of it and overflowed
+ * the rail by 47px onto the planner grid. Widening the bar, the count column or
+ * the padding without moving the floor (and the two thresholds that follow from
+ * it) fails here rather than on someone's screen.
+ */
+describe("the rail's width floor still fits the chart inside it", () => {
+  const root = process.cwd();
+  const sidebarSrc = readFileSync(join(root, "app/components/admin/ParticipationSidebar.tsx"), "utf8");
+  const px = (re: RegExp, what: string, scale = 1) => {
+    const m = sidebarSrc.match(re);
+    expect(m, `could not read ${what} from ParticipationSidebar.tsx`).toBeTruthy();
+    return Number(m![1]) * scale;
+  };
+
+  it("the member row (bar + gap + count, inside the padding) fits", () => {
+    const bar = px(/style=\{\{ width: (\d+), background:/, "the bar's inline width");
+    const gap = px(/className="flex items-center gap-([\d.]+)/, "the row gap", 4);
+    const count = px(/min-w-\[(\d+)px\]/, "the count column");
+    const pad = px(/<aside className="[^"]*\bp-(\d+)\b/, "the aside padding", 4);
+    expect(bar + gap + count + 2 * pad).toBeLessThanOrEqual(RAIL_WIDTH);
+  });
+
+  it("the header row cannot demand the select's intrinsic width", () => {
+    // `w-full` inside a block header. Side by side with the title (the shipped
+    // defect) the header's demand is the SUM, and no floor derived from the bar
+    // row can hold it — a `<select>` is as wide as its longest option.
+    expect(sidebarSrc).toMatch(/<select[\s\S]{0,240}?className="[^"]*\bw-full\b/);
+    expect(sidebarSrc).toMatch(/<div data-rail-header className="mb-1">/);
   });
 });

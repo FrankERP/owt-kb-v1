@@ -1547,27 +1547,40 @@ export default function MonthGenerator({
   );
 
   /**
-   * The SAVED half of the participation rail: D12's lookback window PLUS
-   * anything already stored in the month being planned.
+   * The SAVED half of the participation rail: everything stored in the month
+   * being generated, and NOTHING from any other month.
    *
-   * `savedWindow` on its own is the wrong baseline here, even though it is the
-   * right one for ranking. It ends AT the month's first Sunday, so services the
-   * admin saved earlier in this same month — half a month generated last week,
-   * a special created by hand — would be invisible to a panel whose whole job is
-   * "is this month's load fair". Ranking can afford that (it measures a rolling
-   * recent load); a fairness read-out cannot.
+   * **The rail answers one question — "is THIS month fair?" — so its scope is
+   * this month.** It used to add D12's rolling 56-day lookback (`savedWindow`,
+   * which ends at the month's first Sunday) to make the number a fairness
+   * baseline, and that answered a different question than the one the admin is
+   * holding: they are building September, and a chart headed September that
+   * carries August's load cannot be read against the grid beside it. Two
+   * consequences are the point, not side effects:
+   *   • an EMPTY grid reads everyone at zero — the clean starting line that
+   *     makes "is this month fair" answerable at a glance;
+   *   • a member at 3 in this rail served three times in this month, full stop.
    *
-   * Filtered from `allRoles` in ONE pass and compared by object identity against
-   * `savedWindow`, rather than concatenating two lists and de-duplicating them:
-   * `SavedRole` has no `_id`, so a key built from its fields would have to
-   * re-derive the server's identity for a special to keep two same-day ones
-   * apart. Object identity is exact, free, and cannot drift from that rule.
+   * **Saved services in the month still count, even though they are not on
+   * screen.** Generate September, create six services, come back and generate
+   * again: those six are September's load whether or not this pass re-plans
+   * them. `plannerParticipationRoles` de-duplicates the ones the grid IS
+   * re-planning (`_type|date|normalizeServiceName(name)`), so a service that is
+   * both saved and on screen is counted once, from the draft.
+   *
+   * `savedWindow` is untouched and still feeds `rankCandidates` — a rolling
+   * recent load is the right signal for ORDERING candidates, and a wrong one
+   * for a per-month fairness read-out. The two numbers legitimately differ,
+   * which is why the picker labels its own ("Carga para ordenar").
+   *
+   * String prefix, not a date comparison: `date` is a Sanity `date`
+   * (`YYYY-MM-DD`), so its first seven characters ARE its calendar month. No
+   * `new Date` anywhere near it, so there is no UTC day-flip to get wrong.
    */
   const participationSaved = useMemo(() => {
-    const inWindow = new Set(savedWindow);
     const prefix = `${year}-${String(month).padStart(2, "0")}`;
-    return (allRoles ?? []).filter(r => inWindow.has(r) || r.date.slice(0, 7) === prefix);
-  }, [allRoles, savedWindow, year, month]);
+    return (allRoles ?? []).filter(r => r.date.slice(0, 7) === prefix);
+  }, [allRoles, year, month]);
 
 
   /**
@@ -2451,11 +2464,12 @@ export default function MonthGenerator({
       <ParticipationRail
         placement="panel"
         roles={participationRoles}
-        // Both halves named. "Febrero 2026" alone would head a column of
-        // numbers that also carry D12's 56-day lookback into January — a
-        // member reading 2 off one January service and one February draft,
-        // under a heading that claims to be February.
-        monthLabel={`${MONTHS[month - 1]} ${year} · borradores + carga reciente`}
+        // The month IS the scope now (`participationSaved`), so the month names
+        // itself honestly and the subtitle only has to say that the drafts on
+        // screen are already in the count alongside what is stored. The old
+        // label had to warn that January was in a February total; nothing from
+        // another month can reach this chart any more.
+        monthLabel={`${MONTHS[month - 1]} ${year} · guardados + borradores`}
       />
 
       {/* In "edit" mode `PlannerGrid` already surfaces this via `autoState.disabledReason`
