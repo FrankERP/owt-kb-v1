@@ -72,14 +72,14 @@ describe("plannerParticipationRoles — saved + drafts, each service once", () =
     const cells: GridCell[] = [
       { date: "2026-02-01", rowId: "lead", memberIds: ["m1"], origin: "manual" },
     ];
-    const totals = computeParticipation(plannerParticipationRoles({ saved, columns, cells, members }));
+    const totals = computeParticipation(plannerParticipationRoles({ saved, creatableColumns: columns, cells, members }));
     // 2 saved + 1 draft. Either half alone gives 2 or 1 — only the union gives 3.
     expect(totals.find((r) => r.name === "Frank")!.total).toBe(3);
   });
 
   it("counts a saved service the grid is NOT planning", () => {
     const totals = computeParticipation(
-      plannerParticipationRoles({ saved: [savedSunday("2026-01-04", "m2")], columns, cells: [], members }),
+      plannerParticipationRoles({ saved: [savedSunday("2026-01-04", "m2")], creatableColumns: columns, cells: [], members }),
     );
     expect(totals.find((r) => r.name === "Gaby")!.total).toBe(1);
   });
@@ -90,18 +90,39 @@ describe("plannerParticipationRoles — saved + drafts, each service once", () =
     const cells: GridCell[] = [
       { date: "2026-02-01", rowId: "lead", memberIds: ["m1"], origin: "manual" },
     ];
-    const totals = computeParticipation(plannerParticipationRoles({ saved, columns, cells, members }));
+    const totals = computeParticipation(plannerParticipationRoles({ saved, creatableColumns: columns, cells, members }));
     expect(totals.find((r) => r.name === "Frank")!.total).toBe(1);
     expect(totals.find((r) => r.name === "Gaby")).toBeUndefined();
   });
 
   it("keeps the saved service when the grid's column for it is EMPTY", () => {
-    // The blocked-column case ("ya existe un servicio en esta fecha"): the grid
-    // shows a column it will never create, and the saved role is the only truth.
+    // A creatable column with nobody in it makes no claim about who serves.
     const totals = computeParticipation(
-      plannerParticipationRoles({ saved: [savedSunday("2026-02-01", "m2")], columns, cells: [], members }),
+      plannerParticipationRoles({ saved: [savedSunday("2026-02-01", "m2")], creatableColumns: columns, cells: [], members }),
     );
     expect(totals.find((r) => r.name === "Gaby")!.total).toBe(1);
+  });
+
+  it("ignores a column that will NOT be created, and keeps its saved roster", () => {
+    // The Auto trap. `applySolveResponse` and `applySpecialFill` both seat
+    // people into columns that will never reach Sanity — an already-existing
+    // mid-month service among them. If those seats counted, the solver's
+    // invention would report as serving AND displace the real roster.
+    const saved = [savedSunday("2026-02-01", "m2")];
+    const cells: GridCell[] = [
+      { date: "2026-02-01", rowId: "lead", memberIds: ["m1"], origin: "auto" },
+    ];
+    const totals = computeParticipation(
+      // 2026-02-01 exists already, so it is not among the creatable columns.
+      plannerParticipationRoles({
+        saved,
+        creatableColumns: columns.filter((c) => c.date !== "2026-02-01"),
+        cells,
+        members,
+      }),
+    );
+    expect(totals.find((r) => r.name === "Gaby")!.total).toBe(1); // the truth survives
+    expect(totals.find((r) => r.name === "Frank")).toBeUndefined(); // the invention does not
   });
 });
 
@@ -166,11 +187,14 @@ describe("boardParticipationRoles — the edited service, live", () => {
  * `MonthGenerator` step 1 → step 2, on a month with a single Sunday column so
  * the grid is small enough to reason about. February 2026 starts on a Sunday.
  */
-function goToGrid(allRoles: ParticipantRole[]) {
+function goToGrid(
+  allRoles: ParticipantRole[],
+  existingRoles: { _id: string; _type: string; date: string }[] = [],
+) {
   const view = render(
     <MonthGenerator
       members={members}
-      existingRoles={[]}
+      existingRoles={existingRoles}
       allRoles={allRoles}
       rules={readyRules()}
       onClose={vi.fn()}
@@ -227,6 +251,34 @@ describe("the planner grid's rail counts the drafts being built", () => {
     seatLead(container, "2026-02-01", "Liu");
     expect(railTotal(container, "Liu")).toBe(1); // draft only
     expect(railTotal(container, "Gaby")).toBe(1); // and history survived the draft
+  });
+
+  it("counts a service saved LATER in the planned month, outside D12's lookback", () => {
+    // `savedWindowFor` ends AT the month's first Sunday, so a 22-Feb service is
+    // outside the ranking window entirely. For ranking that is right; for "is
+    // this month fair" it is a hole — half a month generated last week would be
+    // invisible. This is the `|| date.slice(0,7) === prefix` half of
+    // `participationSaved`, and it is the only thing that makes Gaby appear.
+    const { container } = goToGrid([savedSunday("2026-02-22", "m2")]);
+    expect(railTotal(container, "Gaby")).toBe(1);
+  });
+
+  it("ignores seats on a column it will NOT create, and keeps that service's real roster", () => {
+    // The wiring half of the Auto trap: `MonthGenerator` must hand the rail the
+    // columns `isCreatable` accepts, not the columns on screen. A Sunday that
+    // already exists still gets a column, and BOTH fillers seat people into it
+    // (`applySolveResponse` has no isExisting test; `applySpecialFill` says so
+    // in its own comment). Passing `columns` here instead of `creatableColumns`
+    // makes the invention below count AND displaces Gaby's real roster.
+    const { container } = goToGrid(
+      [savedSunday("2026-02-01", "m2")],
+      [{ _id: "role-1", _type: "sunday_role", date: "2026-02-01" }],
+    );
+
+    expect(railTotal(container, "Gaby")).toBe(1);
+    seatLead(container, "2026-02-01", "Frank");
+    expect(railTotal(container, "Frank")).toBeNull(); // never going to be created
+    expect(railTotal(container, "Gaby")).toBe(1); // and the truth was not displaced
   });
 
   it("un-seating a member takes the count back down", () => {

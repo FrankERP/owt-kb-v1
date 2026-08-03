@@ -1562,15 +1562,6 @@ export default function MonthGenerator({
     return (allRoles ?? []).filter(r => inWindow.has(r) || r.date.slice(0, 7) === prefix);
   }, [allRoles, savedWindow, year, month]);
 
-  /**
-   * Saved + the drafts on screen, recomputed on every cell change — the live
-   * total the rail exists to show. See `plannerParticipationRoles` for why a
-   * service present on both sides is counted once, from the draft side.
-   */
-  const participationRoles = useMemo(
-    () => plannerParticipationRoles({ saved: participationSaved, columns, cells, members }),
-    [participationSaved, columns, cells, members],
-  );
 
   /**
    * Two independent sources of "this name matches nobody", MERGED — never one
@@ -2126,6 +2117,31 @@ export default function MonthGenerator({
   const notCreatable = drafts.filter(d => !d.skipped && !isCreatable(d)).length;
 
   /**
+   * The participation rail's draft half — the SAME `isCreatable` verdict the
+   * footer buttons use, not the columns on screen.
+   *
+   * Both fillers seat people into columns that will never be created (see
+   * `applySpecialFill`'s comment and `applySolveResponse`'s unconditional
+   * loop). Feeding those to the panel would report invented people as serving
+   * and — where the column exists because a REAL service already occupies that
+   * date — let the invention displace the real roster `participationSaved`
+   * carries. Derived here, beside `toCreate`, so the two can never disagree
+   * about what this grid is going to create.
+   *
+   * Plain consts, not `useMemo`: `drafts.filter(...)` above already allocates a
+   * new array every render, so a memo keyed on it would recompute every time
+   * anyway while reading as though it did not.
+   */
+  const creatingKeys = new Set(toCreate.map(d => `${d._type}|${d.date.slice(0, 10)}`));
+  const creatableColumns = columns.filter(c => creatingKeys.has(`${c.type}|${c.date.slice(0, 10)}`));
+  const participationRoles = plannerParticipationRoles({
+    saved: participationSaved,
+    creatableColumns,
+    cells,
+    members,
+  });
+
+  /**
    * E17's missing channel. `PlannerGrid` gets `skipped: Set<string>` (the
    * admin's own toggle) and `preflightFor` — and neither can say "this column
    * will not be created because something already occupies it". The preflight
@@ -2428,7 +2444,11 @@ export default function MonthGenerator({
       <ParticipationRail
         placement="panel"
         roles={participationRoles}
-        monthLabel={`${MONTHS[month - 1]} ${year} · incluye borradores`}
+        // Both halves named. "Febrero 2026" alone would head a column of
+        // numbers that also carry D12's 56-day lookback into January — a
+        // member reading 2 off one January service and one February draft,
+        // under a heading that claims to be February.
+        monthLabel={`${MONTHS[month - 1]} ${year} · borradores + carga reciente`}
       />
 
       {/* In "edit" mode `PlannerGrid` already surfaces this via `autoState.disabledReason`

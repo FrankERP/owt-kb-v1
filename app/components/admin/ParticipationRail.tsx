@@ -14,11 +14,24 @@
 // element can reach from inside the flow. Only a viewport-anchored element can
 // use it without narrowing the container — which is the entire request.
 //
-// The thresholds are arithmetic, not taste. The rail is 228px wide at `left-2`
-// (8px), so it needs 236px of gutter:
-//   • panel:  (W - 1280) / 2 >= 236  →  W >= 1752. Set at 1780 for slack.
-//   • dialog: (W -  896) / 2 >= 236  →  W >= 1368. Set at 1400 for slack.
+// The thresholds are arithmetic, not taste. The rail is 216px at `left-2`
+// (8px) and leaves 8px of air, so it needs 232px before the container's first
+// pixel of CONTENT. The admin page adds `px-6` inside `max-w-7xl`, so its
+// content starts 24px further in than the box does; the dialog has no such
+// padding:
+//   • panel:  (W - 1280) / 2 + 24 >= 232  →  W >= 1696. Set at 1700.
+//   • dialog: (W -  896) / 2      >= 232  →  W >= 1360. Set at 1380.
 // A lower threshold would overlap the very content this exists not to shrink.
+//
+// 216px is also the floor, not a preference: `ParticipationSidebar`'s bar is a
+// hard 150px inline width plus a 10px gap and a 24px count column inside 12px
+// padding — 208px before it clips.
+//
+// What this reaches, concretely: any external monitor (1920/2560) and a 16"
+// MacBook Pro (1728 logical) get the rail beside the grid. A 14" (1512) or a
+// 13" Air (1470) has ~140px of usable gutter, which cannot hold a 208px chart
+// at any threshold — those fall back to the stacked placement below. The
+// Tablero's 1380px gate clears all three.
 //
 // ── Below the threshold there is no gutter, so the two surfaces differ ─────
 // `panel` falls back to the normal flow: an ordinary block wherever it is
@@ -30,7 +43,7 @@
 // narrow column (see `SeatBoard.tsx`'s header). Re-introducing that to show a
 // chart would trade the fix for the feature.
 //
-// ── Why a media QUERY and not a `min-[1780px]:` class ─────────────────────
+// ── Why a media QUERY and not a `min-[1700px]:` class ─────────────────────
 // Both placements need the panel to be genuinely ABSENT below the threshold —
 // `dialog` because it must not exist at all, `panel` because a CSS-only answer
 // would need the component mounted twice (once fixed, once in flow) and the
@@ -38,7 +51,7 @@
 // selects in the accessibility tree at all times. One instance, one place.
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 
 import { ParticipationSidebar } from "./ParticipationSidebar";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
@@ -46,9 +59,9 @@ import type { ParticipantRole } from "@/app/utils/computeParticipation";
 export type RailPlacement = "panel" | "dialog";
 
 /** Viewport width at which each surface's gutter can hold the rail. See above. */
-const MIN_WIDTH: Record<RailPlacement, number> = { panel: 1780, dialog: 1400 };
+const MIN_WIDTH: Record<RailPlacement, number> = { panel: 1700, dialog: 1380 };
 
-const RAIL_CLASS = "fixed left-2 z-40 w-[228px]";
+const RAIL_CLASS = "fixed left-2 z-40 w-[216px]";
 
 /**
  * Whether the viewport is at least `minWidth` wide, as a subscription rather
@@ -61,7 +74,12 @@ const RAIL_CLASS = "fixed left-2 z-40 w-[228px]";
  */
 function useWideGutter(minWidth: number): boolean {
   const query = `(min-width: ${minWidth}px)`;
-  const list = useCallback(
+  // ONE `MediaQueryList` per mounted rail. `getSnapshot` runs on every render
+  // of a tree that re-renders on every cell click, and `matchMedia` allocates a
+  // live object each call. Scoped to the component rather than cached in a
+  // module: a module-level cache outlives the `window` it was built against,
+  // which is wrong under jsdom and wrong after any environment swap.
+  const mql = useMemo(
     () =>
       typeof window === "undefined" || typeof window.matchMedia !== "function"
         ? null
@@ -70,11 +88,10 @@ function useWideGutter(minWidth: number): boolean {
   );
   const subscribe = useCallback(
     (onChange: () => void) => {
-      const mql = list();
+      if (!mql) return () => {};
       // `addListener` is the deprecated spelling Safari kept for years; the
       // fallback costs one line and covers an iOS WebView older than the
       // Capacitor wrap's floor.
-      if (!mql) return () => {};
       if (typeof mql.addEventListener === "function") {
         mql.addEventListener("change", onChange);
         return () => mql.removeEventListener("change", onChange);
@@ -82,11 +99,11 @@ function useWideGutter(minWidth: number): boolean {
       mql.addListener(onChange);
       return () => mql.removeListener(onChange);
     },
-    [list],
+    [mql],
   );
   return useSyncExternalStore(
     subscribe,
-    () => list()?.matches ?? false,
+    () => mql?.matches ?? false,
     () => false,
   );
 }
