@@ -2443,7 +2443,7 @@ export default function MonthGenerator({
         Lifting it to the panel to gain a layout slot would export the grid's
         draft state to a component that has no other use for it.
 
-        It costs the grid no width. Above 1780px it is `position: fixed` in the
+        It costs the grid no width. Above 1700px it is `position: fixed` in the
         page's left gutter (`ParticipationRail`), so D10's full-width panel is
         exactly as wide as it was; below that it stacks here, under the grid.
         Placed before the footer so the confirm buttons stay last in tab order.

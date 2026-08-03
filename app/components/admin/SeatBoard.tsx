@@ -602,7 +602,7 @@ export default function SeatBoard(props: SeatBoardProps) {
         A sibling of the two-pane grid, and `position: fixed` in the page gutter
         beside the dialog (`ParticipationRail`), so it takes no width from either
         pane and adds no scroll region inside a dialog built to have exactly two.
-        Below 1400px there is no gutter to sit in and it renders nothing at all —
+        Below 1380px there is no gutter to sit in and it renders nothing at all —
         stacking it into this bounded column is the defect `SeatBoard` exists to
         undo. It stays inside the dialog's own DOM so the focus trap still owns
         its Voces/Instrumentos control.
