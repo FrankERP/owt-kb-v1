@@ -23,9 +23,21 @@
 //   • dialog: (W -  896) / 2      >= 232  →  W >= 1360. Set at 1380.
 // A lower threshold would overlap the very content this exists not to shrink.
 //
-// 216px is also the floor, not a preference: `ParticipationSidebar`'s bar is a
-// hard 150px inline width plus a 10px gap and a 24px count column inside 12px
-// padding — 208px before it clips.
+// 216px is also the floor, not a preference. The floor is the WIDEST ROW inside
+// `ParticipationSidebar`, and there are two of them — deriving it from one row
+// and forgetting the other is exactly how this shipped broken once:
+//   • the member row: a hard 150px inline bar + a 10px gap + a 24px count
+//     column, inside 12px padding either side — 208px before it clips.
+//   • the header row: the title (~131px) above a `w-full` Voces/Instrumentos
+//     select — 131px + the same 24px of padding, 155px.
+// 216 clears both. It did NOT clear the header while that select sat BESIDE the
+// title: a `<select>` is as wide as its widest option ("Instrumentos", 112px),
+// so the header asked for 131 + 8 + 112 + 24 = 275, and a real browser measured
+// the chart at 262px of content in a 216px box with the select's right edge 47px
+// out over the planner grid. Stacking the header (`ParticipationSidebar.tsx`)
+// made each row ask for the wider of the two rather than their sum. If either
+// row grows past 192px of content, this number and both thresholds move with it
+// — `participationAlongside.test.tsx` refuses to let the two drift apart.
 //
 // What this reaches, concretely: any external monitor (1920/2560) and a 16"
 // MacBook Pro (1728 logical) get the rail beside the grid. A 14" (1512) or a
@@ -59,7 +71,15 @@ import type { ParticipantRole } from "@/app/utils/computeParticipation";
 export type RailPlacement = "panel" | "dialog";
 
 /** Viewport width at which each surface's gutter can hold the rail. See above. */
-const MIN_WIDTH: Record<RailPlacement, number> = { panel: 1700, dialog: 1380 };
+export const MIN_WIDTH: Record<RailPlacement, number> = { panel: 1700, dialog: 1380 };
+
+/**
+ * The rail's width in the gutter — the widest row inside `ParticipationSidebar`
+ * plus its padding, and the input to both thresholds above. Exported so a test
+ * can pin the rendered class against the number the arithmetic is stated in,
+ * rather than against a literal copied into an assertion.
+ */
+export const RAIL_WIDTH = 216;
 
 const RAIL_CLASS = "fixed left-2 z-40 w-[216px]";
 

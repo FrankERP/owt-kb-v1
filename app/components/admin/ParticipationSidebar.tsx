@@ -29,13 +29,31 @@ export function ParticipationSidebar({ roles, monthLabel }: { roles: Participant
 
   return (
     <aside className="rounded-xl border border-[#00bfff]/20 bg-[#C8D8EB]/40 dark:bg-[#010b17] p-3 lg:sticky lg:top-4 self-start">
-      <div className="flex items-center justify-between mb-1 gap-2">
-        <div>
-          <p className="font-label text-xs uppercase tracking-widest text-[#003572] dark:text-[#00bfff]">Participaciones</p>
-          <p className="text-xs text-gray-500">{monthLabel}</p>
-        </div>
+      {/*
+        The header is a COLUMN, and the select is `w-full`. Both are load-bearing
+        for the gutter placement, not styling.
+
+        Side by side (the original `flex justify-between`) the header demanded
+        the title's ~131px PLUS the select's intrinsic width — a `<select>` is as
+        wide as its widest option, and "Instrumentos" makes that 112px. Measured
+        in a real browser that came to 262px of content inside a 216px rail: the
+        select's right edge landed 47px past the rail and printed itself over the
+        planner grid — the one thing `ParticipationRail` exists to prevent.
+
+        Stacked, each row asks for the WIDER of the two rather than their sum
+        (~131px), and `w-full` caps the select at the content box instead of
+        letting its longest option set the width. See `ParticipationRail.tsx`'s
+        width derivation, which this is half of.
+
+        `min-h-[44px]`: below the gutter threshold this chart stacks inline on an
+        iPad and in the Capacitor wrap, where this is a touch target.
+      */}
+      <div data-rail-header className="mb-1">
+        <p className="font-label text-xs uppercase tracking-widest text-[#003572] dark:text-[#00bfff]">Participaciones</p>
+        <p className="text-xs text-gray-500">{monthLabel}</p>
         <select value={view} onChange={e => setView(e.target.value as View)}
-          className="text-xs bg-transparent border border-[#00bfff]/20 rounded-lg px-2 py-1">
+          aria-label="Ver participaciones por"
+          className="mt-2 w-full min-h-[44px] text-xs bg-transparent border border-[#00bfff]/20 rounded-lg px-2 py-1">
           <option value="voces">Voces</option>
           <option value="instrumentos">Instrumentos</option>
         </select>
