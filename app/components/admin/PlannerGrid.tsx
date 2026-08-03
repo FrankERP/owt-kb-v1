@@ -1188,7 +1188,25 @@ function CandidateRow({
             <span key={i} className={`h-1.5 w-3 rounded-sm ${served ? "bg-[#00bfff]/70" : "bg-gray-700"}`} />
           ))}
         </div>
-        <span className="font-label text-[10px] text-gray-500">{candidate.load}</span>
+        {/*
+          LABELLED, and never a bare number. `rankCandidates` reads this out of
+          `computeParticipation` (`candidateRanking.ts`) — literally the counter
+          the participation rail renders — but over a DIFFERENT set of services:
+          `unionRoles` here (the ranking lookback plus every draft on this grid,
+          including columns that will never be created), and the month's saved
+          services plus only the CREATABLE drafts in the rail
+          (`plannerParticipationRoles`). Since the rail sits in the gutter beside
+          this picker, the same admin now reads two numbers for one person that
+          legitimately disagree. The arithmetic is right on both sides — they
+          answer different questions — so the fix is to stop the smaller one from
+          posing as the other's total.
+        */}
+        <span
+          className="font-label text-[10px] text-gray-500"
+          title="Carga que ordena esta lista: el historial reciente más todo lo asignado en esta cuadrícula. No es el total de Participaciones, que cuenta el mes y solo los servicios que se van a crear."
+        >
+          Carga para ordenar: {candidate.load}
+        </span>
       </div>
       {candidate.blockedReason && (
         <p className="mt-1 font-body text-[11px] text-red-400">{candidate.blockedReason}</p>

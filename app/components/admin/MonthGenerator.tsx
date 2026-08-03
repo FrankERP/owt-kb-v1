@@ -6,7 +6,6 @@ import { DayCard } from "@/app/components/DayCard";
 import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
 import { runDraftCreateBatch } from "@/app/utils/monthDraftCreate";
 import { creatableTargets, type TargetPreflight } from "./serviceReadiness";
-import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import PlannerGrid, { type AutoState, type SolveDiagnostics } from "./PlannerGrid";
 import MonthCalendar from "./MonthCalendar";
 import { SERVICE_LABEL } from "./serviceCardModel";
@@ -35,6 +34,7 @@ import {
   type GridCell,
   type GridRow,
   type PersonRestriction,
+  type SavedRole,
   type ConflictRule,
   type PresenceRule,
   type SolverConfig,
@@ -100,8 +100,14 @@ interface Props {
    * pre-slice it, since it does not know which month will be picked until the
    * config step runs. Optional so the dialog still renders standalone with an
    * empty (honest "sin historial reciente") window.
+   *
+   * `SavedRole`, not bare `ParticipantRole`: the participation rail keys a saved
+   * special by `_type` + `date` + `service_name`, and a `ParticipantRole` has no
+   * name to key on. `ServicesPanel` passes `ServiceRole[]`, which carries it
+   * already — narrowing this line back would silently make every stored special
+   * nameless again and let a differently-named planned special erase it.
    */
-  allRoles?: ParticipantRole[];
+  allRoles?: SavedRole[];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -200,7 +206,7 @@ function buildUnavailabilityNotices(
  * returns at least one for a real calendar month) or when the caller has no
  * history to offer.
  */
-function savedWindowFor(year: number, month: number, allRoles: ParticipantRole[]): ParticipantRole[] {
+function savedWindowFor(year: number, month: number, allRoles: SavedRole[]): SavedRole[] {
   const firstSunday = getDates(year, month, 0)[0];
   if (!firstSunday) return [];
   const noon = (iso: string) => new Date(iso.slice(0, 10) + "T12:00:00").getTime();
@@ -1553,8 +1559,9 @@ export default function MonthGenerator({
    *
    * Filtered from `allRoles` in ONE pass and compared by object identity against
    * `savedWindow`, rather than concatenating two lists and de-duplicating them:
-   * `ParticipantRole` has no `_id` and no `service_name`, so any key built from
-   * its fields would collapse two same-day specials into one.
+   * `SavedRole` has no `_id`, so a key built from its fields would have to
+   * re-derive the server's identity for a special to keep two same-day ones
+   * apart. Object identity is exact, free, and cannot drift from that rule.
    */
   const participationSaved = useMemo(() => {
     const inWindow = new Set(savedWindow);

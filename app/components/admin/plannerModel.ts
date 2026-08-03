@@ -1183,6 +1183,19 @@ export function cellsToParticipantRoles(
 }
 
 /**
+ * A saved role as the participation panel needs it: a `ParticipantRole` plus the
+ * one field of a special's IDENTITY that `ParticipantRole` does not carry
+ * (`computeParticipation.ts:2-10`).
+ *
+ * Optional, so every existing `ParticipantRole` fixture and every weekend role
+ * still satisfies it, and so a caller that genuinely has no name (a test, a
+ * weekend) is not forced to invent one. `ServiceRole` — what `ServicesPanel`
+ * actually holds and hands down — already declares `service_name?: string`, so
+ * the real path gains the field with no new plumbing.
+ */
+export type SavedRole = ParticipantRole & { service_name?: string };
+
+/**
  * What the participation panel beside the grid counts: everything already SAVED
  * plus every draft currently on screen, as one `ParticipantRole[]` for
  * `computeParticipation`.
@@ -1218,12 +1231,22 @@ export function cellsToParticipantRoles(
  * serves, and dropping the role would report an already-saved team as serving
  * zero times.
  *
- * Matched on `_type` + `date` and nothing else, because `ParticipantRole` has
- * no `service_name` (`computeParticipation.ts:2-10`) — so a saved special is
- * dropped by a populated creatable special on the same date even when the two
- * carry different names. That direction is deliberate: an under-count of one
- * service is a far quieter wrong answer than the double-count the other
- * direction produces, and the pair is rare.
+ * **Matched on `_type` + `date` + `service_name`, all three.** The name is not
+ * decoration: the server's identity for a special IS
+ * `special_role:${date}:${normalizeLabel(name)}` (`roleCreationReceipt.ts`), so
+ * "Vigilia" and "Retiro" on one date are two services and the grid can
+ * legitimately plan the second while the first is already stored. Keyed on
+ * `_type|date` alone the stored one was dropped by the planned one and its
+ * whole roster vanished — a person who really served reading as absent, on the
+ * chart built to answer "is this fair". `SavedRole` widens `ParticipantRole`
+ * with the name for exactly this, the way `WindowRole` widens it with `_id` for
+ * the Tablero (`SeatBoard.tsx`); the real caller already has the field on the
+ * `ServiceRole` documents it holds.
+ *
+ * `normalizeServiceName` and never `.toLowerCase()` — case and accents are
+ * meaningful and the server compares the same way (`normalizeLabel.ts`). A
+ * weekend role stores no name and a weekend column is never given one, so both
+ * sides key to `""` there and weekend behaviour is untouched.
  */
 export function plannerParticipationRoles({
   saved,
@@ -1231,7 +1254,7 @@ export function plannerParticipationRoles({
   cells,
   members,
 }: {
-  saved: ParticipantRole[];
+  saved: SavedRole[];
   /** ONLY the columns that will be created. See above — this is not a filter for neatness. */
   creatableColumns: GridColumn[];
   cells: GridCell[];
@@ -1240,11 +1263,13 @@ export function plannerParticipationRoles({
   const occupied = new Set(
     cells.filter((c) => c.memberIds.length > 0).map((c) => c.date.slice(0, 10)),
   );
+  const serviceKey = (type: ColumnType, date: string, name: unknown) =>
+    `${type}|${date.slice(0, 10)}|${normalizeServiceName(name)}`;
   const planned = new Set(
     creatableColumns
       .filter((c) => occupied.has(c.date.slice(0, 10)))
-      .map((c) => `${c.type}|${c.date.slice(0, 10)}`),
+      .map((c) => serviceKey(c.type, c.date, c.serviceName)),
   );
-  const kept = saved.filter((r) => !planned.has(`${r._type}|${r.date.slice(0, 10)}`));
+  const kept = saved.filter((r) => !planned.has(serviceKey(r._type, r.date, r.service_name)));
   return [...kept, ...cellsToParticipantRoles(cells, creatableColumns, members)];
 }
