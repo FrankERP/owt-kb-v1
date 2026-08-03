@@ -285,18 +285,67 @@ describe("the localStorage rule set is RETIRED", () => {
 });
 
 describe("the source union cannot express a save outside `ready`", () => {
-  it("only `ready` carries a rev", () => {
-    // Not a style point: `SolverConfigController.save` demands a `rev`, so there
-    // is no value to pass from `absent`/`loading`/`error`. The route's
-    // refuse-to-create is the second, independent lock.
-    const states: SolverConfigSource[] = [
-      { status: "loading" },
-      { status: "error", message: "x" },
-      { status: "absent", config: DEFAULT_SOLVER_CONFIG },
-      { status: "ready", rev: "r", config: DEFAULT_SOLVER_CONFIG },
-    ];
-    const withRev = states.filter((s) => "rev" in s);
-    expect(withRev).toHaveLength(1);
-    expect(withRev[0].status).toBe("ready");
+  // Not a style point: `SolverConfigController.save` demands a `rev`, so there
+  // is no value to pass from `absent`/`loading`/`error`. The route's
+  // refuse-to-create is the second, independent lock.
+  //
+  // This used to be asserted over four hand-built literals — which tested the
+  // fixture, not the module: adding `rev?: string` to the `absent` variant AND
+  // making `sourceFromGet` emit `rev: "sneaky"` on absent left it green. Both
+  // halves of the property are now pinned against something that can move:
+  // the RUNTIME half over `sourceFromGet`'s own outputs, the TYPE half against
+  // the union itself, so widening a variant fails `tsc` rather than nothing.
+
+  it("emits a rev on `ready` and on no other state it can produce", () => {
+    for (const body of [
+      { present: false, rev: null, config: null },
+      { present: false },
+      { present: true, rev: null, config: {} },
+      { present: true, rev: "", config: {} },
+      null,
+      "not an object",
+    ]) {
+      const source = sourceFromGet(true, body);
+      expect(source.status, JSON.stringify(body)).not.toBe("ready");
+      expect(source, JSON.stringify(body)).not.toHaveProperty("rev");
+    }
+    for (const failedRead of [sourceFromGet(false, STORED), sourceFromGet(false, null)]) {
+      expect(failedRead.status).toBe("error");
+      expect(failedRead).not.toHaveProperty("rev");
+    }
+    const ready = sourceFromGet(true, STORED);
+    expect(ready.status).toBe("ready");
+    expect(ready).toHaveProperty("rev", "rev-7");
+  });
+
+  it("does not let the TYPE carry a rev anywhere but `ready`", () => {
+    // `@ts-expect-error` inverted: each of these fails `npx tsc --noEmit` today
+    // because `rev` is an excess property, and would START failing — as an
+    // UNUSED expect-error — the moment somebody widened the variant to accept
+    // it. That is the mutation the old literal-based test could not see.
+    // Written per-variant rather than against `SolverConfigSource`, because
+    // excess-property checking on a union admits any key present in ANY member.
+    const absent: Extract<SolverConfigSource, { status: "absent" }> = {
+      status: "absent",
+      config: DEFAULT_SOLVER_CONFIG,
+      // @ts-expect-error `absent` must not carry a rev: there is no document to revise.
+      rev: "r",
+    };
+    const failed: Extract<SolverConfigSource, { status: "error" }> = {
+      status: "error",
+      message: "x",
+      // @ts-expect-error `error` must not carry a rev: we could not read the document.
+      rev: "r",
+    };
+    const loading: Extract<SolverConfigSource, { status: "loading" }> = {
+      status: "loading",
+      // @ts-expect-error `loading` must not carry a rev: nothing is known yet.
+      rev: "r",
+    };
+    expect([absent.status, failed.status, loading.status]).toEqual([
+      "absent",
+      "error",
+      "loading",
+    ]);
   });
 });
