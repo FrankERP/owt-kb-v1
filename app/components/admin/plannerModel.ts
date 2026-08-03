@@ -1181,3 +1181,64 @@ export function cellsToParticipantRoles(
     };
   });
 }
+
+/**
+ * What the participation panel beside the grid counts: everything already SAVED
+ * plus every draft currently on screen, as one `ParticipantRole[]` for
+ * `computeParticipation`.
+ *
+ * **Why the merge, and not one side or the other.** `savedWindow` alone is the
+ * number the sidebar has always shown, and beside a grid it is actively
+ * misleading: it reports a member at 5 while the admin is in the act of making
+ * them 7. The drafts alone answer "is this month fair" but forget that the same
+ * person led three times last month. Fairness is the sum, so this is the sum.
+ *
+ * **The de-duplication is the whole reason this is a function.** A grid column
+ * and a saved role can be the SAME service — the month's first Sunday sits at
+ * the end of D12's lookback window, and any date already saved in the month
+ * being planned appears as a (blocked) column too. Counting both sides would
+ * double every member on that service.
+ *
+ * The saved copy is dropped only where the grid is actually planning PEOPLE
+ * onto that date. An empty column makes no claim about who serves: a column
+ * blocked by `createBlockFor` ("ya existe un servicio en esta fecha") is
+ * precisely the case where the saved role is the only truth there is, and
+ * dropping it would report the people on an already-saved service as serving
+ * zero times. Where the column does hold assignments, the draft wins — it is
+ * what the admin is looking at and about to create.
+ *
+ * Matched on `_type` + `date` and nothing else, because `ParticipantRole` has
+ * no `service_name` (`computeParticipation.ts:2-10`) — so a saved special is
+ * dropped by a populated grid special on the same date even when the two carry
+ * different names. That direction is deliberate: an under-count of one service
+ * is a far quieter wrong answer than the double-count the other direction
+ * produces, and the pair is rare (two same-day specials, one already saved).
+ *
+ * **Known limitation, inherited on purpose.** `cellsToParticipantRoles` emits
+ * one role per column regardless of `skipped`, so a skipped column's leftover
+ * assignments count here even though they will never be created. Diverging
+ * would make this panel and the candidate ranking — which unions the same two
+ * lists — disagree about the same month, which is worse than the over-count.
+ */
+export function plannerParticipationRoles({
+  saved,
+  columns,
+  cells,
+  members,
+}: {
+  saved: ParticipantRole[];
+  columns: GridColumn[];
+  cells: GridCell[];
+  members: RankMember[];
+}): ParticipantRole[] {
+  const occupied = new Set(
+    cells.filter((c) => c.memberIds.length > 0).map((c) => c.date.slice(0, 10)),
+  );
+  const planned = new Set(
+    columns
+      .filter((c) => occupied.has(c.date.slice(0, 10)))
+      .map((c) => `${c.type}|${c.date.slice(0, 10)}`),
+  );
+  const kept = saved.filter((r) => !planned.has(`${r._type}|${r.date.slice(0, 10)}`));
+  return [...kept, ...cellsToParticipantRoles(cells, columns, members)];
+}

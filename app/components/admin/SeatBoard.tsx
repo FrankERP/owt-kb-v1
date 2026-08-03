@@ -34,6 +34,7 @@ import {
   type RankMember,
 } from "./candidateRanking";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
+import { ParticipationRail } from "./ParticipationRail";
 import { unresolvedRuleNames } from "./ruleEnforcement";
 import type { SolverConfig } from "./plannerModel";
 import {
@@ -44,10 +45,19 @@ import {
   type ServiceType,
 } from "./serviceCardModel";
 
+/**
+ * A role in the recent-load window. `_id` is optional and used for ONE thing:
+ * recognising the saved copy of the service this board is editing, so the
+ * participation rail can drop it and count the live seats instead. Optional
+ * because `rankCandidates` neither needs nor reads it, and every caller that
+ * passes real `ServiceRole` documents already carries it.
+ */
+export type WindowRole = ParticipantRole & { _id?: string };
+
 export interface SeatBoardProps {
   initial?: ServiceRole;
   members: RankMember[];
-  windowRoles: ParticipantRole[];
+  windowRoles: WindowRole[];
   onSubmit: (data: unknown) => void;
   onClose: () => void;
   loading: boolean;
@@ -142,6 +152,74 @@ export function withSeatOverrides(
     kept[add.memberId] = add.reason;
   }
   return { ...prev, [seatId]: kept };
+}
+
+/**
+ * What the participation rail beside this board counts: the recent-load window
+ * with this service's SAVED copy removed, plus this service as it stands in the
+ * editor right now.
+ *
+ * **The swap is the point.** `windowRoles` is anchored on the service being
+ * edited (`recentRolesWindow`, `ServicesPanel.tsx`), so the stored version of it
+ * is already in that list. Appending the live seats without dropping it would
+ * count everyone on this service twice and report a fairness picture that is
+ * wrong in exactly the direction the admin is about to change. Dropping it
+ * without appending would show the numbers as they were before the dialog
+ * opened, which is the read the rail exists to replace.
+ *
+ * Matched on `_id`, not on date + type: the board can move the date, and two
+ * specials can share one. A caller that passes no `_id` (the tests' bare
+ * `ParticipantRole` fixtures) simply drops nothing — the live role is still
+ * appended, so the rail is never silently empty.
+ *
+ * `assigned` is `SeatBoard`'s own memo, reused rather than re-derived from
+ * `occupancy`: it already carries the seat id (`lead`/`bgv`/`coro`) and the
+ * category (`voz`/`instrumento`/`foh`) this needs, and it is already built from
+ * `seats`, which excludes Coro on a Saturday. A second walk over `occupancy`
+ * here would be a second place for that exclusion to drift.
+ *
+ * Pure and exported so the arithmetic is testable without a DOM.
+ */
+export function boardParticipationRoles({
+  saved,
+  savedId,
+  type,
+  date,
+  assigned,
+  members,
+}: {
+  saved: WindowRole[];
+  savedId?: string;
+  type: ServiceType;
+  date: string;
+  assigned: AssignedSeat[];
+  members: RankMember[];
+}): ParticipantRole[] {
+  const byId = new Map(members.map((m) => [m._id, m]));
+  // An id with no member record round-trips as a bare `_id` rather than being
+  // dropped — the same contract `cellsToParticipantRoles` keeps, and for the
+  // same reason: `computeParticipation` keys strictly by `_id`, so dropping one
+  // under-counts that person with no signal at all.
+  const person = (id: string) => {
+    const m = byId.get(id);
+    return m ? { _id: m._id, member_name: m.member_name, alias: m.alias } : { _id: id };
+  };
+  const inSeat = (seatId: string) =>
+    assigned.filter((a) => a.seatId === seatId).map((a) => person(a.memberId));
+  const inCategory = (category: AssignedSeat["category"]) =>
+    assigned.filter((a) => a.category === category).map((a) => ({ person: person(a.memberId) }));
+
+  const live: ParticipantRole = {
+    _type: type,
+    date,
+    leads: inSeat("lead"),
+    bgvs: inSeat("bgv"),
+    chorus: inSeat("coro"),
+    instruments: inCategory("instrumento"),
+    foh: inCategory("foh"),
+  };
+  const kept = savedId === undefined ? saved : saved.filter((r) => r._id !== savedId);
+  return [...kept, live];
 }
 
 export default function SeatBoard(props: SeatBoardProps) {
@@ -244,6 +322,19 @@ export default function SeatBoard(props: SeatBoardProps) {
    * is the only safeguard.
    */
   const unresolved = useMemo(() => unresolvedRuleNames(config, members), [config, members]);
+
+  const participationRoles = useMemo(
+    () =>
+      boardParticipationRoles({
+        saved: windowRoles,
+        savedId: initial?._id,
+        type,
+        date,
+        assigned,
+        members,
+      }),
+    [windowRoles, initial?._id, type, date, assigned, members],
+  );
 
   function toggle(memberId: string) {
     const seatId = target.id;
@@ -502,6 +593,25 @@ export default function SeatBoard(props: SeatBoardProps) {
           </ul>
         </div>
       </div>
+
+      {/*
+        The participation rail — the same chart the Servicios panel shows,
+        counting the seats being edited RIGHT NOW rather than only what is
+        stored (see `boardParticipationRoles`).
+
+        A sibling of the two-pane grid, and `position: fixed` in the page gutter
+        beside the dialog (`ParticipationRail`), so it takes no width from either
+        pane and adds no scroll region inside a dialog built to have exactly two.
+        Below 1400px there is no gutter to sit in and it renders nothing at all —
+        stacking it into this bounded column is the defect `SeatBoard` exists to
+        undo. It stays inside the dialog's own DOM so the focus trap still owns
+        its Voces/Instrumentos control.
+      */}
+      <ParticipationRail
+        placement="dialog"
+        roles={participationRoles}
+        monthLabel="Carga reciente · incluye este servicio"
+      />
 
       {/* Footer: a sibling of the two-pane grid above, not a descendant of
           either scroll region, so it never scrolls out of reach regardless of

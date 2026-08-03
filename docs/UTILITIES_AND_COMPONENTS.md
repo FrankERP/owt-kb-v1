@@ -174,7 +174,7 @@ Legend: **[C]** client, **[S]** server.
 | `SeatBoard` | The service team editor: seats + full roster, one scroll region. Decides nothing — see `seatModel` / `candidateRanking`. |
 | `seatModel` | Canonical seat names and categories; one spelling per seat. Pure. |
 | `candidateRanking` | Seat candidates ordered by availability, existing assignment and recent load. Pure; never calls the solver. |
-| `plannerModel` | Pure: the month-grid's rows/columns/cells and BOTH translations to/from the solver's wire format (`buildSolveRequest`/`applySolveResponse`), plus `cellsToDrafts`/`cellsToParticipantRoles`. Owns Saturday↔week adjacency (never position) and D11's Sunday-only Coro row. |
+| `plannerModel` | Pure: the month-grid's rows/columns/cells and BOTH translations to/from the solver's wire format (`buildSolveRequest`/`applySolveResponse`), plus `cellsToDrafts`/`cellsToParticipantRoles`/`plannerParticipationRoles`. Owns Saturday↔week adjacency (never position) and D11's Sunday-only Coro row. |
 | `PlannerGrid` | Renders the month grid `plannerModel` computes — dates across, seats down, every cell editable. Decides nothing; `MonthGenerator` owns `cells`/`counts` state and the Auto fetch. |
 | `MonthGenerator` | Config step (solver pools/rules, `SolverConfigPanel`, unconditional since the `useSolver` toggle was retired) + grid step (`PlannerGrid`, plus `Vista`'s `DayCard` list). **Auto** (inside the grid) is the only caller of `/api/admin/solve`; `Previsualizar →` only builds an empty grid. Owns the create-path POST to `/api/admin/roles` and the solver fairness-history persistence (`localStorage`, replace-not-append per month). |
 | `SetlistEditor` | Inline setlist builder (reorder/remove, play-key, medley via `normalizeMedleyTags`). |
@@ -184,6 +184,7 @@ Legend: **[C]** client, **[S]** server.
 | `AvailabilityPanel` | Team availability vs. scheduled services. |
 | `ActivityPanel` | Member activity / last-login ("Hoy"/"Ayer" calendar-day labels). |
 | `ParticipationSidebar` | Participation bar chart (`computeParticipation`); Voces/Instrumentos toggle. |
+| `ParticipationRail` | Placement only — puts `ParticipationSidebar` in the page's empty side gutter (`position: fixed`) beside the planner grid (≥1780px) and the Tablero (≥1400px), so neither surface loses width. Below the threshold the grid's copy stacks inline; the Tablero's renders nothing (that dialog exists to avoid a third scroll region). Counts come from the callers: `plannerParticipationRoles` and `boardParticipationRoles` each union the SAVED history with the drafts/seats currently on screen, so the totals move as the admin assigns. |
 
 #### Service-readiness card layer
 
