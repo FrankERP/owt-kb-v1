@@ -4,9 +4,19 @@
  * Seed the ONE shared planner rule document (`_id: solverConfig`) from the live
  * `localStorage` capture — the only place the real rules exist.
  *
+ * ─── ALREADY RUN. Kept for the record and for a fresh dataset ────────────────
+ *
+ * Applied to production 2026-08-02 with the user's explicit consent, and the
+ * cutover then made that document authoritative: nothing reads or writes
+ * `owt_solver_config_v3` any more, so the capture step below is HISTORY on any
+ * environment that has been through it. The script refuses if the document
+ * exists, which is what stops a re-run from mattering — but a re-run against a
+ * dataset whose document was deleted would seed whatever JSON it is pointed at,
+ * so point it at a capture of the real rules or at nothing.
+ *
  * ─── Why the capture and not `DEFAULT_SOLVER_CONFIG` ─────────────────────────
  *
- * `DEFAULT_SOLVER_CONFIG` (`app/components/admin/MonthGenerator.tsx`) is the
+ * `DEFAULT_SOLVER_CONFIG` (`app/components/admin/solverConfigDefaults.ts`) is the
  * FIRST-RUN seed and nothing more. Every rule added, edited or deleted since
  * that browser first opened the generator lives only in
  * `localStorage["owt_solver_config_v3"]`. Seeding from the constant would

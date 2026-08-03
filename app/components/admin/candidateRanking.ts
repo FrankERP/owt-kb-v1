@@ -112,9 +112,15 @@ export function rankCandidates(input: {
   /** The month's full Sunday spine; only week exclusions need it (E7, E21). */
   sundayDates?: string[];
   /**
-   * The rules. **Optional** — `SeatBoard` has no access to the solver config
-   * (fact 25) until Task 9 moves it to Sanity, so its behaviour is provably
-   * unchanged until then.
+   * The rules. **Optional, and absent means "no rules", never "the defaults".**
+   *
+   * Both callers now pass one: `PlannerGrid` from the panel's edited copy, and
+   * `SeatBoard` from `enforceableConfig(rules.source)` — the shared Sanity
+   * document (P6, ADR-0010), which the cutover made the single source. It stays
+   * optional because `enforceableConfig` answers `undefined` in the three states
+   * where the rules are not known to be this team's (loading, failed read, no
+   * document), and in each of those this must keep the board's original
+   * behaviour of enforcing nothing rather than inventing refusals.
    */
   config?: SolverConfig;
 }): RankedCandidate[] {

@@ -13,11 +13,11 @@ import { SERVICE_LABEL } from "./serviceCardModel";
 import { fillColumn } from "./localFill";
 import { unresolvedRuleNames } from "./ruleEnforcement";
 import {
-  DEFAULT_SOLVER_CONFIG,
-  SOLVER_CONFIG_STORAGE_KEY,
-  isFirstRunSolverSeed,
-  readStoredSolverConfig,
-} from "./solverConfigStorage";
+  editableConfig,
+  sameSolverConfig,
+  type SolverConfigController,
+  type SolverConfigSource,
+} from "./solverConfigSource";
 import {
   buildColumns,
   buildRows,
@@ -60,6 +60,18 @@ interface Props {
   existingRoles: ExistingRole[];
   onClose: () => void;
   onCreated: () => void;
+  /**
+   * The shared rule set, fetched and written by `ServicesPanel`'s
+   * `useSolverConfig` (P6). **Required, and deliberately not optional with a
+   * default** — an optional prop falling back to `DEFAULT_SOLVER_CONFIG` is the
+   * same "a failed read looks like the defaults" collapse the whole cutover
+   * exists to prevent, wearing a prop's clothes.
+   *
+   * It is owned by the panel rather than fetched here so that this component
+   * and `SeatBoard` read ONE object: a rule saved on this screen is what the
+   * Tablero refuses on, with no second copy to go stale.
+   */
+  rules: SolverConfigController;
   /**
    * Current capability snapshot for the `generateMonth` row of Plan B's matrix,
    * passed in by `ServicesPanel` and RE-CHECKED at preview and at confirmation:
@@ -649,10 +661,15 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
 
 // ─── Rule builder — main orchestrator ────────────────────────────────────────
 
-function RuleBuilder({ config, onChange, members }: {
+function RuleBuilder({ config, onChange, members, shared }: {
   config: SolverConfig;
   onChange: (c: SolverConfig) => void;
   members: MemberOption[];
+  /**
+   * Does a shared document back these rules? `SolverConfigSource.status ===
+   * "ready"`, and nothing else — see the copy at the foot of this component.
+   */
+  shared: boolean;
 }) {
   const [adding,    setAdding]    = useState<"restriction" | "conflict" | "presence" | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -678,29 +695,6 @@ function RuleBuilder({ config, onChange, members }: {
 
   const total = config.restrictions.length + config.conflicts.length + config.presence.length;
   const isFormOpen = !!adding || !!editingId;
-
-  /**
-   * Does the TABLERO enforce what is on this screen? Asked of the live config,
-   * because the honest answer differs per browser.
-   *
-   * `ServicesPanel` feeds `SeatBoard` from `readStoredSolverConfig`, which
-   * answers `null` — "no rules here" — for a stored value that is absent OR
-   * byte-equal to `DEFAULT_SOLVER_CONFIG`. This panel meanwhile seeds its own
-   * state from that same constant and hard-blocks against it. So on a browser
-   * where nobody has touched a rule, the two surfaces genuinely disagree: six
-   * seeded restrictions are hard here and nothing at all is hard there.
-   *
-   * The copy below therefore states which of the two states THIS browser is in.
-   * Claiming parity unconditionally was worse than offering no claim: this
-   * branch's own standard (`ruleEnforcement.ts`) is that a rule which LOOKS
-   * enforced and is not beats a rule plainly not offered — the wrong way round.
-   *
-   * **Do not "fix" the asymmetry instead of describing it.** The seed detection
-   * is deliberate (`isFirstRunSolverSeed`, with its own tests) and the seed
-   * literal is booby-trapped: the match is exact, so editing
-   * `DEFAULT_SOLVER_CONFIG` makes every already-persisted seed start enforcing.
-   */
-  const enforcedInTablero = !isFirstRunSolverSeed(config);
 
   return (
     <div className="space-y-2">
@@ -817,18 +811,18 @@ function RuleBuilder({ config, onChange, members }: {
         Where the rules live, and how far they actually reach — said plainly,
         because both are easy to assume wrongly and expensive to discover late.
 
-        1. STILL `localStorage`, this browser, this admin. Task 9 built the
-           shared Sanity document, the admin-gated route and the seed script,
-           but the CUTOVER has not run: seeding it needs the live rules captured
-           out of this browser first, and until that lands this key is the only
-           copy. Do not soften this sentence ahead of the seed — an admin told
-           their rules are shared, while they are not, is exactly how a second
-           admin's month gets built against rules nobody else has.
-        2. Exclusions and conflicts are hard on the planner grid ALWAYS, and on
-           the Tablero's service editor only once this browser holds rules
-           somebody actually wrote — see `enforcedInTablero` above, which is why
-           this paragraph has two versions and not one. Week exclusions are hard
-           on the grid ONLY, even then — the Tablero edits one service at a time
+        1. THE CUTOVER LANDED. The rules are one Sanity document
+           (`sanity/schemas/solverConfig.ts`), read through `useSolverConfig`,
+           shared by every admin and by both surfaces. `localStorage` is no
+           longer read or written for them — only `owt_solver_history_v2`, the
+           fairness history, stays per-browser (ADR-0010).
+        2. The saved document is what the TABLERO enforces; the edits on this
+           screen are not, until "Guardar reglas" lands them. That gap is the
+           price of an explicit save (a POST per keystroke would thrash the
+           route's `_rev` check and lose edits to its own concurrency guard), so
+           it is stated rather than hidden.
+        3. Exclusions and conflicts are hard on BOTH surfaces. Week exclusions
+           are hard on the grid ONLY — the Tablero edits one service at a time
            and has no Sunday spine, so there is no week to match
            (`ruleEnforcement.ts`, `weekForColumn`). Caps and presence are not
            hard anywhere: they reach CP-SAT for Sundays and Saturdays and
@@ -837,31 +831,38 @@ function RuleBuilder({ config, onChange, members }: {
            looks enforced and is not is worse than one that is plainly not
            offered (`ruleEnforcement.ts` lists both as deliberate non-goals).
 
-        Revise sentence 1 in the same change that lands the cutover
-        (`docs/adr/0010-specials-fill-locally-not-in-the-solver.md`), never
-        before it.
+        The `shared` branch is NOT the old per-browser one wearing new clothes:
+        it is `SolverConfigSource.status === "ready"`, i.e. the document exists.
+        With no document there is nothing to share and nothing to save, and the
+        Tablero enforces nothing (`enforceableConfig`) — so that state gets its
+        own sentence rather than a softened version of the other.
       */}
-      <p className="font-body text-[11px] text-gray-500 px-1 pt-1">
-        Las reglas se guardan todavía solo en <span className="text-amber-400">este navegador</span>:
-        otro administrador no las verá, y se pierden si borras los datos del sitio.
-      </p>
-      {enforcedInTablero ? (
-        <p className="font-body text-[11px] text-gray-500 px-1">
-          Se aplican como bloqueo duro los patrones excluidos y los conflictos entre dos personas,
-          tanto aquí como al editar un servicio en el{" "}
-          <span className="text-gray-400">Tablero</span>. Las{" "}
-          <span className="text-gray-400">semanas excluidas</span> solo se verifican aquí: el editor
-          del Tablero trabaja sobre un servicio suelto y no sabe en qué semana del mes cae.
-        </p>
+      {shared ? (
+        <>
+          <p className="font-body text-[11px] text-gray-500 px-1 pt-1">
+            Las reglas se guardan en el <span className="text-[#00bfff]">servidor</span> y las
+            comparten todos los administradores. Los cambios de esta pantalla no valen en el{" "}
+            <span className="text-gray-400">Tablero</span> hasta que pulses{" "}
+            <span className="text-gray-400">Guardar reglas</span>.
+          </p>
+          <p className="font-body text-[11px] text-gray-500 px-1">
+            Se aplican como bloqueo duro los patrones excluidos y los conflictos entre dos personas,
+            tanto aquí como al editar un servicio en el{" "}
+            <span className="text-gray-400">Tablero</span>. Las{" "}
+            <span className="text-gray-400">semanas excluidas</span> solo se verifican aquí: el editor
+            del Tablero trabaja sobre un servicio suelto y no sabe en qué semana del mes cae.
+          </p>
+        </>
       ) : (
-        <p className="font-body text-[11px] text-gray-500 px-1">
-          Estas son todavía las reglas de <span className="text-amber-400">ejemplo</span> con las que
-          llega la app: mientras no cambies ninguna, los patrones excluidos y los conflictos se
-          aplican como bloqueo duro <span className="text-amber-400">solo aquí</span> — al editar un
-          servicio en el <span className="text-gray-400">Tablero</span> no bloquean nada. Cambia
-          cualquier regla y pasan a aplicarse también allí, salvo las{" "}
-          <span className="text-gray-400">semanas excluidas</span>, que solo se verifican aquí: el
-          editor del Tablero trabaja sobre un servicio suelto y no sabe en qué semana del mes cae.
+        <p className="font-body text-[11px] text-gray-500 px-1 pt-1">
+          Todavía no hay reglas compartidas en el servidor: estas son las de{" "}
+          <span className="text-amber-400">ejemplo</span> con las que llega la app y no se pueden
+          guardar desde aquí. Mientras tanto, los patrones excluidos y los conflictos se aplican
+          como bloqueo duro <span className="text-amber-400">solo aquí</span> — al editar un servicio
+          en el <span className="text-gray-400">Tablero</span> no bloquean nada. Las{" "}
+          <span className="text-gray-400">semanas excluidas</span> solo se verifican aquí en
+          cualquier caso: el editor del Tablero trabaja sobre un servicio suelto y no sabe en qué
+          semana del mes cae.
         </p>
       )}
       <p className="font-body text-[11px] text-gray-500 px-1">
@@ -941,10 +942,129 @@ function YearInput({ value, onChange, className }: {
 
 // ─── Solver config panel ──────────────────────────────────────────────────────
 
-function SolverConfigPanel({ members, config, onChange, history, onRemoveHistory }: {
+/**
+ * The explicit save control — **there was none before the cutover.**
+ *
+ * Persistence used to be an unconditional effect on every `solverConfig`
+ * change. Against a shared server document that shape is not merely wasteful:
+ * a POST per keystroke thrashes the route's `_rev` check, so an admin loses
+ * their own edits to their own concurrency guard, one race per character.
+ *
+ * The button is therefore the ONLY writer, and it is reachable only from
+ * `ready` — the `rev` a save needs exists on no other state
+ * (`SolverConfigSource`), so "the defaults get written over the team's rules"
+ * is not a bug to avoid here but a call that cannot be spelled.
+ *
+ * CLAUDE.md's client-mutation invariant is honoured on both sides: the fetch
+ * lives in `useSolverConfig` (try/catch, `res.ok` checked), and this component
+ * resets `saving` in a `finally` and reports a failure AS a failure — the
+ * edits stay on screen, nothing closes, nothing goes green.
+ */
+function SolverConfigSaveBar({ config, rules }: {
+  config: SolverConfig;
+  rules: SolverConfigController;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
+
+  const source = rules.source;
+  const rev = source.status === "ready" ? source.rev : null;
+  const savedConfig = editableConfig(source);
+  // By CONTENT: an edit undone by hand settles back to "Guardado" instead of
+  // offering to write a document that would not change.
+  const dirty = savedConfig === null || !sameSolverConfig(savedConfig, config);
+
+  const onSave = async () => {
+    if (rev === null) return;
+    setSaving(true);
+    setError(null);
+    setStale(false);
+    try {
+      const result = await rules.save(config, rev);
+      if (!result.ok) {
+        setError(result.message);
+        setStale(result.stale);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+      {error && (
+        <p role="alert" className="font-body text-[11px] text-red-400 mr-auto">
+          {error}
+        </p>
+      )}
+      {stale && (
+        <button
+          type="button"
+          onClick={rules.reload}
+          className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-[#00bfff]/30 text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors"
+        >
+          Recargar reglas
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={onSave}
+        disabled={rev === null || !dirty || saving}
+        title={
+          rev === null
+            ? "Todavía no hay reglas compartidas en el servidor; solo el script de siembra puede crearlas."
+            : dirty
+              ? "Guardar estas reglas para todos los administradores"
+              : undefined
+        }
+        className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-[#00bfff]/40 text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+      >
+        {saving ? "Guardando…" : dirty ? "Guardar reglas" : "Guardado"}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * The rule panel has nothing honest to show — the read has not finished, or it
+ * failed.
+ *
+ * **Never the defaults.** Rendering `DEFAULT_SOLVER_CONFIG` here is the exact
+ * collapse `SolverConfigSource` exists to prevent: a transient fetch failure
+ * would present a rule set nobody wrote as this team's, and the save control
+ * would then offer to make it so. There is no `rev` in either state, so saving
+ * is impossible; this says why instead of pretending.
+ */
+function SolverConfigUnavailable({ source, onReload }: {
+  source: SolverConfigSource;
+  onReload: () => void;
+}) {
+  const failed = source.status === "error";
+  return (
+    <div className="space-y-3 p-3 rounded-xl border border-[#00bfff]/20 bg-[#00bfff]/5">
+      <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">Configuración del Solver</p>
+      <p role={failed ? "alert" : undefined} className={`font-body text-xs ${failed ? "text-red-400" : "text-gray-500"}`}>
+        {failed ? source.message : "Cargando las reglas compartidas…"}
+      </p>
+      {failed && (
+        <button
+          type="button"
+          onClick={onReload}
+          className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-[#00bfff]/30 text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors"
+        >
+          Reintentar
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory }: {
   members: MemberOption[];
   config: SolverConfig;
   onChange: (c: SolverConfig) => void;
+  rules: SolverConfigController;
   history: SolverHistoryEntry[];
   onRemoveHistory: (key: string) => void;
 }) {
@@ -1001,7 +1121,20 @@ function SolverConfigPanel({ members, config, onChange, history, onRemoveHistory
         />
       </div>
 
-      <RuleBuilder config={config} onChange={onChange} members={members.filter(m => m.memberType?.includes("voz"))} />
+      <RuleBuilder
+        config={config}
+        onChange={onChange}
+        members={members.filter(m => m.memberType?.includes("voz"))}
+        shared={rules.source.status === "ready"}
+      />
+
+      {/*
+        Below the pools AND the rules, because it saves the whole document —
+        `sundayLeads`/`saturdayLeads`/`support` as well as the three rule kinds.
+        The per-rule "Guardar cambios" buttons inside `RuleBuilder` commit one
+        form into local state and have never written anything; this is the write.
+      */}
+      <SolverConfigSaveBar config={config} rules={rules} />
 
       {/* Solver history indicator */}
       {history.length > 0 && (
@@ -1032,7 +1165,7 @@ function SolverConfigPanel({ members, config, onChange, history, onRemoveHistory
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function MonthGenerator({
-  members, existingRoles, onClose, onCreated, capability, preflight, allRoles,
+  members, existingRoles, onClose, onCreated, rules, capability, preflight, allRoles,
 }: Props) {
   const gateBlocked = capability && !capability.enabled ? capability.reason ?? "Datos incompletos." : null;
   const now = new Date();
@@ -1052,7 +1185,44 @@ export default function MonthGenerator({
   const [activeSatDates, setActiveSatDates] = useState<string[]>([]);
   /** E2's weekday specials for THIS month — reset whenever year/month changes. */
   const [specials, setSpecials] = useState<{ date: string; name: string }[]>([]);
-  const [solverConfig, setSolverConfig] = useState<SolverConfig>(DEFAULT_SOLVER_CONFIG);
+  /**
+   * The rules ON SCREEN — the fetched document plus whatever the admin has
+   * typed since, not yet saved.
+   *
+   * **`null` is a real state and never means "use the defaults".** It is what
+   * the read has not finished, or has failed, looks like; the config step
+   * renders `SolverConfigUnavailable` and "Previsualizar →" is gated on it, so
+   * the grid can never enforce (or fail to enforce) rules nobody has seen.
+   */
+  const [solverConfig, setSolverConfig] = useState<SolverConfig | null>(() =>
+    editableConfig(rules.source),
+  );
+  /**
+   * The last thing the SERVER said, by identity — a new object on load and on
+   * every successful save, and only then. Syncing on it means a save's
+   * canonical round trip lands on screen, without a re-render of the panel
+   * silently reverting an edit in progress.
+   */
+  const loadedConfig = editableConfig(rules.source);
+  useEffect(() => {
+    if (loadedConfig) setSolverConfig(loadedConfig);
+  }, [loadedConfig]);
+  /**
+   * Why the grid cannot be entered, when the rules are the reason.
+   *
+   * SEPARATE from `gateBlocked` (Plan B's capability matrix) on purpose: this
+   * one gates "Previsualizar →" alone. It does NOT gate creating services — a
+   * month can be built entirely by hand and a failed rules read is no reason to
+   * refuse that — but the grid is the surface where a rule becomes a hard
+   * refusal, and entering it with none would enforce nothing while looking
+   * exactly like enforcing everything.
+   */
+  const rulesBlocked =
+    solverConfig === null
+      ? rules.source.status === "error"
+        ? rules.source.message
+        : "Cargando las reglas compartidas…"
+      : null;
   const [solverHistory, setSolverHistory] = useState<SolverHistoryEntry[]>([]);
   const [unavailabilityNotices, setUnavailabilityNotices] = useState<{ name: string; date: string; service: string }[]>([]);
 
@@ -1164,44 +1334,23 @@ export default function MonthGenerator({
   }, [onClose, step, assignmentCount]);
 
   useEffect(() => {
-    // NORMALISED, not trusted — and DO NOT DELETE THE NORMALISER. It now lives in
-    // `solverConfigStorage.ts` (unchanged in behaviour, including the two-field
-    // `Array.isArray` acceptance test), because `ServicesPanel` reads the SAME
-    // key to feed `SeatBoard`, and a second hand-rolled copy of this guard is
-    // exactly how a legacy `conflicts`/`presence`-less value white-screens one
-    // surface and not the other. That module's header states in full what this
-    // protects and why nothing else is a second lock behind it.
+    // ─── The rule set is NOT read here any more ──────────────────────────────
     //
-    // `null` means "this browser holds no rules", NOT "use the defaults": state
-    // is already seeded from `DEFAULT_SOLVER_CONFIG`, and overwriting it here
-    // would be the same write by another name. A stored value that is still the
-    // untouched seed also reads as `null` — which changes nothing on this
-    // surface, since the state it would have set is that same seed.
-    const stored = readStoredSolverConfig();
-    if (stored) setSolverConfig(stored);
+    // Before the cutover this effect hydrated `solverConfig` from
+    // `owt_solver_config_v3`, and a second effect wrote every change straight
+    // back. Both are gone, in the SAME change that landed the fetch, because
+    // they could not coexist with it: both call `setSolverConfig`, so the
+    // fetched document would have been mirrored into `localStorage` and the
+    // load order — different on a cold load than on a re-render — would have
+    // decided which rule set won.
+    //
+    // `owt_solver_history_v2` below stays per-browser on purpose (ADR-0010):
+    // P6 shares the RULES, not the fairness history.
     try {
       const hist = localStorage.getItem(HISTORY_KEY);
       if (hist) setSolverHistory(JSON.parse(hist) as SolverHistoryEntry[]);
     } catch {}
   }, []);
-
-  useEffect(() => {
-    // **The untouched seed is never written.** This effect used to fire on mount
-    // with `solverConfig` still `DEFAULT_SOLVER_CONFIG`, so merely OPENING this
-    // panel persisted six restrictions, five conflicts and a presence rule that
-    // nobody on this team had chosen — and `ServicesPanel` then handed them to
-    // `SeatBoard` as hard blocks, on the strength of "a key exists". The
-    // reference test is exact: state is this very object only while nothing has
-    // touched it, so the first real edit (or a hydrated stored value, which is
-    // always a fresh object) writes normally — including an edit that lands back
-    // on the seed's content, which must still replace what is stored.
-    //
-    // `readStoredSolverConfig` treats an ALREADY-persisted seed as "no rules"
-    // for the same reason; this guard is what stops new browsers from adding to
-    // the pile.
-    if (solverConfig === DEFAULT_SOLVER_CONFIG) return;
-    try { localStorage.setItem(SOLVER_CONFIG_STORAGE_KEY, JSON.stringify(solverConfig)); } catch {}
-  }, [solverConfig]);
 
   function saveHistoryEntry(y: number, m: number, total_counts: Record<string, number>, role_counts: Record<string, Record<string, number>>) {
     const key = `${y}-${m}`;
@@ -1293,7 +1442,10 @@ export default function MonthGenerator({
   const allUnresolvedNames = useMemo(() => {
     const out: string[] = [];
     const seen = new Set<string>();
-    for (const name of [...unresolvedNames, ...unresolvedRuleNames(solverConfig, members)]) {
+    // No config loaded ⇒ no rules to check names against. NOT an empty config:
+    // there is nothing to report, rather than nothing to report ABOUT.
+    const ruleNames = solverConfig ? unresolvedRuleNames(solverConfig, members) : [];
+    for (const name of [...unresolvedNames, ...ruleNames]) {
       const key = name.trim().toLowerCase();
       if (!key || seen.has(key)) continue;
       seen.add(key);
@@ -1370,6 +1522,10 @@ export default function MonthGenerator({
     // today's guard at the old `handlePreview` (:1226-1228) — Auto is not the
     // only thing `gateBlocked` refuses.
     if (gateBlocked) return;
+    // The grid is where the rules become HARD BLOCKS, so it must never be
+    // entered without them. Same predicate as the button's `disabled` below,
+    // re-checked at handler entry rather than trusted from render.
+    if (rulesBlocked) return;
     // "NO COLUMNS AT ALL" — not "no Sundays and no Saturdays". A month whose
     // only service is a weekday special is exactly what E2 exists for, and a
     // weekend-only predicate here (or on the button below) would leave that
@@ -1511,7 +1667,11 @@ export default function MonthGenerator({
    *   special entries are dropped (by date) before the new ones are appended, so
    *   pressing Auto twice cannot double-count the same empty seat.
    */
-  function applySpecialFill(baseCells: GridCell[], solverUnfilled?: { date: string; rowId: string }[]) {
+  function applySpecialFill(
+    config: SolverConfig,
+    baseCells: GridCell[],
+    solverUnfilled?: { date: string; rowId: string }[],
+  ) {
     const specialDates = new Set(
       columns.filter(c => c.type === "special_role").map(c => c.date),
     );
@@ -1529,7 +1689,7 @@ export default function MonthGenerator({
         cells: next,
         members,
         savedWindow,
-        config: solverConfig,
+        config,
       });
       next = out.cells;
       filled.push(...out.unfilled);
@@ -1553,8 +1713,18 @@ export default function MonthGenerator({
    * — the solve failing has no bearing on a special, which was never sent.
    */
   async function handleAuto() {
+    // The rules must be LOADED before anything solves or fills. Reachable only
+    // by a save-shaped race (the config step gates "Previsualizar →" on the same
+    // value), and the honest answer is a refusal: an Auto run against no rules
+    // seats people a hard block exists to keep apart, under a normal success
+    // toast — the exact silent-degradation the cutover is built to avoid.
+    const config = solverConfig;
+    if (!config) {
+      setAutoError("No se pudieron cargar las reglas compartidas. Recárgalas antes de usar Auto.");
+      return;
+    }
     const built = buildSolveRequest({
-      config: solverConfig,
+      config,
       members,
       sundayDates: sundayDatesFull,
       activeSatDates,
@@ -1567,7 +1737,7 @@ export default function MonthGenerator({
       // the one E5 names outright: "a month with no Sunday leads must still
       // fill its specials". The specials never needed the solver.
       setAutoError(built.reason);
-      applySpecialFill(cells);
+      applySpecialFill(config, cells);
       return;
     }
 
@@ -1587,7 +1757,7 @@ export default function MonthGenerator({
         // EXIT 2 — the solver answered, and said no. A short-staffed month is
         // the solver's NORMAL failure (D15); the specials still fill.
         setAutoError(response?.error ?? "El solver no encontró solución.");
-        applySpecialFill(cells);
+        applySpecialFill(config, cells);
         return;
       }
 
@@ -1617,6 +1787,7 @@ export default function MonthGenerator({
       // otherwise an unfilled marker from a week that was never staffed renders
       // on a date the admin deselected, or on a column that is now a special.
       applySpecialFill(
+        config,
         applied.cells,
         mapUnfilledSeats(response.unfilled_seats ?? [], sundayDatesFull, activeSatDates, selectedSundays),
       );
@@ -1630,7 +1801,7 @@ export default function MonthGenerator({
       // and E5 says the specials fill even when the solve fails; exits 1 and 2
       // both satisfy a loosely-written test and neither reaches this line.
       setAutoError("Error de red al llamar al solver.");
-      applySpecialFill(cells);
+      applySpecialFill(config, cells);
     } finally {
       setAutoPending(false);
     }
@@ -1880,7 +2051,24 @@ export default function MonthGenerator({
         without pools, and gating this panel behind an opt-in left every admin
         who wanted Auto meeting the keyholed panel D17 fixes for the first time.
       */}
-      <SolverConfigPanel members={members} config={solverConfig} onChange={setSolverConfig} history={solverHistory} onRemoveHistory={removeHistoryEntry} />
+      {/*
+        Two renders, never one with a fallback. With no rules loaded there is
+        nothing true to put in the pools or the rule list, and drawing
+        `DEFAULT_SOLVER_CONFIG` there would present a rule set nobody wrote as
+        this team's — with a save control underneath offering to make it so.
+      */}
+      {solverConfig ? (
+        <SolverConfigPanel
+          members={members}
+          config={solverConfig}
+          onChange={setSolverConfig}
+          rules={rules}
+          history={solverHistory}
+          onRemoveHistory={removeHistoryEntry}
+        />
+      ) : (
+        <SolverConfigUnavailable source={rules.source} onReload={rules.reload} />
+      )}
 
       {gateBlocked && (
         <p className="font-body text-xs text-amber-400 bg-amber-500/10 rounded-lg px-3 py-2">{gateBlocked}</p>
@@ -1900,8 +2088,8 @@ export default function MonthGenerator({
         <button
           type="button"
           onClick={handlePreview}
-          disabled={columns.length === 0 || !!gateBlocked}
-          title={gateBlocked ?? undefined}
+          disabled={columns.length === 0 || !!gateBlocked || !!rulesBlocked}
+          title={gateBlocked ?? rulesBlocked ?? undefined}
           className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
         >
           Previsualizar →
@@ -2045,7 +2233,7 @@ export default function MonthGenerator({
           onAuto={handleAuto}
           autoState={autoState}
           diagnostics={diagnostics}
-          config={solverConfig}
+          config={solverConfig ?? undefined}
           sundayDates={sundayDatesFull}
         />
       ) : (

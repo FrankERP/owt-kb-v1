@@ -19,6 +19,30 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MonthGenerator from "../MonthGenerator";
+import { readyRules } from "./rulesHarness";
+import type { SolverConfigController } from "../solverConfigSource";
+
+/**
+ * `MonthGenerator` with the shared rule set supplied.
+ *
+ * The prop is REQUIRED on the component (an optional one defaulting to
+ * `DEFAULT_SOLVER_CONFIG` is the "a failed read looks like the defaults"
+ * collapse the cutover exists to prevent), so every render has to name a state.
+ * `DEFAULT_RULES` is `ready` holding `DEFAULT_SOLVER_CONFIG` — production's
+ * state, and byte-for-byte the rule set these tests exercised before the
+ * cutover, when it was the component's own initial state. A stable module-level
+ * object, so the load-sync effect fires once rather than on every render.
+ */
+const DEFAULT_RULES = readyRules();
+
+function Gen({
+  rules = DEFAULT_RULES,
+  ...props
+}: Omit<React.ComponentProps<typeof MonthGenerator>, "rules"> & {
+  rules?: SolverConfigController;
+}) {
+  return <MonthGenerator {...props} rules={rules} />;
+}
 
 afterEach(() => {
   cleanup();
@@ -148,7 +172,7 @@ describe("Auto on a month whose only column is a special", () => {
   function setup() {
     const { fetchMock, calls } = stubFetch(unreachableSolve);
     const view = render(
-      <MonthGenerator
+      <Gen
         members={[LUCIA, NIZA]}
         existingRoles={[]}
         onClose={vi.fn()}
@@ -224,7 +248,7 @@ describe("the Auto confirmation copy", () => {
   function openConfirm(members: { _id: string }[], withSpecial: boolean) {
     stubFetch(unreachableSolve);
     const view = render(
-      <MonthGenerator
+      <Gen
         members={members as never}
         existingRoles={[]}
         onClose={vi.fn()}
@@ -259,7 +283,7 @@ describe("Auto when the solve fails on the network", () => {
       throw new Error("network down");
     });
     const { container } = render(
-      <MonthGenerator
+      <Gen
         members={[ANA, LUCIA, NIZA, BETO]}
         existingRoles={[]}
         onClose={vi.fn()}
@@ -302,7 +326,7 @@ describe("Auto when the solver refuses the month", () => {
   function setup(solve: () => unknown) {
     const { fetchMock } = stubFetch(solve);
     const view = render(
-      <MonthGenerator
+      <Gen
         members={[ANA, LUCIA, NIZA, BETO]}
         existingRoles={[]}
         onClose={vi.fn()}
@@ -377,7 +401,7 @@ describe("Auto when the solve succeeds", () => {
       }),
     }));
     const { container } = render(
-      <MonthGenerator
+      <Gen
         members={[ANA, LUCIA, NIZA, BETO]}
         existingRoles={[]}
         onClose={vi.fn()}
@@ -421,7 +445,7 @@ describe("two specials in one month", () => {
     // sits it out, and the only thing that can promote her on the second
     // special is the load the first one created.
     const { container } = render(
-      <MonthGenerator
+      <Gen
         members={[ANA, BETO, CARLA, DORA, ELSA, FINA]}
         existingRoles={[]}
         onClose={vi.fn()}
