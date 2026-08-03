@@ -323,8 +323,13 @@ describe("the source union cannot express a save outside `ready`", () => {
     // because `rev` is an excess property, and would START failing — as an
     // UNUSED expect-error — the moment somebody widened the variant to accept
     // it. That is the mutation the old literal-based test could not see.
-    // Written per-variant rather than against `SolverConfigSource`, because
-    // excess-property checking on a union admits any key present in ANY member.
+    // Written per-variant, against `Extract<SolverConfigSource, {status: …}>`,
+    // rather than annotated as the bare union: `SolverConfigSource` is
+    // discriminated on `status`, so TS narrows to the matching member before
+    // excess-property-checking these literals either way — both forms are
+    // sound here. `Extract<…>` is kept because each directive then pins the
+    // ONE variant it names, legible at the assertion itself rather than left
+    // to whichever member TS happens to narrow to.
     const absent: Extract<SolverConfigSource, { status: "absent" }> = {
       status: "absent",
       config: DEFAULT_SOLVER_CONFIG,

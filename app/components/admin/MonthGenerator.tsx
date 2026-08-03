@@ -1320,10 +1320,20 @@ export default function MonthGenerator({
    * Keyed on `solverConfig`, NOT on `source.status`, and that is the difference
    * between "we have no rules" and "we could not re-read the rules". A panel
    * that was `ready` keeps its rule set through a failed reload, so the grid
-   * still has something real to enforce and is still entered — a transient GET
-   * is no reason to discard a month's work. What that state owes the admin is
-   * to SAY the read failed (`SolverConfigReloadNotice`, and the third branch of
-   * the copy in `RuleBuilder`), not to lock the surface.
+   * still has something real to enforce and is still entered. Blocking on
+   * `source.status === "error"` here would NOT protect grid work either way —
+   * `handlePreview` re-checks this same gate at handler entry, and resets
+   * `rows`/`cells`/`drafts` on every entry regardless, so there is no work in
+   * progress to discard. The actual cost of blocking is AVAILABILITY: an admin
+   * who already has a real rule set would be locked out of the planner for as
+   * long as one network blip on the reload lasts. And the retained config is a
+   * genuine server read — unlike `DEFAULT_SOLVER_CONFIG` in the never-`ready`
+   * case, this is not a fabricated rule set — while the Tablero already
+   * enforces nothing in this state (`enforceableConfig`), so the grid keeping
+   * last-known-good is strictly more enforcement than that surface gets. What
+   * this state owes the admin is to SAY the read failed
+   * (`SolverConfigReloadNotice`, and the third branch of the copy in
+   * `RuleBuilder`), not to lock the surface.
    */
   const rulesBlocked =
     solverConfig === null
