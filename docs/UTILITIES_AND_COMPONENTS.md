@@ -183,8 +183,8 @@ Legend: **[C]** client, **[S]** server.
 | `ProposalsPanel` | Admin review of lead proposals (approve / request changes / reopen). |
 | `AvailabilityPanel` | Team availability vs. scheduled services. |
 | `ActivityPanel` | Member activity / last-login ("Hoy"/"Ayer" calendar-day labels). |
-| `ParticipationSidebar` | Participation bar chart (`computeParticipation`); Voces/Instrumentos toggle. |
-| `ParticipationRail` | Placement only — puts `ParticipationSidebar` in the page's empty side gutter (`position: fixed`) beside the planner grid (≥1700px) and the Tablero (≥1380px), so neither surface loses width. Below the threshold the grid's copy stacks inline; the Tablero's renders nothing (that dialog exists to avoid a third scroll region). Counts come from the callers: `plannerParticipationRoles` and `boardParticipationRoles` each union the SAVED history with the drafts/seats currently on screen, so the totals move as the admin assigns. |
+| `ParticipationSidebar` | Participation bar chart (`computeParticipation`); Voces/Instrumentos toggle. Header is a stacked block with a `w-full` select — beside the title the select's longest option ("Instrumentos") overflowed the 216px rail onto the grid. |
+| `ParticipationRail` | Placement only — puts `ParticipationSidebar` in the page's empty side gutter (`position: fixed`, 216px) beside the planner grid (≥1700px) and the Tablero (≥1380px), so neither surface loses width. Below the threshold the grid's copy stacks inline; the Tablero's renders nothing (that dialog exists to avoid a third scroll region). Counts come from the callers, and the two answer different questions: the grid's rail is scoped to **the month being generated** — everything saved in that month plus the creatable drafts on screen, de-duplicated (`plannerParticipationRoles`), so an empty grid reads zero; the Tablero's is a rolling 56-day window anchored at the edited service's date, with the stored copy of that service swapped for the live seats (`boardParticipationRoles`). |
 
 #### Service-readiness card layer
 
