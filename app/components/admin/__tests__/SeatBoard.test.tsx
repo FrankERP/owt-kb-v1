@@ -10,7 +10,8 @@
 import { fireEvent, render, cleanup, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import SeatBoard from "../SeatBoard";
+import SeatBoard, { occupancyAfterPick, withSeatOverrides } from "../SeatBoard";
+import type { RankedCandidate } from "../candidateRanking";
 
 afterEach(() => cleanup());
 
@@ -441,5 +442,230 @@ describe("SeatBoard — hard rules (P6)", () => {
   it("shows no unresolved-names warning when every rule name resolves", () => {
     render(<SeatBoard {...base} members={aliased} config={config} />);
     expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  // ── P10: a human may override a hard block; the automation may not ─────────
+  //
+  // Task 9 brought the hard blocks to this surface and left the override behind,
+  // so against the LIVE rule set an admin editing a Saturday service could no
+  // longer seat Frank, Mkz or Gaby in any voice row — the only escape being to
+  // delete the rule globally, which also changes the solver for every future
+  // month. These pin the two-interaction shape the planner grid already ships:
+  // the blocked row stays inert, and a second, separate action seats them and
+  // records WHICH rule was waived.
+  describe("the override takes a second, deliberate action", () => {
+    const overrideButtons = () =>
+      screen.queryAllByRole("button", { name: "Asignar de todos modos" });
+    /** The seat pane's Voces section — where the persistent marker belongs. */
+    const voicePane = () => screen.getByText("Voces").closest("section") as HTMLElement;
+
+    it("leaves the blocked row inert and seats only via «Asignar de todos modos»", () => {
+      const onSubmit = vi.fn();
+      render(
+        <SeatBoard
+          {...base}
+          members={aliased}
+          config={config}
+          onSubmit={onSubmit}
+          initial={{ _type: "special_role", date: "2026-08-14", service_name: "Vigilia" } as never}
+        />,
+      );
+
+      fireEvent.click(rosterRow("Gaby")); // seats Gaby on Lead
+      const blocked = rosterRow("Lucía");
+      expect(blocked.getAttribute("aria-disabled")).toBe("true");
+
+      // The primary row first: clicking and keying it must do nothing at all.
+      fireEvent.click(blocked);
+      fireEvent.keyDown(blocked, { key: "Enter" });
+      fireEvent.keyDown(blocked, { key: " " });
+      expect(within(voicePane()).queryByText("Lucía")).toBeNull();
+
+      // Exactly one candidate offers the override — the rule-blocked one.
+      const buttons = overrideButtons();
+      expect(buttons).toHaveLength(1);
+      expect(
+        within(rosterRow("Lucía")).getByRole("button", { name: "Asignar de todos modos" }),
+      ).toBeTruthy();
+
+      fireEvent.click(buttons[0]);
+      fireEvent.click(screen.getByRole("button", { name: /guardar/i }));
+      expect(onSubmit.mock.calls[0][0].leads).toEqual(["m2", "m3"]);
+    });
+
+    it("marks the seat with the waived rule instead of going silently green", () => {
+      render(
+        <SeatBoard
+          {...base}
+          members={aliased}
+          config={config}
+          initial={{ _type: "special_role", date: "2026-08-14" } as never}
+        />,
+      );
+      fireEvent.click(rosterRow("Gaby"));
+      fireEvent.click(overrideButtons()[0]);
+      // Names WHO was seated past WHICH rule — an override that only says
+      // "Lucía, here" is indistinguishable from a rule nobody ever wrote.
+      expect(
+        within(voicePane()).getByText(/Regla anulada — Lucía: Regla: no puede coincidir con Gaby/),
+      ).toBeTruthy();
+    });
+
+    it("offers NO override for a same-category double — D6 is not a judgement call", () => {
+      // Frank carries BOTH refusals here: he holds Lead (the double) and
+      // `Frank !in Sun.BGV` refuses him on BGV (the rule). Either term alone
+      // would leave the other deletable with every test still green.
+      render(
+        <SeatBoard
+          {...base}
+          members={aliased}
+          config={config}
+          initial={{ _type: "sunday_role", date: "2026-08-09" } as never}
+        />,
+      );
+      fireEvent.click(rosterRow("Frank")); // Lead
+      fireEvent.click(screen.getByText("BGV"));
+      const row = rosterRow("Frank");
+      expect(row.getAttribute("aria-disabled")).toBe("true");
+      expect(row.getAttribute("title")).toMatch(/Lead/); // the double wins the wording
+      expect(overrideButtons()).toHaveLength(0);
+    });
+
+    // Removing the member must CLEAR their record, not merely stop rendering it.
+    // The marker is drawn from who currently occupies the seat, so a stale entry
+    // is invisible until the person comes back — and then it credits an override
+    // to a plain, unblocked click nobody ever waived a rule for. Both removal
+    // routes are walked all the way to that re-seating.
+    const overrideLucia = () => {
+      fireEvent.click(rosterRow("Gaby")); // seats Gaby on Lead — the conflict
+      fireEvent.click(overrideButtons()[0]); // seats Lucía past it, recorded
+      expect(within(voicePane()).queryByText(/Regla anulada/)).toBeTruthy();
+    };
+    /** Dissolve the rule (un-seat Gaby), then seat Lucía with a normal click. */
+    const reseatLuciaCleanly = () => {
+      fireEvent.click(rosterRow("Gaby"));
+      const row = rosterRow("Lucía");
+      expect(row.getAttribute("aria-disabled")).toBeNull(); // nothing blocks her now
+      fireEvent.click(row);
+      expect(within(voicePane()).getByText("Lucía")).toBeTruthy();
+    };
+
+    it("clears the record when the roster row un-seats them", () => {
+      render(
+        <SeatBoard
+          {...base}
+          members={aliased}
+          config={config}
+          initial={{ _type: "special_role", date: "2026-08-14" } as never}
+        />,
+      );
+      overrideLucia();
+      fireEvent.click(rosterRow("Lucía")); // selectable once seated (self-exempt)
+      expect(within(voicePane()).queryByText(/Regla anulada/)).toBeNull();
+      reseatLuciaCleanly();
+      expect(within(voicePane()).queryByText(/Regla anulada/)).toBeNull();
+    });
+
+    it("clears the record when the seat chip's × removes them", () => {
+      render(
+        <SeatBoard
+          {...base}
+          members={aliased}
+          config={config}
+          initial={{ _type: "special_role", date: "2026-08-14" } as never}
+        />,
+      );
+      overrideLucia();
+      // Both removals go through the CHIP, so no roster toggle intervenes to
+      // prune on this seat's behalf — this is what makes the × route's own
+      // pruning the thing under test.
+      fireEvent.click(screen.getByRole("button", { name: /Quitar a Gaby de Lead/ }));
+      fireEvent.click(screen.getByRole("button", { name: /Quitar a Lucía de Lead/ }));
+      expect(within(voicePane()).queryByText(/Regla anulada/)).toBeNull();
+
+      const row = rosterRow("Lucía");
+      expect(row.getAttribute("aria-disabled")).toBeNull(); // nothing blocks her now
+      fireEvent.click(row);
+      expect(within(voicePane()).getByText("Lucía")).toBeTruthy();
+      expect(within(voicePane()).queryByText(/Regla anulada/)).toBeNull();
+    });
+
+    it("offers no override at all where no rule blocks anyone", () => {
+      // Without a config nothing is rule-blocked, so the secondary action never
+      // appears — the surface keeps its original one-click behaviour.
+      render(
+        <SeatBoard {...base} members={aliased} initial={{ _type: "special_role", date: "2026-08-14" } as never} />,
+      );
+      fireEvent.click(rosterRow("Gaby"));
+      expect(overrideButtons()).toHaveLength(0);
+    });
+  });
+});
+
+// ── The pick's own refusal, pinned directly ─────────────────────────────────
+//
+// `RosterRow` blocks its own `onClick`/`onKeyDown`, so no DOM path can reach the
+// pick with a blocked candidate — which is why dropping the `ruleBlockedReason`
+// term from it once passed every test with only the render side pinned. These
+// call it directly.
+describe("occupancyAfterPick", () => {
+  const seat = { max: null };
+  const candidate = (over: Partial<RankedCandidate>): RankedCandidate => ({
+    id: "m1",
+    name: "Frank",
+    available: true,
+    alreadyAssigned: false,
+    blockedReason: null,
+    ruleBlockedReason: null,
+    eligible: true,
+    load: 0,
+    recent: [],
+    ...over,
+  });
+
+  it("refuses a pick a RULE blocks, with no same-category double in sight", () => {
+    expect(
+      occupancyAfterPick([], seat, candidate({ ruleBlockedReason: "Regla: excluido de Sat.*" }), "m1"),
+    ).toBeNull();
+  });
+
+  it("refuses a pick a same-category double blocks", () => {
+    expect(occupancyAfterPick([], seat, candidate({ blockedReason: "Ya está en Lead" }), "m1")).toBeNull();
+  });
+
+  it("adds an unblocked pick, and REMOVES a seated one even while blocked", () => {
+    expect(occupancyAfterPick([], seat, candidate({}), "m1")).toEqual(["m1"]);
+    // Un-seating is never refused, or a pair a rule now forbids could not be
+    // taken apart.
+    expect(
+      occupancyAfterPick(["m1"], seat, candidate({ ruleBlockedReason: "Regla: …" }), "m1"),
+    ).toEqual([]);
+  });
+
+  it("replaces rather than grows a single-occupant seat", () => {
+    expect(occupancyAfterPick(["m9"], { max: 1 }, candidate({}), "m1")).toEqual(["m1"]);
+  });
+});
+
+// ── The override record, pruned against who is actually seated ───────────────
+describe("withSeatOverrides", () => {
+  it("drops an entry for anyone no longer seated", () => {
+    const prev = { lead: { m2: "Regla: A", m3: "Regla: B" } };
+    expect(withSeatOverrides(prev, "lead", ["m3"])).toEqual({ lead: { m3: "Regla: B" } });
+  });
+
+  it("records a new override only for someone the seating actually kept", () => {
+    expect(withSeatOverrides({}, "lead", ["m2"], { memberId: "m2", reason: "Regla: A" })).toEqual({
+      lead: { m2: "Regla: A" },
+    });
+    // Evicted by a single-occupant seat in the same edit: no entry survives.
+    expect(withSeatOverrides({}, "lead", ["m9"], { memberId: "m2", reason: "Regla: A" })).toEqual({
+      lead: {},
+    });
+  });
+
+  it("leaves other seats alone", () => {
+    const prev = { lead: { m2: "Regla: A" }, bgv: { m3: "Regla: B" } };
+    expect(withSeatOverrides(prev, "lead", [])).toEqual({ lead: {}, bgv: { m3: "Regla: B" } });
   });
 });

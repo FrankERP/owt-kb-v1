@@ -54,12 +54,19 @@ mechanism for a different shape of problem, and the confirmation copy in
 it is the alternative that was rejected, not the one that was chosen. Per-browser
 storage cannot make "hard" true:
 
-- The second surface that enforces rules (`SeatBoard`, the single-service
-  editor) has no access to the config at all, so the same pick is refused in the
-  planner and allowed one screen away.
 - A second admin's browser holds a different set of rules, or none. Two people
   planning the same month enforce different constraints, silently.
 - Clearing site data deletes every rule with no trace.
+- **Even inside ONE browser the two surfaces can disagree.** They now read the
+  same key (Task 9 gave `SeatBoard` the config through `ServicesPanel`), but
+  `readStoredSolverConfig` answers `null` for a stored value that is absent or
+  byte-equal to `DEFAULT_SOLVER_CONFIG`, while `MonthGenerator` seeds its own
+  state from that same constant — so on a browser where nobody has edited a
+  rule, the generator hard-blocks against the six-restriction seed and the
+  Tablero enforces nothing. That is the deliberately safe side of an
+  indistinguishable pair (`isFirstRunSolverSeed`), not a bug to close, and the
+  rule panel's copy says which of the two states this browser is in rather than
+  claiming parity. It disappears when the rules move to Sanity.
 
 A rule the user described as hard cannot depend on which browser is open.
 
@@ -82,12 +89,36 @@ A rule the user described as hard cannot depend on which browser is open.
   on a manual pick. `ruleEnforcement.ts` lists both as deliberate non-goals and
   the rule panel says so on screen. Adding them locally means deciding what a
   month-scoped statement means against a month that has not been committed yet.
-- **A human may override a hard block; the automation may not.** `PlannerGrid`'s
-  "Asignar de todos modos" is a second, separate action on a blocked candidate,
-  recorded in `GridCell.overrides` and rendered as a persistent "regla anulada"
-  marker. `localFill.ts` has no path to it. That asymmetry is the requirement:
-  what was rejected was automation quietly preferring the protected people, not
-  a person making a deliberate exception. Do not "simplify" it by letting the
-  filler consume an override, and do not fold the override into the primary
-  candidate row — a one-click override is the mis-click that seats exactly the
-  pair a rule exists to keep apart.
+- **A human may override a hard block; the automation may not — on BOTH
+  surfaces.** "Asignar de todos modos" is a second, separate action on a
+  rule-blocked candidate, in `PlannerGrid`'s picker and in `SeatBoard`'s roster.
+  The blocked row itself stays inert in both, and in both the seating is recorded
+  with the RULE it waived and rendered as a persistent "Regla anulada — {person}:
+  {rule}" marker rather than going silently green. Only `ruleBlockedReason` is
+  overridable: a same-category double (`blockedReason`, D6) is a data error, not
+  a judgement call, and is refused identically either way. `localFill.ts` has no
+  path to any of it — `fillColumn` only ever appends, never writes an override
+  and never reads one as permission. That asymmetry is the requirement: what was
+  rejected was automation quietly preferring the protected people, not a person
+  making a deliberate exception. Do not "simplify" it by letting the filler
+  consume an override, and do not fold the override into the primary candidate
+  row — a one-click override is the mis-click that seats exactly the pair a rule
+  exists to keep apart.
+
+  The two surfaces differ in **how long the record lives**, because their state
+  differs and nothing was invented to hide it. The planner's override rides in
+  `GridCell.overrides`/`overrideReasons` and lasts as long as the draft; the
+  board's rides in component state keyed by seat, and ends when the dialog
+  closes, because a service document has no field for it. The board loses a
+  marker on reopen and nothing else: no surface re-checks who is ALREADY seated
+  there (`evaluate` self-exempts occupants, so there is no E13 on the board), so
+  a forgotten override cannot turn into a false accusation. Giving it a longer
+  life is a schema field and a migration — part of the Sanity cutover, not
+  something to bolt on.
+
+  **Why the Tablero has it at all.** Task 9 extended the hard blocks to that
+  surface without the override, and against the live rule set that left an admin
+  editing a *Saturday* service unable to seat Frank, Mkz or Gaby in any voice
+  row, with no escape but deleting the rule globally in "Generar mes" — which
+  also changes the solver for every future month. One of those three is the user
+  who asked for the override.

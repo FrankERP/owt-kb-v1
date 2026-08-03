@@ -972,9 +972,37 @@ describe("PlannerGrid — P10, the override takes a second, deliberate action", 
   it("offers NO override for a same-category double — D6 is not a judgement call", () => {
     // Frank holds Lead; the BGV picker refuses him as a double. That refusal is
     // a data error on two shipped surfaces, not something to wave through.
-    const { container } = render(<PlannerGrid {...specialProps({ cells: FRANK_ON_LEAD })} />);
+    //
+    // The config must ALSO rule-block him here, or this test passes for the
+    // wrong reason: with `Frank !with Gaby on *.Lead` alone his
+    // `ruleBlockedReason` on BGV is null, `overridable` is already false on its
+    // FIRST term, and the `!candidate.blockedReason` term it exists to pin can
+    // be deleted with every test still green. `Frank !in *.BGV` is what makes
+    // him carry both refusals at once.
+    const bothRefusals: SolverConfig = {
+      ...CONFLICT_CONFIG,
+      restrictions: [
+        {
+          id: "r-frank-bgv",
+          person: "Frank",
+          excludedPatterns: ["*.BGV"],
+          fairness: "none",
+          fairnessSlack: 0,
+          weekExclusions: [],
+          caps: [],
+        },
+      ],
+    };
+    const { container } = render(
+      <PlannerGrid {...specialProps({ cells: FRANK_ON_LEAD, config: bothRefusals })} />,
+    );
     fireEvent.click(cellFor(container, "bgv", SPECIAL_DATE));
-    expect(candidateLi("Frank").getAttribute("aria-disabled")).toBe("true");
+    const frank = candidateLi("Frank");
+    expect(frank.getAttribute("aria-disabled")).toBe("true");
+    // Both refusals really are live on this row: the double wins the wording
+    // (`title`), and the rule is named in the row's own text.
+    expect(frank.getAttribute("title")).toMatch(/Lead/);
+    expect(within(frank).getByText(/Regla: excluido de \*\.BGV/)).toBeTruthy();
     expect(overrideButtons()).toHaveLength(0);
   });
 

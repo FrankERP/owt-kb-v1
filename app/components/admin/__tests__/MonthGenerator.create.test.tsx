@@ -1794,3 +1794,92 @@ describe("MonthGenerator — persisting the rule set", () => {
     expect(JSON.parse(saved!).sundayLeads).toEqual(["lead-1"]);
   });
 });
+
+// ─── The rule panel says what THIS browser actually enforces ─────────────────
+//
+// The copy used to claim, unconditionally, that exclusions and conflicts are
+// hard "tanto aquí como al editar un servicio en el Tablero". On a browser where
+// nobody has edited a rule that is false: `readStoredSolverConfig` answers
+// `null` for an absent value AND for one byte-equal to `DEFAULT_SOLVER_CONFIG`,
+// so `ServicesPanel` passes no config and the Tablero enforces nothing — while
+// this panel hard-blocks against the full six-restriction seed. A rule that
+// LOOKS enforced and is not is worse than one plainly not offered
+// (`ruleEnforcement.ts`), so the sentence has to describe the state it is in.
+describe("MonthGenerator — what the rule panel claims about the Tablero", () => {
+  const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] }];
+  const open = () =>
+    render(<MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />);
+  const PARITY = /tanto aquí como al editar un servicio en el/;
+
+  it("claims no parity while the rules are still the untouched seed", () => {
+    const { container } = open();
+    expect(container.textContent).not.toMatch(PARITY);
+    // And says so positively, rather than merely staying silent.
+    expect(container.textContent).toMatch(/solo aquí/);
+    expect(container.textContent).toMatch(/no bloquean nada/);
+  });
+
+  it("claims parity as soon as this browser holds rules somebody wrote", () => {
+    // The same edit that makes `readStoredSolverConfig` return something is what
+    // makes the claim true, so the copy turns over on exactly that event.
+    const { container } = open();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Ana" }));
+    expect(localStorage.getItem("owt_solver_config_v3")).not.toBeNull();
+    expect(container.textContent).toMatch(PARITY);
+    expect(container.textContent).not.toMatch(/no bloquean nada/);
+  });
+
+  it("keeps caps and presence out of both versions of the claim", () => {
+    // Neither is hard anywhere, whatever the browser holds.
+    const { container } = open();
+    expect(container.textContent).toMatch(/topes/);
+    expect(container.textContent).toMatch(/solo los resuelve el solver en domingos y\s+sábados/);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Ana" }));
+    expect(container.textContent).toMatch(/solo los resuelve el solver en domingos y\s+sábados/);
+  });
+});
+
+// ─── The year field never hands out a half-typed year ────────────────────────
+//
+// `min`/`max` on a number input stop no keystroke. Retyping the year walked the
+// state through 2, 20, 202 — and `new Date("202-08-01T12:00:00")` is an Invalid
+// Date, so the whole calendar rendered NaN cells labelled "Invalid Date", each
+// of which still opened the special composer.
+describe("MonthGenerator — the year field", () => {
+  const open = () =>
+    render(<MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />);
+  const yearField = (container: HTMLElement) =>
+    container.querySelector('input[type="number"]') as HTMLInputElement;
+  const cellDates = (container: HTMLElement) =>
+    [...container.querySelectorAll("[data-date]")].map((el) => el.getAttribute("data-date") ?? "");
+
+  it("derives no calendar from a half-typed year", () => {
+    const { container } = open();
+    setMonthYear(container, 8, 2026);
+    const field = yearField(container);
+    fireEvent.change(field, { target: { value: "202" } });
+
+    // The field shows what was typed — it is not fighting the typist...
+    expect(field.value).toBe("202");
+    // ...but nothing downstream ever sees it.
+    const dates = cellDates(container);
+    expect(dates.length).toBeGreaterThan(0);
+    expect(dates.every((d) => d.startsWith("2026-08-"))).toBe(true);
+    expect(container.textContent).not.toContain("NaN");
+    expect(container.querySelector('[aria-label*="Invalid Date"]')).toBeNull();
+
+    // Leaving the field puts it back in step with the year actually in use.
+    fireEvent.blur(field);
+    expect(field.value).toBe("2026");
+  });
+
+  it("clamps a complete year to the range the field offers", () => {
+    const { container } = open();
+    setMonthYear(container, 8, 2026);
+    const field = yearField(container);
+    fireEvent.change(field, { target: { value: "1999" } });
+    expect(cellDates(container).every((d) => d.startsWith("2024-08-"))).toBe(true);
+    fireEvent.blur(field);
+    expect(field.value).toBe("2024");
+  });
+});

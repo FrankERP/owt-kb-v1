@@ -15,6 +15,7 @@ import { unresolvedRuleNames } from "./ruleEnforcement";
 import {
   DEFAULT_SOLVER_CONFIG,
   SOLVER_CONFIG_STORAGE_KEY,
+  isFirstRunSolverSeed,
   readStoredSolverConfig,
 } from "./solverConfigStorage";
 import {
@@ -678,6 +679,29 @@ function RuleBuilder({ config, onChange, members }: {
   const total = config.restrictions.length + config.conflicts.length + config.presence.length;
   const isFormOpen = !!adding || !!editingId;
 
+  /**
+   * Does the TABLERO enforce what is on this screen? Asked of the live config,
+   * because the honest answer differs per browser.
+   *
+   * `ServicesPanel` feeds `SeatBoard` from `readStoredSolverConfig`, which
+   * answers `null` — "no rules here" — for a stored value that is absent OR
+   * byte-equal to `DEFAULT_SOLVER_CONFIG`. This panel meanwhile seeds its own
+   * state from that same constant and hard-blocks against it. So on a browser
+   * where nobody has touched a rule, the two surfaces genuinely disagree: six
+   * seeded restrictions are hard here and nothing at all is hard there.
+   *
+   * The copy below therefore states which of the two states THIS browser is in.
+   * Claiming parity unconditionally was worse than offering no claim: this
+   * branch's own standard (`ruleEnforcement.ts`) is that a rule which LOOKS
+   * enforced and is not beats a rule plainly not offered — the wrong way round.
+   *
+   * **Do not "fix" the asymmetry instead of describing it.** The seed detection
+   * is deliberate (`isFirstRunSolverSeed`, with its own tests) and the seed
+   * literal is booby-trapped: the match is exact, so editing
+   * `DEFAULT_SOLVER_CONFIG` makes every already-persisted seed start enforcing.
+   */
+  const enforcedInTablero = !isFirstRunSolverSeed(config);
+
   return (
     <div className="space-y-2">
       {/*
@@ -800,16 +824,18 @@ function RuleBuilder({ config, onChange, members }: {
            copy. Do not soften this sentence ahead of the seed — an admin told
            their rules are shared, while they are not, is exactly how a second
            admin's month gets built against rules nobody else has.
-        2. Exclusions and conflicts ARE hard on BOTH surfaces now: the planner
-           grid and the Tablero's service editor, which reads this same key.
-           Week exclusions are hard on the grid ONLY — the Tablero edits one
-           service at a time and has no Sunday spine, so there is no week to
-           match (`ruleEnforcement.ts`, `weekForColumn`). Caps and presence are
-           not hard anywhere: they reach CP-SAT for Sundays and Saturdays and
+        2. Exclusions and conflicts are hard on the planner grid ALWAYS, and on
+           the Tablero's service editor only once this browser holds rules
+           somebody actually wrote — see `enforcedInTablero` above, which is why
+           this paragraph has two versions and not one. Week exclusions are hard
+           on the grid ONLY, even then — the Tablero edits one service at a time
+           and has no Sunday spine, so there is no week to match
+           (`ruleEnforcement.ts`, `weekForColumn`). Caps and presence are not
+           hard anywhere: they reach CP-SAT for Sundays and Saturdays and
            nothing checks them elsewhere — a special never goes to the solver,
-           and neither does a manual pick. Stated because a rule that looks
-           enforced and is not is worse than one that is plainly not offered
-           (`ruleEnforcement.ts` lists both as deliberate non-goals).
+           and neither does a manual pick. All of it stated because a rule that
+           looks enforced and is not is worse than one that is plainly not
+           offered (`ruleEnforcement.ts` lists both as deliberate non-goals).
 
         Revise sentence 1 in the same change that lands the cutover
         (`docs/adr/0010-specials-fill-locally-not-in-the-solver.md`), never
@@ -819,13 +845,27 @@ function RuleBuilder({ config, onChange, members }: {
         Las reglas se guardan todavía solo en <span className="text-amber-400">este navegador</span>:
         otro administrador no las verá, y se pierden si borras los datos del sitio.
       </p>
+      {enforcedInTablero ? (
+        <p className="font-body text-[11px] text-gray-500 px-1">
+          Se aplican como bloqueo duro los patrones excluidos y los conflictos entre dos personas,
+          tanto aquí como al editar un servicio en el{" "}
+          <span className="text-gray-400">Tablero</span>. Las{" "}
+          <span className="text-gray-400">semanas excluidas</span> solo se verifican aquí: el editor
+          del Tablero trabaja sobre un servicio suelto y no sabe en qué semana del mes cae.
+        </p>
+      ) : (
+        <p className="font-body text-[11px] text-gray-500 px-1">
+          Estas son todavía las reglas de <span className="text-amber-400">ejemplo</span> con las que
+          llega la app: mientras no cambies ninguna, los patrones excluidos y los conflictos se
+          aplican como bloqueo duro <span className="text-amber-400">solo aquí</span> — al editar un
+          servicio en el <span className="text-gray-400">Tablero</span> no bloquean nada. Cambia
+          cualquier regla y pasan a aplicarse también allí, salvo las{" "}
+          <span className="text-gray-400">semanas excluidas</span>, que solo se verifican aquí: el
+          editor del Tablero trabaja sobre un servicio suelto y no sabe en qué semana del mes cae.
+        </p>
+      )}
       <p className="font-body text-[11px] text-gray-500 px-1">
-        Se aplican como bloqueo duro los patrones excluidos y los conflictos entre dos personas,
-        tanto aquí como al editar un servicio en el{" "}
-        <span className="text-gray-400">Tablero</span>. Las{" "}
-        <span className="text-gray-400">semanas excluidas</span> solo se verifican aquí: el editor
-        del Tablero trabaja sobre un servicio suelto y no sabe en qué semana del mes cae. Los{" "}
-        <span className="text-gray-400">topes</span> y la{" "}
+        Los <span className="text-gray-400">topes</span> y la{" "}
         <span className="text-gray-400">presencia</span> solo los resuelve el solver en domingos y
         sábados: en servicios especiales y al asignar a mano no se verifican.
       </p>
@@ -851,6 +891,51 @@ function AddRuleButton({ label, title, tone, disabled, onClick }: {
     >
       {label}
     </button>
+  );
+}
+
+const MIN_YEAR = 2024;
+const MAX_YEAR = 2035;
+
+/**
+ * The year field — which never hands out a half-typed year.
+ *
+ * `min`/`max` on a number input are advisory: they stop no keystroke, so
+ * `Number(e.target.value)` sees 2, 20, 202 while "2026" is being retyped, and
+ * the WHOLE setup step is derived from that number. `new Date("202-08-01T12:00:00")`
+ * is an Invalid Date, so every calendar cell renders `NaN`, every cell's
+ * `aria-label` reads "Invalid Date", and clicking one opens the special composer
+ * on a date that does not exist.
+ *
+ * So the FIELD holds the raw text and the YEAR only ever accepts a complete,
+ * clamped four-digit value; blur puts the text back in step with what was
+ * accepted. Clamping on every keystroke instead — the one-line version — fights
+ * the typist: "2027" typed over a selection lands on 2024 at the first digit and
+ * cannot recover.
+ */
+function YearInput({ value, onChange, className }: {
+  value: number;
+  onChange: (year: number) => void;
+  className?: string;
+}) {
+  const [text, setText] = useState(String(value));
+  const complete = (raw: string) => /^\d{4}$/.test(raw);
+  const clamp = (n: number) => Math.min(MAX_YEAR, Math.max(MIN_YEAR, n));
+  return (
+    <input
+      className={className}
+      type="number"
+      value={text}
+      min={MIN_YEAR}
+      max={MAX_YEAR}
+      onChange={e => {
+        setText(e.target.value);
+        if (complete(e.target.value)) onChange(clamp(Number(e.target.value)));
+      }}
+      // Whatever is half-typed or out of range becomes the year that was
+      // actually accepted, so the field never disagrees with the calendar.
+      onBlur={() => setText(String(complete(text) ? clamp(Number(text)) : value))}
+    />
   );
 }
 
@@ -1739,7 +1824,7 @@ export default function MonthGenerator({
         </div>
         <div className="space-y-1">
           <label className="font-label text-xs uppercase tracking-widest text-gray-500">Año</label>
-          <input className={inCls} type="number" value={year} min={2024} max={2035} onChange={e => setYear(Number(e.target.value))} />
+          <YearInput className={inCls} value={year} onChange={setYear} />
         </div>
       </div>
 
