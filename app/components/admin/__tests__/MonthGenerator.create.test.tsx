@@ -25,6 +25,37 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MonthGenerator from "../MonthGenerator";
+import { absentRules, failedRules, loadingRules, readyRules } from "./rulesHarness";
+import {
+  READ_FAILED_MESSAGE,
+  SAVE_STALE_MESSAGE,
+  sourceFromGet,
+  type SolverConfigController,
+} from "../solverConfigSource";
+import { DEFAULT_SOLVER_CONFIG } from "../solverConfigDefaults";
+import type { SolverConfig } from "../plannerModel";
+
+/**
+ * `MonthGenerator` with the shared rule set supplied.
+ *
+ * The prop is REQUIRED on the component (an optional one defaulting to
+ * `DEFAULT_SOLVER_CONFIG` is the "a failed read looks like the defaults"
+ * collapse the cutover exists to prevent), so every render has to name a state.
+ * `DEFAULT_RULES` is `ready` holding `DEFAULT_SOLVER_CONFIG` — production's
+ * state, and byte-for-byte the rule set these tests exercised before the
+ * cutover, when it was the component's own initial state. A stable module-level
+ * object, so the load-sync effect fires once rather than on every render.
+ */
+const DEFAULT_RULES = readyRules();
+
+function Gen({
+  rules = DEFAULT_RULES,
+  ...props
+}: Omit<React.ComponentProps<typeof MonthGenerator>, "rules"> & {
+  rules?: SolverConfigController;
+}) {
+  return <MonthGenerator {...props} rules={rules} />;
+}
 import type { TargetPreflight, TargetPreflightState } from "../serviceReadiness";
 
 afterEach(() => {
@@ -173,7 +204,7 @@ describe("MonthGenerator — create path", () => {
     const { fetchMock, calls } = stubRolesFetch(() => ({ ok: true }));
 
     const { container } = render(
-      <MonthGenerator
+      <Gen
         members={noMembers}
         existingRoles={[]}
         onClose={vi.fn()}
@@ -204,7 +235,7 @@ describe("MonthGenerator — create path", () => {
     const fetchMock = stubUnreachableFetch();
 
     const { container } = render(
-      <MonthGenerator
+      <Gen
         members={noMembers}
         existingRoles={[]}
         onClose={vi.fn()}
@@ -233,7 +264,7 @@ describe("MonthGenerator — create path", () => {
   it("gives each posted draft its own, distinct creationRequestId", async () => {
     const { fetchMock, calls } = stubRolesFetch(() => ({ ok: true }));
     const { container } = render(
-      <MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     goToPreview(container, 2, 2026);
 
@@ -258,7 +289,7 @@ describe("MonthGenerator — create path", () => {
 
     const onClose = vi.fn();
     const { container } = render(
-      <MonthGenerator members={noMembers} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
+      <Gen members={noMembers} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
     );
     goToPreview(container, 2, 2026);
 
@@ -297,7 +328,7 @@ describe("MonthGenerator — create path", () => {
   it('"Crear N borrador(es)" posts published:false for every draft in the batch', async () => {
     const { fetchMock, calls } = stubRolesFetch(() => ({ ok: true }));
     const { container } = render(
-      <MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     goToPreview(container, 2, 2026);
 
@@ -309,7 +340,7 @@ describe("MonthGenerator — create path", () => {
   it('"Crear y publicar" posts published:true for every draft in the batch', async () => {
     const { fetchMock, calls } = stubRolesFetch(() => ({ ok: true }));
     const { container } = render(
-      <MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     goToPreview(container, 2, 2026);
 
@@ -327,7 +358,7 @@ describe("MonthGenerator — create path", () => {
     const fetchMock = stubUnreachableFetch();
     const onClose = vi.fn();
     const { container, rerender } = render(
-      <MonthGenerator
+      <Gen
         members={noMembers}
         existingRoles={[]}
         onClose={onClose}
@@ -339,7 +370,7 @@ describe("MonthGenerator — create path", () => {
     expect(createButton()).toBeTruthy();
 
     rerender(
-      <MonthGenerator
+      <Gen
         members={noMembers}
         existingRoles={[]}
         onClose={onClose}
@@ -366,7 +397,7 @@ describe("MonthGenerator — create path", () => {
   it('"Debes seleccionar al menos un líder de domingo" refuses before any /api/admin/solve call', async () => {
     const fetchMock = stubUnreachableFetch();
     const { container } = render(
-      <MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     goToPreview(container, 2, 2026); // "Previsualizar →" now only builds an empty grid.
 
@@ -413,7 +444,7 @@ describe("MonthGenerator — create path", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     fireEvent.click(screen.getByLabelText("Ana"));
     goToPreview(container, 2, 2026);
@@ -455,7 +486,7 @@ describe("MonthGenerator — create path", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     fireEvent.click(screen.getByLabelText("Ana"));
     goToPreview(container, 2, 2026);
@@ -489,7 +520,7 @@ describe("MonthGenerator — create path", () => {
     const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz"] }];
     const { fetchMock } = stubRolesFetch(() => ({ ok: true }));
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     goToPreview(container, 2, 2026);
 
@@ -525,7 +556,7 @@ describe("MonthGenerator — create path", () => {
     const { fetchMock } = stubRolesFetch(() => ({ ok: true }));
 
     const { container } = render(
-      <MonthGenerator
+      <Gen
         members={members}
         existingRoles={[{ _type: "sunday_role", date: preExisting }] as never}
         onClose={vi.fn()}
@@ -562,7 +593,7 @@ describe("MonthGenerator — create path", () => {
     );
 
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     goToPreview(container, 2, 2026);
 
@@ -592,7 +623,7 @@ describe("MonthGenerator — create path", () => {
 
     const first = stubRolesFetch(() => ({ ok: true }));
     const { container, unmount } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     goToPreview(container, 2, 2026);
     const firstCell = container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]');
@@ -610,7 +641,7 @@ describe("MonthGenerator — create path", () => {
     // and the wizard re-run) — this time Ana is assigned on TWO Sundays.
     const second = stubRolesFetch(() => ({ ok: true }));
     const { container: container2 } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     goToPreview(container2, 2, 2026);
     for (const date of [FEB_2026_SUNDAYS[0], FEB_2026_SUNDAYS[1]]) {
@@ -654,7 +685,7 @@ describe("MonthGenerator — create path", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     goToPreview(container, 2, 2026);
 
@@ -714,7 +745,7 @@ describe("MonthGenerator — create path", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { container, rerender } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     goToPreview(container, 2, 2026);
 
@@ -736,7 +767,7 @@ describe("MonthGenerator — create path", () => {
     // production: the two dates THIS session just created now come back as
     // `existingRoles` from the server.
     rerender(
-      <MonthGenerator
+      <Gen
         members={members}
         existingRoles={[
           { _id: "r1", _type: "sunday_role", date: FEB_2026_SUNDAYS[0] },
@@ -826,7 +857,7 @@ describe("MonthGenerator — create path", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     setMonthYear(container, 10, 2026);
     // Deselect every October Saturday on the calendar, then re-select ONLY the 31st.
@@ -877,7 +908,7 @@ describe("MonthGenerator — create path", () => {
   // checkboxes to per-date calendar cells. The assertion is unchanged.
   it("Previsualizar → stays disabled when the calendar has no date selected at all", () => {
     const { container } = render(
-      <MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     deselectAll(container, "sunday");
     deselectAll(container, "saturday");
@@ -891,7 +922,7 @@ describe("MonthGenerator — create path", () => {
       { _id: "drum-1", member_name: "Beto", memberType: ["instrumento"] },
     ];
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     goToPreview(container, 2, 2026);
 
@@ -928,7 +959,7 @@ describe("MonthGenerator — create path", () => {
     ];
     const onClose = vi.fn();
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
     );
     goToPreview(container, 2, 2026);
     const drumsCell = container.querySelector('[data-row-id="instrumento:Drums"][data-date="2026-02-01"]');
@@ -948,7 +979,7 @@ describe("MonthGenerator — create path", () => {
     ];
     const onClose = vi.fn();
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
     );
     goToPreview(container, 2, 2026);
     const drumsCell = container.querySelector('[data-row-id="instrumento:Drums"][data-date="2026-02-01"]');
@@ -965,7 +996,7 @@ describe("MonthGenerator — create path", () => {
   it("Escape with an empty grid closes immediately, no confirmation", () => {
     const onClose = vi.fn();
     const { container } = render(
-      <MonthGenerator members={noMembers} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
+      <Gen members={noMembers} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
     );
     goToPreview(container, 2, 2026);
 
@@ -993,7 +1024,7 @@ describe("MonthGenerator — create path", () => {
     });
 
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     goToPreview(container, 2, 2026);
 
@@ -1043,7 +1074,7 @@ describe("MonthGenerator — create path", () => {
   it("D9: with Domingos unchecked, no Sunday column is rendered and no sunday_role is ever POSTed", async () => {
     const { fetchMock, calls } = stubRolesFetch(() => ({ ok: true }));
     const { container } = render(
-      <MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     setMonthYear(container, 2, 2026);
     deselectAll(container, "sunday"); // Saturdays stay selected
@@ -1079,7 +1110,7 @@ describe("MonthGenerator — create path", () => {
 
   it("E21: deselecting a Sunday does not make its adjacent Saturday 'fuera del alcance de Auto'", () => {
     const { container, unmount } = render(
-      <MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     setMonthYear(container, 3, 2026);
     // Deselect ONLY the third Sunday. Its adjacent Saturday (2026-03-14) stays
@@ -1114,7 +1145,7 @@ describe("MonthGenerator — create path", () => {
     // deselected at all. Without this half, a `unaddressableDates` that always
     // returned [] would pass the assertions above.
     const second = render(
-      <MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     setMonthYear(second.container, 2, 2026);
     fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
@@ -1151,7 +1182,7 @@ describe("MonthGenerator — create path", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     setMonthYear(container, 3, 2026);
     deselectAll(container, "saturday");
@@ -1190,7 +1221,7 @@ describe("MonthGenerator — create path", () => {
       memberType: ["voz", "sunday_lead", "saturday_lead", "support"],
     }));
     render(
-      <MonthGenerator members={manyVoz} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={manyVoz} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     // Open the "≥1 Presencia" add-form — its member list is the other one
     // D17 de-keyholed, and it isn't in the DOM until "adding" it.
@@ -1211,7 +1242,7 @@ describe("MonthGenerator — create path", () => {
   it("Escape closes the generator, from both the config step and the grid step", () => {
     const onClose = vi.fn();
     const { unmount } = render(
-      <MonthGenerator members={noMembers} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
+      <Gen members={noMembers} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
     );
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -1219,7 +1250,7 @@ describe("MonthGenerator — create path", () => {
 
     const onClose2 = vi.fn();
     const { container } = render(
-      <MonthGenerator members={noMembers} existingRoles={[]} onClose={onClose2} onCreated={vi.fn()} />,
+      <Gen members={noMembers} existingRoles={[]} onClose={onClose2} onCreated={vi.fn()} />,
     );
     goToPreview(container, 2, 2026);
     fireEvent.keyDown(document, { key: "Enter" }); // a non-Escape key is a no-op
@@ -1237,7 +1268,7 @@ describe("MonthGenerator — create path", () => {
   it("refuses to swap a Sunday column with a Saturday column, so a Coro assignment is never silently dropped", () => {
     const members = [{ _id: "m1", member_name: "Ana", memberType: ["voz"] }];
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     setMonthYear(container, 2, 2026);
     fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
@@ -1284,7 +1315,7 @@ describe("MonthGenerator — create path", () => {
     // would be dead on arrival with only a generic "no se pudieron crear".
     const { fetchMock, calls } = stubRolesFetch(() => ({ ok: true }));
     const { container } = render(
-      <MonthGenerator
+      <Gen
         members={noMembers}
         existingRoles={[]}
         onClose={vi.fn()}
@@ -1324,7 +1355,7 @@ describe("MonthGenerator — create path", () => {
     // hands it `previous: []`.
     const { fetchMock, calls } = stubRolesFetch(() => ({ ok: true }));
     const { container } = render(
-      <MonthGenerator
+      <Gen
         members={noMembers}
         existingRoles={[]}
         onClose={vi.fn()}
@@ -1384,7 +1415,7 @@ describe("MonthGenerator — create path", () => {
       date === failingSunday ? { ok: false, status: 500 } : { ok: true },
     );
     const { container } = render(
-      <MonthGenerator
+      <Gen
         members={noMembers}
         existingRoles={[]}
         onClose={vi.fn()}
@@ -1444,7 +1475,7 @@ describe("MonthGenerator — create path", () => {
       date === failingSunday ? { ok: false, status: 500 } : { ok: true },
     );
     const { container } = render(
-      <MonthGenerator
+      <Gen
         members={noMembers}
         existingRoles={[]}
         onClose={vi.fn()}
@@ -1514,7 +1545,7 @@ describe("MonthGenerator — create path", () => {
     const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz"] }];
     const { fetchMock } = stubRolesFetch(() => ({ ok: true }));
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     specialsOnly(container, 2, 2026);
     addSpecial(container, SPECIAL_DATE, "Vigilia");
@@ -1539,7 +1570,7 @@ describe("MonthGenerator — create path", () => {
     // the case it lets through, because both columns have the same type.
     const members = [{ _id: "m1", member_name: "Ana", memberType: ["voz"] }];
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     specialsOnly(container, 2, 2026);
     addSpecial(container, SPECIAL_DATE, "Vigilia");
@@ -1576,7 +1607,7 @@ describe("MonthGenerator — create path", () => {
     // before "Previsualizar →" — which is what re-runs `cellsToDrafts`.
     const fetchMock = stubUnreachableFetch();
     const { container, rerender } = render(
-      <MonthGenerator
+      <Gen
         members={noMembers}
         existingRoles={[]}
         onClose={vi.fn()}
@@ -1588,7 +1619,7 @@ describe("MonthGenerator — create path", () => {
     addSpecial(container, SPECIAL_DATE, "Vigilia");
 
     rerender(
-      <MonthGenerator
+      <Gen
         members={noMembers}
         existingRoles={[
           { _id: "sp1", _type: "special_role", date: SPECIAL_DATE, service_name: "Vigilia" },
@@ -1620,7 +1651,7 @@ describe("MonthGenerator — create path", () => {
     const stored = FEB_2026_SUNDAYS[0];
     const { fetchMock, calls } = stubRolesFetch(() => ({ ok: true }));
     const { container } = render(
-      <MonthGenerator
+      <Gen
         members={noMembers}
         existingRoles={[{ _id: "r1", _type: "sunday_role", date: stored }]}
         onClose={vi.fn()}
@@ -1652,14 +1683,20 @@ describe("MonthGenerator — create path", () => {
 describe("MonthGenerator — unresolved RULE names", () => {
   const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] }];
 
-  /** The persisted rules an admin's browser hands back on open. */
-  function seedConfig(config: Record<string, unknown>) {
-    localStorage.setItem("owt_solver_config_v3", JSON.stringify(config));
+  /**
+   * The SHARED DOCUMENT the panel opens against, routed through the real read
+   * path (`sourceFromGet`) rather than hand-built — so these tests exercise the
+   * same wire-to-state mapping production does, including its normalisation.
+   */
+  function seededRules(config: Record<string, unknown>) {
+    const source = sourceFromGet(true, { present: true, rev: "rev-1", config });
+    if (source.status !== "ready") throw new Error("fixture is not a readable document");
+    return { source, reload: vi.fn(), save: vi.fn(async () => ({ ok: true as const })) };
   }
 
   it("reports a conflict naming a nonexistent person, with fetch never called", () => {
     const fetchMock = stubUnreachableFetch();
-    seedConfig({
+    const rules = seededRules({
       sundayLeads: ["lead-1"],
       saturdayLeads: [],
       support: [],
@@ -1668,35 +1705,37 @@ describe("MonthGenerator — unresolved RULE names", () => {
       presence: [],
     });
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />,
     );
     goToPreview(container, 2, 2026);
     expect(screen.getByText(/Nombres no reconocidos: .*Fulanito/)).toBeTruthy();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("a config persisted before `conflicts`/`presence` existed still reaches the solver", async () => {
-    // The hydration guard has only ever checked `sundayLeads` and
-    // `restrictions`, so a value written before those two fields were added
-    // arrives with them `undefined` while `SolverConfig` asserts otherwise.
-    // `buildSolveRequest` iterates all three, and it runs BEFORE `handleAuto`'s
-    // try/catch — so without normalisation at hydration this click throws and
-    // Auto is dead for that admin until they clear site data.
+  it("a STORED document missing `conflicts`/`presence` still renders and reaches the solver", async () => {
+    // Was "a config persisted before conflicts/presence existed" — the same
+    // hazard, one storage layer over. The document is written by whatever
+    // version of this app last saved it, and the fields a future version adds
+    // arrive `undefined` from an older one while `SolverConfig` asserts they are
+    // arrays. `solverConfigFromDocument` (inside `sourceFromGet`) is the guard
+    // now; the retired `localStorage` normaliser is not a second lock behind it.
     //
+    // `buildSolveRequest` iterates all three, and it runs BEFORE `handleAuto`'s
+    // try/catch — so without normalisation this click throws and Auto is dead.
     // The click is not even the first casualty: `MemberPool` reads
     // `config.saturdayLeads.length` on the CONFIG STEP'S OWN RENDER, so removing
-    // the normaliser fails this test at `render`, with
-    // `TypeError: Cannot read properties of undefined (reading 'length')` at
-    // `MonthGenerator.tsx:295` — a white screen the moment the generator opens.
-    // Nothing in `ruleEnforcement` guards that path.
+    // the normalisation fails this test at `render` with
+    // `TypeError: Cannot read properties of undefined (reading 'length')` — a
+    // white screen the moment the generator opens. Nothing in `ruleEnforcement`
+    // guards that path.
     const fetchMock = vi.fn(async (url: string) => {
       if (url !== "/api/admin/solve") throw new Error(`unexpected fetch to ${url}`);
       return { ok: true, json: async () => ({ ok: false, error: "sin solución" }) };
     });
     vi.stubGlobal("fetch", fetchMock);
-    seedConfig({ sundayLeads: ["lead-1"], restrictions: [] });
+    const rules = seededRules({ sundayLeads: ["lead-1"], restrictions: [] });
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />,
     );
     goToPreview(container, 2, 2026);
     fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
@@ -1706,7 +1745,7 @@ describe("MonthGenerator — unresolved RULE names", () => {
 
   it("says nothing when every rule name resolves", () => {
     stubUnreachableFetch();
-    seedConfig({
+    const rules = seededRules({
       sundayLeads: ["lead-1"],
       saturdayLeads: [],
       support: [],
@@ -1715,7 +1754,7 @@ describe("MonthGenerator — unresolved RULE names", () => {
       presence: [],
     });
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />,
     );
     goToPreview(container, 2, 2026);
     expect(screen.queryByText(/Nombres no reconocidos/)).toBeNull();
@@ -1726,7 +1765,7 @@ describe("MonthGenerator — unresolved RULE names", () => {
     // must survive: a solve that wiped the rule report, or a rule report that
     // hid the solver's, would each hide a real problem on the one screen that
     // needs both.
-    seedConfig({
+    const rules = seededRules({
       sundayLeads: ["lead-1"],
       saturdayLeads: [],
       support: [],
@@ -1751,7 +1790,7 @@ describe("MonthGenerator — unresolved RULE names", () => {
       }),
     );
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />,
     );
     goToPreview(container, 2, 2026);
     fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
@@ -1763,79 +1802,198 @@ describe("MonthGenerator — unresolved RULE names", () => {
   });
 });
 
-// ─── Opening the generator is not writing a rule ─────────────────────────────
+// ─── Saving the rule set is EXPLICIT, and nothing else writes ────────────────
 //
-// This panel persists `solverConfig` on every change, and its state STARTS as
-// the shipped first-run seed. While that write was unconditional, merely opening
-// "Generar mes" left six restrictions, five conflicts and a presence rule in
-// `owt_solver_config_v3` — and `ServicesPanel` reads that same key to decide
-// what `SeatBoard` HARD-BLOCKS on. So every admin who had ever opened this panel
-// would have had the Tablero start refusing picks against rules nobody on the
-// team wrote, on the strength of "a key exists".
-describe("MonthGenerator — persisting the rule set", () => {
+// Before the cutover, persistence was an unconditional effect on every
+// `solverConfig` change, into `owt_solver_config_v3`. Against a shared server
+// document that shape is not merely wasteful: a POST per keystroke thrashes the
+// route's `_rev` check, so an admin loses their own edits to their own
+// concurrency guard. The button is now the only writer — and the browser key is
+// neither read nor written any more, which had to happen in this same change or
+// the fetched document would have been mirrored straight back into it.
+describe("MonthGenerator — saving the rule set", () => {
   const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] }];
+  const saveButton = () => screen.getByRole("button", { name: /Guardar reglas|Guardando|Guardado/ });
 
-  it("writes nothing to `owt_solver_config_v3` just for being opened", () => {
-    render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
-    );
+  it("writes nothing at all just for being opened, or for an edit", () => {
+    const rules = readyRules();
+    render(<Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />);
+    expect(localStorage.getItem("owt_solver_config_v3")).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Ana" }));
+    // The edit is on screen and NOT saved: per-keystroke persistence is exactly
+    // what the `_rev` guard cannot survive.
+    expect(rules.save).not.toHaveBeenCalled();
     expect(localStorage.getItem("owt_solver_config_v3")).toBeNull();
   });
 
-  it("writes as soon as the admin actually changes something", () => {
-    // The guard is "the untouched seed", not "never persist": one deliberate
-    // edit and the rules are this browser's again.
-    render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
-    );
+  it("posts the EDITED config with the observed rev, once, when Guardar is pressed", async () => {
+    const rules = readyRules(DEFAULT_SOLVER_CONFIG, { rev: "rev-9" });
+    render(<Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />);
     fireEvent.click(screen.getByRole("checkbox", { name: "Ana" }));
-    const saved = localStorage.getItem("owt_solver_config_v3");
-    expect(saved, "a deliberate pool change must persist").not.toBeNull();
-    expect(JSON.parse(saved!).sundayLeads).toEqual(["lead-1"]);
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(rules.save).toHaveBeenCalledTimes(1));
+    const [config, rev] = rules.save.mock.calls[0];
+    expect(rev).toBe("rev-9");
+    expect((config as SolverConfig).sundayLeads).toEqual(["lead-1"]);
+  });
+
+  it("is disabled until something changes, and settles back when an edit is undone", () => {
+    // By CONTENT, not by reference: toggling a pool on and off again leaves the
+    // document unchanged, so there is nothing to write.
+    render(<Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={readyRules()} />);
+    expect((saveButton() as HTMLButtonElement).disabled).toBe(true);
+    expect(saveButton().textContent).toMatch(/Guardado/);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Ana" }));
+    expect((saveButton() as HTMLButtonElement).disabled).toBe(false);
+    expect(saveButton().textContent).toMatch(/Guardar reglas/);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Ana" }));
+    expect((saveButton() as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("cannot save at all while the document is ABSENT — only the seed script may create it", () => {
+    // There is no `rev` in that state, so the write is unrepresentable rather
+    // than merely discouraged. The route refuses a create as a second lock.
+    const rules = absentRules();
+    render(<Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Ana" }));
+    expect((saveButton() as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(saveButton());
+    expect(rules.save).not.toHaveBeenCalled();
+  });
+
+  it("reports a FAILURE as a failure — edits stay, nothing goes green", async () => {
+    const rules = readyRules(DEFAULT_SOLVER_CONFIG, {
+      save: async () => ({ ok: false, message: "Se rompió al guardar.", stale: false }),
+    });
+    render(<Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Ana" }));
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Se rompió al guardar."));
+    // The loading flag was reset (a `finally`), the edit survived, and the
+    // button still offers to retry rather than reading as saved.
+    expect(saveButton().textContent).toMatch(/Guardar reglas/);
+    expect((screen.getByRole("checkbox", { name: "Ana" }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("a STALE rev surfaces as a lost race, with the reload that fixes it", async () => {
+    // Not as a generic error: the whole point of the shared document is two
+    // admins, and "someone changed this first" is the only failure a reload
+    // resolves. Offering the reload is what makes the message actionable.
+    const rules = readyRules(DEFAULT_SOLVER_CONFIG, {
+      save: async () => ({ ok: false, message: SAVE_STALE_MESSAGE, stale: true }),
+    });
+    render(<Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Ana" }));
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe(SAVE_STALE_MESSAGE));
+    fireEvent.click(screen.getByRole("button", { name: "Recargar reglas" }));
+    expect(rules.reload).toHaveBeenCalledTimes(1);
   });
 });
 
-// ─── The rule panel says what THIS browser actually enforces ─────────────────
+// ─── A failed read REFUSES, it does not offer the defaults ───────────────────
 //
-// The copy used to claim, unconditionally, that exclusions and conflicts are
-// hard "tanto aquí como al editar un servicio en el Tablero". On a browser where
-// nobody has edited a rule that is false: `readStoredSolverConfig` answers
-// `null` for an absent value AND for one byte-equal to `DEFAULT_SOLVER_CONFIG`,
-// so `ServicesPanel` passes no config and the Tablero enforces nothing — while
-// this panel hard-blocks against the full six-restriction seed. A rule that
-// LOOKS enforced and is not is worse than one plainly not offered
-// (`ruleEnforcement.ts`), so the sentence has to describe the state it is in.
+// The single most expensive mistake available here: `fetched ??
+// DEFAULT_SOLVER_CONFIG` inside a try/catch turns a transient fetch failure into
+// "your team's rules are the shipped samples". One edit plus Guardar then
+// replaces the shared document wholesale, and until somebody notices, the hard
+// blocks on both surfaces are whatever the samples say.
+describe("MonthGenerator — the rules failed to load", () => {
+  const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] }];
+
+  it("shows the error instead of the rule panel — no pools, no rules, no save", () => {
+    const rules = failedRules();
+    const { container } = render(
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />,
+    );
+    expect(screen.getByRole("alert").textContent).toBe(READ_FAILED_MESSAGE);
+    // The seeded sample rules must not be on screen at all: rendering them is
+    // the collapse, whether or not a save follows.
+    expect(container.textContent).not.toMatch(/Reglas \(/);
+    expect(screen.queryByRole("checkbox", { name: "Ana" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Guardar reglas|Guardado/ })).toBeNull();
+    expect(rules.save).not.toHaveBeenCalled();
+  });
+
+  it("refuses to enter the grid, and offers the retry that fixes it", () => {
+    const rules = failedRules();
+    render(<Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />);
+    const preview = screen.getByRole("button", { name: /Previsualizar/ }) as HTMLButtonElement;
+    expect(preview.disabled).toBe(true);
+    fireEvent.click(preview);
+    expect(screen.queryByRole("button", { name: /Auto-asignar con Solver/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+    expect(rules.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("says it is still loading rather than showing anything, while in flight", () => {
+    const { container } = render(
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={loadingRules()} />,
+    );
+    expect(container.textContent).toContain("Cargando las reglas compartidas");
+    expect(container.textContent).not.toMatch(/Reglas \(/);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect((screen.getByRole("button", { name: /Previsualizar/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+// ─── The rule panel says where the rules actually live ───────────────────────
+//
+// It used to say "todavía solo en este navegador" and pick between two versions
+// of the enforcement claim with `isFirstRunSolverSeed` — a content-equality test
+// against the shipped seed. Both are false after the cutover. The claim still
+// has two versions, but the branch is now a FACT rather than a heuristic:
+// whether the shared document exists. With no document there is nothing shared,
+// nothing saveable, and `enforceableConfig` gives the Tablero nothing — so that
+// state keeps its own honest sentence instead of a softened parity claim.
 describe("MonthGenerator — what the rule panel claims about the Tablero", () => {
   const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] }];
-  const open = () =>
-    render(<MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />);
   const PARITY = /tanto aquí como al editar un servicio en el/;
 
-  it("claims no parity while the rules are still the untouched seed", () => {
-    const { container } = open();
+  it("claims parity, and shared storage, when the document exists", () => {
+    const { container } = render(
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={readyRules()} />,
+    );
+    expect(container.textContent).toMatch(PARITY);
+    expect(container.textContent).toMatch(/se guardan en el/);
+    expect(container.textContent).toMatch(/comparten todos los administradores/);
+    expect(container.textContent).not.toMatch(/no bloquean nada/);
+    // The retired claim, in every spelling it had.
+    expect(container.textContent).not.toMatch(/este navegador/);
+    expect(container.textContent).not.toMatch(/borras los datos del sitio/);
+  });
+
+  it("says the edits on screen are not the Tablero's rules until Guardar", () => {
+    // The price of an explicit save, stated rather than hidden: an unsaved rule
+    // hard-blocks here and nowhere else.
+    const { container } = render(
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={readyRules()} />,
+    );
+    expect(container.textContent).toMatch(/no valen en el/);
+    expect(container.textContent).toMatch(/hasta que pulses/);
+  });
+
+  it("claims NO parity, and no shared storage, when there is no document", () => {
+    const { container } = render(
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={absentRules()} />,
+    );
     expect(container.textContent).not.toMatch(PARITY);
     // And says so positively, rather than merely staying silent.
     expect(container.textContent).toMatch(/solo aquí/);
     expect(container.textContent).toMatch(/no bloquean nada/);
-  });
-
-  it("claims parity as soon as this browser holds rules somebody wrote", () => {
-    // The same edit that makes `readStoredSolverConfig` return something is what
-    // makes the claim true, so the copy turns over on exactly that event.
-    const { container } = open();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Ana" }));
-    expect(localStorage.getItem("owt_solver_config_v3")).not.toBeNull();
-    expect(container.textContent).toMatch(PARITY);
-    expect(container.textContent).not.toMatch(/no bloquean nada/);
+    expect(container.textContent).toMatch(/no se pueden\s+guardar desde aquí/);
   });
 
   it("keeps caps and presence out of both versions of the claim", () => {
-    // Neither is hard anywhere, whatever the browser holds.
-    const { container } = open();
-    expect(container.textContent).toMatch(/topes/);
-    expect(container.textContent).toMatch(/solo los resuelve el solver en domingos y\s+sábados/);
-    fireEvent.click(screen.getByRole("checkbox", { name: "Ana" }));
-    expect(container.textContent).toMatch(/solo los resuelve el solver en domingos y\s+sábados/);
+    // Neither is hard anywhere, whatever the server holds.
+    for (const rules of [readyRules(), absentRules()]) {
+      const { container } = render(
+        <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />,
+      );
+      expect(container.textContent).toMatch(/topes/);
+      expect(container.textContent).toMatch(/solo los resuelve el solver en domingos y\s+sábados/);
+      cleanup();
+    }
   });
 });
 
@@ -1847,7 +2005,7 @@ describe("MonthGenerator — what the rule panel claims about the Tablero", () =
 // of which still opened the special composer.
 describe("MonthGenerator — the year field", () => {
   const open = () =>
-    render(<MonthGenerator members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />);
+    render(<Gen members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />);
   const yearField = (container: HTMLElement) =>
     container.querySelector('input[type="number"]') as HTMLInputElement;
   const cellDates = (container: HTMLElement) =>

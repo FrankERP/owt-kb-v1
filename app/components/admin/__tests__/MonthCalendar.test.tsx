@@ -19,6 +19,30 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MonthCalendar, { refuseSpecialOn, refuseWeekendOn } from "../MonthCalendar";
 import MonthGenerator from "../MonthGenerator";
+import { readyRules } from "./rulesHarness";
+import type { SolverConfigController } from "../solverConfigSource";
+
+/**
+ * `MonthGenerator` with the shared rule set supplied.
+ *
+ * The prop is REQUIRED on the component (an optional one defaulting to
+ * `DEFAULT_SOLVER_CONFIG` is the "a failed read looks like the defaults"
+ * collapse the cutover exists to prevent), so every render has to name a state.
+ * `DEFAULT_RULES` is `ready` holding `DEFAULT_SOLVER_CONFIG` — production's
+ * state, and byte-for-byte the rule set these tests exercised before the
+ * cutover, when it was the component's own initial state. A stable module-level
+ * object, so the load-sync effect fires once rather than on every render.
+ */
+const DEFAULT_RULES = readyRules();
+
+function Gen({
+  rules = DEFAULT_RULES,
+  ...props
+}: Omit<React.ComponentProps<typeof MonthGenerator>, "rules"> & {
+  rules?: SolverConfigController;
+}) {
+  return <MonthGenerator {...props} rules={rules} />;
+}
 // The SHARED key builder, never a hand-rolled `${type}__${date}` — a second
 // copy in the tests could drift from the one both surfaces read.
 import { draftTargetKey } from "../plannerModel";
@@ -326,7 +350,7 @@ describe("MonthGenerator + calendar — E21: the week spine stays the FULL month
     const { captured, fetchMock } = stubSolve({});
     const members = [{ ...ANA, unavailableDates: ["2026-08-16"] }];
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     setMonthYear(container, 8, 2026);
     deselectAll(container, "saturday");
@@ -356,7 +380,7 @@ describe("MonthGenerator + calendar — E21: the week spine stays the FULL month
       "3": { Sunday: { Lead: ["Ana"], BGV: [], Choir: [] } },
     });
     const { container } = render(
-      <MonthGenerator members={[ANA]} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={[ANA]} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     setMonthYear(container, 8, 2026);
     deselectAll(container, "saturday");
@@ -398,7 +422,7 @@ describe("MonthGenerator + calendar — a specials-only month", () => {
 
     const members = [{ _id: "ana", member_name: "Ana", memberType: ["voz"] }];
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     setMonthYear(container, 8, 2026);
     deselectAll(container, "sunday");
@@ -429,7 +453,7 @@ describe("MonthGenerator + calendar — a specials-only month", () => {
 
   it("Previsualizar is disabled only when there is NO column of any kind", () => {
     const { container } = render(
-      <MonthGenerator members={[]} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={[]} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     setMonthYear(container, 8, 2026);
     deselectAll(container, "sunday");
@@ -462,7 +486,7 @@ describe("MonthGenerator + calendar — picks are scoped to one month", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { container } = render(
-      <MonthGenerator members={[]} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={[]} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     setMonthYear(container, 8, 2026);
     composeSpecial(WEDNESDAY, "Bautizos");
@@ -495,7 +519,7 @@ describe("MonthGenerator + calendar — picks are scoped to one month", () => {
   // pins that the reset restores a full month rather than carrying a gap over.
   it("a Sunday deselected in August does not leave September's third Sunday missing", () => {
     const { container } = render(
-      <MonthGenerator members={[]} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={[]} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     setMonthYear(container, 8, 2026);
     fireEvent.click(cell(container, "2026-08-16"));
@@ -522,7 +546,7 @@ describe("MonthGenerator + calendar — unavailability notices follow the column
       },
     ];
     const { container } = render(
-      <MonthGenerator members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     setMonthYear(container, 8, 2026);
     deselectAll(container, "saturday");

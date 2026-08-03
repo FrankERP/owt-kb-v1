@@ -1,6 +1,6 @@
 # ADR-0010: Fill special services locally; move the rules to Sanity
 
-**Date:** 2026-08-01 · **Status:** Accepted (P6 decided, implementation pending)
+**Date:** 2026-08-01 · **Status:** Accepted · P6 implemented 2026-08-03 (seeded 2026-08-02)
 
 ## Context
 
@@ -23,13 +23,38 @@ five weekend voice role types only. Specials are auto-filled by
 `app/components/admin/localFill.ts` — greedy, single-column, one-pass, no
 backtracking — and the rules are enforced locally by
 `app/components/admin/ruleEnforcement.ts`, which is also what makes a manual
-pick a hard block in `PlannerGrid.tsx` and, once seated, what re-checks the
-column (E13).
+pick a hard block on BOTH manual surfaces — `PlannerGrid.tsx` and, since
+9e0f703, `SeatBoard.tsx`'s service editor — and, once seated, what re-checks the
+column (E13). Week exclusions are the one asymmetry: the board edits a single
+service and has no Sunday spine, so there is no week to match.
 
-**2. The rules move to Sanity.** Decided here, **implemented separately** — as
-of this ADR the config still lives in `localStorage` under
-`owt_solver_config_v3`, and the rule panel's own copy in `MonthGenerator.tsx`
-says so, correctly. Revise that copy in the same change that lands the move.
+**2. The rules move to Sanity. DONE.** One singleton document
+(`sanity/schemas/solverConfig.ts`, fixed `_id: solverConfig`), seeded to
+production 2026-08-02 from the live browser capture and made authoritative by
+the cutover. `ServicesPanel` mounts `useSolverConfig` once and threads the one
+controller to `MonthGenerator` and both `SeatBoard` mounts, so the two surfaces
+cannot hold different rules. The browser key is neither read nor written any
+more, and the rule panel's copy was revised in the same change.
+
+Three properties of that cutover are worth knowing before touching it:
+
+- **A save is EXPLICIT** ("Guardar reglas"). Persistence used to be an
+  unconditional effect on every config change; a POST per keystroke thrashes the
+  route's `_rev` check, so an admin would lose their own edits to their own
+  concurrency guard. The cost is stated on screen: an unsaved rule hard-blocks
+  in the planner and nowhere else.
+- **"Document absent" and "read failed" are different states and never collapse
+  into one `??`.** Absent falls back to `DEFAULT_SOLVER_CONFIG` **in memory
+  only**; a failed read shows the error and refuses to save. The union enforces
+  it structurally — `_rev` exists on `ready` alone, so a save from any other
+  state is unspellable rather than merely discouraged, and the route refuses a
+  CREATE as a second, independent lock.
+- **An absent document still gives the Tablero nothing.** `enforceableConfig`
+  hands over a config only in `ready`, which preserves that surface's
+  long-standing behaviour of enforcing nothing rather than hard-blocking against
+  rules nobody wrote. The planner deliberately differs (it has always shown and
+  enforced the sample rules when there were none), and the panel's copy says
+  which of the two states it is in rather than claiming parity.
 
 **3. A special counts toward the local `load` signal, and is excluded from
 persisted solver history.** `cellsToParticipantRoles` (`plannerModel.ts`) feeds
@@ -50,23 +75,21 @@ it at the solver** — the filler is not a degraded solver, it is a different
 mechanism for a different shape of problem, and the confirmation copy in
 `PlannerGrid` names it as one.
 
-**Leaving the rules in `localStorage`.** This is what the code does *today*, and
-it is the alternative that was rejected, not the one that was chosen. Per-browser
-storage cannot make "hard" true:
+**Leaving the rules in `localStorage`.** The alternative that was rejected —
+and, until the cutover, what the code actually did. Per-browser storage cannot
+make "hard" true:
 
 - A second admin's browser holds a different set of rules, or none. Two people
   planning the same month enforce different constraints, silently.
 - Clearing site data deletes every rule with no trace.
-- **Even inside ONE browser the two surfaces can disagree.** They now read the
-  same key (Task 9 gave `SeatBoard` the config through `ServicesPanel`), but
-  `readStoredSolverConfig` answers `null` for a stored value that is absent or
-  byte-equal to `DEFAULT_SOLVER_CONFIG`, while `MonthGenerator` seeds its own
-  state from that same constant — so on a browser where nobody has edited a
-  rule, the generator hard-blocks against the six-restriction seed and the
-  Tablero enforces nothing. That is the deliberately safe side of an
-  indistinguishable pair (`isFirstRunSolverSeed`), not a bug to close, and the
-  rule panel's copy says which of the two states this browser is in rather than
-  claiming parity. It disappears when the rules move to Sanity.
+- **Even inside ONE browser the two surfaces could disagree.** The interim state
+  read the same key on both, but "does this browser hold the team's rules?" had
+  to be guessed by comparing the stored value against the shipped defaults
+  (`isFirstRunSolverSeed`) — every admin who had merely OPENED the generator had
+  those defaults persisted. Safe, and unpleasant: the generator hard-blocked
+  against six sample restrictions while the Tablero enforced nothing. The
+  cutover retired the heuristic by making the server state the fact: `ready` vs
+  `absent`. The asymmetry itself survives on purpose, one state narrower.
 
 A rule the user described as hard cannot depend on which browser is open.
 
@@ -113,7 +136,8 @@ A rule the user described as hard cannot depend on which browser is open.
   marker on reopen and nothing else: no surface re-checks who is ALREADY seated
   there (`evaluate` self-exempts occupants, so there is no E13 on the board), so
   a forgotten override cannot turn into a false accusation. Giving it a longer
-  life is a schema field and a migration — part of the Sanity cutover, not
+  life is a schema field and a migration on the SERVICE document — deliberately
+  not taken by the rules cutover, which touched only the rule set, and still not
   something to bolt on.
 
   **Why the Tablero has it at all.** Task 9 extended the hard blocks to that

@@ -285,9 +285,19 @@ Hidden and read-only in the Studio, **and** in `PROTECTED_STUDIO_TYPES` / `INTER
 applies however the pane was reached, and it applies only to a governed type. Unlike
 `notificationOutbox` nothing here is prunable by hand: its inspection pane is for diagnosis only.
 
-**Status:** as of this writing the document is not yet seeded and `localStorage`
-(`owt_solver_config_v3`) is still the authoritative rule set. See
-[ADR-0010](adr/0010-specials-fill-locally-not-in-the-solver.md).
+**Status:** LIVE. Seeded to production 2026-08-02 from the rules captured out of the one
+browser that held them (they differed from the shipped defaults in two material ways — three
+deleted restrictions and three non-empty pools), and authoritative since the cutover. The
+browser key `owt_solver_config_v3` is no longer read or written; the stale values still in
+admins' browsers are inert. `owt_solver_history_v2` (the solver's fairness history) stays
+per-browser on purpose. See [ADR-0010](adr/0010-specials-fill-locally-not-in-the-solver.md).
+
+**Reading it from the client:** `useSolverConfig` (`app/components/admin/useSolverConfig.ts`),
+mounted once by `ServicesPanel`, which threads the one controller to `MonthGenerator` and both
+`SeatBoard` mounts. Its four states — `loading` / `error` / `absent` / `ready` — are the reason
+a failed read cannot be mistaken for an empty document: only `ready` carries the `_rev` a save
+needs, and only `ready` reaches the Tablero
+(`app/components/admin/solverConfigSource.ts`).
 
 ---
 

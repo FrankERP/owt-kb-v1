@@ -5,8 +5,8 @@ import { newCreationRequestId } from "@/app/utils/monthDraftCreate";
 import MonthGenerator from "./MonthGenerator";
 import SeatBoard from "./SeatBoard";
 import { applyRefreshedRole, refreshedRoleFromResponse } from "./applyRefreshedRole";
-import { readStoredSolverConfig } from "./solverConfigStorage";
-import type { SolverConfig } from "./plannerModel";
+import { enforceableConfig } from "./solverConfigSource";
+import { useSolverConfig } from "./useSolverConfig";
 import {
   SERVICE_SOURCE_KEYS,
   selectServiceCapabilities,
@@ -394,31 +394,24 @@ export default function ServicesPanel() {
   type EditModal = { type: "add" } | { type: "edit"; role: ServiceRole } | { type: "delete"; role: ServiceRole } | null;
   const [editModal, setEditModal] = useState<EditModal>(null);
   /**
-   * The rule set `SeatBoard` enforces (P6).
+   * THE rule set (P6) — one fetch, one object, both surfaces.
    *
-   * **Read from `localStorage`, because `localStorage` is still where the rules
-   * live.** Task 9 built the shared Sanity document and
-   * `/api/admin/solver-config`, but the cutover — capture the live rules out of
-   * the one browser that holds them, seed, then retire this key — has not run.
-   * Reading the same key `MonthGenerator` reads is what makes the Tablero
-   * enforce EXACTLY what the planner grid enforces instead of a second, older
-   * rule set; when the cutover lands, this and the generator swap to the fetch
-   * together, in one change.
+   * This panel owns it because both rule surfaces hang off it: it mounts
+   * `MonthGenerator` (the planner grid and the rule builder) and both
+   * `SeatBoard` modals (the Tablero). Owning it here and passing it down is
+   * what makes "the Tablero enforces exactly what the planner enforces"
+   * structural rather than a coincidence of two components reading the same
+   * place — and it is what makes a rule saved in the generator the rule the
+   * very next "Editar servicio" refuses on, with no second copy to go stale.
    *
-   * Refreshed in `openEditModal` rather than by an effect: the generator lives
-   * in this same panel, so rules edited there must be the rules the next
-   * "Editar servicio" refuses on — and the modal opening is the exact moment
-   * that matters, with no cascading render to pay for it.
-   *
-   * `null` ⇒ no rules in this browser ⇒ `undefined` to `SeatBoard` ⇒ it enforces
-   * nothing, exactly as it always has. Never `DEFAULT_SOLVER_CONFIG`: a browser
-   * that has never opened the generator must not start hard-blocking picks
-   * against a rule set nobody on this team wrote — and neither must one that
-   * merely opened it, which is why `readStoredSolverConfig` answers `null` for a
-   * stored value that is still the untouched first-run seed rather than trusting
-   * the key's mere presence.
+   * `localStorage` is no longer involved. The retired key answered `null` for a
+   * value that was absent OR byte-equal to the shipped seed; that heuristic is
+   * now a fact the server states — see `enforceableConfig`, which hands
+   * `SeatBoard` a config only in the `ready` state, so an absent document, a
+   * failed read and a read still in flight all keep this surface's original
+   * behaviour of enforcing nothing.
    */
-  const [solverConfig, setSolverConfig] = useState<SolverConfig | null>(null);
+  const rules = useSolverConfig();
   const [editError, setEditError] = useState<string | null>(null);
 
   // Month generator
@@ -559,8 +552,6 @@ export default function ServicesPanel() {
     setEditError(null);
     if (next.type === "add") addRequest.current = null;
     if (next.type !== "add") openSnapshot(next.type, control, [next.role]);
-    // The rules the seat board will enforce, re-read now (see `solverConfig`).
-    if (next.type === "add" || next.type === "edit") setSolverConfig(readStoredSolverConfig());
     setEditModal(next);
   };
 
@@ -1291,6 +1282,10 @@ export default function ServicesPanel() {
           // `savedWindow` (D12, inside `MonthGenerator`) degrade to a blank
           // "sin historial reciente" strip.
           allRoles={roles}
+          // THE SAME controller the seat boards read from (`enforceableConfig`
+          // below). One object, so a rule saved here is enforced there without
+          // a refetch, and neither surface can drift onto its own copy.
+          rules={rules}
           // Re-checked at preview and at confirmation, not just at open.
           capability={{ enabled: generateGate.enabled, reason: generateGate.reason }}
           // Per-target A1/A2 preflight: only proven-`creatable` targets are posted.
@@ -1576,14 +1571,14 @@ export default function ServicesPanel() {
       {editModal?.type === "add" && (
         <Modal title="Nuevo servicio" wide ownScroll onClose={closeEditModal} status={editError}>
           <SeatBoard members={members} windowRoles={seatWindowRoles} onSubmit={handleAdd} onClose={closeEditModal} loading={submitting}
-            config={solverConfig ?? undefined}
+            config={enforceableConfig(rules.source)}
             submitBlockedReason={createGate.reason} />
         </Modal>
       )}
       {editModal?.type === "edit" && (
         <Modal title="Editar servicio" wide ownScroll onClose={closeEditModal} status={editError ?? staleModes.edit?.message}>
           <SeatBoard initial={editModal.role} members={members} windowRoles={seatWindowRoles} onSubmit={handleEdit} onClose={closeEditModal} loading={submitting}
-            config={solverConfig ?? undefined}
+            config={enforceableConfig(rules.source)}
             dateLockedReason={gate("changeServiceDate").reason}
             submitBlockedReason={staleModes.edit?.message ?? cardGates.editTeam.reason} />
           {staleModes.edit && (
