@@ -473,6 +473,12 @@ export default function PlannerGrid(props: PlannerGridProps) {
     clearRemoveError();
     const candidate = candidates.find((c) => c.id === memberId);
     if (!candidate?.ruleBlockedReason) return;
+    // A BACKSTOP, and no test can kill this line ALONE: `CandidateRow` renders
+    // the button on the same two conditions, so a double-blocked candidate has
+    // no button to click. The line that carries D6 here is `overridable`, which
+    // IS pinned — by a candidate holding both refusals at once ("offers NO
+    // override for a same-category double"). Kept because this is a write path
+    // into a cell and the cost is one line.
     if (candidate.blockedReason) return;
     const current = cellsByKey.get(cellKey(date, row.id))?.memberIds ?? [];
     // A BACKSTOP, not the enforcement. Nobody already seated here can reach this

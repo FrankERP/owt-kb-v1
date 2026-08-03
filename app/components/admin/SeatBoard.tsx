@@ -76,6 +76,74 @@ const inputCls =
 const selectCls =
   "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-[#0a1929] font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
 
+/**
+ * BOTH refusal channels, as ONE expression read by `occupancyAfterPick` and by
+ * `RosterRow`.
+ *
+ * `blockedReason` (a same-category double booking) and `ruleBlockedReason` (a
+ * hard rule) are separate fields on purpose — Task 3 keeps the rule verdict out
+ * of the double-booking channel so each can be worded and sorted on its own —
+ * and reading only the first silently let every rule through while the roster
+ * row drew it as blocked. The double wins the WORDING when both apply, so the
+ * row the admin cannot click always names the reason the pick will refuse on.
+ */
+function refusalFor(candidate: RankedCandidate | undefined): string | null {
+  return candidate?.blockedReason ?? candidate?.ruleBlockedReason ?? null;
+}
+
+/**
+ * The target seat's occupants after a manual pick — or `null` when the pick is
+ * REFUSED and the seat must not change.
+ *
+ * Exported, and pure, because `toggle`'s own refusal is otherwise unpinnable:
+ * `RosterRow` blocks its own `onClick`/`onKeyDown`, so no DOM path can reach
+ * this with a blocked candidate, and dropping the `ruleBlockedReason` term
+ * inside `toggle` used to pass every test with only the render side pinned.
+ *
+ * REMOVING is never refused: a rule refuses adding, never un-seating, or a pair
+ * a rule now forbids could not be taken apart.
+ */
+export function occupancyAfterPick(
+  current: string[],
+  seat: Pick<SeatDef, "max">,
+  candidate: RankedCandidate | undefined,
+  memberId: string,
+): string[] | null {
+  if (current.includes(memberId)) return current.filter((x) => x !== memberId);
+  if (refusalFor(candidate)) return null;
+  return seat.max !== null && current.length >= seat.max
+    ? [...current.slice(1), memberId] // single-occupant seats replace
+    : [...current, memberId];
+}
+
+/**
+ * P10 — one seat's override record, rewritten against who is now seated there.
+ *
+ * Mirrors `PlannerGrid`'s `withUpdatedCell`: an id no longer seated cannot stay
+ * overridden, so any edit that drops a member drops their entry too. The
+ * alternative is a stale exception that would silently sanction the same person
+ * if they were ever seated here again.
+ *
+ * `add` is the ONLY way an entry is created, and it is reachable from exactly
+ * one place: the roster row's secondary "Asignar de todos modos" action.
+ */
+export function withSeatOverrides(
+  prev: Record<string, Record<string, string>>,
+  seatId: string,
+  seated: string[],
+  add?: { memberId: string; reason: string },
+): Record<string, Record<string, string>> {
+  const stillSeated = new Set(seated);
+  const kept: Record<string, string> = {};
+  for (const [id, reason] of Object.entries(prev[seatId] ?? {})) {
+    if (stillSeated.has(id)) kept[id] = reason;
+  }
+  if (add && stillSeated.has(add.memberId) && kept[add.memberId] === undefined) {
+    kept[add.memberId] = add.reason;
+  }
+  return { ...prev, [seatId]: kept };
+}
+
 export default function SeatBoard(props: SeatBoardProps) {
   const { initial, members, windowRoles, loading, config } = props;
 
@@ -87,6 +155,26 @@ export default function SeatBoard(props: SeatBoardProps) {
   const [occupancy, setOccupancy] = useState<Record<string, string[]>>(() =>
     seedOccupancy(initial),
   );
+  // P10 — seatId → memberId → the RULE that was waived to seat them there.
+  //
+  // The nearest thing this board has to `GridCell.overrides`/`overrideReasons`
+  // (`PlannerGrid`), and written and pruned by the same rules: an id no longer
+  // seated cannot stay overridden, and the entry carries the rule it waived
+  // rather than only the person, so it can never read as sanctioning a rule
+  // written afterwards.
+  //
+  // **Where it necessarily diverges from the planner grid: lifetime.** A
+  // `GridCell` is draft state the planner keeps, so an override there survives
+  // as long as the draft does. This board's output is a service document, and
+  // `special_role`/`sunday_role`/`saturday_role` have no field for an override —
+  // so this record lives exactly as long as the dialog is open, and reopening a
+  // saved service shows no marker. That is a display loss and nothing more:
+  // nothing on this surface re-checks who is ALREADY seated (there is no E13
+  // here — `evaluate` self-exempts occupants), so a forgotten override cannot
+  // turn into a false accusation later. Giving it a longer life means a schema
+  // field and a migration, which is a decision for the Sanity cutover, not
+  // something to invent here.
+  const [overrides, setOverrides] = useState<Record<string, Record<string, string>>>({});
   const [instrumentSeats, setInstrumentSeats] = useState<string[]>(() =>
     seedSeatNames(initial?.instruments?.map((s) => s.instrument), DEFAULT_INSTRUMENT_SEATS),
   );
@@ -158,28 +246,61 @@ export default function SeatBoard(props: SeatBoardProps) {
   const unresolved = useMemo(() => unresolvedRuleNames(config, members), [config, members]);
 
   function toggle(memberId: string) {
-    const current = occupancy[target.id] ?? [];
-    // BOTH refusals. `blockedReason` (a same-category double booking) and
-    // `ruleBlockedReason` (a hard rule) are separate fields on purpose — Task 3
-    // keeps the rule verdict out of the double-booking channel so each can be
-    // worded and sorted on its own — so reading only the first silently let
-    // every rule through while the roster row drew it as blocked.
+    const seatId = target.id;
+    const current = occupancy[seatId] ?? [];
+    const next = occupancyAfterPick(current, target, candidates.find((c) => c.id === memberId), memberId);
+    if (!next) return; // refused — see `occupancyAfterPick`
+    setOccupancy({ ...occupancy, [seatId]: next });
+    setOverrides(withSeatOverrides(overrides, seatId, next));
+  }
+
+  /**
+   * P10 — seat a RULE-blocked member anyway, deliberately, and record it.
+   *
+   * A SECOND, separate interaction, exactly as in `PlannerGrid`: the roster row
+   * itself stays inert while blocked (`RosterRow` guards `onClick` and
+   * `onKeyDown` on `!blocked`), so this cannot be reached by the mis-click that
+   * would otherwise seat exactly the pair the admin wrote a rule to keep apart.
+   *
+   * Only ever a RULE block. D6's same-category double is not overridable — that
+   * refusal is a shipped invariant on both surfaces, and a person in two voice
+   * seats of one service is a data error, not a judgement call.
+   *
+   * The waived rule is recorded WITH the seating, from the same
+   * `ruleBlockedReason` the admin just read on the row: an override sanctions
+   * that rule and no other.
+   *
+   * **Nothing automatic reaches this.** This board has no filler at all, and
+   * `localFill.ts`'s `fillColumn` — the only automation that seats anyone
+   * locally — neither calls anything here nor reads an override. A person may
+   * make a deliberate exception; the automation may not. That asymmetry is the
+   * requirement (ADR-0010), not an implementation detail.
+   */
+  function overrideMember(memberId: string) {
     const candidate = candidates.find((c) => c.id === memberId);
-    const blocked = candidate?.blockedReason ?? candidate?.ruleBlockedReason;
-    if (blocked && !current.includes(memberId)) return;
-    const next = current.includes(memberId)
-      ? current.filter((x) => x !== memberId)
-      : target.max !== null && current.length >= target.max
+    if (!candidate?.ruleBlockedReason) return;
+    // A BACKSTOP, and — as in `PlannerGrid` — one no test can kill on its own:
+    // `RosterRow` offers the button only when the same two conditions hold, so a
+    // double-blocked candidate has no button to click. Kept because this
+    // function is a write path into the occupancy and the cost is one line.
+    if (candidate.blockedReason) return;
+    const seatId = target.id;
+    const current = occupancy[seatId] ?? [];
+    if (current.includes(memberId)) return; // an override ADDS a seat
+    const next =
+      target.max !== null && current.length >= target.max
         ? [...current.slice(1), memberId] // single-occupant seats replace
         : [...current, memberId];
-    setOccupancy({ ...occupancy, [target.id]: next });
+    setOccupancy({ ...occupancy, [seatId]: next });
+    setOverrides(
+      withSeatOverrides(overrides, seatId, next, { memberId, reason: candidate.ruleBlockedReason }),
+    );
   }
 
   function removeFromSeat(seatId: string, memberId: string) {
-    setOccupancy({
-      ...occupancy,
-      [seatId]: (occupancy[seatId] ?? []).filter((id) => id !== memberId),
-    });
+    const next = (occupancy[seatId] ?? []).filter((id) => id !== memberId);
+    setOccupancy({ ...occupancy, [seatId]: next });
+    setOverrides(withSeatOverrides(overrides, seatId, next));
   }
 
   // A brand-new seat name keeps the admin's casing (normalizeSeatName's contract —
@@ -316,6 +437,7 @@ export default function SeatBoard(props: SeatBoardProps) {
             title="Voces"
             seats={voiceSeats}
             occupancy={occupancy}
+            overrides={overrides}
             targetId={target.id}
             onSelectTarget={setTargetId}
             onRemove={removeFromSeat}
@@ -325,6 +447,7 @@ export default function SeatBoard(props: SeatBoardProps) {
             title="Instrumentos"
             seats={instrumentSeats.map(instrumentSeatDef)}
             occupancy={occupancy}
+            overrides={overrides}
             targetId={target.id}
             onSelectTarget={setTargetId}
             onRemove={removeFromSeat}
@@ -335,6 +458,7 @@ export default function SeatBoard(props: SeatBoardProps) {
             title="FOH / Técnicos"
             seats={fohSeats.map(fohSeatDef)}
             occupancy={occupancy}
+            overrides={overrides}
             targetId={target.id}
             onSelectTarget={setTargetId}
             onRemove={removeFromSeat}
@@ -367,6 +491,7 @@ export default function SeatBoard(props: SeatBoardProps) {
                 candidate={candidate}
                 selected={(occupancy[target.id] ?? []).includes(candidate.id)}
                 onToggle={toggle}
+                onOverride={overrideMember}
               />
             ))}
             {candidates.length === 0 && (
@@ -464,6 +589,7 @@ function SeatGroup({
   title,
   seats,
   occupancy,
+  overrides,
   targetId,
   onSelectTarget,
   onRemove,
@@ -472,6 +598,8 @@ function SeatGroup({
   title: string;
   seats: SeatDef[];
   occupancy: Record<string, string[]>;
+  /** P10 — seatId → memberId → the waived rule, for the persistent marker. */
+  overrides: Record<string, Record<string, string>>;
   targetId: string;
   onSelectTarget: (id: string) => void;
   onRemove: (seatId: string, memberId: string) => void;
@@ -487,6 +615,7 @@ function SeatGroup({
             key={seat.id}
             seat={seat}
             occupantIds={occupancy[seat.id] ?? []}
+            overrides={overrides[seat.id]}
             isTarget={seat.id === targetId}
             onSelectTarget={onSelectTarget}
             onRemove={onRemove}
@@ -501,6 +630,7 @@ function SeatGroup({
 function SeatRow({
   seat,
   occupantIds,
+  overrides,
   isTarget,
   onSelectTarget,
   onRemove,
@@ -508,6 +638,8 @@ function SeatRow({
 }: {
   seat: SeatDef;
   occupantIds: string[];
+  /** P10 — memberId → the rule waived to seat them here, if any. */
+  overrides?: Record<string, string>;
   isTarget: boolean;
   onSelectTarget: (id: string) => void;
   onRemove: (seatId: string, memberId: string) => void;
@@ -554,6 +686,17 @@ function SeatRow({
           ))
         )}
       </div>
+      {/* P10 — the persistent marker, in the same words the planner grid uses.
+          An override is a deliberate exception, so the seat must not just go
+          green: it names WHO was seated past WHICH rule, and stays there for as
+          long as they hold the seat. */}
+      {occupantIds
+        .filter((id) => overrides?.[id] !== undefined)
+        .map((id) => (
+          <p key={id} className={`mt-1 font-body text-[11px] text-amber-400 ${CARD_STYLE.longText}`}>
+            Regla anulada — {memberName(id)}: {overrides?.[id]}
+          </p>
+        ))}
     </div>
   );
 }
@@ -606,17 +749,28 @@ function RosterRow({
   candidate,
   selected,
   onToggle,
+  onOverride,
 }: {
   candidate: RankedCandidate;
   selected: boolean;
   onToggle: (id: string) => void;
+  /** P10 — seat this rule-blocked candidate anyway. */
+  onOverride: (id: string) => void;
 }) {
   // Both refusal channels disable the row and both are shown. `blockedReason`
   // (already assigned in another seat of the same category) wins the wording
-  // when they collide, matching `toggle`'s own order so the row the admin
-  // cannot click always names the reason `toggle` will refuse on.
-  const reason = candidate.blockedReason ?? candidate.ruleBlockedReason;
+  // when they collide, matching the pick's own order so the row the admin
+  // cannot click always names the reason `occupancyAfterPick` will refuse on.
+  const reason = refusalFor(candidate);
   const blocked = !!reason;
+  // Only a RULE block is overridable: a same-category double is a data error,
+  // not a judgement call, and it is refused identically on both surfaces.
+  //
+  // `!selected` is a BACKSTOP, not the enforcement — a seated member is exempted
+  // by `evaluate` itself (E6/P9's self-exemption in `ruleEnforcement.ts`), so
+  // their `ruleBlockedReason` is already `null` and this expression is already
+  // false. What keeps a rule hard is `blocked` below.
+  const overridable = !!candidate.ruleBlockedReason && !candidate.blockedReason && !selected;
   return (
     <li
       role="button"
@@ -657,6 +811,32 @@ function RosterRow({
         <span className="font-label text-[10px] text-gray-500">{candidate.load}</span>
       </div>
       {blocked && <p className="mt-1 font-body text-[11px] text-red-400">{reason}</p>}
+      {/*
+        P10 — the override, as a SEPARATE, secondary action, in the same shape
+        and the same words as `PlannerGrid`'s.
+
+        The row above stays inert while blocked, so this button is the only way
+        to seat a rule-blocked person: two distinct interactions, and neither one
+        is the mis-click that seats exactly the pair a rule exists to keep apart.
+        `stopPropagation` is belt-and-braces (the row's own handler already
+        returns early while blocked) — it keeps the button working if that guard
+        is ever loosened, instead of firing both paths.
+
+        Only a human reaches this. This board runs no filler, and `fillColumn`
+        has no path to it at all.
+      */}
+      {overridable && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOverride(candidate.id);
+          }}
+          className="mt-1.5 min-h-[44px] w-full rounded-lg border border-amber-500/40 px-2 font-label text-[10px] uppercase tracking-widest text-amber-400 transition-colors hover:bg-amber-500/10"
+        >
+          Asignar de todos modos
+        </button>
+      )}
     </li>
   );
 }
