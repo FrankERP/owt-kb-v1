@@ -77,9 +77,26 @@ function savedSpecial(date: string, name: string, leadId: string): SavedRole {
   };
 }
 
+/**
+ * The rendered rail, wherever it landed.
+ *
+ * Two places, on purpose. The GUTTER placement is portalled to `document.body`
+ * (`ParticipationRail`, and the WebKit reason is in its header), so it is not
+ * under the render container; the in-flow fallback still is. Looking in the
+ * container first and the document second finds exactly one either way — and
+ * keeps every assertion below asking the same question it asked before the
+ * portal, rather than being softened to accommodate it.
+ *
+ * `selector` narrows to one surface where a test needs to; the default matches
+ * either.
+ */
+function findRail(container: HTMLElement, selector = "[data-participation-rail]"): HTMLElement | null {
+  return container.querySelector<HTMLElement>(selector) ?? document.body.querySelector<HTMLElement>(selector);
+}
+
 /** The big number the sidebar renders for a member, or `null` when absent. */
 function railTotal(container: HTMLElement, name: string): number | null {
-  const rail = container.querySelector("[data-participation-rail]");
+  const rail = findRail(container);
   if (!rail) throw new Error("no participation rail rendered");
   const nameEl = within(rail as HTMLElement).queryByText(name);
   if (!nameEl) return null;
@@ -393,6 +410,10 @@ function stubWideViewport(wide = true, queries: string[] = []) {
 function goToGrid(
   allRoles: ParticipantRole[],
   existingRoles: { _id: string; _type: string; date: string }[] = [],
+  // `container` mounts the generator inside a caller-supplied node — the only
+  // way to put a real `.brand-admin-shell` above it, which the portal tests
+  // need. Everything else renders into RTL's default node as before.
+  options: { container?: HTMLElement } = {},
 ) {
   const view = render(
     <MonthGenerator
@@ -403,6 +424,7 @@ function goToGrid(
       onClose={vi.fn()}
       onCreated={vi.fn()}
     />,
+    options.container ? { container: options.container } : undefined,
   );
   const { container } = view;
   fireEvent.change(container.querySelector("select") as HTMLSelectElement, { target: { value: "2" } });
@@ -522,7 +544,7 @@ describe("the grid's rail is scoped to the month being generated", () => {
     expect(railTotal(container, "Gaby")).toBeNull();
     // Zero as the chart's ANSWER, not as its absence: the rail is mounted and
     // says so in Spanish.
-    expect(container.querySelector("[data-participation-rail]")).not.toBeNull();
+    expect(findRail(container)).not.toBeNull();
     expect(screen.getByText("Sin participaciones en voces.")).toBeTruthy();
   });
 
@@ -592,7 +614,7 @@ describe("the grid's rail placement, on a viewport wide enough for the gutter", 
   it("takes the fixed-gutter branch, at the width the arithmetic derives", () => {
     stubWideViewport();
     const { container } = goToGrid([savedSunday("2026-02-08", "m1")]);
-    const rail = container.querySelector('[data-participation-rail="panel"]') as HTMLElement;
+    const rail = findRail(container, '[data-participation-rail="panel"]') as HTMLElement;
 
     expect(rail).not.toBeNull();
     expect(rail.getAttribute("data-rail-placement")).toBe("gutter");
@@ -626,7 +648,7 @@ describe("the grid's rail placement, on a viewport wide enough for the gutter", 
     // grid. Stacked and `w-full`, it is capped by the rail instead.
     stubWideViewport();
     const { container } = goToGrid([]);
-    const rail = container.querySelector('[data-participation-rail="panel"]') as HTMLElement;
+    const rail = findRail(container, '[data-participation-rail="panel"]') as HTMLElement;
     const header = rail.querySelector("[data-rail-header]") as HTMLElement;
     const select = rail.querySelector("select") as HTMLSelectElement;
 
@@ -645,11 +667,110 @@ describe("the grid's rail placement, on a viewport wide enough for the gutter", 
     // viewport with no gutter to leave it into.
     stubWideViewport(false);
     const { container } = goToGrid([]);
-    const rail = container.querySelector('[data-participation-rail="panel"]') as HTMLElement;
+    const rail = findRail(container, '[data-participation-rail="panel"]') as HTMLElement;
 
     expect(rail).not.toBeNull();
     expect(rail.getAttribute("data-rail-placement")).toBe("inline");
     expect(rail.getAttribute("class")).toBeNull();
+  });
+});
+
+// ─── The portal, as a structural pin ─────────────────────────────────────────
+
+/**
+ * WHAT THIS CATCHES, and — more importantly — what it does not.
+ *
+ * The gutter rail paints nothing in Safari while it is a descendant of an
+ * ancestor carrying `position: relative` + `isolation: isolate` +
+ * `overflow: hidden` (`.brand-admin-shell`, `.brand-facet-panel`). The remedy
+ * is to render it somewhere else entirely, and "somewhere else" is now a design
+ * decision rather than an implementation detail — so it is worth a test.
+ *
+ * CATCHES: someone deleting `createPortal` because the spec says a fixed
+ * element escapes `overflow: hidden` anyway (it does; that reading is correct
+ * and still produces an invisible rail in WebKit), or moving the mount site
+ * back under the shell, or portalling to a node that is itself inside it.
+ *
+ * DOES NOT CATCH — and cannot, in jsdom, which has no layout or paint engine:
+ * that the rail is actually VISIBLE; clipping, stacking, compositing or z-order
+ * of any kind; whether `.brand-admin-shell` still carries the offending trio
+ * (nothing here reads CSS); or the same bug arriving via a NEW ancestor
+ * elsewhere. It pins the shape of the fix, not the absence of the bug. The only
+ * instrument that can confirm the bug is gone is a human looking at real Safari
+ * at ≥1700px — headless WebKit does not reproduce it.
+ */
+describe("the gutter rail renders outside the surfaces that swallow it", () => {
+  it("puts the grid's rail outside .brand-admin-shell, on document.body", () => {
+    stubWideViewport();
+    // The real shell, around the real generator: `admin/page.tsx` wraps
+    // `AdminPanel` in `.brand-admin-shell` and every rail ancestor below it is
+    // an ordinary block. Reconstructed here because `goToGrid` renders the
+    // generator alone.
+    const shell = document.createElement("div");
+    shell.className = "brand-admin-shell";
+    document.body.appendChild(shell);
+    try {
+      const { container } = goToGrid([savedSunday("2026-02-08", "m1")], [], { container: shell });
+      const rail = findRail(container, '[data-participation-rail="panel"]') as HTMLElement;
+
+      expect(rail).not.toBeNull();
+      expect(rail.getAttribute("data-rail-placement")).toBe("gutter");
+      expect(rail.closest(".brand-admin-shell")).toBeNull();
+      expect(shell.contains(rail)).toBe(false);
+      expect(rail.parentElement).toBe(document.body);
+      // Still the same component reading the same state: the counts move when a
+      // seat moves, from outside the shell exactly as they did from inside it.
+      expect(railTotal(container, "Frank")).toBe(1);
+      seatLead(container, "2026-02-01", "Frank");
+      expect(railTotal(container, "Frank")).toBe(2);
+    } finally {
+      shell.remove();
+    }
+  });
+
+  it("keeps the BELOW-threshold panel rail in the flow, inside the shell", () => {
+    // The other half of the design, and the one a careless portal breaks: with
+    // no gutter the rail is an ordinary block under the grid and MUST stay
+    // where it is mounted. Portalling this branch would rip it out of the page
+    // and drop it at the end of the body.
+    stubWideViewport(false);
+    const shell = document.createElement("div");
+    shell.className = "brand-admin-shell";
+    document.body.appendChild(shell);
+    try {
+      const { container } = goToGrid([], [], { container: shell });
+      const rail = findRail(container, '[data-participation-rail="panel"]') as HTMLElement;
+
+      expect(rail).not.toBeNull();
+      expect(rail.getAttribute("data-rail-placement")).toBe("inline");
+      expect(rail.closest(".brand-admin-shell")).toBe(shell);
+    } finally {
+      shell.remove();
+    }
+  });
+
+  it("puts the Tablero's rail outside the dialog shell that carries the same trio", () => {
+    // `CueDialog`'s shell is `brand-facet-panel` — `relative` + `isolation:
+    // isolate` + `overflow: hidden`, the identical property set. `SeatBoard`
+    // renders its own markup here rather than through `CueDialog`, so the
+    // panel class is applied to a stand-in wrapper for the same reason as above.
+    stubWideViewport();
+    const panel = document.createElement("div");
+    panel.className = "brand-facet-panel";
+    document.body.appendChild(panel);
+    try {
+      const { container } = renderBoard({}, panel);
+      const rail = findRail(container, '[data-participation-rail="dialog"]') as HTMLElement;
+
+      expect(rail).not.toBeNull();
+      expect(rail.getAttribute("data-rail-placement")).toBe("gutter");
+      expect(rail.closest(".brand-facet-panel")).toBeNull();
+      expect(panel.contains(rail)).toBe(false);
+      expect(rail.parentElement).toBe(document.body);
+      expect(railTotal(container, "Gaby")).toBe(1);
+    } finally {
+      panel.remove();
+    }
   });
 });
 
@@ -696,7 +817,12 @@ const savedRole: ServiceRole = {
   foh: [],
 } as unknown as ServiceRole;
 
-function renderBoard(props: Partial<React.ComponentProps<typeof SeatBoard>> = {}) {
+function renderBoard(
+  props: Partial<React.ComponentProps<typeof SeatBoard>> = {},
+  // As `goToGrid`: a caller-supplied mount node, so a real `.brand-facet-panel`
+  // can sit above the board the way `CueDialog`'s shell does.
+  container?: HTMLElement,
+) {
   return render(
     <SeatBoard
       initial={savedRole}
@@ -710,6 +836,7 @@ function renderBoard(props: Partial<React.ComponentProps<typeof SeatBoard>> = {}
       loading={false}
       {...props}
     />,
+    container ? { container } : undefined,
   );
 }
 
@@ -717,7 +844,7 @@ describe("the Tablero's rail counts the seats being edited", () => {
   it("renders no rail at all on a narrow viewport", () => {
     stubWideViewport(false);
     const { container } = renderBoard();
-    expect(container.querySelector("[data-participation-rail]")).toBeNull();
+    expect(findRail(container)).toBeNull();
   });
 
   it("counts the live seats, not the stored ones", () => {
@@ -754,7 +881,7 @@ describe("the Tablero's rail counts the seats being edited", () => {
   it("counts a seat added to a service that has no saved copy yet", () => {
     stubWideViewport();
     const { container } = renderBoard({ initial: undefined, windowRoles: [] });
-    expect(container.querySelector("[data-participation-rail]")).not.toBeNull();
+    expect(findRail(container)).not.toBeNull();
     expect(railTotal(container, "Liu")).toBeNull();
 
     fireEvent.click(rosterRow("Liu"));

@@ -2460,6 +2460,19 @@ export default function MonthGenerator({
         page's left gutter (`ParticipationRail`), so D10's full-width panel is
         exactly as wide as it was; below that it stacks here, under the grid.
         Placed before the footer so the confirm buttons stay last in tab order.
+
+        MOUNTED here, RENDERED elsewhere: above the threshold `ParticipationRail`
+        portals its output to `document.body`. Both halves of that are load-
+        bearing and they answer different questions. It is mounted here for
+        STATE — the counts must move with `cells`. It is portalled out for
+        PAINT — in Safari a `position: fixed` descendant of `.brand-admin-shell`
+        (`relative` + `isolation: isolate` + `overflow: hidden`) lays out and
+        hit-tests correctly and then paints nothing at all. That is a WebKit
+        compositing failure, not the spec-level clip it looks like: `relative`
+        does NOT establish a containing block for a fixed descendant, so the
+        shell's `overflow: hidden` cannot clip it and Chromium duly paints it
+        in place. Do not delete the portal on the strength of that spec reading
+        — see `ParticipationRail.tsx`'s header for the full evidence.
       */}
       <ParticipationRail
         placement="panel"
