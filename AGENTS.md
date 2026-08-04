@@ -119,6 +119,14 @@ Issues live in GitHub Issues (`FrankERP/owt-kb-v1`), managed with the `gh` CLI. 
 
 Default canonical labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
 
+### Adversarial plan review
+
+Before implementing any multi-step, data-touching or hard-to-reverse plan, invoke
+`$adversarial-plan-review` (`.agents/skills/adversarial-plan-review/SKILL.md`).
+It runs fresh reviewers **one at a time** until two independent cold reads approve
+byte-identical plan text. The reviewer's brief is `reviewer-brief.md` beside it.
+Never run two reviewers concurrently — sequence is the mechanism, not independence.
+
 ### Domain docs
 
 Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
