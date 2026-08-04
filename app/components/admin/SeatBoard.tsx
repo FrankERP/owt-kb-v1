@@ -604,8 +604,27 @@ export default function SeatBoard(props: SeatBoardProps) {
         pane and adds no scroll region inside a dialog built to have exactly two.
         Below 1380px there is no gutter to sit in and it renders nothing at all —
         stacking it into this bounded column is the defect `SeatBoard` exists to
-        undo. It stays inside the dialog's own DOM so the focus trap still owns
-        its Voces/Instrumentos control.
+        undo.
+
+        MOUNTED here, RENDERED on `document.body`: above the threshold
+        `ParticipationRail` portals its output out of this dialog. It stays
+        mounted here for STATE (it counts the seats being edited right now) and
+        is portalled out for PAINT — `CueDialog`'s shell carries
+        `brand-facet-panel` (`relative` + `isolation: isolate` +
+        `overflow: hidden`), the same trio as `.brand-admin-shell`, and in
+        Safari a `position: fixed` descendant of it lays out and hit-tests
+        correctly and then paints nothing. See `ParticipationRail.tsx`'s header.
+
+        KNOWN COST, accepted deliberately: this comment used to say the rail
+        stayed inside the dialog's DOM "so the focus trap still owns its
+        Voces/Instrumentos control", and that is exactly what the portal gives
+        up. `CueDialog` builds its Tab ring from `shellRef` — which IS the
+        `brand-facet-panel` element — so anything that escapes the panel escapes
+        the ring, and there is no portal target that satisfies both. While this
+        dialog is open the rail's select is mouse-only. A visible chart with a
+        mouse-only view toggle beats an invisible chart whose toggle cannot be
+        reached at all; making `CueDialog` trap portalled satellites is the
+        proper fix and is deliberately not attempted here.
       */}
       <ParticipationRail
         placement="dialog"

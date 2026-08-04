@@ -61,9 +61,47 @@
 // would need the component mounted twice (once fixed, once in flow) and the
 // duplicate would put two "Participaciones" headings and two Voces/Instrumentos
 // selects in the accessibility tree at all times. One instance, one place.
+//
+// ── Why the GUTTER placement is portalled to `document.body` ───────────────
+// This is a WebKit workaround, NOT a spec requirement, and the distinction is
+// the whole reason this paragraph exists. Per spec a `position: fixed` element
+// whose containing block is the viewport is NOT clipped by an ancestor's
+// `overflow: hidden` — `relative` does not establish a containing block for it,
+// only `transform`/`filter`/`backdrop-filter`/`perspective`/`contain`/
+// `container-type`/`will-change` do, and an audit of the live chain found none
+// of those on any ancestor. Chromium paints the rail correctly mounted in
+// place, and a reader who checks the spec will conclude this portal is
+// pointless and remove it.
+//
+// In real Safari it is not pointless: the rail measures its correct box
+// (216 × 563 at 8,112), reports `display: block` / `visibility: visible`, wins
+// `elementFromPoint` at its own centre, accepts a `background-color` — and
+// paints NOTHING. That fingerprint (correct layout, correct hit-testing, no
+// paint) is a compositing failure, not a layout one, and the only thing that
+// distinguishes this element from every other painted element on the page is
+// its ancestor chain: `.brand-admin-shell` and `.brand-facet-panel` both carry
+// `position: relative` + `isolation: isolate` + `overflow: hidden`
+// (`app/brand.css`), the shape WebKit has historically mis-composited fixed
+// descendants out of. The portal takes the rail out of that chain entirely.
+// It reaches the Capacitor iOS wrap too, which is the same engine.
+//
+// The component stays MOUNTED where it is and only its OUTPUT moves, so it
+// still reads the grid's `cells` state directly — see the mount comments in
+// `MonthGenerator.tsx` and `SeatBoard.tsx`, which are about state, while this
+// is about paint. Only the gutter branch is portalled: the below-threshold
+// `panel` fallback is in normal flow inside the shell BY DESIGN (it stacks
+// under the grid) and must stay there.
+//
+// One visible consequence, so it is not mistaken for a regression: mounted
+// inside `MonthGenerator`'s `space-y-4` the rail also inherited that stack's
+// 16px `margin-top`, and landed at y=112 rather than the 96px `top-24` asks
+// for. On `document.body` it has no such sibling and lands at exactly `top-24`,
+// flush with the bottom of the `h-24` navbar. That is the value this file has
+// always declared; the extra 16px was the mount site leaking into the layout.
 "use client";
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 
 import { ParticipationSidebar } from "./ParticipationSidebar";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
@@ -140,7 +178,7 @@ export function ParticipationRail({
   const wide = useWideGutter(MIN_WIDTH[placement]);
   if (!wide && placement === "dialog") return null;
 
-  return (
+  const chart = (
     <div
       data-participation-rail={placement}
       data-rail-placement={wide ? "gutter" : "inline"}
@@ -149,4 +187,11 @@ export function ParticipationRail({
       <ParticipationSidebar roles={roles} monthLabel={monthLabel} />
     </div>
   );
+
+  // No SSR guard is needed and none should be added: `wide` can only be true
+  // once `useWideGutter` has a real `MediaQueryList`, which it refuses to build
+  // without a `window` — and `useSyncExternalStore`'s server snapshot is a hard
+  // `false`, so the first (hydrating) client render takes the in-flow branch
+  // too. `document` therefore exists everywhere this line runs.
+  return wide ? createPortal(chart, document.body) : chart;
 }
