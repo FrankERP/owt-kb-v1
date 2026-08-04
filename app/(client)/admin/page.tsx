@@ -15,7 +15,11 @@ export default async function AdminPage() {
   return (
     <>
       <Navbar title="Control Room" tags schedule />
-      <div className="mx-auto max-w-7xl px-6 pb-20 pt-10">
+      {/* `brand-admin-frame` is the hook the planner grid's three-column
+          workspace widens through (`:has(.planner-wide)` in `app/brand.css`).
+          It carries no styling of its own — the Tailwind classes beside it are
+          still the default, and every other admin tab keeps the 1280px cap. */}
+      <div className="brand-admin-frame mx-auto max-w-7xl px-6 pb-20 pt-10">
         <header className="mb-8 flex flex-col gap-5 border-b border-brand-steel/10 pb-7 sm:flex-row sm:items-end sm:justify-between">
           <div className="brand-section-heading">
             <p className="font-label text-[10px] uppercase tracking-[0.26em] text-brand-beam">Backstage operations</p>

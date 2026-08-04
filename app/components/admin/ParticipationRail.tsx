@@ -1,26 +1,38 @@
 // app/components/admin/ParticipationRail.tsx
 //
-// The participation panel, placed in the page's empty side gutter instead of in
-// a column of its own — so the surface it sits beside keeps every pixel it has
-// today. It is PLACEMENT ONLY: the chart is `ParticipationSidebar`, unchanged,
-// and the live-vs-saved arithmetic belongs to the callers
-// (`plannerParticipationRoles` for the grid, `boardParticipationRoles` for the
-// Tablero). Nothing here decides what is counted.
+// The participation panel, placed in the Tablero's empty side gutter instead of
+// in a column of its own — so the dialog it sits beside keeps every pixel it
+// has today. It is PLACEMENT ONLY: the chart is `ParticipationSidebar`,
+// unchanged, and the live-vs-saved arithmetic belongs to the caller
+// (`boardParticipationRoles`). Nothing here decides what is counted.
+//
+// ── ONE surface now, not two, and why the other one left ──────────────────
+// This file used to serve the planner grid as well (`placement="panel"`, gutter
+// at ≥1700px). It no longer does. The planner grid's chart is an ordinary
+// in-flow COLUMN of `PlannerGrid`'s three-column workspace at every viewport
+// width, because the gutter answer never reached the machine it was for: the
+// admin page caps content at `max-w-7xl` (1280px), so a 1512px 14" MacBook Pro
+// — the screen this app is actually planned on — has ~116px of gutter and the
+// rail simply never appeared. Paying for the panel out of the grid's width, on
+// every machine including the ultrawide where the gutter DID work, is a
+// deliberate trade and not a regression. See `PlannerGrid.tsx`'s header.
+//
+// The Tablero keeps the gutter because its geometry is different in kind: it is
+// a height-bounded two-pane dialog whose whole reason for existing is NOT
+// stacking a third scroll region into one narrow column (see `SeatBoard.tsx`'s
+// header), and its `max-w-4xl` (896px) shell leaves a real gutter from 1380px
+// up — which every machine in use here clears.
 //
 // ── Why `position: fixed`, and why these exact widths ──────────────────────
-// The admin page caps its content at `max-w-7xl` (1280px, `app/(client)/admin/
-// page.tsx:18`) and the Tablero's dialog at `max-w-4xl` (896px,
-// `CueDialog.tsx:97`). Both are centred, so the gutter is real screen space no
-// element can reach from inside the flow. Only a viewport-anchored element can
-// use it without narrowing the container — which is the entire request.
+// `CueDialog` caps the Tablero at `max-w-4xl` (896px, `CueDialog.tsx:97`) and
+// centres it, so the gutter is real screen space no element can reach from
+// inside the flow. Only a viewport-anchored element can use it without
+// narrowing the container — which is the entire point.
 //
-// The thresholds are arithmetic, not taste. The rail is 216px at `left-2`
-// (8px) and leaves 8px of air, so it needs 232px before the container's first
-// pixel of CONTENT. The admin page adds `px-6` inside `max-w-7xl`, so its
-// content starts 24px further in than the box does; the dialog has no such
-// padding:
-//   • panel:  (W - 1280) / 2 + 24 >= 232  →  W >= 1696. Set at 1700.
-//   • dialog: (W -  896) / 2      >= 232  →  W >= 1360. Set at 1380.
+// The threshold is arithmetic, not taste. The rail is 216px at `left-2` (8px)
+// and leaves 8px of air, so it needs 232px before the container's first pixel
+// of content; the dialog has no inner padding to borrow:
+//   • dialog: (W - 896) / 2 >= 232  →  W >= 1360. Set at 1380.
 // A lower threshold would overlap the very content this exists not to shrink.
 //
 // 216px is also the floor, not a preference. The floor is the WIDEST ROW inside
@@ -36,31 +48,18 @@
 // the chart at 262px of content in a 216px box with the select's right edge 47px
 // out over the planner grid. Stacking the header (`ParticipationSidebar.tsx`)
 // made each row ask for the wider of the two rather than their sum. If either
-// row grows past 192px of content, this number and both thresholds move with it
+// row grows past 192px of content, this number and the threshold move with it
 // — `participationAlongside.test.tsx` refuses to let the two drift apart.
 //
-// What this reaches, concretely: any external monitor (1920/2560) and a 16"
-// MacBook Pro (1728 logical) get the rail beside the grid. A 14" (1512) or a
-// 13" Air (1470) has ~140px of usable gutter, which cannot hold a 208px chart
-// at any threshold — those fall back to the stacked placement below. The
-// Tablero's 1380px gate clears all three.
+// ── Below the threshold the dialog renders no rail at all ──────────────────
+// There is no gutter, and re-introducing a third scroll region inside a
+// two-pane dialog to show a chart would trade the fix for the feature.
 //
-// ── Below the threshold there is no gutter, so the two surfaces differ ─────
-// `panel` falls back to the normal flow: an ordinary block wherever it is
-// mounted (below the grid), which STACKS rather than narrows, and keeps the
-// signal available on an iPad or in the Capacitor iOS wrap.
-//
-// `dialog` renders nothing. The Tablero is a height-bounded two-pane dialog
-// whose reason for existing is NOT stacking a third scroll region into one
-// narrow column (see `SeatBoard.tsx`'s header). Re-introducing that to show a
-// chart would trade the fix for the feature.
-//
-// ── Why a media QUERY and not a `min-[1700px]:` class ─────────────────────
-// Both placements need the panel to be genuinely ABSENT below the threshold —
-// `dialog` because it must not exist at all, `panel` because a CSS-only answer
-// would need the component mounted twice (once fixed, once in flow) and the
-// duplicate would put two "Participaciones" headings and two Voces/Instrumentos
-// selects in the accessibility tree at all times. One instance, one place.
+// ── Why a media QUERY and not a `min-[1380px]:` class ──────────────────────
+// The panel must be genuinely ABSENT below the threshold, not merely hidden: a
+// CSS-only answer would need the component mounted twice and the duplicate
+// would put two "Participaciones" headings and two Voces/Instrumentos selects
+// in the accessibility tree at all times. One instance, one place.
 //
 // ── Why the GUTTER placement is portalled to `document.body` ───────────────
 // This is a WebKit workaround, NOT a spec requirement, and the distinction is
@@ -79,25 +78,16 @@
 // paints NOTHING. That fingerprint (correct layout, correct hit-testing, no
 // paint) is a compositing failure, not a layout one, and the only thing that
 // distinguishes this element from every other painted element on the page is
-// its ancestor chain: `.brand-admin-shell` and `.brand-facet-panel` both carry
-// `position: relative` + `isolation: isolate` + `overflow: hidden`
-// (`app/brand.css`), the shape WebKit has historically mis-composited fixed
-// descendants out of. The portal takes the rail out of that chain entirely.
-// It reaches the Capacitor iOS wrap too, which is the same engine.
+// its ancestor chain: `.brand-facet-panel` carries `position: relative` +
+// `isolation: isolate` + `overflow: hidden` (`app/brand.css`), the shape WebKit
+// has historically mis-composited fixed descendants out of. The portal takes
+// the rail out of that chain entirely. It reaches the Capacitor iOS wrap too,
+// which is the same engine. The user has confirmed the fix works in real
+// Safari; headless WebKit never reproduced the bug, so do not "verify" it away.
 //
 // The component stays MOUNTED where it is and only its OUTPUT moves, so it
-// still reads the grid's `cells` state directly — see the mount comments in
-// `MonthGenerator.tsx` and `SeatBoard.tsx`, which are about state, while this
-// is about paint. Only the gutter branch is portalled: the below-threshold
-// `panel` fallback is in normal flow inside the shell BY DESIGN (it stacks
-// under the grid) and must stay there.
-//
-// One visible consequence, so it is not mistaken for a regression: mounted
-// inside `MonthGenerator`'s `space-y-4` the rail also inherited that stack's
-// 16px `margin-top`, and landed at y=112 rather than the 96px `top-24` asks
-// for. On `document.body` it has no such sibling and lands at exactly `top-24`,
-// flush with the bottom of the `h-24` navbar. That is the value this file has
-// always declared; the extra 16px was the mount site leaking into the layout.
+// still reads the board's seat state directly — see the mount comment in
+// `SeatBoard.tsx`, which is about state, while this is about paint.
 "use client";
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
@@ -106,14 +96,21 @@ import { createPortal } from "react-dom";
 import { ParticipationSidebar } from "./ParticipationSidebar";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 
-export type RailPlacement = "panel" | "dialog";
+/**
+ * One member, and deliberately still a union: the value is what
+ * `data-participation-rail` renders, and the planner grid's own column carries
+ * `data-participation-rail="panel"` (`PlannerGrid.tsx`) so both charts stay
+ * findable by one selector. Widening this back to `"panel"` would put a fixed
+ * element back inside `.brand-admin-shell` — read this file's header first.
+ */
+export type RailPlacement = "dialog";
 
-/** Viewport width at which each surface's gutter can hold the rail. See above. */
-export const MIN_WIDTH: Record<RailPlacement, number> = { panel: 1700, dialog: 1380 };
+/** Viewport width at which the dialog's gutter can hold the rail. See above. */
+export const MIN_WIDTH: Record<RailPlacement, number> = { dialog: 1380 };
 
 /**
  * The rail's width in the gutter — the widest row inside `ParticipationSidebar`
- * plus its padding, and the input to both thresholds above. Exported so a test
+ * plus its padding, and the input to the threshold above. Exported so a test
  * can pin the rendered class against the number the arithmetic is stated in,
  * rather than against a literal copied into an assertion.
  */
@@ -133,7 +130,7 @@ const RAIL_CLASS = "fixed left-2 z-40 w-[216px]";
 function useWideGutter(minWidth: number): boolean {
   const query = `(min-width: ${minWidth}px)`;
   // ONE `MediaQueryList` per mounted rail. `getSnapshot` runs on every render
-  // of a tree that re-renders on every cell click, and `matchMedia` allocates a
+  // of a tree that re-renders on every seat click, and `matchMedia` allocates a
   // live object each call. Scoped to the component rather than cached in a
   // module: a module-level cache outlives the `window` it was built against,
   // which is wrong under jsdom and wrong after any environment swap.
@@ -176,13 +173,13 @@ export function ParticipationRail({
   placement: RailPlacement;
 }) {
   const wide = useWideGutter(MIN_WIDTH[placement]);
-  if (!wide && placement === "dialog") return null;
+  if (!wide) return null;
 
   const chart = (
     <div
       data-participation-rail={placement}
-      data-rail-placement={wide ? "gutter" : "inline"}
-      className={wide ? `${RAIL_CLASS} ${placement === "dialog" ? "top-20" : "top-24"}` : undefined}
+      data-rail-placement="gutter"
+      className={`${RAIL_CLASS} top-20`}
     >
       <ParticipationSidebar roles={roles} monthLabel={monthLabel} />
     </div>
@@ -191,7 +188,7 @@ export function ParticipationRail({
   // No SSR guard is needed and none should be added: `wide` can only be true
   // once `useWideGutter` has a real `MediaQueryList`, which it refuses to build
   // without a `window` — and `useSyncExternalStore`'s server snapshot is a hard
-  // `false`, so the first (hydrating) client render takes the in-flow branch
-  // too. `document` therefore exists everywhere this line runs.
-  return wide ? createPortal(chart, document.body) : chart;
+  // `false`, so the first (hydrating) client render returns `null` too.
+  // `document` therefore exists everywhere this line runs.
+  return createPortal(chart, document.body);
 }

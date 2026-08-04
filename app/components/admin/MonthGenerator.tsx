@@ -11,7 +11,7 @@ import MonthCalendar from "./MonthCalendar";
 import { SERVICE_LABEL } from "./serviceCardModel";
 import { fillColumn } from "./localFill";
 import { unresolvedRuleNames } from "./ruleEnforcement";
-import { ParticipationRail } from "./ParticipationRail";
+import { ParticipationSidebar } from "./ParticipationSidebar";
 import {
   editableConfig,
   sameSolverConfig,
@@ -2433,6 +2433,34 @@ export default function MonthGenerator({
           diagnostics={diagnostics}
           config={solverConfig ?? undefined}
           sundayDates={sundayDatesFull}
+          /*
+            The participation chart, handed to the grid as the LEFT COLUMN of
+            its three-column workspace (`PlannerGrid.tsx`'s header has the
+            widths). Built here, rendered there — the counts are a function of
+            `cells`, which is this component's state, so lifting the arithmetic
+            into `PlannerGrid` would export the grid's draft state to a
+            component that has no other use for it. Only the placement moved.
+
+            This used to be a `ParticipationRail` with `placement="panel"`,
+            mounted below the grid: it put the chart in the page's left gutter above
+            1700px and stacked it under the grid below that. It never reached
+            the 1512px laptop this is planned on — the admin page caps content
+            at 1280px, leaving ~116px of gutter for a 216px chart. It now costs
+            the grid 190px at every width, on purpose.
+          */
+          participation={
+            <ParticipationSidebar
+              roles={participationRoles}
+              // The month IS the scope now (`participationSaved`), so the month
+              // names itself honestly and the subtitle only has to say that the
+              // drafts on screen are already in the count alongside what is
+              // stored. The old label had to warn that January was in a
+              // February total; nothing from another month can reach this chart
+              // any more.
+              monthLabel={`${MONTHS[month - 1]} ${year} · guardados + borradores`}
+            />
+          }
+          monthLabel={`${MONTHS[month - 1]} ${year}`}
         />
       ) : (
         // D17/D10: this used to be `max-h-[50vh] overflow-y-auto` — a keyhole
@@ -2450,40 +2478,19 @@ export default function MonthGenerator({
       )}
 
       {/*
-        The participation rail. Mounted HERE, inside the generator's own step-2
-        column, rather than beside `MonthGenerator` in `ServicesPanel`: the
-        counts have to move with `cells`, and `cells` is this component's state.
-        Lifting it to the panel to gain a layout slot would export the grid's
-        draft state to a component that has no other use for it.
-
-        It costs the grid no width. Above 1700px it is `position: fixed` in the
-        page's left gutter (`ParticipationRail`), so D10's full-width panel is
-        exactly as wide as it was; below that it stacks here, under the grid.
-        Placed before the footer so the confirm buttons stay last in tab order.
-
-        MOUNTED here, RENDERED elsewhere: above the threshold `ParticipationRail`
-        portals its output to `document.body`. Both halves of that are load-
-        bearing and they answer different questions. It is mounted here for
-        STATE — the counts must move with `cells`. It is portalled out for
-        PAINT — in Safari a `position: fixed` descendant of `.brand-admin-shell`
-        (`relative` + `isolation: isolate` + `overflow: hidden`) lays out and
-        hit-tests correctly and then paints nothing at all. That is a WebKit
-        compositing failure, not the spec-level clip it looks like: `relative`
-        does NOT establish a containing block for a fixed descendant, so the
-        shell's `overflow: hidden` cannot clip it and Chromium duly paints it
-        in place. Do not delete the portal on the strength of that spec reading
-        — see `ParticipationRail.tsx`'s header for the full evidence.
+        In "Vista" mode there is no `PlannerGrid` to hold the chart's column, so
+        the same chart stacks here under the day cards — the placement this
+        surface had below the gutter threshold, kept for the one mode that has
+        no three-column layout to put it in.
       */}
-      <ParticipationRail
-        placement="panel"
-        roles={participationRoles}
-        // The month IS the scope now (`participationSaved`), so the month names
-        // itself honestly and the subtitle only has to say that the drafts on
-        // screen are already in the count alongside what is stored. The old
-        // label had to warn that January was in a February total; nothing from
-        // another month can reach this chart any more.
-        monthLabel={`${MONTHS[month - 1]} ${year} · guardados + borradores`}
-      />
+      {viewMode === "view" && (
+        <div data-participation-rail="panel" data-rail-placement="stacked">
+          <ParticipationSidebar
+            roles={participationRoles}
+            monthLabel={`${MONTHS[month - 1]} ${year} · guardados + borradores`}
+          />
+        </div>
+      )}
 
       {/* In "edit" mode `PlannerGrid` already surfaces this via `autoState.disabledReason`
           next to Auto — showing it again here would duplicate the same text. */}
