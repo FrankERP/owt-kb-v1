@@ -66,7 +66,7 @@ Verified against source. Breaking any is a regression, not a UI change.
 |---|---|
 | **E7** | **Notify ONLY the services actually modified**, and let the existing debounce do the summarising. The grid opens the whole month but most columns will be untouched, so the save must diff against what it loaded and fire nothing for an unchanged service. **No batching mechanism needs building:** `NOTIFY_DEBOUNCE_MINUTES` defaults to **15** and `NOTIFY_MAX_WINDOW_MINUTES` to 60 (`app/utils/outboxNotice.ts:97-98`), so several modified services already collapse into one summary email per person. The user asked for exactly the behaviour that ships today. **The risk is the inverse of what it first appeared:** not "six emails", but a *false* notification for a service the admin merely looked at — so the change-detection is the load-bearing part, not the fan-out. |
 | **E8** | **One `Guardar` for the month, with a change summary before committing.** On partial failure the screen states exactly which services committed and which did not, and leaves the failed ones still editable. The create path already behaves this way and is the precedent to copy. |
-| **E9** | **Only services that already exist get a column — plus an explicit "create one service" action from the same screen, solver-assisted.** Not empty columns for every date. The new service's auto-fill must account for the services already created that month, so it does not hand the same people another turn. **This is the one genuinely new capability in the plan:** the solver runs over a whole month today; running it for a single service against existing assignments is a different request shape and needs its own design. Task 3 owns it. |
+| **E9** | **Only services that already exist get a column — plus an explicit "create one service" action from the same screen, filled MANUALLY.** Not empty columns for every date. The new service is created empty and its seats are filled by hand with the picker that already exists, which already enforces the rules. **Solver auto-fill for a single service is explicitly OUT OF SCOPE** — see "Deferred" below. This keeps the plan to paths that already exist: creating is the POST the grid already uses, and filling is the picker the grid already has. |
 | **E10** | **A service outside the displayed month is reached by navigating the grid to that month.** The month picker already exists; nothing extra is built, and E3's stated loss is narrower than it first looked. |
 
 ## Tasks
@@ -80,7 +80,7 @@ Tests only, against current code. The create path must still work identically wh
 Load stored services for a month into `GridCell[]`, carrying `_rev` per service. Decide and pin how a cell knows which service it belongs to and what happens when a date has none. Do **not** write anything yet.
 
 ### Task 3 — Create one service from the edit view (E9)
-The new capability. A single service created from the grid, auto-filled by the solver **accounting for the month's existing assignments** so it does not re-pick the same people. The solver's request shape is per-month today (`buildSolveRequest`); establish what a one-service request looks like and whether the existing route serves it. Note the local filler already exists for specials (`localFill.ts`) and may be the better fit for a single service than a CP-SAT round trip.
+Pick a date and type (and a name, if special), create it, and it becomes a column you fill by hand. **No solver.** Both halves already exist — the POST is the create path the grid already uses, and the picker already enforces the rules — so this is wiring plus the conflict cases: a date that already holds a service of that type, and a special whose `special_role:${date}:${normalized name}` identity collides with a stored one.
 
 ### Task 4 — Column-header operations (E2)
 Type, date, and special name. Each has a conflict case that must be refused with a stated reason, not silently dropped: switching to a type that already exists on that date; moving onto an occupied date; renaming a special to a name already used on the same date (the server's identity is `special_role:${date}:${normalized name}`).
@@ -95,6 +95,12 @@ Wire both shapes to `/api/admin/roles/swap`, copying the client precedent at `Se
 
 ### Task 7 — Retire the Tablero
 Only after 1–6 are proven. Delete `SeatBoard` and its mounts; verify nothing else imports it. This also retires its open a11y question and the rail-behind-the-scrim problem (the Tablero rail sits at `z-40` behind `CueDialog`'s `z-[90]` scrim, so clicking it dismisses the dialog).
+
+---
+
+## Deferred — not in this plan
+
+**Solver auto-fill for a single service.** Scoped out with the user 2026-08-03. The ask was for it to account for the month's existing assignments so it does not hand the same people another turn — which is a different request shape from anything that exists: `buildSolveRequest` is per-month, and CP-SAT is given a whole month's slots at once. The local greedy filler built for specials (`localFill.ts`) is probably the better fit for one service than a CP-SAT round trip, since it already ranks by load, enforces the rules hard, and re-evaluates per placement. Worth its own plan when it comes up; nothing here should foreclose it.
 
 ---
 
