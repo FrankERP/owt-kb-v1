@@ -103,7 +103,7 @@
 // `SeatBoard.tsx`, which is about state, while this is about paint.
 "use client";
 
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import React, { useCallback, useMemo, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
 import { ParticipationSidebar } from "./ParticipationSidebar";
@@ -180,16 +180,27 @@ export function ParticipationRail({
   roles,
   monthLabel,
   placement,
+  containerRef,
 }: {
   roles: ParticipantRole[];
   monthLabel: string;
   placement: RailPlacement;
+  /**
+   * The portalled node, handed back to the caller. Exists so the dialog this
+   * rail was mounted inside can put it back in its Tab ring after the portal
+   * above took it out of the shell — see `useCueDialogFocusSatellite` in
+   * `CueDialog.tsx`. A callback ref, not an object ref, because it must fire on
+   * DETACH too: below the threshold this component returns `null`, and a stale
+   * node left in a focus ring is worse than no node at all.
+   */
+  containerRef?: React.Ref<HTMLDivElement>;
 }) {
   const wide = useWideGutter(MIN_WIDTH[placement]);
   if (!wide) return null;
 
   const chart = (
     <div
+      ref={containerRef}
       data-participation-rail={placement}
       data-rail-placement="gutter"
       className={`${RAIL_CLASS} top-20`}
