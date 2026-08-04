@@ -594,51 +594,147 @@ describe("the grid's rail is scoped to the month being generated", () => {
   });
 });
 
-// ─── The grid's rail in the gutter — the branch no test had ever rendered ────
+// ─── The grid's chart is a COLUMN now, at every width ────────────────────────
 //
-// `stubWideViewport` existed only for the Tablero, so every `goToGrid` test above
-// runs against jsdom's absent `matchMedia` and exercises the INLINE fallback.
-// The `fixed left-2 z-40 w-[216px] top-24` path — the whole reason the rail is a
-// component — had never been rendered by a test, and a visible layout defect
-// shipped with a green suite because of it.
+// It used to be `position: fixed` in the page's left gutter above 1700px and an
+// inline block below it. Both are gone. The admin page caps its content at
+// `max-w-7xl` (1280px), so the 1512px laptop this app is planned on has ~116px
+// of gutter and never saw a 216px chart at all — the gutter answer never reached
+// the machine it was for. It is now the left column of `PlannerGrid`'s
+// three-column workspace, in the flow, taking real width from the grid on every
+// machine including the ultrawide where the gutter did work. That trade was
+// asked for explicitly; the tests below are what stop it drifting back.
 //
 // WHAT THIS CANNOT DO: jsdom has no layout engine. `getBoundingClientRect` is all
-// zeroes and `scrollWidth` is 0, so nothing here can prove the rail does not
-// overlap the grid, or that its content fits inside 216px. What is assertable is
-// the CONTRACT that produces the fit: which branch was taken, which threshold was
-// asked for, the classes that place and size the element, and the `w-full` that
-// stops the select from setting the rail's width. A real-browser measurement is
-// still the only thing that can catch an overflow.
+// zeroes and `scrollWidth` is 0, so nothing here can prove the three columns fit
+// a 1512px viewport, or that the chart's content fits inside 190px. What is
+// assertable is the CONTRACT that produces the fit: which placement was taken,
+// that no viewport threshold is consulted at all any more, the classes that size
+// the tracks, and the `w-full` that stops the select from setting the chart's
+// width. A real-browser measurement at 1512×982 is still the only thing that can
+// catch an overflow.
 
-describe("the grid's rail placement, on a viewport wide enough for the gutter", () => {
-  it("takes the fixed-gutter branch, at the width the arithmetic derives", () => {
-    stubWideViewport();
-    const { container } = goToGrid([savedSunday("2026-02-08", "m1")]);
-    const rail = findRail(container, '[data-participation-rail="panel"]') as HTMLElement;
+describe("the grid's chart placement — an in-flow column, at every width", () => {
+  for (const wide of [true, false]) {
+    it(`is a column, never the gutter, on a ${wide ? "wide" : "narrow"} viewport`, () => {
+      // Parametrised on purpose. The old behaviour differed by viewport (fixed
+      // gutter above 1700, inline below), so a single-width test could not tell
+      // "always a column" from "still branching". Both widths, one answer.
+      stubWideViewport(wide);
+      const { container } = goToGrid([savedSunday("2026-02-08", "m1")]);
+      const rail = findRail(container, '[data-participation-rail="panel"]') as HTMLElement;
 
-    expect(rail).not.toBeNull();
-    expect(rail.getAttribute("data-rail-placement")).toBe("gutter");
-    for (const cls of ["fixed", "left-2", "z-40", `w-[${RAIL_WIDTH}px]`, "top-24"]) {
-      expect(rail.className.split(/\s+/)).toContain(cls);
-    }
-    // `top-20` is the dialog's offset. One component serves both surfaces, and
-    // the panel taking the dialog's value would tuck the rail under the page
-    // header rather than under the panel's own.
-    expect(rail.className.split(/\s+/)).not.toContain("top-20");
-    // Placement only: the chart still counts, in the branch that had never run.
-    expect(railTotal(container, "Frank")).toBe(1);
-    seatLead(container, "2026-02-01", "Frank");
-    expect(railTotal(container, "Frank")).toBe(2);
-  });
+      expect(rail).not.toBeNull();
+      expect(rail.getAttribute("data-rail-placement")).toBe("column");
+      // Nothing viewport-anchored: `fixed` inside `.brand-admin-shell` is the
+      // shape that needed the portal, and re-introducing any of it here would
+      // re-introduce the Safari paint bug along with it.
+      for (const cls of ["fixed", "left-2", "top-24", "top-20", `w-[${RAIL_WIDTH}px]`]) {
+        expect(rail.className.split(/\s+/)).not.toContain(cls);
+      }
+      // The track width the layout arithmetic is stated in (`PlannerGrid.tsx`'s
+      // header, `app/brand.css`), applied only once there is room for a row.
+      expect(rail.className.split(/\s+/)).toContain("xl:w-[190px]");
+      // Placement only: the chart still counts what it always counted.
+      expect(railTotal(container, "Frank")).toBe(1);
+      seatLead(container, "2026-02-01", "Frank");
+      expect(railTotal(container, "Frank")).toBe(2);
+    });
+  }
 
-  it("asks for the PANEL threshold, never the dialog's", () => {
-    // The two surfaces have different gutters (`MIN_WIDTH`), and the rail picks
-    // by `placement`. Hard-coding either query, or reading `placement` backwards,
-    // puts the grid's rail in the gutter ~320px before there is one.
+  it("consults NO viewport threshold — the column is unconditional", () => {
+    // The grid's chart no longer goes through `ParticipationRail` at all, so it
+    // asks `matchMedia` nothing. A query reappearing here means someone put the
+    // branch back, and the 1512px laptop loses the chart again silently.
     const queries = stubWideViewport();
     goToGrid([]);
-    expect(queries).toContain(`(min-width: ${MIN_WIDTH.panel}px)`);
+    expect(queries.filter((q) => q.includes("min-width"))).toEqual([]);
     expect(queries).not.toContain(`(min-width: ${MIN_WIDTH.dialog}px)`);
+  });
+
+  it("gives the candidate picker its own column, only while a cell is active", () => {
+    // The interaction change the three-column layout is: the picker was an
+    // in-place popover under the grid and is now a persistent right column. It
+    // must NOT be mounted while idle — an always-present 240px panel is 240px
+    // the grid does not have for the time nobody is picking anybody.
+    stubWideViewport();
+    const { container } = goToGrid([]);
+    expect(container.querySelector("[data-candidate-picker]")).toBeNull();
+
+    fireEvent.click(container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]')!);
+    const picker = container.querySelector("[data-candidate-picker]") as HTMLElement;
+    expect(picker).not.toBeNull();
+    expect(picker.className.split(/\s+/)).toContain("xl:w-[240px]");
+    // Focus follows the panel, which is the whole reason it carries a label:
+    // the picker is now far from the cell that opened it.
+    expect(document.activeElement).toBe(picker);
+    expect(picker.getAttribute("aria-label")).toContain("Lead");
+    // And the cell says it is the one being edited — with the list on the far
+    // side of the grid, nothing else on screen would.
+    expect(
+      container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]')!.getAttribute("data-active"),
+    ).toBe("true");
+  });
+
+  it("switches the open picker to another cell without closing it, and moves focus", () => {
+    stubWideViewport();
+    const { container } = goToGrid([]);
+    fireEvent.click(container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]')!);
+    fireEvent.click(container.querySelector('[data-row-id="bgv"][data-date="2026-02-01"]')!);
+
+    const pickers = container.querySelectorAll("[data-candidate-picker]");
+    expect(pickers.length).toBe(1); // replaced in place, not stacked
+    expect((pickers[0] as HTMLElement).getAttribute("aria-label")).toContain("BGV");
+    expect(document.activeElement).toBe(pickers[0]);
+    expect(
+      container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]')!.getAttribute("data-active"),
+    ).toBeNull();
+  });
+
+  it("Cerrar returns focus to the cell that opened the picker", () => {
+    // A popover left focus somewhere sensible on its own because it sat next to
+    // its trigger. A column on the far side of the grid does not: without this a
+    // keyboard user restarts at the top of the page every time they close it.
+    stubWideViewport();
+    const { container } = goToGrid([]);
+    const cell = container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]') as HTMLElement;
+    fireEvent.click(cell);
+    fireEvent.click(screen.getByRole("button", { name: "Cerrar" }));
+
+    expect(container.querySelector("[data-candidate-picker]")).toBeNull();
+    expect(document.activeElement).toBe(cell);
+  });
+
+  it("Escape closes the picker instead of the generator", () => {
+    // `MonthGenerator` also listens for Escape on `document`, and its answer is
+    // to close the whole generator. The picker's listener is capture-phase for
+    // exactly this reason — bubble-phase order between two listeners on one node
+    // flips whenever either effect re-registers.
+    stubWideViewport();
+    const onClose = vi.fn();
+    const { container } = render(
+      <MonthGenerator
+        members={members}
+        existingRoles={[]}
+        allRoles={[]}
+        rules={readyRules()}
+        onClose={onClose}
+        onCreated={vi.fn()}
+      />,
+    );
+    fireEvent.change(container.querySelector("select") as HTMLSelectElement, { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+    const cell = container.querySelector('[data-row-id="lead"]') as HTMLElement;
+    fireEvent.click(cell);
+    expect(container.querySelector("[data-candidate-picker]")).not.toBeNull();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(container.querySelector("[data-candidate-picker]")).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+
+    // And with nothing left to dismiss, Escape reaches the generator again.
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the Voces/Instrumentos select from setting the rail's width", () => {
@@ -661,17 +757,29 @@ describe("the grid's rail placement, on a viewport wide enough for the gutter", 
     expect(header.className).not.toContain("justify-between");
   });
 
-  it("falls back to the in-flow placement below the threshold, with no fixed positioning", () => {
-    // The inline branch every other grid test above runs in, asserted on purpose
-    // for once: it must NOT be positioned, or it would leave the flow on a
-    // viewport with no gutter to leave it into.
-    stubWideViewport(false);
+  it("full screen drops both side panels and keeps every assignment", () => {
+    // "Sometimes I need to take a screenshot of the whole month." The mode has
+    // to be a real mode — side panels gone, columns free to shrink — and it has
+    // to survive the round trip: entering swaps a host element for a portal, so
+    // React rebuilds the DOM and anything that lived in it would be lost.
+    stubWideViewport();
     const { container } = goToGrid([]);
-    const rail = findRail(container, '[data-participation-rail="panel"]') as HTMLElement;
+    seatLead(container, "2026-02-01", "Frank");
+    expect(railTotal(container, "Frank")).toBe(1);
 
-    expect(rail).not.toBeNull();
-    expect(rail.getAttribute("data-rail-placement")).toBe("inline");
-    expect(rail.getAttribute("class")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Pantalla completa/ }));
+    const full = document.body.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement;
+    expect(full).not.toBeNull();
+    expect(full.parentElement).toBe(document.body); // portalled OUT of the shell
+    expect(full.querySelector("[data-participation-rail]")).toBeNull();
+    // The seat is still there, rendered by the same component instance.
+    expect(full.querySelector('[data-row-id="lead"][data-date="2026-02-01"]')!.textContent).toContain(
+      "Frank",
+    );
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(document.body.querySelector('[role="dialog"][aria-modal="true"]')).toBeNull();
+    expect(railTotal(container, "Frank")).toBe(1); // and nothing was discarded
   });
 });
 
@@ -700,50 +808,53 @@ describe("the grid's rail placement, on a viewport wide enough for the gutter", 
  * at ≥1700px — headless WebKit does not reproduce it.
  */
 describe("the gutter rail renders outside the surfaces that swallow it", () => {
-  it("puts the grid's rail outside .brand-admin-shell, on document.body", () => {
+  for (const wide of [true, false]) {
+    it(`keeps the grid's chart INSIDE .brand-admin-shell, in the flow (${wide ? "wide" : "narrow"})`, () => {
+      // The inverse pin, and the reason it is worth writing down: the portal was
+      // the right answer while the chart was `position: fixed`, and the WebKit
+      // bug it works around is real. An in-flow column is not fixed, so the bug
+      // does not apply to it — and portalling it anyway would rip the left
+      // column out of the layout and drop it at the end of the body. Both
+      // viewport widths, because the old code branched on width here.
+      stubWideViewport(wide);
+      const shell = document.createElement("div");
+      shell.className = "brand-admin-shell";
+      document.body.appendChild(shell);
+      try {
+        const { container } = goToGrid([savedSunday("2026-02-08", "m1")], [], { container: shell });
+        const rail = findRail(container, '[data-participation-rail="panel"]') as HTMLElement;
+
+        expect(rail).not.toBeNull();
+        expect(rail.getAttribute("data-rail-placement")).toBe("column");
+        expect(rail.closest(".brand-admin-shell")).toBe(shell);
+        expect(rail.parentElement).not.toBe(document.body);
+        // Same component, same state: the counts move when a seat moves.
+        expect(railTotal(container, "Frank")).toBe(1);
+        seatLead(container, "2026-02-01", "Frank");
+        expect(railTotal(container, "Frank")).toBe(2);
+      } finally {
+        shell.remove();
+      }
+    });
+  }
+
+  it("puts FULL SCREEN outside .brand-admin-shell — the one fixed thing left here", () => {
+    // Full screen IS `position: fixed` inside the shell's `relative` +
+    // `isolation: isolate` + `overflow: hidden` trio, so it inherits the bug the
+    // rail's portal was written for, and it inherits the portal with it.
     stubWideViewport();
-    // The real shell, around the real generator: `admin/page.tsx` wraps
-    // `AdminPanel` in `.brand-admin-shell` and every rail ancestor below it is
-    // an ordinary block. Reconstructed here because `goToGrid` renders the
-    // generator alone.
-    const shell = document.createElement("div");
-    shell.className = "brand-admin-shell";
-    document.body.appendChild(shell);
-    try {
-      const { container } = goToGrid([savedSunday("2026-02-08", "m1")], [], { container: shell });
-      const rail = findRail(container, '[data-participation-rail="panel"]') as HTMLElement;
-
-      expect(rail).not.toBeNull();
-      expect(rail.getAttribute("data-rail-placement")).toBe("gutter");
-      expect(rail.closest(".brand-admin-shell")).toBeNull();
-      expect(shell.contains(rail)).toBe(false);
-      expect(rail.parentElement).toBe(document.body);
-      // Still the same component reading the same state: the counts move when a
-      // seat moves, from outside the shell exactly as they did from inside it.
-      expect(railTotal(container, "Frank")).toBe(1);
-      seatLead(container, "2026-02-01", "Frank");
-      expect(railTotal(container, "Frank")).toBe(2);
-    } finally {
-      shell.remove();
-    }
-  });
-
-  it("keeps the BELOW-threshold panel rail in the flow, inside the shell", () => {
-    // The other half of the design, and the one a careless portal breaks: with
-    // no gutter the rail is an ordinary block under the grid and MUST stay
-    // where it is mounted. Portalling this branch would rip it out of the page
-    // and drop it at the end of the body.
-    stubWideViewport(false);
     const shell = document.createElement("div");
     shell.className = "brand-admin-shell";
     document.body.appendChild(shell);
     try {
       const { container } = goToGrid([], [], { container: shell });
-      const rail = findRail(container, '[data-participation-rail="panel"]') as HTMLElement;
+      fireEvent.click(screen.getByRole("button", { name: /Pantalla completa/ }));
+      const full = document.body.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement;
 
-      expect(rail).not.toBeNull();
-      expect(rail.getAttribute("data-rail-placement")).toBe("inline");
-      expect(rail.closest(".brand-admin-shell")).toBe(shell);
+      expect(full).not.toBeNull();
+      expect(full.closest(".brand-admin-shell")).toBeNull();
+      expect(shell.contains(full)).toBe(false);
+      expect(container.querySelector('[role="dialog"][aria-modal="true"]')).toBeNull();
     } finally {
       shell.remove();
     }
@@ -892,47 +1003,42 @@ describe("the Tablero's rail counts the seats being edited", () => {
 // ─── The gutter thresholds, as STATED vs as coded ────────────────────────────
 
 /**
- * `ParticipationRail` owns the two widths, and three other places describe them
- * in prose: the mount-site comments in `MonthGenerator` and `SeatBoard`, and the
- * component table in `UTILITIES_AND_COMPONENTS.md`. When the widths last moved,
- * `MIN_WIDTH` and the rail's own header were updated and all three of those were
- * not — leaving a reader who derives the gutter arithmetic from a comment with
- * the wrong answer, in a repo where the comments are the design record.
+ * `ParticipationRail` owns the gutter width, and two other places describe it in
+ * prose: the mount-site comment in `SeatBoard`, and the component table in
+ * `UTILITIES_AND_COMPONENTS.md`. When the widths last moved, `MIN_WIDTH` and the
+ * rail's own header were updated and the prose was not — leaving a reader who
+ * derives the gutter arithmetic from a comment with the wrong answer, in a repo
+ * where the comments are the design record.
  *
  * A static-analysis sync guard, in the shape `routeMatcher.test.ts` already uses
  * for the middleware matcher: nothing here renders, it just refuses to let the
  * prose and the constant disagree again.
+ *
+ * The PANEL half of this guard is gone with the panel placement — the planner
+ * grid consults no threshold at all now. Its replacement is the layout guard
+ * below, which pins the same kind of prose-vs-code drift for the three column
+ * widths that took its place.
  */
-describe("the stated rail thresholds match MIN_WIDTH", () => {
+describe("the stated rail threshold matches MIN_WIDTH", () => {
   const root = process.cwd();
   const read = (p: string) => readFileSync(join(root, p), "utf8");
   const railSrc = read("app/components/admin/ParticipationRail.tsx");
-  const minWidth = railSrc.match(/MIN_WIDTH[^=]*=\s*\{\s*panel:\s*(\d+),\s*dialog:\s*(\d+)\s*\}/);
+  const minWidth = railSrc.match(/MIN_WIDTH[^=]*=\s*\{\s*dialog:\s*(\d+)\s*\}/);
 
-  it("extracts both widths from the rail (the guard is worthless if this fails)", () => {
+  it("extracts the width from the rail (the guard is worthless if this fails)", () => {
     expect(minWidth, "could not extract MIN_WIDTH from ParticipationRail.tsx").toBeTruthy();
-  });
-
-  it("MonthGenerator's mount comment states the panel width", () => {
-    const stated = read("app/components/admin/MonthGenerator.tsx").match(
-      /Above (\d+)px it is `position: fixed`/,
-    );
-    expect(stated?.[1]).toBe(minWidth![1]);
   });
 
   it("SeatBoard's mount comment states the dialog width", () => {
     const stated = read("app/components/admin/SeatBoard.tsx").match(
       /Below (\d+)px there is no gutter/,
     );
-    expect(stated?.[1]).toBe(minWidth![2]);
+    expect(stated?.[1]).toBe(minWidth![1]);
   });
 
-  it("UTILITIES_AND_COMPONENTS.md states both", () => {
-    const stated = read("docs/UTILITIES_AND_COMPONENTS.md").match(
-      /planner grid \(≥(\d+)px\) and the Tablero \(≥(\d+)px\)/,
-    );
+  it("UTILITIES_AND_COMPONENTS.md states it", () => {
+    const stated = read("docs/UTILITIES_AND_COMPONENTS.md").match(/the Tablero \(≥(\d+)px\)/);
     expect(stated?.[1]).toBe(minWidth![1]);
-    expect(stated?.[2]).toBe(minWidth![2]);
   });
 
   it("the class the rail renders is the width the arithmetic is stated in", () => {
@@ -940,37 +1046,110 @@ describe("the stated rail thresholds match MIN_WIDTH", () => {
     // runtime, so the two can drift. This is the only thing that stops them.
     expect(railSrc).toMatch(new RegExp(`w-\\[${RAIL_WIDTH}px\\]`));
   });
+
+  it("nothing mounts the retired panel placement any more", () => {
+    // The one-word change that would quietly put a `position: fixed` element
+    // back inside `.brand-admin-shell` — where it lays out, hit-tests and paints
+    // nothing in Safari.
+    // Matched on the import and the JSX, not on the word: the mount site's
+    // comment names the retired component on purpose, so a reader who goes
+    // looking for it finds out why it is gone rather than that it never existed.
+    expect(railSrc).not.toMatch(/placement === "panel"|panel:\s*\d/);
+    const genSrc = read("app/components/admin/MonthGenerator.tsx");
+    expect(genSrc).not.toMatch(/import\s*\{[^}]*ParticipationRail/);
+    expect(genSrc).not.toMatch(/<ParticipationRail/);
+  });
+});
+
+/**
+ * The three column widths, prose versus code.
+ *
+ * `PlannerGrid.tsx`'s header derives the fit at 1512 (190 + 12 + 1008 + 12 + 240
+ * = 1462 usable), `app/brand.css` repeats the same sum as the justification for
+ * lifting the admin frame's 1280px cap, and the component renders two Tailwind
+ * literals that cannot be built from either. Three copies of one arithmetic is
+ * exactly the drift the retired threshold guard existed to catch, so it is
+ * caught the same way.
+ *
+ * WHAT THIS CANNOT DO, and it is the same limitation the gutter guard had:
+ * nothing here proves anything FITS. jsdom lays nothing out. It proves the
+ * numbers on screen are the numbers the design record claims.
+ */
+describe("the planner's three column widths agree wherever they are written", () => {
+  const root = process.cwd();
+  const read = (p: string) => readFileSync(join(root, p), "utf8");
+  const gridSrc = read("app/components/admin/PlannerGrid.tsx");
+  const cssSrc = read("app/brand.css");
+
+  const CHART = 190;
+  const PICKER = 240;
+
+  it("PlannerGrid renders the two side tracks at the stated widths", () => {
+    expect(gridSrc).toMatch(new RegExp(`xl:w-\\[${CHART}px\\]`));
+    expect(gridSrc).toMatch(new RegExp(`xl:w-\\[${PICKER}px\\]`));
+  });
+
+  it("PlannerGrid's header states the sum, and brand.css states the same one", () => {
+    const stated = gridSrc.match(/(\d+) \(Participaciones\) \+ 12 \+ (\d+) \(grid\) \+ 12 \+ (\d+) \(picker\) = (\d+)/);
+    expect(stated, "could not read the width derivation from PlannerGrid.tsx").toBeTruthy();
+    expect(Number(stated![1])).toBe(CHART);
+    expect(Number(stated![3])).toBe(PICKER);
+    // The sum has to actually add up — a stale total is how a "verified" budget
+    // stops describing the thing it was measured from.
+    expect(Number(stated![1]) + 12 + Number(stated![2]) + 12 + Number(stated![3])).toBe(
+      Number(stated![4]),
+    );
+
+    const css = cssSrc.match(/(\d+) \(chart\) \+ 12 \+ (\d+) \(grid\) \+ 12 \+ (\d+) \(picker\)\s+= (\d+)/);
+    expect(css, "could not read the width derivation from brand.css").toBeTruthy();
+    expect(css![1]).toBe(stated![1]);
+    expect(css![2]).toBe(stated![2]);
+    expect(css![3]).toBe(stated![3]);
+    expect(css![4]).toBe(stated![4]);
+  });
+
+  it("the frame widener is scoped to the planner and to desktop only", () => {
+    // `:has(.planner-wide)` inside a `min-width: 1280px` media query. Unscoped,
+    // it would widen every other admin tab; without the query it would change
+    // the padding on a phone, where nothing is side by side anyway.
+    expect(cssSrc).toMatch(
+      /@media \(min-width: 1280px\) \{[\s\S]*?\.brand-admin-frame:has\(\.planner-wide\)[\s\S]*?\}/,
+    );
+    expect(read("app/(client)/admin/page.tsx")).toContain("brand-admin-frame");
+    expect(gridSrc).toContain("planner-wide");
+  });
+
+  it("lifts the LAYOUT's cap too, not just the admin page's", () => {
+    // `app/(client)/layout.tsx` wraps every page in `max-w-7xl`. Widening only
+    // the admin frame inside it is a silent no-op — the content stays at 1280px
+    // and the three columns are back to ~1174px between them. Both caps, or
+    // neither.
+    expect(cssSrc).toMatch(/\[data-route-main\]:has\(\.planner-wide\)\s*\{\s*max-width:\s*none;/);
+    expect(read("app/(client)/layout.tsx")).toContain("data-route-main");
+  });
 });
 
 /**
  * `MIN_WIDTH` versus `RAIL_WIDTH`, through the formula the header comment
- * actually derives it by — not the regex-vs-import duplicate this replaces,
- * which compared the same declaration to itself and could not fail short of
- * the regex breaking (that failure mode belongs to "extracts both widths…"
- * above).
+ * actually derives it by — not a regex-vs-import duplicate, which would compare
+ * the same declaration to itself and could not fail short of the regex breaking
+ * (that failure mode belongs to "extracts the width…" above).
  *
  * The header states: the rail needs `RAIL_WIDTH` + 8px (`left-2`) + 8px of air
  * clear of the container's content before the container's first pixel — 232px
- * today. That clearance feeds both thresholds:
- *   • panel:  (W - 1280) / 2 + 24 >= clearance   (max-w-7xl, `px-6` inset)
- *   • dialog: (W -  896) / 2      >= clearance   (max-w-4xl, no inset)
- * 1280, 896 and 24 are page-layout facts (`admin/page.tsx`'s `max-w-7xl` +
- * `px-6`, `CueDialog.tsx`'s `max-w-4xl`), not part of this pair — they don't
- * move when the rail's own width does, so they're fixed here rather than
- * re-derived. `RAIL_WIDTH` is the one input that can change (it did, in the
- * commit that stacked the sidebar's header row), and each `MIN_WIDTH` must
+ * today. That clearance feeds the threshold:
+ *   • dialog: (W - 896) / 2 >= clearance   (max-w-4xl, no inset)
+ * 896 is a page-layout fact (`CueDialog.tsx`'s `max-w-4xl`), not part of this
+ * pair — it does not move when the rail's own width does, so it is fixed here
+ * rather than re-derived. `RAIL_WIDTH` is the one input that can change (it did,
+ * in the commit that stacked the sidebar's header row), and `MIN_WIDTH` must
  * stay at least the minimum that formula demands for whatever `RAIL_WIDTH`
  * currently is. A widened rail with a stale `MIN_WIDTH` is exactly the 47px
  * overlap the header's own history names.
  */
 describe("MIN_WIDTH still clears the gutter RAIL_WIDTH actually needs", () => {
   const clearance = RAIL_WIDTH + 8 /* left-2 */ + 8 /* air */;
-  const panelMinRequired = 1280 + 2 * (clearance - 24);
   const dialogMinRequired = 896 + 2 * clearance;
-
-  it("the panel threshold clears (W - 1280) / 2 + 24 >= RAIL_WIDTH + 16", () => {
-    expect(MIN_WIDTH.panel).toBeGreaterThanOrEqual(panelMinRequired);
-  });
 
   it("the dialog threshold clears (W - 896) / 2 >= RAIL_WIDTH + 16", () => {
     expect(MIN_WIDTH.dialog).toBeGreaterThanOrEqual(dialogMinRequired);

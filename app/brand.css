@@ -257,6 +257,56 @@
   background: radial-gradient(circle, rgb(var(--brand-beam) / 0.09), transparent 68%);
 }
 
+/*
+ * The planner grid's three-column workspace, and the ONE place the admin page's
+ * 1280px cap is lifted.
+ *
+ * `app/(client)/admin/page.tsx` caps its content at `max-w-7xl` (1280px) inside
+ * `px-6`, and `.brand-admin-shell` adds up to 1.75rem of its own padding — so a
+ * 1512px 14" MacBook Pro reaches the grid with ~1174px. Participaciones (190) +
+ * the candidate picker (240) + two gaps leaves that grid 720px, i.e. four date
+ * columns of the six the admin is looking at. The full-bleed trick cannot help:
+ * `.brand-admin-shell` is `overflow: hidden`, so a child that breaks out of the
+ * frame is clipped back to it.
+ *
+ * So the FRAME widens, scoped by `:has()` to the one surface that needs it —
+ * `PlannerGrid` marks its root `planner-wide`. Nothing else on `/admin` moves,
+ * and nothing moves at all below 1280px, where the workspace stacks anyway:
+ *
+ *   1512 − 24 (frame px) − 2 (shell border) − 24 (shell padding) = 1462
+ *   190 (chart) + 12 + 1008 (grid) + 12 + 240 (picker)            = 1462
+ *
+ * `max-width: none` rather than a larger fixed cap: on a wider monitor the extra
+ * width all goes to the grid, which is the only thing here that can use it.
+ *
+ * KNOWN COSMETIC COST: the page header above the shell widens with the frame,
+ * so while the planner is open it is wider than the navbar's own centred
+ * content. Accepted — the alternative (a `100vw` shell with a negative margin)
+ * over-runs by the scrollbar width on any platform that reserves one.
+ */
+@media (min-width: 1280px) {
+  /*
+   * TWO caps, not one. `app/(client)/layout.tsx` wraps every page in
+   * `<main data-route-main class="mx-auto max-w-7xl">`, so lifting the admin
+   * page's own cap alone changes nothing at all — the layout's `main` still
+   * pins the content at 1280px. Both have to move together, and forgetting the
+   * outer one is a silent no-op rather than a visible bug.
+   */
+  [data-route-main]:has(.planner-wide) {
+    max-width: none;
+  }
+
+  .brand-admin-frame:has(.planner-wide) {
+    max-width: none;
+    padding-right: 0.75rem;
+    padding-left: 0.75rem;
+  }
+
+  .brand-admin-shell:has(.planner-wide) {
+    padding: 0.75rem;
+  }
+}
+
 .brand-admin-tabs {
   border: 1px solid rgb(var(--brand-steel) / 0.14);
   background: rgb(var(--brand-console) / 0.5);

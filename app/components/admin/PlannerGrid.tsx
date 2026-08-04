@@ -29,8 +29,44 @@
 //  7. Auto has a failure and pending contract (D15) — the component does not
 //     own the fetch (`onAuto` does), but it owns rendering `autoState`
 //     honestly: pending, error, and disabled-with-reason.
+//
+// ── The three-column workspace, and the trade it makes ──────────────────────
+//
+// Participaciones on the left, the grid in the middle, the candidate picker on
+// the right. All three are IN FLOW: the rail used to be `position: fixed` in
+// the page's empty gutter so it cost the grid nothing, and at 1512 logical (a
+// 14" MacBook Pro) there is no gutter — the admin's own machine never showed
+// it. Taking real width from the grid at every size, on every machine, is the
+// deliberate trade that replaces it. `ParticipationRail`'s gutter placement
+// survives for the Tablero alone; see its header.
+//
+// The layout is FLEX, not a grid template, for one reason: the DOM order is
+// centre → picker → participation (so a phone stacks grid, then candidates,
+// then the chart, exactly as this surface stacked before), and `xl:order-*`
+// puts them left-to-right only once there is room. Below `xl` (1280px) nothing
+// is side by side and the layout is the stacked one that shipped.
+//
+// The widths at 1512, measured rather than budgeted — see
+// `.brand-admin-frame` / `.brand-admin-shell` in `app/brand.css`, which the
+// `planner-wide` marker on this component's root widens through `:has()`:
+//   1512 viewport − 24 frame padding − 2 shell border − 24 shell padding
+//     = 1462 usable
+//   190 (Participaciones) + 12 + 1008 (grid) + 12 + 240 (picker) = 1462
+// The picker's 240px is only spent while a cell is ACTIVE; with none open the
+// grid gets it back and runs at 1260.
+//
+// Two consequences that are features, not oversights:
+//  • The grid SCROLLS horizontally rather than squeezing its columns — the date
+//    track keeps its `minmax(150px, 1fr)` floor and the row-label column is
+//    `position: sticky`, so the seat you are reading never leaves the screen.
+//  • "Pantalla completa" exists because none of that fits a whole month at
+//    once, and a screenshot of the whole month is a real need. It portals this
+//    surface to `document.body`, drops both side panels, and switches the date
+//    track to `minmax(0, 1fr)` so N columns divide the viewport instead of
+//    overflowing it.
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import {
   assignedForDate,
@@ -139,6 +175,19 @@ export interface PlannerGridProps {
    * need it; without it they are simply not evaluated.
    */
   sundayDates?: string[];
+  /**
+   * The left column's contents — `ParticipationSidebar`, built and fed by
+   * `MonthGenerator` (the counts are a function of ITS state, and nothing about
+   * what is counted moved here).
+   *
+   * A `ReactNode` rather than the roles themselves, so this component owns the
+   * three widths and none of the arithmetic. Omitted, the left column is not
+   * rendered at all and the grid takes its 190px — which is what every
+   * `PlannerGrid` unit test does.
+   */
+  participation?: ReactNode;
+  /** Named on the full-screen bar, where the page's own month header is gone. */
+  monthLabel?: string;
 }
 
 const cellKey = (date: string, rowId: string) => `${date}|${rowId}`;
@@ -245,6 +294,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
     diagnostics,
     config,
     sundayDates,
+    participation,
+    monthLabel,
   } = props;
 
   const [openCell, setOpenCell] = useState<{ rowId: string; date: string } | null>(null);
@@ -259,6 +310,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
   const [openOrder, setOpenOrder] = useState<string[] | null>(null);
   const [confirmingAuto, setConfirmingAuto] = useState(false);
   const [removeError, setRemoveError] = useState<{ rowId: string; message: string } | null>(null);
+  const [fullScreen, setFullScreen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement | null>(null);
 
   // Finding 5: `removeError` was never cleared by anything except a
   // SUCCESSFUL `removeRow` call, so "Vacía la fila antes de eliminarla"
@@ -496,16 +549,96 @@ export default function PlannerGrid(props: PlannerGridProps) {
     );
   }
 
-  /** Opens the picker and freezes the candidate ORDER as of right now. */
+  /**
+   * Opens the picker and freezes the candidate ORDER as of right now.
+   *
+   * With the picker a PERSISTENT right column rather than an in-place popover,
+   * this is also "switch the picker to another cell": the panel does not close
+   * and reopen, its contents are replaced and `openOrder` is re-captured for
+   * the new cell. Clicking the cell that is already open is deliberately NOT a
+   * toggle — the panel is a fixed region of the layout, and a stray second
+   * click on the cell you are working in must not empty it.
+   */
   function openPicker(row: GridRow, date: string) {
     setOpenOrder(rankFor(row, date).map((c) => c.id));
     setOpenCell({ rowId: row.id, date });
   }
 
-  function closePicker() {
+  /**
+   * Closes the picker and hands focus BACK to the cell that opened it.
+   *
+   * The popover this replaces sat next to the button that summoned it, so
+   * dismissing it left focus somewhere sensible on its own. A column on the far
+   * side of the grid does not: without this, closing drops focus onto `<body>`
+   * and a keyboard user restarts at the top of the page.
+   *
+   * The cell is found by its own data attributes rather than a stored element
+   * reference — the reference would go stale across the re-render that a seat
+   * change or a full-screen toggle causes, and the attributes are the same pair
+   * that identifies the cell everywhere else in this file. Quoted attribute
+   * values need no escaping for the ids in play (`instrumento:Bass`).
+   */
+  const closePicker = useCallback(() => {
+    const target = openCell;
     setOpenCell(null);
     setOpenOrder(null);
-  }
+    if (!target) return;
+    document
+      .querySelector<HTMLElement>(`[data-row-id="${target.rowId}"][data-date="${target.date}"]`)
+      ?.focus();
+  }, [openCell]);
+
+  const openKey = openCell ? `${openCell.rowId}|${openCell.date}` : null;
+
+  /**
+   * Focus follows the picker, on open AND on every switch to another cell.
+   *
+   * Keyed on the cell, not on "the picker appeared": switching from Lead to BGV
+   * keeps the same panel mounted, so nothing else would tell a screen-reader
+   * user that the list under their cursor is now a different seat's. The panel
+   * carries the seat and date in its `aria-label`, which is what lands when
+   * focus does.
+   */
+  useEffect(() => {
+    if (openKey) pickerRef.current?.focus();
+  }, [openKey]);
+
+  /**
+   * Escape, in the CAPTURE phase, and only while there is something for it to
+   * dismiss.
+   *
+   * `MonthGenerator` listens for Escape on `document` too, and its answer is to
+   * close the whole generator (behind the discard guard). Both listeners sit on
+   * the same node, so bubble-phase registration order would decide the winner —
+   * and that order flips whenever either effect re-registers, which both do on
+   * ordinary state changes. A capture-phase listener on `document` runs before
+   * ANY bubble-phase listener on it, whatever the order they were added in, so
+   * this is a priority rule rather than a race.
+   *
+   * `stopPropagation` is what makes it a priority rule: it keeps the keystroke
+   * from reaching the generator's handler at all. It is deliberately scoped —
+   * with no picker open and no full screen, this listener does not exist, and
+   * Escape closes the generator exactly as it always did.
+   *
+   * Full screen outranks the picker when both are up: the picker is visible and
+   * usable inside full screen, so the first Escape returns the admin to the page
+   * they came from and the second closes the picker.
+   */
+  useEffect(() => {
+    if (!openKey && !fullScreen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (fullScreen) {
+        setFullScreen(false);
+        return;
+      }
+      closePicker();
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [openKey, fullScreen, closePicker]);
 
   function handleAutoClick() {
     if (autoState.disabledReason || autoState.pending) return;
@@ -580,8 +713,186 @@ export default function PlannerGrid(props: PlannerGridProps) {
       })
     : liveCandidates;
 
-  return (
-    <div className="space-y-4">
+  // ── The three tracks, and the one number that differs between the modes ────
+  //
+  // The date track's floor is what decides "scroll" vs "squeeze". In the page
+  // it stays at 150px: a column narrower than that wraps a two-word name onto
+  // three lines, and the type on this surface was deliberately made BIGGER, not
+  // smaller. In full screen the whole point is that the month fits, so the floor
+  // goes to 0 and N columns divide whatever the viewport has. Threaded down to
+  // the header and the cells as well, because each of those carries its own
+  // `min-w-[150px]` — leaving those behind would make the fitted template a lie
+  // and reintroduce the horizontal scroll full screen exists to remove.
+  const dateTrack = fullScreen ? "minmax(0, 1fr)" : "minmax(150px, 1fr)";
+  const labelTrack = fullScreen ? "minmax(140px, max-content)" : "minmax(176px, max-content)";
+  const cellMinW = fullScreen ? "min-w-0" : "min-w-[150px]";
+  const labelMinW = fullScreen ? "min-w-[140px]" : "min-w-[176px]";
+  // The row-label column is `sticky` inside the horizontal scroller, so the seat
+  // being read stays on screen while the month scrolls under it — losing track
+  // of which row you are in is the failure mode a narrower grid actually has.
+  // Sticky needs an OPAQUE background or the chips scroll through it; `#010b17`
+  // is `--brand-blackout`, the same value `ParticipationSidebar` paints itself.
+  const stickyLabel = "sticky left-0 z-10 bg-[#010b17]";
+
+  const gridBlock = (
+    <div className={fullScreen ? undefined : "overflow-x-auto"}>
+      <div
+        className="grid"
+        style={{ gridTemplateColumns: `${labelTrack} repeat(${columns.length}, ${dateTrack})` }}
+      >
+        <div className={`${labelMinW} ${stickyLabel}`} />
+        {columns.map((column) => (
+          <ColumnHeader
+            key={column.date}
+            column={column}
+            preflight={preflightFor(column)}
+            createBlock={createBlockFor(column)}
+            skipped={skipped.has(column.date)}
+            unaddressable={unaddressableSet.has(column.date)}
+            onToggleSkip={() => onToggleSkip(column.date)}
+            minWClass={cellMinW}
+          />
+        ))}
+
+        {rows.map((row) => (
+          <RowGroup
+            key={row.id}
+            row={row}
+            columns={columns}
+            cellsByKey={cellsByKey}
+            unfilledByKey={unfilledByKey}
+            duplicatesByDate={(date) => duplicatesByDateMap.get(date) ?? emptyDuplicates}
+            violationsByDate={(date) => violationsByDate.get(date) ?? emptyViolations}
+            memberName={memberName}
+            onOpen={(date) => openPicker(row, date)}
+            onRemove={row.category !== "voz" ? () => removeRow(row.id) : undefined}
+            removeError={activeRemoveError?.rowId === row.id ? activeRemoveError.message : null}
+            onCopy={row.category !== "voz" ? (date) => copyRowAcrossDates(row, date) : undefined}
+            activeDate={openCell?.rowId === row.id ? openCell.date : null}
+            minWClass={cellMinW}
+            labelMinWClass={labelMinW}
+            stickyLabelClass={stickyLabel}
+          />
+        ))}
+      </div>
+    </div>
+  );
+
+  // ── The centre column ──────────────────────────────────────────────────────
+  // `min-w-0` is load-bearing on a flex child: without it the grid's intrinsic
+  // width (every column at its floor) sets the flex basis and pushes the picker
+  // off the screen instead of scrolling inside its own box.
+  const centre = (
+    <div className="min-w-0 flex-1 space-y-4 xl:order-2">
+      {gridBlock}
+      {!fullScreen && (
+        <div className="flex flex-wrap gap-3">
+          <AddRowForm placeholder="Nuevo instrumento" onAdd={addInstrumentRow} />
+          <AddRowForm placeholder="Nuevo rol FOH" onAdd={addFohRow} />
+        </div>
+      )}
+    </div>
+  );
+
+  // ── The right column — present only while a cell is ACTIVE ────────────────
+  // Not "always mounted and empty": an idle 240px panel is 240px the grid does
+  // not have for the ~90% of the time nobody is picking anybody. The template is
+  // flex, so the centre column simply reclaims the width.
+  const pickerColumn =
+    openCell && openRow ? (
+      <div
+        ref={pickerRef}
+        tabIndex={-1}
+        role="region"
+        aria-label={`Candidatos para ${openRow.label} — ${openCell.date}`}
+        data-candidate-picker
+        className={`${CARD_STYLE.dialog} self-start rounded-xl border border-[#00bfff]/15 p-3 focus:outline-none xl:sticky xl:top-4 xl:order-3 xl:w-[240px] xl:shrink-0`}
+      >
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <span className="font-label text-xs uppercase tracking-widest text-[#C8D8EB]/70">
+            Candidatos para {openRow.label} — {openCell.date}
+          </span>
+          <button
+            type="button"
+            onClick={closePicker}
+            className="min-h-[44px] min-w-[44px] shrink-0 font-label text-xs uppercase tracking-widest text-[#C8D8EB]/60 hover:text-white"
+          >
+            Cerrar
+          </button>
+        </div>
+        <ul className="max-h-[60vh] space-y-1.5 overflow-y-auto pr-1">
+          {openCandidates.map((candidate) => (
+            <CandidateRow
+              key={candidate.id}
+              candidate={candidate}
+              selected={(cellsByKey.get(cellKey(openCell.date, openCell.rowId))?.memberIds ?? []).includes(
+                candidate.id,
+              )}
+              onToggle={(id) => toggleCandidate(openRow, openCell.date, id, openCandidates)}
+              onOverride={(id) => overrideCandidate(openRow, openCell.date, id, openCandidates)}
+            />
+          ))}
+          {openCandidates.length === 0 && (
+            <li className="font-body text-xs italic text-gray-600">Nadie elegible para este puesto.</li>
+          )}
+        </ul>
+      </div>
+    ) : null;
+
+  // ── The left column ────────────────────────────────────────────────────────
+  // The data attributes are the ones the gutter rail carried, kept so the
+  // panel stays findable by the same selector it always had — but the VALUE is
+  // honest about what changed: `column`, never `gutter` or `inline`.
+  const participationColumn =
+    participation && !fullScreen ? (
+      <div
+        data-participation-rail="panel"
+        data-rail-placement="column"
+        className="min-w-0 xl:order-1 xl:w-[190px] xl:shrink-0"
+      >
+        {participation}
+      </div>
+    ) : null;
+
+  // DOM order: grid, picker, chart. That is the order a phone stacks them in,
+  // and it is the order this surface already stacked in (the picker sat under
+  // the grid; the rail was mounted after the whole grid in `MonthGenerator`).
+  // `xl:order-*` is the only thing that puts the chart on the left, and only
+  // once there is width for it.
+  const regions = (
+    <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
+      {centre}
+      {pickerColumn}
+      {participationColumn}
+    </div>
+  );
+
+  const surface = (
+    <div
+      className={
+        fullScreen
+          ? "fixed inset-0 z-50 flex flex-col gap-3 overflow-auto bg-[#010b17] p-4"
+          : "planner-wide space-y-4"
+      }
+      {...(fullScreen
+        ? { role: "dialog" as const, "aria-modal": true, "aria-label": "Cuadrícula del mes en pantalla completa" }
+        : {})}
+    >
+      {fullScreen ? (
+        <div className="flex items-center justify-between gap-3">
+          <p className="font-label text-xs uppercase tracking-widest text-gray-500">
+            {monthLabel ?? "Cuadrícula del mes"}
+          </p>
+          <button
+            type="button"
+            onClick={() => setFullScreen(false)}
+            className="min-h-[44px] rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest hover:border-[#00bfff]"
+          >
+            Salir de pantalla completa (Esc)
+          </button>
+        </div>
+      ) : (
+        <>
       {/* ── Auto controls ─────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
         <button
@@ -591,6 +902,20 @@ export default function PlannerGrid(props: PlannerGridProps) {
           className="min-h-[44px] rounded-lg bg-[#003572] px-4 font-label text-xs uppercase tracking-widest transition-colors hover:bg-[#003572]/80 disabled:opacity-50 dark:bg-[#00bfff]/20 dark:hover:bg-[#00bfff]/30"
         >
           {autoState.pending ? "Calculando..." : "🤖 Auto-asignar con Solver"}
+        </button>
+        {/*
+          "Sometimes I need to take a screenshot of the whole month." Neither the
+          page nor the three columns can show a ten-column month at 1512, and a
+          bigger scroller would not answer the request — so this is a mode, not a
+          zoom: both side panels go, the surface leaves the page, and the columns
+          divide the viewport instead of overflowing it.
+        */}
+        <button
+          type="button"
+          onClick={() => setFullScreen(true)}
+          className="min-h-[44px] rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest text-[#C8D8EB]/70 transition-colors hover:border-[#00bfff]"
+        >
+          ⛶ Pantalla completa
         </button>
         {autoState.disabledReason && (
           <p className="font-body text-xs text-amber-400">{autoState.disabledReason}</p>
@@ -667,85 +992,38 @@ export default function PlannerGrid(props: PlannerGridProps) {
         </p>
       )}
 
-      {/* ── The grid — ONE scroller, both axes covered by min-w columns ──── */}
-      <div className="overflow-x-auto">
-        <div
-          className="grid"
-          style={{ gridTemplateColumns: `minmax(176px, max-content) repeat(${columns.length}, minmax(150px, 1fr))` }}
-        >
-          <div className="min-w-[176px]" />
-          {columns.map((column) => (
-            <ColumnHeader
-              key={column.date}
-              column={column}
-              preflight={preflightFor(column)}
-              createBlock={createBlockFor(column)}
-              skipped={skipped.has(column.date)}
-              unaddressable={unaddressableSet.has(column.date)}
-              onToggleSkip={() => onToggleSkip(column.date)}
-            />
-          ))}
-
-          {rows.map((row) => (
-            <RowGroup
-              key={row.id}
-              row={row}
-              columns={columns}
-              cellsByKey={cellsByKey}
-              unfilledByKey={unfilledByKey}
-              duplicatesByDate={(date) => duplicatesByDateMap.get(date) ?? emptyDuplicates}
-              violationsByDate={(date) => violationsByDate.get(date) ?? emptyViolations}
-              memberName={memberName}
-              onOpen={(date) => openPicker(row, date)}
-              onRemove={row.category !== "voz" ? () => removeRow(row.id) : undefined}
-              removeError={activeRemoveError?.rowId === row.id ? activeRemoveError.message : null}
-              onCopy={row.category !== "voz" ? (date) => copyRowAcrossDates(row, date) : undefined}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* ── Add instrument / FOH rows ──────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-3">
-        <AddRowForm placeholder="Nuevo instrumento" onAdd={addInstrumentRow} />
-        <AddRowForm placeholder="Nuevo rol FOH" onAdd={addFohRow} />
-      </div>
-
-      {/* ── Candidate picker — sibling to the grid scroller, never nested ─── */}
-      {openCell && openRow && (
-        <div className={`${CARD_STYLE.dialog} rounded-xl border border-[#00bfff]/15 p-3`}>
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="font-label text-xs uppercase tracking-widest text-[#C8D8EB]/70">
-              Candidatos para {openRow.label} — {openCell.date}
-            </span>
-            <button
-              type="button"
-              onClick={closePicker}
-              className="min-h-[44px] min-w-[44px] font-label text-xs uppercase tracking-widest text-[#C8D8EB]/60 hover:text-white"
-            >
-              Cerrar
-            </button>
-          </div>
-          <ul className="max-h-[50vh] space-y-1.5 overflow-y-auto pr-1">
-            {openCandidates.map((candidate) => (
-              <CandidateRow
-                key={candidate.id}
-                candidate={candidate}
-                selected={(cellsByKey.get(cellKey(openCell.date, openCell.rowId))?.memberIds ?? []).includes(
-                  candidate.id,
-                )}
-                onToggle={(id) => toggleCandidate(openRow, openCell.date, id, openCandidates)}
-                onOverride={(id) => overrideCandidate(openRow, openCell.date, id, openCandidates)}
-              />
-            ))}
-            {openCandidates.length === 0 && (
-              <li className="font-body text-xs italic text-gray-600">Nadie elegible para este puesto.</li>
-            )}
-          </ul>
-        </div>
+      {/* The right column is empty space until a cell is picked, so say what
+          fills it rather than leaving the admin to discover the interaction. */}
+      {!openCell && (
+        <p className="font-body text-[11px] text-gray-500">
+          Selecciona una celda para ver los candidatos de ese puesto.
+        </p>
       )}
+        </>
+      )}
+
+      {regions}
     </div>
   );
+
+  // Full screen leaves the page entirely, and the portal is not decoration.
+  // `.brand-admin-shell` carries `position: relative` + `isolation: isolate` +
+  // `overflow: hidden`, and in real Safari a `position: fixed` descendant of
+  // that trio lays out and hit-tests correctly and paints NOTHING — the same
+  // WebKit compositing failure documented at length in `ParticipationRail.tsx`.
+  // A full-screen overlay is exactly such a descendant, so it goes on
+  // `document.body` for the same reason the Tablero's rail does.
+  //
+  // WHAT THIS COSTS, so it is not mistaken for a bug: switching between the two
+  // branches swaps a host element for a portal, so React rebuilds the DOM
+  // underneath. Everything that decides what is on screen survives — `cells`,
+  // `rows`, `skipped` and the diagnostics live in `MonthGenerator`, and
+  // `openCell`/`openOrder`/`fullScreen` live in THIS component, above the
+  // subtree being rebuilt. What resets is transient DOM: the horizontal scroll
+  // offset, an unsubmitted "Nuevo instrumento" name, and the chart's
+  // Voces/Instrumentos choice (it is passed in as an element and is rebuilt with
+  // the rest). No assignment can be lost this way.
+  return fullScreen ? createPortal(surface, document.body) : surface;
 }
 
 // ── Column header ────────────────────────────────────────────────────────────
@@ -770,6 +1048,7 @@ function ColumnHeader({
   skipped,
   unaddressable,
   onToggleSkip,
+  minWClass,
 }: {
   column: GridColumn;
   preflight: TargetPreflight | null;
@@ -777,6 +1056,8 @@ function ColumnHeader({
   skipped: boolean;
   unaddressable: boolean;
   onToggleSkip: () => void;
+  /** `min-w-[150px]` in the page, `min-w-0` in full screen — see `dateTrack`. */
+  minWClass: string;
 }) {
   const date = new Date(column.date.slice(0, 10) + "T12:00:00");
   const day = date.getDate();
@@ -794,7 +1075,7 @@ function ColumnHeader({
         : null;
 
   return (
-    <div className={`min-w-[150px] space-y-1 px-1 ${skipped || blockCopy ? "opacity-40" : ""}`}>
+    <div className={`${minWClass} space-y-1 px-1 ${skipped || blockCopy ? "opacity-40" : ""}`}>
       {/* Legibility pass: the header's date, month and service type were
           `text-sm`/`text-[10px]` — small enough on a real 10-column month that
           the admin had to lean in to tell one column from another. Bumped one
@@ -872,6 +1153,10 @@ function RowGroup({
   onRemove,
   removeError,
   onCopy,
+  activeDate,
+  minWClass,
+  labelMinWClass,
+  stickyLabelClass,
 }: {
   row: GridRow;
   columns: GridColumn[];
@@ -885,6 +1170,17 @@ function RowGroup({
   onRemove?: () => void;
   removeError: string | null;
   onCopy?: (date: string) => void;
+  /**
+   * The date of THIS row's cell that the picker column is currently showing,
+   * or `null`. With the picker parked on the far side of the grid instead of
+   * under the cell that opened it, the cell has to say so itself — otherwise
+   * two clicks apart the admin has no way to tell which seat the list belongs
+   * to.
+   */
+  activeDate: string | null;
+  minWClass: string;
+  labelMinWClass: string;
+  stickyLabelClass: string;
 }) {
   return (
     <>
@@ -898,7 +1194,7 @@ function RowGroup({
         longest label instead of clipping (`minmax(176px, max-content)`
         above). The accessible name (`Eliminar fila {label}`) is unchanged.
       */}
-      <div className="min-w-[176px] px-1 py-1">
+      <div className={`${labelMinWClass} ${stickyLabelClass} px-1 py-1`}>
         <div className="flex flex-col items-start gap-0.5">
           {/* Legibility pass — one step up from `text-xs`. The track is
               `minmax(176px, max-content)` and the label already wraps
@@ -927,7 +1223,7 @@ function RowGroup({
       </div>
       {columns.map((column) => {
         if (!rowAppliesTo(row, column)) {
-          return <div key={column.date} className="min-w-[150px]" />;
+          return <div key={column.date} className={minWClass} />;
         }
         const cell = cellsByKey.get(cellKey(column.date, row.id));
         const memberIds = cell?.memberIds ?? [];
@@ -944,6 +1240,8 @@ function RowGroup({
             unfilled={unfilledByKey.has(cellKey(column.date, row.id))}
             onOpen={() => onOpen(column.date)}
             onCopy={onCopy ? () => onCopy(column.date) : undefined}
+            active={activeDate === column.date}
+            minWClass={minWClass}
           />
         );
       })}
@@ -961,6 +1259,8 @@ function GridCellView({
   unfilled,
   onOpen,
   onCopy,
+  active,
+  minWClass,
 }: {
   row: GridRow;
   column: GridColumn;
@@ -971,6 +1271,9 @@ function GridCellView({
   unfilled: boolean;
   onOpen: () => void;
   onCopy?: () => void;
+  /** This cell is the one the picker column is showing. */
+  active: boolean;
+  minWClass: string;
 }) {
   // D7: rows that CARRY a target cap at it, then a focusable `+N`. Rows that
   // do not always render every occupant and never show `+N` — two people on
@@ -1017,9 +1320,11 @@ function GridCellView({
       }}
       data-row-id={row.id}
       data-date={column.date}
-      className={`min-h-[44px] min-w-[150px] cursor-pointer rounded-lg border px-2 py-1.5 transition-colors ${
+      data-active={active ? "true" : undefined}
+      aria-expanded={active}
+      className={`min-h-[44px] ${minWClass} cursor-pointer rounded-lg border px-2 py-1.5 transition-colors ${
         overflow ? "border-amber-500/40 bg-amber-500/5" : "border-[#00bfff]/15 hover:border-[#00bfff]/40"
-      }`}
+      } ${active ? "ring-2 ring-[#00bfff] ring-offset-2 ring-offset-[#010b17]" : ""}`}
     >
       <div className="flex flex-wrap gap-1">
         {visibleIds.length === 0 && memberIds.length === 0 && (
