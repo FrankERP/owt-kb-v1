@@ -26,6 +26,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import MonthGenerator from "../MonthGenerator";
 import { MIN_WIDTH, RAIL_WIDTH } from "../ParticipationRail";
+import { CHART_COLUMN_WIDTH, PICKER_COLUMN_WIDTH } from "../PlannerGrid";
 import SeatBoard, { boardParticipationRoles } from "../SeatBoard";
 import { buildColumns, plannerParticipationRoles, type GridCell, type SavedRole } from "../plannerModel";
 import { computeParticipation, type ParticipantRole } from "@/app/utils/computeParticipation";
@@ -634,7 +635,10 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
       }
       // The track width the layout arithmetic is stated in (`PlannerGrid.tsx`'s
       // header, `app/brand.css`), applied only once there is room for a row.
-      expect(rail.className.split(/\s+/)).toContain("xl:w-[190px]");
+      // Read from the exported constant rather than a literal, so this and the
+      // content-floor guard below can never disagree about which number the
+      // column is actually rendered at.
+      expect(rail.className.split(/\s+/)).toContain(`xl:w-[${CHART_COLUMN_WIDTH}px]`);
       // Placement only: the chart still counts what it always counted.
       expect(railTotal(container, "Frank")).toBe(1);
       seatLead(container, "2026-02-01", "Frank");
@@ -780,6 +784,164 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
     fireEvent.keyDown(document, { key: "Escape" });
     expect(document.body.querySelector('[role="dialog"][aria-modal="true"]')).toBeNull();
     expect(railTotal(container, "Frank")).toBe(1); // and nothing was discarded
+  });
+
+  it("keeps the full-screen bar clear of the iOS safe area", () => {
+    // `app/(client)/layout.tsx` sets `viewportFit: "cover"`, and this overlay is
+    // `inset-0` — so on an iPhone (and in the Capacitor wrap, which is the same
+    // engine) the top bar lands under the status bar / Dynamic Island. That bar
+    // holds the ONLY exit control, because there is no Escape key there, so a
+    // plain `p-4` makes the mode a trap. `CueDialog.tsx` already solves this the
+    // same way; left/right are included because the surface is full-bleed
+    // horizontally and a landscape iPhone puts the notch on one of those edges.
+    stubWideViewport();
+    goToGrid([]);
+    fireEvent.click(screen.getByRole("button", { name: /Pantalla completa/ }));
+    const full = document.body.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement;
+    const classes = full.className.split(/\s+/);
+    // Classes rather than an inline style: `max(…, env(…))` is a value jsdom's
+    // CSS parser discards, so an inline version could not be pinned at all.
+    for (const [side, prefix] of [
+      ["top", "pt"],
+      ["bottom", "pb"],
+      ["left", "pl"],
+      ["right", "pr"],
+    ] as const) {
+      expect(classes, `padding-${side} must respect the safe area`).toContain(
+        `${prefix}-[max(1rem,env(safe-area-inset-${side}))]`,
+      );
+    }
+    // And no blanket `p-4` left behind to fight them.
+    expect(classes).not.toContain("p-4");
+  });
+
+  it("moves focus into full screen and hands it back on the way out", () => {
+    // `role="dialog" aria-modal="true"` was declared with none of this: entering
+    // unmounted the button that had focus so it fell to `<body>`, and exiting
+    // did the same — a keyboard user restarted at the top of the page in BOTH
+    // directions. The same failure `closePicker`'s focus restore exists to
+    // prevent, left unhandled on the bigger surface.
+    stubWideViewport();
+    goToGrid([]);
+    const opener = screen.getByRole("button", { name: /Pantalla completa/ });
+    opener.focus();
+    fireEvent.click(opener);
+
+    const full = document.body.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement;
+    expect(document.activeElement).toBe(full);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    // Looked up again, not reused: leaving full screen swaps a portal back for a
+    // host element, so React rebuilt this subtree and the button focus returns
+    // to is a DIFFERENT DOM node from the one that was clicked. A stored ref
+    // would restore focus to a detached element, i.e. to nothing.
+    const reopened = screen.getByRole("button", { name: /Pantalla completa/ });
+    expect(document.activeElement).toBe(reopened);
+  });
+
+  it("traps Tab inside full screen, in both directions", () => {
+    stubWideViewport();
+    goToGrid([]);
+    fireEvent.click(screen.getByRole("button", { name: /Pantalla completa/ }));
+    const full = document.body.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement;
+    const focusable = Array.from(
+      full.querySelectorAll<HTMLElement>(
+        'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',
+      ),
+    );
+    expect(focusable.length).toBeGreaterThan(1);
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    last.focus();
+    fireEvent.keyDown(last, { key: "Tab" });
+    expect(document.activeElement).toBe(first);
+
+    first.focus();
+    fireEvent.keyDown(first, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(last);
+  });
+
+  it("locks the page's scroll while full screen is up, and restores what it found", () => {
+    // Without it, wheeling past the overlay's own extent scrolled the page
+    // underneath and exiting landed somewhere other than where the admin left.
+    // The prior INLINE value is restored rather than cleared — `CueDialogProvider`
+    // does the identical dance, and a planner opened from inside a dialog would
+    // otherwise have that lock wiped on the way out.
+    stubWideViewport();
+    document.body.style.overflow = "scroll";
+    try {
+      goToGrid([]);
+      fireEvent.click(screen.getByRole("button", { name: /Pantalla completa/ }));
+      expect(document.body.style.overflow).toBe("hidden");
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(document.body.style.overflow).toBe("scroll");
+    } finally {
+      document.body.style.overflow = "";
+    }
+  });
+
+  it("makes aria-modal true — the page behind goes inert, and comes back", () => {
+    // `aria-modal="true"` tells assistive tech the rest of the page is hidden.
+    // It was tabbable and readable the whole time. The overlay is portalled to
+    // `body`, so its SIBLINGS are the page behind it.
+    stubWideViewport();
+    const sibling = document.createElement("div");
+    document.body.appendChild(sibling);
+    try {
+      goToGrid([]);
+      fireEvent.click(screen.getByRole("button", { name: /Pantalla completa/ }));
+      const full = document.body.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement;
+
+      expect(sibling.hasAttribute("inert")).toBe(true);
+      expect(full.hasAttribute("inert")).toBe(false); // never the overlay itself
+
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(sibling.hasAttribute("inert")).toBe(false);
+    } finally {
+      sibling.remove();
+    }
+  });
+
+  it("leaves Escape alone while the admin is typing a new row's name", () => {
+    // The capture-phase listener sees Escape before the field it was typed into
+    // does. Unconditional, it answered "undo what I am typing" by closing the
+    // picker and yanking focus across the grid to a cell. Scoped to controls
+    // with no Escape behaviour of their own, so a field keeps its keystroke and
+    // the picker keeps its state.
+    stubWideViewport();
+    const { container } = goToGrid([]);
+    const cell = container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]') as HTMLElement;
+    fireEvent.click(cell);
+    expect(container.querySelector("[data-candidate-picker]")).not.toBeNull();
+
+    const input = screen.getByPlaceholderText("Nuevo instrumento") as HTMLInputElement;
+    input.focus();
+    fireEvent.change(input, { target: { value: "Cajón" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+
+    expect(container.querySelector("[data-candidate-picker]")).not.toBeNull();
+    expect(document.activeElement).toBe(input);
+
+    // And the scoping did not cost Escape its real job: from anywhere that is
+    // not such a field, it still closes the picker.
+    fireEvent.keyDown(cell, { key: "Escape" });
+    expect(container.querySelector("[data-candidate-picker]")).toBeNull();
+  });
+
+  it("announces aria-expanded on the active cell alone", () => {
+    // `aria-expanded={active}` put `aria-expanded="false"` on EVERY cell — ~60
+    // "collapsed" announcements on a ten-column month, on a grid whose cells are
+    // otherwise just seats.
+    stubWideViewport();
+    const { container } = goToGrid([]);
+    expect(container.querySelectorAll("[data-row-id][aria-expanded]").length).toBe(0);
+
+    fireEvent.click(container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]')!);
+    const expanded = container.querySelectorAll("[data-row-id][aria-expanded]");
+    expect(expanded.length).toBe(1);
+    expect(expanded[0].getAttribute("aria-expanded")).toBe("true");
+    expect(expanded[0].getAttribute("data-row-id")).toBe("lead");
   });
 });
 
@@ -1081,8 +1243,12 @@ describe("the planner's three column widths agree wherever they are written", ()
   const gridSrc = read("app/components/admin/PlannerGrid.tsx");
   const cssSrc = read("app/brand.css");
 
-  const CHART = 190;
-  const PICKER = 240;
+  // From the component's own exported constants, not literals copied here — the
+  // Tailwind class is a literal that cannot be built at runtime, so the constant
+  // is the single place the number is declared and everything else is compared
+  // against it.
+  const CHART = CHART_COLUMN_WIDTH;
+  const PICKER = PICKER_COLUMN_WIDTH;
 
   it("PlannerGrid renders the two side tracks at the stated widths", () => {
     expect(gridSrc).toMatch(new RegExp(`xl:w-\\[${CHART}px\\]`));
@@ -1126,6 +1292,128 @@ describe("the planner's three column widths agree wherever they are written", ()
     // neither.
     expect(cssSrc).toMatch(/\[data-route-main\]:has\(\.planner-wide\)\s*\{\s*max-width:\s*none;/);
     expect(read("app/(client)/layout.tsx")).toContain("data-route-main");
+  });
+
+  it("the shell padding the derivation SPENDS is the padding it applies", () => {
+    // The third rule of the three, and the one that was unpinned: a reviewer
+    // deleted `.brand-admin-shell:has(.planner-wide) { padding: .75rem }` and
+    // every test stayed green. Without it the shell falls back to
+    // `clamp(1rem, 2.5vw, 1.75rem)` — 28px a side at 1512 — so the three columns
+    // silently lose 32px and the stated `= 1462` stops being true with nothing
+    // to notice. It looks like a cosmetic tidy-up; it is load-bearing.
+    const rule = cssSrc.match(
+      /\.brand-admin-shell:has\(\.planner-wide\)\s*\{\s*padding:\s*([\d.]+)rem;/,
+    );
+    expect(rule, "could not find the shell padding rule in brand.css").toBeTruthy();
+    // Scoped to desktop, like the other two — on a phone nothing is side by side.
+    expect(cssSrc).toMatch(
+      /@media \(min-width: 1280px\) \{[\s\S]*?\.brand-admin-shell:has\(\.planner-wide\)[\s\S]*?\n\}/,
+    );
+
+    const applied = Number(rule![1]) * 16; // one side
+    // The comment's first line, in the units it is written in.
+    const derived = cssSrc.match(
+      /1512 − 24 \(frame px\) − 2 \(shell border\) − (\d+) \(shell padding\) = (\d+)/,
+    );
+    expect(derived, "could not read the usable-width derivation from brand.css").toBeTruthy();
+    expect(Number(derived![1]), "the derivation spends padding the rule does not apply").toBe(
+      2 * applied,
+    );
+    expect(1512 - 24 - 2 - Number(derived![1])).toBe(Number(derived![2]));
+
+    // …and that usable width is what the three columns are budgeted against.
+    const columns = cssSrc.match(/\(chart\) \+ 12 \+ \d+ \(grid\) \+ 12 \+ \d+ \(picker\)\s+= (\d+)/);
+    expect(columns![1]).toBe(derived![2]);
+  });
+
+  it("the page header keeps a cap of its own while the frame loses one", () => {
+    // With the frame's `max-w-7xl` lifted, an uncapped header stretched to the
+    // full 1512 and sat visibly off the navbar's centred content whenever the
+    // planner was open.
+    const header = read("app/(client)/admin/page.tsx").match(/<header className="([^"]*)"/);
+    expect(header, "could not find the admin page header").toBeTruthy();
+    const classes = header![1].split(/\s+/);
+    expect(classes).toContain("mx-auto");
+    expect(classes).toContain("max-w-7xl");
+  });
+});
+
+/**
+ * The PLANNER COLUMN's width, against the chart that has to fit inside it — the
+ * hole that let a 190px column ship.
+ *
+ * `ParticipationRail`'s own floor guard (below) has existed all along, but it
+ * pins `RAIL_WIDTH`, and the planner column is a different number in a different
+ * file. Nothing tied `CHART_COLUMN_WIDTH` to `ParticipationSidebar` at all: the
+ * three-width guard above compares 216/240 against PROSE in two comments, which
+ * agree with each other perfectly whatever number they hold. So 190 passed every
+ * test while the count column printed itself on top of the bar on every member
+ * row.
+ *
+ * WHAT THIS CANNOT DO: prove the overlap is gone. jsdom lays nothing out. It
+ * re-derives the floor from the sidebar's own source — the numbers a browser
+ * would lay out — and refuses a column narrower than it. A real browser at the
+ * chosen width is still the only instrument that can see the pixels.
+ */
+describe("the planner's chart column is at least the chart's content floor", () => {
+  const sidebarSrc = readFileSync(
+    join(process.cwd(), "app/components/admin/ParticipationSidebar.tsx"),
+    "utf8",
+  );
+  const px = (re: RegExp, what: string, scale = 1) => {
+    const m = sidebarSrc.match(re);
+    expect(m, `could not read ${what} from ParticipationSidebar.tsx`).toBeTruthy();
+    return Number(m![1]) * scale;
+  };
+
+  /**
+   * The member row's irreducible width. The bar is an INLINE `width: 150` and
+   * cannot shrink; the name block around it is `flex-1 min-w-0` and shrinks
+   * instead — so below this the count column is drawn over the bar rather than
+   * anything overflowing the box, which is why nothing looked wrong.
+   */
+  function memberRowFloor(): number {
+    const bar = px(/style=\{\{ width: (\d+), background:/, "the bar's inline width");
+    const gap = px(/className="flex items-center gap-([\d.]+)/, "the row gap", 4);
+    const count = px(/min-w-\[(\d+)px\]/, "the count column");
+    const pad = px(/<aside className="[^"]*\bp-(\d+)\b/, "the aside padding", 4);
+    // The rows do not sit directly in the aside: they sit in the
+    // `max-h-[60vh] overflow-y-auto pr-0.5` scroller, whose right padding is 2px
+    // the row never gets. Left out of the arithmetic, the derived floor comes to
+    // 210 while a real browser measures 212 — found by measuring, not by
+    // reading, which is the whole argument for deriving this from the source
+    // instead of restating a number.
+    const scrollerPad = px(/max-h-\[60vh\] overflow-y-auto pr-([\d.]+)/, "the scroller's right padding", 4);
+    const asideClasses = sidebarSrc.match(/<aside className="([^"]*)"/)![1].split(/\s+/);
+    // The 1px border either side is part of the box too, and was left out of the
+    // 208 the rail's header used to state.
+    expect(asideClasses, "the aside's border is part of the floor").toContain("border");
+    return bar + gap + count + 2 * pad + 2 + scrollerPad;
+  }
+
+  it("CHART_COLUMN_WIDTH clears it", () => {
+    expect(CHART_COLUMN_WIDTH).toBeGreaterThanOrEqual(memberRowFloor());
+  });
+
+  it("derives the floor a real browser measured, to the pixel", () => {
+    // Chromium at 1512, inside the real `.brand-admin-shell` chain: at a 212px
+    // aside the count column's left edge lands exactly on the bar's right edge.
+    // If this number ever stops being 212, the two browser measurements quoted
+    // in `PlannerGrid.tsx`'s header have stopped describing the code.
+    expect(memberRowFloor()).toBe(212);
+  });
+
+  it("and would have refused the 190px this shipped at", () => {
+    // Non-vacuity, stated rather than assumed: a guard that also passes at the
+    // broken width is not a guard. At 190 a real browser put the bar's right
+    // edge at x=163 and the count column's left edge at x=151 — a 12px overlap.
+    expect(memberRowFloor()).toBeGreaterThan(190);
+  });
+
+  it("the gutter rail and the planner column share one floor", () => {
+    // Two surfaces, one chart. If they ever diverge, one of them is wrong — and
+    // the wrong one is whichever is smaller than `memberRowFloor()`.
+    expect(CHART_COLUMN_WIDTH).toBe(RAIL_WIDTH);
   });
 });
 

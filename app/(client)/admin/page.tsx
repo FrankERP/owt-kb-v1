@@ -20,7 +20,12 @@ export default async function AdminPage() {
           It carries no styling of its own — the Tailwind classes beside it are
           still the default, and every other admin tab keeps the 1280px cap. */}
       <div className="brand-admin-frame mx-auto max-w-7xl px-6 pb-20 pt-10">
-        <header className="mb-8 flex flex-col gap-5 border-b border-brand-steel/10 pb-7 sm:flex-row sm:items-end sm:justify-between">
+        {/* `mx-auto max-w-7xl` on the HEADER, not just on the frame: the frame
+            above loses its 1280px cap while the planner is open, and without a
+            cap of its own the header stretched to the full 1512 and sat visibly
+            off the navbar's centred content. Inside the frame's own 1280px cap
+            on every other tab this is a no-op. */}
+        <header className="mx-auto mb-8 flex max-w-7xl flex-col gap-5 border-b border-brand-steel/10 pb-7 sm:flex-row sm:items-end sm:justify-between">
           <div className="brand-section-heading">
             <p className="font-label text-[10px] uppercase tracking-[0.26em] text-brand-beam">Backstage operations</p>
             <h1 className="mt-2 font-display text-4xl font-semibold leading-none text-brand-frost sm:text-5xl">Control Room</h1>

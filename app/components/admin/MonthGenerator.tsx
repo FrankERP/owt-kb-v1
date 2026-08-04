@@ -2446,7 +2446,8 @@ export default function MonthGenerator({
             1700px and stacked it under the grid below that. It never reached
             the 1512px laptop this is planned on — the admin page caps content
             at 1280px, leaving ~116px of gutter for a 216px chart. It now costs
-            the grid 190px at every width, on purpose.
+            the grid 216px at every width, on purpose — the same 216, because it
+            is the chart's own content floor either way.
           */
           participation={
             <ParticipationSidebar
