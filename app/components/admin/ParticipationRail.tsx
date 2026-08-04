@@ -39,9 +39,22 @@
 // `ParticipationSidebar`, and there are two of them — deriving it from one row
 // and forgetting the other is exactly how this shipped broken once:
 //   • the member row: a hard 150px inline bar + a 10px gap + a 24px count
-//     column, inside 12px padding either side — 208px before it clips.
+//     column, inside 12px padding and a 1px border either side, plus the 2px
+//     right padding of the `overflow-y-auto` scroller the rows sit in — 212px
+//     before the count column starts printing itself on top of the bar (the
+//     stated 208 was two terms short, and both were found by measuring rather
+//     than by reading, which is why the guard now derives this). The bar's
+//     `width: 150px` is an INLINE style and cannot shrink; the name block around
+//     it is `flex-1 min-w-0` and shrinks instead, so the failure is an overlap
+//     rather than a clip, and nothing overflows the box to give it away.
 //   • the header row: the title (~131px) above a `w-full` Voces/Instrumentos
 //     select — 131px + the same 24px of padding, 155px.
+// The SAME floor governs the planner grid's left column, which is why that
+// column is also 216 (`PlannerGrid.CHART_COLUMN_WIDTH`). It shipped at 190 for
+// one release and the count column overlapped the bar by 10px on every member
+// row — the defect this paragraph exists to prevent, reached by a surface that
+// never consulted this number. Both are now pinned against the sidebar's own
+// source in `participationAlongside.test.tsx`.
 // 216 clears both. It did NOT clear the header while that select sat BESIDE the
 // title: a `<select>` is as wide as its widest option ("Instrumentos", 112px),
 // so the header asked for 131 + 8 + 112 + 24 = 275, and a real browser measured

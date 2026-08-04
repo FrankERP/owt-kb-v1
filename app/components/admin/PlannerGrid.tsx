@@ -51,9 +51,25 @@
 // `planner-wide` marker on this component's root widens through `:has()`:
 //   1512 viewport − 24 frame padding − 2 shell border − 24 shell padding
 //     = 1462 usable
-//   190 (Participaciones) + 12 + 1008 (grid) + 12 + 240 (picker) = 1462
+//   216 (Participaciones) + 12 + 982 (grid) + 12 + 240 (picker) = 1462
 // The picker's 240px is only spent while a cell is ACTIVE; with none open the
-// grid gets it back and runs at 1260.
+// grid gets it back and runs at 1234.
+//
+// **216 is a FLOOR, not a preference** — `CHART_COLUMN_WIDTH` below, and the
+// same number `ParticipationRail` uses for the Tablero's gutter. It shipped at
+// 190 for one release and the count column printed itself on top of the bar:
+// `ParticipationSidebar`'s member row is a hard 150px INLINE bar (it cannot
+// shrink) + a 10px gap + a 24px count column, inside 12px of padding and a 1px
+// border either side, plus the 2px right padding of the `overflow-y-auto`
+// scroller the rows actually live in — 212px before the count starts
+// overlapping the bar, and the `flex-1 min-w-0` name block shrinks around the
+// bar rather than clipping it, so nothing overflows the box to give it away.
+// Measured in Chromium at 1512 inside the real shell: at 190 the bar's right
+// edge is x=163 and the count column starts at x=151 (a 12px overlap, on every
+// member row); at 216 the count starts at x=177 and clears by 14px.
+// `participationAlongside.test.tsx` re-derives that floor from
+// `ParticipationSidebar`'s own source, so widening the bar or the count column
+// fails there instead of on the admin's screen.
 //
 // Two consequences that are features, not oversights:
 //  • The grid SCROLLS horizontally rather than squeezing its columns — the date
@@ -65,7 +81,15 @@
 //    track to `minmax(0, 1fr)` so N columns divide the viewport instead of
 //    overflowing it.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -182,7 +206,7 @@ export interface PlannerGridProps {
    *
    * A `ReactNode` rather than the roles themselves, so this component owns the
    * three widths and none of the arithmetic. Omitted, the left column is not
-   * rendered at all and the grid takes its 190px — which is what every
+   * rendered at all and the grid takes its 216px — which is what every
    * `PlannerGrid` unit test does.
    */
   participation?: ReactNode;
@@ -190,7 +214,49 @@ export interface PlannerGridProps {
   monthLabel?: string;
 }
 
+/**
+ * The left column's width — the number the layout arithmetic in this file's
+ * header is stated in, and a FLOOR derived from `ParticipationSidebar`'s widest
+ * row rather than a design preference. See the header.
+ *
+ * Exported for the same reason `ParticipationRail.RAIL_WIDTH` is: `xl:w-[216px]`
+ * is a Tailwind literal that cannot be built from a constant at runtime (the JIT
+ * only sees whole class names in the source), so the two can drift. The test
+ * that re-derives the floor from `ParticipationSidebar` pins THIS number, and a
+ * second test pins the rendered literal against it.
+ */
+export const CHART_COLUMN_WIDTH = 216;
+
+/** The right column's width, spent only while a cell is active. */
+export const PICKER_COLUMN_WIDTH = 240;
+
 const cellKey = (date: string, rowId: string) => `${date}|${rowId}`;
+
+/**
+ * Controls whose own Escape means something, so the capture-phase listener does
+ * not steal it. Text entry (revert / dismiss the completion popup) and a
+ * `<select>` (close the dropdown) — never a checkbox, a radio or a button,
+ * which have no Escape behaviour to lose.
+ */
+const NON_TEXT_INPUT_TYPES = new Set(["checkbox", "radio", "button", "submit", "reset", "image", "range", "color"]);
+
+function ownsEscape(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  if (tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (tag !== "INPUT") return false;
+  return !NON_TEXT_INPUT_TYPES.has((target as HTMLInputElement).type);
+}
+
+/**
+ * Everything inside the full-screen overlay a Tab can land on. Deliberately NOT
+ * filtered by visibility: `offsetParent`/`getClientRects` are the only ways to
+ * ask, both are meaningless in jsdom (which would leave the list empty and the
+ * trap untested), and nothing in that surface is rendered-but-hidden.
+ */
+const FOCUSABLE_SELECTOR =
+  'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
 /**
  * Writes `memberIds` into one cell, and keeps `overrides` (P10) honest:
@@ -312,6 +378,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
   const [removeError, setRemoveError] = useState<{ rowId: string; message: string } | null>(null);
   const [fullScreen, setFullScreen] = useState(false);
   const pickerRef = useRef<HTMLDivElement | null>(null);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
 
   // Finding 5: `removeError` was never cleared by anything except a
   // SUCCESSFUL `removeRow` call, so "Vacía la fila antes de eliminarla"
@@ -628,6 +695,18 @@ export default function PlannerGrid(props: PlannerGridProps) {
     if (!openKey && !fullScreen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      // SCOPED to keystrokes that are not already spoken for. A capture-phase
+      // listener on `document` sees Escape before the field it was typed into
+      // does, so an unconditional one made Escape inside "Nuevo instrumento"
+      // close the picker and yank focus across the grid to a cell — a keystroke
+      // that means "undo what I am typing", answered by an unrelated dismissal.
+      // Text entry and an open `<select>` keep their own Escape (the chart's
+      // Voces/Instrumentos select is inside this surface), and because this
+      // handler then does nothing at all, Escape in a field behaves exactly the
+      // same whether or not the picker happens to be open — which is the point.
+      // A checkbox (a column header's "Omitir") has no Escape behaviour of its
+      // own and is deliberately NOT exempt.
+      if (ownsEscape(event.target)) return;
       event.preventDefault();
       event.stopPropagation();
       if (fullScreen) {
@@ -639,6 +718,90 @@ export default function PlannerGrid(props: PlannerGridProps) {
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
   }, [openKey, fullScreen, closePicker]);
+
+  /**
+   * What `role="dialog" aria-modal="true"` promises, actually delivered.
+   *
+   * Declaring the attributes without any of this was the shipped defect:
+   * entering full screen unmounted the button that had focus, so focus fell to
+   * `<body>` and a keyboard user restarted at the top of the page; `aria-modal`
+   * told assistive tech the page behind was hidden while it stayed fully
+   * tabbable; and the page kept its own scroll, so a wheel past the overlay's
+   * extent moved the page underneath and exiting landed somewhere else.
+   *
+   * Three things, one effect, because they share a lifetime:
+   *  • **focus in, and back out.** Out by ATTRIBUTE, not by a stored element
+   *    reference — leaving full screen rebuilds this subtree (see the portal
+   *    note at the bottom of this file), so the button that opened it is a
+   *    different DOM node by the time focus is restored. Same reason
+   *    `closePicker` looks its cell up by `[data-row-id][data-date]`.
+   *  • **body scroll lock**, restoring the caller's own inline value rather than
+   *    assuming it was empty — `CueDialogProvider` does the identical dance, and
+   *    a planner opened from inside a dialog would otherwise have that lock
+   *    cleared on the way out.
+   *  • **`inert` on every other body child**, which is what makes `aria-modal`
+   *    true rather than merely claimed. The overlay is portalled to `body`, so
+   *    its siblings ARE the page behind it. Restored exactly: an element that
+   *    already carried `inert` (a closed `BottomNav` sheet, a lower `CueDialog`
+   *    layer) is left alone rather than un-inerted on the way out.
+   */
+  useEffect(() => {
+    if (!fullScreen) return;
+    const overlay = overlayRef.current;
+    overlay?.focus();
+
+    const body = document.body;
+    const priorOverflow = body.style.overflow;
+    body.style.overflow = "hidden";
+
+    const inerted: HTMLElement[] = [];
+    for (const child of Array.from(body.children)) {
+      if (!(child instanceof HTMLElement)) continue;
+      if (overlay && (child === overlay || child.contains(overlay))) continue;
+      if (child.hasAttribute("inert")) continue;
+      child.setAttribute("inert", "");
+      inerted.push(child);
+    }
+
+    return () => {
+      body.style.overflow = priorOverflow;
+      for (const el of inerted) el.removeAttribute("inert");
+      document.querySelector<HTMLElement>("[data-planner-fullscreen]")?.focus();
+    };
+  }, [fullScreen]);
+
+  /**
+   * The trap itself. `inert` already stops a pointer or a screen reader reaching
+   * the page behind, but it is not honoured for sequential focus in every engine
+   * this app ships to (the Capacitor WebView included), and Tab is the one input
+   * that would otherwise walk straight out of a surface whose only exit control
+   * is inside it.
+   */
+  const trapTab = useCallback((event: ReactKeyboardEvent) => {
+    if (event.key !== "Tab") return;
+    const root = overlayRef.current;
+    if (!root) return;
+    const items = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+    if (items.length === 0) {
+      event.preventDefault();
+      root.focus();
+      return;
+    }
+    const active = document.activeElement;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (event.shiftKey) {
+      if (active === first || active === root || !root.contains(active)) {
+        event.preventDefault();
+        last.focus();
+      }
+      return;
+    }
+    if (active === last || !root.contains(active)) {
+      event.preventDefault();
+      first.focus();
+    }
+  }, []);
 
   function handleAutoClick() {
     if (autoState.disabledReason || autoState.pending) return;
@@ -843,12 +1006,19 @@ export default function PlannerGrid(props: PlannerGridProps) {
   // The data attributes are the ones the gutter rail carried, kept so the
   // panel stays findable by the same selector it always had — but the VALUE is
   // honest about what changed: `column`, never `gutter` or `inline`.
+  //
+  // `xl:w-[216px]` is `CHART_COLUMN_WIDTH`, and it is the content FLOOR of
+  // `ParticipationSidebar`'s member row, not a budget: below 212px the 24px
+  // count column is drawn on top of the 150px inline bar it is supposed to sit
+  // beside. See this file's header, and the guard in
+  // `participationAlongside.test.tsx` that re-derives the floor from the
+  // sidebar's own source.
   const participationColumn =
     participation && !fullScreen ? (
       <div
         data-participation-rail="panel"
         data-rail-placement="column"
-        className="min-w-0 xl:order-1 xl:w-[190px] xl:shrink-0"
+        className="min-w-0 xl:order-1 xl:w-[216px] xl:shrink-0"
       >
         {participation}
       </div>
@@ -871,11 +1041,35 @@ export default function PlannerGrid(props: PlannerGridProps) {
     <div
       className={
         fullScreen
-          ? "fixed inset-0 z-50 flex flex-col gap-3 overflow-auto bg-[#010b17] p-4"
+          ? // The padding is FOUR safe-area maxima rather than `p-4`.
+            // `viewportFit: "cover"` (`app/(client)/layout.tsx`) lets the page
+            // run under the iOS status bar / Dynamic Island and the home
+            // indicator, and `inset-0` is exactly the shape that lands under
+            // them. The bar below holds the ONLY exit control — there is no
+            // Escape key on a phone — so a plain `p-4` puts "Salir de pantalla
+            // completa" under the Dynamic Island and the mode becomes a trap in
+            // the Capacitor wrap. `CueDialog.tsx` already solves this; left and
+            // right are included as well because this surface is full-bleed
+            // horizontally and a landscape iPhone puts the notch on one of those
+            // edges — the orientation a month grid is actually read in.
+            //
+            // Classes, not an inline `style`, for the same reason `Navbar.tsx`
+            // writes `ps-[max(1.25rem,env(safe-area-inset-left))]`: it is this
+            // repo's existing spelling, and an inline `max(…, env(…))` is a
+            // value jsdom's CSS parser drops on the floor, so nothing could pin
+            // it.
+            "fixed inset-0 z-50 flex flex-col gap-3 overflow-auto bg-[#010b17] focus:outline-none pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"
           : "planner-wide space-y-4"
       }
       {...(fullScreen
-        ? { role: "dialog" as const, "aria-modal": true, "aria-label": "Cuadrícula del mes en pantalla completa" }
+        ? {
+            ref: overlayRef,
+            tabIndex: -1,
+            onKeyDown: trapTab,
+            role: "dialog" as const,
+            "aria-modal": true,
+            "aria-label": "Cuadrícula del mes en pantalla completa",
+          }
         : {})}
     >
       {fullScreen ? (
@@ -912,6 +1106,10 @@ export default function PlannerGrid(props: PlannerGridProps) {
         */}
         <button
           type="button"
+          // The anchor focus comes back to on the way out. An attribute rather
+          // than a ref because leaving full screen rebuilds this subtree, so
+          // this is a different DOM node by then — see the effect above.
+          data-planner-fullscreen
           onClick={() => setFullScreen(true)}
           className="min-h-[44px] rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest text-[#C8D8EB]/70 transition-colors hover:border-[#00bfff]"
         >
@@ -1321,7 +1519,12 @@ function GridCellView({
       data-row-id={row.id}
       data-date={column.date}
       data-active={active ? "true" : undefined}
-      aria-expanded={active}
+      // Only where it says something. `aria-expanded={active}` emitted
+      // `aria-expanded="false"` on EVERY cell, so a screen reader announced
+      // "collapsed" ~60 times on a ten-column month — noise on a grid whose
+      // cells are, in the other 59 cases, just seats. At most one cell is the
+      // one the picker column is showing, and that one says so.
+      aria-expanded={active ? true : undefined}
       className={`min-h-[44px] ${minWClass} cursor-pointer rounded-lg border px-2 py-1.5 transition-colors ${
         overflow ? "border-amber-500/40 bg-amber-500/5" : "border-[#00bfff]/15 hover:border-[#00bfff]/40"
       } ${active ? "ring-2 ring-[#00bfff] ring-offset-2 ring-offset-[#010b17]" : ""}`}
