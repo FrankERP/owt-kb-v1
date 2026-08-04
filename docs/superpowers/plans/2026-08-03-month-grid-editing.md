@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task.
 
-**Status:** draft, not yet reviewed.
+**Status:** draft, four open questions answered with the user 2026-08-03, not yet reviewed.
 
 **Goal.** Make the three-column planner grid the way services are edited. An **"Editar mes"** button on Servicios opens the existing layout against *stored* services. The Tablero (`SeatBoard`) is retired. The grid gains swap — whole teams or individual roles — between services.
 
@@ -60,19 +60,14 @@ Verified against source. Breaking any is a regression, not a UI change.
 
 ---
 
-## Open questions — must be answered before implementation
+## Answered 2026-08-03 with the user — these were the open questions
 
-These were put to the user and dismissed. They are cheap to settle on paper and expensive to discover in code.
-
-**O1 — Notification semantics for a bulk save.** Editing one published service emails the team today. Saving six edited published services should not send six separate notification runs. Options: one batched run for the whole save; a summary shown before committing with an explicit send/skip; or per-service as today. **This is the highest-stakes open question** — `EMAIL_ALLOWLIST` has been `"*"` since 2026-07-03, so it reaches everyone.
-
-**O2 — Save granularity.** One `Guardar` for the month, or per service? E6 settles *explicit vs implicit*, not *scope*. A month-wide save needs a clear "what is about to change" summary and a defined partial-failure story: six PATCHes, one fails, what does the admin see and what is now true?
-
-**O3 — Which services appear.** Every service in the month including specials; weekends only; or only services that already exist. This also decides whether a gap can be filled from the same screen — i.e. whether create and edit share one surface.
-
-**O4 — What replaces the Tablero for a service outside the current month.** E3 says the grid cannot reach it. Navigate the grid to that month, or keep a minimal single-service editor for the case.
-
----
+| # | Decision |
+|---|---|
+| **E7** | **Notify ONLY the services actually modified**, and let the existing debounce do the summarising. The grid opens the whole month but most columns will be untouched, so the save must diff against what it loaded and fire nothing for an unchanged service. **No batching mechanism needs building:** `NOTIFY_DEBOUNCE_MINUTES` defaults to **15** and `NOTIFY_MAX_WINDOW_MINUTES` to 60 (`app/utils/outboxNotice.ts:97-98`), so several modified services already collapse into one summary email per person. The user asked for exactly the behaviour that ships today. **The risk is the inverse of what it first appeared:** not "six emails", but a *false* notification for a service the admin merely looked at — so the change-detection is the load-bearing part, not the fan-out. |
+| **E8** | **One `Guardar` for the month, with a change summary before committing.** On partial failure the screen states exactly which services committed and which did not, and leaves the failed ones still editable. The create path already behaves this way and is the precedent to copy. |
+| **E9** | **Only services that already exist get a column — plus an explicit "create one service" action from the same screen, solver-assisted.** Not empty columns for every date. The new service's auto-fill must account for the services already created that month, so it does not hand the same people another turn. **This is the one genuinely new capability in the plan:** the solver runs over a whole month today; running it for a single service against existing assignments is a different request shape and needs its own design. Task 3 owns it. |
+| **E10** | **A service outside the displayed month is reached by navigating the grid to that month.** The month picker already exists; nothing extra is built, and E3's stated loss is narrower than it first looked. |
 
 ## Tasks
 
@@ -84,17 +79,22 @@ Tests only, against current code. The create path must still work identically wh
 ### Task 2 — The read path
 Load stored services for a month into `GridCell[]`, carrying `_rev` per service. Decide and pin how a cell knows which service it belongs to and what happens when a date has none. Do **not** write anything yet.
 
-### Task 3 — Column-header operations (E2)
+### Task 3 — Create one service from the edit view (E9)
+The new capability. A single service created from the grid, auto-filled by the solver **accounting for the month's existing assignments** so it does not re-pick the same people. The solver's request shape is per-month today (`buildSolveRequest`); establish what a one-service request looks like and whether the existing route serves it. Note the local filler already exists for specials (`localFill.ts`) and may be the better fit for a single service than a CP-SAT round trip.
+
+### Task 4 — Column-header operations (E2)
 Type, date, and special name. Each has a conflict case that must be refused with a stated reason, not silently dropped: switching to a type that already exists on that date; moving onto an occupied date; renaming a special to a name already used on the same date (the server's identity is `special_role:${date}:${normalized name}`).
 
-### Task 4 — The write path (E6, O1, O2)
-PATCH per service with `ifRevisionId`, plus the separate lock assertion (fact 15). Explicit save. Partial failure must leave the admin knowing exactly which services committed. Notifications per O1.
+### Task 5 — The write path (E6, E7, E8)
+PATCH per service with `ifRevisionId`, plus the separate lock assertion (fact 15). Explicit save with a change summary (E8). Partial failure must leave the admin knowing exactly which services committed and leave the rest editable.
 
-### Task 5 — Swap (E4)
+**The change-detection is the dangerous part, not the writing.** Per E7 a service that was merely displayed must produce no PATCH and no notification. Diff against what was loaded, not against a fresh fetch — and remember `_key`s and array order are not stable proxies for "changed". A false positive emails the team about a service nobody edited.
+
+### Task 6 — Swap (E4)
 Wire both shapes to `/api/admin/roles/swap`, copying the client precedent at `ServicesPanel.tsx:807`. Team swap between two columns; seat swap between two cells. The route derives from stored state, so the grid must send **identifiers and revisions**, never a roster.
 
-### Task 6 — Retire the Tablero
-Only after 1–5 are proven. Delete `SeatBoard` and its mounts; verify nothing else imports it. This also retires its open a11y question and the rail-behind-the-scrim problem (the Tablero rail sits at `z-40` behind `CueDialog`'s `z-[90]` scrim, so clicking it dismisses the dialog).
+### Task 7 — Retire the Tablero
+Only after 1–6 are proven. Delete `SeatBoard` and its mounts; verify nothing else imports it. This also retires its open a11y question and the rail-behind-the-scrim problem (the Tablero rail sits at `z-40` behind `CueDialog`'s `z-[90]` scrim, so clicking it dismisses the dialog).
 
 ---
 
