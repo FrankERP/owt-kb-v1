@@ -1552,8 +1552,12 @@ change, not a migration — made with evidence rather than on faith.
    `red` → `negative-*` is settled; `yellow`/`orange`/`amber` vs `warning-*` is not.
 2. Codemod and mapping-table authoring — the table is the inventory script's
    reviewed output (§1.0), produced **before** any file changes.
-3. `themePref` delivery: JWT claim vs `/api/me` fetch.
+3. ~~`themePref` delivery: JWT claim vs `/api/me` fetch.~~ **Decided in §4 Phase 3**
+   (fresh `GET /api/me`, `cache: "no-store"`); a JWT claim is unsafe here — see the
+   30s-TTL / `{_id, disabled, role}`-projection argument there.
 4. Whether the `(admin)` chrome around `/studio` follows the theme or pins dark.
+   **Blocks the 1a merge** — 1a retires the `bg-brand-blackout text-brand-frost
+   brand-atmosphere` that `(admin)/layout.tsx` carries (see the ownership table).
 5. Placement and copy of the Phase 4 Spanish announcement.
 
 ## 10. Rejected alternatives
