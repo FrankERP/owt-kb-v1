@@ -1,0 +1,4 @@
+interface:
+  display_name: "Adversarial Plan Review"
+  short_description: "Harden a plan until two fresh cold reviewers approve identical text"
+  default_prompt: "Use $adversarial-plan-review to review the plan until two fresh reviewers, run one at a time, approve the same unchanged text."
