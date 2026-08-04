@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useId, useMemo, useRef } from "react";
+import React, { useCallback, useContext, useEffect, useId, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { trapTabTarget } from "@/app/utils/focusTrap";
 import { DismissReason, useCueDialogContext } from "./CueDialogProvider";
@@ -17,6 +17,100 @@ const FOCUSABLE = [
 function focusables(container: HTMLElement): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
     (el) => !el.hasAttribute("disabled") && el.getAttribute("aria-hidden") !== "true",
+  );
+}
+
+/**
+ * ── Focus SATELLITES: controls this dialog owns that live outside its shell ──
+ *
+ * The trap builds its Tab ring from `shellRef`, and that is normally the whole
+ * dialog. It is not always. A descendant may have to `createPortal` part of
+ * itself out of the shell for reasons that have nothing to do with focus — the
+ * Tablero's participation rail is `position: fixed` in the page gutter and
+ * WebKit refuses to PAINT a fixed descendant of `.brand-facet-panel`
+ * (`relative` + `isolation: isolate` + `overflow: hidden`), which is exactly
+ * what the shell is. See `ParticipationRail.tsx`'s header before touching that
+ * portal. The escape is required for the control to be VISIBLE at all, and its
+ * price was that Tab could never reach it: mouse-only, a real regression.
+ *
+ * A satellite is a container that a dialog's own subtree declares to be part of
+ * that dialog for focus purposes, wherever it happens to be rendered. It is
+ * registered from BELOW, through `useCueDialogFocusSatellite`, because the
+ * component that owns the portal (`SeatBoard`) is a grandchild of the
+ * `<CueDialog>` element and cannot hand it a prop. The context is provided
+ * around `children`, so "the dialog I belong to" resolves to the nearest
+ * enclosing one and a nested dialog shadows its parent — the same nesting the
+ * layer stack already assumes.
+ *
+ * DEFAULT IS EXACTLY TODAY'S BEHAVIOUR. No consumer registers anything, the
+ * set stays empty, and `focusRing` returns `focusables(shell)` — the same array
+ * from the same call as before. The only difference for a dialog with no
+ * satellites is one extra context provider around its children, which renders
+ * no DOM.
+ */
+interface SatelliteRegistry {
+  add: (node: HTMLElement) => void;
+  remove: (node: HTMLElement) => void;
+}
+
+const SatelliteContext = React.createContext<SatelliteRegistry | null>(null);
+
+/**
+ * A callback ref to put on the portalled container. Attach registers it with
+ * the enclosing dialog's Tab ring; detach (React calls a ref callback with
+ * `null`) unregisters it. Each caller gets its own closure remembering the node
+ * it last attached, because `null` alone does not say WHICH node left.
+ *
+ * Outside a `CueDialog` it is an inert no-op, so a component that is sometimes
+ * in a dialog and sometimes not can call it unconditionally.
+ */
+export function useCueDialogFocusSatellite(): (node: HTMLElement | null) => void {
+  const registry = useContext(SatelliteContext);
+  const attached = useRef<HTMLElement | null>(null);
+  return useCallback(
+    (node: HTMLElement | null) => {
+      if (attached.current) registry?.remove(attached.current);
+      attached.current = node;
+      if (node) registry?.add(node);
+    },
+    [registry],
+  );
+}
+
+/**
+ * The Tab ring: the shell's focusables, unioned with every registered
+ * satellite's, **sorted into document order**.
+ *
+ * Document order is not a stylistic choice here, it is a correctness one.
+ * `trapTabTarget` only forces a move at the two ends of the ring and returns
+ * `null` everywhere in between, deliberately letting the browser perform
+ * ordinary interior steps. The browser steps in DOCUMENT order. So an `items`
+ * array in any other order would disagree with what actually happens on the
+ * interior moves, and the two ends would be computed against a ring the user is
+ * not walking. Sorting makes the array a true description of the browser's own
+ * sequence, whatever a future portal target turns out to be.
+ *
+ * With the rail as it ships, document order puts it LAST: `body` holds the app
+ * root, then `[data-cue-dialog-root]` (created when the provider mounts), then
+ * the rail's portal (appended when the Tablero opens). That is also the order
+ * we would have chosen — see `SeatBoard.tsx`'s rail comment for the reasoning
+ * about the dialog's primary actions keeping their position.
+ *
+ * A satellite that is detached, that sits inside an `inert` subtree, or that is
+ * somehow already inside the shell contributes nothing: the first two are not
+ * focusable, and the third is already counted.
+ */
+function focusRing(shell: HTMLElement, satellites: Iterable<HTMLElement>): HTMLElement[] {
+  const items = focusables(shell);
+  const extra: HTMLElement[] = [];
+  for (const node of satellites) {
+    if (!node.isConnected || shell.contains(node) || node.closest("[inert]")) continue;
+    if (node.matches(FOCUSABLE) && node.getAttribute("aria-hidden") !== "true") extra.push(node);
+    extra.push(...focusables(node));
+  }
+  if (extra.length === 0) return items;
+  return [...items, ...extra].sort((a, b) =>
+    a === b ? 0 : a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
   );
 }
 
@@ -47,6 +141,20 @@ export default function CueDialog({
   const openerRef = useRef<HTMLElement | null>(null);
   const { portalNode, layers, registerLayer, isTopLayer } = useCueDialogContext();
 
+  // Held in a ref, never in state: registration happens during commit (a child's
+  // ref callback), and re-rendering the whole dialog because a satellite arrived
+  // would be both pointless and a loop. The keydown handler reads it live, so a
+  // rail that appears later — the gutter only exists above 1380px and the admin
+  // may drag the window there — joins the ring with no effect to re-run.
+  const satellitesRef = useRef<Set<HTMLElement>>(new Set());
+  const satelliteRegistry = useMemo<SatelliteRegistry>(
+    () => ({
+      add: (node) => void satellitesRef.current.add(node),
+      remove: (node) => void satellitesRef.current.delete(node),
+    }),
+    [],
+  );
+
   useEffect(() => {
     if (!open) return;
     openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -67,6 +175,15 @@ export default function CueDialog({
     if (!open || !top) return;
     const shell = shellRef.current;
     if (!shell) return;
+    // Initial focus stays SHELL-ONLY, on purpose. A satellite is registered by
+    // a child's ref callback, so it is already in the set by the time this
+    // parent effect runs — using the full ring here would compile fine and, for
+    // the rail specifically, land on the same element (the shell precedes the
+    // rail in document order). But nothing guarantees that for a satellite
+    // portalled somewhere earlier in the body, and a dialog that opens with
+    // focus on a chart's view toggle instead of on its own close button is not
+    // the behaviour any consumer asked for. The ring is for Tab; the entry
+    // point is the dialog.
     (focusables(shell)[0] ?? shell).focus({ preventScroll: true });
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -79,7 +196,7 @@ export default function CueDialog({
       }
       if (event.key !== "Tab") return;
 
-      const items = focusables(shell);
+      const items = focusRing(shell, satellitesRef.current);
       const activeIndex = items.indexOf(document.activeElement as HTMLElement);
       const target = trapTabTarget(items.length, activeIndex, event.shiftKey);
       if (target !== null) {
@@ -152,7 +269,7 @@ export default function CueDialog({
             </button>
           </div>
         )}
-        {children}
+        <SatelliteContext.Provider value={satelliteRegistry}>{children}</SatelliteContext.Provider>
       </div>
     </div>,
     portalNode,

@@ -34,6 +34,7 @@ import {
   type RankMember,
 } from "./candidateRanking";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
+import { useCueDialogFocusSatellite } from "@/app/components/ui/CueDialog";
 import { ParticipationRail } from "./ParticipationRail";
 import { unresolvedRuleNames } from "./ruleEnforcement";
 import type { SolverConfig } from "./plannerModel";
@@ -322,6 +323,15 @@ export default function SeatBoard(props: SeatBoardProps) {
    * is the only safeguard.
    */
   const unresolved = useMemo(() => unresolvedRuleNames(config, members), [config, members]);
+
+  /**
+   * Puts the participation rail back in the enclosing dialog's Tab ring after
+   * the rail portals itself out of that dialog's shell. A no-op when this board
+   * is rendered outside a `CueDialog` and, since the rail renders nothing below
+   * 1380px, never fires at all on a narrow screen. See the rail's own comment
+   * further down for the order this produces and why.
+   */
+  const railFocusRef = useCueDialogFocusSatellite();
 
   const participationRoles = useMemo(
     () =>
@@ -615,19 +625,45 @@ export default function SeatBoard(props: SeatBoardProps) {
         Safari a `position: fixed` descendant of it lays out and hit-tests
         correctly and then paints nothing. See `ParticipationRail.tsx`'s header.
 
-        KNOWN COST, accepted deliberately: this comment used to say the rail
-        stayed inside the dialog's DOM "so the focus trap still owns its
-        Voces/Instrumentos control", and that is exactly what the portal gives
-        up. `CueDialog` builds its Tab ring from `shellRef` — which IS the
-        `brand-facet-panel` element — so anything that escapes the panel escapes
-        the ring, and there is no portal target that satisfies both. While this
-        dialog is open the rail's select is mouse-only. A visible chart with a
-        mouse-only view toggle beats an invisible chart whose toggle cannot be
-        reached at all; making `CueDialog` trap portalled satellites is the
-        proper fix and is deliberately not attempted here.
+        KEYBOARD: the portal used to cost the rail's Voces/Instrumentos select
+        its place in the Tab ring — `CueDialog` built the ring from `shellRef`,
+        which IS the `brand-facet-panel` element, so anything that escaped the
+        panel escaped the ring and Tab walked straight past the select. That is
+        fixed here rather than by giving the portal up:
+        `useCueDialogFocusSatellite`
+        registers this node with the enclosing dialog, which unions it into the
+        ring in DOCUMENT order. There is no prop to pass instead — this board is
+        a grandchild of the `<CueDialog>` element (`ServicesPanel`'s `Modal`
+        renders it), so registration has to travel upward.
+
+        The rail therefore sits LAST in the cycle, after the footer's
+        Cancelar / Guardar / Crear. Visually it is to the LEFT, and putting it
+        first would have matched that — but it would also have moved the primary
+        actions one stop later for everyone who already knows where they are,
+        to privilege a read-only chart's view toggle. Last also happens to be
+        what the browser does unaided (the portal lands after
+        `[data-cue-dialog-root]` in `body`), which is what lets the trap keep
+        delegating the interior steps instead of forcing every one of them.
+        Tab off "Crear y publicar" reaches the select; Tab again wraps to the
+        dialog's close button; Shift+Tab off the select goes back to the footer,
+        and Shift+Tab off the close button reaches the select. Below 1380px the
+        rail does not render, nothing is registered, and the ring is the shell's
+        alone.
+
+        NOT FIXED HERE, and measured rather than assumed: the rail is `z-40` and
+        `CueDialog`'s layer is `z-[90]`, so while the Tablero is open the
+        dialog's full-viewport backdrop (`bg-black/68 backdrop-blur-md`) sits ON
+        TOP of the rail. `elementFromPoint` at the select's own centre returns
+        the backdrop button, not the select — so a CLICK there dismisses the
+        dialog instead of opening the menu, and the chart reads as a dim blur.
+        Keyboard is therefore the only working way to operate this control, not
+        merely the one that was missing. Raising the rail above the backdrop is
+        a visual decision about whether a chart outside the dialog should be
+        exempt from its scrim, and it is deliberately left for its owner.
       */}
       <ParticipationRail
         placement="dialog"
+        containerRef={railFocusRef}
         roles={participationRoles}
         monthLabel="Carga reciente · incluye este servicio"
       />

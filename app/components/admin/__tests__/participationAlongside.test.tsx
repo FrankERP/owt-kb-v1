@@ -24,6 +24,8 @@ import { join } from "node:path";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import CueDialog from "@/app/components/ui/CueDialog";
+import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
 import MonthGenerator from "../MonthGenerator";
 import { MIN_WIDTH, RAIL_WIDTH } from "../ParticipationRail";
 import { CHART_COLUMN_WIDTH, PICKER_COLUMN_WIDTH } from "../PlannerGrid";
@@ -1159,6 +1161,99 @@ describe("the Tablero's rail counts the seats being edited", () => {
 
     fireEvent.click(rosterRow("Liu"));
     expect(railTotal(container, "Liu")).toBe(1);
+  });
+});
+
+/**
+ * The rail's Voces/Instrumentos select, reachable by KEYBOARD — the whole board
+ * inside a real `CueDialog`, not a stand-in.
+ *
+ * The portal that makes the rail visible in Safari (`ParticipationRail.tsx`)
+ * takes it out of the dialog shell that `CueDialog` builds its Tab ring from, so
+ * for one release the select was mouse-only. `SeatBoard` now registers the
+ * portalled node as a focus SATELLITE (`useCueDialogFocusSatellite`); this is
+ * the end-to-end proof that the wiring is connected, as opposed to
+ * `CueDialog.test.tsx`, which pins the mechanism against a stand-in portal.
+ *
+ * jsdom performs no sequential focus navigation, so only the trap's two FORCED
+ * moves are observable: Shift+Tab off the ring's first stop, and Tab off its
+ * last. Those are exactly the two the fix changes.
+ */
+describe("the Tablero's rail select is reachable by keyboard", () => {
+  function renderBoardInDialog() {
+    return render(
+      <CueDialogProvider>
+        <CueDialog open title="Editar servicio" onDismiss={vi.fn()}>
+          <SeatBoard
+            initial={savedRole}
+            members={members}
+            windowRoles={[{ ...savedRole, _id: "role-1" } as unknown as ParticipantRole & { _id: string }]}
+            onSubmit={vi.fn()}
+            onClose={vi.fn()}
+            loading={false}
+          />
+        </CueDialog>
+      </CueDialogProvider>,
+    );
+  }
+
+  /** The rail's own select, told apart from the board's date/type selects. */
+  function railSelect() {
+    const rail = document.body.querySelector<HTMLElement>('[data-participation-rail="dialog"]');
+    if (!rail) throw new Error("no participation rail rendered");
+    return within(rail).getByRole("combobox") as HTMLSelectElement;
+  }
+
+  it("Shift+Tab off the dialog's first stop lands on the rail's select", () => {
+    stubWideViewport();
+    renderBoardInDialog();
+
+    const close = screen.getByRole("button", { name: "Cerrar diálogo" });
+    // Opening the dialog still focuses the dialog itself, not the rail.
+    expect(document.activeElement).toBe(close);
+
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(railSelect());
+  });
+
+  it("Tab off the rail's select closes the cycle back into the dialog", () => {
+    stubWideViewport();
+    renderBoardInDialog();
+
+    const select = railSelect();
+    select.focus();
+    expect(document.activeElement).toBe(select);
+
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cerrar diálogo" }));
+  });
+
+  it("operates the select from the keyboard and repaints the chart", () => {
+    stubWideViewport();
+    renderBoardInDialog();
+
+    const select = railSelect();
+    select.focus();
+    expect(select.value).toBe("voces");
+
+    // What a keyboard user's arrow-then-commit produces: a change event on the
+    // focused select. The chart must follow, and focus must stay put.
+    fireEvent.change(select, { target: { value: "instrumentos" } });
+    expect(railSelect().value).toBe("instrumentos");
+    expect(document.activeElement).toBe(railSelect());
+  });
+
+  it("keeps the dialog's own ring when the viewport is too narrow for a rail", () => {
+    // Nothing is registered, so this is the untouched behaviour every other
+    // CueDialog consumer gets.
+    stubWideViewport(false);
+    renderBoardInDialog();
+
+    expect(document.body.querySelector('[data-participation-rail="dialog"]')).toBeNull();
+    const close = screen.getByRole("button", { name: "Cerrar diálogo" });
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).not.toBe(close);
+    expect(close.closest('[role="dialog"]')?.contains(document.activeElement)).toBe(true);
   });
 });
 

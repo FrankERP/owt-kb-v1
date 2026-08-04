@@ -1,7 +1,8 @@
 /** @vitest-environment jsdom */
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import CueDialog from "../CueDialog";
+import { createPortal } from "react-dom";
+import CueDialog, { useCueDialogFocusSatellite } from "../CueDialog";
 import { CueDialogProvider } from "../CueDialogProvider";
 import CueDialogStatus from "../CueDialogStatus";
 
@@ -95,5 +96,157 @@ describe("CueDialog", () => {
     fireEvent.click(childBackdrop as HTMLElement);
     expect(backdropDismiss).toHaveBeenCalledWith("backdrop");
     expect(onDismiss).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ── Focus satellites ───────────────────────────────────────────────────────
+ *
+ * The real case is the Tablero: `SeatBoard` mounts `ParticipationRail`, which
+ * `createPortal`s itself onto `document.body` so WebKit will paint it, and the
+ * rail's Voces/Instrumentos `<select>` therefore left the dialog's Tab ring.
+ * These use a stand-in portal rather than the rail itself so they pin the
+ * MECHANISM (`useCueDialogFocusSatellite` + the union + the ordering) and not
+ * the rail's 1380px media query, which jsdom's `matchMedia` stub answers
+ * `false` for unconditionally.
+ *
+ * WHAT THESE CANNOT SEE: jsdom implements no sequential focus navigation, so a
+ * `Tab` the trap deliberately does NOT intercept (every interior step) moves
+ * nothing here. Only the two forced ends of the ring are observable in jsdom.
+ * The interior steps were checked by hand in a real browser — see the report at
+ * `.superpowers/sdd/tablero-keyboard-report.md`.
+ */
+function Satellite({ target, children }: { target?: HTMLElement | null; children: React.ReactNode }) {
+  const railRef = useCueDialogFocusSatellite();
+  // No `target` means `document.body`, which is what `ParticipationRail` does.
+  // React appends the portal's content at mount time, and the dialog's children
+  // only mount once the provider's `[data-cue-dialog-root]` exists — so the
+  // satellite genuinely lands AFTER the shell in the document, as in production.
+  return createPortal(<div ref={railRef}>{children}</div>, target ?? document.body);
+}
+
+describe("CueDialog focus satellites", () => {
+  function SatelliteHarness({
+    target,
+    mounted = true,
+    childOpen = false,
+  }: {
+    target?: HTMLElement | null;
+    mounted?: boolean;
+    childOpen?: boolean;
+  }) {
+    return (
+      <CueDialogProvider>
+        <CueDialog open title="Tablero" onDismiss={vi.fn()}>
+          <div className="p-4">
+            <button>Guardar</button>
+            <button>Cancelar</button>
+            {mounted && (
+              <Satellite target={target}>
+                <select aria-label="Vista">
+                  <option value="voces">Voces</option>
+                </select>
+              </Satellite>
+            )}
+            <CueDialog open={childOpen} title="Confirmar" onDismiss={vi.fn()}>
+              <button>Volver</button>
+            </CueDialog>
+          </div>
+        </CueDialog>
+      </CueDialogProvider>
+    );
+  }
+
+  it("puts a portalled satellite in the ring, last, when it follows the shell", () => {
+    const { getByRole } = render(<SatelliteHarness />);
+
+    const close = getByRole("button", { name: "Cerrar diálogo" });
+    const select = getByRole("combobox", { name: "Vista" });
+
+    // Initial focus is unchanged by the satellite: the dialog's own first stop.
+    expect(document.activeElement).toBe(close);
+
+    // Tab off the ring's last stop wraps to the first — proving the select IS
+    // the last stop, i.e. it is in the ring and it is after the shell.
+    select.focus();
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(document.activeElement).toBe(close);
+
+    // ...and the cycle closes the other way: Shift+Tab off the first stop.
+    close.focus();
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(select);
+  });
+
+  it("orders the ring by document position, not by registration", () => {
+    // Same satellite, but PREPENDED to `body`, so it precedes the dialog shell.
+    // The ring must follow the document, because the interior Tab steps it
+    // delegates to the browser do.
+    const target = document.createElement("div");
+    document.body.prepend(target);
+    const { getByRole } = render(<SatelliteHarness target={target} />);
+
+    const close = getByRole("button", { name: "Cerrar diálogo" });
+    const cancel = getByRole("button", { name: "Cancelar" });
+    const select = getByRole("combobox", { name: "Vista" });
+
+    expect(document.activeElement).toBe(close);
+
+    // The select is now FIRST, so Shift+Tab off it wraps to the shell's last.
+    select.focus();
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(cancel);
+
+    // ...and Tab off the shell's last reaches the select.
+    cancel.focus();
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(document.activeElement).toBe(select);
+  });
+
+  it("drops a satellite from the ring when it unmounts", () => {
+    const { getByRole, rerender } = render(<SatelliteHarness />);
+
+    const close = getByRole("button", { name: "Cerrar diálogo" });
+    const cancel = getByRole("button", { name: "Cancelar" });
+    expect(document.activeElement).toBe(close);
+
+    rerender(<SatelliteHarness mounted={false} />);
+
+    // Back to the shell's own ring — the pinned behaviour of every other dialog.
+    close.focus();
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(cancel);
+  });
+
+  it("leaves an unregistered portalled node out of the ring", () => {
+    // The inertness guarantee for every consumer that never opts in: a stray
+    // portal on `body` — a toast, another dialog's shell — is not a satellite.
+    const stray = document.createElement("div");
+    const strayButton = document.createElement("button");
+    strayButton.textContent = "Intruso";
+    stray.appendChild(strayButton);
+    document.body.appendChild(stray);
+
+    const { getByRole } = render(<Harness open />);
+    const close = getByRole("button", { name: "Cerrar diálogo" });
+    const cancel = getByRole("button", { name: "Cancelar" });
+
+    close.focus();
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(cancel);
+  });
+
+  it("does not lend a parent's satellite to a nested dialog's ring", () => {
+    const { getByRole } = render(<SatelliteHarness childOpen />);
+
+    // The child owns the trap. Its ring is its own close button plus "Volver" —
+    // the parent's satellite belongs to the parent.
+    const childClose = getByRole("button", { name: "Cerrar diálogo" });
+    const volver = getByRole("button", { name: "Volver" });
+    expect(document.activeElement).toBe(childClose);
+
+    childClose.focus();
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(volver);
   });
 });
