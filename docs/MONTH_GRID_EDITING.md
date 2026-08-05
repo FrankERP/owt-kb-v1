@@ -21,7 +21,8 @@ for stored service rosters:
   service and never invokes the solver or fills a roster automatically.
 - Existing services support assignment changes, same- and cross-month date
   moves, and special-service name changes. Service type remains immutable.
-- The grid supports whole-team swaps and individual stored-seat swaps.
+- The grid supports whole-team swaps and complete section swaps across two
+  services: Líderes, BGV, Coro, Instrumentos, or FOH.
 - The former `SeatBoard`/card-swap editor and rendered **Tablero** copy are
   retired.
 - Card-owned delete, copy-instruments, publish/unpublish, setlist, proposal, and
@@ -38,7 +39,7 @@ disappearing or being normalized into apparently valid editable columns.
 | P2 | Canonical submitted-member validation, truthful bootstrap outcomes, special-identity coordination, Studio protection, schema, ADR, and writer tests. |
 | P3 | One empty unpublished service per logical request with stable idempotency identity and exact readback verification. |
 | P4 | Explicit full-roster save, no-op suppression, date/name editing, cross-month moves, frozen attempts, and conservative reconciliation. |
-| P5 | Topology-safe whole-team and stored-item-key seat swaps with all-role intended-state reconciliation. |
+| P5 | Topology-safe whole-team and stored-item-key seat swaps with all-role intended-state reconciliation; the later section-swap correction replaces the individual-seat UI. |
 | P6 | Servicios entry-point migration, focus restoration, operation-specific gates, and legacy editor retirement. |
 
 ## Stored-grid model and admission
@@ -86,12 +87,23 @@ save, and participate in the close warning.
 ## Swap contracts
 
 Whole-team swaps are allowed only when both services are Saturday or both are
-non-Saturday, preventing hidden Chorus data from entering Saturday. Individual
-seat swaps use stored item keys and retain cross-class support.
+non-Saturday, preventing hidden Chorus data from entering Saturday. Section
+swaps exchange exactly one complete stored array between two services. Empty or
+differently sized arrays are supported, and stored order, `_key`, item type,
+member references, and instrument/FOH labels travel unchanged. Shared sections
+may cross service classes; Coro refuses any pair containing Saturday.
 
 Both operations require a globally clean grid. The client freezes the exact
-post-swap semantic state for every involved role and adopts a reload only when
-all involved roles match.
+post-swap semantic state for every involved role. Section swaps additionally
+freeze ordered item-key/member/label fingerprints, so an equal member set with
+the wrong keys, order, or labels cannot be falsely verified. One mutation lock
+covers transport and reconciliation across grid edits, create/save, whole-team,
+and section actions; a second action cannot overwrite pending intent.
+Close and Escape are blocked while a stored request is in flight, including
+when a discard confirmation was already open before the request began. Empty
+custom row additions also count as unresolved work, so neither a swap nor an
+unrelated source reload can erase a row the administrator was preparing to
+fill.
 
 ## Mutation outcomes and recovery
 
@@ -101,7 +113,7 @@ therefore unknown outcomes—not proof that no write occurred.
 
 | Outcome | Client behavior |
 |---|---|
-| Allowlisted typed pre-write refusal | Retain the edit as refused and permit correction/review. |
+| Allowlisted typed pre-write refusal with its exact expected HTTP status | Retain the edit as refused and permit correction/review. |
 | `bootstrap_completed_reload` | Adopt maintenance metadata only; preserve business intent for an explicit reviewed retry. |
 | Unknown outcome | Keep frozen bytes/snapshots, block another write, reload, and reconcile. |
 | Readback equals frozen intent | Adopt the canonical revision and clear that pending intent. |
@@ -126,10 +138,10 @@ truthful status.
 
 ## Capability and accessibility behavior
 
-Create, team edit, date move, team swap, and seat swap each use their own
-source-readiness capability. Entering through one workflow cannot authorize
-another with weaker evidence. Read-only columns cannot open pickers, edit
-headers, or participate in row copy.
+Create, team edit, date move, and swap use operation-specific source-readiness
+capabilities. Entering through one workflow cannot authorize another with
+weaker evidence. Read-only columns cannot open pickers, edit headers, or
+participate in row copy.
 
 Closing the full-width editor restores focus to the remounted opener:
 **Nuevo**, toolbar **Editar mes**, or the originating card's **Editar equipo**,
@@ -150,7 +162,7 @@ with a toolbar fallback if the card is no longer visible.
 
 Final repository gates on 2026-08-05:
 
-- `npm test`: **135 files, 3158 tests passed**.
+- `npm test`: **135 files, 3191 tests passed**.
 - `npx tsc --noEmit`: passed.
 - `npx eslint .`: **0 errors**, 90 accepted backlog warnings.
 - `git diff --check`: passed.

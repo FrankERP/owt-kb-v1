@@ -184,6 +184,8 @@ export interface PlannerGridProps {
   onToggleSkip: (columnId: string) => void;
   onStoredHeaderChange?: (columnId: string, patch: { date?: string; serviceName?: string }) => void;
   storedDateBlockedReason?: string | null;
+  /** Prevent every stored-grid mutation while another stored mutation is unresolved. */
+  mutationLocked?: boolean;
   /** `MonthGenerator` owns the fetch; this component only asks for it. */
   onAuto: () => void;
   autoState: AutoState;
@@ -383,6 +385,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
     onToggleSkip,
     onStoredHeaderChange,
     storedDateBlockedReason,
+    mutationLocked = false,
     onAuto,
     autoState,
     diagnostics,
@@ -590,6 +593,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
    * `blocked`, which is also what renders `aria-disabled` and the red state.
    */
   function toggleCandidate(row: GridRow, columnId: string, memberId: string, candidates: RankedCandidate[]) {
+    if (mutationLocked) return;
     clearRemoveError();
     const current =
       cellsByKey.get(cellKey(columnId, row.id))?.occupants.map((o) => o.memberId) ?? [];
@@ -624,6 +628,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
    * may not. That asymmetry is the requirement, not an implementation detail.
    */
   function overrideCandidate(row: GridRow, columnId: string, memberId: string, candidates: RankedCandidate[]) {
+    if (mutationLocked) return;
     clearRemoveError();
     const candidate = candidates.find((c) => c.id === memberId);
     if (!candidate?.ruleBlockedReason) return;
@@ -849,6 +854,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
   }
 
   function removeRow(rowId: string) {
+    if (mutationLocked) return;
     const hasOccupants = cells.some((c) => c.rowId === rowId && c.occupants.length > 0);
     if (hasOccupants) {
       setRemoveError({ rowId, message: "Vacía la fila antes de eliminarla." });
@@ -859,6 +865,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
   }
 
   function addInstrumentRow(raw: string): string | null {
+    if (mutationLocked) return "Espera a que termine la operación pendiente.";
     const name = normalizeSeatName(raw);
     if (!name) return null;
     if (rows.some((r) => r.category === "instrumento" && r.label.toLowerCase() === name.toLowerCase())) {
@@ -870,6 +877,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
   }
 
   function addFohRow(raw: string): string | null {
+    if (mutationLocked) return "Espera a que termine la operación pendiente.";
     const name = normalizeSeatName(raw);
     if (!name) return null;
     if (rows.some((r) => r.category === "foh" && r.label.toLowerCase() === name.toLowerCase())) {
@@ -881,6 +889,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
   }
 
   function copyRowAcrossColumns(row: GridRow, sourceColumnId: string) {
+    if (mutationLocked) return;
     clearRemoveError();
     const sourceColumn = columnById.get(sourceColumnId);
     if (mode === "stored" && sourceColumn && "admission" in sourceColumn && sourceColumn.admission === "readOnly") return;
@@ -957,6 +966,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             readOnly={mode === "stored" && "admission" in column && column.admission === "readOnly"}
             onStoredHeaderChange={onStoredHeaderChange}
             storedDateBlockedReason={storedDateBlockedReason}
+            mutationLocked={mutationLocked}
             minWClass={cellMinW}
           />
         ))}
@@ -976,11 +986,13 @@ export default function PlannerGrid(props: PlannerGridProps) {
             }
             memberName={memberName}
             onOpen={(columnId) => {
+              if (mutationLocked) return;
               const column = columnById.get(columnId);
               if (mode === "stored" && column && "admission" in column && column.admission === "readOnly") return;
               openPicker(row, columnId);
             }}
             onRemove={row.category !== "voz" ? () => removeRow(row.id) : undefined}
+            mutationLocked={mutationLocked}
             removeError={activeRemoveError?.rowId === row.id ? activeRemoveError.message : null}
             onCopy={
               row.category !== "voz"
@@ -1006,8 +1018,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
       {gridBlock}
       {!fullScreen && (
         <div className="flex flex-wrap gap-3">
-          <AddRowForm placeholder="Nuevo instrumento" onAdd={addInstrumentRow} />
-          <AddRowForm placeholder="Nuevo rol FOH" onAdd={addFohRow} />
+          <AddRowForm placeholder="Nuevo instrumento" onAdd={addInstrumentRow} disabled={mutationLocked} />
+          <AddRowForm placeholder="Nuevo rol FOH" onAdd={addFohRow} disabled={mutationLocked} />
         </div>
       )}
     </div>
@@ -1049,6 +1061,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
                   .get(cellKey(openCell.columnId, openCell.rowId))
                   ?.occupants.map((o) => o.memberId) ?? []
               ).includes(candidate.id)}
+              mutationLocked={mutationLocked}
               onToggle={(id) => toggleCandidate(openRow, openCell.columnId, id, openCandidates)}
               onOverride={(id) =>
                 overrideCandidate(openRow, openCell.columnId, id, openCandidates)
@@ -1312,6 +1325,7 @@ function ColumnHeader({
   readOnly,
   onStoredHeaderChange,
   storedDateBlockedReason,
+  mutationLocked,
   minWClass,
 }: {
   column: GridColumn;
@@ -1324,6 +1338,7 @@ function ColumnHeader({
   readOnly: boolean;
   onStoredHeaderChange?: (columnId: string, patch: { date?: string; serviceName?: string }) => void;
   storedDateBlockedReason?: string | null;
+  mutationLocked: boolean;
   /** `min-w-[150px]` in the page, `min-w-0` in full screen — see `dateTrack`. */
   minWClass: string;
 }) {
@@ -1372,7 +1387,7 @@ function ColumnHeader({
             <input
               type="date"
               value={column.date}
-              disabled={readOnly || !!storedDateBlockedReason}
+              disabled={readOnly || mutationLocked || !!storedDateBlockedReason}
               title={storedDateBlockedReason ?? undefined}
               onChange={(event) => onStoredHeaderChange?.(column.columnId, { date: event.target.value })}
               className="mt-1 w-full rounded border border-[#00bfff]/15 bg-transparent px-1.5 py-1 font-body text-[11px] text-[#C8D8EB]"
@@ -1383,7 +1398,7 @@ function ColumnHeader({
               Nombre
               <input
                 value={column.serviceName ?? ""}
-                disabled={readOnly}
+                disabled={readOnly || mutationLocked}
                 onChange={(event) => onStoredHeaderChange?.(column.columnId, { serviceName: event.target.value })}
                 className="mt-1 w-full rounded border border-[#00bfff]/15 bg-transparent px-1.5 py-1 font-body text-[11px] normal-case tracking-normal text-[#C8D8EB]"
               />
@@ -1450,6 +1465,7 @@ function RowGroup({
   onRemove,
   removeError,
   onCopy,
+  mutationLocked,
   activeColumnId,
   minWClass,
   labelMinWClass,
@@ -1467,6 +1483,7 @@ function RowGroup({
   onRemove?: () => void;
   removeError: string | null;
   onCopy?: (columnId: string) => void;
+  mutationLocked: boolean;
   /**
    * The date of THIS row's cell that the picker column is currently showing,
    * or `null`. With the picker parked on the far side of the grid instead of
@@ -1509,6 +1526,7 @@ function RowGroup({
             <button
               type="button"
               onClick={onRemove}
+              disabled={mutationLocked}
               aria-label={`Eliminar fila ${row.label}`}
               className="font-label text-[10px] uppercase tracking-widest text-red-400/70 hover:text-red-400"
             >
@@ -1537,6 +1555,7 @@ function RowGroup({
             unfilled={unfilledByKey.has(cellKey(column.columnId, row.id))}
             onOpen={() => onOpen(column.columnId)}
             onCopy={onCopy ? () => onCopy(column.columnId) : undefined}
+            mutationLocked={mutationLocked}
             active={activeColumnId === column.columnId}
             minWClass={minWClass}
           />
@@ -1556,6 +1575,7 @@ function GridCellView({
   unfilled,
   onOpen,
   onCopy,
+  mutationLocked,
   active,
   minWClass,
 }: {
@@ -1568,6 +1588,7 @@ function GridCellView({
   unfilled: boolean;
   onOpen: () => void;
   onCopy?: () => void;
+  mutationLocked: boolean;
   /** This cell is the one the picker column is showing. */
   active: boolean;
   minWClass: string;
@@ -1607,10 +1628,11 @@ function GridCellView({
   return (
     <div
       role="button"
-      tabIndex={0}
-      onClick={onOpen}
+      tabIndex={mutationLocked ? -1 : 0}
+      aria-disabled={mutationLocked ? "true" : undefined}
+      onClick={() => { if (!mutationLocked) onOpen(); }}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (!mutationLocked && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();
           onOpen();
         }
@@ -1625,9 +1647,9 @@ function GridCellView({
       // cells are, in the other 59 cases, just seats. At most one cell is the
       // one the picker column is showing, and that one says so.
       aria-expanded={active ? true : undefined}
-      className={`min-h-[44px] ${minWClass} cursor-pointer rounded-lg border px-2 py-1.5 transition-colors ${
+      className={`min-h-[44px] ${minWClass} rounded-lg border px-2 py-1.5 transition-colors ${
         overflow ? "border-amber-500/40 bg-amber-500/5" : "border-[#00bfff]/15 hover:border-[#00bfff]/40"
-      } ${active ? "ring-2 ring-[#00bfff] ring-offset-2 ring-offset-[#010b17]" : ""}`}
+      } ${mutationLocked ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${active ? "ring-2 ring-[#00bfff] ring-offset-2 ring-offset-[#010b17]" : ""}`}
     >
       <div className="flex flex-wrap gap-1">
         {visibleIds.length === 0 && memberIds.length === 0 && (
@@ -1713,8 +1735,9 @@ function GridCellView({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            onCopy();
+            if (!mutationLocked) onCopy();
           }}
+          disabled={mutationLocked}
           className="mt-1 font-label text-[9px] uppercase tracking-widest text-[#C8D8EB]/40 hover:text-[#C8D8EB]/70"
         >
           Copiar a todo el mes
@@ -1729,18 +1752,20 @@ function GridCellView({
 function CandidateRow({
   candidate,
   selected,
+  mutationLocked,
   onToggle,
   onOverride,
 }: {
   candidate: RankedCandidate;
   selected: boolean;
+  mutationLocked: boolean;
   onToggle: (id: string) => void;
   /** P10 — seat this rule-blocked candidate anyway. */
   onOverride: (id: string) => void;
 }) {
   // TWO refusals, read as two predicates and never as `eligible` (which folds
   // in availability and belongs to the filler alone — see `toggleCandidate`).
-  const blocked = !!candidate.blockedReason || !!candidate.ruleBlockedReason;
+  const blocked = mutationLocked || !!candidate.blockedReason || !!candidate.ruleBlockedReason;
   // Only a RULE block is overridable: a same-category double is a data error,
   // not a judgement call.
   //
@@ -1756,7 +1781,7 @@ function CandidateRow({
       role="button"
       tabIndex={blocked ? -1 : 0}
       aria-disabled={blocked ? "true" : undefined}
-      title={candidate.blockedReason ?? candidate.ruleBlockedReason ?? undefined}
+      title={mutationLocked ? "Espera a que termine la operación pendiente." : candidate.blockedReason ?? candidate.ruleBlockedReason ?? undefined}
       onClick={() => {
         if (!blocked) onToggle(candidate.id);
       }}
@@ -1839,8 +1864,9 @@ function CandidateRow({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            onOverride(candidate.id);
+            if (!mutationLocked) onOverride(candidate.id);
           }}
+          disabled={mutationLocked}
           className="mt-1.5 min-h-[44px] w-full rounded-lg border border-amber-500/40 px-2 font-label text-[10px] uppercase tracking-widest text-amber-400 hover:bg-amber-500/10"
         >
           Asignar de todos modos
@@ -1855,9 +1881,11 @@ function CandidateRow({
 function AddRowForm({
   placeholder,
   onAdd,
+  disabled = false,
 }: {
   placeholder: string;
   onAdd: (name: string) => string | null;
+  disabled?: boolean;
 }) {
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -1874,6 +1902,7 @@ function AddRowForm({
       <div className="flex gap-1.5">
         <input
           value={value}
+          disabled={disabled}
           onChange={(e) => {
             setValue(e.target.value);
             if (error) setError(null);
@@ -1883,6 +1912,7 @@ function AddRowForm({
         />
         <button
           type="submit"
+          disabled={disabled}
           className="shrink-0 rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest text-[#C8D8EB]/70 hover:border-[#00bfff]"
         >
           Añadir
