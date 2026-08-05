@@ -306,7 +306,7 @@ export function rawRoleDraftsForTargetQuery(roleType: string, week: string): Bou
 /** Raw `drafts.*` special-role overlays on one calendar day. */
 export function rawSpecialRoleDraftsForDateQuery(date: string): BoundQuery {
   return {
-    query: `*[_type == "special_role" && ${DRAFTS_ONLY} && date == $date]{ _id, _type }`,
+    query: `*[_type == "special_role" && ${DRAFTS_ONLY} && date == $date]{ _id, _type, service_name }`,
     params: { date },
   };
 }

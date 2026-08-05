@@ -11,11 +11,12 @@ exact strings used in GROQ `_type` filters.
 
 ---
 
-## Registered document types (15)
+## Registered document types (16)
 
 `post`, `tag`, `author`, `featuredSongs`, `saturdarSongs`, `saturday_role`, `sunday_role`,
-`teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, and four **internal** types never
-authored by hand: `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `solverConfig`.
+`teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, and five **internal** types never
+authored by hand: `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`,
+`specialIdentityCoordinator`, `solverConfig`.
 
 **Not registered** (present but intentionally unused — do not wire in):
 - `sanity/schemas/youtubeType/youtubeType.ts` — object type `youtube`.
@@ -198,10 +199,11 @@ success**; an `approved` proposal with no valid receipt is `409 legacy_approval_
 
 ---
 
-## Internal coordination types — `roleTargetLock`, `roleCreationReceipt`
+## Internal coordination types — target lock, creation receipt, special coordinator
 
 Files: [`roleTargetLock.ts`](../sanity/schemas/roleTargetLock.ts),
-[`roleCreationReceipt.ts`](../sanity/schemas/roleCreationReceipt.ts). Both are declared
+[`roleCreationReceipt.ts`](../sanity/schemas/roleCreationReceipt.ts), and
+[`specialIdentityCoordinator.ts`](../sanity/schemas/specialIdentityCoordinator.ts). All are declared
 **`hidden: true` and `readOnly: true`** at the type level and are written **only** by the guarded
 mutation routes (never in Studio, never by a script). They carry no member-facing content; they
 exist so two concurrent writers cannot both win.
@@ -227,11 +229,33 @@ derived from the target key `<roleType>:<date>`.
 > therefore *vacates* the lock (clears `roleId`, advances `generation`) instead of removing it, and a
 > recreation claims the same lock with a fresh, non-reused role id.
 
-**`special_role` never gets a lock.** Its target key is its own `_id`, which is not a weekend key, so
-lock derivation returns `null` — a special service is serialized by its own document revision.
+**`special_role` never gets a weekend lock.** Its target key is its own `_id`, which is not a weekend
+key, so lock derivation returns `null`. Its own document revision serializes ordinary writes; the
+global coordinator below additionally serializes creates and date/name identity changes that may
+involve different document IDs.
 `claimed` must have exactly one `roleId` owning the same target; wrong-owner and orphan locks are
 integrity issues, surfaced by `GET /api/admin/service-integrity/roles` and **never reclaimed
 implicitly**.
+
+### `specialIdentityCoordinator` — one global special-identity mutex
+
+Deterministic `_id`: **`specialIdentityCoordinator.global`**. There is exactly one document because
+every special create or date/name identity change must share a target-independent assertion. Its
+identity and claim planner live in
+[`app/utils/specialIdentityCoordinator.ts`](../app/utils/specialIdentityCoordinator.ts).
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `version` | number | Starts at `1` and advances by exactly one on every later claim. |
+| `claimNonce` | string | Fresh for every claim, so an assertion necessarily changes stored state. |
+| `updatedAt` | datetime | Claim timestamp. |
+
+The first authorized identity transaction lazily `create`s version 1; there is no migration or
+pre-created production document. Later claims patch under the coordinator `_rev`, advance version,
+and replace the nonce in the **same transaction** as the special business write. Malformed state is
+an integrity refusal, never repaired implicitly. A transaction conflict requires new occupancy and
+coordinator evidence, not a blind retry. The global contention and rejected per-special-lock design
+are recorded in [ADR-0011](adr/0011-serialize-special-identities-globally.md).
 
 ### `roleCreationReceipt` — the create-request mutex and idempotency tombstone
 
@@ -514,11 +538,12 @@ require a Studio deploy to appear in the Studio UI (the app reads/writes via GRO
 
 The Studio is a *second* writer into the same dataset, so it would otherwise bypass every guard in
 [API_REFERENCE → the protected mutation contract](API_REFERENCE.md#the-protected-mutation-contract).
-**Ten** types are closed to it — the six protected service types **plus** the four internal types
+**Eleven** types are closed to it — the six protected service types **plus** the five internal types
 (`notificationOutbox` keeps `delete` alone, so an operator can prune a stray entry):
 
 `sunday_role`, `saturday_role`, `special_role`, `featuredSongs`, `saturdarSongs`, `setlistProposal`,
-`roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `solverConfig`.
+`roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
+`solverConfig`.
 
 The rules are pure and unit-tested in
 [`app/utils/studioProtection.ts`](../app/utils/studioProtection.ts) (`PROTECTED_STUDIO_TYPES`,
@@ -537,14 +562,14 @@ through **four Sanity v5 mechanisms**:
    inspect, diff, and read history. Read-only capabilities (`read`, `inspect`, `history`, `preview`,
    `structure-list`) stay allowed on purpose; any unknown capability on a protected type is denied.
 
-The internal coordination types are additionally `hidden: true`, and the internal *fields*
+The internal types are additionally `hidden: true`, and the internal *fields*
 (`creationReceiptId`, `creationFingerprint`, the lock/receipt bodies, `approval_receipt`,
-`last_transition`) are `hidden` + `readOnly` individually.
+`last_transition`, and the special coordinator body) are `hidden` + `readOnly` individually.
 
 > **⚠️ `__experimental_actions` is NOT the mechanism.** It was removed in Sanity v5 and is **inert**
 > — a test asserts no protected schema file contains it. The one remaining occurrence, on
 > `loginEvent`, therefore does nothing and is not load-bearing. Do not "fix" protection by adding it.
 
 **Deploy note:** the Studio protection lives in app code and is active as soon as the app deploys,
-but the two new schema *types* only appear in a deployed Studio after a Sanity schema deploy — see
+but internal schema *types* only appear in a deployed Studio after a Sanity schema deploy — see
 [DEVELOPMENT.md](DEVELOPMENT.md).

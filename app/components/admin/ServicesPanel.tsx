@@ -1,11 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { newCreationRequestId } from "@/app/utils/monthDraftCreate";
 import MonthGenerator from "./MonthGenerator";
-import SeatBoard from "./SeatBoard";
-import { applyRefreshedRole, refreshedRoleFromResponse } from "./applyRefreshedRole";
-import { enforceableConfig } from "./solverConfigSource";
 import { useSolverConfig } from "./useSolverConfig";
 import {
   SERVICE_SOURCE_KEYS,
@@ -25,7 +21,6 @@ import {
   initialSourceRecords,
   isValidSourcePayload,
   latchInvalidation,
-  movesServiceDate,
   mutationOutcomeMessage,
   reduceSourceRecords,
   retryTargets,
@@ -45,8 +40,6 @@ import {
 } from "./serviceIntegrityQueue";
 import {
   CARD_STYLE,
-  SECTION_LABEL,
-  SERVICE_BADGE,
   SERVICE_LABEL,
   TONE_CLASS,
   buildPublishConfirmation,
@@ -54,7 +47,6 @@ import {
   commandSummaryCounters,
   commandSummarySegments,
   describeAcknowledgedBlockers,
-  dn,
   formatServiceDate,
   integrityTargetForCard,
   monthTargetPreflight,
@@ -69,7 +61,6 @@ import {
   type ServiceCardModel,
   type ServiceRole,
   type ServiceType,
-  type SwapSource,
 } from "./serviceCardModel";
 import ServiceReadinessCard, {
   type CardGate,
@@ -97,47 +88,10 @@ import CueDialogStatus from "../ui/CueDialogStatus";
 
 import { SetlistEditor } from "./SetlistEditor";
 
-// ─── Swap types ───────────────────────────────────────────────────────────────
-
-type SwapConfirm =
-  | { kind: "card"; roleA: ServiceRole; roleB: ServiceRole }
-  | { kind: "member"; source: Exclude<SwapSource, { kind: "card" }>; target: Exclude<SwapSource, { kind: "card" }>; sourceRole: ServiceRole; targetRole: ServiceRole };
-
-/** Client section name → the stored seat path the swap writer accepts. */
-const SEAT_PATH: Record<"leads" | "bgvs" | "chorus" | "instruments" | "foh", string> = {
-  leads: "Lead", bgvs: "BGVs", chorus: "Chorus", instruments: "instruments", foh: "foh_team",
-};
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Long Spanish date, parsed at local noon (never a bare `new Date(iso)`). */
 const formatDate = (iso: string) => formatServiceDate(iso, "es-MX");
-
-/**
- * How far back `SeatBoard`'s `windowRoles` looks for candidateRanking's "load"
- * (recent-service count). `rankCandidates` derives `load` by counting each
- * member's appearances across whatever role list it is given — handing it
- * every role this panel has ever loaded would make "load" measure a season (or
- * more), not "recent", and the seat board's whole fairness signal would read
- * wrong. ~8 weeks keeps it a short, meaningful window no matter how much
- * history is loaded.
- */
-const CANDIDATE_LOAD_WINDOW_DAYS = 56;
-
-/**
- * `allRoles` bounded to the last `CANDIDATE_LOAD_WINDOW_DAYS` days ending at
- * `anchorIso` (inclusive), both compared at local noon — never a bare
- * `new Date(iso)`, which can flip the calendar day across a UTC offset.
- */
-function recentRolesWindow(allRoles: ServiceRole[], anchorIso: string): ServiceRole[] {
-  const noon = (iso: string) => new Date(iso.slice(0, 10) + "T12:00:00").getTime();
-  const anchor = noon(anchorIso);
-  const start = anchor - CANDIDATE_LOAD_WINDOW_DAYS * 86_400_000;
-  return allRoles.filter(r => {
-    const t = noon(r.date);
-    return t >= start && t <= anchor;
-  });
-}
 
 // Spanish message for a rejected mutation. A 409 always means "your view is
 // stale": the modal/mode stays open and the operator is told to reload.
@@ -177,10 +131,6 @@ async function describeMutationError(res: Response, fallback: string): Promise<s
   }
 }
 
-// Swaps are computed and committed by the server from the currently stored roles
-// (`POST /api/admin/roles/swap`), so this panel no longer builds a replacement
-// team payload of its own — it only sends the two selections it observed.
-
 // ─── Modal wrapper ────────────────────────────────────────────────────────────
 
 function Modal({
@@ -188,38 +138,19 @@ function Modal({
   onClose,
   wide,
   status,
-  ownScroll,
   children,
 }: {
   title: string;
   onClose: () => void;
   wide?: boolean;
   status?: string | null;
-  /**
-   * True when `children` owns a single internal scroll region of its own (today:
-   * only `SeatBoard`'s roster list). The default body here is itself a scroll
-   * container (`overflow-y-auto`); stacking that under a child that ALSO scrolls
-   * reintroduces the nested-scrollbar problem SeatBoard exists to remove. In that
-   * case this body becomes a plain flex column instead — `min-h-0 flex-1` still
-   * gives the child a bounded height to size its own `overflow-y-auto` against,
-   * it just doesn't add a second one. Every other dialog (publish confirmation,
-   * override, swap, unpublish, delete, generator, setlist) keeps the scrolling
-   * body unchanged.
-   */
-  ownScroll?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <CueDialog open title={title} label={title} mode="sheet" size={wide ? "lg" : "sm"} onDismiss={onClose}>
-      <div
-        className={
-          ownScroll
-            ? "flex min-h-0 flex-1 flex-col gap-5 overflow-hidden p-6"
-            : "min-h-0 flex-1 space-y-5 overflow-y-auto p-6"
-        }
-      >
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
         {status && (
-          <div className={ownScroll ? "shrink-0" : undefined}>
+          <div>
             <CueDialogStatus tone="error">{status}</CueDialogStatus>
           </div>
         )}
@@ -229,153 +160,6 @@ function Modal({
   );
 }
 
-
-// ─── Swap confirm modal ───────────────────────────────────────────────────────
-
-function AvailabilityWarning({ lines }: { lines: string[] }) {
-  if (lines.length === 0) return null;
-  return (
-    <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2.5 space-y-1">
-      <p className="font-label text-[11px] uppercase tracking-widest text-orange-400">No disponibles</p>
-      {lines.map((l, i) => <p key={i} className="font-body text-xs text-gray-400">{l}</p>)}
-    </div>
-  );
-}
-
-/**
- * Footer of the swap confirmation. A rejected swap keeps this modal open and
- * shows why; a stale view (409) offers a reload instead of a retry, because
- * retrying with the same observed revisions can only be rejected again.
- */
-function SwapFooter({ onClose, onConfirm, onReload, loading, warn, error, confirmLabel }: {
-  onClose: () => void; onConfirm: () => void; onReload: () => void;
-  loading: boolean; warn: boolean; error: string | null; confirmLabel: string;
-}) {
-  return (
-    <>
-      {error && (
-        <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2.5">
-          <p className="font-body text-xs text-red-300">{error}</p>
-        </div>
-      )}
-      <div className="flex gap-3">
-        <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">Cancelar</button>
-        {error ? (
-          <button type="button" onClick={onReload} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors">Recargar</button>
-        ) : (
-          <button type="button" onClick={onConfirm} disabled={loading} className={`flex-1 py-2 rounded-lg font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${warn ? "bg-orange-600/70 hover:bg-orange-600" : "bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30"}`}>{loading ? "Intercambiando..." : confirmLabel}</button>
-        )}
-      </div>
-    </>
-  );
-}
-
-function SwapConfirmModal({ confirm, onConfirm, onClose, onReload, loading, members, error }: {
-  confirm: SwapConfirm; onConfirm: () => void; onClose: () => void; onReload: () => void;
-  loading: boolean; members: MemberOption[]; error: string | null;
-}) {
-  function lookup(id: string | undefined) {
-    return id ? members.find(m => m._id === id) : undefined;
-  }
-  function unavailableOn(ids: (string | undefined)[], date: string): string[] {
-    return ids
-      .map(id => lookup(id))
-      .filter((m): m is MemberOption => !!(m?.unavailableDates?.includes(date)))
-      .map(m => m.alias?.trim() || m.member_name);
-  }
-  function fmtD(iso: string) {
-    return new Date(iso.slice(0,10) + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" });
-  }
-
-  if (confirm.kind === "card") {
-    const { roleA, roleB } = confirm;
-    const dateA = roleA.date.slice(0,10);
-    const dateB = roleB.date.slice(0,10);
-    const allAIds = [...(roleA.leads ?? []), ...(roleA.bgvs ?? []), ...(roleA.chorus ?? []),
-      ...(roleA.instruments ?? []).filter(s => s.person).map(s => s.person!),
-      ...(roleA.foh ?? []).filter(s => s.person).map(s => s.person!)].map(m => m._id);
-    const allBIds = [...(roleB.leads ?? []), ...(roleB.bgvs ?? []), ...(roleB.chorus ?? []),
-      ...(roleB.instruments ?? []).filter(s => s.person).map(s => s.person!),
-      ...(roleB.foh ?? []).filter(s => s.person).map(s => s.person!)].map(m => m._id);
-    const conflictsAtoB = unavailableOn(allAIds, dateB);
-    const conflictsBtoA = unavailableOn(allBIds, dateA);
-    const warnLines = [
-      ...conflictsAtoB.map(n => `${n} no disponible el ${fmtD(dateB)}`),
-      ...conflictsBtoA.map(n => `${n} no disponible el ${fmtD(dateA)}`),
-    ];
-    return (
-      <Modal title="Intercambiar Equipos" onClose={onClose} wide>
-        <p className="font-body text-sm text-gray-400">
-          Los equipos completos serán intercambiados entre estas dos fechas. Las fechas no cambian, solo el personal asignado a cada una.
-        </p>
-        <div className="grid grid-cols-2 gap-4">
-          {[roleA, roleB].map((role, idx) => (
-            <div key={role._id} className="rounded-lg border border-[#00bfff]/20 p-3 space-y-1.5">
-              <div className="flex items-center gap-2">
-                <span className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full ${SERVICE_BADGE[role._type]}`}>{SERVICE_LABEL[role._type]}</span>
-                {idx === 0 && <span className="font-label text-[11px] text-[#00bfff]">→ Recibe equipo B</span>}
-                {idx === 1 && <span className="font-label text-[11px] text-[#00bfff]">→ Recibe equipo A</span>}
-              </div>
-              <p className="font-body text-sm font-semibold">{formatDate(role.date)}</p>
-              {(role.leads ?? []).length > 0 && <p className="font-body text-xs text-gray-500">Líder: {(role.leads ?? []).map(m => dn(m)).join(", ")}</p>}
-              <div className="flex gap-1.5 flex-wrap">
-                {(role.bgvs ?? []).length > 0 && <Pill>{(role.bgvs ?? []).length} BGV</Pill>}
-                {(role.instruments ?? []).length > 0 && <Pill>{(role.instruments ?? []).length} instr.</Pill>}
-                {(role.foh ?? []).length > 0 && <Pill>{(role.foh ?? []).length} FOH</Pill>}
-              </div>
-            </div>
-          ))}
-        </div>
-        <AvailabilityWarning lines={warnLines} />
-        <SwapFooter
-          onClose={onClose} onConfirm={onConfirm} onReload={onReload}
-          loading={loading} warn={warnLines.length > 0} error={error}
-          confirmLabel="Confirmar intercambio"
-        />
-      </Modal>
-    );
-  }
-
-  const { source, target, sourceRole, targetRole } = confirm;
-  const srcName  = source.kind === "slot" ? (source.member ? dn(source.member) : "—") : dn(source.member);
-  const tgtName  = target.kind === "slot" ? (target.member ? dn(target.member) : "—") : dn(target.member);
-  const srcLabel = `${SECTION_LABEL[source.section]}${source.kind === "slot" ? ` · ${source.slotLabel}` : ""}`;
-  const tgtLabel = `${SECTION_LABEL[target.section]}${target.kind === "slot" ? ` · ${target.slotLabel}` : ""}`;
-
-  // source member moves to targetRole's date; target member moves to sourceRole's date
-  const srcMemberId = source.kind === "member" ? source.member?._id : source.member?._id;
-  const tgtMemberId = target.kind === "member" ? target.member?._id : target.member?._id;
-  const srcDateConflicts = unavailableOn([srcMemberId], targetRole.date.slice(0,10));
-  const tgtDateConflicts = unavailableOn([tgtMemberId], sourceRole.date.slice(0,10));
-  const warnLines = [
-    ...srcDateConflicts.map(n => `${n} no disponible el ${fmtD(targetRole.date)}`),
-    ...tgtDateConflicts.map(n => `${n} no disponible el ${fmtD(sourceRole.date)}`),
-  ];
-
-  return (
-    <Modal title="Intercambiar Miembros" onClose={onClose}>
-      <div className="flex items-center gap-3">
-        <div className="flex-1 text-center rounded-lg border border-[#00bfff]/20 p-3 space-y-1">
-          <p className="font-body text-sm font-semibold">{srcName}</p>
-          <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">{srcLabel}</p>
-          <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">{formatDate(sourceRole.date)}</p>
-        </div>
-        <span className="text-2xl text-gray-500 shrink-0">⇄</span>
-        <div className="flex-1 text-center rounded-lg border border-[#00bfff]/20 p-3 space-y-1">
-          <p className="font-body text-sm font-semibold">{tgtName}</p>
-          <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">{tgtLabel}</p>
-          <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">{formatDate(targetRole.date)}</p>
-        </div>
-      </div>
-      <AvailabilityWarning lines={warnLines} />
-      <SwapFooter
-        onClose={onClose} onConfirm={onConfirm} onReload={onReload}
-        loading={loading} warn={warnLines.length > 0} error={error}
-        confirmLabel="Confirmar"
-      />
-    </Modal>
-  );
-}
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
@@ -390,54 +174,67 @@ export default function ServicesPanel() {
   const [showPastMonths, setShowPastMonths] = useState(false);
   const [toast, setToast]       = useState<string | null>(null);
 
-  // Edit / delete modal
-  type EditModal = { type: "add" } | { type: "edit"; role: ServiceRole } | { type: "delete"; role: ServiceRole } | null;
+  // Delete modal. Roster create/edit now lives in the stored month editor.
+  type EditModal = { type: "delete"; role: ServiceRole } | null;
   const [editModal, setEditModal] = useState<EditModal>(null);
   /**
    * THE rule set (P6) — one fetch, one object, both surfaces.
    *
    * This panel owns it because both rule surfaces hang off it: it mounts
-   * `MonthGenerator` (the planner grid and the rule builder) and both
-   * `SeatBoard` modals (the Tablero). Owning it here and passing it down is
-   * what makes "the Tablero enforces exactly what the planner enforces"
-   * structural rather than a coincidence of two components reading the same
-   * place — and it is what makes a rule saved in the generator the rule the
-   * very next "Editar servicio" refuses on, with no second copy to go stale.
+   * `MonthGenerator` (both the stored month editor and the create planner).
+   * Owning it here keeps every roster surface on one controller.
    *
    * `localStorage` is no longer involved. The retired key answered `null` for a
    * value that was absent OR byte-equal to the shipped seed; that heuristic is
-   * now a fact the server states — see `enforceableConfig`, which hands
-   * `SeatBoard` a config only in the `ready` state, so an absent document, a
-   * failed read and a read still in flight all keep this surface's original
-   * behaviour of enforcing nothing.
+   * now a fact the server states. An absent document, a failed read and a read
+   * still in flight remain distinct states in the shared controller.
    */
   const rules = useSolverConfig();
   const [editError, setEditError] = useState<string | null>(null);
 
   // Month generator
   const [showGenerator, setShowGenerator] = useState(false);
+  const [monthEditor, setMonthEditor] = useState<{
+    month: string;
+    focusRoleId?: string;
+    openComposerInitially?: boolean;
+  } | null>(null);
   // D10: the generator is a full-width panel that replaces this whole view
   // rather than an overlay on top of it, so its own trigger button unmounts
   // while it's open. Escape-to-close lives in `MonthGenerator` itself; focus
   // restoration on close has to live here, since it's this ref — not anything
   // inside `MonthGenerator` — that still exists once the panel is dismissed.
   const generatorTriggerRef = useRef<HTMLButtonElement>(null);
+  const monthEditorTriggerRef = useRef<HTMLButtonElement>(null);
+  const newServiceTriggerRef = useRef<HTMLButtonElement>(null);
+  const monthEditorOpenerRef = useRef<{ kind: "toolbar" | "new" | "card"; roleId?: string }>({ kind: "toolbar" });
   const wasShowingGeneratorRef = useRef(false);
+  const wasShowingMonthEditorRef = useRef(false);
   useEffect(() => {
     if (wasShowingGeneratorRef.current && !showGenerator) {
       generatorTriggerRef.current?.focus();
     }
     wasShowingGeneratorRef.current = showGenerator;
   }, [showGenerator]);
+  useEffect(() => {
+    if (wasShowingMonthEditorRef.current && !monthEditor) {
+      const opener = monthEditorOpenerRef.current;
+      requestAnimationFrame(() => {
+        if (opener.kind === "new") newServiceTriggerRef.current?.focus();
+        else if (opener.kind === "card" && opener.roleId) {
+          const escaped = typeof CSS !== "undefined" && typeof CSS.escape === "function"
+            ? CSS.escape(opener.roleId)
+            : opener.roleId.replace(/["\\]/g, "\\$&");
+          const cardEdit = document.querySelector<HTMLElement>(`[data-card-id="${escaped}"] button[aria-label="Editar equipo"]`);
+          (cardEdit ?? monthEditorTriggerRef.current)?.focus();
+        } else monthEditorTriggerRef.current?.focus();
+      });
+    }
+    wasShowingMonthEditorRef.current = !!monthEditor;
+  }, [monthEditor]);
 
   // Setlist
   const [setlistRole, setSetlistRole] = useState<ServiceRole | null>(null);
-
-  // Swap mode
-  const [swapMode, setSwapMode]     = useState(false);
-  const [swapSource, setSwapSource] = useState<SwapSource | null>(null);
-  const [swapConfirm, setSwapConfirm] = useState<SwapConfirm | null>(null);
-  const [swapError, setSwapError] = useState<string | null>(null);
 
   // Copy-instruments mode: pick a source card, then a target day to repeat its lineup.
   const [copySource, setCopySource] = useState<string | null>(null);
@@ -468,10 +265,6 @@ export default function ServicesPanel() {
   // Transient proposal / integrity handoff, owned by `AdminPanel`.
   const { openReviewTarget, openIntegrityIssue } = useServiceHandoff();
 
-  // The in-flight add-modal logical create: `{ id, payloadKey }`, kept in a ref so
-  // a retry of the same payload reuses the same idempotency key.
-  const addRequest = useRef<{ id: string; payloadKey: string } | null>(null);
-
   // ── Independent source loading + per-control capability ───────────────────
 
   const sources = useMemo(() => sourceStates(sourceRecords), [sourceRecords]);
@@ -489,7 +282,7 @@ export default function ServicesPanel() {
   );
   const view = rolesView(sourceRecords);
 
-  // Active edit/swap/copy snapshots, plus the LATCHED reason each became stale.
+  // Active delete/copy snapshots, plus the LATCHED reason each became stale.
   // A stale mode is never submitted: it requires an explicit reload.
   const [snapshots, setSnapshots] = useState<Partial<Record<ActiveMode, ActiveModeSnapshot>>>({});
   const [staleModes, setStaleModes] = useState<Partial<Record<ActiveMode, ActiveModeInvalidation>>>({});
@@ -545,20 +338,18 @@ export default function ServicesPanel() {
   }, [snapshots, sourceRecords, roles]);
 
   const openEditModal = (next: Exclude<EditModal, null>) => {
-    const control = editModalControl(next.type);
+    const control = editModalControl("delete");
     // Re-checked at handler entry, not only at render.
     const guard = guardControl(sources, control);
     if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
     setEditError(null);
-    if (next.type === "add") addRequest.current = null;
-    if (next.type !== "add") openSnapshot(next.type, control, [next.role]);
+    openSnapshot("delete", control, [next.role]);
     setEditModal(next);
   };
 
   const closeEditModal = () => {
     setEditError(null);
-    addRequest.current = null;
-    clearSnapshot("edit", "delete");
+    clearSnapshot("delete");
     setEditModal(null);
   };
 
@@ -619,86 +410,7 @@ export default function ServicesPanel() {
 
   useEffect(() => { void loadSources(); }, [loadSources]);
 
-  // ── Create / Edit / Delete ────────────────────────────────────────────────
-
-  const handleAdd = async (data: any) => {
-    // Submit re-check: a source may have failed since the modal opened.
-    const guard = guardControl(sources, "createService");
-    if (!guard.ok) { setEditError(guard.message ?? "Datos incompletos."); return; }
-    setSubmitting(true);
-    // One creationRequestId per LOGICAL create: retained while this exact payload
-    // stays retryable (network error, lost response), and replaced as soon as the
-    // form changes — a changed payload is a new logical create, never the old key.
-    const payloadKey = JSON.stringify(data);
-    if (!addRequest.current || addRequest.current.payloadKey !== payloadKey) {
-      addRequest.current = { id: newCreationRequestId(), payloadKey };
-    }
-    try {
-      const res = await fetch("/api/admin/roles", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...data, creationRequestId: addRequest.current.id }),
-      });
-      if (res.ok) {
-        addRequest.current = null;
-        closeEditModal();
-        // A failed refresh after a committed create is reported as such — never
-        // as a fully refreshed success.
-        showToast(mutationOutcomeMessage("Servicio creado.", await loadSources()));
-      } else {
-        setEditError(await describeMutationError(res, "Error al crear."));
-        // A 409 keeps the modal open and refreshes so the operator can reload.
-        if (res.status === 409) void loadSources();
-      }
-    } catch {
-      setEditError("Error de conexión.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleEdit = async (data: any) => {
-    if (editModal?.type !== "edit") return;
-    // A stale snapshot is never submitted: reload first.
-    const stale = staleModes.edit;
-    if (stale) { setEditError(stale.message); return; }
-    const guard = guardControl(sources, "editTeam");
-    if (!guard.ok) { setEditError(guard.message ?? "Datos incompletos."); return; }
-    // Moving the date is its own capability row (all five sources).
-    if (movesServiceDate(editModal.role.date, data?.date)) {
-      const dateGuard = guardControl(sources, "changeServiceDate");
-      if (!dateGuard.ok) { setEditError(dateGuard.message ?? "Datos incompletos."); return; }
-    }
-    setSubmitting(true);
-    try {
-      const res = await fetch(`/api/admin/roles/${editModal.role._id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        // The revision this card was loaded with — the stale-view guard.
-        body: JSON.stringify({ ...data, rev: editModal.role._rev }),
-      });
-      if (res.ok) {
-        // Adopt the committed revision BEFORE reloading. If the reload then fails
-        // we still hold the revision the server just wrote, so the next save is
-        // not refused for a conflict we created ourselves. Parsing is best-effort:
-        // an unreadable body leaves the reload to correct things.
-        const refreshed = await res
-          .json()
-          .then(refreshedRoleFromResponse)
-          .catch(() => null);
-        if (refreshed) setRoles((current) => applyRefreshedRole(current, refreshed));
-        closeEditModal();
-        showToast(mutationOutcomeMessage("Actualizado.", await loadSources()));
-      } else {
-        setEditError(await describeMutationError(res, "Error al actualizar."));
-        if (res.status === 409) void loadSources();
-      }
-    } catch {
-      setEditError("Error de conexión.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  // ── Delete ────────────────────────────────────────────────────────────────
 
   const handleDelete = async () => {
     if (editModal?.type !== "delete") return;
@@ -729,106 +441,6 @@ export default function ServicesPanel() {
     }
   };
 
-  // ── Swap logic ────────────────────────────────────────────────────────────
-
-  /** Swap selection AND confirmation both re-check the swap capability. */
-  function guardSwap(): boolean {
-    const guard = guardControl(sources, "swap");
-    if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return false; }
-    return true;
-  }
-
-  function handleCardSwapSelect(roleId: string) {
-    if (!guardSwap()) return;
-    if (!swapSource) { setSwapSource({ kind: "card", roleId }); return; }
-    if (swapSource.kind !== "card") return;
-    if (swapSource.roleId === roleId) { setSwapSource(null); return; }
-    const roleA = roles.find(r => r._id === swapSource.roleId);
-    const roleB = roles.find(r => r._id === roleId);
-    // A selected role that vanished from the refreshed list is never swapped.
-    if (!roleA || !roleB) { setSwapSource(null); showToast("Este servicio ya no existe. Recarga la lista."); return; }
-    openSnapshot("swap", "swap", [roleA, roleB]);
-    setSwapConfirm({ kind: "card", roleA, roleB });
-  }
-
-  function handleMemberChipClick(src: Exclude<SwapSource, { kind: "card" }>) {
-    if (!guardSwap()) return;
-    if (!swapSource) { setSwapSource(src); return; }
-    if (swapSource.kind === "card") return;
-    // Deselect if same chip (identified by its stored seat key, not its index)
-    if (swapSource.roleId === src.roleId && swapSource.section === src.section && swapSource.itemKey === src.itemKey) {
-      setSwapSource(null); return;
-    }
-    const sourceRole = roles.find(r => r._id === swapSource.roleId);
-    const targetRole = roles.find(r => r._id === src.roleId);
-    if (!sourceRole || !targetRole) { setSwapSource(null); return; }
-    openSnapshot("swap", "swap", [sourceRole, targetRole]);
-    setSwapConfirm({ kind: "member", source: swapSource, target: src, sourceRole, targetRole });
-  }
-
-  // ONE atomic server transaction, never two independent PATCHes: the server
-  // derives both sides from the currently stored roles and either applies the
-  // whole swap or nothing at all. A rejection keeps this modal open and reports
-  // honestly; a 409 means the view is stale and requires a reload.
-  async function confirmSwap() {
-    if (!swapConfirm) return;
-    // Stale selection or a lost dependency: require a reload instead of sending
-    // the snapshot the operator saw.
-    const stale = staleModes.swap;
-    if (stale) { setSwapError(stale.message); return; }
-    const guard = guardControl(sources, "swap");
-    if (!guard.ok) { setSwapError(guard.message ?? "Datos incompletos."); return; }
-    setSubmitting(true);
-    setSwapError(null);
-    try {
-      const body = swapConfirm.kind === "card"
-        ? {
-            kind: "team",
-            roles: [
-              { id: swapConfirm.roleA._id, rev: swapConfirm.roleA._rev },
-              { id: swapConfirm.roleB._id, rev: swapConfirm.roleB._rev },
-            ],
-          }
-        : {
-            kind: "seat",
-            source: {
-              roleId: swapConfirm.source.roleId,
-              rev: swapConfirm.sourceRole._rev,
-              path: SEAT_PATH[swapConfirm.source.section],
-              itemKey: swapConfirm.source.itemKey,
-            },
-            target: {
-              roleId: swapConfirm.target.roleId,
-              rev: swapConfirm.targetRole._rev,
-              path: SEAT_PATH[swapConfirm.target.section],
-              itemKey: swapConfirm.target.itemKey,
-            },
-          };
-      const res = await fetch("/api/admin/roles/swap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) {
-        setSwapConfirm(null);
-        setSwapSource(null);
-        clearSnapshot("swap");
-        showToast(mutationOutcomeMessage("Intercambio realizado.", await loadSources()));
-      } else {
-        setSwapError(await describeMutationError(res, "Error al intercambiar."));
-      }
-    } catch {
-      setSwapError("Error de conexión.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  function exitSwapMode() {
-    setSwapMode(false); setSwapSource(null); setSwapConfirm(null); setSwapError(null);
-    clearSnapshot("swap");
-  }
-
   // ── Copy instruments to another day ─────────────────────────────────────────
 
   function exitCopyMode() { setCopySource(null); clearSnapshot("copy"); }
@@ -838,7 +450,6 @@ export default function ServicesPanel() {
     if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
     const source = roles.find(r => r._id === roleId);
     if (!source) { showToast("Este servicio ya no existe. Recarga la lista."); return; }
-    exitSwapMode();
     openSnapshot("copy", "copyInstruments", [source]);
     setCopySource(roleId);
   }
@@ -1095,20 +706,28 @@ export default function ServicesPanel() {
   function openGenerator() {
     const guard = guardControl(sources, "generateMonth");
     if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
+    setMonthEditor(null);
     setShowGenerator(true);
+  }
+
+  function openMonthEditor(
+    month: string,
+    focusRoleId?: string,
+    openComposerInitially = false,
+    opener: { kind: "toolbar" | "new" | "card"; roleId?: string } = { kind: "toolbar" },
+  ) {
+    if (openComposerInitially) {
+      const guard = guardControl(sources, "createService");
+      if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
+    }
+    monthEditorOpenerRef.current = opener;
+    setShowGenerator(false);
+    setMonthEditor({ month, focusRoleId, openComposerInitially });
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   const today = serviceTodayIso();
-
-  // The seat board's "recent load" window: bounded to the service being edited
-  // (or `today` for a new one still without a date) — never the whole `roles`
-  // array. See `recentRolesWindow` / `CANDIDATE_LOAD_WINDOW_DAYS` above.
-  const seatWindowRoles = useMemo(
-    () => recentRolesWindow(roles, editModal?.type === "edit" ? editModal.role.date : today),
-    [roles, editModal, today],
-  );
 
   // Split months into current/future and past
   const currentYM   = today.slice(0, 7);
@@ -1188,7 +807,7 @@ export default function ServicesPanel() {
   function runPrimaryAction(card: ServiceCardModel) {
     switch (primaryActionRoute(card.readiness)) {
       case "service_modal":
-        openEditModal({ type: "edit", role: card.role });
+        openMonthEditor(card.role.date.slice(0, 7), card.role._id, false, { kind: "card", roleId: card.role._id });
         return;
       case "setlist_editor":
         // Unreachable for a non-editable target (the route falls back), but the
@@ -1230,10 +849,12 @@ export default function ServicesPanel() {
   }
 
   // ── Per-control gates (one snapshot, five individual source states) ─────────
-  const swapGate          = gate("swap");
   const publishGate       = gate("publishReady");
   const generateGate      = gate("generateMonth");
   const createGate        = gate("createService");
+  const editTeamGate      = gate("editTeam");
+  const swapGate          = gate("swap");
+  const changeDateGate    = gate("changeServiceDate");
   const participationGate = gate("participationSidebar");
   const cardGates: CardGates = {
     editTeam: gate("editTeam"),
@@ -1242,7 +863,7 @@ export default function ServicesPanel() {
     deleteService: gate("deleteService"),
     publish: publishGate,
     unpublish: gate("unpublish"),
-    swap: swapGate,
+    swap: gate("swap"),
     proposalHandoff: gate("proposalHandoff"),
   };
 
@@ -1256,7 +877,7 @@ export default function ServicesPanel() {
   );
   const availabilityUnverified = sources.members !== "ready";
 
-  // ── The month generator — a full-width panel, not a dialog (D10) ─────────
+  // ── Month editor / generator — full-width panels, not dialogs (D10) ──────
   //
   // While open, it REPLACES the whole two-column layout below (sidebar
   // included), not just the card list: `lg:grid-cols-[320px_1fr]` leaves only
@@ -1265,6 +886,48 @@ export default function ServicesPanel() {
   // short of the width the grid needs. `CueDialog` has no size above `lg` and
   // widening that shared token risks every other dialog in the app, so the
   // generator leaves `Modal`/`CueDialog` entirely instead.
+  if (monthEditor) {
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center justify-between">
+          <h1 className="font-display text-2xl uppercase tracking-wide">Editar mes</h1>
+        </div>
+        <MonthGenerator
+          key={`stored:${monthEditor.month}:${monthEditor.focusRoleId ?? "month"}`}
+          mode="stored"
+          initialMonth={monthEditor.month}
+          focusRoleId={monthEditor.focusRoleId}
+          openComposerInitially={monthEditor.openComposerInitially}
+          members={members}
+          existingRoles={roles}
+          allRoles={roles}
+          rules={rules}
+          capability={monthEditor.openComposerInitially
+            ? { enabled: createGate.enabled, reason: createGate.reason }
+            : { enabled: editTeamGate.enabled, reason: editTeamGate.reason }}
+          storedCapabilities={{
+            edit: { enabled: editTeamGate.enabled, reason: editTeamGate.reason },
+            create: { enabled: createGate.enabled, reason: createGate.reason },
+            swap: { enabled: swapGate.enabled, reason: swapGate.reason },
+            changeDate: { enabled: changeDateGate.enabled, reason: changeDateGate.reason },
+          }}
+          storedSource={{
+            roles,
+            integrity: summaries.roles,
+            rolesStatus: sourceRecords.roles.status,
+            integrityStatus: sourceRecords.roleTargets.status,
+            rolesGeneration: sourceRecords.roles.generation,
+            integrityGeneration: sourceRecords.roleTargets.generation,
+            reload: async () =>
+              (await loadSources(["roles", "roleTargets"])).length === 0,
+          }}
+          onClose={() => setMonthEditor(null)}
+          onCreated={() => showToast("Servicio creado y verificado.")}
+        />
+      </div>
+    );
+  }
+
   if (showGenerator) {
     return (
       <div className="space-y-5">
@@ -1282,9 +945,8 @@ export default function ServicesPanel() {
           // `savedWindow` (D12, inside `MonthGenerator`) degrade to a blank
           // "sin historial reciente" strip.
           allRoles={roles}
-          // THE SAME controller the seat boards read from (`enforceableConfig`
-          // below). One object, so a rule saved here is enforced there without
-          // a refetch, and neither surface can drift onto its own copy.
+          // The same controller used by the stored month editor. One object, so
+          // neither planner surface can drift onto its own rules copy.
           rules={rules}
           // Re-checked at preview and at confirmation, not just at open.
           capability={{ enabled: generateGate.enabled, reason: generateGate.reason }}
@@ -1330,17 +992,6 @@ export default function ServicesPanel() {
           )}
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          {/* Swap mode toggle */}
-          <button
-            onClick={() => { if (swapMode) { exitSwapMode(); } else { exitCopyMode(); setSwapMode(true); } }}
-            disabled={!swapGate.enabled && !swapMode}
-            title={swapGate.reason ?? undefined}
-            className={`flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-40 ${
-              swapMode ? "border-[#00bfff] bg-[#00bfff]/10 text-[#00bfff]" : "border-[#003572]/20 dark:border-[#00bfff]/15 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff]/30"
-            }`}
-          >
-            ⇄ {swapMode ? "Salir" : "Intercambiar"}
-          </button>
           {visibleCards.some(c => c.readiness.publishState === "draft") && (
             <button type="button"
               disabled={!publishGate.enabled}
@@ -1356,8 +1007,18 @@ export default function ServicesPanel() {
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#003572]/20 dark:border-[#00bfff]/15 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff]/30 transition-colors disabled:opacity-40">
             📅 Generar mes
           </button>
-          {!swapMode && !copyMode && (
-            <button onClick={() => openEditModal({ type: "add" })}
+          <button
+            ref={monthEditorTriggerRef}
+            type="button"
+            onClick={() => openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, false, { kind: "toolbar" })}
+            disabled={!editTeamGate.enabled}
+            title={editTeamGate.reason ?? undefined}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#003572]/20 dark:border-[#00bfff]/15 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff]/30 transition-colors disabled:opacity-40"
+          >
+            Editar mes
+          </button>
+          {!copyMode && (
+            <button ref={newServiceTriggerRef} onClick={() => openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, true, { kind: "new" })}
               disabled={!createGate.enabled}
               title={createGate.reason ?? undefined}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-40">
@@ -1434,25 +1095,6 @@ export default function ServicesPanel() {
               </li>
             ))}
           </ul>
-        </div>
-      )}
-
-      {/* Swap mode banner */}
-      {swapMode && (
-        <div className="rounded-lg border border-[#00bfff]/30 bg-[#00bfff]/5 px-4 py-2.5 flex items-center justify-between">
-          <div>
-            <p className="font-label text-xs uppercase tracking-widest text-[#00bfff]">Modo intercambio activo</p>
-            <p className="font-body text-xs text-gray-500 mt-0.5">
-              {!swapSource ? "Haz clic en «⇄ Equipo» para intercambiar equipos completos, o selecciona un miembro de cualquier card." :
-               swapSource.kind === "card" ? "Ahora selecciona otro equipo para intercambiar." :
-               "Ahora selecciona el miembro con quien intercambiar."}
-            </p>
-          </div>
-          {swapSource && (
-            <button onClick={() => setSwapSource(null)} className="font-label text-[11px] uppercase tracking-widest text-gray-500 hover:text-red-400 transition-colors ml-4 shrink-0">
-              Cancelar selección
-            </button>
-          )}
         </div>
       )}
 
@@ -1536,7 +1178,7 @@ export default function ServicesPanel() {
               todayIso={today}
               gates={cardGates}
               onPrimaryAction={() => runPrimaryAction(card)}
-              onEdit={() => openEditModal({ type: "edit", role: card.role })}
+              onEdit={() => openMonthEditor(card.role.date.slice(0, 7), card.role._id, false, { kind: "card", roleId: card.role._id })}
               onDelete={() => openEditModal({ type: "delete", role: card.role })}
               onSetlist={() => openSetlist(card.role)}
               // The menu's `Publicar` is the explicit override path when workflow
@@ -1545,10 +1187,10 @@ export default function ServicesPanel() {
                 card.readiness.isReadyToPublish ? openPublishPlan([card]) : openOverride(card)
               }
               onUnpublish={() => openUnpublish(card)}
-              swapMode={swapMode}
-              swapSource={swapSource}
-              onCardSwapSelect={() => handleCardSwapSelect(card.role._id)}
-              onMemberChipClick={handleMemberChipClick}
+              swapMode={false}
+              swapSource={null}
+              onCardSwapSelect={() => {}}
+              onMemberChipClick={() => {}}
               copyMode={copyMode}
               isCopySource={copySource === card.role._id}
               onCopyStart={() => startCopyInstruments(card.role._id)}
@@ -1568,27 +1210,6 @@ export default function ServicesPanel() {
       )}
 
       {/* ── Modals ── */}
-      {editModal?.type === "add" && (
-        <Modal title="Nuevo servicio" wide ownScroll onClose={closeEditModal} status={editError}>
-          <SeatBoard members={members} windowRoles={seatWindowRoles} onSubmit={handleAdd} onClose={closeEditModal} loading={submitting}
-            config={enforceableConfig(rules.source)}
-            submitBlockedReason={createGate.reason} />
-        </Modal>
-      )}
-      {editModal?.type === "edit" && (
-        <Modal title="Editar servicio" wide ownScroll onClose={closeEditModal} status={editError ?? staleModes.edit?.message}>
-          <SeatBoard initial={editModal.role} members={members} windowRoles={seatWindowRoles} onSubmit={handleEdit} onClose={closeEditModal} loading={submitting}
-            config={enforceableConfig(rules.source)}
-            dateLockedReason={gate("changeServiceDate").reason}
-            submitBlockedReason={staleModes.edit?.message ?? cardGates.editTeam.reason} />
-          {staleModes.edit && (
-            <button type="button" onClick={() => { closeEditModal(); retryLoad(); }}
-              className="w-full shrink-0 py-2 rounded-lg border border-[#00bfff]/30 font-label text-xs uppercase tracking-widest text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors">
-              Recargar
-            </button>
-          )}
-        </Modal>
-      )}
       {editModal?.type === "delete" && (() => {
         // Dependency inventory must be complete (all five) and the observed
         // record still current, or this destructive confirmation is disabled.
@@ -1607,18 +1228,6 @@ export default function ServicesPanel() {
           </Modal>
         );
       })()}
-      {swapConfirm && (
-        <SwapConfirmModal
-          confirm={swapConfirm}
-          onConfirm={confirmSwap}
-          onClose={() => { setSwapConfirm(null); setSwapSource(null); setSwapError(null); clearSnapshot("swap"); }}
-          onReload={() => { exitSwapMode(); retryLoad(); }}
-          loading={submitting}
-          members={members}
-          // A stale/blocked selection shows its reason and offers reload.
-          error={swapError ?? staleModes.swap?.message ?? swapGate.reason}
-        />
-      )}
 
       {/* `Publicar listos` — the readiness-aware bulk confirmation */}
       {publishPlan && (
@@ -1896,10 +1505,6 @@ function PublicationFooter({
 
 // ─── Tiny helpers ─────────────────────────────────────────────────────────────
 
-function Pill({ children }: { children: React.ReactNode }) {
-  return <span className="font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-500 whitespace-nowrap">{children}</span>;
-}
-
 function fmtYM(ym: string) {
   return new Date(ym + "-01T12:00:00").toLocaleDateString("es-MX", { month: "short", year: "2-digit" });
 }
@@ -1920,8 +1525,4 @@ function MonthPill({ label, selected, onClick, past }: { label: string; selected
       {label}
     </button>
   );
-}
-
-function TrashIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>;
 }

@@ -15,7 +15,7 @@ import { describe, expect, it } from "vitest";
 
 import { instrumentSeatDef, VOICE_SEATS } from "../seatModel";
 import { rankCandidates, type AssignedSeat, type RankMember } from "../candidateRanking";
-import { resolveToMemberName, type GridColumn, type SolverConfig } from "../plannerModel";
+import { resolveToMemberName, type ColumnType, type SolverConfig } from "../plannerModel";
 import {
   evaluate,
   parsePattern,
@@ -65,9 +65,10 @@ const member = (id: string): RankMember => {
 /** March 2026 begins on a Sunday and holds five of them. */
 const SUNDAYS = ["2026-03-01", "2026-03-08", "2026-03-15", "2026-03-22", "2026-03-29"];
 
-const sun = (date: string): GridColumn => ({ date, type: "sunday_role" });
-const sat = (date: string): GridColumn => ({ date, type: "saturday_role" });
-const special = (date: string, name = "Vigilia"): GridColumn => ({
+type RuleColumn = { date: string; type: ColumnType; serviceName?: string };
+const sun = (date: string): RuleColumn => ({ date, type: "sunday_role" });
+const sat = (date: string): RuleColumn => ({ date, type: "saturday_role" });
+const special = (date: string, name = "Vigilia"): RuleColumn => ({
   date,
   type: "special_role",
   serviceName: name,
@@ -132,7 +133,7 @@ const seat = (seatId: string, memberId: string): AssignedSeat => ({
 const check = (over: {
   member: RankMember;
   row?: { id: string };
-  column?: GridColumn;
+  column?: RuleColumn;
   sundayDates?: string[];
   assigned?: AssignedSeat[];
   config?: SolverConfig;
@@ -675,7 +676,7 @@ describe("rankCandidates with rules", () => {
 const ROWS: RuleRow[] = [{ id: "lead" }, { id: "bgv" }, { id: "coro" }, { id: "instrumento:Bass" }];
 
 const violations = (over: {
-  column?: GridColumn;
+  column?: RuleColumn;
   assigned: AssignedSeat[];
   config?: SolverConfig;
   /** `violationKey` → the exact reason that override waived (P10). */
