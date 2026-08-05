@@ -561,6 +561,7 @@ export interface RoleSelection {
 
 export type ParsedSwapRequest =
   | { kind: "seat"; source: SeatSelection; target: SeatSelection }
+  | { kind: "section"; path: SeatPath; roles: [RoleSelection, RoleSelection] }
   | { kind: "team"; roles: [RoleSelection, RoleSelection] };
 
 function parseSeatSelection(value: unknown, side: "source" | "target"): ParseResult<SeatSelection> {
@@ -606,7 +607,9 @@ export function parseSwapRequest(body: unknown): ParseResult<ParsedSwapRequest> 
     return { ok: true, value: { kind: "seat", source: a, target: b } };
   }
 
-  if (body.kind === "team") {
+  if (body.kind === "section" || body.kind === "team") {
+    const path = body.path;
+    if (body.kind === "section" && !isSeatPath(path)) return fail(["path"]);
     const rows = body.roles;
     if (!Array.isArray(rows) || rows.length !== 2) return fail(["roles"]);
     const first = parseRoleSelection(rows[0], 0);
@@ -614,6 +617,13 @@ export function parseSwapRequest(body: unknown): ParseResult<ParsedSwapRequest> 
     const second = parseRoleSelection(rows[1], 1);
     if (!second.ok) return second;
     if (first.value.id === second.value.id) return fail(["identical_selection"]);
+    if (body.kind === "section") {
+      if (!isSeatPath(path)) return fail(["path"]);
+      return {
+        ok: true,
+        value: { kind: "section", path, roles: [first.value, second.value] },
+      };
+    }
     return { ok: true, value: { kind: "team", roles: [first.value, second.value] } };
   }
 
