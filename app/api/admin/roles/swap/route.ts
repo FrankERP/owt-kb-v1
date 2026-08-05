@@ -25,6 +25,7 @@ import {
   seatPersonPatchPath,
   storedSeatArrays,
   type NormalizedSeats,
+  type SeatPath,
   type SeatPersonReplacement,
 } from "@/app/utils/roleWriteRequest";
 import {
@@ -43,17 +44,19 @@ function reject(res: { status: number; body: unknown }) {
 /**
  * Atomic swap of assignments between service roles (A2 §4).
  *
- * Two shapes only:
+ * Three shapes:
  *   `{ kind: "seat",  source: { roleId, rev, path, itemKey }, target: { … } }`
+ *   `{ kind: "section", path, roles: [{ id, rev }, { id, rev }] }`
  *   `{ kind: "team",  roles: [{ id, rev }, { id, rev }] }`
  *
  * The assignments written are derived from the CURRENT stored roles — a
  * replacement team payload is never accepted. A seat swap addresses items by
  * their stable stored `_key` (never a rendered index) and sets only the person
  * reference, so the destination `_key`, instrument label and FOH label are
- * preserved: the person moves, the seat does not. A team swap exchanges exactly
- * the five seat fields, so identity, date, service name, publication state, songs
- * and team notes are untouched.
+ * preserved: the person moves, the seat does not. A section swap exchanges one
+ * complete stored array, while a team swap exchanges exactly the five seat
+ * fields. Identity, date, service name, publication state, songs and team notes
+ * are untouched.
  *
  * Same-role swaps, topology-compatible team swaps, and individual-seat swaps
  * assert every involved role revision and coordination token in ONE transaction, so a
@@ -141,13 +144,26 @@ async function postHandler(req: NextRequest) {
     }
   }
 
+  if (request.kind === "section" && request.path === "Chorus") {
+    const includesSaturday = request.roles.some(
+      (selection) => targetById.get(selection.id)?.role._type === "saturday_role",
+    );
+    if (includesSaturday) {
+      return reject(
+        serviceError("invalid_request", {
+          details: { issues: ["incompatible_section_topology"] },
+        }),
+      );
+    }
+  }
+
   // ── Plan the writes from stored state ─────────────────────────────────────
   /** `set` payload per role id. */
   const patchOf = new Map<string, Record<string, unknown>>();
   /** Seat-level person replacements per role id, for the post-commit view. */
   const replacementsOf = new Map<string, SeatPersonReplacement[]>();
-  /** Team-swap partner per role id: its post-state is the partner's stored seats. */
-  const partnerOf = new Map<string, string>();
+  /** Stored-state-derived post-commit seats for team and section swaps. */
+  const afterSeatsOf = new Map<string, NormalizedSeats>();
   const involvedPersonIds: string[] = [];
 
   if (request.kind === "seat") {
@@ -194,16 +210,32 @@ async function postHandler(req: NextRequest) {
     if (!firstSeats || !secondSeats) {
       return reject(serviceError("integrity_conflict", { details: { detail: "seat_arrays" } }));
     }
-    // Exactly the five seat fields are exchanged. `_key`s travel with their items
-    // rather than being regenerated, and nothing else on either document is set.
-    mergePatch(patchOf, first._id, { ...secondSeats });
-    mergePatch(patchOf, second._id, { ...firstSeats });
-    partnerOf.set(first._id, second._id);
-    partnerOf.set(second._id, first._id);
-    involvedPersonIds.push(
-      ...seatAssignees(normalizeStoredSeats(first)),
-      ...seatAssignees(normalizeStoredSeats(second)),
-    );
+    if (request.kind === "section") {
+      const path = request.path;
+      // The complete selected arrays travel unchanged, including order, keys,
+      // item types, labels, references, emptiness and differing cardinality.
+      mergePatch(patchOf, first._id, { [path]: secondSeats[path] });
+      mergePatch(patchOf, second._id, { [path]: firstSeats[path] });
+      const firstBefore = normalizeStoredSeats(first);
+      const secondBefore = normalizeStoredSeats(second);
+      afterSeatsOf.set(first._id, normalizeStoredSeats({ ...first, [path]: secondSeats[path] }));
+      afterSeatsOf.set(second._id, normalizeStoredSeats({ ...second, [path]: firstSeats[path] }));
+      involvedPersonIds.push(
+        ...sectionAssignees(firstBefore, path),
+        ...sectionAssignees(secondBefore, path),
+      );
+    } else {
+      // Exactly the five seat fields are exchanged. `_key`s travel with their
+      // items rather than being regenerated, and nothing else is set.
+      mergePatch(patchOf, first._id, { ...secondSeats });
+      mergePatch(patchOf, second._id, { ...firstSeats });
+      afterSeatsOf.set(first._id, normalizeStoredSeats(second));
+      afterSeatsOf.set(second._id, normalizeStoredSeats(first));
+      involvedPersonIds.push(
+        ...seatAssignees(normalizeStoredSeats(first)),
+        ...seatAssignees(normalizeStoredSeats(second)),
+      );
+    }
   }
 
   // ── Dangling assignment refusal ───────────────────────────────────────────
@@ -233,12 +265,11 @@ async function postHandler(req: NextRequest) {
   const seatStatesOf = new Map<string, { before: NormalizedSeats; after: NormalizedSeats }>();
   for (const coordinated of coordination.roles) {
     if (!patchOf.has(coordinated.role._id)) continue;
-    const partnerId = partnerOf.get(coordinated.role._id);
     seatStatesOf.set(coordinated.role._id, {
       before: normalizeStoredSeats(coordinated.role),
-      after: partnerId
-        ? normalizeStoredSeats(targetById.get(partnerId)?.role)
-        : normalizeStoredSeats(coordinated.role, replacementsOf.get(coordinated.role._id) ?? []),
+      after:
+        afterSeatsOf.get(coordinated.role._id) ??
+        normalizeStoredSeats(coordinated.role, replacementsOf.get(coordinated.role._id) ?? []),
     });
   }
 
@@ -330,4 +361,12 @@ function addReplacement(
   replacement: SeatPersonReplacement,
 ) {
   map.set(id, [...(map.get(id) ?? []), replacement]);
+}
+
+function sectionAssignees(seats: NormalizedSeats, path: SeatPath): string[] {
+  if (path === "Lead") return seats.leads;
+  if (path === "BGVs") return seats.bgvs;
+  if (path === "Chorus") return seats.chorus;
+  if (path === "instruments") return seats.instruments.map((slot) => slot.personId);
+  return seats.foh.map((slot) => slot.personId);
 }

@@ -11,17 +11,23 @@ import type { ServiceRole } from "../serviceCardModel";
 vi.mock("../PlannerGrid", () => ({
   default: ({
     columns,
+    rows,
     cells,
     onCellsChange,
+    onRowsChange,
     onStoredHeaderChange,
+    mutationLocked,
   }: {
     columns: GridColumn[];
     rows: GridRow[];
     cells: GridCell[];
     onCellsChange: (next: GridCell[]) => void;
+    onRowsChange: (next: GridRow[]) => void;
     onStoredHeaderChange?: (columnId: string, patch: { date?: string; serviceName?: string }) => void;
+    mutationLocked?: boolean;
   }) => (
     <div data-testid="stored-grid">
+      <span data-testid="stored-row-count">{rows.length}</span>
       {columns.map((column) => (
         <span key={column.columnId} data-testid="stored-column" data-column-id={column.columnId}>
           {column.columnId}
@@ -29,6 +35,7 @@ vi.mock("../PlannerGrid", () => ({
       ))}
       <button
         type="button"
+        disabled={mutationLocked}
         onClick={() => onCellsChange(cells.map((cell) =>
           cell.columnId === "role-a" && cell.rowId === "lead"
             ? { ...cell, occupants: [{ memberId: "member-new" }] }
@@ -39,6 +46,7 @@ vi.mock("../PlannerGrid", () => ({
       </button>
       <button
         type="button"
+        disabled={mutationLocked}
         onClick={() => onCellsChange(cells.map((cell) =>
           cell.columnId === "role-a" && cell.rowId === "lead"
             ? { ...cell, occupants: [...cell.occupants].reverse() }
@@ -47,11 +55,14 @@ vi.mock("../PlannerGrid", () => ({
       >
         Reordenar sin cambio
       </button>
-      <button type="button" onClick={() => onStoredHeaderChange?.("role-a", { date: "2026-03-01" })}>
+      <button type="button" disabled={mutationLocked} onClick={() => onStoredHeaderChange?.("role-a", { date: "2026-03-01" })}>
         Mover a marzo
       </button>
-      <button type="button" onClick={() => onStoredHeaderChange?.("role-a", { serviceName: "" })}>
+      <button type="button" disabled={mutationLocked} onClick={() => onStoredHeaderChange?.("role-a", { serviceName: "" })}>
         Vaciar nombre especial
+      </button>
+      <button type="button" disabled={mutationLocked} onClick={() => onRowsChange([...rows, { id: "instrumento:Nuevo", label: "Nuevo", category: "instrumento", target: 1 }])}>
+        Añadir fila simulada
       </button>
     </div>
   ),
@@ -67,6 +78,13 @@ const members = [
   "chorus-a",
   "instrument-a",
   "foh-a",
+  "bgv-b",
+  "bgv-c",
+  "bgv-d",
+  "instrument-b",
+  "instrument-c",
+  "foh-b",
+  "foh-c",
   "member-new",
 ].map((id) => ({ _id: id, member_name: id }));
 
@@ -159,25 +177,27 @@ function source(roles: ServiceRole[]) {
 
 function renderStored(roles: ServiceRole[], options: {
   openComposerInitially?: boolean;
+  initialMonth?: string;
   storedCapabilities?: ComponentProps<typeof MonthGenerator>["storedCapabilities"];
 } = {}) {
   const storedSource = source(roles);
+  const onClose = vi.fn();
   const result = render(
     <MonthGenerator
       mode="stored"
       members={members}
       existingRoles={roles}
       allRoles={roles}
-      initialMonth="2026-02"
+      initialMonth={options.initialMonth ?? "2026-02"}
       openComposerInitially={options.openComposerInitially}
       storedCapabilities={options.storedCapabilities}
       storedSource={storedSource}
       rules={readyRules()}
-      onClose={vi.fn()}
+      onClose={onClose}
       onCreated={vi.fn()}
     />,
   );
-  return { ...result, storedSource };
+  return { ...result, storedSource, onClose };
 }
 
 function response(status = 200, body: unknown = {}) {
@@ -291,6 +311,36 @@ describe("MonthGenerator — stored mode", () => {
     expect(bodies[1].creationRequestId).toBe(bodies[0].creationRequestId);
   });
 
+  it("treats a 500 with a pre-write-looking create code as unknown", async () => {
+    const fetchMock = vi.fn(async () => response(500, { error: "invalid_request" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { storedSource } = renderStored([], { openComposerInitially: true });
+
+    fireEvent.click(screen.getByRole("button", { name: "Crear vacío" }));
+
+    await waitFor(() => expect(storedSource.reload).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: "Reintentar misma solicitud" })).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the exact create retry disabled until unknown-outcome reload reconciliation finishes", async () => {
+    let finishReload: ((value: boolean) => void) | undefined;
+    const fetchMock = vi.fn(async () => { throw new Error("connection lost"); });
+    vi.stubGlobal("fetch", fetchMock);
+    const { storedSource } = renderStored([], { openComposerInitially: true });
+    storedSource.reload.mockImplementationOnce(() => new Promise<boolean>((resolve) => { finishReload = resolve; }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Crear vacío" }));
+    await waitFor(() => expect(screen.getByText(/Resultado de creación desconocido/)).toBeTruthy());
+    const inFlight = screen.getByRole("button", { name: "Creando…" }) as HTMLButtonElement;
+    expect(inFlight.disabled).toBe(true);
+    fireEvent.click(inFlight);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    finishReload?.(true);
+    await waitFor(() => expect((screen.getByRole("button", { name: "Reintentar misma solicitud" }) as HTMLButtonElement).disabled).toBe(false));
+  });
+
   it("gates create with its own capability even when stored editing is allowed", () => {
     renderStored([], {
       openComposerInitially: true,
@@ -365,49 +415,486 @@ describe("MonthGenerator — stored mode", () => {
     expect(screen.getByText(/Cerrar descarta 1 servicio con cambios/)).toBeTruthy();
   });
 
-  it("sends a seat swap using only stored role, revision, path, and item key", async () => {
+  it("sends the Aug 2/Aug 9 BGV section request and removes the old per-person action", async () => {
     const second = role({
       _id: "role-b",
       _rev: "rev-b",
-      date: "2026-02-08",
-      leads: [member("lead-b", "lead-key-b")],
+      date: "2026-08-09",
+      bgvs: [member("bgv-b", "bgv-key-b")],
     });
+    const first = role({ date: "2026-08-02" });
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => response());
     vi.stubGlobal("fetch", fetchMock);
-    renderStored([role(), second]);
+    renderStored([first, second], { initialMonth: "2026-08" });
 
-    fireEvent.change(screen.getByLabelText("Primera asignación"), {
-      target: { value: "role-a:Lead:lead-key-a" },
-    });
-    fireEvent.change(screen.getByLabelText("Segunda asignación"), {
-      target: { value: "role-b:Lead:lead-key-b" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Intercambiar puestos" }));
+    fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "BGVs" } });
+    fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
+    fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
+    fireEvent.click(screen.getByRole("button", { name: "Intercambiar sección" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("/api/admin/roles/swap");
     expect(JSON.parse(String(init?.body))).toEqual({
-      kind: "seat",
-      source: { roleId: "role-a", rev: "rev-a", path: "Lead", itemKey: "lead-key-a" },
-      target: { roleId: "role-b", rev: "rev-b", path: "Lead", itemKey: "lead-key-b" },
+      kind: "section",
+      path: "BGVs",
+      roles: [
+        { id: "role-a", rev: "rev-a" },
+        { id: "role-b", rev: "rev-b" },
+      ],
     });
+    expect(screen.queryByRole("button", { name: "Intercambiar puestos" })).toBeNull();
   });
 
-  it("refuses seat swaps while local grid changes are dirty", () => {
+  it("verifies the Aug 2/Aug 9 BGV swap against the positive canonical readback", async () => {
+    const first = role({ date: "2026-08-02", bgvs: [member("bgv-a", "bgv-key-a")] });
+    const second = role({
+      _id: "role-b",
+      _rev: "rev-b",
+      date: "2026-08-09",
+      bgvs: [member("bgv-b", "bgv-key-b")],
+    });
+    const firstSource = source([first, second]);
+    vi.stubGlobal("fetch", vi.fn(async () => response()));
+    const common = {
+      mode: "stored" as const,
+      members,
+      initialMonth: "2026-08",
+      rules: readyRules(),
+      onClose: vi.fn(),
+      onCreated: vi.fn(),
+    };
+    const { rerender } = render(
+      <MonthGenerator {...common} existingRoles={[first, second]} allRoles={[first, second]} storedSource={firstSource} />,
+    );
+    fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "BGVs" } });
+    fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
+    fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
+    fireEvent.click(screen.getByRole("button", { name: "Intercambiar sección" }));
+    await waitFor(() => expect(firstSource.reload).toHaveBeenCalledTimes(1));
+
+    const refreshedFirst = role({ date: "2026-08-02", bgvs: [member("bgv-b", "bgv-key-b")] });
+    const refreshedSecond = role({
+      _id: "role-b",
+      _rev: "rev-b-2",
+      date: "2026-08-09",
+      bgvs: [member("bgv-a", "bgv-key-a")],
+    });
+    const refreshedSource = source([refreshedFirst, refreshedSecond]);
+    refreshedSource.rolesGeneration = 2;
+    refreshedSource.integrityGeneration = 2;
+    rerender(
+      <MonthGenerator {...common} existingRoles={[refreshedFirst, refreshedSecond]} allRoles={[refreshedFirst, refreshedSecond]} storedSource={refreshedSource} />,
+    );
+
+    await waitFor(() => expect(screen.getByText("Intercambio guardado y verificado.")).toBeTruthy());
+  });
+
+  it("keeps empty sections selectable and disambiguates same-date special services", () => {
+    const roles = [
+      role({
+        _id: "special-a",
+        _rev: "special-rev-a",
+        _type: "special_role",
+        date: "2026-02-14",
+        service_name: "Bodas",
+        instruments: [],
+      }),
+      role({
+        _id: "special-b",
+        _rev: "special-rev-b",
+        _type: "special_role",
+        date: "2026-02-14",
+        service_name: "Vigilia",
+        instruments: [],
+      }),
+    ];
+    renderStored(roles);
+
+    fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "instruments" } });
+    const first = screen.getByLabelText("Primer servicio") as HTMLSelectElement;
+    expect([...first.options].map((option) => option.value)).toEqual(["", "special-a", "special-b"]);
+    expect([...first.options].map((option) => option.text)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/Especial · Bodas/),
+      expect.stringMatching(/Especial · Vigilia/),
+    ]));
+  });
+
+  it.each([
+    {
+      sectionLabel: "Instrumentos",
+      path: "instruments",
+      firstPatch: {
+        instruments: [
+          { _key: "bass-a", instrument: "Bajo", person: member("instrument-a", "ignored-a") },
+          { _key: "keys-a", instrument: "Teclados", person: member("instrument-b", "ignored-b") },
+        ],
+      },
+      secondPatch: {
+        instruments: [
+          { _key: "guitar-b", instrument: "Guitarra", person: member("instrument-c", "ignored-c") },
+        ],
+      },
+    },
+    {
+      sectionLabel: "FOH",
+      path: "foh_team",
+      firstPatch: {
+        foh: [
+          { _key: "console-a", role: "Consola", person: member("foh-a", "ignored-a") },
+          { _key: "audio-a", role: "Audio", person: member("foh-b", "ignored-b") },
+        ],
+      },
+      secondPatch: {
+        foh: [
+          { _key: "slides-b", role: "Letras", person: member("foh-c", "ignored-c") },
+        ],
+      },
+    },
+  ])("exchanges every $sectionLabel row, including source-only labels and unequal cardinality", async ({ path, firstPatch, secondPatch }) => {
+    const first = role({ date: "2026-08-02", ...firstPatch });
+    const second = role({ _id: "role-b", _rev: "rev-b", date: "2026-08-09", ...secondPatch });
+    const firstSource = source([first, second]);
+    const fetchMock = vi.fn(async () => response());
+    vi.stubGlobal("fetch", fetchMock);
+    const common = {
+      mode: "stored" as const,
+      members,
+      initialMonth: "2026-08",
+      rules: readyRules(),
+      onClose: vi.fn(),
+      onCreated: vi.fn(),
+    };
+    const { rerender } = render(
+      <MonthGenerator {...common} existingRoles={[first, second]} allRoles={[first, second]} storedSource={firstSource} />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Sección"), { target: { value: path } });
+    fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
+    fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
+    fireEvent.click(screen.getByRole("button", { name: "Intercambiar sección" }));
+    await waitFor(() => expect(firstSource.reload).toHaveBeenCalledTimes(1));
+
+    const refreshedFirst = role({ date: "2026-08-02", ...secondPatch });
+    const refreshedSecond = role({ _id: "role-b", _rev: "rev-b-2", date: "2026-08-09", ...firstPatch });
+    const refreshedSource = source([refreshedFirst, refreshedSecond]);
+    refreshedSource.rolesGeneration = 2;
+    refreshedSource.integrityGeneration = 2;
+    rerender(
+      <MonthGenerator {...common} existingRoles={[refreshedFirst, refreshedSecond]} allRoles={[refreshedFirst, refreshedSecond]} storedSource={refreshedSource} />,
+    );
+
+    await waitFor(() => expect(screen.getByText("Intercambio guardado y verificado.")).toBeTruthy());
+  });
+
+  it("keeps an equal-member readback pending when ordered keys do not match, without retrying", async () => {
+    const first = role({
+      date: "2026-08-02",
+      bgvs: [member("bgv-a", "a-1"), member("bgv-b", "a-2")],
+    });
+    const second = role({
+      _id: "role-b",
+      _rev: "rev-b",
+      date: "2026-08-09",
+      bgvs: [member("bgv-c", "b-1"), member("bgv-d", "b-2")],
+    });
+    const firstSource = source([first, second]);
+    const fetchMock = vi.fn(async () => response());
+    vi.stubGlobal("fetch", fetchMock);
+    const common = {
+      mode: "stored" as const,
+      members,
+      initialMonth: "2026-08",
+      rules: readyRules(),
+      onClose: vi.fn(),
+      onCreated: vi.fn(),
+    };
+    const { rerender } = render(
+      <MonthGenerator {...common} existingRoles={[first, second]} allRoles={[first, second]} storedSource={firstSource} />,
+    );
+    fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "BGVs" } });
+    fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
+    fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
+    fireEvent.click(screen.getByRole("button", { name: "Intercambiar sección" }));
+    await waitFor(() => expect(firstSource.reload).toHaveBeenCalledTimes(1));
+
+    const wrongFirst = role({
+      date: "2026-08-02",
+      bgvs: [member("bgv-c", "b-2"), member("bgv-d", "b-1")],
+    });
+    const correctSecond = role({
+      _id: "role-b",
+      _rev: "rev-b-2",
+      date: "2026-08-09",
+      bgvs: [member("bgv-a", "a-1"), member("bgv-b", "a-2")],
+    });
+    const refreshedSource = source([wrongFirst, correctSecond]);
+    refreshedSource.rolesGeneration = 2;
+    refreshedSource.integrityGeneration = 2;
+    rerender(
+      <MonthGenerator {...common} existingRoles={[wrongFirst, correctSecond]} allRoles={[wrongFirst, correctSecond]} storedSource={refreshedSource} />,
+    );
+
+    await waitFor(() => expect(screen.getByText(/no coincide con el intercambio solicitado/)).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect((screen.getByRole("button", { name: "Intercambiar sección" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it.each([
+    {
+      mismatch: "the exact stored label changes only by whitespace",
+      observed: [
+        { _key: "guitar-b", instrument: " Guitarra ", person: member("instrument-b", "ignored-b") },
+        { _key: "keys-b", instrument: "Teclados", person: member("instrument-c", "ignored-c") },
+      ],
+    },
+    {
+      mismatch: "the intact key/member/label pairs arrive in the wrong order",
+      observed: [
+        { _key: "keys-b", instrument: "Teclados", person: member("instrument-c", "ignored-c") },
+        { _key: "guitar-b", instrument: "Guitarra", person: member("instrument-b", "ignored-b") },
+      ],
+    },
+  ])("keeps an otherwise semantic instrument readback pending when $mismatch", async ({ observed }) => {
+    const firstInstruments = [
+      { _key: "bass-a", instrument: "Bajo", person: member("instrument-a", "ignored-a") },
+    ];
+    const secondInstruments = [
+      { _key: "guitar-b", instrument: "Guitarra", person: member("instrument-b", "ignored-b") },
+      { _key: "keys-b", instrument: "Teclados", person: member("instrument-c", "ignored-c") },
+    ];
+    const first = role({ date: "2026-08-02", instruments: firstInstruments });
+    const second = role({
+      _id: "role-b",
+      _rev: "rev-b",
+      date: "2026-08-09",
+      instruments: secondInstruments,
+    });
+    const firstSource = source([first, second]);
+    const fetchMock = vi.fn(async () => response());
+    vi.stubGlobal("fetch", fetchMock);
+    const common = {
+      mode: "stored" as const,
+      members,
+      initialMonth: "2026-08",
+      rules: readyRules(),
+      onClose: vi.fn(),
+      onCreated: vi.fn(),
+    };
+    const { rerender } = render(
+      <MonthGenerator {...common} existingRoles={[first, second]} allRoles={[first, second]} storedSource={firstSource} />,
+    );
+    fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "instruments" } });
+    fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
+    fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
+    fireEvent.click(screen.getByRole("button", { name: "Intercambiar sección" }));
+    await waitFor(() => expect(firstSource.reload).toHaveBeenCalledTimes(1));
+
+    const wrongFirst = role({ date: "2026-08-02", instruments: observed });
+    const correctSecond = role({
+      _id: "role-b",
+      _rev: "rev-b-2",
+      date: "2026-08-09",
+      instruments: firstInstruments,
+    });
+    const refreshedSource = source([wrongFirst, correctSecond]);
+    refreshedSource.rolesGeneration = 2;
+    refreshedSource.integrityGeneration = 2;
+    rerender(
+      <MonthGenerator {...common} existingRoles={[wrongFirst, correctSecond]} allRoles={[wrongFirst, correctSecond]} storedSource={refreshedSource} />,
+    );
+
+    await waitFor(() => expect(screen.getByText(/no coincide con el intercambio solicitado/)).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains section selections after a proven refusal", async () => {
+    const second = role({ _id: "role-b", _rev: "rev-b", date: "2026-02-08" });
+    vi.stubGlobal("fetch", vi.fn(async () => response(400, { error: "invalid_request" })));
+    renderStored([role(), second]);
+    fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "BGVs" } });
+    fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
+    fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
+    fireEvent.click(screen.getByRole("button", { name: "Intercambiar sección" }));
+
+    await waitFor(() => expect(screen.getByText(/No se intercambiaron las secciones/)).toBeTruthy());
+    expect((screen.getByLabelText("Primer servicio") as HTMLSelectElement).value).toBe("role-a");
+    expect((screen.getByLabelText("Segundo servicio") as HTMLSelectElement).value).toBe("role-b");
+  });
+
+  it("treats a 500 with a pre-write-looking swap code as unknown", async () => {
+    const second = role({ _id: "role-b", _rev: "rev-b", date: "2026-02-08" });
+    const fetchMock = vi.fn(async () => response(500, { error: "invalid_request" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { storedSource } = renderStored([role(), second]);
+    fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
+    fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
+    fireEvent.click(screen.getByRole("button", { name: "Intercambiar sección" }));
+
+    await waitFor(() => expect(storedSource.reload).toHaveBeenCalledTimes(1));
+    expect(screen.getByText(/resultado no verificable/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Intercambiar sección" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains section selections after an unknown transport outcome", async () => {
+    const second = role({ _id: "role-b", _rev: "rev-b", date: "2026-02-08" });
+    const fetchMock = vi.fn(async () => { throw new Error("connection lost"); });
+    vi.stubGlobal("fetch", fetchMock);
+    renderStored([role(), second]);
+    fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
+    fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
+    fireEvent.click(screen.getByRole("button", { name: "Intercambiar sección" }));
+
+    await waitFor(() => expect(screen.getByText(/Resultado desconocido/)).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect((screen.getByLabelText("Primer servicio") as HTMLSelectElement).value).toBe("role-a");
+    expect((screen.getByLabelText("Segundo servicio") as HTMLSelectElement).value).toBe("role-b");
+  });
+
+  it("disables a section swap when both service choices are the same role", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    renderStored([role()]);
+    fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
+    fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-a" } });
+
+    const action = screen.getByRole("button", { name: "Intercambiar sección" }) as HTMLButtonElement;
+    expect(action.disabled).toBe(true);
+    fireEvent.click(action);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("locks cell, header, row, team, create, and section mutations while the section request is in flight", async () => {
+    const second = role({ _id: "role-b", _rev: "rev-b", date: "2026-02-08" });
+    let finishRequest: ((value: ReturnType<typeof response>) => void) | undefined;
+    const fetchMock = vi.fn(() => new Promise<ReturnType<typeof response>>((resolve) => { finishRequest = resolve; }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, storedSource, onClose } = renderStored([role(), second]);
+    const initialRowCount = screen.getByTestId("stored-row-count").textContent;
+    fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
+    fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
+    fireEvent.click(screen.getByRole("button", { name: "Intercambiar sección" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    for (const name of ["Cambiar una celda", "Mover a marzo", "Añadir fila simulada", "+ Nuevo servicio", "Intercambiar sección"]) {
+      expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.click(screen.getByRole("button", { name }));
+    }
+    const teamButtons = container.querySelectorAll<HTMLButtonElement>("[data-swap-date]");
+    expect([...teamButtons].every((button) => button.disabled)).toBe(true);
+    teamButtons.forEach((button) => fireEvent.click(button));
+    expect((screen.getByLabelText("Sección") as HTMLSelectElement).disabled).toBe(true);
+    expect((screen.getByLabelText("Primer servicio") as HTMLSelectElement).disabled).toBe(true);
+    expect(screen.getByTestId("stored-row-count").textContent).toBe(initialRowCount);
+    expect((screen.getByRole("button", { name: "Guardando…" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getAllByRole("button", { name: "Cerrar" }).every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    finishRequest?.(response());
+    await waitFor(() => expect(storedSource.reload).toHaveBeenCalledTimes(1));
+    expect((screen.getByLabelText("Primer servicio") as HTMLSelectElement).value).toBe("");
+    expect((screen.getByLabelText("Segundo servicio") as HTMLSelectElement).value).toBe("");
+  });
+
+  it("disables section swaps while local grid changes are dirty", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    renderStored([role(), role({ _id: "role-b", _rev: "rev-b", date: "2026-02-08" })]);
+
+    fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
+    fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cambiar una celda" }));
+
+    expect((screen.getByRole("button", { name: "Intercambiar sección" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not start a stored write behind an open discard confirmation", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     renderStored([role()]);
 
-    fireEvent.change(screen.getByLabelText("Primera asignación"), {
-      target: { value: "role-a:Lead:lead-key-a" },
-    });
-    fireEvent.change(screen.getByLabelText("Segunda asignación"), {
-      target: { value: "role-a:BGVs:bgv-key-a" },
-    });
     fireEvent.click(screen.getByRole("button", { name: "Cambiar una celda" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Cerrar" })[0]!);
 
-    expect((screen.getByRole("button", { name: "Intercambiar puestos" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole("button", { name: "Cerrar de todos modos" })).toBeTruthy();
+    const save = screen.getByRole("button", { name: "Guardar 1 servicio" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    fireEvent.click(save);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("treats an added empty row as unresolved work before a swap", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { container } = renderStored([role(), role({ _id: "role-b", _rev: "rev-b", date: "2026-02-08" })]);
+
+    fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
+    fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
+    fireEvent.click(screen.getByRole("button", { name: "Añadir fila simulada" }));
+
+    expect((screen.getByRole("button", { name: "Intercambiar sección" }) as HTMLButtonElement).disabled).toBe(true);
+    expect([...container.querySelectorAll<HTMLButtonElement>("[data-swap-date]")].every((button) => button.disabled)).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("preserves an added empty row across an unrelated source reload", async () => {
+    const storedRole = role();
+    const firstSource = source([storedRole]);
+    const common = {
+      mode: "stored" as const,
+      members,
+      existingRoles: [storedRole],
+      allRoles: [storedRole],
+      initialMonth: "2026-02",
+      rules: readyRules(),
+      onClose: vi.fn(),
+      onCreated: vi.fn(),
+    };
+    const { rerender } = render(<MonthGenerator {...common} storedSource={firstSource} />);
+    const initialCount = Number(screen.getByTestId("stored-row-count").textContent);
+
+    fireEvent.click(screen.getByRole("button", { name: "Añadir fila simulada" }));
+    expect(Number(screen.getByTestId("stored-row-count").textContent)).toBe(initialCount + 1);
+
+    const refreshedRole = role({ _rev: "rev-a-2" });
+    const refreshedSource = source([refreshedRole]);
+    refreshedSource.rolesGeneration = 2;
+    refreshedSource.integrityGeneration = 2;
+    rerender(
+      <MonthGenerator
+        {...common}
+        existingRoles={[refreshedRole]}
+        allRoles={[refreshedRole]}
+        storedSource={refreshedSource}
+      />,
+    );
+
+    await waitFor(() => expect(Number(screen.getByTestId("stored-row-count").textContent)).toBe(initialCount + 1));
+  });
+
+  it("disables Chorus when either selected service is Saturday", () => {
+    const saturday = role({
+      _id: "role-sat",
+      _rev: "rev-sat",
+      _type: "saturday_role",
+      date: "2026-02-07",
+      chorus: [],
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    renderStored([role(), saturday]);
+    fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "Chorus" } });
+    fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
+    fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-sat" } });
+
+    const action = screen.getByRole("button", { name: "Intercambiar sección" }) as HTMLButtonElement;
+    expect(action.disabled).toBe(true);
+    expect(action.title).toBe("Coro no está disponible en servicios de sábado.");
+    fireEvent.click(action);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

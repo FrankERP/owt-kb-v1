@@ -122,6 +122,20 @@ Implementation began only after the user explicitly authorized it on 2026-08-04.
 - Added a route query-contract regression for the normalized boolean projection. Full verification passed: 135 test files / 3159 tests, TypeScript, diff check, and ESLint with 0 errors / 90 accepted warnings.
 - While rerunning the gate, restored the documented legacy `ParticipationRail` threshold sentence required by its existing source-contract test; the helper remains unmounted cleanup debt.
 
+## Post-preview correction — complete section swaps (2026-08-05)
+
+- User testing clarified that the second swap control was meant to exchange a complete section between two dates (for example, every BGV assignment on August 2 with every BGV assignment on August 9), not exchange one person with another.
+- The stored writer now accepts a section path plus two role ID/revision selections and derives both complete arrays from canonical server state. One guarded transaction swaps only that field; array order, `_key`, `_type`, labels, references, emptiness, and unequal cardinality travel unchanged.
+- The month editor replaces the per-person selectors with **Sección**, **Primer servicio**, **Segundo servicio**, and **Intercambiar sección**. The five choices are Líderes, BGV, Coro, Instrumentos, and FOH; services remain selectable even when the chosen section is empty.
+- Shared sections may cross service classes. Coro refuses a pair containing Saturday, and the existing hidden-Saturday-Coro integrity refusal remains fail-closed.
+- Section reconciliation adds ordered key/member/label fingerprints to the complete semantic snapshots. Equal member sets with wrong keys, order, or labels remain verification-pending and are never automatically retried.
+- A single stored-mutation lock now covers cells, headers, row add/remove, save/create, both whole-team clicks, and section controls through transport and reconciliation. This closes the pre-existing window where a local edit or second swap could be accepted and then overwritten by readback adoption.
+- Fresh integrated code review found two remaining loss windows: Close/Escape could unmount during active transport, and an empty custom row did not count as unresolved before a swap. Active stored transport now blocks both exits, and row-layout drift blocks team/section swaps until reverted or populated; deferred-request and empty-row regressions pin both corrections.
+- The final bounded correction pass also closes three related races: a discard confirmation opened before transport can no longer close the editor during that request; row-only local work prevents adoption of unrelated source reloads; and a typed error counts as a proven pre-write refusal only when its exact HTTP status also matches. All 5xx responses remain unknown outcomes and reconcile from readback even if their JSON body reuses an allowlisted error code.
+- Review accounting: the first review found the in-flight edit-loss window; the corrected digest received one cold approval; the next cold review found exact-fingerprint and overlapping-swap gaps. The loop then stopped at the churn cap under the user's token-efficiency direction. All three verified blockers were implemented; no claim is made that the final plan received two unchanged approvals.
+- Focused integrated verification passed 5 files / 254 tests. Full verification passed 135 files / 3191 tests, TypeScript, diff check, and ESLint with 0 errors / 90 accepted warnings.
+- No Sanity migration, direct content write, production deployment, or automatic retry was introduced.
+
 ## Final verification
 
 - Focused client command (`MonthGenerator.stored`, `PlannerGrid`, and `solverConfigSource`): 3 files and 104 tests passed. The production role-write path was verified separately by the 96-test route suite above.
