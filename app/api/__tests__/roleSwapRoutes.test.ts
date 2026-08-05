@@ -280,6 +280,17 @@ function specialRole(over: Record<string, unknown> = {}) {
   });
 }
 
+function saturdayRole(over: Record<string, unknown> = {}) {
+  return role({
+    _id: "role-sat",
+    _rev: "rev-sat",
+    _type: "saturday_role",
+    week: "2026-08-08",
+    Chorus: [],
+    ...over,
+  });
+}
+
 function lock(over: Record<string, unknown> = {}) {
   return {
     _id: "roleTarget.sunday_role.2026-08-09",
@@ -380,6 +391,24 @@ describe("POST /api/admin/roles/swap — seat swap", () => {
     const lockOps = ops.filter((o) => o.id.startsWith("roleTarget"));
     expect(lockOps.map((o) => o.rev).sort()).toEqual(["lock-rev-1", "lock-rev-2"]);
     expect(revalidateServiceViewsMock).toHaveBeenCalled();
+  });
+
+  it("refuses hidden Saturday Chorus before member resolution or coordination", async () => {
+    store.roles.push(saturdayRole({ Chorus: [ref("hidden", "mem-9")] }), role());
+    const res = await swapPOST(
+      req({
+        kind: "seat",
+        source: seat("role-sat", "rev-sat", "Lead", "a1"),
+        target: seat("role-1", "rev-1", "Lead", "a1"),
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      error: "integrity_conflict",
+      details: { detail: "hidden_saturday_chorus", roleId: "role-sat" },
+    });
+    expect(operationalFetch.mock.calls.some(([query]) => String(query).includes("teamMembers"))).toBe(false);
+    expect(transactions).toHaveLength(0);
   });
 
   it("swaps the same seat path across two services (two leads trading dates)", async () => {
@@ -726,6 +755,45 @@ describe("POST /api/admin/roles/swap — team swap", () => {
     expect(specialPatch.set.service_name).toBeUndefined();
   });
 
+  it.each([
+    ["Saturday first", [
+      { id: "role-sat", rev: "rev-sat" },
+      { id: "role-1", rev: "rev-1" },
+    ]],
+    ["Saturday second", [
+      { id: "role-1", rev: "rev-1" },
+      { id: "role-sat", rev: "rev-sat" },
+    ]],
+  ])("refuses incompatible team topology with %s", async (_name, roles) => {
+    store.roles.push(role(), saturdayRole());
+    const res = await swapPOST(req({ kind: "team", roles }));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      error: "invalid_request",
+      details: { issues: ["incompatible_team_topology"] },
+    });
+    expect(operationalFetch.mock.calls.some(([query]) => String(query).includes("teamMembers"))).toBe(false);
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("refuses hidden Saturday Chorus before planning a team write", async () => {
+    store.roles.push(saturdayRole({ Chorus: [ref("hidden", "mem-9")] }), saturdayRole({
+      _id: "role-sat-2",
+      _rev: "rev-sat-2",
+      week: "2026-08-15",
+    }));
+    const res = await swapPOST(req({
+      kind: "team",
+      roles: [
+        { id: "role-sat", rev: "rev-sat" },
+        { id: "role-sat-2", rev: "rev-sat-2" },
+      ],
+    }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).details.detail).toBe("hidden_saturday_chorus");
+    expect(transactions).toHaveLength(0);
+  });
+
   it("notifies the newly added assignees per destination role", async () => {
     store.roles.push(role(), otherRole());
     store.locks.push(lockFor("role-1", "2026-08-09", "lock-rev-1"), lockFor("role-2", "2026-08-16", "lock-rev-2"));
@@ -811,7 +879,7 @@ describe("POST /api/admin/roles/swap — team swap", () => {
     expect(transactions).toHaveLength(0);
   });
 
-  it("bootstraps a legacy weekend lock, then swaps from the produced revisions", async () => {
+  it("requires an explicit reload after bootstrapping a legacy weekend lock", async () => {
     store.roles.push(role(), otherRole());
     // role-2 owns no lock yet (legacy weekend target).
     store.locks.push(lockFor("role-1", "2026-08-09", "lock-rev-1"));
@@ -821,22 +889,40 @@ describe("POST /api/admin/roles/swap — team swap", () => {
       if (q.includes("_id == $id") && p.id === "role-2") {
         roleReads++;
         if (roleReads > 1) {
-          store.locks.push(lockFor("role-2", "2026-08-16", "lock-rev-boot"));
+          if (!store.locks.some((item) => item._id === "roleTarget.sunday_role.2026-08-16")) {
+            store.locks.push(lockFor("role-2", "2026-08-16", "lock-rev-boot"));
+          }
           return [otherRole({ _rev: "rev-2-after-boot" })];
         }
       }
       return canonicalRead(q, p);
     });
-    const res = await swapPOST(
+    const bootstrap = await swapPOST(
       req({ kind: "team", roles: [{ id: "role-1", rev: "rev-1" }, { id: "role-2", rev: "rev-2" }] }),
     );
-    expect(res.status).toBe(200);
-    expect(committedTransactions()).toHaveLength(2);
-    // 1) maintenance: guarded heartbeat of the unchanged target field + the lock.
+    expect(bootstrap.status).toBe(409);
+    expect(await bootstrap.json()).toMatchObject({ error: "bootstrap_completed_reload" });
+    expect(committedTransactions()).toHaveLength(1);
+    // The first request performs maintenance only: guarded heartbeat of the
+    // unchanged target field plus the missing lock, with no roster mutation.
     const boot = committedTransactions()[0].ops;
     expect(boot[0]).toMatchObject({ kind: "patch", id: "role-2", rev: "rev-2" });
     expect(boot[1]).toMatchObject({ kind: "create" });
-    // 2) business: continues ONLY from the produced revision.
+    expect(boot.some((op) => op.kind === "patch" && Object.hasOwn(op.set, "Lead"))).toBe(false);
+
+    // Only an explicit second request may perform the swap, using the role and
+    // lock revisions obtained by reloading after maintenance.
+    const res = await swapPOST(
+      req({
+        kind: "team",
+        roles: [
+          { id: "role-1", rev: "rev-1" },
+          { id: "role-2", rev: "rev-2-after-boot" },
+        ],
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(committedTransactions()).toHaveLength(2);
     const business = patches(committedTransactions()[1]);
     expect(business.find((o) => o.id === "role-2")?.rev).toBe("rev-2-after-boot");
     expect(business.some((o) => o.id === "roleTarget.sunday_role.2026-08-16" && o.rev === "lock-rev-boot")).toBe(true);

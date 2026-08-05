@@ -63,6 +63,7 @@ helpers: [`serviceMutation.ts`](../app/utils/serviceMutation.ts) (error model),
 [`proposalWriteRequest.ts`](../app/utils/proposalWriteRequest.ts),
 [`roleTargetLock.ts`](../app/utils/roleTargetLock.ts),
 [`roleCreationReceipt.ts`](../app/utils/roleCreationReceipt.ts),
+[`specialIdentityCoordinator.ts`](../app/utils/specialIdentityCoordinator.ts),
 [`roleDependencies.ts`](../app/utils/roleDependencies.ts).
 
 ### Error envelope
@@ -154,8 +155,9 @@ is the receipt). Deterministic `_id` `roleTarget.<roleType>.<date>` from the tar
 
 - `claimed` has exactly one non-empty `roleId` owning the same target; `vacate` clears `roleId` /
   `claimNonce` and **advances `generation`**. Deletion **vacates**, never deletes the lock.
-- **`special_role` takes no lock** — its target key is its own `_id`, so weekend lock derivation
-  returns `null` and a special service is serialized by its own document revision.
+- **`special_role` takes no weekend lock** — its target key is its own `_id`, so weekend lock
+  derivation returns `null`. Its revision serializes ordinary same-document changes; the global
+  coordinator below serializes identity claims that can involve different documents.
 - Every Sunday/Saturday writer asserts or heartbeats (`set updatedAt` under `ifRevisionId`) the
   owned lock **in the same business transaction**. Wrong-owner and orphan locks are integrity
   issues, never reclaimed implicitly.
@@ -167,6 +169,26 @@ business step then conflicts, the response is **`409 bootstrap_completed_reload`
 fields are unchanged and no notification/revalidation ran, but the lock and the advanced role
 revision intentionally persist. All body/id/type/cardinality, revision, raw-draft, ambiguity, and
 dependency validation runs **before** bootstrap, so an invalid request writes nothing at all.
+
+### Global `specialIdentityCoordinator`
+
+Special identity is the normalized `{date, service_name}` pair, so a role's own `_rev` cannot
+serialize two distinct documents trying to claim the same destination. Every special create and
+every date/name identity-changing PATCH therefore claims the deterministic internal document
+`specialIdentityCoordinator.global` in the same transaction as the business write.
+
+- The published-perspective operational loader accepts exactly zero or one row and refuses malformed
+  ID/type/revision/version/nonce/timestamp state as `integrity_conflict`; it never repairs state.
+- An absent coordinator is lazily `create`d at `version: 1` with a fresh `claimNonce`. There is no
+  migration or implementation-time production write.
+- A present coordinator is patched under its observed `_rev`; the claim advances `version` and writes
+  a fresh nonce/timestamp so the assertion cannot be a no-op.
+- A coordination conflict triggers new receipt, normalized-occupancy, and coordinator evidence. The
+  business transaction is never blindly replayed. An inert coordinator may remain after code rollback.
+
+The schema is hidden/read-only and the Studio removes every create, mutate, and delete affordance.
+See [DATA_MODEL](DATA_MODEL.md#specialidentitycoordinator--one-global-special-identity-mutex) and
+[ADR-0011](adr/0011-serialize-special-identities-globally.md).
 
 ### Dependency refusal policy
 
@@ -398,7 +420,7 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   as a non-editable `targetState`, `/api/song/[id]` and `/api/me/songs` drop it from play
   history, and `notifyProposalSubmitted` sends nothing.
 - **Protected mutations have no alternate path:** the API routes above are the only writers. The
-  embedded Studio strips every mutating action from all eight protected types, and the five historical
+  embedded Studio strips every mutating action from all eleven protected types, and the five historical
   one-shot scripts fail closed before constructing a client — see
   [DATA_MODEL → Studio](DATA_MODEL.md#studio) and
   [SOLVER_AND_INFRA §3](SOLVER_AND_INFRA.md#3-scripts--one-off-migrations-imports--ops).

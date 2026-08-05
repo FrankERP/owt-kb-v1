@@ -10,7 +10,7 @@ import { apiVersion } from './env'
 /**
  * Studio structure for the embedded Studio (Service Readiness A2 §8).
  *
- * The ten protected types are removed from the DEFAULT document-type list and
+ * The eleven protected types are removed from the DEFAULT document-type list and
  * re-offered only inside an explicitly labelled read-only inspection group, so
  * the ordinary "pick a type and edit it" path cannot reach them. Their documents
  * remain viewable — `readOnly: true` on the type makes the form non-editable and
@@ -21,7 +21,7 @@ import { apiVersion } from './env'
  * needs a pane at all.
  *
  * `documentList` (rather than `documentTypeList`) is used on purpose: it works
- * uniformly for the four `hidden: true` internal types, which have no
+ * uniformly for the five `hidden: true` internal types, which have no
  * `documentTypeListItem` to filter.
  */
 export const serviceReadinessStructure: StructureResolver = (S) => {

@@ -55,8 +55,8 @@ function reject(res: { status: number; body: unknown }) {
  * the five seat fields, so identity, date, service name, publication state, songs
  * and team notes are untouched.
  *
- * Same-role, weekend↔weekend, weekend↔special and special↔special all assert
- * every involved role revision and coordination token in ONE transaction, so a
+ * Same-role swaps, topology-compatible team swaps, and individual-seat swaps
+ * assert every involved role revision and coordination token in ONE transaction, so a
  * partial swap is impossible: any conflict rolls the whole thing back and returns
  * `409` with no business mutation.
  */
@@ -107,6 +107,39 @@ async function postHandler(req: NextRequest) {
     targets.push(loaded.target);
   }
   const targetById = new Map(targets.map((t) => [t.role._id, t]));
+
+  // ── Stored topology admission — before member reads or coordination ───────
+  // A Saturday never renders Chorus. Nonempty stored Chorus is therefore
+  // hidden data, not an assignment a swap may silently move or erase.
+  const hiddenSaturday = targets.find(
+    (target) =>
+      target.role._type === "saturday_role" &&
+      Array.isArray(target.role.Chorus) &&
+      target.role.Chorus.length > 0,
+  );
+  if (hiddenSaturday) {
+    return reject(
+      serviceError("integrity_conflict", {
+        details: { detail: "hidden_saturday_chorus", roleId: hiddenSaturday.role._id },
+      }),
+    );
+  }
+
+  if (request.kind === "team") {
+    const [first, second] = request.roles.map((selection) => targetById.get(selection.id)?.role);
+    if (!first || !second) {
+      return reject(serviceError("integrity_conflict", { details: { detail: "role_unresolved" } }));
+    }
+    const firstIsSaturday = first._type === "saturday_role";
+    const secondIsSaturday = second._type === "saturday_role";
+    if (firstIsSaturday !== secondIsSaturday) {
+      return reject(
+        serviceError("invalid_request", {
+          details: { issues: ["incompatible_team_topology"] },
+        }),
+      );
+    }
+  }
 
   // ── Plan the writes from stored state ─────────────────────────────────────
   /** `set` payload per role id. */

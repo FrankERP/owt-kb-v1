@@ -101,6 +101,19 @@ describe("sourceFromGet — absent and failed are different answers", () => {
     }
   });
 
+  it("a malformed successful response is `error` — only explicit false confirms absence", () => {
+    for (const malformed of [
+      {},
+      { present: null },
+      { present: "false" },
+      { present: 0 },
+    ]) {
+      const source = sourceFromGet(true, malformed);
+      expect(source.status).toBe("error");
+      expect(source).not.toHaveProperty("config");
+    }
+  });
+
   it("a present document with no usable rev is an ERROR, not an absent one", () => {
     // A document we cannot name a revision for is one we must not overwrite.
     // Calling it "absent" would put the client and the seed script's
@@ -202,7 +215,7 @@ describe("sameSolverConfig", () => {
 // machine). SOURCE assertions, in the style `studioProtection.test.ts` already
 // uses, are what stop the wiring from being dropped in a refactor with every
 // other test still green.
-describe("ServicesPanel wires ONE rule set to both surfaces", () => {
+describe("ServicesPanel wires ONE rule set to its roster surfaces", () => {
   const src = readFileSync(
     path.join(process.cwd(), "app/components/admin/ServicesPanel.tsx"),
     "utf8",
@@ -213,21 +226,55 @@ describe("ServicesPanel wires ONE rule set to both surfaces", () => {
     expect(src.match(/useSolverConfig\(\)/g) ?? []).toHaveLength(1);
   });
 
-  it("gives BOTH seat boards the same expression — not merely 'a config'", () => {
-    // The old pin was `toContain("config=")`, which a `config={undefined}` would
-    // have satisfied. This asserts the VALUE, and that the two mounts agree.
+  it("retires every SeatBoard mount after create and edit move to the month editor", () => {
     const mounts = src.match(/<SeatBoard[\s\S]*?\/>/g) ?? [];
-    expect(mounts.length, "expected the add and edit SeatBoard mounts").toBe(2);
-    for (const mount of mounts) {
-      expect(mount).toContain("config={enforceableConfig(rules.source)}");
-    }
+    expect(mounts).toHaveLength(0);
+    expect(src).not.toContain('from "./SeatBoard"');
   });
 
-  it("hands the generator the SAME controller object the boards read", () => {
+  it("hands every generator the SAME controller object", () => {
     // Two `useSolverConfig()` calls would read the same document through the
     // same code and still drift: save a rule in the generator, close it, open a
     // service, and the board would enforce the copy it fetched before the edit.
     expect(src).toMatch(/<MonthGenerator[\s\S]*?rules=\{rules\}[\s\S]*?\/>/);
+  });
+
+  it("mounts stored editing with independent role and integrity observations", () => {
+    expect(src).toMatch(/<MonthGenerator[\s\S]*?mode="stored"[\s\S]*?initialMonth=\{monthEditor\.month\}/);
+    expect(src).toContain("rolesStatus: sourceRecords.roles.status");
+    expect(src).toContain("integrityStatus: sourceRecords.roleTargets.status");
+    expect(src).toContain("rolesGeneration: sourceRecords.roles.generation");
+    expect(src).toContain("integrityGeneration: sourceRecords.roleTargets.generation");
+    expect(src).toContain('loadSources(["roles", "roleTargets"])');
+  });
+
+  it("routes card roster actions into the stored month editor", () => {
+    expect(src.match(/openMonthEditor\(card\.role\.date\.slice\(0, 7\), card\.role\._id, false, \{ kind: "card", roleId: card\.role\._id \}\)/g) ?? [])
+      .toHaveLength(2);
+    expect(src).toContain('data-card-id="${escaped}"');
+    expect(src).toContain("Editar mes");
+    expect(src).not.toContain('openEditModal({ type: "edit"');
+  });
+
+  it("routes Nuevo to the stored editor's safe create-one composer", () => {
+    expect(src).toMatch(/openMonthEditor\(selectedMonths\.size === 1 \? \[\.\.\.selectedMonths\]\[0\] : currentYM, undefined, true, \{ kind: "new" \}\)/);
+    expect(src).toContain("ref={newServiceTriggerRef}");
+    expect(src).toContain("openComposerInitially={monthEditor.openComposerInitially}");
+    expect(src).not.toContain('openEditModal({ type: "add"');
+  });
+
+  it("retires the legacy card swap entry after stored grid swaps ship", () => {
+    expect(src).not.toContain("const [swapMode");
+    expect(src).toContain("swapMode={false}");
+    expect(src).not.toContain("SwapConfirmModal");
+    expect(src).not.toContain("Modo intercambio activo");
+  });
+
+  it("allows the stored editor to show its own read-only and retry state", () => {
+    const opener = src.slice(src.indexOf("function openMonthEditor"), src.indexOf("// ── Render", src.indexOf("function openMonthEditor")));
+    expect(opener).toContain("if (openComposerInitially)");
+    expect(opener.match(/guardControl\(/g) ?? []).toHaveLength(1);
+    expect(opener).toContain('guardControl(sources, "createService")');
   });
 });
 
