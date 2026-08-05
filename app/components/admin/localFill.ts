@@ -54,9 +54,10 @@
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import { rankCandidates, type RankedCandidate, type RankMember } from "./candidateRanking";
 import {
-  assignedForDate,
+  assignedForColumn,
   cellsToParticipantRoles,
   hasTarget,
+  reconcileOccupants,
   resolveToMemberName,
   seatDefForRow,
   type GridCell,
@@ -104,7 +105,7 @@ export interface FillColumnResult {
    * per solver `unfilled_seats` string (`unfilledSeats.ts:30`) and whose `length`
    * `PlannerGrid` renders as a count of people missing.
    */
-  unfilled: { date: string; rowId: string }[];
+  unfilled: { columnId: string; rowId: string }[];
 }
 
 // ─── Fairness (P7b) ──────────────────────────────────────────────────────────
@@ -202,17 +203,18 @@ export function orderByEffectiveLoad(
 
 // ─── The fill ────────────────────────────────────────────────────────────────
 
-function withAutoCell(cells: GridCell[], date: string, rowId: string, memberIds: string[]): GridCell[] {
-  const idx = cells.findIndex((c) => c.date === date && c.rowId === rowId);
+function withAutoCell(cells: GridCell[], columnId: string, rowId: string, memberIds: string[]): GridCell[] {
+  const idx = cells.findIndex((c) => c.columnId === columnId && c.rowId === rowId);
   // `origin: "auto"`, matching `applySolveResponse` against `withUpdatedCell`'s
   // `"manual"`. Nothing reads the field for behaviour today; setting it
   // correctly keeps it meaningful if anything ever does. A cell that already
   // held a manual pick and then receives an auto one becomes `"auto"` — the
   // cell is no longer purely manual, and the field describes the cell, not each
   // occupant.
-  if (idx === -1) return [...cells, { date, rowId, memberIds, origin: "auto" }];
+  const occupants = reconcileOccupants(idx === -1 ? [] : cells[idx].occupants, memberIds);
+  if (idx === -1) return [...cells, { columnId, rowId, occupants, origin: "auto" }];
   const next = [...cells];
-  next[idx] = { ...next[idx], memberIds, origin: "auto" };
+  next[idx] = { ...next[idx], occupants, origin: "auto" };
   return next;
 }
 
@@ -234,7 +236,7 @@ function withAutoCell(cells: GridCell[], date: string, rowId: string, memberIds:
  */
 export function fillColumn(input: FillColumnInput): FillColumnResult {
   const { column, columns, rows, cells, members, savedWindow, config } = input;
-  const unfilled: { date: string; rowId: string }[] = [];
+  const unfilled: { columnId: string; rowId: string }[] = [];
   if (column.type !== "special_role") return { cells, unfilled };
 
   const fairness = fairnessByMemberId(config, members);
@@ -246,14 +248,17 @@ export function fillColumn(input: FillColumnInput): FillColumnResult {
     const target = row.target ?? 0;
     const seat = seatDefForRow(row);
 
-    let current = working.find((c) => c.date === column.date && c.rowId === row.id)?.memberIds ?? [];
+    let current =
+      working
+        .find((c) => c.columnId === column.columnId && c.rowId === row.id)
+        ?.occupants.map((o) => o.memberId) ?? [];
 
     while (current.length < target) {
       // STEP 3 — re-ranked against `working`, the assignment state as of THIS
       // placement. Hoisting any of these three out of the loop re-introduces the
       // pre-fill snapshot the whole module exists to avoid.
       const windowRoles = [...savedWindow, ...cellsToParticipantRoles(working, columns, members)];
-      const assigned = assignedForDate(working, rows, column.date);
+      const assigned = assignedForColumn(working, rows, column.columnId);
       const ranked = rankCandidates({
         seat,
         date: column.date,
@@ -278,13 +283,15 @@ export function fillColumn(input: FillColumnInput): FillColumnResult {
       // STEP 5 — an empty seat is the correct output. One entry per seat still
       // missing, then on to the next row; no relaxation, no second pass.
       if (pool.length === 0) {
-        for (let i = current.length; i < target; i++) unfilled.push({ date: column.date, rowId: row.id });
+        for (let i = current.length; i < target; i++) {
+          unfilled.push({ columnId: column.columnId, rowId: row.id });
+        }
         break;
       }
 
       const pick = orderByEffectiveLoad(pool, fairness)[0];
       current = [...current, pick.id];
-      working = withAutoCell(working, column.date, row.id, current);
+      working = withAutoCell(working, column.columnId, row.id, current);
     }
   }
 

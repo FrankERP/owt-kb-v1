@@ -1,6 +1,6 @@
 // Static audit of protected-type query sites (Service Readiness A1 §1/§3, A2 §8/item 12).
 //
-// The six protected stored types must be read through the canonical operational
+// The protected service and coordination types must be read through the canonical operational
 // clients (`sanity/lib/operationalClient`). This module statically detects every
 // git-tracked query site that reads or writes a protected type through any other
 // Sanity client, so a new direct read cannot land unnoticed.
@@ -24,6 +24,7 @@ export const PROTECTED_TYPES = [
   // Deliberate stored typo (Saturday setlist). Never rename — it would orphan data.
   "saturdarSongs",
   "setlistProposal",
+  "specialIdentityCoordinator",
 ] as const;
 
 export type ProtectedType = (typeof PROTECTED_TYPES)[number];
@@ -94,6 +95,7 @@ const PROTECTED_LOADER_HELPERS = [
   "loadCanonicalRole",
   "loadCanonicalProposal",
   "resolveOwnedCoordination",
+  "loadSpecialIdentityCoordinator",
 ] as const;
 
 const PROTECTED_LOADER_RE = new RegExp(`\\b(${PROTECTED_LOADER_HELPERS.join("|")})\\s*\\(`);

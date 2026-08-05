@@ -80,6 +80,8 @@ export interface RuleRow {
   id: string;
 }
 
+type RuleColumn = Pick<GridColumn, "type" | "date">;
+
 export type RuleVerdict = { blocked: true; reason: string } | { blocked: false };
 
 const NOT_BLOCKED: RuleVerdict = { blocked: false };
@@ -180,7 +182,7 @@ export function parsePattern(pattern: string): ParsedPattern | null {
  */
 export function patternMatches(
   pattern: string,
-  column: GridColumn | undefined,
+  column: RuleColumn | undefined,
   row: RuleRow,
 ): boolean {
   if (!column) return false;
@@ -285,7 +287,7 @@ export interface EvaluateInput {
   member: RankMember;
   row: RuleRow;
   /** Absent ⇒ no rule can be scoped, so nothing is blocked. See `patternMatches`. */
-  column?: GridColumn;
+  column?: RuleColumn;
   /**
    * The month's FULL Sunday spine, positional and 1-based — the same list
    * `weekForColumn` needs (`plannerModel.ts:575-585`). `GridColumn` carries no
@@ -475,10 +477,10 @@ export interface SeatedViolation {
  * contribute.
  */
 export function ruleViolationsForColumn(input: {
-  column: GridColumn;
+  column: RuleColumn;
   /** Every row the column can hold; only ids are read. */
   rows: RuleRow[];
-  /** Everyone seated on this column — `assignedForDate`'s output. */
+  /** Everyone seated on this column — `assignedForColumn`'s output. */
   assigned: AssignedSeat[];
   members: RankMember[];
   sundayDates?: string[];

@@ -21,6 +21,8 @@ export const SERVICE_CONFLICT_CODES = [
   "idempotency_key_retired",
   /** Legacy lock bootstrap committed, then a later business conflict occurred. */
   "bootstrap_completed_reload",
+  /** Legacy lock bootstrap persistence could not be proved either way. */
+  "bootstrap_outcome_unknown",
   /** Create target already carries orphaned setlist/proposal history. */
   "target_has_orphaned_dependencies",
   /** Old or destination date of a move carries dependent history. */
@@ -70,6 +72,8 @@ const DEFAULT_MESSAGES: Record<ServiceErrorCode, string> = {
     "This creation request id belongs to a deleted service and cannot be reused.",
   bootstrap_completed_reload:
     "Legacy coordination state was repaired, but your change did not apply. Reload and retry.",
+  bootstrap_outcome_unknown:
+    "Legacy coordination persistence could not be verified. Stop writes and reconcile before retrying.",
   target_has_orphaned_dependencies:
     "This target already has setlist or proposal history and will not be adopted automatically.",
   role_date_has_dependencies:

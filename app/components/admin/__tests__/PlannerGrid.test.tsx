@@ -21,6 +21,19 @@ import type { RankMember } from "../candidateRanking";
 import type { TargetPreflight } from "../serviceReadiness";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 
+type InputGridCell = GridCell | {
+  date: string;
+  rowId: string;
+  memberIds: string[];
+  origin: GridCell["origin"];
+  overrides?: string[];
+  overrideReasons?: Record<string, string>;
+};
+
+type PlannerGridTestOverrides = Omit<Partial<PlannerGridProps>, "cells"> & {
+  cells?: InputGridCell[];
+};
+
 afterEach(() => cleanup());
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -55,11 +68,23 @@ const members: RankMember[] = [
   { _id: "f1", member_name: "Rene", memberType: ["foh"] },
 ];
 
-function baseProps(overrides: Partial<PlannerGridProps> = {}): PlannerGridProps {
+function baseProps(overrides: PlannerGridTestOverrides = {}): PlannerGridProps {
+  const columns = overrides.columns ?? SUNDAY_ONLY;
+  const cells = (overrides.cells ?? []).map((cell): GridCell => {
+    if ("columnId" in cell) return cell;
+    const column = columns.find((candidate) => candidate.date === cell.date);
+    if (!column) throw new Error(`no test column for ${cell.date}`);
+    return {
+      columnId: column.columnId,
+      rowId: cell.rowId,
+      occupants: cell.memberIds.map((memberId) => ({ memberId })),
+      origin: cell.origin,
+      overrides: cell.overrides,
+      overrideReasons: cell.overrideReasons,
+    };
+  });
   return {
     rows: ROWS,
-    columns: SUNDAY_ONLY,
-    cells: [],
     members,
     savedWindow: [],
     preflightFor: () => null,
@@ -75,6 +100,8 @@ function baseProps(overrides: Partial<PlannerGridProps> = {}): PlannerGridProps 
     autoState: { pending: false, error: null, disabledReason: null },
     diagnostics: null,
     ...overrides,
+    columns,
+    cells,
   };
 }
 
@@ -82,6 +109,12 @@ function baseProps(overrides: Partial<PlannerGridProps> = {}): PlannerGridProps 
 function cellFor(container: HTMLElement, rowId: string, date: string): HTMLElement {
   const el = container.querySelector(`[data-row-id="${rowId}"][data-date="${date}"]`);
   if (!el) throw new Error(`cell not found for rowId=${rowId} date=${date}`);
+  return el as HTMLElement;
+}
+
+function cellForColumn(container: HTMLElement, rowId: string, columnId: string): HTMLElement {
+  const el = container.querySelector(`[data-row-id="${rowId}"][data-column-id="${columnId}"]`);
+  if (!el) throw new Error(`cell not found for rowId=${rowId} columnId=${columnId}`);
   return el as HTMLElement;
 }
 
@@ -102,6 +135,27 @@ function candidateLi(name: string): HTMLLIElement {
 }
 
 describe("PlannerGrid — shape", () => {
+  it("isolates same-date columns by columnId", () => {
+    const columns: GridColumn[] = [
+      { columnId: "role-a", date: "2026-08-12", type: "special_role", serviceName: "Vigilia" },
+      { columnId: "role-b", date: "2026-08-12", type: "special_role", serviceName: "Retiro" },
+    ];
+    const cells: GridCell[] = [
+      { columnId: "role-a", rowId: "lead", occupants: [{ memberId: "m1" }], origin: "manual" },
+      { columnId: "role-b", rowId: "lead", occupants: [{ memberId: "m2" }], origin: "manual" },
+    ];
+    const onCellsChange = vi.fn();
+    const { container } = render(<PlannerGrid {...baseProps({ columns, cells, onCellsChange })} />);
+    expect(within(cellForColumn(container, "lead", "role-a")).getByText("Frank")).toBeTruthy();
+    expect(within(cellForColumn(container, "lead", "role-b")).getByText("Gaby")).toBeTruthy();
+
+    fireEvent.click(cellForColumn(container, "lead", "role-b"));
+    fireEvent.click(candidateLi("Liu"));
+    const next = onCellsChange.mock.calls[0][0] as GridCell[];
+    expect(next.find((cell) => cell.columnId === "role-a")?.occupants.map((o) => o.memberId)).toEqual(["m1"]);
+    expect(next.find((cell) => cell.columnId === "role-b")?.occupants.map((o) => o.memberId)).toEqual(["m2", "m3"]);
+  });
+
   it("renders rows from props and columns from props", () => {
     render(<PlannerGrid {...baseProps()} />);
     expect(screen.getByText("Lead")).toBeTruthy();
@@ -120,7 +174,7 @@ describe("PlannerGrid — shape", () => {
   });
 
   it("has no scroll region nested inside another (checked on BOTH axes — this scroller is overflow-x-auto, not overflow-y-auto)", () => {
-    const cells: GridCell[] = [{ date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "manual" }];
+    const cells: InputGridCell[] = [{ date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "manual" }];
     const { container } = render(<PlannerGrid {...baseProps({ cells })} />);
     // Open the candidate picker too, so an overflow-y-auto scroller (the
     // roster list) exists simultaneously — otherwise this test would pass
@@ -165,7 +219,7 @@ describe("PlannerGrid — Domingos unchecked (D9)", () => {
   const satOnly = buildColumns({ sundayDates: [], activeSatDates: ["2026-08-08"] });
 
   it("Auto is ENABLED, produces Saturday cells, and renders no Sunday column", () => {
-    const cells: GridCell[] = [{ date: "2026-08-08", rowId: "lead", memberIds: ["m1"], origin: "auto" }];
+    const cells: InputGridCell[] = [{ date: "2026-08-08", rowId: "lead", memberIds: ["m1"], origin: "auto" }];
     const { container } = render(<PlannerGrid {...baseProps({ columns: satOnly, cells })} />);
     expect(screen.queryByText("Domingo")).toBeNull();
     expect(screen.getByText("Sábado")).toBeTruthy();
@@ -182,7 +236,7 @@ describe("PlannerGrid — cell density (D7)", () => {
     // holds two voice slots on one service (fact 4) — the fixture would be
     // self-contradictory (and would trip the duplicate-surfacing flag,
     // testing the wrong thing) if any of Lead/BGV/Coro overlapped here.
-    const cells: GridCell[] = [
+    const cells: InputGridCell[] = [
       { date: "2026-08-09", rowId: "lead", memberIds: ["v1", "v2"], origin: "auto" },
       { date: "2026-08-09", rowId: "bgv", memberIds: ["v3", "v4", "v5"], origin: "auto" },
       { date: "2026-08-09", rowId: "coro", memberIds: ["v6", "v7", "v8"], origin: "auto" },
@@ -195,7 +249,7 @@ describe("PlannerGrid — cell density (D7)", () => {
   });
 
   it("+N appears only above target on a solvable row, is keyboard-reachable, and carries no title", () => {
-    const cells: GridCell[] = [
+    const cells: InputGridCell[] = [
       { date: "2026-08-09", rowId: "lead", memberIds: ["m1", "m2", "m3"], origin: "auto" }, // target 2, +1
     ];
     const { container } = render(<PlannerGrid {...baseProps({ cells })} />);
@@ -212,7 +266,7 @@ describe("PlannerGrid — cell density (D7)", () => {
     // `isSolvable` is false for every row on a special (E4/E5). Gating the cap
     // on it — as this component used to — would silently drop both the cap and
     // the amber over-target warning on every special column.
-    const cells: GridCell[] = [
+    const cells: InputGridCell[] = [
       { date: "2026-08-12", rowId: "lead", memberIds: ["m1", "m2", "m3"], origin: "manual" }, // target 2, +1
     ];
     const { container } = render(<PlannerGrid {...baseProps({ columns: SPECIAL_ONLY, cells })} />);
@@ -226,7 +280,7 @@ describe("PlannerGrid — cell density (D7)", () => {
   });
 
   it("on a non-solvable row (Drums), TWO occupants render both names and no +N", () => {
-    const cells: GridCell[] = [
+    const cells: InputGridCell[] = [
       { date: "2026-08-09", rowId: "instrumento:Drums", memberIds: ["d1", "d2"], origin: "manual" },
     ];
     const { container } = render(<PlannerGrid {...baseProps({ cells })} />);
@@ -237,7 +291,7 @@ describe("PlannerGrid — cell density (D7)", () => {
   });
 
   it("above target, a solvable cell still accepts a new occupant (D6) — no cell ever replaces", () => {
-    const cells: GridCell[] = [
+    const cells: InputGridCell[] = [
       { date: "2026-08-09", rowId: "lead", memberIds: ["m1", "m2", "m3"], origin: "auto" },
     ];
     const onCellsChange = vi.fn();
@@ -246,12 +300,12 @@ describe("PlannerGrid — cell density (D7)", () => {
     fireEvent.click(screen.getByText("Mkz"));
     expect(onCellsChange).toHaveBeenCalledTimes(1);
     const next: GridCell[] = onCellsChange.mock.calls[0][0];
-    const lead = next.find((c) => c.rowId === "lead" && c.date === "2026-08-09")!;
-    expect(lead.memberIds.sort()).toEqual(["m1", "m2", "m3", "m4"].sort());
+    const lead = next.find((c) => c.rowId === "lead" && c.columnId === SUNDAY_ONLY[0].columnId)!;
+    expect(lead.occupants.map((o) => o.memberId).sort()).toEqual(["m1", "m2", "m3", "m4"].sort());
   });
 
   it("an over-target solvable cell carries a Spanish text warning, not just a border color (Finding 6)", () => {
-    const cells: GridCell[] = [
+    const cells: InputGridCell[] = [
       { date: "2026-08-09", rowId: "lead", memberIds: ["m1", "m2", "m3"], origin: "auto" }, // target 2, +1
     ];
     const { container } = render(<PlannerGrid {...baseProps({ cells })} />);
@@ -260,7 +314,7 @@ describe("PlannerGrid — cell density (D7)", () => {
   });
 
   it("a non-solvable Drums cell with two occupants never replaces a third addition", () => {
-    const cells: GridCell[] = [
+    const cells: InputGridCell[] = [
       { date: "2026-08-09", rowId: "instrumento:Drums", memberIds: ["d1", "d2"], origin: "manual" },
     ];
     const onCellsChange = vi.fn();
@@ -269,13 +323,13 @@ describe("PlannerGrid — cell density (D7)", () => {
     fireEvent.click(screen.getByText("Fanta"));
     const next: GridCell[] = onCellsChange.mock.calls[0][0];
     const drums = next.find((c) => c.rowId === "instrumento:Drums")!;
-    expect(drums.memberIds.sort()).toEqual(["d1", "d2", "d3"].sort());
+    expect(drums.occupants.map((o) => o.memberId).sort()).toEqual(["d1", "d2", "d3"].sort());
   });
 });
 
 describe("PlannerGrid — ranking (D12)", () => {
   it("clicking a cell opens the ranked list, with `assigned` built from that date's whole column", () => {
-    const cells: GridCell[] = [{ date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "manual" }];
+    const cells: InputGridCell[] = [{ date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "manual" }];
     const { container } = render(<PlannerGrid {...baseProps({ cells })} />);
     fireEvent.click(cellFor(container, "bgv", "2026-08-09"));
     // Frank (m1) already holds a voz seat (Lead) on this date -> blocked in BGV.
@@ -327,7 +381,7 @@ describe("PlannerGrid — ranking (D12)", () => {
       { _id: "zoe", member_name: "Zoe", memberType: ["voz"] },
     ];
     const columns = buildColumns({ sundayDates: ["2026-08-02", "2026-08-09"], activeSatDates: [] });
-    const cells: GridCell[] = [{ date: "2026-08-02", rowId: "lead", memberIds: ["ana"], origin: "auto" }];
+    const cells: InputGridCell[] = [{ date: "2026-08-02", rowId: "lead", memberIds: ["ana"], origin: "auto" }];
     const { container } = render(<PlannerGrid {...baseProps({ columns, cells, members: localMembers })} />);
     fireEvent.click(cellFor(container, "lead", "2026-08-09"));
     const items = screen.getAllByRole("button").filter((el) => el.tagName === "LI");
@@ -446,7 +500,7 @@ describe("PlannerGrid — candidate order frozen while the picker is open", () =
 
 describe("PlannerGrid — manual pick blocking (D6)", () => {
   it("REFUSES a same-category double, exactly as SeatBoard does", () => {
-    const cells: GridCell[] = [{ date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "manual" }];
+    const cells: InputGridCell[] = [{ date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "manual" }];
     const onCellsChange = vi.fn();
     const { container } = render(<PlannerGrid {...baseProps({ cells, onCellsChange })} />);
     fireEvent.click(cellFor(container, "bgv", "2026-08-09"));
@@ -457,7 +511,7 @@ describe("PlannerGrid — manual pick blocking (D6)", () => {
   });
 
   it("does NOT block cross-category double duty (voz + instrumento)", () => {
-    const cells: GridCell[] = [{ date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "manual" }];
+    const cells: InputGridCell[] = [{ date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "manual" }];
     const membersWithBoth: RankMember[] = [
       { _id: "m1", member_name: "Frank", memberType: ["voz", "instrumento"] },
       ...members.slice(1),
@@ -476,7 +530,7 @@ describe("PlannerGrid — manual pick blocking (D6)", () => {
 
 describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
   it("surfaces a same-category duplicate against BOTH cells", () => {
-    const cells: GridCell[] = [
+    const cells: InputGridCell[] = [
       { date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "auto" },
       { date: "2026-08-09", rowId: "bgv", memberIds: ["m1"], origin: "auto" },
     ];
@@ -488,7 +542,7 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
   });
 
   it("does NOT flag cross-category double duty (voz + instrumento)", () => {
-    const cells: GridCell[] = [
+    const cells: InputGridCell[] = [
       { date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "auto" },
       { date: "2026-08-09", rowId: "instrumento:Bass", memberIds: ["m1"], origin: "manual" },
     ];
@@ -503,7 +557,7 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
     // be flagged. `duplicates` is keyed by member alone across the whole
     // date, so checking `duplicates.has(id)` without also checking that
     // THIS row participates would incorrectly paint the Bass chip red too.
-    const cells: GridCell[] = [
+    const cells: InputGridCell[] = [
       { date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "manual" },
       { date: "2026-08-09", rowId: "bgv", memberIds: ["m1"], origin: "auto" },
       { date: "2026-08-09", rowId: "instrumento:Bass", memberIds: ["m1"], origin: "manual" },
@@ -523,7 +577,7 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
     // them. Assigning instead of appending keeps only the last category's rows,
     // so the voz duplicate silently stops being flagged — the very thing the
     // function exists to catch.
-    const cells: GridCell[] = [
+    const cells: InputGridCell[] = [
       // ONE member doubled in BOTH categories — that is what makes an
       // overwrite lose a flag. Two different members would never collide.
       { date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "manual" },
@@ -541,7 +595,7 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
   });
 
   it("clears the row-removal refusal once a cell is edited again", () => {
-    const cells: GridCell[] = [
+    const cells: InputGridCell[] = [
       { date: "2026-08-09", rowId: "instrumento:Bass", memberIds: ["d1"], origin: "manual" },
     ];
     const { container, queryByText } = render(<PlannerGrid {...baseProps({ cells })} />);
@@ -562,7 +616,7 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
     // duplicate — but the old code only ever checked `visibleIds`, so a
     // duplicate sitting in the hidden tail was invisible exactly when +N
     // exists (an over-target cell).
-    const cells: GridCell[] = [
+    const cells: InputGridCell[] = [
       { date: "2026-08-09", rowId: "lead", memberIds: ["m2", "m3", "m1"], origin: "auto" },
       { date: "2026-08-09", rowId: "bgv", memberIds: ["m1"], origin: "auto" },
     ];
@@ -593,7 +647,7 @@ describe("PlannerGrid — Auto contract (D15)", () => {
   });
 
   it("renders a solver ok:false reason and leaves the grid untouched", () => {
-    const cells: GridCell[] = [{ date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "manual" }];
+    const cells: InputGridCell[] = [{ date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "manual" }];
     const { rerender } = render(
       <PlannerGrid {...baseProps({ cells, autoState: { pending: false, error: null, disabledReason: null } })} />,
     );
@@ -685,13 +739,13 @@ describe("PlannerGrid — unresolvedNames and unfilled surfacing", () => {
   });
 
   it("surfaces mapUnfilledSeats output against the specific row and date", () => {
-    const { container } = render(<PlannerGrid {...baseProps({ unfilled: [{ date: "2026-08-09", rowId: "coro" }] })} />);
+    const { container } = render(<PlannerGrid {...baseProps({ unfilled: [{ columnId: SUNDAY_ONLY[0].columnId, rowId: "coro" }] })} />);
     const coroCell = cellFor(container, "coro", "2026-08-09");
     expect(within(coroCell).getByText(/sin cubrir/i)).toBeTruthy();
   });
 
   it("keeps the degradation explainer alongside the short-staffing signal", () => {
-    render(<PlannerGrid {...baseProps({ unfilled: [{ date: "2026-08-09", rowId: "coro" }] })} />);
+    render(<PlannerGrid {...baseProps({ unfilled: [{ columnId: SUNDAY_ONLY[0].columnId, rowId: "coro" }] })} />);
     expect(screen.getByText(/el líder siempre se asigna/i)).toBeTruthy();
     expect(screen.getByText(/lugares sin cubrir/i)).toBeTruthy();
   });
@@ -714,15 +768,15 @@ describe("PlannerGrid — diagnostics", () => {
 });
 
 describe("PlannerGrid — per-column skip control (D18)", () => {
-  it("calls onToggleSkip(date) and reflects the skipped set", () => {
+  it("calls onToggleSkip(columnId) and reflects the skipped set", () => {
     const onToggleSkip = vi.fn();
     const { rerender } = render(<PlannerGrid {...baseProps({ onToggleSkip })} />);
     const checkbox = screen.getByLabelText("Omitir 2026-08-09") as HTMLInputElement;
     expect(checkbox.checked).toBe(false);
     fireEvent.click(checkbox);
-    expect(onToggleSkip).toHaveBeenCalledWith("2026-08-09");
+    expect(onToggleSkip).toHaveBeenCalledWith(SUNDAY_ONLY[0].columnId);
 
-    rerender(<PlannerGrid {...baseProps({ onToggleSkip, skipped: new Set(["2026-08-09"]) })} />);
+    rerender(<PlannerGrid {...baseProps({ onToggleSkip, skipped: new Set([SUNDAY_ONLY[0].columnId]) })} />);
     const checkbox2 = screen.getByLabelText("Omitir 2026-08-09") as HTMLInputElement;
     expect(checkbox2.checked).toBe(true);
   });
@@ -749,7 +803,7 @@ describe("PlannerGrid — row management", () => {
   });
 
   it("refuses to remove a row that holds occupants, with a reason", () => {
-    const cells: GridCell[] = [
+    const cells: InputGridCell[] = [
       { date: "2026-08-09", rowId: "instrumento:Drums", memberIds: ["d1"], origin: "manual" },
     ];
     const onRowsChange = vi.fn();
@@ -779,7 +833,7 @@ describe("PlannerGrid — row management", () => {
     // whatever condition caused it if the row is emptied by some OTHER
     // path (Auto, a manual pick clearing the last occupant, `cells` simply
     // changing under a controlled re-render).
-    const cells: GridCell[] = [
+    const cells: InputGridCell[] = [
       { date: "2026-08-09", rowId: "instrumento:Drums", memberIds: ["d1"], origin: "manual" },
     ];
     const { rerender } = render(<PlannerGrid {...baseProps({ cells })} />);
@@ -794,7 +848,7 @@ describe("PlannerGrid — row management", () => {
 describe("PlannerGrid — copy across dates (fact 26, grid-only)", () => {
   it("copies an instrument row's occupants to every other date in the grid", () => {
     const columns = buildColumns({ sundayDates: ["2026-08-02", "2026-08-09"], activeSatDates: [] });
-    const cells: GridCell[] = [
+    const cells: InputGridCell[] = [
       { date: "2026-08-02", rowId: "instrumento:Drums", memberIds: ["d1", "d2"], origin: "manual" },
     ];
     const onCellsChange = vi.fn();
@@ -803,8 +857,10 @@ describe("PlannerGrid — copy across dates (fact 26, grid-only)", () => {
     fireEvent.click(within(sourceCell).getByRole("button", { name: /copiar a todo el mes/i }));
     expect(onCellsChange).toHaveBeenCalledTimes(1);
     const next: GridCell[] = onCellsChange.mock.calls[0][0];
-    const copied = next.find((c) => c.rowId === "instrumento:Drums" && c.date === "2026-08-09");
-    expect(copied?.memberIds.sort()).toEqual(["d1", "d2"]);
+    const copied = next.find(
+      (c) => c.rowId === "instrumento:Drums" && c.columnId === columns[1].columnId,
+    );
+    expect(copied?.occupants.map((o) => o.memberId).sort()).toEqual(["d1", "d2"]);
   });
 });
 
@@ -830,11 +886,11 @@ const CONFLICT_CONFIG: SolverConfig = {
   presence: [],
 };
 
-const FRANK_ON_LEAD: GridCell[] = [
+const FRANK_ON_LEAD: InputGridCell[] = [
   { date: SPECIAL_DATE, rowId: "lead", memberIds: ["m1"], origin: "manual" },
 ];
 
-const specialProps = (over: Partial<PlannerGridProps> = {}) =>
+const specialProps = (over: PlannerGridTestOverrides = {}) =>
   baseProps({ columns: SPECIAL_ONLY, config: CONFLICT_CONFIG, ...over });
 
 /** The picker's secondary override action, if the open picker offers one. */
@@ -888,7 +944,7 @@ describe("PlannerGrid — E6 hard blocks on a manual pick", () => {
     const frank = candidateLi("Frank");
     expect(frank.getAttribute("aria-disabled")).toBeNull();
     fireEvent.click(frank);
-    expect(onCellsChange.mock.calls[0][0].find((c: GridCell) => c.rowId === "lead").memberIds).toEqual([]);
+    expect(onCellsChange.mock.calls[0][0].find((c: GridCell) => c.rowId === "lead").occupants).toEqual([]);
   });
 
   it("threads `sundayDates`, so a WEEK exclusion reaches the weekend grid", () => {
@@ -962,7 +1018,7 @@ describe("PlannerGrid — P10, the override takes a second, deliberate action", 
     fireEvent.click(buttons[0]);
     expect(onCellsChange).toHaveBeenCalledTimes(1);
     const cell = onCellsChange.mock.calls[0][0].find((c: GridCell) => c.rowId === "lead");
-    expect(cell.memberIds).toEqual(["m1", "m2"]);
+    expect(cell.occupants.map((o: { memberId: string }) => o.memberId)).toEqual(["m1", "m2"]);
     expect(cell.overrides).toEqual(["m2"]);
     // And WHICH rule was waived, recorded with the seating: an override that
     // only knows "Gaby, here" is inherited by every rule written afterwards.
@@ -1007,7 +1063,7 @@ describe("PlannerGrid — P10, the override takes a second, deliberate action", 
   });
 
   /** Gaby seated past `Frank !with Gaby on *.Lead`, the waived rule recorded. */
-  const OVERRIDDEN_PAIR: GridCell[] = [
+  const OVERRIDDEN_PAIR: InputGridCell[] = [
     {
       date: SPECIAL_DATE,
       rowId: "lead",
@@ -1034,7 +1090,7 @@ describe("PlannerGrid — P10, the override takes a second, deliberate action", 
     fireEvent.click(cellFor(container, "lead", SPECIAL_DATE));
     fireEvent.click(candidateLi("Gaby"));
     const next = onCellsChange.mock.calls[0][0].find((c: GridCell) => c.rowId === "lead");
-    expect(next.memberIds).toEqual(["m1"]);
+    expect(next.occupants.map((o: { memberId: string }) => o.memberId)).toEqual(["m1"]);
     // A stale entry would silence E13 if the same person were ever re-seated.
     expect(next.overrides).toEqual([]);
     expect(next.overrideReasons).toEqual({});
@@ -1075,7 +1131,7 @@ describe("PlannerGrid — P10, the override takes a second, deliberate action", 
 
 describe("PlannerGrid — E13 re-checks what is already seated", () => {
   /** The shape `applySolveResponse` writes: seated by the solver, not by hand. */
-  const SOLVER_PAIR: GridCell[] = [
+  const SOLVER_PAIR: InputGridCell[] = [
     { date: SPECIAL_DATE, rowId: "lead", memberIds: ["m1", "m2"], origin: "auto" },
   ];
 
@@ -1096,7 +1152,11 @@ describe("PlannerGrid — E13 re-checks what is already seated", () => {
     const gaby = candidateLi("Gaby");
     expect(gaby.getAttribute("aria-disabled")).toBeNull();
     fireEvent.click(gaby);
-    expect(onCellsChange.mock.calls[0][0].find((c: GridCell) => c.rowId === "lead").memberIds).toEqual(["m1"]);
+    expect(
+      onCellsChange.mock.calls[0][0]
+        .find((c: GridCell) => c.rowId === "lead")
+        .occupants.map((o: { memberId: string }) => o.memberId),
+    ).toEqual(["m1"]);
   });
 
   it("flags a violation created by EDITING the rules after the month was seated", () => {
@@ -1110,7 +1170,7 @@ describe("PlannerGrid — E13 re-checks what is already seated", () => {
   });
 
   it("surfaces a violation hidden behind +N, like a duplicate", () => {
-    const cells: GridCell[] = [
+    const cells: InputGridCell[] = [
       { date: SPECIAL_DATE, rowId: "lead", memberIds: ["m3", "m1", "m2"], origin: "auto" },
     ];
     const { container } = render(<PlannerGrid {...specialProps({ cells })} />);
@@ -1121,7 +1181,7 @@ describe("PlannerGrid — E13 re-checks what is already seated", () => {
   });
 
   it("does not flag an unrelated pairing", () => {
-    const cells: GridCell[] = [
+    const cells: InputGridCell[] = [
       { date: SPECIAL_DATE, rowId: "lead", memberIds: ["m1", "m3"], origin: "auto" },
     ];
     const { container } = render(<PlannerGrid {...specialProps({ cells })} />);

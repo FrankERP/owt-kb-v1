@@ -73,6 +73,53 @@ export async function GET() {
     expect(auditViolations(sites)).toHaveLength(1);
   });
 
+  it("treats the special identity coordinator as protected operational state", () => {
+    const nonCanonical = scanSource(
+      "app/api/example/route.ts",
+      `${CLIENT_IMPORTS}
+export async function GET() {
+  return serverClient.fetch(\`*[_type == "specialIdentityCoordinator"]{ _id, _rev, version }\`);
+}`,
+    );
+    expect(nonCanonical).toHaveLength(1);
+    expect(nonCanonical[0]).toMatchObject({
+      kind: "protected-literal-read",
+      client: "serverClient",
+      compliant: false,
+    });
+    expect(auditViolations(nonCanonical)).toHaveLength(1);
+
+    const canonical = scanSource(
+      "app/utils/specialIdentityCoordinator.ts",
+      `${CLIENT_IMPORTS}
+export async function loadSpecialIdentityCoordinator() {
+  return operationalClient.fetch(\`*[_type == "specialIdentityCoordinator"]{ _id, _rev, version }\`);
+}`,
+    );
+    expect(canonical).toHaveLength(1);
+    expect(canonical[0]).toMatchObject({
+      kind: "protected-literal-read",
+      client: "operationalClient",
+      compliant: true,
+    });
+    expect(auditViolations(canonical)).toHaveLength(0);
+  });
+
+  it("detects a coordinator-backed mutation even when the route names no protected type", () => {
+    const sites = scanSource(
+      "app/api/example/route.ts",
+      `${CLIENT_IMPORTS}
+import { loadSpecialIdentityCoordinator } from "@/app/utils/specialIdentityCoordinator";
+export async function POST() {
+  const loaded = await loadSpecialIdentityCoordinator();
+  return writeClient.transaction().patch("coordinator", (p) => p.set({ version: 2 })).commit();
+}`,
+    );
+    expect(sites).toHaveLength(1);
+    expect(sites[0]).toMatchObject({ operation: "POST", kind: "protected-write" });
+    expect(sites[0].evidence).toContain("loadSpecialIdentityCoordinator");
+  });
+
   it("flags a delete that names no type literal, resolved through a protected loader", () => {
     // The real blind spot this closes: `roles/[id]` DELETE resolves the document by
     // id through a loader and then deletes it. Nothing in the region spells a
@@ -536,6 +583,7 @@ describe("git-tracked protected read inventory", () => {
       "featuredSongs",
       "saturdarSongs",
       "setlistProposal",
+      "specialIdentityCoordinator",
     ]);
   });
 });
