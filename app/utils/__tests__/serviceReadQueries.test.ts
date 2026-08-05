@@ -11,6 +11,7 @@ import {
   rawProposalDraftsQuery,
   rawRoleDraftForBaseQuery,
   rawRoleDraftsQuery,
+  rawSpecialRoleDraftsForDateQuery,
   rawSetlistDraftsQuery,
 } from "@/app/utils/serviceReadQueries";
 import { ROLE_TYPES, SETLIST_TYPES } from "@/app/utils/serviceReadModel";
@@ -63,6 +64,13 @@ describe("canonical query builders", () => {
     expect(q.params.draftId).toBe("drafts.role-9");
     expect(q.query).toContain('path("drafts.**")');
     expect(q.query).toContain("$draftId");
+  });
+
+  it("raw special-date evidence projects the identity name used for collision filtering", () => {
+    const q = rawSpecialRoleDraftsForDateQuery("2026-08-09");
+    expect(q.params.date).toBe("2026-08-09");
+    expect(q.query).toContain("service_name");
+    expect(q.query).toContain('path("drafts.**")');
   });
 
   it("members-by-ids binds the id list as a parameter", () => {

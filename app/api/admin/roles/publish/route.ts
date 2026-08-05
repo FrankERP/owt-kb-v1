@@ -124,7 +124,6 @@ async function postHandler(req: NextRequest) {
     if (lockId) lockIdOf.set(role._id, lockId);
   }
   const locks = await loadLocks([...lockIdOf.values()]);
-  let bootstrapped = false;
   const asserted = new Map<string, StoredLock>();
   const roleRevs = new Map<string, string>(roles.map((r) => [r._id, r._rev]));
 
@@ -150,18 +149,14 @@ async function postHandler(req: NextRequest) {
         dateField: roleDateField(role._type),
         date,
       });
-      if (!boot.ok || !boot.role || !boot.lock) {
-        return reject(
-          serviceError(boot.committed ? "bootstrap_completed_reload" : "stale_revision", {
-            details: { id: role._id, lockId },
-          }),
-        );
-      }
-      bootstrapped = true;
-      // Continue ONLY from the revisions the maintenance transaction produced.
-      roleRevs.set(role._id, boot.role._rev);
-      asserted.set(role._id, boot.lock);
-      continue;
+      const code = boot.outcome === "committed_reload"
+        ? "bootstrap_completed_reload"
+        : boot.outcome === "unknown"
+          ? "bootstrap_outcome_unknown"
+          : "stale_revision";
+      return reject(
+        serviceError(code, { details: { id: role._id, ...boot.details } }),
+      );
     }
     asserted.set(role._id, locks.get(lockId) as StoredLock);
   }
@@ -189,7 +184,7 @@ async function postHandler(req: NextRequest) {
     } catch (err) {
       if (!sanityConflictKind(err)) throw err;
       return reject(
-        serviceError(bootstrapped ? "bootstrap_completed_reload" : "stale_revision", {
+        serviceError("stale_revision", {
           details: { ids: toPatch },
         }),
       );

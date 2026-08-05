@@ -118,6 +118,24 @@ Issues live in GitHub Issues (`FrankERP/owt-kb-v1`), managed with the `gh` CLI. 
 
 Default canonical labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
 
+### Adversarial plan review
+
+Before implementing a substantial plan, use
+`.agents/skills/adversarial-plan-review/SKILL.md` and record its risk tier and rationale.
+
+- **Standard risk (default):** one fresh cold `APPROVED`. Parent roadmaps and
+  read/model/UI/cutover work stay standard unless they directly own a critical contract.
+- **Critical risk:** two sequential fresh `APPROVED` verdicts on byte-identical
+  text. Critical means changing a production/server writer or mutation trust
+  boundary, destructive/full-array serializer, auth/security/ACL/secret boundary,
+  schema/data migration, multi-document transaction/concurrency/recovery protocol,
+  or irreversible remote release action. A client/UI consumer of an already-approved
+  idempotent writer stays standard unless it changes one of those contracts.
+- Run reviewers **one at a time** and never expose prior findings. After two
+  substantive `CHANGES_REQUIRED` rounds for one artifact, stop and reassess with the user.
+- After each implementation phase, run a fresh code review plus the documented
+  test/browser gates. Plan approval never authorizes implementation.
+
 ### Domain docs
 
 Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.

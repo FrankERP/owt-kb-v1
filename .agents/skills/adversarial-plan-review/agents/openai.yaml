@@ -1,0 +1,4 @@
+interface:
+  display_name: "Adversarial Plan Review"
+  short_description: "Harden plans with risk-tiered cold review"
+  default_prompt: "Use $adversarial-plan-review to classify this plan's risk and run the required fresh sequential review."

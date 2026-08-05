@@ -1,4 +1,4 @@
-// Studio protection policy for the ten protected stored types
+// Studio protection policy for the eleven protected stored types
 // (Service Readiness A2 §8 / A3 §4) — pure, exported, and unit-testable.
 //
 // WHY a code-owned policy instead of UI configuration alone: the Studio is an
@@ -24,7 +24,7 @@
 // look at a lock, a receipt, or a malformed role while diagnosing.
 
 /**
- * The ten protected stored types. `saturdarSongs` is a deliberate stored typo —
+ * The eleven protected stored types. `saturdarSongs` is a deliberate stored typo —
  * never rename.
  *
  * Membership here is what earns a type a pane in `sanity/structure.ts`'s
@@ -52,6 +52,7 @@ export const PROTECTED_STUDIO_TYPES = [
   "roleTargetLock",
   "roleCreationReceipt",
   "notificationOutbox",
+  "specialIdentityCoordinator",
   "solverConfig",
 ] as const;
 
@@ -115,7 +116,7 @@ const DELETE_ONLY_REASONS: Readonly<Record<DeleteOnlyStudioType, { read: string;
   });
 
 /**
- * The four internal types: never authored by hand at all, so they are also
+ * The five internal types: never authored by hand at all, so they are also
  * `hidden: true` in the schema and never appear in any create affordance.
  * `notificationOutbox` is additionally delete-only (above) — it is the one type
  * governed by both lists at once.
@@ -134,6 +135,7 @@ export const INTERNAL_STUDIO_TYPES = [
   "roleTargetLock",
   "roleCreationReceipt",
   "notificationOutbox",
+  "specialIdentityCoordinator",
   "solverConfig",
 ] as const;
 
@@ -177,6 +179,7 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
     "status",
     "claimedAt",
   ],
+  specialIdentityCoordinator: ["version", "claimNonce", "updatedAt"],
   // Every field of the rule set: it is written wholesale by
   // `app/api/admin/solver-config` (and, once, by the seed script), under an
   // `_rev` check and with a `_key` per array item. There is no field of it a
@@ -442,5 +445,6 @@ export const PROTECTED_STUDIO_TITLES: Readonly<Record<ProtectedStudioType, strin
   roleTargetLock: "Locks internos (solo lectura)",
   roleCreationReceipt: "Recibos internos (solo lectura)",
   notificationOutbox: "Cola de avisos (solo lectura)",
+  specialIdentityCoordinator: "Coordinador de especiales (solo lectura)",
   solverConfig: "Reglas del planificador (solo lectura)",
 });

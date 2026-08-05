@@ -28,6 +28,7 @@ import { rankCandidates, type RankedCandidate, type RankMember } from "../candid
 import { VOICE_SEATS } from "../seatModel";
 import {
   buildRows,
+  createColumnId,
   type GridCell,
   type GridColumn,
   type GridRow,
@@ -100,8 +101,17 @@ function pick(...ids: string[]): RankMember[] {
 // ─── The month, and the column under test ────────────────────────────────────
 
 /** A Wednesday. `Math.ceil(18 / 7)` = 3, and a special has NO week at all (E21). */
-const SPECIAL: GridColumn = { date: "2026-03-18", type: "special_role", serviceName: "Vigilia" };
-const SUNDAY: GridColumn = { date: "2026-03-15", type: "sunday_role" };
+const SPECIAL: GridColumn = {
+  columnId: createColumnId("special_role", "2026-03-18"),
+  date: "2026-03-18",
+  type: "special_role",
+  serviceName: "Vigilia",
+};
+const SUNDAY: GridColumn = {
+  columnId: createColumnId("sunday_role", "2026-03-15"),
+  date: "2026-03-15",
+  type: "sunday_role",
+};
 
 const ROWS: GridRow[] = buildRows();
 const rowOf = (id: string) => {
@@ -211,8 +221,10 @@ function fill(over: {
   });
 }
 
-const idsIn = (cells: GridCell[], rowId: string, date = SPECIAL.date) =>
-  cells.find((c) => c.date === date && c.rowId === rowId)?.memberIds ?? [];
+const idsIn = (cells: GridCell[], rowId: string, columnId = SPECIAL.columnId) =>
+  cells
+    .find((c) => c.columnId === columnId && c.rowId === rowId)
+    ?.occupants.map((occupant) => occupant.memberId) ?? [];
 
 /** The eligible pool `fillColumn` would order, built the way `fillColumn` builds it. */
 function eligiblePool(members: RankMember[], loads: Record<string, number>): RankedCandidate[] {
@@ -349,7 +361,12 @@ describe("which rows the filler touches", () => {
   it("leaves a special's CORO cell byte-identical — Coro is never auto-filled (O3)", () => {
     // SEVEN voice candidates for five Lead+BGV seats, so two are left over and
     // a filler that included Coro would top this cell up to its target of 3.
-    const coro: GridCell = { date: SPECIAL.date, rowId: "coro", memberIds: ["zoe"], origin: "manual" };
+    const coro: GridCell = {
+      columnId: SPECIAL.columnId,
+      rowId: "coro",
+      occupants: [{ memberId: "zoe" }],
+      origin: "manual",
+    };
     const out = fill({
       members: pick("ana", "beto", "carla", "dora", "elsa", "fina", "gina"),
       cells: [coro],
@@ -368,12 +385,17 @@ describe("which rows the filler touches", () => {
     // The pool carries an `instrumento` member and an `foh` member, so a filler
     // that looped `rowAppliesTo` would have someone to seat in both.
     const bass: GridCell = {
-      date: SPECIAL.date,
+      columnId: SPECIAL.columnId,
       rowId: INSTRUMENT_ROW.id,
-      memberIds: [],
+      occupants: [],
       origin: "empty",
     };
-    const foh: GridCell = { date: SPECIAL.date, rowId: FOH_ROW.id, memberIds: [], origin: "empty" };
+    const foh: GridCell = {
+      columnId: SPECIAL.columnId,
+      rowId: FOH_ROW.id,
+      occupants: [],
+      origin: "empty",
+    };
     const out = fill({
       members: [...pick("ana", "beto", "carla", "dora", "elsa"), ...NON_VOICE],
       cells: [bass, foh],
@@ -394,9 +416,9 @@ describe("an empty seat is a correct output", () => {
     const out = fill({ members: pick("ana", "beto"), loads: { ana: 1, beto: 2 } });
     // Lead took both; every BGV candidate is now blocked by double duty.
     expect(out.unfilled).toEqual([
-      { date: SPECIAL.date, rowId: "bgv" },
-      { date: SPECIAL.date, rowId: "bgv" },
-      { date: SPECIAL.date, rowId: "bgv" },
+      { columnId: SPECIAL.columnId, rowId: "bgv" },
+      { columnId: SPECIAL.columnId, rowId: "bgv" },
+      { columnId: SPECIAL.columnId, rowId: "bgv" },
     ]);
     expect(out.cells.some((c) => c.rowId === "bgv")).toBe(false);
   });
@@ -597,9 +619,9 @@ describe("the fill itself", () => {
 
   it("tops a manual cell up instead of rebuilding it — the manual pick keeps its place", () => {
     const manual: GridCell = {
-      date: SPECIAL.date,
+      columnId: SPECIAL.columnId,
       rowId: "lead",
-      memberIds: ["elsa"],
+      occupants: [{ memberId: "elsa" }],
       origin: "manual",
     };
     const out = fill({
@@ -634,7 +656,12 @@ describe("the fill itself", () => {
   it("moves load between two specials of one month, so the second does not re-pick the first's people", () => {
     // The reason `columns` is a REQUIRED input: the in-grid half of `load` is
     // `cellsToParticipantRoles(cells, columns, members)`, which iterates columns.
-    const second: GridColumn = { date: "2026-03-25", type: "special_role", serviceName: "Bautizos" };
+    const second: GridColumn = {
+      columnId: createColumnId("special_role", "2026-03-25"),
+      date: "2026-03-25",
+      type: "special_role",
+      serviceName: "Bautizos",
+    };
     const columns = [SPECIAL, second];
     const members = pick("ana", "beto", "carla", "dora", "elsa", "fina", "zoe");
     const first = fillColumn({
@@ -657,8 +684,8 @@ describe("the fill itself", () => {
     });
     const firstSeats = [...idsIn(out.cells, "lead"), ...idsIn(out.cells, "bgv")];
     const secondSeats = [
-      ...idsIn(out.cells, "lead", second.date),
-      ...idsIn(out.cells, "bgv", second.date),
+      ...idsIn(out.cells, "lead", second.columnId),
+      ...idsIn(out.cells, "bgv", second.columnId),
     ];
     expect(firstSeats).toHaveLength(5);
     expect(secondSeats).toHaveLength(5);
@@ -710,17 +737,17 @@ describe("the filler never overrides a rule", () => {
     // sanctioned seat on the next render — nor add one of its own.
     const seeded: GridCell[] = [
       {
-        date: SPECIAL.date,
+        columnId: SPECIAL.columnId,
         rowId: "lead",
-        memberIds: ["lucia"],
+        occupants: [{ memberId: "lucia" }],
         origin: "manual",
         overrides: ["lucia"],
       },
     ];
     const out = fill({ members: MEMBERS, loads: LOADS, cells: seeded });
-    const lead = out.cells.find((c) => c.rowId === "lead" && c.date === SPECIAL.date);
-    expect(lead?.memberIds).toHaveLength(2);
-    expect(lead?.memberIds[0]).toBe("lucia");
+    const lead = out.cells.find((c) => c.rowId === "lead" && c.columnId === SPECIAL.columnId);
+    expect(lead?.occupants).toHaveLength(2);
+    expect(lead?.occupants[0].memberId).toBe("lucia");
     expect(lead?.overrides).toEqual(["lucia"]);
     // BGV was filled around it, and carries no override of its own.
     expect(idsIn(out.cells, "bgv")).toHaveLength(rowOf("bgv").target!);
@@ -732,7 +759,13 @@ describe("the filler never overrides a rule", () => {
     // `*.LeadBGV` conflict still refuses Lucía there — an override is per pick,
     // never a standing exemption the filler can lean on.
     const seeded: GridCell[] = [
-      { date: SPECIAL.date, rowId: "lead", memberIds: ["niza"], origin: "manual", overrides: ["niza"] },
+      {
+        columnId: SPECIAL.columnId,
+        rowId: "lead",
+        occupants: [{ memberId: "niza" }],
+        origin: "manual",
+        overrides: ["niza"],
+      },
     ];
     const out = fill({ members: MEMBERS, loads: LOADS, cells: seeded });
     expect(idsIn(out.cells, "bgv")).not.toContain("lucia");

@@ -577,12 +577,14 @@ describe("PUT /api/admin/setlists — refused targets", () => {
 // ── Legacy lock bootstrap ───────────────────────────────────────────────────
 
 describe("PUT /api/admin/setlists — legacy weekend lock", () => {
-  it("bootstraps the missing lock, then saves in a second guarded transaction", async () => {
+  it("requires an explicit reload after bootstrapping the missing lock", async () => {
     store.roles.push(sundayRole());
-    const res = await PUT(req(body()));
-    expect(res.status).toBe(200);
-    expect(committedTransactions()).toHaveLength(2);
-    // 1) maintenance: heartbeat the unchanged target field + create the claimed lock
+    const bootstrap = await PUT(req(body()));
+    expect(bootstrap.status).toBe(409);
+    expect(await bootstrap.json()).toMatchObject({ error: "bootstrap_completed_reload" });
+    expect(committedTransactions()).toHaveLength(1);
+    // The first request performs maintenance only: heartbeat the unchanged
+    // target field plus the missing lock, with no setlist mutation.
     const boot = committedTransactions()[0];
     expect(patches(boot)).toEqual([
       { kind: "patch", id: "role-1", rev: "role-rev-1", set: { week: WEEK }, unset: [] },
@@ -593,7 +595,13 @@ describe("PUT /api/admin/setlists — legacy weekend lock", () => {
       state: "claimed",
       roleId: "role-1",
     });
-    // 2) business: the setlist create plus the freshly produced lock revision
+    expect(creates(boot).some((doc) => doc._type === "featuredSongs")).toBe(false);
+
+    // An explicit second request observes the reloaded role/lock revisions and
+    // may then perform the guarded business write.
+    const res = await PUT(req(body()));
+    expect(res.status).toBe(200);
+    expect(committedTransactions()).toHaveLength(2);
     const business = committedTransactions()[1];
     expect(creates(business)[0]).toMatchObject({ _id: `featuredSongs.${WEEK}` });
     expect(patches(business)[0]).toMatchObject({

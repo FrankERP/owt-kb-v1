@@ -15,14 +15,20 @@ import { serviceDependencyError, serviceError } from "@/app/utils/serviceMutatio
 import { buildCreationReceipt } from "@/app/utils/roleCreationReceipt";
 import { buildClaimedLock, claimLockPatch } from "@/app/utils/roleTargetLock";
 import {
+  loadSpecialIdentityCoordinator,
+  planSpecialIdentityCoordinatorClaim,
+} from "@/app/utils/specialIdentityCoordinator";
+import {
   buildRoleDocument,
   decideReceipt,
   parseCreateRequest,
   planTargetClaim,
   sanityConflictKind,
+  seatAssignees,
   type ParsedCreateRequest,
 } from "@/app/utils/roleWriteRequest";
 import {
+  loadCanonicalMemberIds,
   loadCanonicalRole,
   loadDependencies,
   loadLock,
@@ -58,7 +64,8 @@ export async function GET() {
   const roles = await operationalClient.fetch(`
     *[_type in ["sunday_role", "saturday_role", "special_role"]]
     | order(coalesce(week, date) asc) {
-      _id, _rev, _type, service_name, published,
+      _id, _rev, _type, service_name,
+      "published": coalesce(published, true),
       "date": coalesce(week, date),
       "leads": Lead[defined(@->)]{ _key, ...@->{_id, member_name, alias} },
       "bgvs": BGVs[defined(@->)]{ _key, ...@->{_id, member_name, alias} },
@@ -125,6 +132,16 @@ async function postHandler(req: NextRequest) {
   const existing = await loadReceiptById(request.receiptId);
   if (existing) {
     return resolveExistingReceipt(existing, request);
+  }
+
+  // A first attempt may write only published-perspective canonical members.
+  // Exact receipt replay stays above this lookup so idempotency does not depend
+  // on whether a previously committed assignee still exists today.
+  const wanted = seatAssignees(request.seats);
+  const resolvedMembers = await loadCanonicalMemberIds(wanted);
+  const danglingRefs = wanted.filter((id) => !resolvedMembers.has(id)).sort();
+  if (danglingRefs.length) {
+    return reject(serviceError("integrity_conflict", { details: { danglingRefs } }));
   }
 
   // ── First attempt: inventory the target before writing anything ───────────
@@ -216,7 +233,28 @@ async function postHandler(req: NextRequest) {
     nextKey,
   });
 
-  // One transaction: receipt + role (+ weekend claim). `create`, never
+  let specialClaim: ReturnType<typeof planSpecialIdentityCoordinatorClaim> | null = null;
+  if (request.roleType === "special_role") {
+    const loadedCoordinator = await loadSpecialIdentityCoordinator();
+    if (!loadedCoordinator.ok) {
+      return reject(
+        serviceError("integrity_conflict", {
+          details: { detail: "special_identity_coordinator", issues: loadedCoordinator.issues },
+        }),
+      );
+    }
+    specialClaim = planSpecialIdentityCoordinatorClaim(loadedCoordinator.coordinator);
+    if (!specialClaim.ok) {
+      return reject(
+        serviceError("integrity_conflict", {
+          details: { detail: "special_identity_coordinator", issues: specialClaim.issues },
+        }),
+      );
+    }
+  }
+
+  // One transaction: receipt + role (+ weekend claim or special coordinator).
+  // `create`, never
   // `createIfNotExists` — the id collision IS the cross-request mutex.
   let tx = writeClient.transaction().create(receipt).create(doc);
   if (claim?.kind === "create") {
@@ -233,6 +271,12 @@ async function postHandler(req: NextRequest) {
   } else if (claim?.kind === "reclaim") {
     const patch = claimLockPatch({ roleId, claimNonce: randomUUID(), now });
     tx = tx.patch(claim.lockId, (p) => p.ifRevisionId(claim.lockRev).set(patch.set));
+  } else if (specialClaim?.ok && specialClaim.kind === "create") {
+    tx = tx.create(specialClaim.document);
+  } else if (specialClaim?.ok && specialClaim.kind === "patch") {
+    tx = tx.patch(specialClaim.id, (p) =>
+      p.ifRevisionId(specialClaim.ifRevisionId).set(specialClaim.set),
+    );
   }
 
   try {
@@ -243,19 +287,51 @@ async function postHandler(req: NextRequest) {
     // reported as replay/mismatch rather than as a target conflict.
     const raced = await loadReceiptById(request.receiptId);
     if (raced) return resolveExistingReceipt(raced, request);
-    const afterState = await loadTargetOccupancy({
+    const afterStatePromise = loadTargetOccupancy({
       roleType: request.roleType,
       date: request.date,
       serviceName: request.serviceName,
     });
-    if (afterState.canonicalRoleIds.length || afterState.rawDraftIds.length) {
+    const coordinatorPromise =
+      request.roleType === "special_role" ? loadSpecialIdentityCoordinator() : Promise.resolve(null);
+    const [afterState, coordinatorAfter] = await Promise.all([
+      afterStatePromise,
+      coordinatorPromise,
+    ]);
+    if (afterState.rawDraftIds.length) {
+      return reject(
+        serviceError("integrity_conflict", {
+          details: { targetKey: request.targetKey, rawDrafts: afterState.rawDraftIds },
+        }),
+      );
+    }
+    if (afterState.canonicalRoleIds.length) {
       return reject(
         serviceError("ambiguous_target", {
           details: { targetKey: request.targetKey, roleIds: afterState.canonicalRoleIds },
         }),
       );
     }
-    return reject(serviceError("stale_revision", { details: { targetKey: request.targetKey } }));
+    if (coordinatorAfter && !coordinatorAfter.ok) {
+      return reject(
+        serviceError("integrity_conflict", {
+          details: { detail: "special_identity_coordinator", issues: coordinatorAfter.issues },
+        }),
+      );
+    }
+    return reject(
+      serviceError("stale_revision", {
+        details: {
+          targetKey: request.targetKey,
+          ...(coordinatorAfter?.ok && coordinatorAfter.coordinator
+            ? {
+                coordinatorRev: coordinatorAfter.coordinator._rev,
+                coordinatorVersion: coordinatorAfter.coordinator.version,
+              }
+            : {}),
+        },
+      }),
+    );
   }
 
   // ── Post-commit side effects (§7), all through the one shared module ───────
