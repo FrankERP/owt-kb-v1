@@ -16,6 +16,10 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   straight to `main`). **Direct push, no PRs.**
 - Conventional commits (`fix(scope): …`), body explains the *why*.
 - **Never** add AI/Claude attribution or `Co-Authored-By` trailers.
+- **Keep documentation current in the same delivery.** Implementation, behavior,
+  verification counts, branch/commit state, and deployment status must be
+  reflected in the canonical docs before reporting completion; remove stale
+  "not released" or "preview only" statements when a release advances.
 - Production Sanity writes need explicit user consent — dry-run first
   (one-off scripts in `scripts/`, guarded by `--apply`, run with
   `node --env-file=.env.local scripts/<name>.mjs`). Diagnosing ≠ consent to write.
