@@ -317,10 +317,11 @@ admins' browsers are inert. `owt_solver_history_v2` (the solver's fairness histo
 per-browser on purpose. See [ADR-0010](adr/0010-specials-fill-locally-not-in-the-solver.md).
 
 **Reading it from the client:** `useSolverConfig` (`app/components/admin/useSolverConfig.ts`),
-mounted once by `ServicesPanel`, which threads the one controller to `MonthGenerator` and both
-`SeatBoard` mounts. Its four states — `loading` / `error` / `absent` / `ready` — are the reason
+mounted once by `ServicesPanel`, which threads the one controller to `MonthGenerator` for both
+create-planning and stored-service month editing. Its four states — `loading` / `error` /
+`absent` / `ready` — are the reason
 a failed read cannot be mistaken for an empty document: only `ready` carries the `_rev` a save
-needs, and only `ready` reaches the Tablero
+needs, and only an enforceable state enables mutable grid operations
 (`app/components/admin/solverConfigSource.ts`).
 
 ---

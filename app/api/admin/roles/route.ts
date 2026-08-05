@@ -64,7 +64,8 @@ export async function GET() {
   const roles = await operationalClient.fetch(`
     *[_type in ["sunday_role", "saturday_role", "special_role"]]
     | order(coalesce(week, date) asc) {
-      _id, _rev, _type, service_name, published,
+      _id, _rev, _type, service_name,
+      "published": coalesce(published, true),
       "date": coalesce(week, date),
       "leads": Lead[defined(@->)]{ _key, ...@->{_id, member_name, alias} },
       "bgvs": BGVs[defined(@->)]{ _key, ...@->{_id, member_name, alias} },

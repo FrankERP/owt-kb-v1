@@ -26,7 +26,8 @@ Studio, and native iOS/Android apps (Capacitor).
 | 7 | [`SOLVER_AND_INFRA.md`](SOLVER_AND_INFRA.md) | The Python OR-Tools solver, its DSL, Cloud Build CI/CD, the `scripts/` catalog, mobile/Capacitor, testing. |
 | 8 | [`DEVELOPMENT.md`](DEVELOPMENT.md) | Setup, commands, the verification gate, branching/commit conventions, how to run data scripts safely, common tasks. |
 | 9 | [`SERVICE_READINESS_UI.md`](SERVICE_READINESS_UI.md) | The `/admin → Servicios` readiness layer: the five sources, the dimensions, the 15-rule primary-action ladder, the integrity queue, bulk-publish blockers. |
-| 10 | [`VERIFICATION_HARNESS.md`](VERIFICATION_HARNESS.md) | The deployed-verification (A3) runbook: isolation guarantees, env vars, the dataset lease, run identity, the zero-delivery proof, teardown. **Read before running Playwright.** |
+| 10 | [`MONTH_GRID_EDITING.md`](MONTH_GRID_EDITING.md) | The stored-service month editor: role-ID grid, create/save/swap contracts, mutation recovery, server hardening, and preview delivery evidence. |
+| 11 | [`VERIFICATION_HARNESS.md`](VERIFICATION_HARNESS.md) | The deployed-verification (A3) runbook: isolation guarantees, env vars, the dataset lease, run identity, the zero-delivery proof, teardown. **Read before running Playwright.** |
 
 Also in this repo root:
 - [`adr/`](adr/README.md) — **decision records**: why a choice was made and what was
@@ -67,7 +68,8 @@ roster. Everything is **Spanish UI**, **dark-mode-first**, timezone **America/Me
 7. **Client mutation handlers** must check `res.ok`, use try/catch/finally, and never
    close-as-success on failure.
 8. **Production Sanity writes need explicit user consent** — dry-run scripts first.
-9. **Both must pass before "done":** `npx tsc --noEmit` and `npm test`.
+9. **All three must pass before "done":** `npx tsc --noEmit`, `npm test`, and
+   `npx eslint .` with zero errors.
 10. **No AI/Claude attribution in commits.** Conventional commits, direct push to `main`
     (via a working branch), no PRs.
 
@@ -83,6 +85,7 @@ roster. Everything is **Spanish UI**, **dark-mode-first**, timezone **America/Me
 - **"How does the auto-scheduler work?"** → [SOLVER_AND_INFRA.md](SOLVER_AND_INFRA.md)
 - **"How do I run/verify a change?"** → [DEVELOPMENT.md](DEVELOPMENT.md)
 - **"Why does this service card say that / show one button?"** → [SERVICE_READINESS_UI.md](SERVICE_READINESS_UI.md)
+- **"How does stored month-grid editing save and recover safely?"** → [MONTH_GRID_EDITING.md](MONTH_GRID_EDITING.md)
 - **"Why can't I edit this document in Studio?"** → [AUTH_AND_SECURITY.md](AUTH_AND_SECURITY.md#studio-write-protection)
 - **"How do I run the deployed verification suite?"** → [VERIFICATION_HARNESS.md](VERIFICATION_HARNESS.md)
 - [NOTIFICATIONS.md](NOTIFICATIONS.md) — debounced notification emails: the outbox, the three flush triggers, the liveness alarm, and how to operate them.
