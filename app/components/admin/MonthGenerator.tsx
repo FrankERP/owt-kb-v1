@@ -154,15 +154,80 @@ interface Props {
 const MONTHS = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
                 "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
-const SWAP_PROVEN_PREWRITE_FAILURES = new Set([
-  "invalid_request",
-  "forbidden",
-  "not_found",
-  "integrity_conflict",
-  "ambiguous_target",
-  "dependency_conflict",
-  "stale_revision",
+const SWAP_PROVEN_PREWRITE_FAILURES = new Map<string, number>([
+  ["invalid_request", 400],
+  ["forbidden", 403],
+  ["not_found", 404],
+  ["integrity_conflict", 409],
+  ["ambiguous_target", 409],
+  ["dependency_conflict", 409],
+  ["stale_revision", 409],
 ]);
+
+const CREATE_PROVEN_PREWRITE_FAILURES = new Map<string, number>([
+  ["invalid_request", 400],
+  ["idempotency_mismatch", 409],
+  ["idempotency_key_retired", 409],
+  ["ambiguous_target", 409],
+  ["integrity_conflict", 409],
+  ["stale_revision", 409],
+]);
+
+type StoredSectionPath = "Lead" | "BGVs" | "Chorus" | "instruments" | "foh_team";
+
+type StoredSectionFingerprint = Array<{
+  itemKey: string;
+  memberId: string;
+  label?: string;
+}>;
+
+const STORED_SECTION_OPTIONS: Array<{ path: StoredSectionPath; label: string }> = [
+  { path: "Lead", label: "Líderes" },
+  { path: "BGVs", label: "BGV" },
+  { path: "Chorus", label: "Coro" },
+  { path: "instruments", label: "Instrumentos" },
+  { path: "foh_team", label: "FOH" },
+];
+
+function storedSectionFingerprint(
+  role: ServiceRole,
+  path: StoredSectionPath,
+): StoredSectionFingerprint | null {
+  const keyedMember = (item: { _id: string; _key?: string }) =>
+    item._key ? { itemKey: item._key, memberId: item._id } : null;
+  if (path === "Lead" || path === "BGVs" || path === "Chorus") {
+    const items = path === "Lead" ? role.leads : path === "BGVs" ? role.bgvs : role.chorus;
+    const fingerprint = items.map(keyedMember);
+    return fingerprint.every((item) => item !== null)
+      ? fingerprint as StoredSectionFingerprint
+      : null;
+  }
+  if (path === "instruments") {
+    const fingerprint = role.instruments.map((item) =>
+      item._key && item.person
+        ? { itemKey: item._key, memberId: item.person._id, label: item.instrument }
+        : null,
+    );
+    return fingerprint.every((item) => item !== null)
+      ? fingerprint as StoredSectionFingerprint
+      : null;
+  }
+  const fingerprint = role.foh.map((item) =>
+    item._key && item.person
+      ? { itemKey: item._key, memberId: item.person._id, label: item.role }
+      : null,
+  );
+  return fingerprint.every((item) => item !== null)
+    ? fingerprint as StoredSectionFingerprint
+    : null;
+}
+
+function sameStoredSectionFingerprint(
+  expected: StoredSectionFingerprint,
+  observed: StoredSectionFingerprint,
+): boolean {
+  return JSON.stringify(expected) === JSON.stringify(observed);
+}
 
 const PATTERNS: Array<{ value: string; label: string }> = [
   { value: "Sun.*",     label: "Domingo (todo)"   },
@@ -1467,9 +1532,17 @@ export default function MonthGenerator({
   const [swapSel, setSwapSel]     = useState<string | null>(null);
   const [swapToast, setSwapToast] = useState<string | null>(null);
   const [swapVerificationPending, setSwapVerificationPending] = useState(false);
-  const pendingSwapExpected = useRef<{ body: string; snapshots: Map<string, RoleSemanticSnapshot> } | null>(null);
-  const [seatSwapSource, setSeatSwapSource] = useState("");
-  const [seatSwapTarget, setSeatSwapTarget] = useState("");
+  const pendingSwapExpected = useRef<{
+    body: string;
+    snapshots: Map<string, RoleSemanticSnapshot>;
+    section?: {
+      path: StoredSectionPath;
+      fingerprints: Map<string, StoredSectionFingerprint>;
+    };
+  } | null>(null);
+  const [sectionSwapPath, setSectionSwapPath] = useState<StoredSectionPath>("Lead");
+  const [sectionSwapFirst, setSectionSwapFirst] = useState("");
+  const [sectionSwapSecond, setSectionSwapSecond] = useState("");
   // Shared by "← Volver" and Escape (below): the ONE state that gates
   // discarding grid work, naming which action is pending so the two exits
   // can never end up with different rules about what counts as "unsaved" —
@@ -1657,40 +1730,39 @@ export default function MonthGenerator({
   const invalidStoredColumns = storedMode
     ? storedColumns.filter((column) => touchedStoredRoleIds.has(column.roleId) && !serializeStoredColumn(column, rows, cells).ok)
     : [];
+  const storedRowsDirty = storedMode && JSON.stringify(rows) !== JSON.stringify(initialStoredRows);
   const hasStoredDateMove = [...storedHeaderEdits.values()].some((edit) => edit.date !== undefined);
   const storedSaveBlocked = storedEditBlocked ?? (hasStoredDateMove ? storedDateBlocked : null);
-  const storedWriteUnresolved = dirtyStoredColumns.length > 0 || invalidStoredColumns.length > 0 || pendingSaveAttempts.size > 0 || swapVerificationPending;
+  const storedWriteUnresolved = storedRowsDirty || dirtyStoredColumns.length > 0 || invalidStoredColumns.length > 0 || pendingSaveAttempts.size > 0 || swapVerificationPending;
   const storedHasUnresolvedWork = storedWriteUnresolved || createAttemptStatus !== null;
+  const storedTransportActive = storedMode && (savingStored || creatingOne);
+  const storedMutationLocked = storedMode && (
+    savingStored
+    || pendingSaveAttempts.size > 0
+    || swapVerificationPending
+    || creatingOne
+    || createAttemptStatus !== null
+    || pendingDiscard !== null
+  );
   const storedGenerationKey = `${storedSource?.rolesGeneration ?? 0}:${storedSource?.integrityGeneration ?? 0}`;
-  const storedSeatOptions = storedMode
-    ? cells.flatMap((cell) => {
-        const column = storedColumns.find((item) => item.columnId === cell.columnId);
-        const row = rows.find((item) => item.id === cell.rowId);
-        if (!column || column.admission !== "approved" || !row) return [];
-        const path = cell.rowId === "lead"
-          ? "Lead"
-          : cell.rowId === "bgv"
-            ? "BGVs"
-            : cell.rowId === "coro"
-              ? "Chorus"
-              : cell.rowId.startsWith("instrumento:")
-                ? "instruments"
-                : "foh_team";
-        return cell.occupants.flatMap((occupant) => occupant.itemKey ? [{
-          key: `${column.roleId}:${path}:${occupant.itemKey}`,
-          roleId: column.roleId,
-          rev: column.rev,
-          path,
-          itemKey: occupant.itemKey,
-          memberId: occupant.memberId,
-          label: `${fmtDate(column.date)} · ${row.label} · ${dn(members.find((member) => member._id === occupant.memberId) ?? { _id: occupant.memberId, member_name: occupant.memberId })}`,
-        }] : []);
-      })
+  const storedSectionServiceOptions = storedMode
+    ? storedColumns
+        .filter((column) => column.admission === "approved")
+        .map((column) => ({
+          column,
+          label: `${fmtDate(column.date)} · ${SERVICE_LABEL[column.type]}${column.type === "special_role" ? ` · ${column.serviceName}` : ""}`,
+        }))
     : [];
+  const sectionSwapFirstColumn = storedSectionServiceOptions.find(({ column }) => column.roleId === sectionSwapFirst)?.column;
+  const sectionSwapSecondColumn = storedSectionServiceOptions.find(({ column }) => column.roleId === sectionSwapSecond)?.column;
+  const sectionSwapTopologyInvalid = sectionSwapPath === "Chorus"
+    && (sectionSwapFirstColumn?.type === "saturday_role" || sectionSwapSecondColumn?.type === "saturday_role");
+  const storedSwapInteractionBlocked = storedMutationLocked || storedHasUnresolvedWork || !!storedSwapBlocked;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      if (storedTransportActive) return;
       const wouldDiscard = storedMode
         ? storedHasUnresolvedWork
         : step === "grid" && assignmentCount > 0;
@@ -1702,7 +1774,7 @@ export default function MonthGenerator({
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [assignmentCount, onClose, step, storedHasUnresolvedWork, storedMode]);
+  }, [assignmentCount, onClose, step, storedHasUnresolvedWork, storedMode, storedTransportActive]);
 
   useEffect(() => {
     if (!storedMode || !focusRoleId) return;
@@ -1734,10 +1806,20 @@ export default function MonthGenerator({
 
     if (swapVerificationPending) {
       const expected = pendingSwapExpected.current;
-      const verified = expected && [...expected.snapshots].every(([roleId, snapshot]) => {
+      const semanticsVerified = expected && [...expected.snapshots].every(([roleId, snapshot]) => {
         const observed = refreshedSnapshots.get(roleId);
         return observed ? sameRoleSemantics(snapshot, observed) : false;
       });
+      const fingerprintsVerified = expected?.section
+        ? [...expected.section.fingerprints].every(([roleId, fingerprint]) => {
+            const observedRole = storedInventory.roles.find((item) => item.role._id === roleId)?.role;
+            const observed = observedRole
+              ? storedSectionFingerprint(observedRole, expected.section!.path)
+              : null;
+            return observed ? sameStoredSectionFingerprint(fingerprint, observed) : false;
+          })
+        : true;
+      const verified = semanticsVerified && fingerprintsVerified;
       if (!verified) {
         setSwapToast("La recarga no coincide con el intercambio solicitado. Se conserva como resultado pendiente y no se reintentó.");
         return;
@@ -1810,7 +1892,7 @@ export default function MonthGenerator({
       return;
     }
 
-    if (dirtyStoredColumns.length === 0 && invalidStoredColumns.length === 0 && !swapVerificationPending) {
+    if (!storedRowsDirty && dirtyStoredColumns.length === 0 && invalidStoredColumns.length === 0 && !swapVerificationPending) {
       baselineByRole.current = refreshedSnapshots;
       setRows(refreshedRows);
       setCells(refreshedCells);
@@ -1818,7 +1900,7 @@ export default function MonthGenerator({
       setTouchedStoredRoleIds(new Set());
       setSwapVerificationPending(false);
     }
-  }, [allStoredTranslations, dirtyStoredColumns.length, invalidStoredColumns.length, pendingSaveAttempts, saveKnownFailures, storedGenerationKey, storedInventory.coherent, storedMode, storedTranslations, swapVerificationPending]);
+  }, [allStoredTranslations, dirtyStoredColumns.length, invalidStoredColumns.length, pendingSaveAttempts, saveKnownFailures, storedGenerationKey, storedInventory, storedMode, storedRowsDirty, storedTranslations, swapVerificationPending]);
 
   useEffect(() => {
     const attempt = createAttempt.current;
@@ -1979,6 +2061,7 @@ export default function MonthGenerator({
 
   function requestBack() {
     if (storedMode) {
+      if (storedTransportActive) return;
       if (storedHasUnresolvedWork) { setPendingDiscard("close"); return; }
       onClose();
       return;
@@ -1991,6 +2074,12 @@ export default function MonthGenerator({
     setPendingDiscard(null);
     setStep("config");
     setSwapSel(null);
+  }
+
+  function confirmPendingDiscard() {
+    if (storedTransportActive) return;
+    if (!storedMode && pendingDiscard === "back") goBackToConfig();
+    else onClose();
   }
 
   function handlePreview() {
@@ -2025,7 +2114,7 @@ export default function MonthGenerator({
   }
 
   function handleCellsChange(next: GridCell[]) {
-    if (storedMode && (pendingSaveAttempts.size > 0 || swapVerificationPending || createAttemptStatus !== null)) return;
+    if (storedMutationLocked) return;
     if (storedMode) {
       const changedRoleIds = new Set<string>();
       const allColumnIds = new Set([...cells.map((cell) => cell.columnId), ...next.map((cell) => cell.columnId)]);
@@ -2047,7 +2136,7 @@ export default function MonthGenerator({
   }
 
   function handleStoredHeaderChange(columnId: string, patch: { date?: string; serviceName?: string }) {
-    if (!storedMode || pendingSaveAttempts.size > 0 || swapVerificationPending || createAttemptStatus !== null) return;
+    if (!storedMode || storedMutationLocked) return;
     if (patch.date !== undefined && storedDateBlocked) {
       setSaveNotice(storedDateBlocked);
       return;
@@ -2061,6 +2150,11 @@ export default function MonthGenerator({
     setSaveNotice(null);
   }
 
+  function handleRowsChange(next: GridRow[]) {
+    if (storedMutationLocked) return;
+    setRows(next);
+  }
+
   function handleToggleSkip(columnId: string) {
     if (storedMode) return;
     setSkippedColumnIds(prev => {
@@ -2072,7 +2166,7 @@ export default function MonthGenerator({
   }
 
   async function handleStoredSave() {
-    if (!storedMode || !storedSource || savingStored || dirtyStoredColumns.length === 0 || storedSaveBlocked) return;
+    if (!storedMode || !storedSource || storedMutationLocked || dirtyStoredColumns.length === 0 || storedSaveBlocked) return;
     setSavingStored(true);
     setSaveNotice(null);
     setSaveKnownFailures(0);
@@ -2123,7 +2217,8 @@ export default function MonthGenerator({
   }
 
   async function handleCreateOne() {
-    if (!storedMode || !storedSource || creatingOne || storedWriteUnresolved || createAttemptStatus === "committedUnverified" || storedCreateBlocked) return;
+    const retryingUnknownAttempt = createAttemptStatus === "unknown";
+    if (!storedMode || !storedSource || creatingOne || (storedMutationLocked && !retryingUnknownAttempt) || storedWriteUnresolved || createAttemptStatus === "committedUnverified" || storedCreateBlocked) return;
     const normalizedName = createType === "special_role" ? normalizeServiceName(createName) : null;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(createDate) || createDate.slice(0, 7) !== monthPrefix) {
       setSaveNotice("Elige una fecha válida dentro del mes abierto.");
@@ -2164,18 +2259,11 @@ export default function MonthGenerator({
         const code = responseBody && typeof responseBody === "object" && typeof (responseBody as { error?: unknown }).error === "string"
           ? (responseBody as { error: string }).error
           : null;
-        const provenPrewrite = new Set([
-          "invalid_request",
-          "idempotency_mismatch",
-          "idempotency_key_retired",
-          "ambiguous_target",
-          "integrity_conflict",
-          "stale_revision",
-        ]).has(code ?? "");
+        const provenPrewrite = code !== null && CREATE_PROVEN_PREWRITE_FAILURES.get(code) === response.status;
         if (provenPrewrite) setCreateAttemptStatus(null);
         else setCreateAttemptStatus("unknown");
         setSaveNotice(`No se creó el servicio (${code ?? "respuesta_no_verificable"}).`);
-        if (response.status === 409) await storedSource.reload();
+        if (response.status === 409 || !provenPrewrite) await storedSource.reload();
         return;
       }
       const responseRoleId = responseBody && typeof responseBody === "object" && typeof (responseBody as { _id?: unknown })._id === "string"
@@ -2204,7 +2292,12 @@ export default function MonthGenerator({
     }
   }
 
-  function frozenSwapExpectation(roleIds: readonly string[], candidateCells: GridCell[], body: unknown) {
+  function frozenSwapExpectation(
+    roleIds: readonly string[],
+    candidateCells: GridCell[],
+    body: unknown,
+    section?: { path: StoredSectionPath; fingerprints: Map<string, StoredSectionFingerprint> },
+  ) {
     const snapshots = new Map<string, RoleSemanticSnapshot>();
     for (const roleId of roleIds) {
       const column = storedColumns.find((item) => item.roleId === roleId);
@@ -2213,7 +2306,7 @@ export default function MonthGenerator({
       if (!serialized.ok) return null;
       snapshots.set(roleId, serialized.snapshot);
     }
-    return { body: JSON.stringify(body), snapshots };
+    return { body: JSON.stringify(body), snapshots, ...(section ? { section } : {}) };
   }
 
   async function handleRejectedStoredSwap(response: Response, subject: string) {
@@ -2224,14 +2317,14 @@ export default function MonthGenerator({
         code = (body as { error: string }).error;
       }
     } catch {}
-    if (code === "bootstrap_completed_reload") {
+    if (code === "bootstrap_completed_reload" && response.status === 409) {
       pendingSwapExpected.current = null;
       setSwapVerificationPending(false);
       setSwapToast("Se preparó un servicio legado. Revisa la recarga y vuelve a solicitar el intercambio.");
       await storedSource?.reload();
       return;
     }
-    if (code && SWAP_PROVEN_PREWRITE_FAILURES.has(code)) {
+    if (code && SWAP_PROVEN_PREWRITE_FAILURES.get(code) === response.status) {
       pendingSwapExpected.current = null;
       setSwapVerificationPending(false);
       setSwapToast(`No se intercambiaron ${subject} (${code}).`);
@@ -2245,6 +2338,7 @@ export default function MonthGenerator({
   /** Whole-day swap, carried over as a COLUMN swap (2026-07-30 decision):
    *  pick two date columns and exchange every row's cell between them. */
   async function handleColumnSwap(columnId: string) {
+    if (storedMode && storedSwapInteractionBlocked) return;
     if (!swapSel) { setSwapSel(columnId); return; }
     if (swapSel === columnId) { setSwapSel(null); return; }
     const a = swapSel;
@@ -2264,7 +2358,7 @@ export default function MonthGenerator({
         setSwapToast(storedSwapBlocked);
         return;
       }
-      if (dirtyStoredColumns.length > 0 || pendingSaveAttempts.size > 0) {
+      if (dirtyStoredColumns.length > 0 || invalidStoredColumns.length > 0 || storedMutationLocked) {
         setSwapToast("Guarda o resuelve los cambios pendientes antes de intercambiar equipos.");
         return;
       }
@@ -2366,35 +2460,67 @@ export default function MonthGenerator({
     setTimeout(() => setSwapToast(null), 2500);
   }
 
-  async function handleSeatSwap() {
-    if (!storedMode || !storedSource || savingStored || storedHasUnresolvedWork || storedSwapBlocked) return;
-    const source = storedSeatOptions.find((option) => option.key === seatSwapSource);
-    const target = storedSeatOptions.find((option) => option.key === seatSwapTarget);
-    if (!source || !target || source.key === target.key) {
-      setSwapToast("Selecciona dos asignaciones distintas.");
+  async function handleSectionSwap() {
+    if (!storedMode || !storedSource || storedSwapInteractionBlocked) return;
+    const source = sectionSwapFirstColumn;
+    const target = sectionSwapSecondColumn;
+    if (!source || !target || source.roleId === target.roleId) {
+      setSwapToast("Selecciona dos servicios distintos.");
+      return;
+    }
+    if (sectionSwapPath === "Chorus" && (source.type === "saturday_role" || target.type === "saturday_role")) {
+      setSwapToast("Coro no se puede intercambiar con un servicio de sábado.");
       return;
     }
     setSavingStored(true);
     setSwapToast(null);
     try {
       const body = {
-        kind: "seat",
-        source: { roleId: source.roleId, rev: source.rev, path: source.path, itemKey: source.itemKey },
-        target: { roleId: target.roleId, rev: target.rev, path: target.path, itemKey: target.itemKey },
+        kind: "section",
+        path: sectionSwapPath,
+        roles: [
+          { id: source.roleId, rev: source.rev },
+          { id: target.roleId, rev: target.rev },
+        ],
       };
-      const candidateCells = cells.map((cell) => ({
-        ...cell,
-        occupants: cell.occupants.map((occupant) => {
-          if (cell.columnId === source.roleId && occupant.itemKey === source.itemKey) {
-            return { ...occupant, memberId: target.memberId };
-          }
-          if (cell.columnId === target.roleId && occupant.itemKey === target.itemKey) {
-            return { ...occupant, memberId: source.memberId };
-          }
-          return occupant;
-        }),
-      }));
-      const expected = frozenSwapExpectation([...new Set([source.roleId, target.roleId])], candidateCells, body);
+      const sectionOwnsRow = (rowId: string) => sectionSwapPath === "Lead"
+        ? rowId === "lead"
+        : sectionSwapPath === "BGVs"
+          ? rowId === "bgv"
+          : sectionSwapPath === "Chorus"
+            ? rowId === "coro"
+            : sectionSwapPath === "instruments"
+              ? rowId.startsWith("instrumento:")
+              : rowId.startsWith("foh:");
+      const sourceCells = cells.filter((cell) => cell.columnId === source.roleId && sectionOwnsRow(cell.rowId));
+      const targetCells = cells.filter((cell) => cell.columnId === target.roleId && sectionOwnsRow(cell.rowId));
+      const candidateCells = cells.filter((cell) =>
+        !((cell.columnId === source.roleId || cell.columnId === target.roleId) && sectionOwnsRow(cell.rowId)),
+      );
+      candidateCells.push(
+        ...targetCells.map((cell) => ({ ...cell, columnId: source.roleId })),
+        ...sourceCells.map((cell) => ({ ...cell, columnId: target.roleId })),
+      );
+      const sourceRole = storedInventory.roles.find((item) => item.role._id === source.roleId)?.role;
+      const targetRole = storedInventory.roles.find((item) => item.role._id === target.roleId)?.role;
+      const sourceFingerprint = sourceRole ? storedSectionFingerprint(sourceRole, sectionSwapPath) : null;
+      const targetFingerprint = targetRole ? storedSectionFingerprint(targetRole, sectionSwapPath) : null;
+      if (!sourceFingerprint || !targetFingerprint) {
+        setSwapToast("No se pudo congelar la sección almacenada para verificar el intercambio.");
+        return;
+      }
+      const expected = frozenSwapExpectation(
+        [source.roleId, target.roleId],
+        candidateCells,
+        body,
+        {
+          path: sectionSwapPath,
+          fingerprints: new Map([
+            [source.roleId, targetFingerprint],
+            [target.roleId, sourceFingerprint],
+          ]),
+        },
+      );
       if (!expected) {
         setSwapToast("No se pudo construir una intención completa para el intercambio.");
         return;
@@ -2406,13 +2532,13 @@ export default function MonthGenerator({
         body: expected.body,
       });
       if (!response.ok) {
-        await handleRejectedStoredSwap(response, "las asignaciones");
+        await handleRejectedStoredSwap(response, "las secciones");
         return;
       }
       setSwapVerificationPending(true);
-      setSwapToast("Asignaciones intercambiadas; verificando…");
-      setSeatSwapSource("");
-      setSeatSwapTarget("");
+      setSwapToast("Secciones intercambiadas; verificando…");
+      setSectionSwapFirst("");
+      setSectionSwapSecond("");
       if (!await storedSource.reload()) {
         setSwapVerificationPending(true);
         setSwapToast("El intercambio respondió correctamente, pero no se pudo verificar la recarga.");
@@ -2962,7 +3088,7 @@ export default function MonthGenerator({
             </p>
           )}
         </div>
-        <button type="button" onClick={requestBack} className="font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] transition-colors">
+        <button type="button" onClick={requestBack} disabled={storedTransportActive} className="font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] transition-colors disabled:opacity-50">
           {storedMode ? "Cerrar" : "← Volver"}
         </button>
       </div>
@@ -2989,7 +3115,7 @@ export default function MonthGenerator({
             <button
               type="button"
               onClick={() => setComposerOpen(true)}
-              disabled={storedHasUnresolvedWork || !!storedCreateBlocked}
+              disabled={storedMutationLocked || storedHasUnresolvedWork || !!storedCreateBlocked}
               title={storedCreateBlocked ?? undefined}
               className="min-h-[44px] rounded-lg border border-[#00bfff]/25 px-4 font-label text-xs uppercase tracking-widest text-[#00bfff] disabled:opacity-50"
             >
@@ -2999,7 +3125,7 @@ export default function MonthGenerator({
             <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.4fr_auto] md:items-end">
               <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
                 Tipo
-                <select value={createType} disabled={createAttemptStatus !== null} onChange={(event) => setCreateType(event.target.value as ServiceType)} className={selCls}>
+                <select value={createType} disabled={storedMutationLocked} onChange={(event) => setCreateType(event.target.value as ServiceType)} className={selCls}>
                   <option value="sunday_role">Domingo</option>
                   <option value="saturday_role">Sábado</option>
                   <option value="special_role">Especial</option>
@@ -3007,16 +3133,16 @@ export default function MonthGenerator({
               </label>
               <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
                 Fecha
-                <input type="date" value={createDate} disabled={createAttemptStatus !== null} min={`${monthPrefix}-01`} max={`${monthPrefix}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`} onChange={(event) => setCreateDate(event.target.value)} className={inCls} />
+                <input type="date" value={createDate} disabled={storedMutationLocked} min={`${monthPrefix}-01`} max={`${monthPrefix}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`} onChange={(event) => setCreateDate(event.target.value)} className={inCls} />
               </label>
               {createType === "special_role" ? (
                 <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
                   Nombre
-                  <input value={createName} disabled={createAttemptStatus !== null} onChange={(event) => setCreateName(event.target.value)} className={inCls} placeholder="Nombre del servicio" />
+                  <input value={createName} disabled={storedMutationLocked} onChange={(event) => setCreateName(event.target.value)} className={inCls} placeholder="Nombre del servicio" />
                 </label>
               ) : <div />}
               <div className="flex gap-2">
-                <button type="button" onClick={() => void handleCreateOne()} disabled={creatingOne || storedWriteUnresolved || createAttemptStatus === "committedUnverified" || !!storedCreateBlocked} title={storedCreateBlocked ?? undefined} className="min-h-[44px] rounded-lg bg-[#003572] px-4 font-label text-xs uppercase tracking-widest dark:bg-[#00bfff]/20 disabled:opacity-50">
+                <button type="button" onClick={() => void handleCreateOne()} disabled={creatingOne || (storedMutationLocked && createAttemptStatus !== "unknown") || storedWriteUnresolved || createAttemptStatus === "committedUnverified" || !!storedCreateBlocked} title={storedCreateBlocked ?? undefined} className="min-h-[44px] rounded-lg bg-[#003572] px-4 font-label text-xs uppercase tracking-widest dark:bg-[#00bfff]/20 disabled:opacity-50">
                   {creatingOne ? "Creando…" : createAttemptStatus === "unknown" ? "Reintentar misma solicitud" : createAttemptStatus === "committedUnverified" ? "Verificando…" : "Crear vacío"}
                 </button>
                 <button type="button" onClick={() => setComposerOpen(false)} disabled={creatingOne || createAttemptStatus !== null} className="min-h-[44px] rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50">
@@ -3060,8 +3186,9 @@ export default function MonthGenerator({
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={!storedMode && pendingDiscard === "back" ? goBackToConfig : onClose}
-              className="min-h-[44px] rounded-lg bg-[#003572] px-3 font-label text-xs uppercase tracking-widest dark:bg-[#00bfff]/20"
+              onClick={confirmPendingDiscard}
+              disabled={storedTransportActive}
+              className="min-h-[44px] rounded-lg bg-[#003572] px-3 font-label text-xs uppercase tracking-widest dark:bg-[#00bfff]/20 disabled:opacity-50"
             >
               {!storedMode && pendingDiscard === "back" ? "Volver de todos modos" : "Cerrar de todos modos"}
             </button>
@@ -3096,6 +3223,7 @@ export default function MonthGenerator({
               type="button"
               data-swap-date={col.date}
               onClick={() => handleColumnSwap(col.columnId)}
+              disabled={storedMode && storedSwapInteractionBlocked}
               className={`min-h-[44px] px-2 py-1 rounded-full border text-[10px] font-label uppercase tracking-widest transition-colors ${
                 swapSel === col.columnId
                   ? "border-[#00bfff] bg-[#00bfff]/20 text-[#00bfff]"
@@ -3110,28 +3238,35 @@ export default function MonthGenerator({
       )}
 
       {storedMode && (
-        <div className="grid gap-2 rounded-lg border border-[#00bfff]/15 p-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
+        <div className="grid gap-2 rounded-lg border border-[#00bfff]/15 p-3 md:grid-cols-[0.8fr_1fr_1fr_auto] md:items-end">
           <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
-            Primera asignación
-            <select value={seatSwapSource} onChange={(event) => setSeatSwapSource(event.target.value)} className={selCls}>
-              <option value="">Seleccionar…</option>
-              {storedSeatOptions.map((option) => <option key={`a:${option.key}`} value={option.key}>{option.label}</option>)}
+            Sección
+            <select value={sectionSwapPath} disabled={storedSwapInteractionBlocked} onChange={(event) => setSectionSwapPath(event.target.value as StoredSectionPath)} className={selCls}>
+              {STORED_SECTION_OPTIONS.map((option) => <option key={option.path} value={option.path}>{option.label}</option>)}
             </select>
           </label>
           <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
-            Segunda asignación
-            <select value={seatSwapTarget} onChange={(event) => setSeatSwapTarget(event.target.value)} className={selCls}>
+            Primer servicio
+            <select value={sectionSwapFirst} disabled={storedSwapInteractionBlocked} onChange={(event) => setSectionSwapFirst(event.target.value)} className={selCls}>
               <option value="">Seleccionar…</option>
-              {storedSeatOptions.map((option) => <option key={`b:${option.key}`} value={option.key}>{option.label}</option>)}
+              {storedSectionServiceOptions.map((option) => <option key={`a:${option.column.roleId}`} value={option.column.roleId}>{option.label}</option>)}
+            </select>
+          </label>
+          <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
+            Segundo servicio
+            <select value={sectionSwapSecond} disabled={storedSwapInteractionBlocked} onChange={(event) => setSectionSwapSecond(event.target.value)} className={selCls}>
+              <option value="">Seleccionar…</option>
+              {storedSectionServiceOptions.map((option) => <option key={`b:${option.column.roleId}`} value={option.column.roleId}>{option.label}</option>)}
             </select>
           </label>
           <button
             type="button"
-            onClick={() => void handleSeatSwap()}
-            disabled={savingStored || storedHasUnresolvedWork || !!storedSwapBlocked || !seatSwapSource || !seatSwapTarget || seatSwapSource === seatSwapTarget}
+            onClick={() => void handleSectionSwap()}
+            disabled={storedSwapInteractionBlocked || !sectionSwapFirst || !sectionSwapSecond || sectionSwapFirst === sectionSwapSecond || sectionSwapTopologyInvalid}
+            title={sectionSwapTopologyInvalid ? "Coro no está disponible en servicios de sábado." : undefined}
             className="min-h-[44px] rounded-lg border border-[#00bfff]/25 px-4 font-label text-xs uppercase tracking-widest text-[#00bfff] disabled:opacity-50"
           >
-            Intercambiar puestos
+            Intercambiar sección
           </button>
         </div>
       )}
@@ -3185,10 +3320,11 @@ export default function MonthGenerator({
           unresolvedNames={allUnresolvedNames}
           unfilled={unfilled}
           onCellsChange={handleCellsChange}
-          onRowsChange={setRows}
+          onRowsChange={handleRowsChange}
           onToggleSkip={handleToggleSkip}
           onStoredHeaderChange={handleStoredHeaderChange}
           storedDateBlockedReason={storedDateBlocked}
+          mutationLocked={storedMutationLocked}
           onAuto={handleAuto}
           autoState={autoState}
           diagnostics={diagnostics}
@@ -3274,13 +3410,13 @@ export default function MonthGenerator({
 
       {storedMode ? (
         <div className="flex gap-3">
-          <button type="button" onClick={requestBack} className="flex-1 min-h-[44px] rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
+          <button type="button" onClick={requestBack} disabled={storedTransportActive} className="flex-1 min-h-[44px] rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors disabled:opacity-50">
             Cerrar
           </button>
           <button
             type="button"
             onClick={() => void handleStoredSave()}
-            disabled={savingStored || pendingSaveAttempts.size > 0 || dirtyStoredColumns.length === 0 || invalidStoredColumns.length > 0 || !storedInventory.coherent || !!storedSaveBlocked}
+            disabled={storedMutationLocked || dirtyStoredColumns.length === 0 || invalidStoredColumns.length > 0 || !storedInventory.coherent || !!storedSaveBlocked}
             title={storedSaveBlocked ?? undefined}
             className="flex-1 min-h-[44px] rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
           >

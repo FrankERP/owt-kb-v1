@@ -783,6 +783,40 @@ describe("PlannerGrid — per-column skip control (D18)", () => {
 });
 
 describe("PlannerGrid — row management", () => {
+  it("exposes the stored mutation lock on cells, headers, candidates, and row controls", () => {
+    const onCellsChange = vi.fn();
+    const onRowsChange = vi.fn();
+    const onStoredHeaderChange = vi.fn();
+    const cells: InputGridCell[] = [
+      { date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "manual" },
+    ];
+    const { container, rerender } = render(
+      <PlannerGrid
+        {...baseProps({ mode: "stored", cells, onCellsChange, onRowsChange, onStoredHeaderChange })}
+      />,
+    );
+    fireEvent.click(cellFor(container, "lead", "2026-08-09"));
+    expect(candidateLi("Gaby").getAttribute("aria-disabled")).toBeNull();
+
+    rerender(
+      <PlannerGrid
+        {...baseProps({ mode: "stored", cells, onCellsChange, onRowsChange, onStoredHeaderChange, mutationLocked: true })}
+      />,
+    );
+
+    const leadCell = cellFor(container, "lead", "2026-08-09");
+    expect(leadCell.getAttribute("aria-disabled")).toBe("true");
+    expect(candidateLi("Gaby").getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(candidateLi("Gaby"));
+    expect(onCellsChange).not.toHaveBeenCalled();
+    expect((screen.getByDisplayValue("2026-08-09") as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /eliminar fila drums/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByPlaceholderText("Nuevo instrumento") as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getAllByRole("button", { name: "Añadir" }).every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+    expect(onRowsChange).not.toHaveBeenCalled();
+    expect(onStoredHeaderChange).not.toHaveBeenCalled();
+  });
+
   it("adds an instrument row via onRowsChange", () => {
     const onRowsChange = vi.fn();
     render(<PlannerGrid {...baseProps({ onRowsChange })} />);

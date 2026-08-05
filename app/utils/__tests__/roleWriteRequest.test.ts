@@ -453,6 +453,56 @@ describe("parseSwapRequest", () => {
     }
   });
 
+  it("accepts an exact section swap on every canonical path", () => {
+    for (const path of SEAT_PATHS) {
+      const parsed = parseSwapRequest({
+        kind: "section",
+        path,
+        roles: [{ id: "role-1", rev: "rev-1" }, { id: "role-2", rev: "rev-2" }],
+      });
+      expect(parsed.ok, path).toBe(true);
+      if (parsed.ok) {
+        expect(parsed.value).toEqual({
+          kind: "section",
+          path,
+          roles: [{ id: "role-1", rev: "rev-1" }, { id: "role-2", rev: "rev-2" }],
+        });
+      }
+    }
+  });
+
+  it("rejects malformed section paths and role selections", () => {
+    const validRoles = [{ id: "role-1", rev: "rev-1" }, { id: "role-2", rev: "rev-2" }];
+    for (const body of [
+      { kind: "section", path: "songs", roles: validRoles },
+      { kind: "section", path: "BGVs", roles: [validRoles[0]] },
+      { kind: "section", path: "BGVs", roles: [validRoles[0], validRoles[0]] },
+      { kind: "section", path: "BGVs", roles: [{ id: "drafts.role-1", rev: "rev-1" }, validRoles[1]] },
+      { kind: "section", path: "BGVs", roles: [{ id: "role-1" }, validRoles[1]] },
+    ]) {
+      expect(parseSwapRequest(body).ok, JSON.stringify(body)).toBe(false);
+    }
+  });
+
+  it("strips extra section fields so no client roster enters the parsed value", () => {
+    const parsed = parseSwapRequest({
+      kind: "section",
+      path: "BGVs",
+      roles: [{ id: "role-1", rev: "rev-1" }, { id: "role-2", rev: "rev-2" }],
+      BGVs: [{ _key: "hacker", _ref: "mem-hacker" }],
+      assignments: ["mem-hacker"],
+    });
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(parsed.value).toEqual({
+        kind: "section",
+        path: "BGVs",
+        roles: [{ id: "role-1", rev: "rev-1" }, { id: "role-2", rev: "rev-2" }],
+      });
+      expect(JSON.stringify(parsed.value)).not.toContain("mem-hacker");
+    }
+  });
+
   it("rejects a team swap of one role, three roles, or the same role twice", () => {
     for (const roles of [
       [{ id: "role-1", rev: "rev-1" }],
