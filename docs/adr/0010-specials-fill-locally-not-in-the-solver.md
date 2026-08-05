@@ -2,6 +2,13 @@
 
 **Date:** 2026-08-01 · **Status:** Accepted · P6 implemented 2026-08-03 (seeded 2026-08-02)
 
+> **2026-08-05 UI supersession:** `SeatBoard`/Tablero is no longer mounted;
+> `PlannerGrid` is the sole free-form roster editor. References below to two
+> manual surfaces describe the historical system that motivated this ADR. The
+> core decisions remain active: specials stay out of CP-SAT, shared rules remain
+> authoritative in Sanity, and automatic local fill cannot consume a human
+> override. The new one-service composer is manual-only and does not auto-fill.
+
 ## Context
 
 Special services (`special_role` — vigils, conferences, midweek nights) were
