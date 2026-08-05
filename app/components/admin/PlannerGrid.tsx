@@ -93,9 +93,10 @@ import {
 import { createPortal } from "react-dom";
 
 import {
-  assignedForDate,
+  assignedForColumn,
   cellsToParticipantRoles,
   hasTarget,
+  reconcileOccupants,
   rowAppliesTo,
   seatDefForRow,
   type GridCell,
@@ -143,6 +144,7 @@ export interface AutoState {
 }
 
 export interface PlannerGridProps {
+  mode?: "create" | "stored";
   rows: GridRow[];
   columns: GridColumn[];
   cells: GridCell[];
@@ -165,7 +167,7 @@ export interface PlannerGridProps {
    * `handleConfirm` quietly posted nothing.
    */
   createBlockFor: (c: GridColumn) => "existing" | "created" | null;
-  /** By column date. */
+  /** By opaque column id. */
   skipped: Set<string>;
   /**
    * Computed from `sundayDates`, NOT from `columns` — under D9 `columns` can
@@ -175,11 +177,15 @@ export interface PlannerGridProps {
   unaddressableDates: string[];
   unresolvedNames: string[];
   /** `mapUnfilledSeats` output. */
-  unfilled: { date: string; rowId: string }[];
+  unfilled: { columnId: string; rowId: string }[];
   onCellsChange: (next: GridCell[]) => void;
   /** Add/remove instrument and FOH rows. */
   onRowsChange: (next: GridRow[]) => void;
-  onToggleSkip: (date: string) => void;
+  onToggleSkip: (columnId: string) => void;
+  onStoredHeaderChange?: (columnId: string, patch: { date?: string; serviceName?: string }) => void;
+  storedDateBlockedReason?: string | null;
+  /** Prevent every stored-grid mutation while another stored mutation is unresolved. */
+  mutationLocked?: boolean;
   /** `MonthGenerator` owns the fetch; this component only asks for it. */
   onAuto: () => void;
   autoState: AutoState;
@@ -199,6 +205,7 @@ export interface PlannerGridProps {
    * need it; without it they are simply not evaluated.
    */
   sundayDates?: string[];
+  sundayDatesForColumn?: (column: GridColumn) => string[];
   /**
    * The left column's contents — `ParticipationSidebar`, built and fed by
    * `MonthGenerator` (the counts are a function of ITS state, and nothing about
@@ -230,7 +237,7 @@ export const CHART_COLUMN_WIDTH = 216;
 /** The right column's width, spent only while a cell is active. */
 export const PICKER_COLUMN_WIDTH = 240;
 
-const cellKey = (date: string, rowId: string) => `${date}|${rowId}`;
+const cellKey = (columnId: string, rowId: string) => `${columnId}|${rowId}`;
 
 /**
  * Controls whose own Escape means something, so the capture-phase listener does
@@ -273,11 +280,11 @@ const FOCUSABLE_SELECTOR =
 function withUpdatedCell(
   cells: GridCell[],
   rowId: string,
-  date: string,
+  columnId: string,
   memberIds: string[],
   addOverride?: { memberId: string; reason: string },
 ): GridCell[] {
-  const idx = cells.findIndex((c) => c.date === date && c.rowId === rowId);
+  const idx = cells.findIndex((c) => c.columnId === columnId && c.rowId === rowId);
   const seated = new Set(memberIds);
   const prior = idx === -1 ? [] : (cells[idx].overrides ?? []);
   const priorReasons = idx === -1 ? {} : (cells[idx].overrideReasons ?? {});
@@ -293,10 +300,26 @@ function withUpdatedCell(
     if (reason !== undefined) overrideReasons[id] = reason;
   }
   if (idx === -1) {
-    return [...cells, { date, rowId, memberIds, origin: "manual", overrides, overrideReasons }];
+    return [
+      ...cells,
+      {
+        columnId,
+        rowId,
+        occupants: reconcileOccupants([], memberIds),
+        origin: "manual" as const,
+        overrides,
+        overrideReasons,
+      },
+    ];
   }
   const next = [...cells];
-  next[idx] = { ...next[idx], memberIds, origin: "manual", overrides, overrideReasons };
+  next[idx] = {
+    ...next[idx],
+    occupants: reconcileOccupants(next[idx].occupants, memberIds),
+    origin: "manual",
+    overrides,
+    overrideReasons,
+  };
   return next;
 }
 
@@ -307,14 +330,18 @@ function withUpdatedCell(
  * then places in BGV needs re-checking after every run. Cross-category
  * (voz + instrumento) double duty is legitimate and never flagged.
  */
-function categoryDuplicatesForDate(cells: GridCell[], rows: GridRow[], date: string): Map<string, string[]> {
+function categoryDuplicatesForColumn(
+  cells: GridCell[],
+  rows: GridRow[],
+  columnId: string,
+): Map<string, string[]> {
   const rowById = new Map(rows.map((r) => [r.id, r]));
   const byMember = new Map<string, { rowId: string; category: SeatCategory }[]>();
   for (const c of cells) {
-    if (c.date !== date) continue;
+    if (c.columnId !== columnId) continue;
     const row = rowById.get(c.rowId);
     if (!row) continue;
-    for (const memberId of c.memberIds) {
+    for (const { memberId } of c.occupants) {
       const list = byMember.get(memberId) ?? [];
       list.push({ rowId: c.rowId, category: row.category });
       byMember.set(memberId, list);
@@ -341,6 +368,7 @@ function categoryDuplicatesForDate(cells: GridCell[], rows: GridRow[], date: str
 
 export default function PlannerGrid(props: PlannerGridProps) {
   const {
+    mode = "create",
     rows,
     columns,
     cells,
@@ -355,16 +383,20 @@ export default function PlannerGrid(props: PlannerGridProps) {
     onCellsChange,
     onRowsChange,
     onToggleSkip,
+    onStoredHeaderChange,
+    storedDateBlockedReason,
+    mutationLocked = false,
     onAuto,
     autoState,
     diagnostics,
     config,
     sundayDates,
+    sundayDatesForColumn,
     participation,
     monthLabel,
   } = props;
 
-  const [openCell, setOpenCell] = useState<{ rowId: string; date: string } | null>(null);
+  const [openCell, setOpenCell] = useState<{ rowId: string; columnId: string } | null>(null);
   // D-defect-3: candidate ORDER only, captured the moment a cell opens. Each
   // row's own live state (load, recent strip, `Ya asignado`, blocked reason,
   // selected) still comes from a fresh `rankFor` every render — only the
@@ -390,7 +422,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
   // effect — the row it names may no longer even exist in `rows`, and the
   // effect approach also trips `react-hooks/set-state-in-effect`.
   const activeRemoveError =
-    removeError && cells.some((c) => c.rowId === removeError.rowId && c.memberIds.length > 0)
+    removeError && cells.some((c) => c.rowId === removeError.rowId && c.occupants.length > 0)
       ? removeError
       : null;
 
@@ -409,17 +441,17 @@ export default function PlannerGrid(props: PlannerGridProps) {
   );
   const unionRoles = useMemo(() => [...savedWindow, ...inGridRoles], [savedWindow, inGridRoles]);
 
-  const columnByDate = useMemo(() => new Map(columns.map((c) => [c.date, c])), [columns]);
+  const columnById = useMemo(() => new Map(columns.map((c) => [c.columnId, c])), [columns]);
 
   const cellsByKey = useMemo(() => {
     const map = new Map<string, GridCell>();
-    for (const c of cells) map.set(cellKey(c.date, c.rowId), c);
+    for (const c of cells) map.set(cellKey(c.columnId, c.rowId), c);
     return map;
   }, [cells]);
 
   const unfilledByKey = useMemo(() => {
     const set = new Set<string>();
-    for (const u of unfilled) set.add(cellKey(u.date, u.rowId));
+    for (const u of unfilled) set.add(cellKey(u.columnId, u.rowId));
     return set;
   }, [unfilled]);
 
@@ -436,10 +468,12 @@ export default function PlannerGrid(props: PlannerGridProps) {
   // ~rows×columns full scans per render. Computed once per distinct date
   // that actually holds a cell, keyed for O(1) lookup per (row, column) pair.
   const emptyDuplicates = useMemo(() => new Map<string, string[]>(), []);
-  const duplicatesByDateMap = useMemo(() => {
+  const duplicatesByColumnId = useMemo(() => {
     const map = new Map<string, Map<string, string[]>>();
-    const dates = new Set(cells.map((c) => c.date));
-    for (const date of dates) map.set(date, categoryDuplicatesForDate(cells, rows, date));
+    const columnIds = new Set(cells.map((c) => c.columnId));
+    for (const columnId of columnIds) {
+      map.set(columnId, categoryDuplicatesForColumn(cells, rows, columnId));
+    }
     return map;
   }, [cells, rows]);
 
@@ -455,7 +489,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
    * re-asks with the occupant's own seat removed.
    */
   const emptyViolations = useMemo(() => new Map<string, SeatedViolation>(), []);
-  const violationsByDate = useMemo(() => {
+  const violationsByColumnId = useMemo(() => {
     const map = new Map<string, Map<string, SeatedViolation>>();
     if (!config) return map;
     // P10's record, read straight off the cells — the only reader there is.
@@ -464,57 +498,59 @@ export default function PlannerGrid(props: PlannerGridProps) {
     // overriding Gaby on the 12th silently sanction her on the 19th too. The
     // VALUE is the rule that was waived, so it cannot sanction a rule added or
     // edited since either — see `ruleViolationsForColumn`.
-    const overriddenByDate = new Map<string, Map<string, string>>();
+    const overriddenByColumnId = new Map<string, Map<string, string>>();
     for (const c of cells) {
       for (const id of c.overrides ?? []) {
         const reason = c.overrideReasons?.[id];
         if (reason === undefined) continue;
-        const map = overriddenByDate.get(c.date) ?? new Map<string, string>();
+        const map = overriddenByColumnId.get(c.columnId) ?? new Map<string, string>();
         map.set(violationKey(c.rowId, id), reason);
-        overriddenByDate.set(c.date, map);
+        overriddenByColumnId.set(c.columnId, map);
       }
     }
     for (const column of columns) {
+      const columnSundayDates = sundayDatesForColumn?.(column) ?? sundayDates;
       const found = ruleViolationsForColumn({
         column,
         rows,
-        assigned: assignedForDate(cells, rows, column.date),
+        assigned: assignedForColumn(cells, rows, column.columnId),
         members,
-        sundayDates,
+        sundayDates: columnSundayDates,
         config,
-        overridden: overriddenByDate.get(column.date),
+        overridden: overriddenByColumnId.get(column.columnId),
       });
-      if (found.size > 0) map.set(column.date, found);
+      if (found.size > 0) map.set(column.columnId, found);
     }
     return map;
-  }, [cells, rows, columns, members, sundayDates, config]);
+  }, [cells, rows, columns, members, sundayDates, sundayDatesForColumn, config]);
 
-  function rankFor(row: GridRow, date: string): RankedCandidate[] {
+  function rankFor(row: GridRow, columnId: string): RankedCandidate[] {
+    const column = columnById.get(columnId);
+    if (!column) return [];
     const seat = seatDefForRow(row);
-    const assigned = assignedForDate(cells, rows, date);
-    // At most one column per date (E3), so the date identifies the column.
+    const assigned = assignedForColumn(cells, rows, columnId);
+    const columnSundayDates = sundayDatesForColumn?.(column) ?? sundayDates;
     // Passed to BOTH calls: the merge below keeps only `recent` from the second,
     // so its verdict is discarded and cannot disagree — but a later change to
     // what the merge keeps would make a divergence here a real hazard.
-    const column = columnByDate.get(date);
     const order = rankCandidates({
       seat,
-      date,
+      date: column.date,
       members,
       windowRoles: unionRoles,
       assigned,
       column,
-      sundayDates,
+      sundayDates: columnSundayDates,
       config,
     });
     const recentOnly = rankCandidates({
       seat,
-      date,
+      date: column.date,
       members,
       windowRoles: savedWindow,
       assigned,
       column,
-      sundayDates,
+      sundayDates: columnSundayDates,
       config,
     });
     const recentById = new Map(recentOnly.map((c) => [c.id, c.recent]));
@@ -556,17 +592,19 @@ export default function PlannerGrid(props: PlannerGridProps) {
    * two lines; the line that must never be weakened is `CandidateRow`'s
    * `blocked`, which is also what renders `aria-disabled` and the red state.
    */
-  function toggleCandidate(row: GridRow, date: string, memberId: string, candidates: RankedCandidate[]) {
+  function toggleCandidate(row: GridRow, columnId: string, memberId: string, candidates: RankedCandidate[]) {
+    if (mutationLocked) return;
     clearRemoveError();
-    const current = cellsByKey.get(cellKey(date, row.id))?.memberIds ?? [];
+    const current =
+      cellsByKey.get(cellKey(columnId, row.id))?.occupants.map((o) => o.memberId) ?? [];
     if (current.includes(memberId)) {
-      onCellsChange(withUpdatedCell(cells, row.id, date, current.filter((id) => id !== memberId)));
+      onCellsChange(withUpdatedCell(cells, row.id, columnId, current.filter((id) => id !== memberId)));
       return;
     }
     const candidate = candidates.find((c) => c.id === memberId);
     if (candidate?.blockedReason) return; // refuse a same-category double (D6)
     if (candidate?.ruleBlockedReason) return; // refuse a hard rule (E6) — see `overrideCandidate`
-    onCellsChange(withUpdatedCell(cells, row.id, date, [...current, memberId]));
+    onCellsChange(withUpdatedCell(cells, row.id, columnId, [...current, memberId]));
   }
 
   /**
@@ -589,7 +627,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
    * reads `overrides`; a person may make a deliberate exception, the automation
    * may not. That asymmetry is the requirement, not an implementation detail.
    */
-  function overrideCandidate(row: GridRow, date: string, memberId: string, candidates: RankedCandidate[]) {
+  function overrideCandidate(row: GridRow, columnId: string, memberId: string, candidates: RankedCandidate[]) {
+    if (mutationLocked) return;
     clearRemoveError();
     const candidate = candidates.find((c) => c.id === memberId);
     if (!candidate?.ruleBlockedReason) return;
@@ -600,7 +639,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
     // override for a same-category double"). Kept because this is a write path
     // into a cell and the cost is one line.
     if (candidate.blockedReason) return;
-    const current = cellsByKey.get(cellKey(date, row.id))?.memberIds ?? [];
+    const current =
+      cellsByKey.get(cellKey(columnId, row.id))?.occupants.map((o) => o.memberId) ?? [];
     // A BACKSTOP, not the enforcement. Nobody already seated here can reach this
     // line: `evaluate` exempts a cell's own occupants outright (E6/P9,
     // `ruleEnforcement.ts`'s self-exemption), so their `ruleBlockedReason` is
@@ -609,7 +649,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
     // below assumes, and re-stating it costs one line.
     if (current.includes(memberId)) return;
     onCellsChange(
-      withUpdatedCell(cells, row.id, date, [...current, memberId], {
+      withUpdatedCell(cells, row.id, columnId, [...current, memberId], {
         memberId,
         reason: candidate.ruleBlockedReason,
       }),
@@ -626,9 +666,9 @@ export default function PlannerGrid(props: PlannerGridProps) {
    * toggle — the panel is a fixed region of the layout, and a stray second
    * click on the cell you are working in must not empty it.
    */
-  function openPicker(row: GridRow, date: string) {
-    setOpenOrder(rankFor(row, date).map((c) => c.id));
-    setOpenCell({ rowId: row.id, date });
+  function openPicker(row: GridRow, columnId: string) {
+    setOpenOrder(rankFor(row, columnId).map((c) => c.id));
+    setOpenCell({ rowId: row.id, columnId });
   }
 
   /**
@@ -651,11 +691,11 @@ export default function PlannerGrid(props: PlannerGridProps) {
     setOpenOrder(null);
     if (!target) return;
     document
-      .querySelector<HTMLElement>(`[data-row-id="${target.rowId}"][data-date="${target.date}"]`)
+      .querySelector<HTMLElement>(`[data-row-id="${target.rowId}"][data-column-id="${target.columnId}"]`)
       ?.focus();
   }, [openCell]);
 
-  const openKey = openCell ? `${openCell.rowId}|${openCell.date}` : null;
+  const openKey = openCell ? `${openCell.rowId}|${openCell.columnId}` : null;
 
   /**
    * Focus follows the picker, on open AND on every switch to another cell.
@@ -814,7 +854,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
   }
 
   function removeRow(rowId: string) {
-    const hasOccupants = cells.some((c) => c.rowId === rowId && c.memberIds.length > 0);
+    if (mutationLocked) return;
+    const hasOccupants = cells.some((c) => c.rowId === rowId && c.occupants.length > 0);
     if (hasOccupants) {
       setRemoveError({ rowId, message: "Vacía la fila antes de eliminarla." });
       return;
@@ -824,6 +865,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
   }
 
   function addInstrumentRow(raw: string): string | null {
+    if (mutationLocked) return "Espera a que termine la operación pendiente.";
     const name = normalizeSeatName(raw);
     if (!name) return null;
     if (rows.some((r) => r.category === "instrumento" && r.label.toLowerCase() === name.toLowerCase())) {
@@ -835,6 +877,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
   }
 
   function addFohRow(raw: string): string | null {
+    if (mutationLocked) return "Espera a que termine la operación pendiente.";
     const name = normalizeSeatName(raw);
     if (!name) return null;
     if (rows.some((r) => r.category === "foh" && r.label.toLowerCase() === name.toLowerCase())) {
@@ -845,14 +888,19 @@ export default function PlannerGrid(props: PlannerGridProps) {
     return null;
   }
 
-  function copyRowAcrossDates(row: GridRow, sourceDate: string) {
+  function copyRowAcrossColumns(row: GridRow, sourceColumnId: string) {
+    if (mutationLocked) return;
     clearRemoveError();
-    const sourceIds = cellsByKey.get(cellKey(sourceDate, row.id))?.memberIds ?? [];
+    const sourceColumn = columnById.get(sourceColumnId);
+    if (mode === "stored" && sourceColumn && "admission" in sourceColumn && sourceColumn.admission === "readOnly") return;
+    const sourceIds =
+      cellsByKey.get(cellKey(sourceColumnId, row.id))?.occupants.map((o) => o.memberId) ?? [];
     let next = cells;
     for (const col of columns) {
-      if (col.date === sourceDate) continue;
+      if (col.columnId === sourceColumnId) continue;
+      if (mode === "stored" && "admission" in col && col.admission === "readOnly") continue;
       if (!rowAppliesTo(row, col)) continue;
-      next = withUpdatedCell(next, row.id, col.date, sourceIds);
+      next = withUpdatedCell(next, row.id, col.columnId, sourceIds);
     }
     onCellsChange(next);
   }
@@ -864,7 +912,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
   // aren't in `openOrder` (shouldn't happen — the candidate pool for a given
   // row/date doesn't change while it's open) sort after everything frozen,
   // stably, rather than disappearing.
-  const liveCandidates = openCell && openRow ? rankFor(openRow, openCell.date) : [];
+  const openColumn = openCell ? columnById.get(openCell.columnId) ?? null : null;
+  const liveCandidates = openCell && openRow ? rankFor(openRow, openCell.columnId) : [];
   const openCandidates = openOrder
     ? [...liveCandidates].sort((a, b) => {
         const ia = openOrder.indexOf(a.id);
@@ -906,13 +955,18 @@ export default function PlannerGrid(props: PlannerGridProps) {
         <div className={`${labelMinW} ${stickyLabel}`} />
         {columns.map((column) => (
           <ColumnHeader
-            key={column.date}
+            key={column.columnId}
             column={column}
             preflight={preflightFor(column)}
             createBlock={createBlockFor(column)}
-            skipped={skipped.has(column.date)}
+            skipped={skipped.has(column.columnId)}
             unaddressable={unaddressableSet.has(column.date)}
-            onToggleSkip={() => onToggleSkip(column.date)}
+            onToggleSkip={() => onToggleSkip(column.columnId)}
+            stored={mode === "stored"}
+            readOnly={mode === "stored" && "admission" in column && column.admission === "readOnly"}
+            onStoredHeaderChange={onStoredHeaderChange}
+            storedDateBlockedReason={storedDateBlockedReason}
+            mutationLocked={mutationLocked}
             minWClass={cellMinW}
           />
         ))}
@@ -924,14 +978,28 @@ export default function PlannerGrid(props: PlannerGridProps) {
             columns={columns}
             cellsByKey={cellsByKey}
             unfilledByKey={unfilledByKey}
-            duplicatesByDate={(date) => duplicatesByDateMap.get(date) ?? emptyDuplicates}
-            violationsByDate={(date) => violationsByDate.get(date) ?? emptyViolations}
+            duplicatesByColumnId={(columnId) =>
+              duplicatesByColumnId.get(columnId) ?? emptyDuplicates
+            }
+            violationsByColumnId={(columnId) =>
+              violationsByColumnId.get(columnId) ?? emptyViolations
+            }
             memberName={memberName}
-            onOpen={(date) => openPicker(row, date)}
+            onOpen={(columnId) => {
+              if (mutationLocked) return;
+              const column = columnById.get(columnId);
+              if (mode === "stored" && column && "admission" in column && column.admission === "readOnly") return;
+              openPicker(row, columnId);
+            }}
             onRemove={row.category !== "voz" ? () => removeRow(row.id) : undefined}
+            mutationLocked={mutationLocked}
             removeError={activeRemoveError?.rowId === row.id ? activeRemoveError.message : null}
-            onCopy={row.category !== "voz" ? (date) => copyRowAcrossDates(row, date) : undefined}
-            activeDate={openCell?.rowId === row.id ? openCell.date : null}
+            onCopy={
+              row.category !== "voz"
+                ? (columnId) => copyRowAcrossColumns(row, columnId)
+                : undefined
+            }
+            activeColumnId={openCell?.rowId === row.id ? openCell.columnId : null}
             minWClass={cellMinW}
             labelMinWClass={labelMinW}
             stickyLabelClass={stickyLabel}
@@ -950,8 +1018,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
       {gridBlock}
       {!fullScreen && (
         <div className="flex flex-wrap gap-3">
-          <AddRowForm placeholder="Nuevo instrumento" onAdd={addInstrumentRow} />
-          <AddRowForm placeholder="Nuevo rol FOH" onAdd={addFohRow} />
+          <AddRowForm placeholder="Nuevo instrumento" onAdd={addInstrumentRow} disabled={mutationLocked} />
+          <AddRowForm placeholder="Nuevo rol FOH" onAdd={addFohRow} disabled={mutationLocked} />
         </div>
       )}
     </div>
@@ -962,18 +1030,18 @@ export default function PlannerGrid(props: PlannerGridProps) {
   // not have for the ~90% of the time nobody is picking anybody. The template is
   // flex, so the centre column simply reclaims the width.
   const pickerColumn =
-    openCell && openRow ? (
+    openCell && openRow && openColumn ? (
       <div
         ref={pickerRef}
         tabIndex={-1}
         role="region"
-        aria-label={`Candidatos para ${openRow.label} — ${openCell.date}`}
+        aria-label={`Candidatos para ${openRow.label} — ${openColumn.date}`}
         data-candidate-picker
         className={`${CARD_STYLE.dialog} self-start rounded-xl border border-[#00bfff]/15 p-3 focus:outline-none xl:sticky xl:top-4 xl:order-3 xl:w-[240px] xl:shrink-0`}
       >
         <div className="mb-2 flex items-start justify-between gap-2">
           <span className="font-label text-xs uppercase tracking-widest text-[#C8D8EB]/70">
-            Candidatos para {openRow.label} — {openCell.date}
+            Candidatos para {openRow.label} — {openColumn.date}
           </span>
           <button
             type="button"
@@ -988,11 +1056,16 @@ export default function PlannerGrid(props: PlannerGridProps) {
             <CandidateRow
               key={candidate.id}
               candidate={candidate}
-              selected={(cellsByKey.get(cellKey(openCell.date, openCell.rowId))?.memberIds ?? []).includes(
-                candidate.id,
-              )}
-              onToggle={(id) => toggleCandidate(openRow, openCell.date, id, openCandidates)}
-              onOverride={(id) => overrideCandidate(openRow, openCell.date, id, openCandidates)}
+              selected={(
+                cellsByKey
+                  .get(cellKey(openCell.columnId, openCell.rowId))
+                  ?.occupants.map((o) => o.memberId) ?? []
+              ).includes(candidate.id)}
+              mutationLocked={mutationLocked}
+              onToggle={(id) => toggleCandidate(openRow, openCell.columnId, id, openCandidates)}
+              onOverride={(id) =>
+                overrideCandidate(openRow, openCell.columnId, id, openCandidates)
+              }
             />
           ))}
           {openCandidates.length === 0 && (
@@ -1089,14 +1162,16 @@ export default function PlannerGrid(props: PlannerGridProps) {
         <>
       {/* ── Auto controls ─────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={handleAutoClick}
-          disabled={!!autoState.disabledReason || autoState.pending}
-          className="min-h-[44px] rounded-lg bg-[#003572] px-4 font-label text-xs uppercase tracking-widest transition-colors hover:bg-[#003572]/80 disabled:opacity-50 dark:bg-[#00bfff]/20 dark:hover:bg-[#00bfff]/30"
-        >
-          {autoState.pending ? "Calculando..." : "🤖 Auto-asignar con Solver"}
-        </button>
+        {mode === "create" && (
+          <button
+            type="button"
+            onClick={handleAutoClick}
+            disabled={!!autoState.disabledReason || autoState.pending}
+            className="min-h-[44px] rounded-lg bg-[#003572] px-4 font-label text-xs uppercase tracking-widest transition-colors hover:bg-[#003572]/80 disabled:opacity-50 dark:bg-[#00bfff]/20 dark:hover:bg-[#00bfff]/30"
+          >
+            {autoState.pending ? "Calculando..." : "🤖 Auto-asignar con Solver"}
+          </button>
+        )}
         {/*
           "Sometimes I need to take a screenshot of the whole month." Neither the
           page nor the three columns can show a ten-column month at 1512, and a
@@ -1115,13 +1190,13 @@ export default function PlannerGrid(props: PlannerGridProps) {
         >
           ⛶ Pantalla completa
         </button>
-        {autoState.disabledReason && (
+        {mode === "create" && autoState.disabledReason && (
           <p className="font-body text-xs text-amber-400">{autoState.disabledReason}</p>
         )}
-        {autoState.error && <p className="font-body text-xs text-red-400">{autoState.error}</p>}
+        {mode === "create" && autoState.error && <p className="font-body text-xs text-red-400">{autoState.error}</p>}
       </div>
 
-      {confirmingAuto && (
+      {mode === "create" && confirmingAuto && (
         <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
           <p className="font-body text-xs text-amber-300">
             Esto reemplazará toda asignación de voz (Lead, BGV, Coro) que el solver pueda resolver en
@@ -1246,6 +1321,11 @@ function ColumnHeader({
   skipped,
   unaddressable,
   onToggleSkip,
+  stored,
+  readOnly,
+  onStoredHeaderChange,
+  storedDateBlockedReason,
+  mutationLocked,
   minWClass,
 }: {
   column: GridColumn;
@@ -1254,6 +1334,11 @@ function ColumnHeader({
   skipped: boolean;
   unaddressable: boolean;
   onToggleSkip: () => void;
+  stored: boolean;
+  readOnly: boolean;
+  onStoredHeaderChange?: (columnId: string, patch: { date?: string; serviceName?: string }) => void;
+  storedDateBlockedReason?: string | null;
+  mutationLocked: boolean;
   /** `min-w-[150px]` in the page, `min-w-0` in full screen — see `dateTrack`. */
   minWClass: string;
 }) {
@@ -1273,7 +1358,7 @@ function ColumnHeader({
         : null;
 
   return (
-    <div className={`${minWClass} space-y-1 px-1 ${skipped || blockCopy ? "opacity-40" : ""}`}>
+    <div data-grid-column-id={column.columnId} className={`${minWClass} space-y-1 px-1 ${skipped || blockCopy ? "opacity-40" : ""}`}>
       {/* Legibility pass: the header's date, month and service type were
           `text-sm`/`text-[10px]` — small enough on a real 10-column month that
           the admin had to lean in to tell one column from another. Bumped one
@@ -1294,27 +1379,56 @@ function ColumnHeader({
           {column.serviceName}
         </span>
       )}
+      {stored && (
+        <div className="space-y-1.5 pt-1">
+          {readOnly && <p className="font-body text-[10px] text-amber-400">Solo lectura: revisa la integridad del servicio.</p>}
+          <label className="block font-label text-[9px] uppercase tracking-widest text-gray-500">
+            Fecha
+            <input
+              type="date"
+              value={column.date}
+              disabled={readOnly || mutationLocked || !!storedDateBlockedReason}
+              title={storedDateBlockedReason ?? undefined}
+              onChange={(event) => onStoredHeaderChange?.(column.columnId, { date: event.target.value })}
+              className="mt-1 w-full rounded border border-[#00bfff]/15 bg-transparent px-1.5 py-1 font-body text-[11px] text-[#C8D8EB]"
+            />
+          </label>
+          {column.type === "special_role" && (
+            <label className="block font-label text-[9px] uppercase tracking-widest text-gray-500">
+              Nombre
+              <input
+                value={column.serviceName ?? ""}
+                disabled={readOnly || mutationLocked}
+                onChange={(event) => onStoredHeaderChange?.(column.columnId, { serviceName: event.target.value })}
+                className="mt-1 w-full rounded border border-[#00bfff]/15 bg-transparent px-1.5 py-1 font-body text-[11px] normal-case tracking-normal text-[#C8D8EB]"
+              />
+            </label>
+          )}
+        </div>
+      )}
       {/* A blocked column is skipped whatever the toggle says, so the checkbox
           shows it as skipped and refuses the toggle instead of offering an
           un-skip that changes nothing. */}
-      <label className="flex items-center gap-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
-        <input
-          type="checkbox"
-          checked={skipped || blockCopy !== null}
-          disabled={blockCopy !== null}
-          onChange={onToggleSkip}
-          aria-label={`Omitir ${column.date}`}
-        />
-        Omitir
-      </label>
-      {blockCopy && (
+      {!stored && (
+        <label className="flex items-center gap-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
+          <input
+            type="checkbox"
+            checked={skipped || blockCopy !== null}
+            disabled={blockCopy !== null}
+            onChange={onToggleSkip}
+            aria-label={`Omitir ${column.date}`}
+          />
+          Omitir
+        </label>
+      )}
+      {!stored && blockCopy && (
         <p className={`font-body text-[10px] text-amber-400 ${CARD_STYLE.longText}`}>{blockCopy}</p>
       )}
       {/* Suppressed while blocked: the preflight's special branch is name-blind,
           so its badge would read "Se puede crear" right beside the reason this
           column will not be created. A genuinely blocked/unknown preflight
           still has something to say and is rendered below. */}
-      {preflight && !(blockCopy && preflight.state === "creatable") && (
+      {!stored && preflight && !(blockCopy && preflight.state === "creatable") && (
         <div>
           <span
             className={`inline-flex rounded-full border px-1.5 py-0.5 font-label text-[10px] uppercase tracking-widest ${TONE_CLASS[PREFLIGHT_COPY[preflight.state].tone]}`}
@@ -1328,7 +1442,7 @@ function ColumnHeader({
           )}
         </div>
       )}
-      {unaddressable && (
+      {!stored && unaddressable && (
         <p className="font-label text-[10px] uppercase tracking-widest text-red-400">
           Fuera del alcance de Auto
         </p>
@@ -1344,14 +1458,15 @@ function RowGroup({
   columns,
   cellsByKey,
   unfilledByKey,
-  duplicatesByDate,
-  violationsByDate,
+  duplicatesByColumnId,
+  violationsByColumnId,
   memberName,
   onOpen,
   onRemove,
   removeError,
   onCopy,
-  activeDate,
+  mutationLocked,
+  activeColumnId,
   minWClass,
   labelMinWClass,
   stickyLabelClass,
@@ -1360,14 +1475,15 @@ function RowGroup({
   columns: GridColumn[];
   cellsByKey: Map<string, GridCell>;
   unfilledByKey: Set<string>;
-  duplicatesByDate: (date: string) => Map<string, string[]>;
-  /** E13, by `violationKey(rowId, memberId)` — that date's whole column. */
-  violationsByDate: (date: string) => Map<string, SeatedViolation>;
+  duplicatesByColumnId: (columnId: string) => Map<string, string[]>;
+  /** E13, by `violationKey(rowId, memberId)` — that service column only. */
+  violationsByColumnId: (columnId: string) => Map<string, SeatedViolation>;
   memberName: (id: string) => string;
-  onOpen: (date: string) => void;
+  onOpen: (columnId: string) => void;
   onRemove?: () => void;
   removeError: string | null;
-  onCopy?: (date: string) => void;
+  onCopy?: (columnId: string) => void;
+  mutationLocked: boolean;
   /**
    * The date of THIS row's cell that the picker column is currently showing,
    * or `null`. With the picker parked on the far side of the grid instead of
@@ -1375,7 +1491,7 @@ function RowGroup({
    * two clicks apart the admin has no way to tell which seat the list belongs
    * to.
    */
-  activeDate: string | null;
+  activeColumnId: string | null;
   minWClass: string;
   labelMinWClass: string;
   stickyLabelClass: string;
@@ -1410,6 +1526,7 @@ function RowGroup({
             <button
               type="button"
               onClick={onRemove}
+              disabled={mutationLocked}
               aria-label={`Eliminar fila ${row.label}`}
               className="font-label text-[10px] uppercase tracking-widest text-red-400/70 hover:text-red-400"
             >
@@ -1421,24 +1538,25 @@ function RowGroup({
       </div>
       {columns.map((column) => {
         if (!rowAppliesTo(row, column)) {
-          return <div key={column.date} className={minWClass} />;
+          return <div key={column.columnId} className={minWClass} />;
         }
-        const cell = cellsByKey.get(cellKey(column.date, row.id));
-        const memberIds = cell?.memberIds ?? [];
-        const duplicates = duplicatesByDate(column.date);
+        const cell = cellsByKey.get(cellKey(column.columnId, row.id));
+        const memberIds = cell?.occupants.map((o) => o.memberId) ?? [];
+        const duplicates = duplicatesByColumnId(column.columnId);
         return (
           <GridCellView
-            key={column.date}
+            key={column.columnId}
             row={row}
             column={column}
             memberIds={memberIds}
             memberName={memberName}
             duplicates={duplicates}
-            violations={violationsByDate(column.date)}
-            unfilled={unfilledByKey.has(cellKey(column.date, row.id))}
-            onOpen={() => onOpen(column.date)}
-            onCopy={onCopy ? () => onCopy(column.date) : undefined}
-            active={activeDate === column.date}
+            violations={violationsByColumnId(column.columnId)}
+            unfilled={unfilledByKey.has(cellKey(column.columnId, row.id))}
+            onOpen={() => onOpen(column.columnId)}
+            onCopy={onCopy ? () => onCopy(column.columnId) : undefined}
+            mutationLocked={mutationLocked}
+            active={activeColumnId === column.columnId}
             minWClass={minWClass}
           />
         );
@@ -1457,6 +1575,7 @@ function GridCellView({
   unfilled,
   onOpen,
   onCopy,
+  mutationLocked,
   active,
   minWClass,
 }: {
@@ -1469,6 +1588,7 @@ function GridCellView({
   unfilled: boolean;
   onOpen: () => void;
   onCopy?: () => void;
+  mutationLocked: boolean;
   /** This cell is the one the picker column is showing. */
   active: boolean;
   minWClass: string;
@@ -1508,16 +1628,18 @@ function GridCellView({
   return (
     <div
       role="button"
-      tabIndex={0}
-      onClick={onOpen}
+      tabIndex={mutationLocked ? -1 : 0}
+      aria-disabled={mutationLocked ? "true" : undefined}
+      onClick={() => { if (!mutationLocked) onOpen(); }}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (!mutationLocked && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();
           onOpen();
         }
       }}
       data-row-id={row.id}
       data-date={column.date}
+      data-column-id={column.columnId}
       data-active={active ? "true" : undefined}
       // Only where it says something. `aria-expanded={active}` emitted
       // `aria-expanded="false"` on EVERY cell, so a screen reader announced
@@ -1525,9 +1647,9 @@ function GridCellView({
       // cells are, in the other 59 cases, just seats. At most one cell is the
       // one the picker column is showing, and that one says so.
       aria-expanded={active ? true : undefined}
-      className={`min-h-[44px] ${minWClass} cursor-pointer rounded-lg border px-2 py-1.5 transition-colors ${
+      className={`min-h-[44px] ${minWClass} rounded-lg border px-2 py-1.5 transition-colors ${
         overflow ? "border-amber-500/40 bg-amber-500/5" : "border-[#00bfff]/15 hover:border-[#00bfff]/40"
-      } ${active ? "ring-2 ring-[#00bfff] ring-offset-2 ring-offset-[#010b17]" : ""}`}
+      } ${mutationLocked ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${active ? "ring-2 ring-[#00bfff] ring-offset-2 ring-offset-[#010b17]" : ""}`}
     >
       <div className="flex flex-wrap gap-1">
         {visibleIds.length === 0 && memberIds.length === 0 && (
@@ -1613,8 +1735,9 @@ function GridCellView({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            onCopy();
+            if (!mutationLocked) onCopy();
           }}
+          disabled={mutationLocked}
           className="mt-1 font-label text-[9px] uppercase tracking-widest text-[#C8D8EB]/40 hover:text-[#C8D8EB]/70"
         >
           Copiar a todo el mes
@@ -1629,18 +1752,20 @@ function GridCellView({
 function CandidateRow({
   candidate,
   selected,
+  mutationLocked,
   onToggle,
   onOverride,
 }: {
   candidate: RankedCandidate;
   selected: boolean;
+  mutationLocked: boolean;
   onToggle: (id: string) => void;
   /** P10 — seat this rule-blocked candidate anyway. */
   onOverride: (id: string) => void;
 }) {
   // TWO refusals, read as two predicates and never as `eligible` (which folds
   // in availability and belongs to the filler alone — see `toggleCandidate`).
-  const blocked = !!candidate.blockedReason || !!candidate.ruleBlockedReason;
+  const blocked = mutationLocked || !!candidate.blockedReason || !!candidate.ruleBlockedReason;
   // Only a RULE block is overridable: a same-category double is a data error,
   // not a judgement call.
   //
@@ -1656,7 +1781,7 @@ function CandidateRow({
       role="button"
       tabIndex={blocked ? -1 : 0}
       aria-disabled={blocked ? "true" : undefined}
-      title={candidate.blockedReason ?? candidate.ruleBlockedReason ?? undefined}
+      title={mutationLocked ? "Espera a que termine la operación pendiente." : candidate.blockedReason ?? candidate.ruleBlockedReason ?? undefined}
       onClick={() => {
         if (!blocked) onToggle(candidate.id);
       }}
@@ -1739,8 +1864,9 @@ function CandidateRow({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            onOverride(candidate.id);
+            if (!mutationLocked) onOverride(candidate.id);
           }}
+          disabled={mutationLocked}
           className="mt-1.5 min-h-[44px] w-full rounded-lg border border-amber-500/40 px-2 font-label text-[10px] uppercase tracking-widest text-amber-400 hover:bg-amber-500/10"
         >
           Asignar de todos modos
@@ -1755,9 +1881,11 @@ function CandidateRow({
 function AddRowForm({
   placeholder,
   onAdd,
+  disabled = false,
 }: {
   placeholder: string;
   onAdd: (name: string) => string | null;
+  disabled?: boolean;
 }) {
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -1774,6 +1902,7 @@ function AddRowForm({
       <div className="flex gap-1.5">
         <input
           value={value}
+          disabled={disabled}
           onChange={(e) => {
             setValue(e.target.value);
             if (error) setError(null);
@@ -1783,6 +1912,7 @@ function AddRowForm({
         />
         <button
           type="submit"
+          disabled={disabled}
           className="shrink-0 rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest text-[#C8D8EB]/70 hover:border-[#00bfff]"
         >
           Añadir

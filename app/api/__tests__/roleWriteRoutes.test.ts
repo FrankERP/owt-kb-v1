@@ -15,6 +15,7 @@ vi.mock("server-only", () => ({}));
 const requireActiveManagerMock = vi.fn();
 const operationalFetch = vi.fn();
 const rawFetch = vi.fn();
+const serverFetch = vi.fn();
 const sendPushMock = vi.fn();
 const sendAssignmentEmailsMock = vi.fn();
 const sendAssignmentEmailsBatchMock = vi.fn();
@@ -32,7 +33,7 @@ vi.mock("@/sanity/lib/operationalClient", () => ({
 }));
 
 vi.mock("@/sanity/lib/serverClient", () => ({
-  serverClient: { fetch: vi.fn() },
+  serverClient: { fetch: (...a: unknown[]) => serverFetch(...a) },
   writeClient: { transaction: () => makeTransaction() },
 }));
 
@@ -56,9 +57,17 @@ vi.mock("next/server", async (importOriginal) => {
 });
 
 import { payloadFingerprint, receiptIdForRequestId } from "@/app/utils/roleCreationReceipt";
-import { POST as createPOST } from "@/app/api/admin/roles/route";
+import { GET as membersGET } from "@/app/api/admin/members/route";
+import { GET as rolesGET, POST as createPOST } from "@/app/api/admin/roles/route";
 import { PATCH as rolePATCH, DELETE as roleDELETE } from "@/app/api/admin/roles/[id]/route";
 import { POST as publishPOST } from "@/app/api/admin/roles/publish/route";
+import type { RoleDomainSummary, RoleTarget } from "@/app/utils/serviceReadSummary";
+import {
+  buildStoredGridRows,
+  joinStoredRoleInventory,
+  translateStoredRole,
+} from "@/app/components/admin/storedRoleReadModel";
+import { serializeStoredColumn } from "@/app/components/admin/plannerSaveModel";
 
 // ── Transaction recorder ────────────────────────────────────────────────────
 
@@ -178,6 +187,8 @@ function queuedMemberIds(): unknown[] {
 // ── In-memory store, dispatched off the bound GROQ ──────────────────────────
 
 interface Store {
+  members: Record<string, unknown>[];
+  coordinators: Record<string, unknown>[];
   roles: Record<string, unknown>[];
   locks: Record<string, unknown>[];
   receipts: Record<string, unknown>[];
@@ -198,6 +209,8 @@ let receiptReads = 0;
 
 function emptyStore(): Store {
   return {
+    members: [],
+    coordinators: [],
     roles: [],
     locks: [],
     receipts: [],
@@ -211,6 +224,15 @@ function emptyStore(): Store {
 }
 
 function canonicalRead(query: string, params: Record<string, unknown>): unknown[] {
+  if (query.includes('_type == "teamMembers"')) {
+    if (Array.isArray(params.ids)) {
+      return store.members.filter((member) => (params.ids as string[]).includes(member._id as string));
+    }
+    return store.members;
+  }
+  if (query.includes('_type == "specialIdentityCoordinator"')) {
+    return store.coordinators.filter((coordinator) => coordinator._id === params.id);
+  }
   if (query.includes("roleCreationReceipt")) {
     receiptReads++;
     if (receiptReads > 1 && lateRoles.length) {
@@ -337,6 +359,18 @@ function receipt(over: Record<string, unknown> = {}) {
   };
 }
 
+function coordinator(over: Record<string, unknown> = {}) {
+  return {
+    _id: "specialIdentityCoordinator.global",
+    _rev: "coord-rev-1",
+    _type: "specialIdentityCoordinator",
+    version: 1,
+    claimNonce: "coord-nonce-1",
+    updatedAt: "2026-08-04T18:00:00.000Z",
+    ...over,
+  };
+}
+
 function proposal(over: Record<string, unknown> = {}) {
   return {
     _id: "prop-1",
@@ -382,11 +416,49 @@ beforeEach(() => {
   receiptReads = 0;
   onCommit = null;
   store = emptyStore();
+  store.members.push(
+    { _id: "mem-1", member_name: "Uno", memberType: ["vocals"] },
+    { _id: "mem-2", member_name: "Dos", memberType: ["instruments"] },
+    { _id: "mem-5", member_name: "Cinco", memberType: ["foh"] },
+  );
   requireActiveManagerMock.mockResolvedValue(ADMIN);
   operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) =>
     canonicalRead(q, p),
   );
   rawFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) => rawRead(q, p));
+});
+
+describe("GET /api/admin/members — canonical candidates", () => {
+  it("keeps auth, projection, and order while reading the published operational perspective", async () => {
+    const res = await membersGET();
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(store.members);
+    expect(serverFetch).not.toHaveBeenCalled();
+    expect(rawFetch).not.toHaveBeenCalled();
+    expect(operationalFetch).toHaveBeenCalledOnce();
+    const query = operationalFetch.mock.calls[0][0] as string;
+    expect(query).toContain('*[_type == "teamMembers"] | order(member_name asc)');
+    expect(query).toContain("_id, member_name, alias, email, role, memberType, notifPrefs");
+    expect(query).toContain('"hasPassword": defined(passwordHash) && passwordHash != ""');
+  });
+
+  it("still denies content-editors before reading candidates", async () => {
+    requireActiveManagerMock.mockResolvedValue({ user: { role: "content-editor" } });
+
+    expect((await membersGET()).status).toBe(403);
+    expect(operationalFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /api/admin/roles — stored editor projection", () => {
+  it("requests a grandfathered boolean projection for a missing legacy publication flag", async () => {
+    operationalFetch.mockResolvedValueOnce([]);
+    expect((await rolesGET()).status).toBe(200);
+
+    const query = operationalFetch.mock.calls[0][0] as string;
+    expect(query).toContain('"published": coalesce(published, true)');
+  });
 });
 
 // ── Create ──────────────────────────────────────────────────────────────────
@@ -405,6 +477,78 @@ describe("POST /api/admin/roles — create", () => {
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe("invalid_request");
     expect(transactions).toHaveLength(0);
+  });
+
+  it.each([
+    ["Lead", { leads: ["missing-lead"] }, "missing-lead"],
+    ["BGVs", { bgvs: ["missing-bgvs"] }, "missing-bgvs"],
+    ["Chorus", { chorus: ["missing-chorus"] }, "missing-chorus"],
+    [
+      "instruments",
+      { instruments: [{ instrument: "Piano", personId: "missing-instrument" }] },
+      "missing-instrument",
+    ],
+    ["foh_team", { foh: [{ role: "Audio", personId: "missing-foh" }] }, "missing-foh"],
+  ])("refuses an unresolved %s assignee before occupancy or writes", async (_field, over, missing) => {
+    const res = await createPOST(req(createBody(over)));
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      error: "integrity_conflict",
+      details: { danglingRefs: [missing] },
+    });
+    expect(transactions).toHaveLength(0);
+    expect(afterCallbacks).toHaveLength(0);
+    expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
+    const queries = operationalFetch.mock.calls.map(([query]) => query as string);
+    expect(queries.filter((query) => query.includes('_type == "teamMembers"'))).toHaveLength(1);
+    expect(queries.some((query) => query.includes("week == $week"))).toBe(false);
+  });
+
+  it("reports one sorted missing set after de-duplicating all five submitted paths", async () => {
+    const res = await createPOST(
+      req(
+        createBody({
+          leads: ["missing-z", "mem-1"],
+          bgvs: ["missing-b", "missing-z"],
+          chorus: ["missing-c"],
+          instruments: [
+            { instrument: "Piano", personId: "missing-a" },
+            { instrument: "Bajo", personId: "missing-b" },
+          ],
+          foh: [{ role: "Audio", personId: "missing-d" }],
+        }),
+      ),
+    );
+
+    expect((await res.json()).details.danglingRefs).toEqual([
+      "missing-a",
+      "missing-b",
+      "missing-c",
+      "missing-d",
+      "missing-z",
+    ]);
+    const memberCall = operationalFetch.mock.calls.find(([query]) =>
+      (query as string).includes('_type == "teamMembers"'),
+    );
+    expect(memberCall?.[1].ids).toEqual([
+      "missing-z",
+      "mem-1",
+      "missing-b",
+      "missing-c",
+      "missing-a",
+      "missing-d",
+    ]);
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("accepts a canonical member even when memberType would not suggest the submitted seat", async () => {
+    const res = await createPOST(
+      req(createBody({ leads: ["mem-5"], instruments: [], creationRequestId: "req-types-00000001" })),
+    );
+
+    expect(res.status).toBe(201);
+    expect(committedTransactions()).toHaveLength(1);
   });
 
   it("commits receipt + role + weekend lock in ONE transaction", async () => {
@@ -484,14 +628,188 @@ describe("POST /api/admin/roles — create", () => {
     );
     expect(res.status).toBe(201);
     const ops = committedTransactions()[0].ops;
-    expect(ops).toHaveLength(2);
+    expect(ops).toHaveLength(3);
     expect(ops.some((o) => o.kind === "create" && o.doc._type === "roleTargetLock")).toBe(false);
+    expect(ops).toContainEqual({
+      kind: "create",
+      doc: expect.objectContaining({
+        _id: "specialIdentityCoordinator.global",
+        _type: "specialIdentityCoordinator",
+        version: 1,
+      }),
+    });
     const roleDoc = (ops.find((o) => o.kind === "create" && o.doc._type === "special_role") as {
       doc: Record<string, unknown>;
     }).doc;
     expect(roleDoc.date).toBe("2026-08-09");
     expect(roleDoc.service_name).toBe("Bautizos");
     expect(roleDoc.week).toBeUndefined();
+  });
+
+  it("advances an existing special identity coordinator in the create transaction", async () => {
+    store.coordinators.push(coordinator({ _rev: "coord-rev-7", version: 7 }));
+
+    const res = await createPOST(
+      req(
+        createBody({
+          _type: "special_role",
+          service_name: "Bautizos",
+          creationRequestId: "req-special-0000002",
+        }),
+      ),
+    );
+
+    expect(res.status).toBe(201);
+    const coordPatch = committedTransactions()[0].ops.find(
+      (op) => op.kind === "patch" && op.id === "specialIdentityCoordinator.global",
+    ) as PatchOp;
+    expect(coordPatch).toMatchObject({ rev: "coord-rev-7", set: { version: 8 } });
+    expect(coordPatch.set.claimNonce).not.toBe("coord-nonce-1");
+  });
+
+  it.each([
+    ["matching", "  Bautizos\n", 409, "integrity_conflict"],
+    ["different-name", "Vigilia", 201, null],
+    ["case-distinct", "bautizos", 201, null],
+  ])(
+    "%s same-date raw special evidence is filtered by normalized identity",
+    async (_case, rawName, status, error) => {
+      store.rawRoleDrafts.push({
+        _id: "drafts.role-other",
+        _type: "special_role",
+        date: "2026-08-09",
+        service_name: rawName,
+      });
+
+      const res = await createPOST(
+        req(
+          createBody({
+            _type: "special_role",
+            service_name: "Bautizos",
+            creationRequestId: `req-special-${_case}-1`,
+          }),
+        ),
+      );
+
+      expect(res.status).toBe(status);
+      if (error) expect((await res.json()).error).toBe(error);
+      expect(committedTransactions()).toHaveLength(status === 201 ? 1 : 0);
+    },
+  );
+
+  it.each([
+    ["same normalized identity", " Bautizos ", 409],
+    ["different name", "Vigilia", 201],
+    ["case-distinct name", "bautizos", 201],
+  ])("classifies a %s canonical special on the create date", async (_case, storedName, status) => {
+    store.roles.push(
+      role({
+        _id: "role-existing-special",
+        _rev: "existing-rev",
+        _type: "special_role",
+        week: undefined,
+        date: "2026-08-09",
+        service_name: storedName,
+      }),
+    );
+
+    const res = await createPOST(
+      req(
+        createBody({
+          _type: "special_role",
+          service_name: "Bautizos",
+          creationRequestId: `req-special-canonical-${status}`,
+        }),
+      ),
+    );
+
+    expect(res.status).toBe(status);
+    expect(committedTransactions()).toHaveLength(status === 201 ? 1 : 0);
+  });
+
+  it("reconciles a special coordinator conflict without retrying the business transaction", async () => {
+    let coordinatorReads = 0;
+    operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) => {
+      if (q.includes('_type == "specialIdentityCoordinator"')) {
+        coordinatorReads++;
+        return [
+          coordinator({
+            _rev: coordinatorReads > 1 ? "coord-rev-2" : "coord-rev-1",
+            version: coordinatorReads > 1 ? 2 : 1,
+          }),
+        ];
+      }
+      return canonicalRead(q, p);
+    });
+    commitOutcomes.push(conflictError("documentRevisionIDDoesNotMatchError", "coord"));
+
+    const res = await createPOST(
+      req(
+        createBody({
+          _type: "special_role",
+          service_name: "Bautizos",
+          creationRequestId: "req-special-conflict-1",
+        }),
+      ),
+    );
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      error: "stale_revision",
+      details: { coordinatorRev: "coord-rev-2", coordinatorVersion: 2 },
+    });
+    expect(coordinatorReads).toBe(2);
+    expect(transactions).toHaveLength(1);
+    expect(committedTransactions()).toHaveLength(0);
+  });
+
+  it("checks a racing special receipt before occupancy or coordinator reconciliation", async () => {
+    const requestId = "req-special-receipt-race";
+    const body = createBody({
+      _type: "special_role",
+      service_name: "Bautizos",
+      creationRequestId: requestId,
+    });
+    const receiptId = receiptIdForRequestId(requestId) as string;
+    const fingerprint = payloadFingerprint(body);
+    let coordinatorReads = 0;
+    let occupancyReads = 0;
+    operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) => {
+      if (q.includes('_type == "specialIdentityCoordinator"')) coordinatorReads++;
+      if (q.includes('_type == "special_role" && date == $date')) occupancyReads++;
+      return canonicalRead(q, p);
+    });
+    commitOutcomes.push(conflictError());
+    lateReceipts.push(
+      receipt({
+        _id: receiptId,
+        requestId,
+        fingerprint,
+        roleId: "role-special-winner",
+        roleType: "special_role",
+        targetIdentity: "special_role:2026-08-09:Bautizos",
+      }),
+    );
+    lateRoles.push(
+      role({
+        _id: "role-special-winner",
+        _type: "special_role",
+        week: undefined,
+        date: "2026-08-09",
+        service_name: "Bautizos",
+        creationReceiptId: receiptId,
+        creationFingerprint: fingerprint,
+      }),
+    );
+
+    const res = await createPOST(req(body));
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).replay).toBe(true);
+    expect(coordinatorReads).toBe(1);
+    expect(occupancyReads).toBe(1);
+    expect(transactions).toHaveLength(1);
+    expect(committedTransactions()).toHaveLength(0);
   });
 
   it("re-claims an existing VACANT lock under its observed revision", async () => {
@@ -516,6 +834,11 @@ describe("POST /api/admin/roles — create", () => {
     expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
     expect(revalidatePathMock).not.toHaveBeenCalled();
     expect(afterCallbacks).toHaveLength(0);
+    expect(
+      operationalFetch.mock.calls.some(([query]) =>
+        (query as string).includes('_type == "teamMembers"'),
+      ),
+    ).toBe(false);
   });
 
   it.each([
@@ -634,11 +957,261 @@ describe("PATCH /api/admin/roles/[id] — edit", () => {
     };
   }
 
+  function specialRole(over: Record<string, unknown> = {}) {
+    return role({
+      _id: "role-sp",
+      _type: "special_role",
+      week: undefined,
+      date: "2026-08-09",
+      service_name: "Bautizos",
+      ...over,
+    });
+  }
+
+  function specialEditBody(over: Record<string, unknown> = {}) {
+    return editBody({ _type: "special_role", service_name: "Bautizos", ...over });
+  }
+
   it("requires the client-observed revision", async () => {
     store.roles.push(role());
     const res = await rolePATCH(req(editBody({ rev: undefined })), ctx("role-1"));
     expect(res.status).toBe(400);
     expect(transactions).toHaveLength(0);
+  });
+
+  it.each([
+    ["Lead", { leads: ["missing-lead"] }, "missing-lead"],
+    ["BGVs", { bgvs: ["missing-bgvs"] }, "missing-bgvs"],
+    ["Chorus", { chorus: ["missing-chorus"] }, "missing-chorus"],
+    [
+      "instruments",
+      { instruments: [{ instrument: "Piano", personId: "missing-instrument" }] },
+      "missing-instrument",
+    ],
+    ["foh_team", { foh: [{ role: "Audio", personId: "missing-foh" }] }, "missing-foh"],
+  ])("refuses an unresolved %s assignee before legacy bootstrap or writes", async (_field, over, missing) => {
+    store.roles.push(role());
+
+    const res = await rolePATCH(req(editBody(over)), ctx("role-1"));
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      error: "integrity_conflict",
+      details: { danglingRefs: [missing] },
+    });
+    expect(transactions).toHaveLength(0);
+    expect(afterCallbacks).toHaveLength(0);
+    expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
+    expect(operationalFetch).toHaveBeenCalledOnce();
+    expect(operationalFetch.mock.calls[0][0]).toContain('_type == "teamMembers"');
+  });
+
+  it("returns PATCH missing member ids in sorted order", async () => {
+    store.roles.push(role());
+    const res = await rolePATCH(
+      req(editBody({ leads: ["missing-z"], chorus: ["missing-a"] })),
+      ctx("role-1"),
+    );
+
+    expect((await res.json()).details.danglingRefs).toEqual(["missing-a", "missing-z"]);
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("rejects a normalized-empty name from the stored special type even when _type is omitted", async () => {
+    store.roles.push(
+      role({
+        _id: "role-sp",
+        _type: "special_role",
+        week: undefined,
+        date: "2026-08-09",
+        service_name: "Bautizos",
+      }),
+    );
+
+    const res = await rolePATCH(
+      req(editBody({ _type: undefined, service_name: "  \n  " })),
+      ctx("role-sp"),
+    );
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      error: "integrity_conflict",
+      details: { id: "role-sp", storedType: "special_role", issues: ["service_name"] },
+    });
+    expect(transactions).toHaveLength(0);
+    expect(afterCallbacks).toHaveLength(0);
+    expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
+  });
+
+  it("checks normalized occupancy on a roster-only special PATCH without claiming the coordinator", async () => {
+    store.roles.push(specialRole());
+    store.coordinators.push(coordinator());
+
+    const res = await rolePATCH(
+      req(specialEditBody({ leads: ["mem-5"], service_name: " Bautizos\n" })),
+      ctx("role-sp"),
+    );
+
+    expect(res.status).toBe(200);
+    expect(committedTransactions()).toHaveLength(1);
+    expect(committedTransactions()[0].ops).toHaveLength(1);
+    expect(
+      committedTransactions()[0].ops.some(
+        (op) => op.kind === "patch" && op.id === "specialIdentityCoordinator.global",
+      ),
+    ).toBe(false);
+    expect(
+      operationalFetch.mock.calls.some(([query]) =>
+        (query as string).includes('_type == "special_role" && date == $date'),
+      ),
+    ).toBe(true);
+    expect(
+      operationalFetch.mock.calls.some(([query]) =>
+        (query as string).includes('_type == "specialIdentityCoordinator"'),
+      ),
+    ).toBe(false);
+  });
+
+  it("refuses normalized-identical canonical occupancy on a roster-only special PATCH", async () => {
+    store.roles.push(
+      specialRole(),
+      specialRole({ _id: "role-other", _rev: "rev-other", service_name: "Bautizos" }),
+    );
+
+    const res = await rolePATCH(req(specialEditBody()), ctx("role-sp"));
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      error: "ambiguous_target",
+      details: { roleIds: ["role-other"] },
+    });
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("allows a differently named canonical special on the same date", async () => {
+    store.roles.push(
+      specialRole(),
+      specialRole({ _id: "role-other", _rev: "rev-other", service_name: "Vigilia" }),
+    );
+
+    expect((await rolePATCH(req(specialEditBody()), ctx("role-sp"))).status).toBe(200);
+    expect(committedTransactions()).toHaveLength(1);
+  });
+
+  it.each([
+    ["matching other draft", "drafts.role-other", " Bautizos\n", 409],
+    ["different other draft", "drafts.role-other", "Vigilia", 200],
+    ["same-role overlay with another name", "drafts.role-sp", "Vigilia", 409],
+  ])(
+    "%s is classified against the requested special identity",
+    async (_case, draftId, rawName, status) => {
+      store.roles.push(specialRole());
+      store.rawRoleDrafts.push({
+        _id: draftId,
+        _type: "special_role",
+        date: "2026-08-09",
+        service_name: rawName,
+      });
+
+      const res = await rolePATCH(req(specialEditBody()), ctx("role-sp"));
+
+      expect(res.status).toBe(status);
+      if (status === 409) expect((await res.json()).error).toBe("integrity_conflict");
+      expect(committedTransactions()).toHaveLength(status === 200 ? 1 : 0);
+    },
+  );
+
+  it("claims the coordinator in the same transaction as a special identity rename", async () => {
+    store.roles.push(specialRole());
+    store.coordinators.push(coordinator({ _rev: "coord-rev-7", version: 7 }));
+
+    const res = await rolePATCH(
+      req(specialEditBody({ service_name: "Vigilia" })),
+      ctx("role-sp"),
+    );
+
+    expect(res.status).toBe(200);
+    const ops = committedTransactions()[0].ops;
+    expect(ops).toHaveLength(2);
+    expect(ops[0]).toMatchObject({ kind: "patch", id: "role-sp", rev: "rev-1" });
+    expect(ops[1]).toMatchObject({
+      kind: "patch",
+      id: "specialIdentityCoordinator.global",
+      rev: "coord-rev-7",
+      set: { version: 8 },
+    });
+  });
+
+  it("reconciles special rename conflicts through occupancy and coordinator without retry", async () => {
+    let coordinatorReads = 0;
+    let occupancyReads = 0;
+    store.roles.push(specialRole());
+    operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) => {
+      if (q.includes('_type == "specialIdentityCoordinator"')) {
+        coordinatorReads++;
+        return [
+          coordinator({
+            _rev: coordinatorReads > 1 ? "coord-rev-2" : "coord-rev-1",
+            version: coordinatorReads > 1 ? 2 : 1,
+          }),
+        ];
+      }
+      if (q.includes('_type == "special_role" && date == $date')) occupancyReads++;
+      return canonicalRead(q, p);
+    });
+    commitOutcomes.push(conflictError("documentRevisionIDDoesNotMatchError", "coord"));
+
+    const res = await rolePATCH(
+      req(specialEditBody({ service_name: "Vigilia" })),
+      ctx("role-sp"),
+    );
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      error: "stale_revision",
+      details: { coordinatorRev: "coord-rev-2", coordinatorVersion: 2 },
+    });
+    expect(coordinatorReads).toBe(2);
+    expect(occupancyReads).toBe(2);
+    expect(transactions).toHaveLength(1);
+    expect(committedTransactions()).toHaveLength(0);
+    expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it("reports the normalized occupancy winner observed after a special rename conflict", async () => {
+    let coordinatorReads = 0;
+    let occupancyReads = 0;
+    store.roles.push(specialRole());
+    operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) => {
+      if (q.includes('_type == "specialIdentityCoordinator"')) {
+        coordinatorReads++;
+        return [coordinator({ _rev: `coord-rev-${coordinatorReads}`, version: coordinatorReads })];
+      }
+      if (q.includes('_type == "special_role" && date == $date')) {
+        occupancyReads++;
+        return occupancyReads > 1
+          ? [specialRole(), specialRole({ _id: "role-winner", service_name: "Vigilia" })]
+          : [specialRole()];
+      }
+      return canonicalRead(q, p);
+    });
+    commitOutcomes.push(conflictError("documentRevisionIDDoesNotMatchError", "coord"));
+
+    const res = await rolePATCH(
+      req(specialEditBody({ service_name: "Vigilia" })),
+      ctx("role-sp"),
+    );
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      error: "ambiguous_target",
+      details: { roleIds: ["role-winner"] },
+    });
+    expect(occupancyReads).toBe(2);
+    expect(coordinatorReads).toBe(2);
+    expect(transactions).toHaveLength(1);
+    expect(committedTransactions()).toHaveLength(0);
   });
 
   it("refuses a stale observed revision with no business mutation", async () => {
@@ -650,7 +1223,7 @@ describe("PATCH /api/admin/roles/[id] — edit", () => {
     expect(transactions).toHaveLength(0);
   });
 
-  it("asserts the role revision and heartbeats the owned lock on a same-date edit", async () => {
+  it("asserts the role revision and heartbeats the owned lock without enforcing memberType", async () => {
     store.roles.push(role());
     store.locks.push(lock());
     const res = await rolePATCH(req(editBody()), ctx("role-1"));
@@ -661,6 +1234,245 @@ describe("PATCH /api/admin/roles/[id] — edit", () => {
     expect(ops[0].set._type).toBeUndefined();
     expect((ops[0].set.Lead as { _ref: string }[]).map((l) => l._ref)).toEqual(["mem-1", "mem-5"]);
     expect(ops[1]).toMatchObject({ id: "roleTarget.sunday_role.2026-08-09", rev: "lock-rev-1" });
+  });
+
+  it("preserves the complete production-shaped role through grid edit and the real PATCH transaction", async () => {
+    const projectedMember = (id: string, key: string) => ({
+      _id: id,
+      _key: key,
+      member_name: id,
+    });
+    const targetProjected = {
+      _id: "role-1",
+      _rev: "rev-1",
+      _type: "sunday_role",
+      date: "2026-08-09",
+      published: false,
+      leads: [
+        projectedMember("lead-old", "lead-old-key"),
+        projectedMember("lead-2", "lead-2-key"),
+      ],
+      bgvs: [
+        projectedMember("bgv-1", "bgv-1-key"),
+        projectedMember("bgv-2", "bgv-2-key"),
+      ],
+      chorus: [
+        projectedMember("chorus-1", "chorus-1-key"),
+        projectedMember("chorus-2", "chorus-2-key"),
+      ],
+      instruments: [
+        { _key: "bass-upper-1", instrument: "Bass", person: projectedMember("bass-dup", "ignored-1") },
+        { _key: "bass-upper-2", instrument: "Bass", person: projectedMember("bass-dup", "ignored-2") },
+        { _key: "bass-lower", instrument: "bass", person: projectedMember("bass-lower", "ignored-3") },
+      ],
+      foh: [
+        { _key: "console-upper-1", role: "Console", person: projectedMember("console-1", "ignored-4") },
+        { _key: "console-upper-2", role: "Console", person: projectedMember("console-2", "ignored-5") },
+        { _key: "console-lower", role: "console", person: projectedMember("console-lower", "ignored-6") },
+      ],
+    };
+    const decoyProjected = {
+      _id: "role-decoy",
+      _rev: "rev-decoy",
+      _type: "special_role",
+      date: "2026-08-09",
+      service_name: "Vigilia",
+      published: false,
+      leads: [projectedMember("decoy-lead", "decoy-lead-key")],
+      bgvs: [],
+      chorus: [],
+      instruments: [],
+      foh: [],
+    };
+    const targetRefs = [
+      "lead-old", "lead-2", "bgv-1", "bgv-2", "chorus-1", "chorus-2",
+      "bass-dup", "bass-lower", "console-1", "console-2", "console-lower",
+    ];
+    const integrityTarget = (
+      id: string,
+      rev: string,
+      type: "sunday_role" | "special_role",
+      assignedRefs: string[],
+    ): RoleTarget => ({
+      targetKey: type === "special_role" ? `special_role:${id}` : "sunday_role:2026-08-09",
+      type,
+      canonicalCount: 1,
+      canonicalIds: [id],
+      canonicalState: "single",
+      publicState: "single",
+      memberVisibleCount: 0,
+      draftIds: [],
+      records: [{
+        id,
+        rev,
+        type,
+        serviceDate: "2026-08-09",
+        published: false,
+        assignedRefs,
+        members: [],
+        danglingRefs: [],
+      }],
+      expectsLock: type !== "special_role",
+      lock: type === "special_role" ? null : {
+        id: "roleTarget.sunday_role.2026-08-09",
+        rev: "lock-rev-1",
+        state: "claimed",
+        roleId: "role-1",
+        generation: 2,
+      },
+      lockIssues: [],
+    });
+    const integrity: RoleDomainSummary = {
+      targets: [
+        integrityTarget("role-1", "rev-1", "sunday_role", targetRefs),
+        integrityTarget("role-decoy", "rev-decoy", "special_role", ["decoy-lead"]),
+      ],
+      recordIssues: [],
+      lockIssues: [],
+    };
+
+    operationalFetch.mockImplementation(async (query: string, params: Record<string, unknown> = {}) =>
+      query.includes('*[_type in ["sunday_role", "saturday_role", "special_role"]]')
+        ? [targetProjected, decoyProjected]
+        : canonicalRead(query, params),
+    );
+    const rolesResponse = await rolesGET();
+    expect(rolesResponse.status).toBe(200);
+    const rolesRows = await rolesResponse.json();
+    const rolesQuery = operationalFetch.mock.calls.find(([query]) =>
+      typeof query === "string" && query.includes('*[_type in ["sunday_role", "saturday_role", "special_role"]]'),
+    )?.[0] as string;
+    expect(rolesQuery).toContain('"leads": Lead[defined(@->)]{ _key, ...@->{_id, member_name, alias} }');
+    expect(rolesQuery).toContain('"bgvs": BGVs[defined(@->)]{ _key, ...@->{_id, member_name, alias} }');
+    expect(rolesQuery).toContain('"chorus": Chorus[defined(@->)]{ _key, ...@->{_id, member_name, alias} }');
+    expect(rolesQuery).toContain('"instruments": instruments[]{_key, instrument, "person": person->{_id, member_name, alias}}');
+    expect(rolesQuery).toContain('"foh": foh_team[]{_key, role, "person": person->{_id, member_name, alias}}');
+
+    const joined = joinStoredRoleInventory(rolesRows, integrity);
+    expect(joined).toMatchObject({ coherent: true });
+    expect(joined.roles.map((entry) => entry.admission)).toEqual(["approved", "approved"]);
+    const translations = joined.roles.map(translateStoredRole);
+    expect(translations.every((entry) => entry !== null)).toBe(true);
+    const translated = translations.find((entry) => entry?.column.roleId === "role-1");
+    if (!translated) throw new Error("target translation missing");
+    const cells = translations.flatMap((entry) => entry?.cells ?? []).map((cell) =>
+      cell.columnId === "role-1" && cell.rowId === "lead"
+        ? {
+            ...cell,
+            occupants: cell.occupants.map((occupant, index) =>
+              index === 0 ? { ...occupant, memberId: "lead-new" } : occupant),
+          }
+        : cell,
+    );
+    const serialized = serializeStoredColumn(
+      translated.column,
+      buildStoredGridRows(translations.filter((entry) => entry !== null)),
+      cells,
+    );
+    expect(serialized.ok).toBe(true);
+    if (!serialized.ok) throw new Error(serialized.reasons.join(","));
+    expect(serialized.body).toEqual({
+      rev: "rev-1",
+      lockRev: "lock-rev-1",
+      _type: "sunday_role",
+      date: "2026-08-09",
+      leads: ["lead-new", "lead-2"],
+      bgvs: ["bgv-1", "bgv-2"],
+      chorus: ["chorus-1", "chorus-2"],
+      instruments: [
+        { instrument: "Bass", personId: "bass-dup" },
+        { instrument: "Bass", personId: "bass-dup" },
+        { instrument: "bass", personId: "bass-lower" },
+      ],
+      foh: [
+        { role: "Console", personId: "console-1" },
+        { role: "Console", personId: "console-2" },
+        { role: "console", personId: "console-lower" },
+      ],
+    });
+
+    const targetRaw = role({
+      Lead: targetProjected.leads.map((item) => ({ _key: item._key, _type: "reference", _ref: item._id })),
+      BGVs: targetProjected.bgvs.map((item) => ({ _key: item._key, _type: "reference", _ref: item._id })),
+      Chorus: targetProjected.chorus.map((item) => ({ _key: item._key, _type: "reference", _ref: item._id })),
+      instruments: targetProjected.instruments.map((item) => ({
+        _key: item._key,
+        _type: "instrument_slot",
+        instrument: item.instrument,
+        person: { _type: "reference", _ref: item.person._id },
+      })),
+      foh_team: targetProjected.foh.map((item) => ({
+        _key: item._key,
+        _type: "foh_slot",
+        role: item.role,
+        person: { _type: "reference", _ref: item.person._id },
+      })),
+    });
+    const decoyRaw = role({
+      _id: "role-decoy",
+      _rev: "rev-decoy",
+      _type: "special_role",
+      week: undefined,
+      date: "2026-08-09",
+      service_name: "Vigilia",
+      Lead: [{ _key: "decoy-lead-key", _type: "reference", _ref: "decoy-lead" }],
+    });
+    store.roles.push(targetRaw, decoyRaw);
+    store.locks.push(lock());
+    for (const id of [...new Set([...targetRefs, "lead-new"])]) {
+      store.members.push({ _id: id, member_name: id });
+    }
+    onCommit = () => {
+      const patch = committedTransactions()[0]?.ops.find(
+        (op): op is PatchOp => op.kind === "patch" && op.id === "role-1",
+      );
+      if (!patch) throw new Error("committed role patch missing");
+      store.roles = store.roles.map((document) =>
+        document._id === "role-1" ? { ...document, ...patch.set, _rev: "rev-2" } : document,
+      );
+    };
+
+    const response = await rolePATCH(req(serialized.body), ctx("role-1"));
+    const responseBody = await response.json();
+    if (response.status !== 200) throw new Error(JSON.stringify(responseBody));
+    const rolePatch = committedTransactions()[0]?.ops.find(
+      (op): op is PatchOp => op.kind === "patch" && op.id === "role-1",
+    );
+    expect(rolePatch).toMatchObject({ id: "role-1", rev: "rev-1" });
+    expect(rolePatch?.set._type).toBeUndefined();
+
+    const committed = store.roles.find((document) => document._id === "role-1");
+    const refsOf = (value: unknown) =>
+      (value as { _ref: string }[]).map((item) => item._ref);
+    const labeledRefs = (value: unknown, label: "instrument" | "role") =>
+      (value as Record<string, unknown>[]).map((item) => [
+        item[label],
+        (item.person as { _ref: string })._ref,
+      ]);
+    expect(committed).toMatchObject({ _id: "role-1", _rev: "rev-2", week: "2026-08-09" });
+    expect(refsOf(committed?.Lead)).toEqual(["lead-new", "lead-2"]);
+    expect(refsOf(committed?.BGVs)).toEqual(["bgv-1", "bgv-2"]);
+    expect(refsOf(committed?.Chorus)).toEqual(["chorus-1", "chorus-2"]);
+    expect(labeledRefs(committed?.instruments, "instrument")).toEqual([
+      ["Bass", "bass-dup"],
+      ["Bass", "bass-dup"],
+      ["bass", "bass-lower"],
+    ]);
+    expect(labeledRefs(committed?.foh_team, "role")).toEqual([
+      ["Console", "console-1"],
+      ["Console", "console-2"],
+      ["console", "console-lower"],
+    ]);
+    expect(store.roles.find((document) => document._id === "role-decoy")).toEqual(decoyRaw);
+    const validationCall = operationalFetch.mock.calls.find(
+      ([query, params]) =>
+        typeof query === "string" &&
+        query.includes('_type == "teamMembers"') &&
+        Array.isArray((params as Record<string, unknown>).ids),
+    );
+    expect(new Set((validationCall?.[1] as { ids: string[] }).ids)).toEqual(
+      new Set([...targetRefs.filter((id) => id !== "lead-old"), "lead-new"]),
+    );
   });
 
   it("answers with the REFRESHED stored read at the committed revision, not an echo", async () => {
@@ -854,7 +1666,7 @@ describe("PATCH /api/admin/roles/[id] — edit", () => {
     expect(outboxUpserts()).toHaveLength(0);
   });
 
-  it("bootstraps a legacy weekend role with no lock, then applies the edit", async () => {
+  it("stops after successful legacy bootstrap maintenance and requires reload", async () => {
     store.roles.push(role({ _rev: "rev-legacy" }));
     // The refetch after the maintenance commit sees the advanced revision + lock.
     let roleReads = 0;
@@ -873,42 +1685,59 @@ describe("PATCH /api/admin/roles/[id] — edit", () => {
       return canonicalRead(q, p);
     });
     const res = await rolePATCH(req(editBody({ rev: "rev-legacy" })), ctx("role-1"));
-    expect(res.status).toBe(200);
-    expect(committedTransactions()).toHaveLength(2);
-    // 1) maintenance: revision-guarded heartbeat of the unchanged target field
-    //    plus the created lock.
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      error: "bootstrap_completed_reload",
+      details: { cause: "commit_succeeded", attemptedRoleRev: "rev-legacy" },
+    });
+    expect(committedTransactions()).toHaveLength(1);
+    // Maintenance only: revision-guarded heartbeat of the unchanged target
+    // field plus the created lock. No business transaction follows it.
     const boot = committedTransactions()[0].ops;
     expect(boot[0]).toMatchObject({ kind: "patch", id: "role-1", rev: "rev-legacy" });
     expect((boot[0] as PatchOp).set.week).toBe("2026-08-09");
     expect(boot[1]).toMatchObject({ kind: "create" });
-    // 2) business: continues ONLY from the produced revisions.
-    const business = committedTransactions()[1].ops as PatchOp[];
-    expect(business[0]).toMatchObject({ id: "role-1", rev: "rev-after-boot" });
-    expect(business[1]).toMatchObject({ id: "roleTarget.sunday_role.2026-08-09", rev: "lock-rev-boot" });
+    expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
+    expect(afterCallbacks).toHaveLength(0);
   });
 
-  it("reports bootstrap_completed_reload when the business write then conflicts", async () => {
+  it("reports bootstrap_outcome_unknown when rejected maintenance readback has a moved revision", async () => {
     store.roles.push(role({ _rev: "rev-legacy" }));
     let roleReads = 0;
     operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) => {
-      if (q.includes("roleTargetLock")) return store.locks.length ? canonicalRead(q, p) : [];
+      if (q.includes("roleTargetLock")) return [];
       if (q.includes("_id == $id") && !q.includes("roleCreationReceipt")) {
         roleReads++;
-        if (roleReads > 1) {
-          store.locks.push(lock({ _rev: "lock-rev-boot" }));
-          return [role({ _rev: "rev-after-boot" })];
-        }
-        return [role({ _rev: "rev-legacy" })];
+        return [role({ _rev: roleReads > 1 ? "rev-moved" : "rev-legacy" })];
       }
       return canonicalRead(q, p);
     });
-    // First commit (maintenance) succeeds; the business commit conflicts.
-    commitOutcomes.push(undefined, conflictError("documentRevisionIDDoesNotMatchError", "role-1"));
+    commitOutcomes.push(conflictError("documentRevisionIDDoesNotMatchError", "role-1"));
     const res = await rolePATCH(req(editBody({ rev: "rev-legacy" })), ctx("role-1"));
     expect(res.status).toBe(409);
-    expect((await res.json()).error).toBe("bootstrap_completed_reload");
-    // The maintenance lock/revision intentionally persist; no business state did.
-    expect(committedTransactions()).toHaveLength(1);
+    expect(await res.json()).toMatchObject({
+      error: "bootstrap_outcome_unknown",
+      details: { cause: "inconclusive_readback", observedRoleRev: "rev-moved" },
+    });
+    expect(committedTransactions()).toHaveLength(0);
+    expect(transactions).toHaveLength(1);
+    expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it("maps a conclusively rejected bootstrap to stale_revision without a business write", async () => {
+    store.roles.push(role({ _rev: "rev-legacy" }));
+    commitOutcomes.push(conflictError("documentRevisionIDDoesNotMatchError", "role-1"));
+
+    const res = await rolePATCH(req(editBody({ rev: "rev-legacy" })), ctx("role-1"));
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      error: "stale_revision",
+      details: { cause: "prebootstrap_state_observed", attemptedRoleRev: "rev-legacy" },
+    });
+    expect(committedTransactions()).toHaveLength(0);
+    expect(transactions).toHaveLength(1);
     expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
     expect(afterCallbacks).toHaveLength(0);
   });
@@ -933,6 +1762,63 @@ describe("DELETE /api/admin/roles/[id]", () => {
     expect(body.error).toBe("role_has_dependencies");
     expect(body.details.dependencies[0].id).toBe("prop-1");
     expect(transactions).toHaveLength(0);
+  });
+
+  it("stops a delete after successful legacy bootstrap maintenance", async () => {
+    store.roles.push(role({ _rev: "rev-legacy" }));
+
+    const res = await roleDELETE(req({ rev: "rev-legacy" }), ctx("role-1"));
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      error: "bootstrap_completed_reload",
+      details: { cause: "commit_succeeded", attemptedRoleRev: "rev-legacy" },
+    });
+    expect(committedTransactions()).toHaveLength(1);
+    expect(committedTransactions()[0].ops.some((op) => op.kind === "delete")).toBe(false);
+    expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it("maps inconclusive rejected delete bootstrap to bootstrap_outcome_unknown", async () => {
+    store.roles.push(role({ _rev: "rev-legacy" }));
+    let roleReads = 0;
+    operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) => {
+      if (q.includes("roleTargetLock")) return [];
+      if (q.includes("_id == $id") && !q.includes("roleCreationReceipt")) {
+        roleReads++;
+        return [role({ _rev: roleReads > 1 ? "rev-moved" : "rev-legacy" })];
+      }
+      return canonicalRead(q, p);
+    });
+    commitOutcomes.push(conflictError("documentRevisionIDDoesNotMatchError", "role-1"));
+
+    const res = await roleDELETE(req({ rev: "rev-legacy" }), ctx("role-1"));
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      error: "bootstrap_outcome_unknown",
+      details: { cause: "inconclusive_readback", observedRoleRev: "rev-moved" },
+    });
+    expect(committedTransactions()).toHaveLength(0);
+    expect(transactions).toHaveLength(1);
+    expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
+  });
+
+  it("maps conclusively rejected delete bootstrap to stale_revision", async () => {
+    store.roles.push(role({ _rev: "rev-legacy" }));
+    commitOutcomes.push(conflictError("documentRevisionIDDoesNotMatchError", "role-1"));
+
+    const res = await roleDELETE(req({ rev: "rev-legacy" }), ctx("role-1"));
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      error: "stale_revision",
+      details: { cause: "prebootstrap_state_observed", attemptedRoleRev: "rev-legacy" },
+    });
+    expect(committedTransactions()).toHaveLength(0);
+    expect(transactions).toHaveLength(1);
+    expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
   });
 
   it("vacates its own lock, retires its receipt, and deletes the role atomically", async () => {

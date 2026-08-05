@@ -280,6 +280,17 @@ function specialRole(over: Record<string, unknown> = {}) {
   });
 }
 
+function saturdayRole(over: Record<string, unknown> = {}) {
+  return role({
+    _id: "role-sat",
+    _rev: "rev-sat",
+    _type: "saturday_role",
+    week: "2026-08-08",
+    Chorus: [],
+    ...over,
+  });
+}
+
 function lock(over: Record<string, unknown> = {}) {
   return {
     _id: "roleTarget.sunday_role.2026-08-09",
@@ -380,6 +391,24 @@ describe("POST /api/admin/roles/swap — seat swap", () => {
     const lockOps = ops.filter((o) => o.id.startsWith("roleTarget"));
     expect(lockOps.map((o) => o.rev).sort()).toEqual(["lock-rev-1", "lock-rev-2"]);
     expect(revalidateServiceViewsMock).toHaveBeenCalled();
+  });
+
+  it("refuses hidden Saturday Chorus before member resolution or coordination", async () => {
+    store.roles.push(saturdayRole({ Chorus: [ref("hidden", "mem-9")] }), role());
+    const res = await swapPOST(
+      req({
+        kind: "seat",
+        source: seat("role-sat", "rev-sat", "Lead", "a1"),
+        target: seat("role-1", "rev-1", "Lead", "a1"),
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      error: "integrity_conflict",
+      details: { detail: "hidden_saturday_chorus", roleId: "role-sat" },
+    });
+    expect(operationalFetch.mock.calls.some(([query]) => String(query).includes("teamMembers"))).toBe(false);
+    expect(transactions).toHaveLength(0);
   });
 
   it("swaps the same seat path across two services (two leads trading dates)", async () => {
@@ -667,6 +696,216 @@ describe("POST /api/admin/roles/swap — seat swap", () => {
   });
 });
 
+// ── Section swap ────────────────────────────────────────────────────────────
+
+describe("POST /api/admin/roles/swap — section swap", () => {
+  const selection = (path: string, roles = [
+    { id: "role-1", rev: "rev-1" },
+    { id: "role-2", rev: "rev-2" },
+  ]) => ({ kind: "section", path, roles });
+
+  function seedTwoWeekendRoles(first = role(), second = otherRole()) {
+    store.roles.push(first, second);
+    store.locks.push(
+      lockFor("role-1", "2026-08-09", "lock-rev-1"),
+      lockFor("role-2", "2026-08-16", "lock-rev-2"),
+    );
+    seedAllMembers();
+  }
+
+  it("exchanges unequal BGV arrays exactly and patches no other role field", async () => {
+    const firstBGVs = [ref("a-bgv-2", "mem-2"), ref("a-bgv-1", "mem-1")];
+    const secondBGVs = [
+      ref("b-bgv-3", "mem-10"),
+      ref("b-bgv-1", "mem-9"),
+      ref("b-bgv-2", "mem-5"),
+    ];
+    seedTwoWeekendRoles(
+      role({ BGVs: firstBGVs, team_notes: "first notes" }),
+      otherRole({ BGVs: secondBGVs, team_notes: "second notes" }),
+    );
+
+    const res = await swapPOST(req({
+      ...selection("BGVs"),
+      BGVs: [ref("hacker", "mem-hacker")],
+      assignments: ["mem-hacker"],
+    }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, kind: "section", roleIds: ["role-1", "role-2"] });
+    const roleOps = patches(committedTransactions()[0]).filter((op) => !op.id.startsWith("roleTarget"));
+    expect(roleOps).toHaveLength(2);
+    expect(roleOps[0]).toMatchObject({ id: "role-1", rev: "rev-1", set: { BGVs: secondBGVs } });
+    expect(roleOps[1]).toMatchObject({ id: "role-2", rev: "rev-2", set: { BGVs: firstBGVs } });
+    expect(Object.keys(roleOps[0].set)).toEqual(["BGVs"]);
+    expect(Object.keys(roleOps[1].set)).toEqual(["BGVs"]);
+    expect(JSON.stringify(roleOps)).not.toContain("mem-hacker");
+    for (const field of [
+      "_id", "_type", "week", "date", "service_name", "published", "songs", "team_notes",
+      "Lead", "Chorus", "instruments", "foh_team",
+    ]) {
+      expect(roleOps[0].set[field]).toBeUndefined();
+      expect(roleOps[1].set[field]).toBeUndefined();
+    }
+  });
+
+  it("moves an entire nonempty section into an empty section and vice versa", async () => {
+    const full = [ref("b1", "mem-5"), ref("b2", "mem-6")];
+    seedTwoWeekendRoles(role({ BGVs: [] }), otherRole({ BGVs: full }));
+
+    const res = await swapPOST(req(selection("BGVs")));
+
+    expect(res.status).toBe(200);
+    const roleOps = patches(committedTransactions()[0]).filter((op) => !op.id.startsWith("roleTarget"));
+    expect(roleOps.find((op) => op.id === "role-1")?.set).toEqual({ BGVs: full });
+    expect(roleOps.find((op) => op.id === "role-2")?.set).toEqual({ BGVs: [] });
+  });
+
+  it("preserves instrument keys, item/reference types, labels and order", async () => {
+    const first = [
+      instrumentSlot("a-bass", "Bajo", "mem-3"),
+      instrumentSlot("a-guitar", "Guitarra", "mem-4"),
+    ];
+    const second = [instrumentSlot("b-keys", "Teclado principal", "mem-7")];
+    seedTwoWeekendRoles(role({ instruments: first }), otherRole({ instruments: second }));
+
+    const res = await swapPOST(req(selection("instruments")));
+
+    expect(res.status).toBe(200);
+    const roleOps = patches(committedTransactions()[0]).filter((op) => !op.id.startsWith("roleTarget"));
+    expect(roleOps.find((op) => op.id === "role-1")?.set).toEqual({ instruments: second });
+    expect(roleOps.find((op) => op.id === "role-2")?.set).toEqual({ instruments: first });
+    expect((roleOps.find((op) => op.id === "role-2")?.set.instruments as typeof first)[0]).toEqual({
+      _key: "a-bass",
+      _type: "instrument_slot",
+      instrument: "Bajo",
+      person: { _type: "reference", _ref: "mem-3" },
+    });
+  });
+
+  it("allows a shared BGV section across service classes and resolves only that section", async () => {
+    store.roles.push(
+      role({ BGVs: [ref("a2", "mem-2")] }),
+      specialRole({ Lead: [ref("unrelated", "mem-dangling")], BGVs: [ref("c2", "mem-9")] }),
+    );
+    store.locks.push(lockFor("role-1", "2026-08-09", "lock-rev-1"));
+    seedMembers("mem-2", "mem-9");
+
+    const res = await swapPOST(req(selection("BGVs", [
+      { id: "role-1", rev: "rev-1" },
+      { id: "role-sp", rev: "rev-sp" },
+    ])));
+
+    expect(res.status).toBe(200);
+    const ops = patches(committedTransactions()[0]);
+    expect(ops.find((op) => op.id === "role-1")?.set).toEqual({ BGVs: [ref("c2", "mem-9")] });
+    expect(ops.find((op) => op.id === "role-sp")?.set).toEqual({ BGVs: [ref("a2", "mem-2")] });
+  });
+
+  it("refuses Saturday Chorus before member resolution, coordination or a transaction", async () => {
+    store.roles.push(
+      role({ Chorus: [ref("sun-chorus", "mem-dangling")] }),
+      saturdayRole(),
+    );
+
+    const res = await swapPOST(req(selection("Chorus", [
+      { id: "role-1", rev: "rev-1" },
+      { id: "role-sat", rev: "rev-sat" },
+    ])));
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      error: "invalid_request",
+      details: { issues: ["incompatible_section_topology"] },
+    });
+    expect(operationalFetch.mock.calls.some(([query]) => String(query).includes("teamMembers"))).toBe(false);
+    expect(operationalFetch.mock.calls.some(([query]) => String(query).includes("roleTargetLock"))).toBe(false);
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("rejects a dangling reference in the selected arrays before coordination", async () => {
+    store.roles.push(
+      role({ BGVs: [ref("a2", "mem-dangling")] }),
+      otherRole({ BGVs: [ref("b2", "mem-5")] }),
+    );
+    seedMembers("mem-5");
+
+    const res = await swapPOST(req(selection("BGVs")));
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      error: "integrity_conflict",
+      details: { danglingRefs: ["mem-dangling"] },
+    });
+    expect(operationalFetch.mock.calls.some(([query]) => String(query).includes("roleTargetLock"))).toBe(false);
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("refuses stale revisions and draft overlays without writing", async () => {
+    seedTwoWeekendRoles();
+    let res = await swapPOST(req(selection("BGVs", [
+      { id: "role-1", rev: "moved" },
+      { id: "role-2", rev: "rev-2" },
+    ])));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("stale_revision");
+    expect(transactions).toHaveLength(0);
+
+    store.rawRoleDrafts.push({ _id: "drafts.role-2", _type: "sunday_role", week: "2026-08-16" });
+    res = await swapPOST(req(selection("BGVs")));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("integrity_conflict");
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("keeps both section patches atomic on a commit conflict and emits no side effects", async () => {
+    seedTwoWeekendRoles();
+    commitOutcomes.push(conflictError());
+
+    const res = await swapPOST(req(selection("BGVs")));
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("stale_revision");
+    expect(committedTransactions()).toHaveLength(0);
+    expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it("stops after legacy-lock bootstrap maintenance without swapping the section", async () => {
+    store.roles.push(role(), otherRole());
+    store.locks.push(lockFor("role-1", "2026-08-09", "lock-rev-1"));
+    seedAllMembers();
+
+    const res = await swapPOST(req(selection("BGVs")));
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("bootstrap_completed_reload");
+    expect(committedTransactions()).toHaveLength(1);
+    const ops = committedTransactions()[0].ops;
+    expect(ops.some((op) => op.kind === "patch" && Object.hasOwn(op.set, "BGVs"))).toBe(false);
+  });
+
+  it("computes notification before/after states with only BGV replaced", async () => {
+    seedTwoWeekendRoles(
+      role({ BGVs: [ref("a-bgv", "mem-2")] }),
+      otherRole({ BGVs: [ref("b-bgv-1", "mem-9"), ref("b-bgv-2", "mem-10")] }),
+    );
+
+    const res = await swapPOST(req(selection("BGVs")));
+
+    expect(res.status).toBe(200);
+    expect(afterCallbacks).toHaveLength(3);
+    await drainAfter();
+    expect(sendPushMock).toHaveBeenCalledTimes(2);
+    expect(sendPushMock.mock.calls[0][0]).toEqual(["mem-9", "mem-10"]);
+    expect(sendPushMock.mock.calls[1][0]).toEqual(["mem-2"]);
+    const byKey = new Map(outboxUpserts().map((doc) => [doc.subjectKey, doc]));
+    expect(byKey.get("mem-2__role-1")?.before).toEqual({ beforeRoles: ["BGV"] });
+    expect(byKey.get("mem-9__role-2")?.before).toEqual({ beforeRoles: ["BGV"] });
+    expect(byKey.get("mem-1__role-1")?.before).toEqual({ beforeRoles: ["Líder"] });
+  });
+});
+
 // ── Team swap ───────────────────────────────────────────────────────────────
 
 describe("POST /api/admin/roles/swap — team swap", () => {
@@ -724,6 +963,45 @@ describe("POST /api/admin/roles/swap — team swap", () => {
     const specialPatch = ops.find((o) => o.id === "role-sp") as PatchOp;
     expect(specialPatch.set.songs).toBeUndefined();
     expect(specialPatch.set.service_name).toBeUndefined();
+  });
+
+  it.each([
+    ["Saturday first", [
+      { id: "role-sat", rev: "rev-sat" },
+      { id: "role-1", rev: "rev-1" },
+    ]],
+    ["Saturday second", [
+      { id: "role-1", rev: "rev-1" },
+      { id: "role-sat", rev: "rev-sat" },
+    ]],
+  ])("refuses incompatible team topology with %s", async (_name, roles) => {
+    store.roles.push(role(), saturdayRole());
+    const res = await swapPOST(req({ kind: "team", roles }));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      error: "invalid_request",
+      details: { issues: ["incompatible_team_topology"] },
+    });
+    expect(operationalFetch.mock.calls.some(([query]) => String(query).includes("teamMembers"))).toBe(false);
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("refuses hidden Saturday Chorus before planning a team write", async () => {
+    store.roles.push(saturdayRole({ Chorus: [ref("hidden", "mem-9")] }), saturdayRole({
+      _id: "role-sat-2",
+      _rev: "rev-sat-2",
+      week: "2026-08-15",
+    }));
+    const res = await swapPOST(req({
+      kind: "team",
+      roles: [
+        { id: "role-sat", rev: "rev-sat" },
+        { id: "role-sat-2", rev: "rev-sat-2" },
+      ],
+    }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).details.detail).toBe("hidden_saturday_chorus");
+    expect(transactions).toHaveLength(0);
   });
 
   it("notifies the newly added assignees per destination role", async () => {
@@ -811,7 +1089,7 @@ describe("POST /api/admin/roles/swap — team swap", () => {
     expect(transactions).toHaveLength(0);
   });
 
-  it("bootstraps a legacy weekend lock, then swaps from the produced revisions", async () => {
+  it("requires an explicit reload after bootstrapping a legacy weekend lock", async () => {
     store.roles.push(role(), otherRole());
     // role-2 owns no lock yet (legacy weekend target).
     store.locks.push(lockFor("role-1", "2026-08-09", "lock-rev-1"));
@@ -821,22 +1099,40 @@ describe("POST /api/admin/roles/swap — team swap", () => {
       if (q.includes("_id == $id") && p.id === "role-2") {
         roleReads++;
         if (roleReads > 1) {
-          store.locks.push(lockFor("role-2", "2026-08-16", "lock-rev-boot"));
+          if (!store.locks.some((item) => item._id === "roleTarget.sunday_role.2026-08-16")) {
+            store.locks.push(lockFor("role-2", "2026-08-16", "lock-rev-boot"));
+          }
           return [otherRole({ _rev: "rev-2-after-boot" })];
         }
       }
       return canonicalRead(q, p);
     });
-    const res = await swapPOST(
+    const bootstrap = await swapPOST(
       req({ kind: "team", roles: [{ id: "role-1", rev: "rev-1" }, { id: "role-2", rev: "rev-2" }] }),
     );
-    expect(res.status).toBe(200);
-    expect(committedTransactions()).toHaveLength(2);
-    // 1) maintenance: guarded heartbeat of the unchanged target field + the lock.
+    expect(bootstrap.status).toBe(409);
+    expect(await bootstrap.json()).toMatchObject({ error: "bootstrap_completed_reload" });
+    expect(committedTransactions()).toHaveLength(1);
+    // The first request performs maintenance only: guarded heartbeat of the
+    // unchanged target field plus the missing lock, with no roster mutation.
     const boot = committedTransactions()[0].ops;
     expect(boot[0]).toMatchObject({ kind: "patch", id: "role-2", rev: "rev-2" });
     expect(boot[1]).toMatchObject({ kind: "create" });
-    // 2) business: continues ONLY from the produced revision.
+    expect(boot.some((op) => op.kind === "patch" && Object.hasOwn(op.set, "Lead"))).toBe(false);
+
+    // Only an explicit second request may perform the swap, using the role and
+    // lock revisions obtained by reloading after maintenance.
+    const res = await swapPOST(
+      req({
+        kind: "team",
+        roles: [
+          { id: "role-1", rev: "rev-1" },
+          { id: "role-2", rev: "rev-2-after-boot" },
+        ],
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(committedTransactions()).toHaveLength(2);
     const business = patches(committedTransactions()[1]);
     expect(business.find((o) => o.id === "role-2")?.rev).toBe("rev-2-after-boot");
     expect(business.some((o) => o.id === "roleTarget.sunday_role.2026-08-16" && o.rev === "lock-rev-boot")).toBe(true);

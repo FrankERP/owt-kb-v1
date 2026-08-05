@@ -185,13 +185,13 @@ export interface WeekendCoordination {
   role: StoredRole | null;
   /** The owned coordination token to assert/heartbeat; null when no role exists. */
   lock: StoredLock | null;
-  /** True when a legacy lock had to be bootstrapped first (documented persistence). */
-  bootstrapped: boolean;
+  /** Compatibility marker; bootstrap maintenance now always returns a failure. */
+  bootstrapped: false;
 }
 
 export type WeekendCoordinationLoad =
   | { ok: true; coordination: WeekendCoordination }
-  | { ok: false; failure: RoleWriteFailure; bootstrapped: boolean };
+  | { ok: false; failure: RoleWriteFailure };
 
 /**
  * Resolve the coordination token every weekend setlist/proposal writer must
@@ -218,7 +218,6 @@ export async function loadWeekendCoordination(input: {
         rawDrafts: idsOf(drafts),
         detail: "role_draft_conflict",
       }),
-      bootstrapped: false,
     };
   }
   if (roles.length > 1) {
@@ -228,7 +227,6 @@ export async function loadWeekendCoordination(input: {
         week: input.week,
         roleIds: idsOf(roles),
       }),
-      bootstrapped: false,
     };
   }
   const role = pickUnique(roles);
@@ -239,21 +237,19 @@ export async function loadWeekendCoordination(input: {
   if (!validation.groupable || !validation.targetKey) {
     return {
       ...failure("integrity_conflict", { roleId: role._id, issues: validation.issues }),
-      bootstrapped: false,
     };
   }
   const date = storedRoleDate(role);
   if (!date) {
     return {
       ...failure("integrity_conflict", { roleId: role._id, issues: ["date"] }),
-      bootstrapped: false,
     };
   }
   const coordination = await resolveOwnedCoordination([
     { role, date, targetKey: validation.targetKey, lockId: roleTargetLockId(validation.targetKey) },
   ]);
   if (!coordination.ok) {
-    return { ok: false, failure: coordination.failure, bootstrapped: coordination.bootstrapped };
+    return { ok: false, failure: coordination.failure };
   }
   const resolved = coordination.roles[0];
   return {
@@ -261,7 +257,7 @@ export async function loadWeekendCoordination(input: {
     coordination: {
       role: resolved.role,
       lock: resolved.lock,
-      bootstrapped: coordination.bootstrapped,
+      bootstrapped: false,
     },
   };
 }

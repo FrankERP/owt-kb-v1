@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
-import { serverClient, writeClient } from "@/sanity/lib/serverClient";
+import { writeClient } from "@/sanity/lib/serverClient";
+import { operationalClient } from "@/sanity/lib/operationalClient";
 
 // Reading the member list is needed by the Servicios/Disponibilidad panels (admin-accessible).
 // Creating/editing members stays super-admin only (Miembros section).
@@ -15,7 +16,7 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const members = await serverClient.fetch(
+  const members = await operationalClient.fetch(
     `*[_type == "teamMembers"] | order(member_name asc) {
       _id, member_name, alias, email, role, memberType, notifPrefs,
       unavailableDates, unavailabilityNotes,

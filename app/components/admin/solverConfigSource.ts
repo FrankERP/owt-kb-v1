@@ -87,7 +87,8 @@ function isObj(v: unknown): v is Record<string, unknown> {
  */
 export function sourceFromGet(ok: boolean, body: unknown): SolverConfigSource {
   if (!ok || !isObj(body)) return { status: "error", message: READ_FAILED_MESSAGE };
-  if (body.present !== true) return { status: "absent", config: DEFAULT_SOLVER_CONFIG };
+  if (body.present === false) return { status: "absent", config: DEFAULT_SOLVER_CONFIG };
+  if (body.present !== true) return { status: "error", message: READ_FAILED_MESSAGE };
   const rev = typeof body.rev === "string" && body.rev.length ? body.rev : null;
   if (rev === null) return { status: "error", message: READ_FAILED_MESSAGE };
   // Normalised through the SAME reader the route uses, because this payload

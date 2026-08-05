@@ -38,6 +38,7 @@ import {
 import { normalizeServiceName } from "./normalizeLabel";
 import {
   canonicalGroupState,
+  normalizeBaseId,
   validateRole,
   type CanonicalGroupState,
   type RoleType,
@@ -50,6 +51,7 @@ import {
   isSpecialRoleType,
   planOwnedLock,
   roleDateField,
+  sanityConflictKind,
   storedRoleDate,
 } from "./roleWriteRequest";
 import {
@@ -94,6 +96,7 @@ export interface StoredLock {
   roleId?: string;
   roleType?: string;
   date?: string;
+  claimNonce?: string;
   generation?: number;
 }
 
@@ -280,21 +283,21 @@ export interface CoordinatedRole {
 }
 
 export type RoleCoordination =
-  | { ok: true; roles: CoordinatedRole[]; bootstrapped: boolean }
-  | { ok: false; failure: RoleWriteFailure; bootstrapped: boolean };
+  | { ok: true; roles: CoordinatedRole[]; bootstrapped: false }
+  | { ok: false; failure: RoleWriteFailure };
 
 /**
  * Resolve the coordination token every involved role must already own, so ONE
  * business transaction can assert all of them. A wrong-owner, vacant or malformed
  * token is an integrity conflict and is never repaired implicitly; exactly one
- * legacy weekend role with no token runs the §1 bootstrap maintenance transaction
- * and the caller then continues only from the produced revisions.
+ * legacy weekend role with no token runs the §1 bootstrap maintenance transaction.
+ * Any maintenance commit, concurrent maintenance, or uncertain persistence stops
+ * the complete logical operation; callers never continue into a business write.
  */
 export async function resolveOwnedCoordination(
   targets: readonly RoleWriteTarget[],
 ): Promise<RoleCoordination> {
   const out: CoordinatedRole[] = [];
-  let bootstrapped = false;
   const lockIds = targets
     .map((t) => t.lockId)
     .filter((id): id is string => typeof id === "string");
@@ -315,7 +318,6 @@ export async function resolveOwnedCoordination(
     if (plan.kind === "integrity") {
       return {
         ok: false,
-        bootstrapped,
         failure: { code: "integrity_conflict", details: { lockId, detail: plan.detail } },
       };
     }
@@ -327,19 +329,19 @@ export async function resolveOwnedCoordination(
         dateField: roleDateField(target.role._type),
         date: target.date,
       });
-      if (!boot.ok || !boot.role || !boot.lock) {
-        return {
-          ok: false,
-          bootstrapped: bootstrapped || boot.committed,
-          failure: {
-            code: boot.committed ? "bootstrap_completed_reload" : "stale_revision",
-            details: { id: target.role._id, lockId },
-          },
-        };
-      }
-      bootstrapped = true;
-      out.push({ role: boot.role, targetKey, date: target.date, lock: boot.lock });
-      continue;
+      const code =
+        boot.outcome === "committed_reload"
+          ? "bootstrap_completed_reload"
+          : boot.outcome === "unknown"
+            ? "bootstrap_outcome_unknown"
+            : "stale_revision";
+      return {
+        ok: false,
+        failure: {
+          code,
+          details: { ...boot.details, id: target.role._id },
+        },
+      };
     }
     out.push({
       role: target.role,
@@ -348,7 +350,7 @@ export async function resolveOwnedCoordination(
       lock: locks.get(lockId) as StoredLock,
     });
   }
-  return { ok: true, roles: out, bootstrapped };
+  return { ok: true, roles: out, bootstrapped: false };
 }
 
 // ── Target occupancy ────────────────────────────────────────────────────────
@@ -377,7 +379,7 @@ export async function loadTargetOccupancy(input: {
         ? canonicalSpecialRolesForDateQuery(input.date)
         : canonicalWeekendRolesForTargetQuery(input.roleType, input.date),
     ),
-    runRaw<{ _id: string }>(
+    runRaw<{ _id: string; service_name?: string }>(
       special
         ? rawSpecialRoleDraftsForDateQuery(input.date)
         : rawRoleDraftsForTargetQuery(input.roleType, input.date),
@@ -393,7 +395,14 @@ export async function loadTargetOccupancy(input: {
       .filter((r) => r._id !== input.excludeRoleId)
       .filter((r) => !special || normalizeServiceName(r.service_name) === wanted)
       .map((r) => r._id),
-    rawDraftIds: drafts.map((d) => d._id),
+    rawDraftIds: drafts
+      .filter(
+        (draft) =>
+          !special ||
+          normalizeBaseId(draft._id) === input.excludeRoleId ||
+          normalizeServiceName(draft.service_name) === wanted,
+      )
+      .map((draft) => draft._id),
   };
 }
 
@@ -443,13 +452,101 @@ export async function loadDependencies(input: {
 
 // ── Legacy lock bootstrap (§1 maintenance boundary) ─────────────────────────
 
+export type BootstrapOutcome = "not_committed" | "committed_reload" | "unknown";
+
+export interface BootstrapEvidence {
+  roleId: string;
+  lockId: string | null;
+  attemptedRoleRev: string;
+  observedRoleRev?: string;
+  observedLockRev?: string;
+  commit: "succeeded" | "rejected";
+  commitFailure?: "already_exists" | "revision_mismatch" | "conflict" | "unclassified";
+  nonceEvidence: "exact" | "different" | "absent" | "unreadable";
+  cause: string;
+}
+
 export interface BootstrapResult {
-  ok: boolean;
-  /** True once the maintenance transaction has committed (documented persistence). */
-  committed: boolean;
-  /** Role and lock refetched AFTER the maintenance commit — the only usable revisions. */
+  outcome: BootstrapOutcome;
+  /** Non-secret reconciliation evidence. The attempted nonce is never exposed. */
+  details: BootstrapEvidence;
+}
+
+function expectedBootstrapRole(
+  role: StoredRole | null,
+  input: {
+    roleId: string;
+    targetKey: string;
+    dateField: "week" | "date";
+    date: string;
+  },
+): role is StoredRole {
+  if (!role || role._id !== input.roleId) return false;
+  const validation = validateRole(role);
+  return (
+    validation.groupable &&
+    validation.targetKey === input.targetKey &&
+    validation.serviceDate === input.date &&
+    roleDateField(role._type) === input.dateField
+  );
+}
+
+function validBootstrapLock(
+  lock: StoredLock,
+  input: { roleId: string; targetKey: string; date: string },
+): boolean {
+  const lockId = roleTargetLockId(input.targetKey);
+  const roleType = input.targetKey.slice(0, input.targetKey.indexOf(":"));
+  return (
+    !!lockId &&
+    lock._id === lockId &&
+    typeof lock._rev === "string" &&
+    lock._rev.length > 0 &&
+    lock._type === "roleTargetLock" &&
+    lock.targetKey === input.targetKey &&
+    lock.state === "claimed" &&
+    lock.roleId === input.roleId &&
+    lock.roleType === roleType &&
+    lock.date === input.date &&
+    typeof lock.claimNonce === "string" &&
+    lock.claimNonce.length > 0 &&
+    typeof lock.generation === "number" &&
+    Number.isInteger(lock.generation) &&
+    lock.generation >= 0
+  );
+}
+
+interface BootstrapReadback {
   role: StoredRole | null;
+  roleState: CanonicalGroupState;
+  draftIds: string[];
   lock: StoredLock | null;
+  lockState: "absent" | "single" | "malformed";
+}
+
+async function loadBootstrapReadback(roleId: string, lockId: string): Promise<BootstrapReadback> {
+  const roleQuery = canonicalRoleByIdQuery(roleId);
+  const draftQuery = rawRoleDraftForBaseQuery(roleId);
+  const lockQuery = roleTargetLocksByIdsQuery([lockId]);
+  const [roles, drafts, locks] = await Promise.all([
+    operationalClient.fetch<StoredRole[]>(roleQuery.query, roleQuery.params),
+    rawIntegrityClient.fetch<{ _id: string }[]>(draftQuery.query, draftQuery.params),
+    operationalClient.fetch<StoredLock[]>(lockQuery.query, lockQuery.params),
+  ]);
+  if (!Array.isArray(roles) || !Array.isArray(drafts) || !Array.isArray(locks)) {
+    throw new Error("malformed bootstrap readback");
+  }
+  if (drafts.some((draft) => !draft || typeof draft._id !== "string")) {
+    throw new Error("malformed bootstrap draft readback");
+  }
+  const lock = locks.length === 1 && locks[0]?._id === lockId ? locks[0] : null;
+  return {
+    role: pickUnique(roles),
+    roleState: canonicalGroupState(roles.length),
+    draftIds: drafts.map((draft) => draft._id),
+    lock,
+    lockState: locks.length === 0 ? "absent" : lock ? "single" : "malformed",
+  };
 }
 
 /**
@@ -461,9 +558,11 @@ export interface BootstrapResult {
  * The maintenance transaction revision-guards and heartbeats ONLY the role's
  * unchanged target field, and `create`s its claimed lock (so concurrent
  * bootstrappers serialize on the deterministic lock id). Afterwards role and lock
- * are refetched and the caller may continue only from the produced revisions; a
- * later business conflict is reported as `409 bootstrap_completed_reload` and the
- * lock plus the advanced role revision intentionally persist.
+ * are refetched only to classify persistence. A maintenance commit always ends
+ * this request with `committed_reload`; no caller may continue into a business
+ * write. A rejected/lost commit is `not_committed` only when readback conclusively
+ * observes the exact pre-bootstrap role and no lock. Every other observation is
+ * `unknown` and forbids automatic retry.
  */
 export async function bootstrapLegacyLock(input: {
   roleId: string;
@@ -472,14 +571,29 @@ export async function bootstrapLegacyLock(input: {
   dateField: "week" | "date";
   date: string;
 }): Promise<BootstrapResult> {
+  const claimNonce = randomUUID();
   const lock = buildClaimedLock({
     targetKey: input.targetKey,
     roleId: input.roleId,
-    claimNonce: randomUUID(),
+    claimNonce,
     now: nowIso(),
   });
-  if (!lock) return { ok: false, committed: false, role: null, lock: null };
+  if (!lock) {
+    return {
+      outcome: "unknown",
+      details: {
+        roleId: input.roleId,
+        lockId: roleTargetLockId(input.targetKey),
+        attemptedRoleRev: input.roleRev,
+        commit: "rejected",
+        nonceEvidence: "unreadable",
+        cause: "invalid_bootstrap_plan",
+      },
+    };
+  }
 
+  let commit: BootstrapEvidence["commit"] = "succeeded";
+  let commitFailure: BootstrapEvidence["commitFailure"];
   try {
     await writeClient
       .transaction()
@@ -488,20 +602,95 @@ export async function bootstrapLegacyLock(input: {
       )
       .create(lock)
       .commit();
-  } catch {
-    // A concurrent bootstrapper won the lock id, or the observed role revision
-    // moved. Either way this request must reload; it never applies stale data.
-    return { ok: false, committed: false, role: null, lock: null };
+  } catch (error) {
+    commit = "rejected";
+    const kind = sanityConflictKind(error);
+    commitFailure = kind ?? "unclassified";
   }
 
-  const [refetched, refetchedLock] = await Promise.all([
-    loadCanonicalRole(input.roleId),
-    loadLock(lock._id),
-  ]);
-  return {
-    ok: !!refetched.role && !!refetchedLock,
-    committed: true,
-    role: refetched.role,
-    lock: refetchedLock,
-  };
+  try {
+    const refetched = await loadBootstrapReadback(input.roleId, lock._id);
+    const role = refetched.role;
+    const refetchedLock = refetched.lock;
+    const roleIsExpected =
+      refetched.roleState === "single" &&
+      refetched.draftIds.length === 0 &&
+      expectedBootstrapRole(role, input);
+    const observedRoleRev = role?._rev;
+    const observedLockRev = refetchedLock?._rev;
+    const nonceEvidence = refetched.lockState === "absent"
+      ? "absent"
+      : refetched.lockState === "single" && refetchedLock && validBootstrapLock(refetchedLock, input)
+        ? refetchedLock.claimNonce === claimNonce
+          ? "exact"
+          : "different"
+        : "unreadable";
+
+    if (commit === "succeeded") {
+      return {
+        outcome: "committed_reload",
+        details: {
+          roleId: input.roleId,
+          lockId: lock._id,
+          attemptedRoleRev: input.roleRev,
+          ...(observedRoleRev ? { observedRoleRev } : {}),
+          ...(observedLockRev ? { observedLockRev } : {}),
+          commit,
+          nonceEvidence,
+          cause: "commit_succeeded",
+        },
+      };
+    }
+
+    const baseDetails = {
+      roleId: input.roleId,
+      lockId: lock._id,
+      attemptedRoleRev: input.roleRev,
+      ...(observedRoleRev ? { observedRoleRev } : {}),
+      ...(observedLockRev ? { observedLockRev } : {}),
+      commit,
+      ...(commitFailure ? { commitFailure } : {}),
+      nonceEvidence,
+    } satisfies Omit<BootstrapEvidence, "cause">;
+
+    if (
+      roleIsExpected &&
+      observedRoleRev !== input.roleRev &&
+      refetchedLock &&
+      validBootstrapLock(refetchedLock, input)
+    ) {
+      return {
+        outcome: "committed_reload",
+        details: {
+          ...baseDetails,
+          cause: nonceEvidence === "exact" ? "attempted_nonce_observed" : "concurrent_nonce_observed",
+        },
+      };
+    }
+
+    if (roleIsExpected && observedRoleRev === input.roleRev && refetched.lockState === "absent") {
+      return {
+        outcome: "not_committed",
+        details: { ...baseDetails, cause: "prebootstrap_state_observed" },
+      };
+    }
+
+    return {
+      outcome: "unknown",
+      details: { ...baseDetails, cause: "inconclusive_readback" },
+    };
+  } catch {
+    return {
+      outcome: commit === "succeeded" ? "committed_reload" : "unknown",
+      details: {
+        roleId: input.roleId,
+        lockId: lock._id,
+        attemptedRoleRev: input.roleRev,
+        commit,
+        ...(commitFailure ? { commitFailure } : {}),
+        nonceEvidence: "unreadable",
+        cause: "readback_failed",
+      },
+    };
+  }
 }

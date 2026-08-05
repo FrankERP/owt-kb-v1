@@ -4,12 +4,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { SolveResponse } from "@/app/api/admin/solve/route";
 import { DayCard } from "@/app/components/DayCard";
 import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
-import { runDraftCreateBatch } from "@/app/utils/monthDraftCreate";
+import { draftCreateBody, newCreationRequestId, runDraftCreateBatch } from "@/app/utils/monthDraftCreate";
+import { normalizeServiceName } from "@/app/utils/normalizeLabel";
 import { creatableTargets, type TargetPreflight } from "./serviceReadiness";
 import PlannerGrid, { type AutoState, type SolveDiagnostics } from "./PlannerGrid";
 import MonthCalendar from "./MonthCalendar";
-import { SERVICE_LABEL } from "./serviceCardModel";
+import { SERVICE_LABEL, type ServiceRole } from "./serviceCardModel";
+import type { RoleDomainSummary } from "@/app/utils/serviceReadSummary";
 import { fillColumn } from "./localFill";
+import { ruleContextForTarget } from "./serviceRuleContext";
 import { unresolvedRuleNames } from "./ruleEnforcement";
 import { ParticipationSidebar } from "./ParticipationSidebar";
 import {
@@ -24,6 +27,7 @@ import {
   buildSolveRequest,
   applySolveResponse,
   cellsToDrafts,
+  createColumnId,
   draftTargetKey,
   historyEntryFromDrafts,
   mapUnfilledSeats,
@@ -40,6 +44,23 @@ import {
   type SolverConfig,
   type SolverHistoryEntry,
 } from "./plannerModel";
+import {
+  buildStoredGridRows,
+  joinStoredRoleInventory,
+  translateStoredRole,
+  type StoredGridColumn,
+  type StoredGridTranslation,
+} from "./storedRoleReadModel";
+import {
+  classifyPatchOutcome,
+  freezeSaveAttempt,
+  reconcileSaveAttempt,
+  sameRoleSemantics,
+  serializeStoredColumn,
+  type FrozenSaveAttempt,
+  type PatchTransportOutcome,
+  type RoleSemanticSnapshot,
+} from "./plannerSaveModel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,6 +79,7 @@ const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;
 interface ExistingRole { _id: string; _type: string; date: string; service_name?: string; }
 
 interface Props {
+  mode?: "create" | "stored";
   members: MemberOption[];
   existingRoles: ExistingRole[];
   onClose: () => void;
@@ -69,9 +91,8 @@ interface Props {
    * same "a failed read looks like the defaults" collapse the whole cutover
    * exists to prevent, wearing a prop's clothes.
    *
-   * It is owned by the panel rather than fetched here so that this component
-   * and `SeatBoard` read ONE object: a rule saved on this screen is what the
-   * Tablero refuses on, with no second copy to go stale.
+   * It is owned by the panel rather than fetched here so every month-planner
+   * entry reads one shared object with no second copy to go stale.
    */
   rules: SolverConfigController;
   /**
@@ -82,6 +103,12 @@ interface Props {
    * standalone (defaults to enabled).
    */
   capability?: { enabled: boolean; reason: string | null };
+  storedCapabilities?: {
+    edit: { enabled: boolean; reason: string | null };
+    create: { enabled: boolean; reason: string | null };
+    swap: { enabled: boolean; reason: string | null };
+    changeDate: { enabled: boolean; reason: string | null };
+  };
   /**
    * Per-target A1/A2 preflight for the `generateMonth` row of Plan B's matrix
    * (plan §"Data loading and validation consumption"). Every previewed target is
@@ -108,12 +135,99 @@ interface Props {
    * nameless again and let a differently-named planned special erase it.
    */
   allRoles?: SavedRole[];
+  initialMonth?: string;
+  focusRoleId?: string;
+  openComposerInitially?: boolean;
+  storedSource?: {
+    roles: ServiceRole[];
+    integrity: RoleDomainSummary | null;
+    rolesStatus: "loading" | "ready" | "error";
+    integrityStatus: "loading" | "ready" | "error";
+    rolesGeneration: number;
+    integrityGeneration: number;
+    reload: () => Promise<boolean>;
+  };
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MONTHS = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
                 "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+const SWAP_PROVEN_PREWRITE_FAILURES = new Map<string, number>([
+  ["invalid_request", 400],
+  ["forbidden", 403],
+  ["not_found", 404],
+  ["integrity_conflict", 409],
+  ["ambiguous_target", 409],
+  ["dependency_conflict", 409],
+  ["stale_revision", 409],
+]);
+
+const CREATE_PROVEN_PREWRITE_FAILURES = new Map<string, number>([
+  ["invalid_request", 400],
+  ["idempotency_mismatch", 409],
+  ["idempotency_key_retired", 409],
+  ["ambiguous_target", 409],
+  ["integrity_conflict", 409],
+  ["stale_revision", 409],
+]);
+
+type StoredSectionPath = "Lead" | "BGVs" | "Chorus" | "instruments" | "foh_team";
+
+type StoredSectionFingerprint = Array<{
+  itemKey: string;
+  memberId: string;
+  label?: string;
+}>;
+
+const STORED_SECTION_OPTIONS: Array<{ path: StoredSectionPath; label: string }> = [
+  { path: "Lead", label: "Líderes" },
+  { path: "BGVs", label: "BGV" },
+  { path: "Chorus", label: "Coro" },
+  { path: "instruments", label: "Instrumentos" },
+  { path: "foh_team", label: "FOH" },
+];
+
+function storedSectionFingerprint(
+  role: ServiceRole,
+  path: StoredSectionPath,
+): StoredSectionFingerprint | null {
+  const keyedMember = (item: { _id: string; _key?: string }) =>
+    item._key ? { itemKey: item._key, memberId: item._id } : null;
+  if (path === "Lead" || path === "BGVs" || path === "Chorus") {
+    const items = path === "Lead" ? role.leads : path === "BGVs" ? role.bgvs : role.chorus;
+    const fingerprint = items.map(keyedMember);
+    return fingerprint.every((item) => item !== null)
+      ? fingerprint as StoredSectionFingerprint
+      : null;
+  }
+  if (path === "instruments") {
+    const fingerprint = role.instruments.map((item) =>
+      item._key && item.person
+        ? { itemKey: item._key, memberId: item.person._id, label: item.instrument }
+        : null,
+    );
+    return fingerprint.every((item) => item !== null)
+      ? fingerprint as StoredSectionFingerprint
+      : null;
+  }
+  const fingerprint = role.foh.map((item) =>
+    item._key && item.person
+      ? { itemKey: item._key, memberId: item.person._id, label: item.role }
+      : null,
+  );
+  return fingerprint.every((item) => item !== null)
+    ? fingerprint as StoredSectionFingerprint
+    : null;
+}
+
+function sameStoredSectionFingerprint(
+  expected: StoredSectionFingerprint,
+  observed: StoredSectionFingerprint,
+): boolean {
+  return JSON.stringify(expected) === JSON.stringify(observed);
+}
 
 const PATTERNS: Array<{ value: string; label: string }> = [
   { value: "Sun.*",     label: "Domingo (todo)"   },
@@ -147,7 +261,7 @@ const PAT_LABEL: Record<string, string> = {
 const HISTORY_KEY   = "owt_solver_history_v2";
 const MAX_HISTORY   = 6;
 
-/** 56 days — matches `ServicesPanel`'s `CANDIDATE_LOAD_WINDOW_DAYS` for SeatBoard. */
+/** 56 days — matches the historical candidate-load window used by Servicios. */
 const SAVED_WINDOW_DAYS = 56;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -829,14 +943,13 @@ function RuleBuilder({ config, onChange, members, source }: {
            shared by every admin and by both surfaces. `localStorage` is no
            longer read or written for them — only `owt_solver_history_v2`, the
            fairness history, stays per-browser (ADR-0010).
-        2. The saved document is what the TABLERO enforces; the edits on this
-           screen are not, until "Guardar reglas" lands them. That gap is the
+        2. The saved document is what other planner sessions enforce; the edits
+           on this screen are not, until "Guardar reglas" lands them. That gap is the
            price of an explicit save (a POST per keystroke would thrash the
            route's `_rev` check and lose edits to its own concurrency guard), so
            it is stated rather than hidden.
-        3. Exclusions and conflicts are hard on BOTH surfaces. Week exclusions
-           are hard on the grid ONLY — the Tablero edits one service at a time
-           and has no Sunday spine, so there is no week to match
+        3. Exclusions, conflicts, and week exclusions are hard on the month grid;
+           week exclusions use its complete Sunday spine
            (`ruleEnforcement.ts`, `weekForColumn`). Caps and presence are not
            hard anywhere: they reach CP-SAT for Sundays and Saturdays and
            nothing checks them elsewhere — a special never goes to the solver,
@@ -846,8 +959,7 @@ function RuleBuilder({ config, onChange, members, source }: {
 
         The branch is NOT the old per-browser one wearing new clothes: it is
         `SolverConfigSource`, i.e. what we actually know about the document.
-        With no document there is nothing to share and nothing to save, and the
-        Tablero enforces nothing (`enforceableConfig`) — so that state gets its
+        With no document there is nothing to share and nothing to save, so that state gets its
         own sentence rather than a softened version of the other.
 
         THREE sentences, not two, and this is the point of taking the whole
@@ -864,28 +976,21 @@ function RuleBuilder({ config, onChange, members, source }: {
         <>
           <p className="font-body text-[11px] text-gray-500 px-1 pt-1">
             Las reglas se guardan en el <span className="text-[#00bfff]">servidor</span> y las
-            comparten todos los administradores. Los cambios de esta pantalla no valen en el{" "}
-            <span className="text-gray-400">Tablero</span> hasta que pulses{" "}
+            comparten todos los administradores. Los cambios de esta pantalla no valen en otras sesiones hasta que pulses{" "}
             <span className="text-gray-400">Guardar reglas</span>.
           </p>
           <p className="font-body text-[11px] text-gray-500 px-1">
             Se aplican como bloqueo duro los patrones excluidos y los conflictos entre dos personas,
-            tanto aquí como al editar un servicio en el{" "}
-            <span className="text-gray-400">Tablero</span>. Las{" "}
-            <span className="text-gray-400">semanas excluidas</span> solo se verifican aquí: el editor
-            del Tablero trabaja sobre un servicio suelto y no sabe en qué semana del mes cae.
+            al editar cualquier servicio de este mes. Las{" "}
+            <span className="text-gray-400">semanas excluidas</span> se verifican con el calendario completo del mes.
           </p>
         </>
       ) : source.status === "absent" ? (
         <p className="font-body text-[11px] text-gray-500 px-1 pt-1">
           Todavía no hay reglas compartidas en el servidor: estas son las de{" "}
           <span className="text-amber-400">ejemplo</span> con las que llega la app y no se pueden
-          guardar desde aquí. Mientras tanto, los patrones excluidos y los conflictos se aplican
-          como bloqueo duro <span className="text-amber-400">solo aquí</span> — al editar un servicio
-          en el <span className="text-gray-400">Tablero</span> no bloquean nada. Las{" "}
-          <span className="text-gray-400">semanas excluidas</span> solo se verifican aquí en
-          cualquier caso: el editor del Tablero trabaja sobre un servicio suelto y no sabe en qué
-          semana del mes cae.
+          guardar desde aquí. Los patrones excluidos, los conflictos y las semanas excluidas se
+          aplican en esta sesión del editor mensual, pero aún no son reglas compartidas.
         </p>
       ) : (
         <p className="font-body text-[11px] text-gray-500 px-1 pt-1">
@@ -896,12 +1001,8 @@ function RuleBuilder({ config, onChange, members, source }: {
           </span>{" "}
           Estas son las reglas que quedaron en pantalla, no necesariamente las que el servidor
           tiene ahora, y no se pueden guardar hasta que vuelvan a cargar. Mientras tanto, los
-          patrones excluidos y los conflictos se aplican como bloqueo duro{" "}
-          <span className="text-amber-400">solo aquí</span> — al editar un servicio en el{" "}
-          <span className="text-gray-400">Tablero</span> no bloquean nada. Las{" "}
-          <span className="text-gray-400">semanas excluidas</span> solo se verifican aquí en
-          cualquier caso: el editor del Tablero trabaja sobre un servicio suelto y no sabe en qué
-          semana del mes cae.
+          patrones excluidos, los conflictos y las semanas excluidas se aplican con la última
+          configuración cargada en esta sesión.
         </p>
       )}
       <p className="font-body text-[11px] text-gray-500 px-1">
@@ -1265,13 +1366,16 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function MonthGenerator({
-  members, existingRoles, onClose, onCreated, rules, capability, preflight, allRoles,
+  mode = "create", members, existingRoles, onClose, onCreated, rules, capability, preflight, allRoles,
+  initialMonth, focusRoleId, openComposerInitially = false, storedSource, storedCapabilities,
 }: Props) {
+  const storedMode = mode === "stored";
   const gateBlocked = capability && !capability.enabled ? capability.reason ?? "Datos incompletos." : null;
   const now = new Date();
-  const [step, setStep]           = useState<"config" | "grid">("config");
-  const [year, setYear]           = useState(now.getFullYear());
-  const [month, setMonth]         = useState(now.getMonth() + 1);
+  const initialMonthMatch = /^(\d{4})-(\d{2})$/.exec(initialMonth ?? "");
+  const [step, setStep]           = useState<"config" | "grid">(storedMode ? "grid" : "config");
+  const [year, setYear]           = useState(initialMonthMatch ? Number(initialMonthMatch[1]) : now.getFullYear());
+  const [month, setMonth]         = useState(initialMonthMatch ? Number(initialMonthMatch[2]) : now.getMonth() + 1);
   /**
    * E1's per-date Sunday picker, stored as DESELECTIONS rather than as the
    * selected dates. Two reasons, both bugs the other shape invites:
@@ -1336,9 +1440,8 @@ export default function MonthGenerator({
    * who already has a real rule set would be locked out of the planner for as
    * long as one network blip on the reload lasts. And the retained config is a
    * genuine server read — unlike `DEFAULT_SOLVER_CONFIG` in the never-`ready`
-   * case, this is not a fabricated rule set — while the Tablero already
-   * enforces nothing in this state (`enforceableConfig`), so the grid keeping
-   * last-known-good is strictly more enforcement than that surface gets. What
+   * case, this is not a fabricated rule set, so the grid keeping
+   * last-known-good preserves useful enforcement. What
    * this state owes the admin is to SAY the read failed
    * (`SolverConfigReloadNotice`, and the third branch of the copy in
    * `RuleBuilder`), not to lock the surface.
@@ -1349,13 +1452,53 @@ export default function MonthGenerator({
         ? rules.source.message
         : "Cargando las reglas compartidas…"
       : null;
+  const storedEditBlocked = storedCapabilities?.edit.enabled === false
+    ? storedCapabilities.edit.reason ?? "Datos incompletos."
+    : gateBlocked ?? rulesBlocked;
+  const storedCreateBlocked = storedCapabilities?.create.enabled === false
+    ? storedCapabilities.create.reason ?? "Datos incompletos."
+    : gateBlocked;
+  const storedSwapBlocked = storedCapabilities?.swap.enabled === false
+    ? storedCapabilities.swap.reason ?? "Datos incompletos."
+    : storedEditBlocked;
+  const storedDateBlocked = storedCapabilities?.changeDate.enabled === false
+    ? storedCapabilities.changeDate.reason ?? "Datos incompletos."
+    : null;
   const [solverHistory, setSolverHistory] = useState<SolverHistoryEntry[]>([]);
   const [unavailabilityNotices, setUnavailabilityNotices] = useState<{ name: string; date: string; service: string }[]>([]);
 
+  const storedInventory = useMemo(
+    () => joinStoredRoleInventory(
+      storedSource?.roles ?? [],
+      storedSource?.rolesStatus === "ready" && storedSource.integrityStatus === "ready"
+        ? storedSource.integrity
+        : null,
+    ),
+    [storedSource?.integrity, storedSource?.integrityStatus, storedSource?.roles, storedSource?.rolesStatus],
+  );
+  const allStoredTranslations = useMemo(() => {
+    if (!storedMode || !storedInventory.coherent) return [];
+    return storedInventory.roles
+      .map(translateStoredRole)
+      .filter((entry): entry is StoredGridTranslation => entry !== null);
+  }, [storedInventory, storedMode]);
+  const storedTranslations = useMemo(() => {
+    const prefix = `${year}-${String(month).padStart(2, "0")}`;
+    return allStoredTranslations.filter((entry) => entry.column.date.slice(0, 7) === prefix);
+  }, [allStoredTranslations, month, year]);
+  const initialStoredRows = useMemo(
+    () => buildStoredGridRows(storedTranslations),
+    [storedTranslations],
+  );
+  const initialStoredCells = useMemo(
+    () => storedTranslations.flatMap((entry) => entry.cells),
+    [storedTranslations],
+  );
+
   // ── Grid state (Task 2/3's shape; `MonthGenerator` owns it per the brief) ──
-  const [rows, setRows]           = useState<GridRow[]>(() => buildRows());
-  const [cells, setCells]         = useState<GridCell[]>([]);
-  const [skippedDates, setSkippedDates] = useState<Set<string>>(new Set());
+  const [rows, setRows]           = useState<GridRow[]>(() => storedMode ? initialStoredRows : buildRows());
+  const [cells, setCells]         = useState<GridCell[]>(() => storedMode ? initialStoredCells : []);
+  const [skippedColumnIds, setSkippedColumnIds] = useState<Set<string>>(new Set());
   const [drafts, setDrafts]       = useState<DraftCard[]>([]);
   /**
    * **P2: the one thing standing between a rename and a duplicate
@@ -1380,7 +1523,7 @@ export default function MonthGenerator({
    */
   const createdTargets = useRef<Set<string>>(new Set());
   const [unresolvedNames, setUnresolvedNames] = useState<string[]>([]);
-  const [unfilled, setUnfilled]   = useState<{ date: string; rowId: string }[]>([]);
+  const [unfilled, setUnfilled]   = useState<{ columnId: string; rowId: string }[]>([]);
   const [diagnostics, setDiagnostics] = useState<SolveDiagnostics | null>(null);
   const [autoPending, setAutoPending] = useState(false);
   const [autoError, setAutoError]     = useState<string | null>(null);
@@ -1388,6 +1531,18 @@ export default function MonthGenerator({
   const [viewMode, setViewMode]   = useState<"edit" | "view">("edit");
   const [swapSel, setSwapSel]     = useState<string | null>(null);
   const [swapToast, setSwapToast] = useState<string | null>(null);
+  const [swapVerificationPending, setSwapVerificationPending] = useState(false);
+  const pendingSwapExpected = useRef<{
+    body: string;
+    snapshots: Map<string, RoleSemanticSnapshot>;
+    section?: {
+      path: StoredSectionPath;
+      fingerprints: Map<string, StoredSectionFingerprint>;
+    };
+  } | null>(null);
+  const [sectionSwapPath, setSectionSwapPath] = useState<StoredSectionPath>("Lead");
+  const [sectionSwapFirst, setSectionSwapFirst] = useState("");
+  const [sectionSwapSecond, setSectionSwapSecond] = useState("");
   // Shared by "← Volver" and Escape (below): the ONE state that gates
   // discarding grid work, naming which action is pending so the two exits
   // can never end up with different rules about what counts as "unsaved" —
@@ -1395,6 +1550,39 @@ export default function MonthGenerator({
   const [pendingDiscard, setPendingDiscard] = useState<"back" | "close" | null>(null);
   const [pushing, setPushing]     = useState(false);
   const [pushError, setPushError] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const [savingStored, setSavingStored] = useState(false);
+  const [saveKnownFailures, setSaveKnownFailures] = useState(0);
+  const [pendingSaveAttempts, setPendingSaveAttempts] = useState<Map<string, {
+    attempt: FrozenSaveAttempt;
+    transport: PatchTransportOutcome;
+  }>>(new Map());
+  const [storedHeaderEdits, setStoredHeaderEdits] = useState<Map<string, { date?: string; serviceName?: string }>>(new Map());
+  const [touchedStoredRoleIds, setTouchedStoredRoleIds] = useState<Set<string>>(new Set());
+  const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
+  const [composerOpen, setComposerOpen] = useState(storedMode && openComposerInitially);
+  const [createType, setCreateType] = useState<ServiceType>("sunday_role");
+  const [createDate, setCreateDate] = useState(`${monthPrefix}-01`);
+  const [createName, setCreateName] = useState("");
+  const [creatingOne, setCreatingOne] = useState(false);
+  const [createAttemptStatus, setCreateAttemptStatus] = useState<"unknown" | "committedUnverified" | null>(null);
+  const createAttempt = useRef<{
+    id: string;
+    payloadKey: string;
+    target: { type: ServiceType; date: string; name: string | null };
+    roleId?: string;
+  } | null>(null);
+  const baselineByRole = useRef<Map<string, RoleSemanticSnapshot>>(new Map());
+  if (storedMode && baselineByRole.current.size === 0) {
+    for (const translation of storedTranslations) {
+      const serialized = serializeStoredColumn(
+        translation.column,
+        initialStoredRows,
+        initialStoredCells,
+      );
+      if (serialized.ok) baselineByRole.current.set(translation.column.roleId, serialized.snapshot);
+    }
+  }
 
   /**
    * Total occupied seats across the whole grid — what "← Volver" (and Escape,
@@ -1404,7 +1592,7 @@ export default function MonthGenerator({
    * effects that read it, rather than down near the JSX that used to be its
    * only reader.
    */
-  const assignmentCount = cells.reduce((n, c) => n + c.memberIds.length, 0);
+  const assignmentCount = cells.reduce((n, c) => n + c.occupants.length, 0);
 
   /**
    * Every per-date pick is scoped to ONE (year, month) and is dropped when
@@ -1449,16 +1637,6 @@ export default function MonthGenerator({
    * currently-visible grid work while on that step; on "config" there is
    * nothing on screen for Escape to discard.
    */
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      if (step === "grid" && assignmentCount > 0) { setPendingDiscard("close"); return; }
-      onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose, step, assignmentCount]);
-
   useEffect(() => {
     // ─── The rule set is NOT read here any more ──────────────────────────────
     //
@@ -1531,10 +1709,223 @@ export default function MonthGenerator({
   );
 
   // D9's EXPLICIT column set — never inferred from `sundayDatesFull`.
-  const columns = useMemo(
+  const createColumns = useMemo(
     () => buildColumns({ sundayDates: selectedSundays, activeSatDates, specials }),
     [selectedSundays, activeSatDates, specials],
   );
+  const columns = storedMode
+    ? storedTranslations.map((entry) => ({
+        ...entry.column,
+        ...(storedHeaderEdits.get(entry.column.roleId) ?? {}),
+      }))
+    : createColumns;
+  const storedColumns = columns.filter((column): column is StoredGridColumn => "roleId" in column);
+  const dirtyStoredColumns = storedMode
+    ? storedColumns.filter((column) => {
+        const serialized = serializeStoredColumn(column, rows, cells);
+        const baseline = baselineByRole.current.get(column.roleId);
+        return serialized.ok && (!baseline || !sameRoleSemantics(baseline, serialized.snapshot));
+      })
+    : [];
+  const invalidStoredColumns = storedMode
+    ? storedColumns.filter((column) => touchedStoredRoleIds.has(column.roleId) && !serializeStoredColumn(column, rows, cells).ok)
+    : [];
+  const storedRowsDirty = storedMode && JSON.stringify(rows) !== JSON.stringify(initialStoredRows);
+  const hasStoredDateMove = [...storedHeaderEdits.values()].some((edit) => edit.date !== undefined);
+  const storedSaveBlocked = storedEditBlocked ?? (hasStoredDateMove ? storedDateBlocked : null);
+  const storedWriteUnresolved = storedRowsDirty || dirtyStoredColumns.length > 0 || invalidStoredColumns.length > 0 || pendingSaveAttempts.size > 0 || swapVerificationPending;
+  const storedHasUnresolvedWork = storedWriteUnresolved || createAttemptStatus !== null;
+  const storedTransportActive = storedMode && (savingStored || creatingOne);
+  const storedMutationLocked = storedMode && (
+    savingStored
+    || pendingSaveAttempts.size > 0
+    || swapVerificationPending
+    || creatingOne
+    || createAttemptStatus !== null
+    || pendingDiscard !== null
+  );
+  const storedGenerationKey = `${storedSource?.rolesGeneration ?? 0}:${storedSource?.integrityGeneration ?? 0}`;
+  const storedSectionServiceOptions = storedMode
+    ? storedColumns
+        .filter((column) => column.admission === "approved")
+        .map((column) => ({
+          column,
+          label: `${fmtDate(column.date)} · ${SERVICE_LABEL[column.type]}${column.type === "special_role" ? ` · ${column.serviceName}` : ""}`,
+        }))
+    : [];
+  const sectionSwapFirstColumn = storedSectionServiceOptions.find(({ column }) => column.roleId === sectionSwapFirst)?.column;
+  const sectionSwapSecondColumn = storedSectionServiceOptions.find(({ column }) => column.roleId === sectionSwapSecond)?.column;
+  const sectionSwapTopologyInvalid = sectionSwapPath === "Chorus"
+    && (sectionSwapFirstColumn?.type === "saturday_role" || sectionSwapSecondColumn?.type === "saturday_role");
+  const storedSwapInteractionBlocked = storedMutationLocked || storedHasUnresolvedWork || !!storedSwapBlocked;
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (storedTransportActive) return;
+      const wouldDiscard = storedMode
+        ? storedHasUnresolvedWork
+        : step === "grid" && assignmentCount > 0;
+      if (wouldDiscard) {
+        setPendingDiscard("close");
+        return;
+      }
+      onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [assignmentCount, onClose, step, storedHasUnresolvedWork, storedMode, storedTransportActive]);
+
+  useEffect(() => {
+    if (!storedMode || !focusRoleId) return;
+    const frame = requestAnimationFrame(() => {
+      const escaped = typeof CSS !== "undefined" && typeof CSS.escape === "function"
+        ? CSS.escape(focusRoleId)
+        : focusRoleId.replace(/["\\]/g, "\\$&");
+      document.querySelector(`[data-grid-column-id="${escaped}"]`)?.scrollIntoView({ block: "nearest", inline: "center" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusRoleId, storedGenerationKey, storedMode]);
+  const lastStoredGeneration = useRef(storedGenerationKey);
+  useEffect(() => {
+    if (!storedMode || lastStoredGeneration.current === storedGenerationKey) return;
+    lastStoredGeneration.current = storedGenerationKey;
+    if (!storedInventory.coherent) {
+      setSaveNotice("La recarga no produjo una vista íntegra. Tus cambios siguen separados y no se adoptaron.");
+      return;
+    }
+    const refreshedRows = buildStoredGridRows(storedTranslations);
+    const refreshedCells = storedTranslations.flatMap((entry) => entry.cells);
+    const refreshedSnapshots = new Map<string, RoleSemanticSnapshot>();
+    const allRefreshedRows = buildStoredGridRows(allStoredTranslations);
+    const allRefreshedCells = allStoredTranslations.flatMap((entry) => entry.cells);
+    for (const translation of allStoredTranslations) {
+      const serialized = serializeStoredColumn(translation.column, allRefreshedRows, allRefreshedCells);
+      if (serialized.ok) refreshedSnapshots.set(translation.column.roleId, serialized.snapshot);
+    }
+
+    if (swapVerificationPending) {
+      const expected = pendingSwapExpected.current;
+      const semanticsVerified = expected && [...expected.snapshots].every(([roleId, snapshot]) => {
+        const observed = refreshedSnapshots.get(roleId);
+        return observed ? sameRoleSemantics(snapshot, observed) : false;
+      });
+      const fingerprintsVerified = expected?.section
+        ? [...expected.section.fingerprints].every(([roleId, fingerprint]) => {
+            const observedRole = storedInventory.roles.find((item) => item.role._id === roleId)?.role;
+            const observed = observedRole
+              ? storedSectionFingerprint(observedRole, expected.section!.path)
+              : null;
+            return observed ? sameStoredSectionFingerprint(fingerprint, observed) : false;
+          })
+        : true;
+      const verified = semanticsVerified && fingerprintsVerified;
+      if (!verified) {
+        setSwapToast("La recarga no coincide con el intercambio solicitado. Se conserva como resultado pendiente y no se reintentó.");
+        return;
+      }
+      baselineByRole.current = refreshedSnapshots;
+      setRows(refreshedRows);
+      setCells(refreshedCells);
+      setStoredHeaderEdits(new Map());
+      setTouchedStoredRoleIds(new Set());
+      pendingSwapExpected.current = null;
+      setSwapVerificationPending(false);
+      setSwapToast("Intercambio guardado y verificado.");
+      return;
+    }
+
+    if (pendingSaveAttempts.size > 0) {
+      const outcomes = [...pendingSaveAttempts.values()].map(({ attempt, transport }) => {
+        const snapshot = refreshedSnapshots.get(attempt.roleId);
+        const column = allStoredTranslations.find((entry) => entry.column.roleId === attempt.roleId)?.column;
+        const outcome = reconcileSaveAttempt({
+          attempt,
+          transport,
+          observed: snapshot && column ? { rev: column.rev, snapshot } : null,
+        });
+        return { roleId: attempt.roleId, transport, column, outcome };
+      });
+      const resolved = outcomes.every(({ transport, column, outcome }) =>
+        outcome.kind === "applied"
+        || (transport.kind === "maintenanceReload" && column?.admission === "approved"),
+      );
+      if (resolved) {
+        const appliedRoleIds = new Set(
+          outcomes.filter(({ outcome }) => outcome.kind === "applied").map(({ roleId }) => roleId),
+        );
+        const maintenanceRoleIds = new Set(
+          outcomes.filter(({ transport, outcome }) => transport.kind === "maintenanceReload" && outcome.kind !== "applied").map(({ roleId }) => roleId),
+        );
+        const nextBaselines = new Map(baselineByRole.current);
+        for (const roleId of pendingSaveAttempts.keys()) {
+          const snapshot = refreshedSnapshots.get(roleId);
+          if (snapshot) nextBaselines.set(roleId, snapshot);
+        }
+        baselineByRole.current = nextBaselines;
+        setCells((current) => [
+          ...current.filter((cell) => !appliedRoleIds.has(cell.columnId)),
+          ...refreshedCells.filter((cell) => appliedRoleIds.has(cell.columnId)),
+        ]);
+        setStoredHeaderEdits((current) => {
+          const next = new Map(current);
+          for (const roleId of appliedRoleIds) next.delete(roleId);
+          return next;
+        });
+        setTouchedStoredRoleIds((current) => {
+          const next = new Set(current);
+          for (const roleId of appliedRoleIds) next.delete(roleId);
+          return next;
+        });
+        setPendingSaveAttempts(new Map());
+        setSaveNotice(
+          maintenanceRoleIds.size > 0
+            ? `Se verificaron ${appliedRoleIds.size} cambios; ${maintenanceRoleIds.size} servicio${maintenanceRoleIds.size !== 1 ? "s" : ""} quedó listo para volver a guardar.${saveKnownFailures ? ` ${saveKnownFailures} fue rechazado y conserva sus cambios.` : ""}`
+            : `Cambios guardados y verificados.${saveKnownFailures ? ` ${saveKnownFailures} servicio${saveKnownFailures !== 1 ? "s" : ""} fue rechazado y conserva sus cambios.` : ""}`,
+        );
+        setSaveKnownFailures(0);
+      } else if (outcomes.some(({ outcome }) => outcome.kind === "committedThenSuperseded")) {
+        setSaveNotice("El cambio se guardó, pero otra edición lo reemplazó. Conservamos tu intención sin adoptar la versión remota.");
+      } else {
+        setSaveNotice("No se pudo confirmar el resultado. Conservamos tus cambios; recarga antes de intentar de nuevo.");
+      }
+      return;
+    }
+
+    if (!storedRowsDirty && dirtyStoredColumns.length === 0 && invalidStoredColumns.length === 0 && !swapVerificationPending) {
+      baselineByRole.current = refreshedSnapshots;
+      setRows(refreshedRows);
+      setCells(refreshedCells);
+      setStoredHeaderEdits(new Map());
+      setTouchedStoredRoleIds(new Set());
+      setSwapVerificationPending(false);
+    }
+  }, [allStoredTranslations, dirtyStoredColumns.length, invalidStoredColumns.length, pendingSaveAttempts, saveKnownFailures, storedGenerationKey, storedInventory, storedMode, storedRowsDirty, storedTranslations, swapVerificationPending]);
+
+  useEffect(() => {
+    const attempt = createAttempt.current;
+    if (!storedMode || !attempt || !storedInventory.coherent) return;
+    if (!attempt.roleId) return;
+    const matches = (storedSource?.roles ?? []).filter((role) => role._id === attempt.roleId);
+    const admittedEmpty = matches.find((role) =>
+      role._type === attempt.target.type
+      && role.date === attempt.target.date
+      && (role._type !== "special_role" || normalizeServiceName(role.service_name) === attempt.target.name)
+      && role.published === false
+      && role.leads.length === 0
+      && role.bgvs.length === 0
+      && role.chorus.length === 0
+      && role.instruments.length === 0
+      && role.foh.length === 0,
+    );
+    if (!admittedEmpty) return;
+    createAttempt.current = null;
+    setCreateAttemptStatus(null);
+    setComposerOpen(false);
+    setCreateName("");
+    setSaveNotice("Servicio vacío creado y verificado. Ya puedes asignar el equipo.");
+    onCreated();
+  }, [onCreated, storedGenerationKey, storedInventory.coherent, storedMode, storedSource?.roles]);
 
   const unaddressableDatesList = useMemo(
     () => computeUnaddressableDates(sundayDatesFull, activeSatDates),
@@ -1669,6 +2060,12 @@ export default function MonthGenerator({
   }
 
   function requestBack() {
+    if (storedMode) {
+      if (storedTransportActive) return;
+      if (storedHasUnresolvedWork) { setPendingDiscard("close"); return; }
+      onClose();
+      return;
+    }
     if (assignmentCount > 0) { setPendingDiscard("back"); return; }
     goBackToConfig();
   }
@@ -1677,6 +2074,12 @@ export default function MonthGenerator({
     setPendingDiscard(null);
     setStep("config");
     setSwapSel(null);
+  }
+
+  function confirmPendingDiscard() {
+    if (storedTransportActive) return;
+    if (!storedMode && pendingDiscard === "back") goBackToConfig();
+    else onClose();
   }
 
   function handlePreview() {
@@ -1701,7 +2104,7 @@ export default function MonthGenerator({
     );
     setRows(buildRows());
     setCells([]);
-    setSkippedDates(new Set());
+    setSkippedColumnIds(new Set());
     setUnresolvedNames([]);
     setUnfilled([]);
     setDiagnostics(null);
@@ -1711,34 +2114,311 @@ export default function MonthGenerator({
   }
 
   function handleCellsChange(next: GridCell[]) {
+    if (storedMutationLocked) return;
+    if (storedMode) {
+      const changedRoleIds = new Set<string>();
+      const allColumnIds = new Set([...cells.map((cell) => cell.columnId), ...next.map((cell) => cell.columnId)]);
+      for (const columnId of allColumnIds) {
+        const before = cells.filter((cell) => cell.columnId === columnId);
+        const after = next.filter((cell) => cell.columnId === columnId);
+        if (JSON.stringify(before) !== JSON.stringify(after)) changedRoleIds.add(columnId);
+      }
+      if (changedRoleIds.size) {
+        setTouchedStoredRoleIds((current) => new Set([...current, ...changedRoleIds]));
+      }
+    }
     setCells(next);
-    setDrafts(prev => cellsToDrafts(next, columns, skippedDates, prev, existingRoles));
+    if (storedMode) {
+      setSaveNotice(null);
+      return;
+    }
+    setDrafts(prev => cellsToDrafts(next, columns, skippedColumnIds, prev, existingRoles));
   }
 
-  function handleToggleSkip(date: string) {
-    setSkippedDates(prev => {
+  function handleStoredHeaderChange(columnId: string, patch: { date?: string; serviceName?: string }) {
+    if (!storedMode || storedMutationLocked) return;
+    if (patch.date !== undefined && storedDateBlocked) {
+      setSaveNotice(storedDateBlocked);
+      return;
+    }
+    setStoredHeaderEdits((current) => {
+      const next = new Map(current);
+      next.set(columnId, { ...(next.get(columnId) ?? {}), ...patch });
+      return next;
+    });
+    setTouchedStoredRoleIds((current) => new Set(current).add(columnId));
+    setSaveNotice(null);
+  }
+
+  function handleRowsChange(next: GridRow[]) {
+    if (storedMutationLocked) return;
+    setRows(next);
+  }
+
+  function handleToggleSkip(columnId: string) {
+    if (storedMode) return;
+    setSkippedColumnIds(prev => {
       const next = new Set(prev);
-      if (next.has(date)) next.delete(date); else next.add(date);
+      if (next.has(columnId)) next.delete(columnId); else next.add(columnId);
       setDrafts(prevDrafts => cellsToDrafts(cells, columns, next, prevDrafts, existingRoles));
       return next;
     });
   }
 
+  async function handleStoredSave() {
+    if (!storedMode || !storedSource || storedMutationLocked || dirtyStoredColumns.length === 0 || storedSaveBlocked) return;
+    setSavingStored(true);
+    setSaveNotice(null);
+    setSaveKnownFailures(0);
+    const pending = new Map<string, { attempt: FrozenSaveAttempt; transport: PatchTransportOutcome }>();
+    let knownFailures = 0;
+    try {
+      for (const column of dirtyStoredColumns) {
+        const serialized = serializeStoredColumn(column, rows, cells);
+        if (!serialized.ok) {
+          setSaveNotice(`No se puede guardar ${column.date}: ${serialized.reasons.join(", ")}.`);
+          return;
+        }
+        const attempt = freezeSaveAttempt(crypto.randomUUID(), column, serialized);
+        let transport: PatchTransportOutcome;
+        try {
+          const response = await fetch(`/api/admin/roles/${encodeURIComponent(column.roleId)}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: attempt.exactBodyBytes,
+          });
+          let responseBody: unknown = null;
+          try { responseBody = await response.json(); } catch {}
+          transport = classifyPatchOutcome({ status: response.status, body: responseBody });
+        } catch {
+          transport = classifyPatchOutcome({ transportError: true });
+        }
+        if (transport.kind === "knownFailure") {
+          knownFailures += 1;
+          setSaveNotice(`El servidor rechazó ${column.date} (${transport.code}); los demás cambios seguros continuaron.`);
+          continue;
+        }
+        pending.set(column.roleId, { attempt, transport });
+        if (transport.kind !== "knownCommitted") break;
+      }
+      setPendingSaveAttempts(pending);
+      setSaveKnownFailures(knownFailures);
+      if (pending.size > 0) {
+        const reloaded = await storedSource.reload();
+        if (!reloaded) {
+          setSaveNotice("No se pudo verificar la recarga. Conservamos tus cambios y no se reintentó el guardado.");
+        }
+      } else if (knownFailures > 0) {
+        setSaveNotice(`${knownFailures} servicio${knownFailures !== 1 ? "s" : ""} fue rechazado antes de escribir; tus cambios siguen pendientes.`);
+      }
+    } finally {
+      setSavingStored(false);
+    }
+  }
+
+  async function handleCreateOne() {
+    const retryingUnknownAttempt = createAttemptStatus === "unknown";
+    if (!storedMode || !storedSource || creatingOne || (storedMutationLocked && !retryingUnknownAttempt) || storedWriteUnresolved || createAttemptStatus === "committedUnverified" || storedCreateBlocked) return;
+    const normalizedName = createType === "special_role" ? normalizeServiceName(createName) : null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(createDate) || createDate.slice(0, 7) !== monthPrefix) {
+      setSaveNotice("Elige una fecha válida dentro del mes abierto.");
+      return;
+    }
+    if (createType === "special_role" && !normalizedName) {
+      setSaveNotice("Escribe el nombre del servicio especial.");
+      return;
+    }
+    const target = { type: createType, date: createDate, name: normalizedName };
+    const payloadKey = JSON.stringify(target);
+    if (!createAttempt.current || createAttempt.current.payloadKey !== payloadKey) {
+      createAttempt.current = { id: newCreationRequestId(), payloadKey, target };
+    }
+    const body = draftCreateBody({
+      localId: createAttempt.current.id,
+      creationRequestId: createAttempt.current.id,
+      _type: createType,
+      date: createDate,
+      ...(createType === "special_role" ? { service_name: normalizedName ?? "" } : {}),
+      leads: [],
+      bgvs: [],
+      chorus: [],
+      instruments: [],
+      foh: [],
+    }, false);
+    setCreatingOne(true);
+    setSaveNotice(null);
+    try {
+      const response = await fetch("/api/admin/roles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      let responseBody: unknown = null;
+      try { responseBody = await response.json(); } catch {}
+      if (!response.ok) {
+        const code = responseBody && typeof responseBody === "object" && typeof (responseBody as { error?: unknown }).error === "string"
+          ? (responseBody as { error: string }).error
+          : null;
+        const provenPrewrite = code !== null && CREATE_PROVEN_PREWRITE_FAILURES.get(code) === response.status;
+        if (provenPrewrite) setCreateAttemptStatus(null);
+        else setCreateAttemptStatus("unknown");
+        setSaveNotice(`No se creó el servicio (${code ?? "respuesta_no_verificable"}).`);
+        if (response.status === 409 || !provenPrewrite) await storedSource.reload();
+        return;
+      }
+      const responseRoleId = responseBody && typeof responseBody === "object" && typeof (responseBody as { _id?: unknown })._id === "string"
+        ? (responseBody as { _id: string })._id
+        : null;
+      const echoedRequestId = responseBody && typeof responseBody === "object" && typeof (responseBody as { creationRequestId?: unknown }).creationRequestId === "string"
+        ? (responseBody as { creationRequestId: string }).creationRequestId
+        : null;
+      if (!responseRoleId || echoedRequestId !== createAttempt.current.id) {
+        setCreateAttemptStatus("unknown");
+        setSaveNotice("El servidor confirmó la creación sin identidad verificable. Repite la misma solicitud para verificarla sin duplicar.");
+        return;
+      }
+      createAttempt.current.roleId = responseRoleId;
+      setCreateAttemptStatus("committedUnverified");
+      setSaveNotice("Servicio creado; verificando la lectura canónica…");
+      if (!await storedSource.reload()) {
+        setSaveNotice("El servidor confirmó la creación, pero no se pudo verificar la recarga.");
+      }
+    } catch {
+      setCreateAttemptStatus("unknown");
+      setSaveNotice("Resultado de creación desconocido. Conservamos la misma solicitud y no creamos otra.");
+      await storedSource.reload();
+    } finally {
+      setCreatingOne(false);
+    }
+  }
+
+  function frozenSwapExpectation(
+    roleIds: readonly string[],
+    candidateCells: GridCell[],
+    body: unknown,
+    section?: { path: StoredSectionPath; fingerprints: Map<string, StoredSectionFingerprint> },
+  ) {
+    const snapshots = new Map<string, RoleSemanticSnapshot>();
+    for (const roleId of roleIds) {
+      const column = storedColumns.find((item) => item.roleId === roleId);
+      if (!column) return null;
+      const serialized = serializeStoredColumn(column, rows, candidateCells);
+      if (!serialized.ok) return null;
+      snapshots.set(roleId, serialized.snapshot);
+    }
+    return { body: JSON.stringify(body), snapshots, ...(section ? { section } : {}) };
+  }
+
+  async function handleRejectedStoredSwap(response: Response, subject: string) {
+    let code: string | null = null;
+    try {
+      const body = await response.json();
+      if (body && typeof body === "object" && typeof (body as { error?: unknown }).error === "string") {
+        code = (body as { error: string }).error;
+      }
+    } catch {}
+    if (code === "bootstrap_completed_reload" && response.status === 409) {
+      pendingSwapExpected.current = null;
+      setSwapVerificationPending(false);
+      setSwapToast("Se preparó un servicio legado. Revisa la recarga y vuelve a solicitar el intercambio.");
+      await storedSource?.reload();
+      return;
+    }
+    if (code && SWAP_PROVEN_PREWRITE_FAILURES.get(code) === response.status) {
+      pendingSwapExpected.current = null;
+      setSwapVerificationPending(false);
+      setSwapToast(`No se intercambiaron ${subject} (${code}).`);
+      return;
+    }
+    setSwapVerificationPending(true);
+    setSwapToast("El servidor devolvió un resultado no verificable. No se reintentó; recargando para comparar la intención exacta…");
+    await storedSource?.reload();
+  }
+
   /** Whole-day swap, carried over as a COLUMN swap (2026-07-30 decision):
    *  pick two date columns and exchange every row's cell between them. */
-  function handleColumnSwap(date: string) {
-    if (!swapSel) { setSwapSel(date); return; }
-    if (swapSel === date) { setSwapSel(null); return; }
+  async function handleColumnSwap(columnId: string) {
+    if (storedMode && storedSwapInteractionBlocked) return;
+    if (!swapSel) { setSwapSel(columnId); return; }
+    if (swapSel === columnId) { setSwapSel(null); return; }
     const a = swapSel;
-    const b = date;
+    const b = columnId;
+    const columnA = columns.find((c) => c.columnId === a);
+    const columnB = columns.find((c) => c.columnId === b);
     // A Sunday column and a Saturday column have different seats (a Saturday
     // has no Coro row at all in the write path — `cellsToDrafts` zeroes
     // `chorus` for `saturday_role` unconditionally). Swapping across types
     // would carry a Coro cell onto a Saturday and lose it silently on create,
     // under a success toast with no warning. Refuse instead.
-    const typeOf = (d: string) => columns.find(c => c.date === d)?.type;
-    const typeA = typeOf(a);
-    const typeB = typeOf(b);
+    const typeA = columnA?.type;
+    const typeB = columnB?.type;
+    if (storedMode) {
+      setSwapSel(null);
+      if (storedSwapBlocked) {
+        setSwapToast(storedSwapBlocked);
+        return;
+      }
+      if (dirtyStoredColumns.length > 0 || invalidStoredColumns.length > 0 || storedMutationLocked) {
+        setSwapToast("Guarda o resuelve los cambios pendientes antes de intercambiar equipos.");
+        return;
+      }
+      const storedA = columnA && "roleId" in columnA ? columnA as StoredGridColumn : null;
+      const storedB = columnB && "roleId" in columnB ? columnB as StoredGridColumn : null;
+      if (!storedA || !storedB || storedA.admission !== "approved" || storedB.admission !== "approved") {
+        setSwapToast("Uno de los servicios está en modo de solo lectura.");
+        return;
+      }
+      if ((typeA === "saturday_role") !== (typeB === "saturday_role")) {
+        setSwapToast("Los equipos de sábado solo se intercambian con otro sábado.");
+        return;
+      }
+      setSavingStored(true);
+      try {
+        const body = {
+          kind: "team",
+          roles: [
+            { id: storedA.roleId, rev: storedA.rev },
+            { id: storedB.roleId, rev: storedB.rev },
+          ],
+        };
+        const byRowA = new Map(cells.filter((cell) => cell.columnId === storedA.roleId).map((cell) => [cell.rowId, cell]));
+        const byRowB = new Map(cells.filter((cell) => cell.columnId === storedB.roleId).map((cell) => [cell.rowId, cell]));
+        const candidateCells = cells.filter((cell) => cell.columnId !== storedA.roleId && cell.columnId !== storedB.roleId);
+        for (const rowId of new Set([...byRowA.keys(), ...byRowB.keys()])) {
+          const left = byRowA.get(rowId);
+          const right = byRowB.get(rowId);
+          if (right) candidateCells.push({ ...right, columnId: storedA.roleId });
+          if (left) candidateCells.push({ ...left, columnId: storedB.roleId });
+        }
+        const expected = frozenSwapExpectation([storedA.roleId, storedB.roleId], candidateCells, body);
+        if (!expected) {
+          setSwapToast("No se pudo construir una intención completa para el intercambio.");
+          return;
+        }
+        pendingSwapExpected.current = expected;
+        const response = await fetch("/api/admin/roles/swap", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: expected.body,
+        });
+        if (!response.ok) {
+          await handleRejectedStoredSwap(response, "los equipos");
+          return;
+        }
+        setSwapVerificationPending(true);
+        setSwapToast("Equipos intercambiados; verificando…");
+        if (!await storedSource?.reload()) {
+          setSwapVerificationPending(true);
+          setSwapToast("El intercambio respondió correctamente, pero no se pudo verificar la recarga.");
+        }
+      } catch {
+        setSwapVerificationPending(true);
+        setSwapToast("Resultado desconocido. No se reintentó; recarga para verificar.");
+      } finally {
+        setSavingStored(false);
+      }
+      return;
+    }
     // P4: a special is never swappable, not even with another special. The swap
     // exchanges CELLS between two date columns and moves nothing else — the
     // `service_name` stays with its date (it comes from `specials`, which this
@@ -1763,21 +2443,112 @@ export default function MonthGenerator({
       setTimeout(() => setSwapToast(null), 2500);
       return;
     }
-    const byRowA = new Map(cells.filter(c => c.date === a).map(c => [c.rowId, c]));
-    const byRowB = new Map(cells.filter(c => c.date === b).map(c => [c.rowId, c]));
+    const byRowA = new Map(cells.filter(c => c.columnId === a).map(c => [c.rowId, c]));
+    const byRowB = new Map(cells.filter(c => c.columnId === b).map(c => [c.rowId, c]));
     const rowIds = new Set([...byRowA.keys(), ...byRowB.keys()]);
-    const next = cells.filter(c => c.date !== a && c.date !== b);
+    const next = cells.filter(c => c.columnId !== a && c.columnId !== b);
     for (const rowId of rowIds) {
       const ca = byRowA.get(rowId);
       const cb = byRowB.get(rowId);
-      if (cb) next.push({ ...cb, date: a });
-      if (ca) next.push({ ...ca, date: b });
+      if (cb) next.push({ ...cb, columnId: a });
+      if (ca) next.push({ ...ca, columnId: b });
     }
     setCells(next);
-    setDrafts(prev => cellsToDrafts(next, columns, skippedDates, prev, existingRoles));
+    setDrafts(prev => cellsToDrafts(next, columns, skippedColumnIds, prev, existingRoles));
     setSwapSel(null);
-    setSwapToast(`⇄ ${fmtDate(a)} ↔ ${fmtDate(b)}`);
+    setSwapToast(`⇄ ${fmtDate(columnA?.date ?? "")} ↔ ${fmtDate(columnB?.date ?? "")}`);
     setTimeout(() => setSwapToast(null), 2500);
+  }
+
+  async function handleSectionSwap() {
+    if (!storedMode || !storedSource || storedSwapInteractionBlocked) return;
+    const source = sectionSwapFirstColumn;
+    const target = sectionSwapSecondColumn;
+    if (!source || !target || source.roleId === target.roleId) {
+      setSwapToast("Selecciona dos servicios distintos.");
+      return;
+    }
+    if (sectionSwapPath === "Chorus" && (source.type === "saturday_role" || target.type === "saturday_role")) {
+      setSwapToast("Coro no se puede intercambiar con un servicio de sábado.");
+      return;
+    }
+    setSavingStored(true);
+    setSwapToast(null);
+    try {
+      const body = {
+        kind: "section",
+        path: sectionSwapPath,
+        roles: [
+          { id: source.roleId, rev: source.rev },
+          { id: target.roleId, rev: target.rev },
+        ],
+      };
+      const sectionOwnsRow = (rowId: string) => sectionSwapPath === "Lead"
+        ? rowId === "lead"
+        : sectionSwapPath === "BGVs"
+          ? rowId === "bgv"
+          : sectionSwapPath === "Chorus"
+            ? rowId === "coro"
+            : sectionSwapPath === "instruments"
+              ? rowId.startsWith("instrumento:")
+              : rowId.startsWith("foh:");
+      const sourceCells = cells.filter((cell) => cell.columnId === source.roleId && sectionOwnsRow(cell.rowId));
+      const targetCells = cells.filter((cell) => cell.columnId === target.roleId && sectionOwnsRow(cell.rowId));
+      const candidateCells = cells.filter((cell) =>
+        !((cell.columnId === source.roleId || cell.columnId === target.roleId) && sectionOwnsRow(cell.rowId)),
+      );
+      candidateCells.push(
+        ...targetCells.map((cell) => ({ ...cell, columnId: source.roleId })),
+        ...sourceCells.map((cell) => ({ ...cell, columnId: target.roleId })),
+      );
+      const sourceRole = storedInventory.roles.find((item) => item.role._id === source.roleId)?.role;
+      const targetRole = storedInventory.roles.find((item) => item.role._id === target.roleId)?.role;
+      const sourceFingerprint = sourceRole ? storedSectionFingerprint(sourceRole, sectionSwapPath) : null;
+      const targetFingerprint = targetRole ? storedSectionFingerprint(targetRole, sectionSwapPath) : null;
+      if (!sourceFingerprint || !targetFingerprint) {
+        setSwapToast("No se pudo congelar la sección almacenada para verificar el intercambio.");
+        return;
+      }
+      const expected = frozenSwapExpectation(
+        [source.roleId, target.roleId],
+        candidateCells,
+        body,
+        {
+          path: sectionSwapPath,
+          fingerprints: new Map([
+            [source.roleId, targetFingerprint],
+            [target.roleId, sourceFingerprint],
+          ]),
+        },
+      );
+      if (!expected) {
+        setSwapToast("No se pudo construir una intención completa para el intercambio.");
+        return;
+      }
+      pendingSwapExpected.current = expected;
+      const response = await fetch("/api/admin/roles/swap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: expected.body,
+      });
+      if (!response.ok) {
+        await handleRejectedStoredSwap(response, "las secciones");
+        return;
+      }
+      setSwapVerificationPending(true);
+      setSwapToast("Secciones intercambiadas; verificando…");
+      setSectionSwapFirst("");
+      setSectionSwapSecond("");
+      if (!await storedSource.reload()) {
+        setSwapVerificationPending(true);
+        setSwapToast("El intercambio respondió correctamente, pero no se pudo verificar la recarga.");
+      }
+    } catch {
+      setSwapVerificationPending(true);
+      setSwapToast("Resultado desconocido. No se reintentó; recarga para verificar.");
+    } finally {
+      setSavingStored(false);
+    }
   }
 
   /**
@@ -1833,13 +2604,13 @@ export default function MonthGenerator({
   function applySpecialFill(
     config: SolverConfig,
     baseCells: GridCell[],
-    solverUnfilled?: { date: string; rowId: string }[],
+    solverUnfilled?: { columnId: string; rowId: string }[],
   ) {
-    const specialDates = new Set(
-      columns.filter(c => c.type === "special_role").map(c => c.date),
+    const specialColumnIds = new Set(
+      columns.filter(c => c.type === "special_role").map(c => c.columnId),
     );
     let next = baseCells;
-    const filled: { date: string; rowId: string }[] = [];
+    const filled: { columnId: string; rowId: string }[] = [];
     for (const column of columns) {
       if (column.type !== "special_role") continue;
       // Fed the ACCUMULATED cells, so the second special of a month ranks
@@ -1859,10 +2630,10 @@ export default function MonthGenerator({
     }
     setCells(next);
     setUnfilled(prev => [
-      ...(solverUnfilled ?? prev.filter(u => !specialDates.has(u.date))),
+      ...(solverUnfilled ?? prev.filter(u => !specialColumnIds.has(u.columnId))),
       ...filled,
     ]);
-    setDrafts(prev => cellsToDrafts(next, columns, skippedDates, prev, existingRoles));
+    setDrafts(prev => cellsToDrafts(next, columns, skippedColumnIds, prev, existingRoles));
   }
 
   /**
@@ -2152,11 +2923,11 @@ export default function MonthGenerator({
    * new array every render, so a memo keyed on it would recompute every time
    * anyway while reading as though it did not.
    */
-  const creatingKeys = new Set(toCreate.map(d => `${d._type}|${d.date.slice(0, 10)}`));
-  const creatableColumns = columns.filter(c => creatingKeys.has(`${c.type}|${c.date.slice(0, 10)}`));
+  const creatingColumnIds = new Set(toCreate.map((d) => createColumnId(d._type, d.date)));
+  const creatableColumns = columns.filter((c) => creatingColumnIds.has(c.columnId));
   const participationRoles = plannerParticipationRoles({
     saved: participationSaved,
-    creatableColumns,
+    creatableColumns: storedMode ? columns : creatableColumns,
     cells,
     members,
   });
@@ -2302,18 +3073,95 @@ export default function MonthGenerator({
       <div className="flex items-center justify-between">
         <div>
           <p className="font-label text-xs uppercase tracking-widest text-gray-500">{MONTHS[month - 1]} {year}</p>
-          <p className="font-body text-sm">
-            <span className="text-[#00bfff] font-semibold">{toCreate.length}</span> por crear
-            {skippedCount > 0 && <span className="text-gray-500"> · {skippedCount} omitido{skippedCount !== 1 ? "s" : ""}</span>}
-            {notCreatable > 0 && (
-              <span className="text-amber-400"> · {notCreatable} no disponible{notCreatable !== 1 ? "s" : ""}</span>
-            )}
-          </p>
+          {storedMode ? (
+            <p className="font-body text-sm">
+              <span className="text-[#00bfff] font-semibold">{storedColumns.length}</span> servicio{storedColumns.length !== 1 ? "s" : ""}
+              {dirtyStoredColumns.length + invalidStoredColumns.length > 0 && <span className="text-amber-300"> · {dirtyStoredColumns.length + invalidStoredColumns.length} con cambios</span>}
+            </p>
+          ) : (
+            <p className="font-body text-sm">
+              <span className="text-[#00bfff] font-semibold">{toCreate.length}</span> por crear
+              {skippedCount > 0 && <span className="text-gray-500"> · {skippedCount} omitido{skippedCount !== 1 ? "s" : ""}</span>}
+              {notCreatable > 0 && (
+                <span className="text-amber-400"> · {notCreatable} no disponible{notCreatable !== 1 ? "s" : ""}</span>
+              )}
+            </p>
+          )}
         </div>
-        <button type="button" onClick={requestBack} className="font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] transition-colors">
-          ← Volver
+        <button type="button" onClick={requestBack} disabled={storedTransportActive} className="font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] transition-colors disabled:opacity-50">
+          {storedMode ? "Cerrar" : "← Volver"}
         </button>
       </div>
+
+      {storedMode && (!storedSource || !storedInventory.coherent) && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5">
+          <p className="font-body text-sm text-amber-200">No se puede editar este mes hasta verificar todos los servicios.</p>
+          <p className="mt-1 font-body text-xs text-amber-300/80">
+            {storedSource?.rolesStatus === "error" || storedSource?.integrityStatus === "error"
+              ? "Falló una fuente de datos. Reintenta la carga."
+              : storedInventory.reasons.join(", ") || "Cargando datos…"}
+          </p>
+          {storedSource && (
+            <button type="button" onClick={() => void storedSource.reload()} className="mt-2 min-h-[44px] rounded-lg border border-amber-300/30 px-3 font-label text-xs uppercase tracking-widest">
+              Reintentar
+            </button>
+          )}
+        </div>
+      )}
+
+      {storedMode && storedInventory.coherent && (
+        <div className="rounded-lg border border-[#00bfff]/15 bg-[#00bfff]/5 px-3 py-3">
+          {!composerOpen ? (
+            <button
+              type="button"
+              onClick={() => setComposerOpen(true)}
+              disabled={storedMutationLocked || storedHasUnresolvedWork || !!storedCreateBlocked}
+              title={storedCreateBlocked ?? undefined}
+              className="min-h-[44px] rounded-lg border border-[#00bfff]/25 px-4 font-label text-xs uppercase tracking-widest text-[#00bfff] disabled:opacity-50"
+            >
+              + Nuevo servicio
+            </button>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.4fr_auto] md:items-end">
+              <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
+                Tipo
+                <select value={createType} disabled={storedMutationLocked} onChange={(event) => setCreateType(event.target.value as ServiceType)} className={selCls}>
+                  <option value="sunday_role">Domingo</option>
+                  <option value="saturday_role">Sábado</option>
+                  <option value="special_role">Especial</option>
+                </select>
+              </label>
+              <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
+                Fecha
+                <input type="date" value={createDate} disabled={storedMutationLocked} min={`${monthPrefix}-01`} max={`${monthPrefix}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`} onChange={(event) => setCreateDate(event.target.value)} className={inCls} />
+              </label>
+              {createType === "special_role" ? (
+                <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
+                  Nombre
+                  <input value={createName} disabled={storedMutationLocked} onChange={(event) => setCreateName(event.target.value)} className={inCls} placeholder="Nombre del servicio" />
+                </label>
+              ) : <div />}
+              <div className="flex gap-2">
+                <button type="button" onClick={() => void handleCreateOne()} disabled={creatingOne || (storedMutationLocked && createAttemptStatus !== "unknown") || storedWriteUnresolved || createAttemptStatus === "committedUnverified" || !!storedCreateBlocked} title={storedCreateBlocked ?? undefined} className="min-h-[44px] rounded-lg bg-[#003572] px-4 font-label text-xs uppercase tracking-widest dark:bg-[#00bfff]/20 disabled:opacity-50">
+                  {creatingOne ? "Creando…" : createAttemptStatus === "unknown" ? "Reintentar misma solicitud" : createAttemptStatus === "committedUnverified" ? "Verificando…" : "Crear vacío"}
+                </button>
+                <button type="button" onClick={() => setComposerOpen(false)} disabled={creatingOne || createAttemptStatus !== null} className="min-h-[44px] rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50">
+                  Cancelar
+                </button>
+                {createAttemptStatus && (
+                  <button type="button" onClick={() => void storedSource?.reload()} className="min-h-[44px] rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest text-[#00bfff]">
+                    Recargar
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {storedMode && storedEditBlocked && (
+        <p className="rounded-lg bg-amber-500/10 px-3 py-2 font-body text-xs text-amber-300">{storedEditBlocked}</p>
+      )}
 
       {/*
         Task 3 could not implement this — it lives on the wizard shell, not on
@@ -2331,15 +3179,18 @@ export default function MonthGenerator({
       {pendingDiscard && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 space-y-2">
           <p className="font-body text-xs text-amber-300">
-            {pendingDiscard === "back" ? "Volver a configuración" : "Cerrar"} descarta {assignmentCount} asignación{assignmentCount !== 1 ? "es" : ""} en este mes. ¿Continuar?
+            {storedMode
+              ? `Cerrar descarta ${dirtyStoredColumns.length + invalidStoredColumns.length} servicio${dirtyStoredColumns.length + invalidStoredColumns.length !== 1 ? "s" : ""} con cambios o resultado pendiente. ¿Continuar?`
+              : `${pendingDiscard === "back" ? "Volver a configuración" : "Cerrar"} descarta ${assignmentCount} asignación${assignmentCount !== 1 ? "es" : ""} en este mes. ¿Continuar?`}
           </p>
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={pendingDiscard === "back" ? goBackToConfig : onClose}
-              className="min-h-[44px] rounded-lg bg-[#003572] px-3 font-label text-xs uppercase tracking-widest dark:bg-[#00bfff]/20"
+              onClick={confirmPendingDiscard}
+              disabled={storedTransportActive}
+              className="min-h-[44px] rounded-lg bg-[#003572] px-3 font-label text-xs uppercase tracking-widest dark:bg-[#00bfff]/20 disabled:opacity-50"
             >
-              {pendingDiscard === "back" ? "Volver de todos modos" : "Cerrar de todos modos"}
+              {!storedMode && pendingDiscard === "back" ? "Volver de todos modos" : "Cerrar de todos modos"}
             </button>
             <button type="button" onClick={() => setPendingDiscard(null)} className="min-h-[44px] rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest">
               Cancelar
@@ -2348,7 +3199,7 @@ export default function MonthGenerator({
         </div>
       )}
 
-      <div className="flex justify-center">
+      {!storedMode && <div className="flex justify-center">
         <div className="flex rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 overflow-hidden">
           <button type="button" onClick={() => setViewMode("edit")}
             className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
@@ -2361,19 +3212,20 @@ export default function MonthGenerator({
             Vista
           </button>
         </div>
-      </div>
+      </div>}
 
       {viewMode === "edit" && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">⇄ Intercambiar columnas:</span>
+          <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">⇄ Intercambiar equipos:</span>
           {columns.map(col => (
             <button
-              key={col.date}
+              key={col.columnId}
               type="button"
               data-swap-date={col.date}
-              onClick={() => handleColumnSwap(col.date)}
+              onClick={() => handleColumnSwap(col.columnId)}
+              disabled={storedMode && storedSwapInteractionBlocked}
               className={`min-h-[44px] px-2 py-1 rounded-full border text-[10px] font-label uppercase tracking-widest transition-colors ${
-                swapSel === col.date
+                swapSel === col.columnId
                   ? "border-[#00bfff] bg-[#00bfff]/20 text-[#00bfff]"
                   : "border-[#00bfff]/15 text-gray-500 hover:text-[#00bfff]"
               }`}
@@ -2385,8 +3237,49 @@ export default function MonthGenerator({
         </div>
       )}
 
+      {storedMode && (
+        <div className="grid gap-2 rounded-lg border border-[#00bfff]/15 p-3 md:grid-cols-[0.8fr_1fr_1fr_auto] md:items-end">
+          <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
+            Sección
+            <select value={sectionSwapPath} disabled={storedSwapInteractionBlocked} onChange={(event) => setSectionSwapPath(event.target.value as StoredSectionPath)} className={selCls}>
+              {STORED_SECTION_OPTIONS.map((option) => <option key={option.path} value={option.path}>{option.label}</option>)}
+            </select>
+          </label>
+          <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
+            Primer servicio
+            <select value={sectionSwapFirst} disabled={storedSwapInteractionBlocked} onChange={(event) => setSectionSwapFirst(event.target.value)} className={selCls}>
+              <option value="">Seleccionar…</option>
+              {storedSectionServiceOptions.map((option) => <option key={`a:${option.column.roleId}`} value={option.column.roleId}>{option.label}</option>)}
+            </select>
+          </label>
+          <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
+            Segundo servicio
+            <select value={sectionSwapSecond} disabled={storedSwapInteractionBlocked} onChange={(event) => setSectionSwapSecond(event.target.value)} className={selCls}>
+              <option value="">Seleccionar…</option>
+              {storedSectionServiceOptions.map((option) => <option key={`b:${option.column.roleId}`} value={option.column.roleId}>{option.label}</option>)}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => void handleSectionSwap()}
+            disabled={storedSwapInteractionBlocked || !sectionSwapFirst || !sectionSwapSecond || sectionSwapFirst === sectionSwapSecond || sectionSwapTopologyInvalid}
+            title={sectionSwapTopologyInvalid ? "Coro no está disponible en servicios de sábado." : undefined}
+            className="min-h-[44px] rounded-lg border border-[#00bfff]/25 px-4 font-label text-xs uppercase tracking-widest text-[#00bfff] disabled:opacity-50"
+          >
+            Intercambiar sección
+          </button>
+        </div>
+      )}
+
       {swapToast && (
-        <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff] text-center bg-[#00bfff]/10 rounded-lg py-1.5">{swapToast}</p>
+        <div className="flex items-center justify-center gap-2 rounded-lg bg-[#00bfff]/10 px-3 py-1.5">
+          <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff] text-center">{swapToast}</p>
+          {storedMode && swapVerificationPending && storedSource && (
+            <button type="button" onClick={() => void storedSource.reload()} className="min-h-[44px] rounded-lg border border-[#00bfff]/25 px-3 font-label text-[10px] uppercase tracking-widest text-[#00bfff]">
+              Recargar y verificar
+            </button>
+          )}
+        </div>
       )}
 
       {unavailabilityNotices.length > 0 && (() => {
@@ -2414,25 +3307,30 @@ export default function MonthGenerator({
 
       {viewMode === "edit" ? (
         <PlannerGrid
+          mode={storedMode ? "stored" : "create"}
           rows={rows}
           columns={columns}
           cells={cells}
           members={members}
           savedWindow={savedWindow}
-          preflightFor={col => (preflight ? preflight(col.type, col.date) : null)}
-          createBlockFor={createBlockFor}
-          skipped={skippedDates}
+          preflightFor={col => storedMode ? null : (preflight ? preflight(col.type, col.date) : null)}
+          createBlockFor={col => storedMode ? null : createBlockFor(col)}
+          skipped={skippedColumnIds}
           unaddressableDates={unaddressableDatesList}
           unresolvedNames={allUnresolvedNames}
           unfilled={unfilled}
           onCellsChange={handleCellsChange}
-          onRowsChange={setRows}
+          onRowsChange={handleRowsChange}
           onToggleSkip={handleToggleSkip}
+          onStoredHeaderChange={handleStoredHeaderChange}
+          storedDateBlockedReason={storedDateBlocked}
+          mutationLocked={storedMutationLocked}
           onAuto={handleAuto}
           autoState={autoState}
           diagnostics={diagnostics}
           config={solverConfig ?? undefined}
           sundayDates={sundayDatesFull}
+          sundayDatesForColumn={(column) => ruleContextForTarget(column.type, column.date)?.sundayDates ?? []}
           /*
             The participation chart, handed to the grid as the LEFT COLUMN of
             its three-column workspace (`PlannerGrid.tsx`'s header has the
@@ -2463,7 +3361,7 @@ export default function MonthGenerator({
           }
           monthLabel={`${MONTHS[month - 1]} ${year}`}
         />
-      ) : (
+      ) : !storedMode ? (
         // D17/D10: this used to be `max-h-[50vh] overflow-y-auto` — a keyhole
         // sized for the old `CueDialog` overlay. The full-width panel this
         // section now lives in has no competing content to keep on screen, so
@@ -2476,7 +3374,7 @@ export default function MonthGenerator({
                       bgvs={p.bgvs} chorus={p.chorus} instruments={p.instruments} fohTeam={p.fohTeam} />;
           })}
         </div>
-      )}
+      ) : null}
 
       {/*
         In "Vista" mode there is no `PlannerGrid` to hold the chart's column, so
@@ -2484,7 +3382,7 @@ export default function MonthGenerator({
         surface had below the gutter threshold, kept for the one mode that has
         no three-column layout to put it in.
       */}
-      {viewMode === "view" && (
+      {!storedMode && viewMode === "view" && (
         <div data-participation-rail="panel" data-rail-placement="stacked">
           <ParticipationSidebar
             roles={participationRoles}
@@ -2499,21 +3397,45 @@ export default function MonthGenerator({
         <p className="font-body text-xs text-amber-400 bg-amber-500/10 rounded-lg px-3 py-2">{gateBlocked}</p>
       )}
 
-      {pushError && (
-        <p className="font-label text-xs uppercase tracking-widest text-red-400 text-center bg-red-500/10 rounded-lg py-1.5">{pushError}</p>
+      {(pushError || saveNotice) && (
+        <p className={`font-label text-xs uppercase tracking-widest text-center rounded-lg py-1.5 ${pushError ? "bg-red-500/10 text-red-400" : "bg-[#00bfff]/10 text-[#00bfff]"}`}>
+          {pushError ?? saveNotice}
+        </p>
+      )}
+      {storedMode && invalidStoredColumns.length > 0 && (
+        <p className="rounded-lg bg-red-500/10 px-3 py-2 font-body text-xs text-red-300">
+          Corrige los datos inválidos antes de guardar: {invalidStoredColumns.map((column) => column.date).join(", ")}.
+        </p>
       )}
 
-      <div className="flex gap-3">
-        <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
-          Cancelar
-        </button>
-        <button type="button" onClick={() => handleConfirm(false)} disabled={pushing || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
-          {pushing ? "Creando..." : `Crear ${toCreate.length} borrador${toCreate.length !== 1 ? "es" : ""}`}
-        </button>
-        <button type="button" onClick={() => handleConfirm(true)} disabled={pushing || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
-          Crear y publicar
-        </button>
-      </div>
+      {storedMode ? (
+        <div className="flex gap-3">
+          <button type="button" onClick={requestBack} disabled={storedTransportActive} className="flex-1 min-h-[44px] rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors disabled:opacity-50">
+            Cerrar
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleStoredSave()}
+            disabled={storedMutationLocked || dirtyStoredColumns.length === 0 || invalidStoredColumns.length > 0 || !storedInventory.coherent || !!storedSaveBlocked}
+            title={storedSaveBlocked ?? undefined}
+            className="flex-1 min-h-[44px] rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+          >
+            {savingStored ? "Guardando…" : `Guardar ${dirtyStoredColumns.length} servicio${dirtyStoredColumns.length !== 1 ? "s" : ""}`}
+          </button>
+        </div>
+      ) : (
+        <div className="flex gap-3">
+          <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
+            Cancelar
+          </button>
+          <button type="button" onClick={() => handleConfirm(false)} disabled={pushing || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+            {pushing ? "Creando..." : `Crear ${toCreate.length} borrador${toCreate.length !== 1 ? "es" : ""}`}
+          </button>
+          <button type="button" onClick={() => handleConfirm(true)} disabled={pushing || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+            Crear y publicar
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -51,10 +51,33 @@ import { normalizeLabel, normalizeServiceName } from "@/app/utils/normalizeLabel
 
 export type CellOrigin = "manual" | "auto" | "empty";
 
+export interface GridOccupant {
+  memberId: string;
+  /** Stored-role array item identity. Create-preview occupants do not have one. */
+  itemKey?: string;
+}
+
+/**
+ * Rebuild an occupant list from member ids without detaching stored item keys
+ * from occupants that remain seated. Repeated member ids consume repeated
+ * prior occupants in order; newly added occupants have no stored key.
+ */
+export function reconcileOccupants(
+  previous: readonly GridOccupant[],
+  memberIds: readonly string[],
+): GridOccupant[] {
+  const unused = [...previous];
+  return memberIds.map((memberId) => {
+    const index = unused.findIndex((occupant) => occupant.memberId === memberId);
+    if (index === -1) return { memberId };
+    return unused.splice(index, 1)[0];
+  });
+}
+
 export interface GridCell {
-  date: string;
+  columnId: string;
   rowId: string;
-  memberIds: string[];
+  occupants: GridOccupant[];
   origin: CellOrigin;
   /**
    * P10 — member ids a HUMAN deliberately seated here despite a hard rule
@@ -64,13 +87,13 @@ export interface GridCell {
    * `origin` is: the cell is the thing that survives a re-render, a step
    * round-trip and a re-solve, and an override that evaporated on re-render
    * would silently become a violation again. Nothing downstream has to learn
-   * about it — `cellsToDrafts` reads `date`/`rowId`/`memberIds` only, so this
+   * about it — `cellsToDrafts` reads `columnId`/`rowId`/`occupants` only, so this
    * costs the create path nothing, exactly as `origin` already proves.
    *
    * Read by `PlannerGrid` alone, for two things: suppressing E13's post-fill
    * re-flag for this member, and rendering the persistent "regla anulada"
    * marker that keeps the exception visible instead of silent. Removing the
-   * member from `memberIds` clears their entry.
+   * member from `occupants` clears their entry.
    *
    * **The auto-filler never writes this** (`localFill.ts` neither sets nor
    * reads it) — that asymmetry IS the requirement: a person may make a
@@ -108,6 +131,7 @@ export interface GridRow {
 export type ColumnType = "sunday_role" | "saturday_role" | "special_role";
 
 export interface GridColumn {
+  columnId: string;
   date: string;
   type: ColumnType;
   /**
@@ -121,6 +145,23 @@ export interface GridColumn {
    * where it feeds the collision key and nothing else.
    */
   serviceName?: string;
+}
+
+/** Fail closed when a caller supplies ambiguous or detached grid identity. */
+export function assertGridIdentity(columns: GridColumn[], cells: GridCell[] = []): void {
+  const ids = new Set<string>();
+  for (const column of columns) {
+    if (!column.columnId.trim()) throw new Error("Grid column is missing columnId");
+    if (ids.has(column.columnId)) {
+      throw new Error(`Duplicate grid columnId: ${column.columnId}`);
+    }
+    ids.add(column.columnId);
+  }
+  for (const cell of cells) {
+    if (!ids.has(cell.columnId)) {
+      throw new Error(`Grid cell references unknown columnId: ${cell.columnId}`);
+    }
+  }
 }
 
 // ─── Draft cards (the create-path shape `MonthGenerator` already posts) ──────
@@ -313,7 +354,7 @@ export function columnShowsRowId(type: ColumnType, rowId: string): boolean {
 }
 
 /** Whether a row exists at all on a given column. */
-export function rowAppliesTo(row: GridRow, column: GridColumn): boolean {
+export function rowAppliesTo(row: GridRow, column: Pick<GridColumn, "type">): boolean {
   return columnShowsRowId(column.type, row.id);
 }
 
@@ -329,7 +370,7 @@ export function rowAppliesTo(row: GridRow, column: GridColumn): boolean {
  * braces, and it is stated rather than left implied, because the pre-widening
  * version had no column-type test at all and would have answered `true`.
  */
-export function isSolvable(row: GridRow, column: GridColumn): boolean {
+export function isSolvable(row: GridRow, column: Pick<GridColumn, "type">): boolean {
   if (column.type === "special_role") return false;
   if (!rowAppliesTo(row, column)) return false;
   if (row.category !== "voz") return false;
@@ -346,7 +387,7 @@ export function isSolvable(row: GridRow, column: GridColumn): boolean {
  * unsolvable. Overloading `isSolvable` for both would have silently dropped
  * both on every special column.
  */
-export function hasTarget(row: GridRow, column: GridColumn): boolean {
+export function hasTarget(row: GridRow, column: Pick<GridColumn, "type">): boolean {
   if (!rowAppliesTo(row, column)) return false;
   if (row.category !== "voz") return false;
   return row.target != null;
@@ -399,9 +440,11 @@ export function buildColumns(input: {
     cols.push(col);
   };
 
-  for (const d of sundayDates) push({ date: d, type: "sunday_role" });
-  for (const d of activeSatDates) push({ date: d, type: "saturday_role" });
-  for (const s of specials) push({ date: s.date, type: "special_role", serviceName: s.name });
+  for (const d of sundayDates) push({ columnId: createColumnId("sunday_role", d), date: d, type: "sunday_role" });
+  for (const d of activeSatDates) push({ columnId: createColumnId("saturday_role", d), date: d, type: "saturday_role" });
+  for (const s of specials) {
+    push({ columnId: createColumnId("special_role", s.date), date: s.date, type: "special_role", serviceName: s.name });
+  }
 
   return cols.sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -672,7 +715,10 @@ const ROLE_FIELD: Record<string, "Lead" | "BGV" | "Choir"> = { lead: "Lead", bgv
  * Exported so it can be pinned directly rather than only through
  * `applySolveResponse`'s observable output.
  */
-export function weekForColumn(column: GridColumn, sundayDates: string[]): number | null {
+export function weekForColumn(
+  column: Pick<GridColumn, "type" | "date">,
+  sundayDates: string[],
+): number | null {
   if (column.type === "special_role") return null;
   if (column.type === "sunday_role") {
     const i = sundayDates.indexOf(column.date);
@@ -714,6 +760,7 @@ export function applySolveResponse(input: {
   members: RankMember[];
 }): AppliedSolveResult {
   const { response, previousCells, columns, rows, sundayDates, members } = input;
+  assertGridIdentity(columns, previousCells);
 
   const nameToId = (name: string): string | null => {
     const lo = name.toLowerCase().trim();
@@ -724,7 +771,7 @@ export function applySolveResponse(input: {
   };
 
   const byKey = new Map<string, GridCell>();
-  for (const c of previousCells) byKey.set(`${c.date}|${c.rowId}`, c);
+  for (const c of previousCells) byKey.set(`${c.columnId}|${c.rowId}`, c);
 
   const unresolved = new Set<string>();
   const schedule = response.schedule ?? {};
@@ -753,7 +800,12 @@ export function applySolveResponse(input: {
         if (id) ids.push(id);
         else unresolved.add(name);
       }
-      byKey.set(`${column.date}|${row.id}`, { date: column.date, rowId: row.id, memberIds: ids, origin: "auto" });
+      byKey.set(`${column.columnId}|${row.id}`, {
+        columnId: column.columnId,
+        rowId: row.id,
+        occupants: ids.map((memberId) => ({ memberId })),
+        origin: "auto",
+      });
     }
   }
 
@@ -782,10 +834,10 @@ export function mapUnfilledSeats(
   sundayDates: string[],
   activeSatDates: string[],
   selectedSundays: string[],
-): { date: string; rowId: string }[] {
+): { columnId: string; rowId: string }[] {
   const activeSat = new Set(activeSatDates);
   const selectedSun = new Set(selectedSundays);
-  const out: { date: string; rowId: string }[] = [];
+  const out: { columnId: string; rowId: string }[] = [];
   for (const seat of seats) {
     const parsed = parseUnfilledSeat(seat);
     if (!parsed) continue;
@@ -798,7 +850,10 @@ export function mapUnfilledSeats(
       const satDate = saturdayForWeek(parsed.week, sundayDates);
       date = satDate && activeSat.has(satDate) ? satDate : null;
     }
-    if (date) out.push({ date, rowId });
+    if (date) {
+      const type = parsed.service === "Sunday" ? "sunday_role" : "saturday_role";
+      out.push({ columnId: createColumnId(type, date), rowId });
+    }
   }
   return out;
 }
@@ -835,6 +890,11 @@ const FOH_PREFIX = "foh:";
  */
 export function draftTargetKey(type: string, date: string): string {
   return `${type}__${date}`;
+}
+
+/** Stable identity for a create-preview column. */
+export function createColumnId(type: ColumnType, date: string): string {
+  return `create:${draftTargetKey(type, date)}`;
 }
 
 /**
@@ -876,20 +936,21 @@ function collisionKey(type: string, date: string, serviceName?: string): string 
 export function cellsToDrafts(
   cells: GridCell[],
   columns: GridColumn[],
-  skippedDates: Set<string>,
+  skippedColumnIds: Set<string>,
   previous: DraftCard[],
   existingRoles: ExistingRoleRef[],
 ): DraftCard[] {
+  assertGridIdentity(columns, cells);
   const existing = new Set(
     existingRoles.map((r) => collisionKey(r._type, r.date, r.service_name)),
   );
   const prevByKey = new Map(previous.map((d) => [draftTargetKey(d._type, d.date), d]));
 
-  const cellsByDate = new Map<string, GridCell[]>();
+  const cellsByColumnId = new Map<string, GridCell[]>();
   for (const c of cells) {
-    const list = cellsByDate.get(c.date);
+    const list = cellsByColumnId.get(c.columnId);
     if (list) list.push(c);
-    else cellsByDate.set(c.date, [c]);
+    else cellsByColumnId.set(c.columnId, [c]);
   }
 
   const out: DraftCard[] = [];
@@ -898,7 +959,7 @@ export function cellsToDrafts(
     const localId = prevDraft?.localId ?? uid();
     const creationRequestId = prevDraft?.creationRequestId ?? newCreationRequestId();
     const isExisting = existing.has(collisionKey(column.type, column.date, column.serviceName));
-    const skipped = skippedDates.has(column.date) || isExisting;
+    const skipped = skippedColumnIds.has(column.columnId) || isExisting;
     // THE TWO ARE NOT THE SAME QUESTION, and only `isExisting` answers the one
     // its name asks. `exists` folds in `previous`, so a special that collided,
     // was created, and was then RENAMED keeps `exists: true` with
@@ -907,8 +968,9 @@ export function cellsToDrafts(
     // draft already achieved" must read `exists`.
     const exists = isExisting || prevDraft?.exists === true;
 
-    const dateCells = cellsByDate.get(column.date) ?? [];
-    const idsFor = (rowId: string) => dateCells.find((c) => c.rowId === rowId)?.memberIds ?? [];
+    const columnCells = cellsByColumnId.get(column.columnId) ?? [];
+    const idsFor = (rowId: string) =>
+      columnCells.find((c) => c.rowId === rowId)?.occupants.map((o) => o.memberId) ?? [];
 
     const leads = idsFor("lead");
     const bgvs = idsFor("bgv");
@@ -922,15 +984,17 @@ export function cellsToDrafts(
 
     const instruments: DraftInstrumentSlot[] = [];
     const foh: DraftFohSlot[] = [];
-    for (const c of dateCells) {
+    for (const c of columnCells) {
       if (c.rowId.startsWith(INSTRUMENT_PREFIX)) {
         const label = c.rowId.slice(INSTRUMENT_PREFIX.length);
-        c.memberIds.forEach((personId, idx) =>
+        c.occupants.forEach(({ memberId: personId }, idx) =>
           instruments.push({ id: `${c.rowId}#${idx}`, instrument: label, personId }),
         );
       } else if (c.rowId.startsWith(FOH_PREFIX)) {
         const label = c.rowId.slice(FOH_PREFIX.length);
-        c.memberIds.forEach((personId, idx) => foh.push({ id: `${c.rowId}#${idx}`, role: label, personId }));
+        c.occupants.forEach(({ memberId: personId }, idx) =>
+          foh.push({ id: `${c.rowId}#${idx}`, role: label, personId }),
+        );
       }
     }
 
@@ -1069,10 +1133,10 @@ export function historyEntryFromDrafts(
   return { key: `${year}-${month}`, year, month, total_counts, role_counts };
 }
 
-// ─── Cells → AssignedSeat (who is already on this date) ──────────────────────
+// ─── Cells → AssignedSeat (who is already on this column) ────────────────────
 
 /**
- * Everyone seated on `date`, in the `AssignedSeat` shape `rankCandidates` and
+ * Everyone seated on `columnId`, in the `AssignedSeat` shape `rankCandidates` and
  * `ruleEnforcement.evaluate` both consume. **`seatId` IS the row id** — the same
  * convention `cellsToDrafts` reads above, and the one `evaluate`'s
  * self-exemption (`a.seatId === row.id`) and its conflict scan
@@ -1088,14 +1152,16 @@ export function historyEntryFromDrafts(
  * cannot know its category, and a guessed one would make the same-category
  * double-duty block either fire or stay silent at random.
  */
-export function assignedForDate(cells: GridCell[], rows: GridRow[], date: string): AssignedSeat[] {
+export function assignedForColumn(cells: GridCell[], rows: GridRow[], columnId: string): AssignedSeat[] {
   const rowById = new Map(rows.map((r) => [r.id, r]));
   const out: AssignedSeat[] = [];
   for (const c of cells) {
-    if (c.date !== date) continue;
+    if (c.columnId !== columnId) continue;
     const row = rowById.get(c.rowId);
     if (!row) continue;
-    for (const memberId of c.memberIds) out.push({ seatId: c.rowId, category: row.category, memberId });
+    for (const { memberId } of c.occupants) {
+      out.push({ seatId: c.rowId, category: row.category, memberId });
+    }
   }
   return out;
 }
@@ -1110,7 +1176,7 @@ interface RolePerson {
 }
 
 /**
- * Converts `GridCell.memberIds` (strings) into the `ParticipantRole` shape
+ * Converts `GridCell.occupants` into the `ParticipantRole` shape
  * `rankCandidates` consumes (member objects) — D12's union needs both `PlannerGrid`
  * calls of `rankCandidates` fed `[...savedWindow, ...cellsToParticipantRoles(...)]`,
  * and hand-rolling this conversion in the component would duplicate the row-id
@@ -1130,30 +1196,32 @@ export function cellsToParticipantRoles(
   columns: GridColumn[],
   members: RankMember[],
 ): ParticipantRole[] {
+  assertGridIdentity(columns);
   const byId = new Map(members.map((mm) => [mm._id, mm]));
   const toPerson = (id: string): RolePerson => {
     const found = byId.get(id);
     return found ? { _id: found._id, member_name: found.member_name, alias: found.alias } : { _id: id };
   };
 
-  const cellsByDate = new Map<string, GridCell[]>();
+  const cellsByColumnId = new Map<string, GridCell[]>();
   for (const c of cells) {
-    const list = cellsByDate.get(c.date);
+    const list = cellsByColumnId.get(c.columnId);
     if (list) list.push(c);
-    else cellsByDate.set(c.date, [c]);
+    else cellsByColumnId.set(c.columnId, [c]);
   }
 
   return columns.map((column) => {
-    const dateCells = cellsByDate.get(column.date) ?? [];
-    const idsFor = (rowId: string) => dateCells.find((c) => c.rowId === rowId)?.memberIds ?? [];
+    const columnCells = cellsByColumnId.get(column.columnId) ?? [];
+    const idsFor = (rowId: string) =>
+      columnCells.find((c) => c.rowId === rowId)?.occupants.map((o) => o.memberId) ?? [];
 
     const instruments: { person: RolePerson }[] = [];
     const foh: { person: RolePerson }[] = [];
-    for (const c of dateCells) {
+    for (const c of columnCells) {
       if (c.rowId.startsWith(INSTRUMENT_PREFIX)) {
-        c.memberIds.forEach((id) => instruments.push({ person: toPerson(id) }));
+        c.occupants.forEach(({ memberId }) => instruments.push({ person: toPerson(memberId) }));
       } else if (c.rowId.startsWith(FOH_PREFIX)) {
-        c.memberIds.forEach((id) => foh.push({ person: toPerson(id) }));
+        c.occupants.forEach(({ memberId }) => foh.push({ person: toPerson(memberId) }));
       }
     }
 
@@ -1260,14 +1328,12 @@ export function plannerParticipationRoles({
   cells: GridCell[];
   members: RankMember[];
 }): ParticipantRole[] {
-  const occupied = new Set(
-    cells.filter((c) => c.memberIds.length > 0).map((c) => c.date.slice(0, 10)),
-  );
+  const occupied = new Set(cells.filter((c) => c.occupants.length > 0).map((c) => c.columnId));
   const serviceKey = (type: ColumnType, date: string, name: unknown) =>
     `${type}|${date.slice(0, 10)}|${normalizeServiceName(name)}`;
   const planned = new Set(
     creatableColumns
-      .filter((c) => occupied.has(c.date.slice(0, 10)))
+      .filter((c) => occupied.has(c.columnId))
       .map((c) => serviceKey(c.type, c.date, c.serviceName)),
   );
   const kept = saved.filter((r) => !planned.has(serviceKey(r._type, r.date, r.service_name)));

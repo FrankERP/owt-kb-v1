@@ -113,12 +113,16 @@ function railTotal(container: HTMLElement, name: string): number | null {
 
 describe("plannerParticipationRoles — saved + drafts, each service once", () => {
   const columns = buildColumns({ sundayDates: ["2026-02-01", "2026-02-08"], activeSatDates: [] });
+  const leadCell = (columnId: string, memberId: string, origin: GridCell["origin"] = "manual"): GridCell => ({
+    columnId,
+    rowId: "lead",
+    occupants: [{ memberId }],
+    origin,
+  });
 
   it("sums the saved history and the drafts on screen", () => {
     const saved = [savedSunday("2026-01-04", "m1"), savedSunday("2026-01-11", "m1")];
-    const cells: GridCell[] = [
-      { date: "2026-02-01", rowId: "lead", memberIds: ["m1"], origin: "manual" },
-    ];
+    const cells = [leadCell(columns[0].columnId, "m1")];
     const totals = computeParticipation(plannerParticipationRoles({ saved, creatableColumns: columns, cells, members }));
     // 2 saved + 1 draft. Either half alone gives 2 or 1 — only the union gives 3.
     expect(totals.find((r) => r.name === "Frank")!.total).toBe(3);
@@ -134,9 +138,7 @@ describe("plannerParticipationRoles — saved + drafts, each service once", () =
   it("counts a service present on BOTH sides once, from the draft", () => {
     // The same Sunday, saved with Gaby and re-planned with Frank.
     const saved = [savedSunday("2026-02-01", "m2")];
-    const cells: GridCell[] = [
-      { date: "2026-02-01", rowId: "lead", memberIds: ["m1"], origin: "manual" },
-    ];
+    const cells = [leadCell(columns[0].columnId, "m1")];
     const totals = computeParticipation(plannerParticipationRoles({ saved, creatableColumns: columns, cells, members }));
     expect(totals.find((r) => r.name === "Frank")!.total).toBe(1);
     expect(totals.find((r) => r.name === "Gaby")).toBeUndefined();
@@ -156,9 +158,7 @@ describe("plannerParticipationRoles — saved + drafts, each service once", () =
     // mid-month service among them. If those seats counted, the solver's
     // invention would report as serving AND displace the real roster.
     const saved = [savedSunday("2026-02-01", "m2")];
-    const cells: GridCell[] = [
-      { date: "2026-02-01", rowId: "lead", memberIds: ["m1"], origin: "auto" },
-    ];
+    const cells = [leadCell(columns[0].columnId, "m1", "auto")];
     const totals = computeParticipation(
       // 2026-02-01 exists already, so it is not among the creatable columns.
       plannerParticipationRoles({
@@ -191,9 +191,7 @@ describe("plannerParticipationRoles — saved + drafts, each service once", () =
       activeSatDates: [],
       specials: [{ date: "2026-02-11", name: "Retiro" }],
     });
-    const cells: GridCell[] = [
-      { date: "2026-02-11", rowId: "lead", memberIds: ["m1"], origin: "manual" },
-    ];
+    const cells = [leadCell(specialColumns[0].columnId, "m1")];
     const totals = computeParticipation(
       plannerParticipationRoles({
         saved: [savedSpecial("2026-02-11", "Vigilia", "m2")],
@@ -218,9 +216,7 @@ describe("plannerParticipationRoles — saved + drafts, each service once", () =
       activeSatDates: [],
       specials: [{ date: "2026-02-11", name: "Vigilia" }],
     });
-    const cells: GridCell[] = [
-      { date: "2026-02-11", rowId: "lead", memberIds: ["m1"], origin: "manual" },
-    ];
+    const cells = [leadCell(specialColumns[0].columnId, "m1")];
     const totals = computeParticipation(
       plannerParticipationRoles({
         saved: [savedSpecial("2026-02-11", "Vigilia", "m2")],
@@ -240,9 +236,7 @@ describe("plannerParticipationRoles — saved + drafts, each service once", () =
     // server (`roleWriteOps.ts`) says it is not.
     const columnsFor = (name: string) =>
       buildColumns({ sundayDates: [], activeSatDates: [], specials: [{ date: "2026-02-11", name }] });
-    const cells: GridCell[] = [
-      { date: "2026-02-11", rowId: "lead", memberIds: ["m1"], origin: "manual" },
-    ];
+    const cells = [leadCell(columnsFor("Vigilia de Oración")[0].columnId, "m1")];
     const saved = [savedSpecial("2026-02-11", "Vigilia de Oración", "m2")];
 
     const collapsed = computeParticipation(
