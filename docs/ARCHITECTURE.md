@@ -63,7 +63,7 @@ flowchart TB
   end
 
   subgraph Sanity[Sanity Content Lake]
-    Docs[(Documents: post, teamMembers,\nsunday_role, saturday_role, special_role,\nfeaturedSongs, saturdarSongs,\nsetlistProposal, tag, author, loginEvent,\nroleTargetLock, roleCreationReceipt - internal)]
+    Docs[(Documents: post, teamMembers,\nsunday_role, saturday_role, special_role,\nfeaturedSongs, saturdarSongs,\nsetlistProposal, tag, author, loginEvent,\nroleTargetLock, roleCreationReceipt,\nspecialIdentityCoordinator - internal)]
   end
 
   subgraph Google[Google Cloud]
@@ -279,15 +279,17 @@ Three pure, I/O-free modules carry the rules, so they are exhaustively unit-test
 ### The protected-read audit rule
 
 [`app/utils/protectedReadAudit.ts`](../app/utils/protectedReadAudit.ts) plus its test scan every
-**git-tracked** query site for reads/writes of the six protected types and **fail** on any that
-bypasses the operational client without an exact `file + operation` exemption. Detection covers:
+**git-tracked** query site for reads/writes of the seven audited protected operational types and
+**fail** on any that bypasses the operational client without an exact `file + operation` exemption.
+Detection covers:
 
 1. quoted type literals (`_type == "sunday_role"`, `_type in [...]`);
 2. generic `_id` / `references()` queries whose **projection consumes protected fields**;
 3. **mutation** operations whose region names a protected type;
 4. **mutation** operations that resolve a document through a **protected loader** —
    `loadRoleForWrite`, `loadRoleForMutation`, `loadCanonicalRole`, `loadCanonicalProposal`,
-   `resolveOwnedCoordination` — even when no type is named anywhere in the region.
+   `resolveOwnedCoordination`, `loadSpecialIdentityCoordinator` — even when no type is named
+   anywhere in the region.
 
 There are **no directory or glob exemptions** — every entry names one file and one operation, and
 gitignored local tooling is out of scope (never listed, never asserted to exist).
@@ -339,18 +341,22 @@ the load-bearing shapes are:
   setlist PUT / proposal save / proposal transition all submit the revision the client actually
   loaded or reviewed. A stale one is `409 stale_revision` and the modal stays open. A freshly fetched
   server revision is explicitly *not* a substitute — that would defeat the point.
-- **Two independent mutexes.** A `roleTargetLock` (deterministic `roleTarget.<roleType>.<date>`)
+- **Three independent coordination documents.** A `roleTargetLock` (deterministic
+  `roleTarget.<roleType>.<date>`)
   serializes competing writers at **one weekend target**; a `roleCreationReceipt`
   (`roleCreate.<sha256(creationRequestId)>`) serializes **one logical create request** across every
-  role type and target. Special services take no lock — their own document revision is the token.
-  → [DATA_MODEL](DATA_MODEL.md#internal-coordination-types--roletargetlock-rolecreationreceipt)
+  role type and target. Special services take no weekend lock: their own revision serializes ordinary
+  edits, while `specialIdentityCoordinator.global` serializes create/date/name identity claims that
+  can involve different documents. The coordinator is created lazily at version 1 and every later
+  `_rev`-asserted claim advances version and nonce in the business transaction.
+  → [DATA_MODEL](DATA_MODEL.md#internal-coordination-types--target-lock-creation-receipt-special-coordinator)
 - **Deterministic receipts make retries safe.** An exact same-key/same-fingerprint replay is a
   no-write `200`; a changed payload is `409 idempotency_mismatch`; a deleted role's key is
   `409 idempotency_key_retired` and can never resurrect the service. Approval and the three proposal
   transitions have the same shape via `approval_receipt` / `last_transition`.
-- **One transaction per business change.** Role+receipt+lock, both roles in a swap, proposal+setlist
-  +lock on approval — each is a single `transaction()` under `ifRevisionId` preconditions, so a
-  conflict leaves every business document byte-for-byte unchanged.
+- **One transaction per business change.** Role+receipt+lock/coordinator, both roles in a swap,
+  proposal+setlist+lock on approval — each is a single `transaction()` under `ifRevisionId`
+  preconditions, so a conflict leaves every business document byte-for-byte unchanged.
 - **Strict dependency refusal.** Create / date-move / delete never cascade, adopt, migrate, archive,
   or delete service history. Dependencies are inventoried across canonical *and* raw-draft setlists
   and both proposal indexes, and refusal returns exact ids under `target_has_orphaned_dependencies`,
@@ -361,7 +367,7 @@ the load-bearing shapes are:
   unchanged, no side effects, but the lock and advanced role revision persist.
 - **Post-commit side effects are centralized** in
   [`app/utils/serviceMutationSideEffects.ts`](../app/utils/serviceMutationSideEffects.ts) — see §9.
-- **Alternate write paths are closed:** the Studio strips every mutating action from all **eight**
+- **Alternate write paths are closed:** the Studio strips every mutating action from all **eleven**
   protected types (→ [DATA_MODEL → Studio](DATA_MODEL.md#studio)) and the five historical one-shot
   scripts fail closed (→ [SOLVER_AND_INFRA §3](SOLVER_AND_INFRA.md#3-scripts--one-off-migrations-imports--ops)).
 
@@ -506,17 +512,18 @@ Condensed here; each is expanded in the linked doc.
 4. **Member-facing reads filter `published != false`** (missing = grandfathered published;
    explicit `false` = draft). Setlists gate through `publishedSetlist()`. This is the
    *member-visible* gate — **not** the same as *canonical*. → [DATA_MODEL](DATA_MODEL.md#draftpublish-gating), §8
-5. **The six protected types are read only through `operationalClient`** (published
-   perspective). `rawIntegrityClient` is draft *evidence*, never content. A static audit fails
+5. **The seven audited protected operational types are read only through `operationalClient`**
+   (published perspective). `rawIntegrityClient` is draft *evidence*, never content. A static audit fails
    any new bypass without an exact `file + operation` exemption, and the *read* handoff allowlist is
    **empty** — the guarded mutation routes are licensed to write only. → §8
 
    And their **writers** are revision-aware, coordinated, and atomic: send the client-observed
-   revision (never a server refetch); assert the weekend `roleTargetLock` — or the special role's own
-   revision — inside the same transaction; require a `creationRequestId` per logical create; refuse
-   dependencies instead of cascading; commit all business changes or none. The two internal
-   coordination types are never written by hand, by the Studio, or by a script.
-   → §8, [DATA_MODEL](DATA_MODEL.md#internal-coordination-types--roletargetlock-rolecreationreceipt)
+   revision (never a server refetch); assert the weekend `roleTargetLock`, or for special identity
+   changes the global `specialIdentityCoordinator`, inside the same transaction; require a
+   `creationRequestId` per logical create; refuse dependencies instead of cascading; commit all
+   business changes or none. The three internal coordination types are never written by hand, by the
+   Studio, or by a script.
+   → §8, [DATA_MODEL](DATA_MODEL.md#internal-coordination-types--target-lock-creation-receipt-special-coordinator)
 6. **Sanity array-of-object writes need a unique `_key` per item** (and the right `_type` for
    object slots: `setlist_song`, `proposal_song`, `instrument_slot`, `foh_slot`, `contributor`;
    reference-array items use `_type: "reference"`). Note `proposal_song` — proposal songs are

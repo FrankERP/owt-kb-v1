@@ -108,7 +108,7 @@ export function rankCandidates(input: {
    * pattern's service half can be matched, so every rule is out of scope and
    * `ruleBlockedReason` stays `null`.
    */
-  column?: GridColumn;
+  column?: Pick<GridColumn, "type" | "date">;
   /** The month's full Sunday spine; only week exclusions need it (E7, E21). */
   sundayDates?: string[];
   /**

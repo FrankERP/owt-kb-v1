@@ -1265,6 +1265,46 @@ describe("MonthGenerator — create path", () => {
   // Saturday column moved Coro cells onto a Saturday, which `cellsToDrafts`
   // zeroes (`chorus: []`) on write (D11) — the assignment vanished under a
   // success toast with no warning. Now refused, with a Spanish reason.
+  it("swaps two Sunday rosters while each date keeps its original creationRequestId", async () => {
+    const members = [
+      { _id: "lead-a", member_name: "Ana", memberType: ["voz"] },
+      { _id: "lead-b", member_name: "Beto", memberType: ["voz"] },
+    ];
+    let fail = true;
+    const { calls } = stubRolesFetch(() => fail ? { ok: false, status: 500 } : { ok: true });
+    const { container } = render(
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+
+    fireEvent.click(container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]')!);
+    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+    fireEvent.click(screen.getByText("Cerrar"));
+    fireEvent.click(container.querySelector('[data-row-id="lead"][data-date="2026-02-08"]')!);
+    fireEvent.click(within(container.querySelector("ul")!).getByText("Beto"));
+    fireEvent.click(screen.getByText("Cerrar"));
+
+    fireEvent.click(createButton());
+    await waitFor(() => expect(calls).toHaveLength(4));
+    const firstA = calls.find((call) => call.date === "2026-02-01")!;
+    const firstB = calls.find((call) => call.date === "2026-02-08")!;
+    expect(firstA.body.leads).toEqual(["lead-a"]);
+    expect(firstB.body.leads).toEqual(["lead-b"]);
+
+    fireEvent.click(container.querySelector('[data-swap-date="2026-02-01"]')!);
+    fireEvent.click(container.querySelector('[data-swap-date="2026-02-08"]')!);
+    fail = false;
+    fireEvent.click(createButton());
+    await waitFor(() => expect(calls).toHaveLength(8));
+
+    const retryA = calls.filter((call) => call.date === "2026-02-01")[1];
+    const retryB = calls.filter((call) => call.date === "2026-02-08")[1];
+    expect(retryA.body.leads).toEqual(["lead-b"]);
+    expect(retryB.body.leads).toEqual(["lead-a"]);
+    expect(retryA.body.creationRequestId).toBe(firstA.body.creationRequestId);
+    expect(retryB.body.creationRequestId).toBe(firstB.body.creationRequestId);
+  });
+
   it("refuses to swap a Sunday column with a Saturday column, so a Coro assignment is never silently dropped", () => {
     const members = [{ _id: "m1", member_name: "Ana", memberType: ["voz"] }];
     const { container } = render(
@@ -1975,9 +2015,9 @@ describe("MonthGenerator — the rules failed to load", () => {
 // whether the shared document exists. With no document there is nothing shared,
 // nothing saveable, and `enforceableConfig` gives the Tablero nothing — so that
 // state keeps its own honest sentence instead of a softened parity claim.
-describe("MonthGenerator — what the rule panel claims about the Tablero", () => {
+describe("MonthGenerator — what the rule panel claims about other planner sessions", () => {
   const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] }];
-  const PARITY = /tanto aquí como al editar un servicio en el/;
+  const PARITY = /al editar cualquier servicio de este mes/;
 
   it("claims parity, and shared storage, when the document exists", () => {
     const { container } = render(
@@ -1992,13 +2032,13 @@ describe("MonthGenerator — what the rule panel claims about the Tablero", () =
     expect(container.textContent).not.toMatch(/borras los datos del sitio/);
   });
 
-  it("says the edits on screen are not the Tablero's rules until Guardar", () => {
+  it("says the edits on screen are not other sessions' rules until Guardar", () => {
     // The price of an explicit save, stated rather than hidden: an unsaved rule
     // hard-blocks here and nowhere else.
     const { container } = render(
       <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={readyRules()} />,
     );
-    expect(container.textContent).toMatch(/no valen en el/);
+    expect(container.textContent).toMatch(/no valen en otras sesiones/);
     expect(container.textContent).toMatch(/hasta que pulses/);
   });
 
@@ -2008,8 +2048,7 @@ describe("MonthGenerator — what the rule panel claims about the Tablero", () =
     );
     expect(container.textContent).not.toMatch(PARITY);
     // And says so positively, rather than merely staying silent.
-    expect(container.textContent).toMatch(/solo aquí/);
-    expect(container.textContent).toMatch(/no bloquean nada/);
+    expect(container.textContent).toMatch(/esta sesión del editor mensual/);
     expect(container.textContent).toMatch(/no se pueden\s+guardar desde aquí/);
   });
 
@@ -2042,7 +2081,7 @@ describe("MonthGenerator — what the rule panel claims about the Tablero", () =
 describe("MonthGenerator — the rules failed to RELOAD", () => {
   const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] }];
   const saveButton = () => screen.getByRole("button", { name: /Guardar reglas|Guardando|Guardado/ });
-  const PARITY = /tanto aquí como al editar un servicio en el/;
+  const PARITY = /al editar cualquier servicio de este mes/;
 
   it("makes a failed 'Recargar reglas' visible instead of reading as resolved", async () => {
     const rules = readyRules(DEFAULT_SOLVER_CONFIG, {

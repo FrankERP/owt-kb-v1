@@ -11,12 +11,15 @@ import type { SolveResponse } from "@/app/api/admin/solve/route";
 import { computeParticipation } from "@/app/utils/computeParticipation";
 import type { RankMember } from "../candidateRanking";
 import {
-  applySolveResponse,
+  applySolveResponse as applySolveResponseModel,
+  assignedForColumn,
+  assertGridIdentity,
   buildColumns,
   buildRows,
   buildSolveRequest,
-  cellsToDrafts,
-  cellsToParticipantRoles,
+  cellsToDrafts as cellsToDraftsModel,
+  cellsToParticipantRoles as cellsToParticipantRolesModel,
+  createColumnId,
   hasTarget,
   historyEntryFromDrafts,
   historyForRequest,
@@ -31,11 +34,96 @@ import {
   weekForColumn,
   weekendWeekIndexes,
   type DraftCard,
-  type GridCell,
-  type GridColumn,
+  type GridCell as ModelGridCell,
+  type GridColumn as ModelGridColumn,
   type SolverConfig,
   type SolverHistoryEntry,
 } from "../plannerModel";
+
+type GridColumn = Omit<ModelGridColumn, "columnId"> & { columnId?: string };
+type GridCell = {
+  date: string;
+  rowId: string;
+  memberIds: string[];
+  origin: ModelGridCell["origin"];
+  overrides?: string[];
+  overrideReasons?: Record<string, string>;
+};
+
+const normalizeColumns = (columns: GridColumn[]): ModelGridColumn[] =>
+  columns.map((column) => ({
+    ...column,
+    columnId: column.columnId ?? createColumnId(column.type, column.date),
+  }));
+
+const normalizeCells = (cells: GridCell[], columns: ModelGridColumn[]): ModelGridCell[] =>
+  cells.map((cell) => {
+    const matches = columns.filter((column) => column.date === cell.date);
+    if (matches.length !== 1) throw new Error(`ambiguous test cell date ${cell.date}`);
+    return {
+      columnId: matches[0].columnId,
+      rowId: cell.rowId,
+      occupants: cell.memberIds.map((memberId) => ({ memberId })),
+      origin: cell.origin,
+      overrides: cell.overrides,
+      overrideReasons: cell.overrideReasons,
+    };
+  });
+
+const cellsToDrafts = (
+  cells: GridCell[] | ModelGridCell[],
+  inputColumns: GridColumn[] | ModelGridColumn[],
+  skipped: Set<string>,
+  previous: DraftCard[],
+  existing: Parameters<typeof cellsToDraftsModel>[4],
+) => {
+  const columns = normalizeColumns(inputColumns);
+  const normalized = cells.map((cell) =>
+    "columnId" in cell ? cell : normalizeCells([cell], columns)[0],
+  );
+  const skippedColumnIds = new Set(
+    [...skipped].map((value) => columns.find((column) => column.date === value)?.columnId ?? value),
+  );
+  return cellsToDraftsModel(normalized, columns, skippedColumnIds, previous, existing);
+};
+
+const cellsToParticipantRoles = (
+  cells: GridCell[] | ModelGridCell[],
+  inputColumns: GridColumn[] | ModelGridColumn[],
+  members: RankMember[],
+) => {
+  const columns = normalizeColumns(inputColumns);
+  const normalized = cells.map((cell) =>
+    "columnId" in cell ? cell : normalizeCells([cell], columns)[0],
+  );
+  return cellsToParticipantRolesModel(normalized, columns, members);
+};
+
+const applySolveResponse = (
+  input: Omit<Parameters<typeof applySolveResponseModel>[0], "previousCells" | "columns"> & {
+    previousCells: GridCell[];
+    columns: GridColumn[];
+  },
+) => {
+  const columns = normalizeColumns(input.columns);
+  const result = applySolveResponseModel({
+    ...input,
+    columns,
+    previousCells: normalizeCells(input.previousCells, columns),
+  });
+  const dateByColumnId = new Map(columns.map((column) => [column.columnId, column.date]));
+  return {
+    ...result,
+    cells: result.cells.map((cell): GridCell => ({
+      date: dateByColumnId.get(cell.columnId)!,
+      rowId: cell.rowId,
+      memberIds: cell.occupants.map((occupant) => occupant.memberId),
+      origin: cell.origin,
+      overrides: cell.overrides,
+      overrideReasons: cell.overrideReasons,
+    })),
+  };
+};
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -58,6 +146,109 @@ const emptyConfig: SolverConfig = {
   conflicts: [],
   presence: [],
 };
+
+describe("stable grid identity", () => {
+  it("builds exact target-bound create column ids", () => {
+    const [column] = buildColumns({ sundayDates: ["2026-02-01"], activeSatDates: [] });
+    expect(column.columnId).toBe("create:sunday_role__2026-02-01");
+  });
+
+  it("keeps two same-date columns and their rosters independent", () => {
+    const columns: ModelGridColumn[] = [
+      { columnId: "role-a", date: "2026-02-11", type: "special_role", serviceName: "Vigilia" },
+      { columnId: "role-b", date: "2026-02-11", type: "special_role", serviceName: "Retiro" },
+    ];
+    const cells: ModelGridCell[] = [
+      { columnId: "role-a", rowId: "lead", occupants: [{ memberId: "m1" }], origin: "manual" },
+      { columnId: "role-b", rowId: "lead", occupants: [{ memberId: "m2" }], origin: "manual" },
+    ];
+    const roles = cellsToParticipantRolesModel(cells, columns, [m("m1", "Uno"), m("m2", "Dos")]);
+    expect(roles[0].leads?.map((person) => person._id)).toEqual(["m1"]);
+    expect(roles[1].leads?.map((person) => person._id)).toEqual(["m2"]);
+    expect(assignedForColumn(cells, buildRows(), "role-a").map((seat) => seat.memberId)).toEqual(["m1"]);
+  });
+
+  it("keeps cells attached when only a column's calendar date changes", () => {
+    const cells: ModelGridCell[] = [
+      { columnId: "role-a", rowId: "lead", occupants: [{ memberId: "m1" }], origin: "manual" },
+    ];
+    const [role] = cellsToParticipantRolesModel(
+      cells,
+      [{ columnId: "role-a", date: "2026-03-04", type: "special_role", serviceName: "Vigilia" }],
+      [m("m1", "Uno")],
+    );
+    expect(role.date).toBe("2026-03-04");
+    expect(role.leads?.map((person) => person._id)).toEqual(["m1"]);
+  });
+
+  it("fails closed on missing, duplicate, or detached identity", () => {
+    expect(() =>
+      assertGridIdentity([
+        { columnId: "same", date: "2026-02-01", type: "sunday_role" },
+        { columnId: "same", date: "2026-02-08", type: "sunday_role" },
+      ]),
+    ).toThrow(/Duplicate grid columnId/);
+    expect(() =>
+      assertGridIdentity(
+        [{ columnId: "known", date: "2026-02-01", type: "sunday_role" }],
+        [{ columnId: "missing", rowId: "lead", occupants: [], origin: "empty" }],
+      ),
+    ).toThrow(/unknown columnId/);
+  });
+
+  it("keeps create POST meaning independent of stored occupant item keys", () => {
+    const columns = buildColumns({ sundayDates: ["2026-02-01"], activeSatDates: [] });
+    const [draft] = cellsToDraftsModel(
+      [{ columnId: columns[0].columnId, rowId: "lead", occupants: [{ memberId: "m1", itemKey: "stored-key" }], origin: "manual" }],
+      columns,
+      new Set(),
+      [],
+      [],
+    );
+    expect(draft.leads).toEqual(["m1"]);
+    expect(JSON.stringify(draft)).not.toContain("stored-key");
+  });
+
+  it("preserves the complete create draft boundary after the occupant migration", () => {
+    const columns = buildColumns({ sundayDates: ["2026-02-01"], activeSatDates: [] });
+    const columnId = columns[0].columnId;
+    const previous: DraftCard[] = [{
+      localId: "draft-1",
+      creationRequestId: "request-1",
+      _type: "sunday_role",
+      date: "2026-02-01",
+      exists: false,
+      isExisting: false,
+      skipped: false,
+      leads: [],
+      bgvs: [],
+      chorus: [],
+      instruments: [],
+      foh: [],
+    }];
+    const [draft] = cellsToDraftsModel(
+      [
+        { columnId, rowId: "lead", occupants: [{ memberId: "lead-1" }], origin: "manual" },
+        { columnId, rowId: "bgv", occupants: [{ memberId: "bgv-1" }], origin: "manual" },
+        { columnId, rowId: "coro", occupants: [{ memberId: "coro-1" }], origin: "manual" },
+        { columnId, rowId: "instrumento:Bass", occupants: [{ memberId: "bass-1" }], origin: "manual" },
+        { columnId, rowId: "foh:Console", occupants: [{ memberId: "foh-1" }], origin: "manual" },
+      ],
+      columns,
+      new Set(),
+      previous,
+      [],
+    );
+    expect(draft).toEqual({
+      ...previous[0],
+      leads: ["lead-1"],
+      bgvs: ["bgv-1"],
+      chorus: ["coro-1"],
+      instruments: [{ id: "instrumento:Bass#0", instrument: "Bass", personId: "bass-1" }],
+      foh: [{ id: "foh:Console#0", role: "Console", personId: "foh-1" }],
+    });
+  });
+});
 
 // ─── Shape ────────────────────────────────────────────────────────────────────
 
@@ -703,12 +894,12 @@ describe("mapUnfilledSeats", () => {
   // the explicit "all of them" these three pre-existing cases always meant.
   it("places a Sunday seat on its row and date", () => {
     const out = mapUnfilledSeats(["W2 Sunday Sun.Choir #2"], FEB_SUNDAYS, FEB_SATURDAYS, FEB_SUNDAYS);
-    expect(out).toEqual([{ date: "2026-02-08", rowId: "coro" }]);
+    expect(out).toEqual([{ columnId: createColumnId("sunday_role", "2026-02-08"), rowId: "coro" }]);
   });
 
   it("places a Saturday seat on its row and adjacent date", () => {
     const out = mapUnfilledSeats(["W2 Saturday Sat.BGV #1"], FEB_SUNDAYS, FEB_SATURDAYS, FEB_SUNDAYS);
-    expect(out).toEqual([{ date: "2026-02-07", rowId: "bgv" }]);
+    expect(out).toEqual([{ columnId: createColumnId("saturday_role", "2026-02-07"), rowId: "bgv" }]);
   });
 
   it("drops a Saturday seat whose resolved date is not in the selected column set", () => {
@@ -736,7 +927,7 @@ describe("mapUnfilledSeats", () => {
       [],
       selected,
     );
-    expect(out).toEqual([{ date: "2026-02-08", rowId: "lead" }]);
+    expect(out).toEqual([{ columnId: createColumnId("sunday_role", "2026-02-08"), rowId: "lead" }]);
   });
 });
 
@@ -1353,7 +1544,9 @@ describe("buildColumns dedupes by date, weekend-first (E3, work item 13)", () =>
       activeSatDates: [],
       specials: [{ date: "2026-02-08", name: "Vigilia" }],
     });
-    expect(cols).toEqual([{ date: "2026-02-08", type: "sunday_role" }]);
+    expect(cols).toEqual([
+      { columnId: createColumnId("sunday_role", "2026-02-08"), date: "2026-02-08", type: "sunday_role" },
+    ]);
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn.mock.calls[0][0]).toContain("2026-02-08");
     warn.mockRestore();
@@ -1366,7 +1559,9 @@ describe("buildColumns dedupes by date, weekend-first (E3, work item 13)", () =>
       activeSatDates: ["2026-02-07"],
       specials: [{ date: "2026-02-07", name: "Vigilia" }],
     });
-    expect(cols).toEqual([{ date: "2026-02-07", type: "saturday_role" }]);
+    expect(cols).toEqual([
+      { columnId: createColumnId("saturday_role", "2026-02-07"), date: "2026-02-07", type: "saturday_role" },
+    ]);
     warn.mockRestore();
   });
 
@@ -1377,8 +1572,8 @@ describe("buildColumns dedupes by date, weekend-first (E3, work item 13)", () =>
       specials: [{ date: "2026-02-07", name: "Vigilia" }],
     });
     expect(cols).toEqual([
-      { date: "2026-02-07", type: "special_role", serviceName: "Vigilia" },
-      { date: "2026-02-08", type: "sunday_role" },
+      { columnId: createColumnId("special_role", "2026-02-07"), date: "2026-02-07", type: "special_role", serviceName: "Vigilia" },
+      { columnId: createColumnId("sunday_role", "2026-02-08"), date: "2026-02-08", type: "sunday_role" },
     ]);
   });
 
@@ -1421,14 +1616,14 @@ describe("buildColumns dedupes by date, weekend-first (E3, work item 13)", () =>
     // default were deleted. February 2026, all four Saturdays selected — Feb 28
     // is a Saturday with no Sunday of its own in-month, and still gets a column.
     expect(buildColumns({ sundayDates: FEB_SUNDAYS, activeSatDates: FEB_SATURDAYS })).toEqual([
-      { date: "2026-02-01", type: "sunday_role" },
-      { date: "2026-02-07", type: "saturday_role" },
-      { date: "2026-02-08", type: "sunday_role" },
-      { date: "2026-02-14", type: "saturday_role" },
-      { date: "2026-02-15", type: "sunday_role" },
-      { date: "2026-02-21", type: "saturday_role" },
-      { date: "2026-02-22", type: "sunday_role" },
-      { date: "2026-02-28", type: "saturday_role" },
+      { columnId: createColumnId("sunday_role", "2026-02-01"), date: "2026-02-01", type: "sunday_role" },
+      { columnId: createColumnId("saturday_role", "2026-02-07"), date: "2026-02-07", type: "saturday_role" },
+      { columnId: createColumnId("sunday_role", "2026-02-08"), date: "2026-02-08", type: "sunday_role" },
+      { columnId: createColumnId("saturday_role", "2026-02-14"), date: "2026-02-14", type: "saturday_role" },
+      { columnId: createColumnId("sunday_role", "2026-02-15"), date: "2026-02-15", type: "sunday_role" },
+      { columnId: createColumnId("saturday_role", "2026-02-21"), date: "2026-02-21", type: "saturday_role" },
+      { columnId: createColumnId("sunday_role", "2026-02-22"), date: "2026-02-22", type: "sunday_role" },
+      { columnId: createColumnId("saturday_role", "2026-02-28"), date: "2026-02-28", type: "saturday_role" },
     ]);
   });
 });

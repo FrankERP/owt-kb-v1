@@ -11,8 +11,13 @@ import {
   roleUpdateNotice,
 } from "@/app/utils/serviceMutationSideEffects";
 import { serviceDependencyError, serviceError } from "@/app/utils/serviceMutation";
+import { normalizeServiceName } from "@/app/utils/normalizeLabel";
 import { validateRole } from "@/app/utils/serviceReadModel";
 import { retireReceiptPatch } from "@/app/utils/roleCreationReceipt";
+import {
+  loadSpecialIdentityCoordinator,
+  planSpecialIdentityCoordinatorClaim,
+} from "@/app/utils/specialIdentityCoordinator";
 import {
   buildClaimedLock,
   claimLockPatch,
@@ -28,9 +33,11 @@ import {
   planTargetClaim,
   roleDateField,
   sanityConflictKind,
+  seatAssignees,
 } from "@/app/utils/roleWriteRequest";
 import {
   bootstrapLegacyLock,
+  loadCanonicalMemberIds,
   loadCanonicalRole,
   loadDependencies,
   loadLock,
@@ -117,9 +124,19 @@ async function patchHandler(
   }
   const request = parsed.value;
 
+  // Validate the complete submitted roster before any occupancy, coordination,
+  // legacy bootstrap, or business transaction can run. This is referential
+  // validation only; memberType remains UI guidance, not server policy.
+  const wanted = seatAssignees(request.seats);
+  const resolvedMembers = await loadCanonicalMemberIds(wanted);
+  const danglingRefs = wanted.filter((memberId) => !resolvedMembers.has(memberId)).sort();
+  if (danglingRefs.length) {
+    return reject(serviceError("integrity_conflict", { details: { danglingRefs } }));
+  }
+
   const loaded = await loadRoleForMutation(id, request.rev);
   if (!loaded.ok) return loaded.response;
-  let role = loaded.target.role;
+  const role = loaded.target.role;
   const { targetKey, lockId } = loaded.target;
   const oldDate = loaded.target.date;
 
@@ -138,9 +155,19 @@ async function patchHandler(
       }),
     );
   }
-
+  if (roleType === "special_role" && !request.serviceName) {
+    return reject(
+      serviceError("integrity_conflict", {
+        details: { id, storedType: roleType, issues: ["service_name"] },
+      }),
+    );
+  }
   const newDate = request.date;
   const isMove = newDate !== oldDate;
+  const isSpecial = roleType === "special_role";
+  const specialIdentityChanged =
+    isSpecial &&
+    (isMove || normalizeServiceName(role.service_name) !== normalizeServiceName(request.serviceName));
 
   // ── Dependency refusal (a move only; a same-date edit touches no history) ──
   if (isMove) {
@@ -153,24 +180,29 @@ async function patchHandler(
     if (dependencies.hasDependencies) {
       return reject(serviceDependencyError(dependencies.code, dependencies.dependencies));
     }
-    const destination = await loadTargetOccupancy({
+  }
+
+  // Every special PATCH checks its complete normalized identity, even when the
+  // request changes only roster fields. Weekend occupancy remains move-only.
+  if (isSpecial || isMove) {
+    const occupancy = await loadTargetOccupancy({
       roleType,
       date: newDate,
       serviceName: request.serviceName,
       excludeRoleId: role._id,
     });
-    if (destination.rawDraftIds.length) {
+    if (occupancy.rawDraftIds.length) {
       return reject(
         serviceError("integrity_conflict", {
-          details: { destinationDate: newDate, rawDrafts: destination.rawDraftIds },
+          details: { destinationDate: newDate, rawDrafts: occupancy.rawDraftIds },
         }),
       );
     }
-    if (destination.canonicalRoleIds.length) {
+    if (occupancy.canonicalRoleIds.length) {
       return reject(
         serviceError("ambiguous_target", {
           message: "Ya existe un servicio en la fecha destino.",
-          details: { destinationDate: newDate, roleIds: destination.canonicalRoleIds },
+          details: { destinationDate: newDate, roleIds: occupancy.canonicalRoleIds },
         }),
       );
     }
@@ -178,7 +210,6 @@ async function patchHandler(
 
   // ── Coordination: assert the owned lock, bootstrapping a legacy one first ──
   let ownedLock: StoredLock | null = null;
-  let bootstrapped = false;
   if (lockId) {
     ownedLock = await loadLock(lockId);
     if (request.lockRev && ownedLock && ownedLock._rev !== request.lockRev) {
@@ -202,17 +233,33 @@ async function patchHandler(
         dateField: roleDateField(roleType),
         date: oldDate,
       });
-      if (!boot.ok || !boot.role || !boot.lock) {
-        return reject(
-          serviceError(boot.committed ? "bootstrap_completed_reload" : "stale_revision", {
-            details: { id, lockId },
-          }),
-        );
-      }
-      bootstrapped = true;
-      // Continue ONLY from the revisions the maintenance transaction produced.
-      role = boot.role;
-      ownedLock = boot.lock;
+      const code =
+        boot.outcome === "committed_reload"
+          ? "bootstrap_completed_reload"
+          : boot.outcome === "unknown"
+            ? "bootstrap_outcome_unknown"
+            : "stale_revision";
+      return reject(serviceError(code, { details: { ...boot.details, id } }));
+    }
+  }
+
+  let specialClaim: ReturnType<typeof planSpecialIdentityCoordinatorClaim> | null = null;
+  if (specialIdentityChanged) {
+    const loadedCoordinator = await loadSpecialIdentityCoordinator();
+    if (!loadedCoordinator.ok) {
+      return reject(
+        serviceError("integrity_conflict", {
+          details: { detail: "special_identity_coordinator", issues: loadedCoordinator.issues },
+        }),
+      );
+    }
+    specialClaim = planSpecialIdentityCoordinatorClaim(loadedCoordinator.coordinator);
+    if (!specialClaim.ok) {
+      return reject(
+        serviceError("integrity_conflict", {
+          details: { detail: "special_identity_coordinator", issues: specialClaim.issues },
+        }),
+      );
     }
   }
 
@@ -277,13 +324,69 @@ async function patchHandler(
       tx = tx.patch(ownedLock._id, (p) => p.ifRevisionId(lockRev).set({ updatedAt: now }));
     }
   }
-
+  if (specialClaim?.ok && specialClaim.kind === "create") {
+    tx = tx.create(specialClaim.document);
+  } else if (specialClaim?.ok && specialClaim.kind === "patch") {
+    tx = tx.patch(specialClaim.id, (p) =>
+      p.ifRevisionId(specialClaim.ifRevisionId).set(specialClaim.set),
+    );
+  }
   try {
     await tx.commit();
   } catch (err) {
     if (!sanityConflictKind(err)) throw err;
+    if (isSpecial) {
+      const occupancyPromise = loadTargetOccupancy({
+        roleType,
+        date: newDate,
+        serviceName: request.serviceName,
+        excludeRoleId: role._id,
+      });
+      const coordinatorPromise = specialClaim
+        ? loadSpecialIdentityCoordinator()
+        : Promise.resolve(null);
+      const [occupancy, coordinatorAfter] = await Promise.all([
+        occupancyPromise,
+        coordinatorPromise,
+      ]);
+      if (occupancy.rawDraftIds.length) {
+        return reject(
+          serviceError("integrity_conflict", {
+            details: { destinationDate: newDate, rawDrafts: occupancy.rawDraftIds },
+          }),
+        );
+      }
+      if (occupancy.canonicalRoleIds.length) {
+        return reject(
+          serviceError("ambiguous_target", {
+            details: { destinationDate: newDate, roleIds: occupancy.canonicalRoleIds },
+          }),
+        );
+      }
+      if (coordinatorAfter && !coordinatorAfter.ok) {
+        return reject(
+          serviceError("integrity_conflict", {
+            details: { detail: "special_identity_coordinator", issues: coordinatorAfter.issues },
+          }),
+        );
+      }
+      return reject(
+        serviceError("stale_revision", {
+          details: {
+            id,
+            targetKey,
+            ...(coordinatorAfter?.ok && coordinatorAfter.coordinator
+              ? {
+                  coordinatorRev: coordinatorAfter.coordinator._rev,
+                  coordinatorVersion: coordinatorAfter.coordinator.version,
+                }
+              : {}),
+          },
+        }),
+      );
+    }
     return reject(
-      serviceError(bootstrapped ? "bootstrap_completed_reload" : "stale_revision", {
+      serviceError("stale_revision", {
         details: { id, targetKey },
       }),
     );
@@ -376,7 +479,7 @@ async function deleteHandler(
 
   const loaded = await loadRoleForMutation(id, request.rev);
   if (!loaded.ok) return loaded.response;
-  let role = loaded.target.role;
+  const role = loaded.target.role;
   const { targetKey, lockId, date } = loaded.target;
   const dateField = roleDateField(role._type);
 
@@ -393,7 +496,6 @@ async function deleteHandler(
 
   // ── Coordination token: only ever vacate a token this role owns ───────────
   let ownedLock: StoredLock | null = null;
-  let bootstrapped = false;
   if (lockId) {
     ownedLock = await loadLock(lockId);
     if (request.lockRev && ownedLock && ownedLock._rev !== request.lockRev) {
@@ -417,16 +519,13 @@ async function deleteHandler(
         dateField,
         date,
       });
-      if (!boot.ok || !boot.role || !boot.lock) {
-        return reject(
-          serviceError(boot.committed ? "bootstrap_completed_reload" : "stale_revision", {
-            details: { id, lockId },
-          }),
-        );
-      }
-      bootstrapped = true;
-      role = boot.role;
-      ownedLock = boot.lock;
+      const code =
+        boot.outcome === "committed_reload"
+          ? "bootstrap_completed_reload"
+          : boot.outcome === "unknown"
+            ? "bootstrap_outcome_unknown"
+            : "stale_revision";
+      return reject(serviceError(code, { details: { ...boot.details, id } }));
     }
   }
 
@@ -486,7 +585,7 @@ async function deleteHandler(
   } catch (err) {
     if (!sanityConflictKind(err)) throw err;
     return reject(
-      serviceError(bootstrapped ? "bootstrap_completed_reload" : "stale_revision", {
+      serviceError("stale_revision", {
         details: { id, targetKey },
       }),
     );

@@ -2,7 +2,7 @@
 // without a browser.
 //
 // The point of these tests: "we configured the Studio" is not evidence. The
-// policy is code, so every capability of every one of the ten protected types
+// policy is code, so every capability of every one of the eleven protected types
 // is asserted here, plus the wiring in `sanity.config.ts` / `sanity/structure.ts`
 // that actually installs it — and the fact that the v5-inert
 // `__experimental_actions` is used nowhere.
@@ -58,7 +58,7 @@ function gitTracked(): string[] {
 // ── The policy ──────────────────────────────────────────────────────────────
 
 describe("studio protection policy", () => {
-  it("covers exactly the ten protected types, keeping the saturdarSongs typo", () => {
+  it("covers exactly the eleven protected types, keeping the saturdarSongs typo", () => {
     expect([...PROTECTED_STUDIO_TYPES]).toEqual([
       "sunday_role",
       "saturday_role",
@@ -69,6 +69,7 @@ describe("studio protection policy", () => {
       "roleTargetLock",
       "roleCreationReceipt",
       "notificationOutbox",
+      "specialIdentityCoordinator",
       // The shared planner rule set. `hidden` + `readOnly` left `delete`,
       // `duplicate`, `restore` and `unpublish` reachable by direct URL — a
       // second write path around the `_rev`-checked admin route.
@@ -86,6 +87,7 @@ describe("studio protection policy", () => {
       "setlistProposal",
       "roleTargetLock",
       "roleCreationReceipt",
+      "specialIdentityCoordinator",
       "solverConfig",
     ]);
   });
@@ -161,6 +163,7 @@ describe("studio protection policy", () => {
       "roleTargetLock",
       "roleCreationReceipt",
       "notificationOutbox",
+      "specialIdentityCoordinator",
       "solverConfig",
     ]);
     for (const type of INTERNAL_STUDIO_TYPES) {
@@ -208,6 +211,9 @@ describe("studio protection policy", () => {
     }
     for (const field of ["requestId", "fingerprint", "state"]) {
       expect(isInternalStudioField("roleCreationReceipt", field), field).toBe(true);
+    }
+    for (const field of ["version", "claimNonce", "updatedAt"]) {
+      expect(isInternalStudioField("specialIdentityCoordinator", field), field).toBe(true);
     }
     expect(isInternalStudioField("sunday_role", "week")).toBe(false);
     expect(isInternalStudioField("post", "title")).toBe(false);
@@ -414,7 +420,7 @@ describe("studio config installs the policy", () => {
     expect(structure).toContain("PROTECTED_STUDIO_TYPES");
   });
 
-  it("marks all ten protected schema types read-only", () => {
+  it("marks all eleven protected schema types read-only", () => {
     const files: Record<string, string> = {
       sunday_role: "sanity/schemas/sunRole.ts",
       saturday_role: "sanity/schemas/satRole.ts",
@@ -425,6 +431,7 @@ describe("studio config installs the policy", () => {
       roleTargetLock: "sanity/schemas/roleTargetLock.ts",
       roleCreationReceipt: "sanity/schemas/roleCreationReceipt.ts",
       notificationOutbox: "sanity/schemas/notificationOutbox.ts",
+      specialIdentityCoordinator: "sanity/schemas/specialIdentityCoordinator.ts",
       solverConfig: "sanity/schemas/solverConfig.ts",
     };
     expect(Object.keys(files).sort()).toEqual([...PROTECTED_STUDIO_TYPES].sort());
@@ -432,7 +439,14 @@ describe("studio config installs the policy", () => {
       const src = read(files[type]);
       expect(src, `${files[type]} declares ${type}`).toMatch(new RegExp(`name:\\s*['"]${type}['"]`));
       expect(src, `${files[type]} must be readOnly`).toMatch(/readOnly:\s*true/);
+      expect(src, `${files[type]} assigns __experimental_actions`).not.toMatch(/__experimental_actions\s*:/);
     }
+  });
+
+  it("registers the special identity coordinator in the Sanity schema", () => {
+    const src = read("sanity/schema.ts");
+    expect(src).toContain("./schemas/specialIdentityCoordinator");
+    expect(src).toMatch(/types:\s*\[[\s\S]*specialIdentityCoordinator[\s\S]*\]/);
   });
 
   it("keeps the internal fields off the authoring surface, each by its own mechanism", () => {
@@ -450,6 +464,7 @@ describe("studio config installs the policy", () => {
       "sanity/schemas/roleTargetLock.ts",
       "sanity/schemas/roleCreationReceipt.ts",
       "sanity/schemas/notificationOutbox.ts",
+      "sanity/schemas/specialIdentityCoordinator.ts",
       "sanity/schemas/solverConfig.ts",
     ]) {
       const src = read(file);
@@ -465,6 +480,7 @@ describe("studio config installs the policy", () => {
         "roleTargetLock",
         "roleCreationReceipt",
         "notificationOutbox",
+        "specialIdentityCoordinator",
         "solverConfig",
       ].sort(),
     );
