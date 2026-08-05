@@ -134,12 +134,12 @@ Implementation began only after the user explicitly authorized it on 2026-08-04.
 - The final bounded correction pass also closes three related races: a discard confirmation opened before transport can no longer close the editor during that request; row-only local work prevents adoption of unrelated source reloads; and a typed error counts as a proven pre-write refusal only when its exact HTTP status also matches. All 5xx responses remain unknown outcomes and reconcile from readback even if their JSON body reuses an allowlisted error code.
 - Review accounting: the first review found the in-flight edit-loss window; the corrected digest received one cold approval; the next cold review found exact-fingerprint and overlapping-swap gaps. The loop then stopped at the churn cap under the user's token-efficiency direction. All three verified blockers were implemented; no claim is made that the final plan received two unchanged approvals.
 - Focused integrated verification passed 5 files / 254 tests. Full verification passed 135 files / 3191 tests, TypeScript, diff check, and ESLint with 0 errors / 90 accepted warnings.
-- No Sanity migration, direct content write, production deployment, or automatic retry was introduced.
+- The correction required no Sanity migration, direct content write, or automatic retry. It was later released through the recorded `main` merge and production deployment below.
 
 ## Final verification
 
 - Focused client command (`MonthGenerator.stored`, `PlannerGrid`, and `solverConfigSource`): 3 files and 104 tests passed. The production role-write path was verified separately by the 96-test route suite above.
-- `npm test`: 135 files and 3158 tests passed.
+- `npm test`: 135 files and 3191 tests passed on the final feature and `main` merge trees.
 - `npx tsc --noEmit`: passed.
 - `npx eslint .`: passed with 0 errors and 90 accepted backlog warnings.
 - `git diff --check`: passed.
@@ -152,7 +152,7 @@ Implementation began only after the user explicitly authorized it on 2026-08-04.
 - The final P6/integrated review found the five material defects listed above. They were corrected and the focused/full gates were rerun green.
 - At the user's direction, the review loop stopped after that bounded correction pass to preserve implementation budget. No claim is made that every phase received a separate formal post-fix approval or that a second final cold review was run.
 
-## Commits and preview delivery
+## Commits and release delivery
 
 - `6914c6d` — `docs(agents): make plan review risk-tiered`: formalized the token-efficient policy in the repository and Claude guidance while retaining two approvals for critical mutation/recovery plans.
 - `3e0ab97` — `feat(admin): add safe month-grid service editing`: 60 files, 7659 insertions, 1249 deletions; pushed to `origin/feat/month-grid-editing`.
@@ -160,10 +160,15 @@ Implementation began only after the user explicitly authorized it on 2026-08-04.
 - Vercel deployment `dpl_77qBCC7VCkAdhp87u51q8BN9vmyf` built commit `4d7165b` in canonical project `owt-backstage`, reached `READY`, and received aliases `dev-owt-backstage.vercel.app` and `owt-backstage-git-preview-frank-rochas-projects.vercel.app`.
 - Stable preview returned HTTP 200 and the expected app sign-in shell. `/admin` correctly remained behind Vercel Deployment Protection.
 - The Vercel build completed successfully with one non-blocking Turbopack NFT tracing warning from the existing `next.config.mjs`/solve-route trace.
+- `8346a88` — `fix(admin): admit legacy services in month grid`: corrected the missing-`published` read projection without a Sanity migration and was pushed to the feature branch.
+- `ed77adb` — `fix(admin): swap complete roster sections`: replaced person swaps with complete stored-section exchanges and added the final mutation-lock/readback corrections; pushed to the feature branch.
+- `39d955c` — `merge: complete section swaps into preview`: exact corrected feature tree merged and pushed to `preview`; Vercel deployment `dpl_EmphTLKX4eM6k8XovVTc5ZPkiksa` reached `READY` with `dev-owt-backstage.vercel.app` attached.
+- `fee03d8` — `merge: month-grid editing into main`: exact tested feature tree merged and pushed to `main` on 2026-08-05.
+- Production Vercel deployment `dpl_9PcfDGNvjtWzYt38FCZ69BJy6zJH` built commit `fee03d8` in canonical project `owt-backstage`, reached `READY`, and attached `owt-backstage.vercel.app` without alias errors.
 
 ## Explicit non-actions and remaining release checks
 
-- No production Sanity content write, migration, production deployment, `main` merge, or PR occurred.
+- No production Sanity content write, migration, or PR occurred. The Git/Vercel production release completed from `main` as recorded above.
 - No live authenticated roster mutation was used for verification.
-- Before production release, an authorized operator must smoke-test the authenticated Servicios paths on preview and confirm the Sanity revision-history recovery procedure for real edits/swaps.
+- Monitor the first authenticated production use and retain the Sanity revision-history recovery procedure for real edits/swaps.
 - Deferred by scope: single-service solver/local auto-fill, service-type conversion, and automatic retry from a fresh revision.
