@@ -114,6 +114,14 @@ Implementation began only after the user explicitly authorized it on 2026-08-04.
 - Mixed save batches reconcile successful and maintenance-only roles independently while retaining rejected edits and truthful summary copy.
 - Full-panel close restores focus to a stable remounted toolbar, **Nuevo**, or card opener identity rather than an unmounted DOM node.
 
+## Post-preview correction — legacy publication flags (2026-08-05)
+
+- Preview diagnosis found 14 of 27 stored role documents predated the `published` field. Sanity projected those missing values as `null`, while the stored-role parser requires a boolean and the established publication invariant treats only explicit `false` as unpublished.
+- The admin roles inventory now projects `"published": coalesce(published, true)`. This keeps legacy/missing values grandfathered as published, preserves explicit drafts as `false`, and makes the editor inventory agree with the integrity routes.
+- No Sanity migration or content write was needed. The correction is read-only and removes the primary `invalid_roles_response`; the reported cardinality and mismatch codes were downstream consequences of rejecting the whole inventory.
+- Added a route query-contract regression for the normalized boolean projection. Full verification passed: 135 test files / 3159 tests, TypeScript, diff check, and ESLint with 0 errors / 90 accepted warnings.
+- While rerunning the gate, restored the documented legacy `ParticipationRail` threshold sentence required by its existing source-contract test; the helper remains unmounted cleanup debt.
+
 ## Final verification
 
 - Focused client command (`MonthGenerator.stored`, `PlannerGrid`, and `solverConfigSource`): 3 files and 104 tests passed. The production role-write path was verified separately by the 96-test route suite above.

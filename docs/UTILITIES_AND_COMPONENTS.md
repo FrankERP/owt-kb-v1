@@ -184,7 +184,7 @@ Legend: **[C]** client, **[S]** server.
 | `AvailabilityPanel` | Team availability vs. scheduled services. |
 | `ActivityPanel` | Member activity / last-login ("Hoy"/"Ayer" calendar-day labels). |
 | `ParticipationSidebar` | Participation bar chart (`computeParticipation`); Voces/Instrumentos toggle. Header is a stacked block with a `w-full` select — beside the title the select's longest option ("Instrumentos") overflowed the 216px rail onto the grid. |
-| `ParticipationRail` | Legacy Tablero placement helper retained as unmounted source/test cleanup debt. The active month grid renders `ParticipationSidebar` as the in-flow left column of `PlannerGrid` at every width. |
+| `ParticipationRail` | Legacy Tablero placement helper retained as unmounted source/test cleanup debt. Its retained geometry threshold for the Tablero (≥1380px) remains pinned by source-contract tests until cleanup. The active month grid renders `ParticipationSidebar` as the in-flow left column of `PlannerGrid` at every width. |
 
 #### Service-readiness card layer
 
