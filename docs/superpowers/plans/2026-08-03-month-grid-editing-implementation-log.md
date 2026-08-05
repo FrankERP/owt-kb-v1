@@ -43,6 +43,30 @@ Implementation began only after the user explicitly authorized it on 2026-08-04.
 - Targeted red assertion: the `2026-02-28` boundary case returned February/null instead of March week 1.
 - Following-Sunday ownership was restored immediately after the red proof.
 
+## P2 evidence
+
+### Canonical assignees and truthful protected writers
+
+- Production change: the members read uses published perspective and role POST/PATCH resolve every submitted assignee across all five seat fields against canonical published member IDs before coordinator, bootstrap, transaction, notification, or revalidation work.
+- Route tests prove draft-only, deleted, and arbitrary member IDs produce zero writes. Receipt replay remains a no-write recovery path.
+- Protected PATCH/create/swap paths propagate `bootstrap_completed_reload` whenever maintenance committed before a later business refusal; clients never mistake the advanced revision for an ordinary no-write failure.
+- `npx vitest run app/api/__tests__/roleWriteRoutes.test.ts` passed 96 tests, including the production-path all-five-array preservation fixture. Focused bootstrap/swap route cases also passed inside the full suite, including first-role-bootstrap/second-role refusal and destination conflict.
+
+### Serialized special identity
+
+- Production change: special create and identity-changing PATCH use one revision-guarded coordinator keyed by normalized date/name target. Special occupancy is authoritative for roster-only PATCH as well as moves/renames.
+- Added the `specialIdentityCoordinator` Sanity schema, monotonic nonce/version mutation, Studio hiding/protection, protected-read audit coverage, and ADR 0011.
+- Concurrency tests prove one winner for same-target attempts and prevent stale coordinator revisions from authorizing a writer.
+
+## P3 evidence
+
+### Idempotent create-one and exact readback
+
+- Production change: the stored editor creates one empty unpublished service with a stable `creationRequestId`; it never invokes solver/local-fill.
+- Unknown create outcomes freeze the exact payload and disable a new logical create until receipt replay/readback resolves it.
+- A successful response must return the role ID and echo the exact request ID. Canonical readback must then match type, date, normalized special name, five empty arrays, and `published: false`.
+- The unrelated-empty-role regression proves another role at the same target cannot be adopted as the created service.
+
 ## P5 evidence
 
 ### Stored swap topology admission
@@ -79,8 +103,53 @@ Implementation began only after the user explicitly authorized it on 2026-08-04.
 ### Final integrated review corrections
 
 - Split create, edit, and swap capability gates so opening the editor through one path cannot authorize another operation.
+- Added a separate `changeServiceDate` capability and enforced it in both the date input and save path.
 - Create reconciliation now requires the exact role ID returned with the echoed creation request ID; an unrelated empty role at the same target cannot satisfy readback.
+- Create readback compares the complete frozen target: type, date, normalized special name, empty roster, and unpublished state.
 - Stored swaps freeze intended post-swap semantic snapshots for every involved role and adopt readback only when all match.
+- Swap non-2xx classification clears frozen intent only for allowlisted typed pre-write refusals; 5xx, malformed/untyped, bootstrap-unknown, and transport loss remain verification-pending.
 - Cross-month moves retain source role identity, use the destination service's complete Sunday spine, and reconcile by role ID outside the displayed-month filter.
 - Per-role integrity failures remain visible as read-only columns. Invalid local edits count as unresolved work and cannot be silently closed or saved.
+- Read-only columns are excluded as row-copy sources and destinations.
 - Mixed save batches reconcile successful and maintenance-only roles independently while retaining rejected edits and truthful summary copy.
+- Full-panel close restores focus to a stable remounted toolbar, **Nuevo**, or card opener identity rather than an unmounted DOM node.
+
+## Post-preview correction — legacy publication flags (2026-08-05)
+
+- Preview diagnosis found 14 of 27 stored role documents predated the `published` field. Sanity projected those missing values as `null`, while the stored-role parser requires a boolean and the established publication invariant treats only explicit `false` as unpublished.
+- The admin roles inventory now projects `"published": coalesce(published, true)`. This keeps legacy/missing values grandfathered as published, preserves explicit drafts as `false`, and makes the editor inventory agree with the integrity routes.
+- No Sanity migration or content write was needed. The correction is read-only and removes the primary `invalid_roles_response`; the reported cardinality and mismatch codes were downstream consequences of rejecting the whole inventory.
+- Added a route query-contract regression for the normalized boolean projection. Full verification passed: 135 test files / 3159 tests, TypeScript, diff check, and ESLint with 0 errors / 90 accepted warnings.
+- While rerunning the gate, restored the documented legacy `ParticipationRail` threshold sentence required by its existing source-contract test; the helper remains unmounted cleanup debt.
+
+## Final verification
+
+- Focused client command (`MonthGenerator.stored`, `PlannerGrid`, and `solverConfigSource`): 3 files and 104 tests passed. The production role-write path was verified separately by the 96-test route suite above.
+- `npm test`: 135 files and 3158 tests passed.
+- `npx tsc --noEmit`: passed.
+- `npx eslint .`: passed with 0 errors and 90 accepted backlog warnings.
+- `git diff --check`: passed.
+- Production-source search confirmed no rendered `Tablero` or `SeatBoard` entry remained in `MonthGenerator`/`ServicesPanel`.
+- Local browser verification reached the expected sign-in shell with no console errors. Authenticated admin UI was unavailable without credentials, so mutation behavior remained covered by automated component/route tests.
+
+### Code-review accounting
+
+- The P4 production-path preservation change received a fresh read-only review and `APPROVED` verdict after 96/96 route tests.
+- The final P6/integrated review found the five material defects listed above. They were corrected and the focused/full gates were rerun green.
+- At the user's direction, the review loop stopped after that bounded correction pass to preserve implementation budget. No claim is made that every phase received a separate formal post-fix approval or that a second final cold review was run.
+
+## Commits and preview delivery
+
+- `6914c6d` — `docs(agents): make plan review risk-tiered`: formalized the token-efficient policy in the repository and Claude guidance while retaining two approvals for critical mutation/recovery plans.
+- `3e0ab97` — `feat(admin): add safe month-grid service editing`: 60 files, 7659 insertions, 1249 deletions; pushed to `origin/feat/month-grid-editing`.
+- `4d7165b` — `merge: month-grid editing into preview`: exact feature tree merged and pushed to `preview` on 2026-08-05.
+- Vercel deployment `dpl_77qBCC7VCkAdhp87u51q8BN9vmyf` built commit `4d7165b` in canonical project `owt-backstage`, reached `READY`, and received aliases `dev-owt-backstage.vercel.app` and `owt-backstage-git-preview-frank-rochas-projects.vercel.app`.
+- Stable preview returned HTTP 200 and the expected app sign-in shell. `/admin` correctly remained behind Vercel Deployment Protection.
+- The Vercel build completed successfully with one non-blocking Turbopack NFT tracing warning from the existing `next.config.mjs`/solve-route trace.
+
+## Explicit non-actions and remaining release checks
+
+- No production Sanity content write, migration, production deployment, `main` merge, or PR occurred.
+- No live authenticated roster mutation was used for verification.
+- Before production release, an authorized operator must smoke-test the authenticated Servicios paths on preview and confirm the Sanity revision-history recovery procedure for real edits/swaps.
+- Deferred by scope: single-service solver/local auto-fill, service-type conversion, and automatic retry from a fresh revision.

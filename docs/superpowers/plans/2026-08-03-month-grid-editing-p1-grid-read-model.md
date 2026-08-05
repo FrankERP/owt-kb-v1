@@ -1,5 +1,9 @@
 # Implementation Plan: Stable grid identity and stored-service read model
 
+> **Historical plan — implemented 2026-08-05.** Delivered in `3e0ab97` and
+> preview merge `4d7165b`. See [`../../MONTH_GRID_EDITING.md`](../../MONTH_GRID_EDITING.md)
+> and the [implementation log](2026-08-03-month-grid-editing-implementation-log.md).
+
 ## Original request
 
 > "For editing the services, I want to see the 3 column grid layout we just built. So there should be an 'Edit month' button that opens this layout. This will replace individual edits for a more robust edit view."
