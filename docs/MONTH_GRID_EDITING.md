@@ -1,9 +1,9 @@
 # Month-grid service editing
 
-> **Current state (2026-08-05):** implemented on `feat/month-grid-editing`, merged
-> into `preview`, and available at
-> [dev-owt-backstage.vercel.app](https://dev-owt-backstage.vercel.app).
-> Production was not changed.
+> **Current state (2026-08-05):** released from `main` at merge commit
+> `fee03d8` and available in production at
+> [owt-backstage.vercel.app](https://owt-backstage.vercel.app). The tested
+> feature tree remains on `feat/month-grid-editing` and `preview`.
 
 This is the current-state reference for editing stored service teams through
 the month grid. Detailed mutation-test evidence lives in the
@@ -178,19 +178,25 @@ columns from row copy.
 | 2026-08-05 | `3e0ab97` | Complete implementation committed and pushed on `feat/month-grid-editing`. |
 | 2026-08-05 | `4d7165b` | Feature merged and pushed to `preview`. |
 | 2026-08-05 | `dpl_77qBCC7VCkAdhp87u51q8BN9vmyf` | Vercel `READY`; canonical `owt-backstage`; stable preview alias attached. |
+| 2026-08-05 | `8346a88` | Legacy roles without `published` admitted without a Sanity migration. |
+| 2026-08-05 | `ed77adb` | Complete section swaps and final reconciliation protections committed and pushed. |
+| 2026-08-05 | `39d955c` | Corrected feature tree merged and pushed to `preview`. |
+| 2026-08-05 | `fee03d8` | Exact tested feature tree merged and pushed to `main`. |
+| 2026-08-05 | `dpl_9PcfDGNvjtWzYt38FCZ69BJy6zJH` | Production deployment `READY`; `owt-backstage.vercel.app` attached without alias errors. |
 
 The stable preview returned HTTP 200 with the expected app sign-in shell.
 `/admin` remains behind Vercel Deployment Protection and app authentication.
 Authenticated mutation flows were not exercised live; route/component tests
 cover them. The build completed with one non-blocking Turbopack NFT tracing
-warning.
+warning. The later production deployment built exact `main` commit `fee03d8`
+in canonical project `owt-backstage`, reached `READY`, and attached the
+production alias without errors.
 
 ## Non-actions and residual release checks
 
-- No production Sanity write, migration, production deployment, `main` merge,
-  or PR was performed.
-- Preview delivery does not authorize production release.
-- Before production release, smoke-test authenticated Servicios on preview and
-  confirm the Sanity revision recovery procedure for real edits/swaps.
+- No production Sanity content write, migration, or PR was performed.
+- The Git/Vercel production release did not exercise a live authenticated
+  roster mutation. Monitor the first operator use and retain the documented
+  Sanity revision-history recovery procedure for real edits and swaps.
 - Intentionally absent: single-service solver/local auto-fill, service-type
   conversion, and automatic retry from a fresh revision.
