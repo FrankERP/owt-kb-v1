@@ -120,12 +120,21 @@ Default canonical labels: `needs-triage`, `needs-info`, `ready-for-agent`, `read
 
 ### Adversarial plan review
 
-Before implementing any multi-step, data-touching or hard-to-reverse plan, use the
-`adversarial-plan-review` skill. It runs fresh `skeptical-reviewer` agents **one at
-a time** until two independent cold reads approve byte-identical plan text. A
-repo-local copy of both the loop and the reviewer's brief lives at
-`.agents/skills/adversarial-plan-review/` so any harness can run it.
-Never run two reviewers concurrently — sequence is the mechanism, not independence.
+Before implementing a substantial plan, use
+`.agents/skills/adversarial-plan-review/SKILL.md` and record its risk tier and rationale.
+
+- **Standard risk (default):** one fresh cold `APPROVED`. Parent roadmaps and
+  read/model/UI/cutover work stay standard unless they directly own a critical contract.
+- **Critical risk:** two sequential fresh `APPROVED` verdicts on byte-identical
+  text. Critical means changing a production/server writer or mutation trust
+  boundary, destructive/full-array serializer, auth/security/ACL/secret boundary,
+  schema/data migration, multi-document transaction/concurrency/recovery protocol,
+  or irreversible remote release action. A client/UI consumer of an already-approved
+  idempotent writer stays standard unless it changes one of those contracts.
+- Run reviewers **one at a time** and never expose prior findings. After two
+  substantive `CHANGES_REQUIRED` rounds for one artifact, stop and reassess with the user.
+- After each implementation phase, run a fresh code review plus the documented
+  test/browser gates. Plan approval never authorizes implementation.
 
 ### Domain docs
 
