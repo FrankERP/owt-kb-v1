@@ -451,6 +451,16 @@ describe("GET /api/admin/members — canonical candidates", () => {
   });
 });
 
+describe("GET /api/admin/roles — stored editor projection", () => {
+  it("requests a grandfathered boolean projection for a missing legacy publication flag", async () => {
+    operationalFetch.mockResolvedValueOnce([]);
+    expect((await rolesGET()).status).toBe(200);
+
+    const query = operationalFetch.mock.calls[0][0] as string;
+    expect(query).toContain('"published": coalesce(published, true)');
+  });
+});
+
 // ── Create ──────────────────────────────────────────────────────────────────
 
 describe("POST /api/admin/roles — create", () => {
