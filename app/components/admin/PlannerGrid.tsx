@@ -289,7 +289,7 @@ const FOCUSABLE_SELECTOR =
  * written and pruned together here, so `overrideReasons` can never outlive the
  * seating it describes. See `GridCell.overrideReasons`.
  */
-function withUpdatedCell(
+export function withUpdatedCell(
   cells: GridCell[],
   rowId: string,
   columnId: string,
