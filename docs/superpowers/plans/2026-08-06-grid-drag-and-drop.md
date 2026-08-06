@@ -8,6 +8,7 @@
 **Decision numbering.** This plan's decisions are **DD1–DD12**. They were `D1–D12` and collided with the shipped planner-grid spec, which already owns `D4`, `D6`, `D7`, `D9` and `D12` for different decisions (`docs/superpowers/plans/2026-07-29-planner-grid.md:81-89`; `PlannerGrid.tsx:12`, `:154`, `:447`). Bare `D6` in this document always means **PlannerGrid's** D6, the never-replace rule.
 **Risk tier:** **CRITICAL**, two sequential fresh approvals on byte-identical text — a **deliberate raise, not an application of the ladder**. By CLAUDE.md's text this is "a client/UI consumer of an already-approved idempotent writer" and would be standard; it is raised because nothing downstream dedupes, so the client payload is the last line of defence.
 **Authorization:** this document does not authorize implementation.
+**Review ledger:** `2026-08-06-grid-drag-and-drop-review-log.md` — per-round digests, blockers, dispositions, and what changed after approval.
 
 ## Original request
 
