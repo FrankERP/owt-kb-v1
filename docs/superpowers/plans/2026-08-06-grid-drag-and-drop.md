@@ -1,11 +1,12 @@
-# Drag a person between seats on the month grid — Implementation Plan
+# Implementation Plan: move a person between seats by dragging on the month grid
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task.
 
-**Status:** draft, not yet reviewed.
-**Risk tier:** **CRITICAL** — see "Risk classification" below. Two sequential fresh approvals on byte-identical text.
+**Status:** `READY_FOR_ADVERSARIAL_REVIEW`. No unresolved blocking unknowns.
+**Risk tier:** **CRITICAL** — two sequential fresh approvals on byte-identical text. Rationale below; a reviewer may argue it down with evidence.
+**Authorization:** this document does not authorize implementation.
 
-## The request, in the user's words
+## Original request
 
 > "I want to add a button or a mechanism that allows me to grab somebody that is already assigned in another position in the same role, and put them on the position I'm editing (or that I have selected/clicked) on the grid."
 
@@ -13,84 +14,127 @@
 
 > "Dropping onto a cell that's already at target will add the person and mark amber."
 
-**The problem it solves.** Moving Gaby from BGV to LEAD of the same service today means: close the picker, open the BGV cell, remove her, reopen LEAD, add her. The picker shows her as `Ya asignado en Bgv` and refuses the pick, with no path to relocate.
+## Planning frame
 
-## Risk classification — CRITICAL, and why
+**Primary outcome.** An admin editing the month grid can move a person from one seat to another — within a service or across services — by dragging, with a force/desist prompt when a rule stands against the move, and an equivalent keyboard-reachable action.
 
-This is UI on top of an already-approved writer, which the review skill would normally classify **standard**. It is classified **critical** deliberately, on one hazard:
+**Intended operator.** A worship-team admin using the month grid at desktop width.
 
-**A move implemented as add-without-remove writes the same person into a service twice.** `canonicalRefs` preserves genuine duplicates, `normalizeRefs` does not dedupe, and `seatFields` mints one `_key` per entry — so a duplicate `_ref` reaches Sanity, is double-counted by `computeParticipation`, and is notified per seat. This is the exact failure class already fought on this surface. The payload the client sends is therefore a data-safety contract, not merely a rendering concern.
+**Current behaviour and the gap.** Moving Gaby from BGV to LEAD of the same service requires: close the picker → open the BGV cell → remove her → reopen LEAD → add her. The picker shows her as `Ya asignado en Bgv` and refuses the pick outright, offering no path to relocate. Nothing in the UI moves a person.
 
-If review concludes the hazard is structurally impossible, the tier can be argued down — but it is not assumed.
+**Invariants that must remain true.**
+- **D6:** no cell refuses an occupant for reasons of count, and none ever replaces one (`PlannerGrid.tsx:20-23`). Replacement is what evicted a drummer on 18 shipped services.
+- A person appears **at most once** in a service's assignments. Duplicates survive the whole write path (see Risk).
+- Stored mode emits a PATCH and a notification only for services actually changed.
+- `saturdarSongs` untouched; `_key` per Sanity array item; member-facing reads keep `published != false`.
+
+**In scope.** Drag-move within and across services at desktop width; a rule-conflict prompt with force/desist; a keyboard/touch-reachable equivalent; stored-mode change tracking for both affected services.
+
+**Out of scope (non-goals).** Seat-level swap by drag (D7); touch drag (D8); edge auto-scroll during a drag (D9); any change to the swap route, the PATCH writer, or what counts as a change on save.
+
+**Acceptance criteria** — each is measurable and owned by a task below.
+1. After a drag, the moved member appears **exactly once** across the entire `cells` array. *(T2)*
+2. A drag from BGV to LEAD of the same service leaves BGV with one fewer occupant and LEAD with one more, in a single state update. *(T2)*
+3. Dropping onto a cell already at target **adds** and renders the existing amber over-target treatment; no occupant is displaced. *(T1, T4)*
+4. A move whose target has no rule conflict completes with **no prompt**. *(T3, T4)*
+5. A move blocked by a rule raises the prompt; desist leaves `cells` byte-identical; force completes the move and records the waived rule exactly as the shipped override does. *(T3, T4)*
+6. A same-category double is **never** offered a force path. *(T3)*
+7. A cross-service drag marks **both** roles touched; a save then PATCHes both, and services untouched by the drag emit no PATCH and no notification. *(T6)*
+8. Every drag outcome is reachable without a pointer. *(T5)*
+
+**Dependencies and affected boundaries.** `PlannerGrid` (cell rendering and the pick path), `plannerModel` (cell shape), `ruleEnforcement` (conflict evaluation), `MonthGenerator` (stored-mode change tracking). No server route changes.
 
 ---
 
-## Load-bearing facts
+## Risk classification — CRITICAL, and why
 
-Verified against source.
+Normally this would be **standard**: UI on top of an already-approved writer. It is raised deliberately on one hazard.
 
-1. **A cell is mutated only through `withUpdatedCell`** (`PlannerGrid.tsx:292-298`), which takes a complete `memberIds` array for one `(rowId, columnId)` plus an optional `addOverride`. A drag touching two cells is therefore **two** calls, and they must be applied to one `cells` value — not sequentially against stale state.
-2. **`toggleCandidate` (`:607-613`) is the existing pick path.** It reads the current occupants, and removal is `current.filter(id => id !== memberId)`. Drag-move can reuse this shape rather than inventing a mutation.
-3. **D6, stated in the file's own header (`:20-23`):** *"No cell ever refuses an occupant for reasons of count, and none ever replaces one — replacement is what evicted a drummer in a shipped bug, on 18 services running two drummers on one Drums seat. A manual pick still refuses a same-category double."* Drop-onto-at-target therefore **already** has the behaviour the user asked for: it adds and shows amber.
-4. **Two distinct block reasons**, and they are not equally forceable:
-   - `blockedReason` — `Ya asignado en {seat}` (`candidateRanking.ts:195`), the same-category double-duty block.
-   - `ruleBlockedReason` — `Regla: no puede coincidir con {name}` (`ruleEnforcement.ts:408`), the conflict rule.
-5. **Stored mode tracks changes per role** via `touchedStoredRoleIds` (`MonthGenerator.tsx:1561`) diffed against `baselineByRole` (`:1575`). A cross-service drag touches **two** roles and must mark both, or one half of the move never saves.
-6. **The grid scrolls horizontally**, and columns can be off-screen.
-7. The app ships as a **Capacitor iOS wrap** (WebKit), where touch drag competes with that scroll.
+**A move implemented as add-without-remove writes the same person into a service twice.** `canonicalRefs` preserves genuine duplicates, `normalizeRefs` does not dedupe, and `seatFields` mints one `_key` per entry — so a duplicate `_ref` reaches Sanity, is double-counted by `computeParticipation`, and is notified per seat. The client payload is therefore a data-safety contract feeding a destructive full-array PATCH, not a rendering concern.
+
+The mitigation is D1 plus acceptance criterion 1. **If a reviewer establishes that the single-update primitive makes the hazard structurally impossible, the tier can be argued down to standard** — it is not assumed either way.
+
+---
+
+## Evidence
+
+| Fact | Source | Implication |
+|---|---|---|
+| A cell is mutated only through `withUpdatedCell(cells, rowId, columnId, memberIds, addOverride?)`. | `PlannerGrid.tsx:292-298` | A drag touches two cells, so it is two mutations that must resolve against **one** `cells` value, not two sequential calls against stale state. |
+| `toggleCandidate` is the existing pick path; removal is `current.filter(id => id !== memberId)`. | `PlannerGrid.tsx:607-613` | Drag-move reuses this shape rather than inventing a mutation. |
+| D6 is stated in the file header and already pinned by tests. | `PlannerGrid.tsx:20-23`; `PlannerGrid.test.tsx:292`, `:315` | Drop-onto-at-target already behaves as the user asked. Extend those pins; do not duplicate them. |
+| `blockedReason` = `Ya asignado en {seat}` — the same-category double-duty block. | `candidateRanking.ts:195` | Resolved by a move, never forced. |
+| `ruleBlockedReason` = `Regla: no puede coincidir con {name}` — the conflict rule. | `ruleEnforcement.ts:408` | The only forceable constraint. |
+| Stored mode diffs `touchedStoredRoleIds` against `baselineByRole`. | `MonthGenerator.tsx:1561`, `:1575` | A cross-service drag must mark **both** roles or half the move never saves. |
+| The grid scrolls horizontally; columns can be off-screen. | `PlannerGrid.tsx` grid container | Bounds D9. |
+| The app ships as a Capacitor iOS wrap (WebKit). | `capacitor.config.ts` | Touch drag competes with that scroll; bounds D8. |
 
 ---
 
 ## Decisions
 
-| # | Decision |
-|---|---|
-| **D1** | **A drag is a MOVE: remove from source and add to target in ONE `cells` update.** Never add-then-remove, never two updates against stale state. This is the whole of the critical hazard — an add-only path writes a duplicate `_ref` that reaches Sanity. |
-| **D2** | **The same-category double-duty block dissolves by construction and is NEVER forced.** A move cannot double someone — they leave the source seat. There is no "force" for `blockedReason`, because D6 calls it a data error rather than a judgement call. |
-| **D3** | **Only a rule conflict raises the prompt.** Force / desist, per the user's ask. This reuses the meaning of the shipped "Asignar de todos modos" override, so a forced drop must record the waived rule exactly as that override does — the marker, the rule-scoping, and clearing on removal. |
-| **D4** | **Dropping onto an at-target cell ADDS and marks amber** (the user's decision). This is already D6's behaviour; the drag must not introduce a replace path. |
-| **D5** | **Drag works anywhere on the grid** — within a service and across services. A cross-service move marks **both** roles touched (fact 5). |
-| **D6** | **Keyboard parity is required, not optional.** Drag-and-drop is not keyboard-operable, and this surface has had deliberate keyboard work. The accessible equivalent is the button the user originally proposed: on a candidate blocked by `blockedReason`, an action that performs the same move. |
+| # | Decision | Rationale |
+|---|---|---|
+| **D1** | A drag is a **MOVE**: remove from source and add to target in **one** `cells` update. Never add-then-remove; never two updates against stale state. | The entire critical hazard. An add-only path writes a duplicate `_ref` that reaches Sanity. |
+| **D2** | The same-category double-duty block **dissolves by construction and is never forced**. | A move cannot double someone — they leave the source seat. D6 calls a double a data error, not a judgement call. |
+| **D3** | **Only a rule conflict raises the prompt** (force / desist). A forced drop records the waived rule exactly as the shipped "Asignar de todos modos" override does — same marker, same rule-scoping, cleared on removal. | Keeps the prompt meaningful rather than something learned to click through, and reuses a mechanism already reviewed. |
+| **D4** | Dropping onto an **at-target** cell **adds** and marks amber. | The user's decision, and already D6's behaviour. The drag must not introduce a replace path. |
+| **D5** | Drag works **anywhere on the grid** — within a service and across services. A cross-service move marks both roles touched. | The user's ask. |
+| **D6** | **Keyboard parity is required.** The accessible equivalent is a "traer aquí" action on a candidate blocked by `blockedReason`, driving the same primitive. | Drag is not keyboard-operable, and this surface has had deliberate keyboard work. Also serves touch under D8. |
+| **D7** | **No seat-level swap by drag.** Swapping two people is two drags. | The grid already has a column-level swap backed by an atomic revision-guarded route. A second swap with different semantics is a new concurrency surface for a case two drags cover. |
+| **D8** | **Desktop drag only.** Touch is served by D6's action. | Touch drag needs long-press-to-lift, which fights the grid's horizontal scroll — building a second interaction to dodge a conflict the button already avoids. |
+| **D9** | **Visible columns only.** Scroll first, then drag. | Edge auto-scroll during a drag is fiddly and additive later; excluding it changes nothing else in this plan. |
+
+## Assumptions
+
+| Assumption | Impact if false | Validation |
+|---|---|---|
+| `withUpdatedCell` is the only path that mutates a cell. | A second path could add without removing, reintroducing the duplicate. | T1 pins it; grep for other writers to `cells`. |
+| Rule evaluation against a *proposed* post-move state needs no new inputs beyond what `evaluate` already takes. | T3 grows into a rule-engine change rather than a caller. | T3 establishes this before building. |
+| The existing over-target amber path needs no change for a dropped occupant. | T4 gains display work not budgeted here. | T1 pins current behaviour; T4 verifies against it. |
+| Marking both roles touched is sufficient for a cross-service save. | Half a move silently fails to persist. | T6 verifies through a real save, not a unit assertion. |
+
+## Open questions — all resolved
+
+O1 (swap by drag), O2 (touch), O3 (auto-scroll) were blocking and were resolved with the user on 2026-08-06 as D7, D8 and D9.
 
 ---
 
-## Open questions
+## Scope test — why this is one plan, not several
 
-**O1 — Does a drag onto an occupied cell ever mean swap?** D4 settles at-target as "add". But two people dragging past each other is a common intent, and the grid already has a column-level swap. State whether seat-level swap-by-drag is in scope or explicitly out.
-
-**O2 — Touch behaviour on the iOS wrap.** Long-press-to-lift is the usual answer, but it competes with the grid's horizontal scroll (fact 6, 7). Decide whether drag is desktop-only at first, with the keyboard/button path serving touch.
-
-**O3 — Auto-scroll while dragging.** Dragging to an off-screen column needs edge auto-scroll. Confirm whether that is in scope or whether the first version only supports visible columns.
-
----
+The six tasks are sequential layers of a single outcome, not separable deliverables. T2's primitive has no user-visible value alone; T4's drag is unsafe without T2's single-update guarantee; T5 is the same primitive under a different trigger. Splitting would produce intermediate states that are either unusable (a primitive nothing calls) or unsafe (a drag without the duplicate guard). The coupling is retained deliberately, per the scope test.
 
 ## Tasks
 
-### Task 1 — Pin what must not move
-Tests only, against current code. Pin: `withUpdatedCell`'s single-call contract; that a manual pick refuses a same-category double; that an at-target cell **adds** rather than replaces (the two-drummer invariant, already pinned at `PlannerGrid.test.tsx:315` and `:292` — extend rather than duplicate); and that stored mode marks a role touched on any cell change. Prove each fails when inverted.
+Each task ends in a safe state: the feature is inert until T4 wires the interaction, so T1–T3 can land without changing behaviour.
 
-### Task 2 — The move primitive
-A pure function taking `(cells, source: {rowId, columnId, memberId}, target: {rowId, columnId})` and returning one new `cells` array with the member removed from source and added to target. **No React, no drag.** This is where D1 lives, and it is the only place a duplicate could be introduced — pin that the member appears exactly once across the whole returned array.
+### T1 — Pin what must not move
+Tests only, against current code. Pin `withUpdatedCell`'s single-call contract; that a manual pick refuses a same-category double; that an at-target cell **adds** rather than replaces (extend `PlannerGrid.test.tsx:292`/`:315` rather than duplicating); that stored mode marks a role touched on any cell change. Prove each fails when inverted.
+*Safe end state:* no production change. *Rollback:* revert the commit.
 
-### Task 3 — Rule evaluation for a proposed move
-Given a proposed move, return whether it is clean, or blocked by a rule and by which one. Reuse `ruleEnforcement.evaluate` against the target cell's post-move state. Must NOT consult `blockedReason` — D2 says double-duty is resolved by the move itself.
+### T2 — The move primitive (acceptance 1, 2)
+A pure function `(cells, source: {rowId, columnId, memberId}, target: {rowId, columnId}) → cells`, removing from source and adding to target in one returned array. No React, no drag. **The only place a duplicate could be introduced** — pin that the member appears exactly once across the whole result.
+*Safe end state:* exported, uncalled. *Rollback:* delete the module.
 
-### Task 4 — The drag interaction
-Pointer-based drag on desktop, with drop targets at cell granularity. Answer O2 and O3 before building. The prompt from D3 appears only for a rule conflict.
+### T3 — Rule evaluation for a proposed move (acceptance 4, 5, 6)
+Given a proposed move, return clean, or blocked-by-rule with which rule. Reuse `ruleEnforcement.evaluate` against the target's post-move state. **Must not consult `blockedReason`** — D2.
+*Safe end state:* pure, uncalled. *Rollback:* delete the module.
 
-### Task 5 — Keyboard parity (D6)
-The accessible path: on a candidate blocked by `blockedReason`, an action that performs the same move through the Task 2 primitive. Not a second mechanism — the same primitive, a different trigger.
+### T4 — The drag interaction (acceptance 3, 5)
+Pointer drag at desktop width, drop targets at cell granularity, prompt only on a rule conflict. Any new `position: fixed` surface — drag ghost, prompt — needs a portal and a real-Safari check: a fixed element under an ancestor combining `isolation: isolate` with `overflow: hidden` is clipped in WebKit and not in Chromium.
+*Safe end state:* first point at which behaviour changes. *Rollback:* revert; T2/T3 remain inert.
 
-### Task 6 — Stored-mode wiring (fact 5)
-A cross-service drag marks both roles touched. Verify a save afterwards emits PATCHes for both, and that an unchanged service still emits none — a false positive notifies the team about a service nobody edited.
+### T5 — Keyboard and touch parity (acceptance 8)
+The "traer aquí" action on a `blockedReason`-blocked candidate, driving T2's primitive. Not a second mechanism.
+*Safe end state:* additive. *Rollback:* revert.
 
----
+### T6 — Stored-mode wiring (acceptance 7)
+A cross-service drag marks both roles touched. Verify through a real save that both PATCH and that untouched services emit neither PATCH nor notification — a false positive notifies the team about a service nobody edited.
+*Safe end state:* completes the feature. *Rollback:* revert; drag then persists only same-service moves, which is incorrect — so T6 must land with T4.
 
 ## Global constraints
 
 - Done gate per task: `npx tsc --noEmit`, `npm test`, `npx eslint .` at **0 errors** (90 warnings are a deliberate backlog).
 - Spanish UI copy. 44px touch targets. Dates `YYYY-MM-DD` at local noon.
-- Sanity array-of-object writes need a `_key` per item.
 - **Never** add AI/Claude attribution or a `Co-Authored-By` trailer.
 - Prove tests discriminate by mutation. ~30 tests in this project have shipped unable to fail.
-- Any new `position: fixed` surface (a drag ghost, the prompt) needs a portal and a real-Safari check — a fixed element under an ancestor combining `isolation: isolate` with `overflow: hidden` is clipped in WebKit and not in Chromium.
