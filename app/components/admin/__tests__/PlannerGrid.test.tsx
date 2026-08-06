@@ -89,6 +89,10 @@ function baseProps(overrides: PlannerGridTestOverrides = {}): PlannerGridProps {
     savedWindow: [],
     preflightFor: () => null,
     createBlockFor: () => null,
+    // P3 is required in create mode, so every fixture has to say something. The
+    // permissive answer is the default; the P3 case overrides it with a
+    // create-blocked column built from the real `cellsToDrafts` authority.
+    canReceive: () => true,
     skipped: new Set(),
     unaddressableDates: [],
     unresolvedNames: [],

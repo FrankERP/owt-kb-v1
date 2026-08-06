@@ -21,7 +21,7 @@
 //
 // Buttons are matched by their REAL computed labels (`Crear ${n} borrador(es)`
 // pluralised, and the literal "Crear y publicar"): a bare /Crear/ matches both.
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MonthGenerator from "../MonthGenerator";
@@ -2226,5 +2226,77 @@ describe("MonthGenerator — the year field", () => {
     expect(cellDates(container).every((d) => d.startsWith("2024-08-"))).toBe(true);
     fireEvent.blur(field);
     expect(field.value).toBe("2024");
+  });
+});
+
+// ─── T4 — the drag gate's P3 is wired to THIS component's create authority ───
+//
+// `PlannerGrid` owns the drag; what only this file can prove is that the
+// `canReceive` it receives is `isDraftCreatable` — the same predicate
+// `handleConfirm` and the footer buttons use — rather than a permissive stub or
+// a second copy of the rule. A create-blocked column is invisible to
+// `PlannerGrid`'s own props: `skipped` holds the admin's toggle alone, and a
+// `blocked` preflight never enters it.
+//
+// Why it matters more than an ordinary refusal: a drag is a MOVE. Drop into a
+// column that will never be written and the REMOVAL lands on a column that is
+// created while the ADD lands on one that is not — the person vanishes from the
+// month in one gesture, with nothing on screen to say so.
+describe("MonthGenerator — the drag's create-mode drop guard (T4/P3)", () => {
+  const ANA = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz"] }];
+
+  function seatAnaOnFirstSunday(container: HTMLElement) {
+    fireEvent.click(container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]')!);
+    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+    fireEvent.click(screen.getByText("Cerrar"));
+  }
+
+  function dragLeadTo(container: HTMLElement, date: string) {
+    const chip = container.querySelector(
+      '[data-row-id="lead"][data-date="2026-02-01"] [data-occupant="lead-1"]',
+    )!;
+    const target = container.querySelector(`[data-row-id="lead"][data-date="${date}"]`)!;
+    const dataTransfer = { effectAllowed: "", dropEffect: "", setData: () => {}, getData: () => "" };
+    fireEvent(chip, createEvent.dragStart(chip, { dataTransfer }));
+    const over = createEvent.dragOver(target, { dataTransfer });
+    fireEvent(target, over);
+    fireEvent(target, createEvent.drop(target, { dataTransfer }));
+    return { droppable: over.defaultPrevented };
+  }
+
+  const occupants = (container: HTMLElement, date: string) =>
+    Array.from(
+      container.querySelectorAll(`[data-row-id="lead"][data-date="${date}"] [data-occupant]`),
+    ).map((el) => el.getAttribute("data-occupant"));
+
+  it("refuses a drop onto a column the preflight says will never be created", () => {
+    const preflight = makePreflight((date) => (date === "2026-02-08" ? "blocked" : "creatable"));
+    const { container } = render(
+      <Gen members={ANA} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} preflight={preflight} />,
+    );
+    goToPreview(container, 2, 2026);
+    seatAnaOnFirstSunday(container);
+
+    const { droppable } = dragLeadTo(container, "2026-02-08");
+
+    expect(droppable).toBe(false);
+    expect(occupants(container, "2026-02-01")).toEqual(["lead-1"]);
+    expect(occupants(container, "2026-02-08")).toEqual([]);
+    expect(container.textContent).toContain("Esta columna no se va a crear.");
+  });
+
+  it("allows the same drop onto a creatable column — the guard is the authority, not a blanket refusal", () => {
+    const preflight = makePreflight((date) => (date === "2026-02-08" ? "blocked" : "creatable"));
+    const { container } = render(
+      <Gen members={ANA} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} preflight={preflight} />,
+    );
+    goToPreview(container, 2, 2026);
+    seatAnaOnFirstSunday(container);
+
+    const { droppable } = dragLeadTo(container, "2026-02-15");
+
+    expect(droppable).toBe(true);
+    expect(occupants(container, "2026-02-01")).toEqual([]);
+    expect(occupants(container, "2026-02-15")).toEqual(["lead-1"]);
   });
 });
