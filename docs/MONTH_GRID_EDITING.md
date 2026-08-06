@@ -162,9 +162,13 @@ with a toolbar fallback if the card is no longer visible.
 
 ## Verification, review, and delivery
 
-Final repository gates on 2026-08-05:
+Final repository gates, re-run on 2026-08-06 after the Tablero retirement
+(`50dd868`) deleted `SeatBoard.test.tsx` and trimmed six other test files:
 
-- `npm test`: **135 files, 3191 tests passed**.
+- `npm test`: **135 files, 3134 tests passed**. (134/3131 after that deletion;
+  135/3134 once `scripts/__tests__/vendoredSkillDigest.test.ts` was added. It was
+  135/3191 on 2026-08-05, before the deletion — the file count coinciding again is
+  a coincidence, not a no-op.)
 - `npx tsc --noEmit`: passed.
 - `npx eslint .`: **0 errors**, 90 accepted backlog warnings.
 - `git diff --check`: passed.
