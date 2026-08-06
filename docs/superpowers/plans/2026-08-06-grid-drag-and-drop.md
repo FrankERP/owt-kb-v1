@@ -33,14 +33,14 @@
 **Out of scope (non-goals).** Seat-level swap by drag (D7); touch drag (D8); edge auto-scroll during a drag (D9); any change to the swap route, the PATCH writer, `withUpdatedCell`'s signature, or what counts as a change on save.
 
 **Acceptance criteria** — each is measurable and owned by a task below.
-1. After any drag, the moved member appears **at most once within each cell**, and the source cell no longer contains them. A fixture in which the target cell **already holds the member** is included. *(T2)*
+1. After any drag, the moved member appears **at most once within each cell**, and **exactly one** copy has left the source. Fixtures: the target cell already holds the member; and the source cell holds the member **twice**, where one copy must remain. *(T2)*
 2. A drag from BGV to LEAD of the same service leaves BGV with one fewer occupant and LEAD with one more, in a single `onCellsChange`. *(T2)*
 3. Dropping onto a cell already at target (over-capacity, not over-duplicate) **adds** and renders the existing amber over-target treatment; no occupant is displaced. *(T1, T4)*
 4. A move violating none of the four constraints completes with **no prompt**. *(T3, T4)*
 5. A move blocked by a **rule conflict** raises the prompt; desist leaves `cells` byte-identical; force completes the move and records the waived rule through `withUpdatedCell`'s `addOverride`, in the same single update. *(T2, T3, T4)*
 6. A configured conflict pair raises C4. **This test must fail if the gate is handed post-move state** — that is the point of it, given `ruleEnforcement.ts:351`. *(T3)*
 7. Each of the three **non-forceable** constraints (C1 duplicate-in-cell, C2 same-category double in the target service, C3 seat `memberType`) refuses the drop and is **never** offered a force path. Each has its own fixture, including the cross-service C2 case: Gaby in BGV of week 1 dragged to Lead of week 2 while already in BGV of week 2 — and the converse, a same-service BGV→Lead move of an otherwise-clean member, which must **not** be refused. *(T3)*
-8. Each precondition (P1 locked, P2 `readOnly` on **either** endpoint, P3 skipped target in create mode) makes the endpoint non-draggable and non-droppable, with no state change and no marking of the column as touched. *(T3, T4)*
+8. Each precondition (P1 locked, P2 `readOnly` on **either** endpoint, P3 a create-mode column that will never be written) makes the endpoint non-draggable and non-droppable, with no state change and no marking of the column as touched. P3's fixture uses a **create-blocked** column, not merely a skipped one. *(T3, T4)*
 9. A cross-service drag marks **both** roles touched; a save then PATCHes both, and services untouched by the drag emit no PATCH and no notification. *(T6)*
 10. Every outcome drag can produce — **including cross-service** — is reachable by keyboard and by touch through the D6 pick-then-place path, running the same gate. *(T5)*
 
@@ -92,7 +92,7 @@ Checked before any constraint, on **both** endpoints. A failing endpoint is not 
 |---|---|---|
 | **P1** | Not while `mutationLocked` / `storedMutationLocked`. | `handleCellsChange` drops the write silently (`MonthGenerator.tsx:2117`), so the drop would appear to succeed and revert. |
 | **P2** | In stored mode, **neither endpoint may be an `admission === "readOnly"` column.** | Both shipped mutation paths already refuse these (`PlannerGrid.tsx:907`, `:1003`). Worse than a bypass: touching one marks it changed, `serializeStoredColumn` then rejects it (`plannerSaveModel.ts:65`), it enters `invalidStoredColumns`, and **Guardar is disabled for the entire month** behind "Corrige los datos inválidos antes de guardar" — advice the admin cannot act on, since readOnly is an integrity verdict, not a typo. The only escape is discarding every pending edit. |
-| **P3** | In create mode, a `skipped` column is not a drop target. | `cellsToDrafts` excludes skipped columns (`MonthGenerator.tsx:2134`), so a move into one would delete the assignment from creation in a single gesture, where the picker required two deliberate ones. |
+| **P3** | In create mode, a column that **will never be written** is not a drop target. That set is larger than `skipped`: `cellsToDrafts` computes `skipped = skippedColumnIds.has(columnId) \|\| isExisting` (`plannerModel.ts:969`), and `isCreatable` further refuses `createdTargets` and any draft whose preflight is not `creatable` (`MonthGenerator.tsx:2056-2060`). `PlannerGrid` receives only `skipped={skippedColumnIds}` (`:3318`); the rest arrives via `createBlockFor` and `preflightFor` (`:3316-3317`). | Because a drag is a MOVE, dropping into a column that is never created lands the **removal** on a column that *is* created and the **add** on one that is not: the person vanishes from the month in one gesture, with no signal. Implement it as one `canReceive(column)` predicate threaded down from `MonthGenerator`, sharing the authority `cellsToDrafts`/`isCreatable` use, so the two cannot drift. |
 
 ## The evaluation input — get this wrong and the whole gate is dead
 
@@ -109,6 +109,7 @@ Three refuse; one prompts.
 | # | Constraint | Detection | On violation |
 |---|---|---|---|
 | **C1** | The target cell already contains the dragged member. | Membership test on the target cell. | **Refuse.** Not a no-op-and-move: removing them from the source would silently delete an assignment the operator did not ask to drop. Show "Ya está en esta casilla". |
+| — | *(A source cell holding the member **twice** is not a refusal — see D10. The move takes one copy and leaves the other.)* | | |
 | **C2** | The member would hold **two seats of the same category** in the target service. | The `blockedReason` rule (`candidateRanking.ts:190-195`) over `assignedAfterSourceRemoval`. | **Refuse**, with the picker's wording. `PlannerGrid.tsx:22-23` calls this a data error, not a judgement call. |
 | **C3** | The member's `memberType` does not include the target seat's. | `candidateRanking.ts:185`'s filter, applied to the target seat. | **Refuse.** The picker would never have listed them; a drag must not be a weaker gate than the picker. |
 | **C4** | A configured rule forbids the pairing. | `ruleEnforcement.evaluate` over `assignedAfterSourceRemoval`. | **Prompt** — force or desist. The only forceable one. |
@@ -127,6 +128,7 @@ C2 is the constraint that a naive "a move can't double someone, they leave the s
 | **D6** | **Keyboard and touch parity is required, and it is a pick-then-place on the occupant chip** — "marcar para mover" on any draggable occupant, then activate a target cell to place. It runs the same T2 primitive through the same T3 gate. It is **not** a picker-row action. | A picker-row "traer aquí" cannot reach the cross-service case at all: `blockedReason` comes from `assignedForColumn`, that column only (`plannerModel.ts:1162-1174`), so a member seated in another service is an ordinary unblocked candidate there and no action would render. Since D8 routes all touch — i.e. the shipped iOS wrap — through this path, a same-service-only mechanism would leave the iOS app unable to make the cross-service move D5 exists for. Pick-then-place is source-anchored, so it covers every move drag covers. |
 | **D7** | **No seat-level swap by drag.** Swapping two people is two drags. | The grid already has a column-level swap backed by an atomic revision-guarded route. A second swap with different semantics is a new concurrency surface for a case two drags cover. |
 | **D8** | **Desktop drag only.** Touch is served by D6's pick-then-place, which covers every move drag covers. | Touch drag needs long-press-to-lift, which fights the grid's horizontal scroll — a second interaction built to dodge a conflict pick-then-place avoids. |
+| **D10** | The move removes **exactly one** occupant from the source, not every copy of that member. | `reconcileOccupants` deliberately supports repeated ids in one cell — "Repeated member ids consume repeated prior occupants in order" (`plannerModel.ts:60-63`) — and `ruleEnforcement.ts:508-511` reasons explicitly about a member holding one row twice. The state is reachable through the swap route, which sets a person into a seat without checking the array already holds them (`app/api/admin/roles/swap/route.ts:190-201`). A `memberId`-keyed removal would delete two assignments from one drag — the very harm C1 refuses. Use `reasonsFor`'s one-copy-drop shape (`ruleEnforcement.ts:516-524`). |
 | **D9** | **Visible columns only.** Scroll first, then drag. | Edge auto-scroll during a drag is fiddly and additive later; excluding it changes nothing else in this plan. |
 
 ## Assumptions
@@ -148,7 +150,7 @@ O1 (swap by drag), O2 (touch), O3 (auto-scroll) were blocking and were resolved 
 
 ## Scope test — why this is one plan, not several
 
-The six tasks are sequential layers of a single outcome, not separable deliverables. T2's primitive has no user-visible value alone; T4's drag is unsafe without T2's single-update guarantee and T3's constraint gate; T5 is the same primitive under a different trigger. Splitting would produce intermediate states that are either unusable (a primitive nothing calls) or unsafe (a drag without the constraint gate). The coupling is retained deliberately, per the scope test.
+T1–T6 are sequential layers of a single outcome, not separable deliverables. T2's primitive has no user-visible value alone; T4's drag is unsafe without T2's single-update guarantee and T3's constraint gate; T5 is the same primitive under a different trigger. Splitting would produce intermediate states that are either unusable (a primitive nothing calls) or unsafe (a drag without the constraint gate). The coupling is retained deliberately, per the scope test.
 
 ## Tasks
 
@@ -161,7 +163,7 @@ Tests only, against current code. Pin `withUpdatedCell`'s single-call contract a
 ### T2 — The move primitive (acceptance 1, 2, 5)
 `(cells, source: {rowId, columnId, memberId}, target: {rowId, columnId}, addOverride?) → cells`. It **composes `withUpdatedCell` twice over one array** — source minus the member, target plus the member, `addOverride` forwarded to the target call — and returns one array for one `onCellsChange`. The `addOverride` parameter is not optional to the design: without it a forced C4 move would need a second update, which is the exact anti-pattern D1 forbids.
 
-Fixtures must include: target already holds the member (C1 — refused upstream, but the primitive must not produce `[X, X]` if called); a forced move, asserting the target's `overrideReasons` carries the waived rule and the source's overrides are pruned.
+Removal is **one copy, not all copies** (D10). Fixtures must include: target already holds the member (C1 — refused upstream, but the primitive must not produce `[X, X]` if called); **source holds the member twice, one copy remains**; a forced move, asserting the target's `overrideReasons` carries the waived rule and the source's overrides are pruned.
 *Safe end state:* exported, uncalled. *Rollback:* delete the module.
 
 ### T3 — Preconditions and the constraint gate (acceptance 4, 6, 7, 8)
@@ -173,7 +175,7 @@ Build `assignedAfterSourceRemoval` exactly as specified above and **assert its s
 ### T4 — The drag interaction (acceptance 3, 5, 8)
 Pointer drag at desktop width, drop targets at cell granularity, refusals surfaced inline, prompt only on C4. State explicitly whether this reuses `SetlistEditor.tsx:335-339`'s HTML5 drag idiom or introduces pointer events, and why.
 
-Endpoints failing P1–P3 are neither draggable nor droppable. Note that solvable rows hide occupants beyond `target` behind a `+N` control (`PlannerGrid.tsx:1692`), so an over-target occupant may have no chip and therefore no drag handle — the person an admin most wants to move out. Say how that is handled rather than discovering it. Any new `position: fixed` surface — drag ghost, prompt — needs a portal and a real-Safari check: a fixed element under an ancestor combining `isolation: isolate` with `overflow: hidden` is clipped in WebKit and not in Chromium.
+Endpoints failing P1–P3 are neither draggable nor droppable. Solvable rows hide occupants beyond `target` behind a `+N` control (`PlannerGrid.tsx:1639-1643`, `:1692`), so an over-target occupant has no chip and therefore no handle on **either** path — the person an admin most wants to move out. **Decide this at the start of T4, before building**, since T5 anchors on the same chip. Any new `position: fixed` surface — drag ghost, prompt — needs a portal and a real-Safari check: a fixed element under an ancestor combining `isolation: isolate` with `overflow: hidden` is clipped in WebKit and not in Chromium.
 *Safe end state:* first point at which behaviour changes. *Rollback:* revert; T2/T3 remain inert.
 
 ### T5 — Keyboard and touch parity (acceptance 10)
@@ -181,8 +183,14 @@ The D6 pick-then-place: "marcar para mover" on an occupant chip, then activate a
 *Safe end state:* additive. *Rollback:* revert.
 
 ### T6 — End-to-end verification (acceptance 9)
-Change tracking is already all-columns (`MonthGenerator.tsx:2118-2128`), so this is verification, not wiring: confirm through a real save **on preview/dev, not production** (CLAUDE.md: production Sanity writes need explicit consent) that a cross-service drag PATCHes both services and that untouched services emit neither PATCH nor notification — a false positive notifies the team about a service nobody edited. Also exercise one drag in **create mode** to close the `cellsToDrafts` assumption.
+Change tracking is already all-columns (`MonthGenerator.tsx:2118-2128`), so this is verification, not wiring. Assert against **`dirtyStoredColumns`** (`MonthGenerator.tsx:1723-1729`, `:2176`) — the semantic diff that actually decides what is PATCHed — not only the touched set, which drives `invalidStoredColumns` and the discard warning. Confirm through a real save **on preview/dev, not production** (CLAUDE.md: production Sanity writes need explicit consent) that a cross-service drag PATCHes both services and that untouched services emit neither PATCH nor notification — a false positive notifies the team about a service nobody edited.
+
+Also: exercise one drag in **create mode**, including a create-blocked column, to close the `cellsToDrafts` assumption; and assert the **partial-failure** case, since this plan sells the move as one operation while the save loop PATCHes sequentially (`:2176-2203`). Source-committed + target-failed leaves the person seated nowhere. The pre-drag two-edit workflow has the identical exposure and it stays visible and retryable (`:2196-2213`), so this is a verification requirement, not a new guarantee to build.
 *Safe end state:* completes the feature. *Rollback:* revert T4 — T2/T3 are then inert.
+
+### T7 — Documentation, in the same delivery
+CLAUDE.md requires docs current before completion is reported. D7 (no swap by drag), D8 (no touch drag) and D9 (no auto-scroll) are "deliberately not done" decisions whose reasons will not be obvious from the code — the ADR bar in `docs/adr/README.md`. Write one short ADR covering them and link it from `PlannerGrid.tsx`, so the next person does not "fix" the missing swap. Record the D10 one-copy rule and the pre-placement evaluation input where the code can be read against them.
+*Safe end state:* docs match shipped behaviour. *Rollback:* revert.
 
 ## Global constraints
 
