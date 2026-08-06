@@ -153,3 +153,38 @@ A rule the user described as hard cannot depend on which browser is open.
   row, with no escape but deleting the rule globally in "Generar mes" — which
   also changes the solver for every future month. One of those three is the user
   who asked for the override.
+
+---
+
+## 2026-08-06 — the Tablero's source is gone, not merely unmounted
+
+The 2026-08-05 note above recorded that `SeatBoard`/Tablero was no longer
+mounted. The source, its tests and its dependencies have now been deleted:
+`SeatBoard.tsx`, `SeatBoard.test.tsx` and `ParticipationRail.tsx` are removed,
+and `enforceableConfig` in `solverConfigSource.ts` went with them — it existed
+only to give that surface a narrower rules contract and had no other caller.
+
+**Everything above stays as written.** It is the decision history of a system
+that had two manual surfaces, and the reasoning only makes sense in those terms.
+Read the passages about "both surfaces", the Tablero's override, and
+`enforceableConfig` as describing why the shared rule set is shaped the way it
+is — not as a description of what ships.
+
+What is still true, and now has one surface instead of two:
+
+- Specials stay out of CP-SAT; local fill is manual-triggered and appends only.
+- The shared rules live in one Sanity document and are authoritative.
+- `ready` vs `absent` remains the distinction that stops a transient read
+  failure from enforcing `DEFAULT_SOLVER_CONFIG` against the team. With
+  `enforceableConfig` gone, the structural guarantee is carried entirely by
+  `_rev` existing on `ready` alone: a save from any other state is unspellable.
+- The human override on a rule-blocked candidate lives in `PlannerGrid`'s
+  picker, riding in `GridCell.overrides`/`overrideReasons` for the life of the
+  draft. The board's shorter-lived, component-state variant is gone with the
+  board; no schema field was added, and none is needed.
+
+The **two-drummer invariant** (D6 — no cell ever replaces an occupant) was the
+one piece of Tablero coverage worth checking before deletion. It is pinned on
+the grid at `PlannerGrid.test.tsx` ("a non-solvable Drums cell with two
+occupants never replaces a third addition"), and structurally by
+`seatModel.ts`'s `max: null` and its test. No coverage was lost.

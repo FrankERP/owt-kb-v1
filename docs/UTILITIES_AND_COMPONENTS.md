@@ -171,7 +171,6 @@ Legend: **[C]** client, **[S]** server.
 |-----------|---------|
 | `AdminPanel` | Root admin shell: tabs + member management (Fuse.js search, add/edit modal, role-gated). |
 | `ServicesPanel` | Service-readiness cards plus card-owned delete/copy/publish/setlist/proposal flows. Owns the canonical roles/integrity source bundle and opens `MonthGenerator` for **Editar mes**, card roster edits, and **Nuevo**. The editor replaces the tab with a full-width panel rather than a dialog. |
-| `SeatBoard` | Legacy service-team editor retained only as unmounted source/test cleanup debt after the 2026-08-05 month-grid cutover. Do not add new entry points; `PlannerGrid` is the sole free-form roster editor. |
 | `seatModel` | Canonical seat names and categories; one spelling per seat. Pure. |
 | `candidateRanking` | Seat candidates ordered by availability, existing assignment and recent load. Pure; never calls the solver. |
 | `plannerModel` | Pure month-grid rows/columns/cells plus create-solver translations (`buildSolveRequest`/`applySolveResponse`) and participant/draft projections. Stored columns use role-ID `columnId` and keyed occupants; stored admission/translation lives in `storedRoleReadModel`. Owns Saturday↔week adjacency (never position) and the Sunday-only Coro row. |
@@ -183,8 +182,7 @@ Legend: **[C]** client, **[S]** server.
 | `ProposalsPanel` | Admin review of lead proposals (approve / request changes / reopen). |
 | `AvailabilityPanel` | Team availability vs. scheduled services. |
 | `ActivityPanel` | Member activity / last-login ("Hoy"/"Ayer" calendar-day labels). |
-| `ParticipationSidebar` | Participation bar chart (`computeParticipation`); Voces/Instrumentos toggle. Header is a stacked block with a `w-full` select — beside the title the select's longest option ("Instrumentos") overflowed the 216px rail onto the grid. |
-| `ParticipationRail` | Legacy Tablero placement helper retained as unmounted source/test cleanup debt. Its retained geometry threshold for the Tablero (≥1380px) remains pinned by source-contract tests until cleanup. The active month grid renders `ParticipationSidebar` as the in-flow left column of `PlannerGrid` at every width. |
+| `ParticipationSidebar` | Participation bar chart (`computeParticipation`); Voces/Instrumentos toggle. Header is a stacked block with a `w-full` select — beside the title the select's longest option ("Instrumentos") overflowed the 216px chart column onto the grid. |
 
 #### Service-readiness card layer
 

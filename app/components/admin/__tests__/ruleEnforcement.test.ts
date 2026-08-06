@@ -593,7 +593,7 @@ describe("rankCandidates with rules", () => {
     expect(gaby?.eligible).toBe(true);
   });
 
-  it("changes NOTHING without a config — SeatBoard's shipped behaviour is untouched", () => {
+  it("changes NOTHING without a config — absent rules never become the defaults", () => {
     const lucia = rankCandidates(base).find((c) => c.id === "lucia");
     expect(lucia?.ruleBlockedReason).toBeNull();
     expect(lucia?.eligible).toBe(true);

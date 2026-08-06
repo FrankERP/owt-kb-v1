@@ -25,22 +25,31 @@ function focusables(container: HTMLElement): HTMLElement[] {
  *
  * The trap builds its Tab ring from `shellRef`, and that is normally the whole
  * dialog. It is not always. A descendant may have to `createPortal` part of
- * itself out of the shell for reasons that have nothing to do with focus — the
- * Tablero's participation rail is `position: fixed` in the page gutter and
- * WebKit refuses to PAINT a fixed descendant of `.brand-facet-panel`
- * (`relative` + `isolation: isolate` + `overflow: hidden`), which is exactly
- * what the shell is. See `ParticipationRail.tsx`'s header before touching that
- * portal. The escape is required for the control to be VISIBLE at all, and its
- * price was that Tab could never reach it: mouse-only, a real regression.
+ * itself out of the shell for reasons that have nothing to do with focus, and
+ * the escape then costs it the Tab ring: reachable by mouse, unreachable by
+ * keyboard, which is a real accessibility regression rather than a cosmetic one.
+ *
+ * **NO PRODUCTION CONSUMER REGISTERS A SATELLITE TODAY.** The case this was
+ * built for was the Tablero's participation rail, which was `position: fixed`
+ * in the page gutter and had to be portalled onto `document.body` because
+ * WebKit refuses to PAINT a fixed descendant of `relative` + `isolation:
+ * isolate` + `overflow: hidden` — exactly what the shell is. That surface was
+ * retired; the same WebKit trap still governs `PlannerGrid`'s full-screen
+ * overlay, and the bug is documented there in full.
+ *
+ * This is kept rather than deleted because the hazard is structural: the next
+ * dialog descendant that portals a control out of the shell reintroduces the
+ * mouse-only regression, and the fix for it is here and tested. It is dead
+ * code in the sense of "no caller", not "no contract".
  *
  * A satellite is a container that a dialog's own subtree declares to be part of
  * that dialog for focus purposes, wherever it happens to be rendered. It is
  * registered from BELOW, through `useCueDialogFocusSatellite`, because the
- * component that owns the portal (`SeatBoard`) is a grandchild of the
- * `<CueDialog>` element and cannot hand it a prop. The context is provided
- * around `children`, so "the dialog I belong to" resolves to the nearest
- * enclosing one and a nested dialog shadows its parent — the same nesting the
- * layer stack already assumes.
+ * component that owns the portal is typically a grandchild of the `<CueDialog>`
+ * element and cannot hand it a prop. The context is provided around `children`,
+ * so "the dialog I belong to" resolves to the nearest enclosing one and a
+ * nested dialog shadows its parent — the same nesting the layer stack already
+ * assumes.
  *
  * DEFAULT IS EXACTLY TODAY'S BEHAVIOUR. No consumer registers anything, the
  * set stays empty, and `focusRing` returns `focusables(shell)` — the same array
@@ -90,11 +99,12 @@ export function useCueDialogFocusSatellite(): (node: HTMLElement | null) => void
  * not walking. Sorting makes the array a true description of the browser's own
  * sequence, whatever a future portal target turns out to be.
  *
- * With the rail as it ships, document order puts it LAST: `body` holds the app
- * root, then `[data-cue-dialog-root]` (created when the provider mounts), then
- * the rail's portal (appended when the Tablero opens). That is also the order
- * we would have chosen — see `SeatBoard.tsx`'s rail comment for the reasoning
- * about the dialog's primary actions keeping their position.
+ * For a satellite portalled to `document.body`, document order puts it LAST:
+ * `body` holds the app root, then `[data-cue-dialog-root]` (created when the
+ * provider mounts), then the satellite's portal (appended when the dialog
+ * opens). That is also the order we would choose — it keeps the dialog's own
+ * primary actions in the position a user already learned, and appends the
+ * escaped control after them rather than ahead of Guardar/Cancelar.
  *
  * A satellite that is detached, that sits inside an `inert` subtree, or that is
  * somehow already inside the shell contributes nothing: the first two are not

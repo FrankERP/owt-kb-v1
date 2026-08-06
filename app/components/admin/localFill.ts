@@ -165,7 +165,10 @@ function medianOf(values: number[]): number | null {
 
 /**
  * The filler's ordering key (P7b), and **never** `RankedCandidate.load`, which
- * is rendered on two shipped surfaces (`PlannerGrid.tsx`, `SeatBoard.tsx`).
+ * is the figure the picker RENDERS (`PlannerGrid.tsx`). Two different questions:
+ * `load` answers "how much has this person served", this answers "who should
+ * the filler reach for next". Conflating them would put the filler's exemption
+ * and slack arithmetic on screen as if it were participation history.
  *
  *  • exempt  ⇒ the MEDIAN load of the eligible NON-exempt candidates. "Not
  *    pushed up top, not buried" is the user's own wording (O2); an earlier draft

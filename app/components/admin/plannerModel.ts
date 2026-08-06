@@ -329,9 +329,8 @@ export function buildRows(input: { instrumentSeats?: string[]; fohSeats?: string
  * `ServiceForm` showing one Coro picker for every service type, not something
  * the team ever used. Offering it invites an assignment that should not exist.
  *
- * **A special DOES have a Coro** (E18), matching `SeatBoard`, which already
- * creates specials with Coro, instruments and FOH (`SeatBoard.tsx:219`, `:241`,
- * `:83-86`) — only `saturday_role` drops it there too.
+ * **A special DOES have a Coro** (E18): specials are created with Coro,
+ * instruments and FOH, and `saturday_role` is the only type that drops it.
  *
  * A `Record<ColumnType, …>` rather than a chain of `===`: a fourth column type
  * is then a `tsc` error here instead of silently inheriting "shows everything".
@@ -911,8 +910,8 @@ export function createColumnId(type: ColumnType, date: string): string {
  * and (worse, in the other direction) the two definitions would drift.
  *
  * E3 does NOT make this redundant: the collision arrives from Sanity via
- * `existingRoles`, not from two columns in the grid, and `SeatBoard` can
- * already have created a special on that date.
+ * `existingRoles`, not from two columns in the grid — a special may already be
+ * stored on that date from any earlier session.
  */
 function collisionKey(type: string, date: string, serviceName?: string): string {
   return type === "special_role"
@@ -924,9 +923,17 @@ function collisionKey(type: string, date: string, serviceName?: string): string 
  * One draft per column REGARDLESS of occupancy (an omitted column would have
  * no `localId`, so `preflights.get` would miss). `skippedDates` (D18) is the
  * single explicit channel for a user-toggled skip; a date already `exists`
- * (in `existingRoles`) is ALSO skipped, mirroring today's `buildEmptyDrafts`
- * default — editing an existing service is A · Tablero's job (D4), not this
- * generator's.
+ * (in `existingRoles`) is ALSO skipped.
+ *
+ * **The skip is still correct, but not for the reason it was written.** It used
+ * to defer to a separate editor. That editor is gone, and the skip survives
+ * because THIS FUNCTION IS THE CREATE PATH ONLY: every call site in
+ * `MonthGenerator` is guarded against `storedMode`, which is the grid's own
+ * editor for already-saved services and reaches Sanity through
+ * `/api/admin/roles/swap` and the stored-save reconciliation instead. Emitting a
+ * draft for a date that already exists would make the create path POST over a
+ * live service. Do not "fix" this into an upsert without moving the stored path
+ * with it.
  *
  * `localId`/`creationRequestId`/`exists` are looked up in `previous` by
  * `(type, date)`: pass the prior call's drafts to preserve them across an
@@ -1307,8 +1314,7 @@ export type SavedRole = ParticipantRole & { service_name?: string };
  * `_type|date` alone the stored one was dropped by the planned one and its
  * whole roster vanished — a person who really served reading as absent, on the
  * chart built to answer "is this fair". `SavedRole` widens `ParticipantRole`
- * with the name for exactly this, the way `WindowRole` widens it with `_id` for
- * the Tablero (`SeatBoard.tsx`); the real caller already has the field on the
+ * with the name for exactly this; the real caller already has the field on the
  * `ServiceRole` documents it holds.
  *
  * `normalizeServiceName` and never `.toLowerCase()` — case and accents are

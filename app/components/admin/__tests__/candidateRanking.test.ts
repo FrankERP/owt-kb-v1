@@ -180,8 +180,8 @@ describe("rankCandidates", () => {
 
   // FINDING C1 (double-duty block bypassed): `seatById` used to be a Map keyed
   // by memberId, which keeps only the LAST entry for a member holding two
-  // seats. SeatBoard builds `assigned` in seat order — voces, then
-  // instrumentos, then FOH (SeatBoard.tsx) — so an instrument seat always
+  // seats. The editor that shipped the bug built `assigned` in seat order —
+  // voces, then instrumentos, then FOH — so an instrument seat always
   // overwrote a voice one, silently erasing the voice-seat conflict. A member
   // must keep ALL of their held seats so a same-category conflict is caught
   // no matter which seat happened to be built last.

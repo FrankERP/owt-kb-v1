@@ -3339,8 +3339,9 @@ export default function MonthGenerator({
             into `PlannerGrid` would export the grid's draft state to a
             component that has no other use for it. Only the placement moved.
 
-            This used to be a `ParticipationRail` with `placement="panel"`,
-            mounted below the grid: it put the chart in the page's left gutter above
+            This used to go through a `ParticipationRail` component (since
+            deleted) with `placement="panel"`, mounted below the grid: it put the
+            chart in the page's left gutter above
             1700px and stacked it under the grid below that. It never reached
             the 1512px laptop this is planned on — the admin page caps content
             at 1280px, leaving ~116px of gutter for a 216px chart. It now costs

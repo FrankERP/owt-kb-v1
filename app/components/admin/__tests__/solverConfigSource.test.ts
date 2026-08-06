@@ -8,14 +8,15 @@
 // team's rules or a stand-in?", and the server answers it now. The QUESTION did
 // not retire — `ready` vs `absent` is the same distinction with a fact behind it
 // instead of a content-equality heuristic — so the pin that mattered most there
-// survives here in a stronger form: an ABSENT document still cannot make the
-// Tablero hard-block against rules nobody wrote (`enforceableConfig`).
+// survives here in a stronger form: `absent` yields the defaults IN MEMORY ONLY
+// and carries no `rev`, so it can never be written back over the shared
+// document.
 //
 // Four properties, each a way the live rules could still be lost:
 //
 //   · "absent" and "read failed" never collapse into one `?? DEFAULT`;
 //   · a save is UNREPRESENTABLE outside `ready` — no `rev` exists elsewhere;
-//   · both surfaces read ONE controller, so they cannot drift;
+//   · the rule panel and the grid read ONE controller, so they cannot drift;
 //   · nothing reads or writes the retired browser key any more.
 
 import { execFileSync } from "node:child_process";
@@ -32,7 +33,6 @@ import {
   SAVE_REJECTED_MESSAGE,
   SAVE_STALE_MESSAGE,
   editableConfig,
-  enforceableConfig,
   sameSolverConfig,
   saveFailure,
   sourceFromGet,
@@ -120,25 +120,6 @@ describe("sourceFromGet — absent and failed are different answers", () => {
     // refuse-if-exists guard into disagreement about the same document.
     expect(sourceFromGet(true, { present: true, rev: null, config: {} }).status).toBe("error");
     expect(sourceFromGet(true, { present: true, rev: "", config: {} }).status).toBe("error");
-  });
-});
-
-describe("enforceableConfig — what the TABLERO is allowed to refuse on", () => {
-  it("hands over the rules only when the document exists", () => {
-    const ready = sourceFromGet(true, STORED);
-    if (ready.status !== "ready") throw new Error("unreachable");
-    expect(enforceableConfig(ready)).toBe(ready.config);
-    expect(enforceableConfig(ready)?.conflicts).toHaveLength(1);
-  });
-
-  it("hands over NOTHING for absent, loading and failed — three states, one reason each", () => {
-    // absent: `DEFAULT_SOLVER_CONFIG` is nobody's decision, and this surface has
-    // never hard-blocked on it. loading/failed: we do not know the rules.
-    const absent = sourceFromGet(true, { present: false });
-    expect(absent.status).toBe("absent");
-    expect(enforceableConfig(absent)).toBeUndefined();
-    expect(enforceableConfig({ status: "loading" })).toBeUndefined();
-    expect(enforceableConfig({ status: "error", message: "x" })).toBeUndefined();
   });
 });
 

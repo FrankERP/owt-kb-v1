@@ -59,9 +59,12 @@ export function normalizeSeatName(raw: unknown): string {
 /**
  * `max` is null, like the voice seats. It is NOT a mistake that an instrument
  * seat has no cap: 18 of the team's services run TWO drummers on one `Drums`
- * seat, and every service from 2026-06-07 to 2026-08-30 does. A cap of 1 made
- * `SeatBoard.toggle` evict the first occupant on any click, silently losing one
- * of them. Capacity guidance belongs in the UI, never in a rule that drops data.
+ * seat, and every service from 2026-06-07 to 2026-08-30 does. A cap of 1 once
+ * made the editor's toggle evict the first occupant on any click, silently
+ * losing one of them — a shipped bug, not a hypothetical. Capacity guidance
+ * belongs in the UI, never in a rule that drops data. The grid pins the same
+ * invariant as D6 (`PlannerGrid.test.tsx`, "a non-solvable Drums cell with two
+ * occupants never replaces a third addition").
  */
 export function instrumentSeatDef(label: string): SeatDef {
   const name = normalizeSeatName(label);

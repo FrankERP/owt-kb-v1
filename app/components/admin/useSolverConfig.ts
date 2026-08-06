@@ -6,14 +6,15 @@
 //
 // ─── Why it is mounted by `ServicesPanel` and passed down ────────────────────
 //
-// Both rule surfaces hang off that panel: it mounts `MonthGenerator` (the
-// planner grid and the rule builder) and both `SeatBoard` modals (the Tablero).
-// Owning the state THERE and threading it down makes "both surfaces read the
-// same config" structural rather than coincidental — one fetch, one object — and
-// it is what makes a save visible to the Tablero immediately. Two independent
-// hooks, one per component, would read the same document through the same code
-// and still drift: save a rule in the generator, close it, open a service, and
-// the board would enforce the copy it fetched before the edit.
+// The rule surfaces hang off that panel: it mounts `MonthGenerator`, which
+// carries both the planner grid and the rule builder, in create and stored
+// modes alike. Owning the state THERE and threading it down makes "every
+// surface reads the same config" structural rather than coincidental — one
+// fetch, one object. Two independent hooks, one per mount, would read the same
+// document through the same code and still drift: save a rule in one generator,
+// close it, open another, and the second would enforce the copy it fetched
+// before the edit. The panel is still the right owner even though the number of
+// mounts has changed; do not move the hook down into the component.
 //
 // ─── No `revalidate*`, deliberately ──────────────────────────────────────────
 //

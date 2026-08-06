@@ -19,8 +19,8 @@
 //     occupant.
 //  3. No cell ever refuses an occupant for reasons of count, and none ever
 //     replaces one (D6) — replacement is what evicted a drummer in a shipped
-//     bug. A manual pick still refuses a same-category double, exactly like
-//     `SeatBoard`.
+//     bug, on 18 services running two drummers on one Drums seat. A manual pick
+//     still refuses a same-category double.
 //  4. A Saturday column has no Coro row at all — gated by `rowAppliesTo`, not
 //     just solvability. (A special DOES have one — E18.)
 //  5. Unchecking Domingos still enables Auto and renders no Sunday column.
@@ -37,8 +37,10 @@
 // the page's empty gutter so it cost the grid nothing, and at 1512 logical (a
 // 14" MacBook Pro) there is no gutter — the admin's own machine never showed
 // it. Taking real width from the grid at every size, on every machine, is the
-// deliberate trade that replaces it. `ParticipationRail`'s gutter placement
-// survives for the Tablero alone; see its header.
+// deliberate trade that replaces it. The gutter placement is gone entirely —
+// the component that owned it was retired with the Tablero, and the WebKit
+// paint bug it worked around is recorded at the full-screen portal below, which
+// is the last `position: fixed` thing here and inherits the same problem.
 //
 // The layout is FLEX, not a grid template, for one reason: the DOM order is
 // centre → picker → participation (so a phone stacks grid, then candidates,
@@ -55,8 +57,8 @@
 // The picker's 240px is only spent while a cell is ACTIVE; with none open the
 // grid gets it back and runs at 1234.
 //
-// **216 is a FLOOR, not a preference** — `CHART_COLUMN_WIDTH` below, and the
-// same number `ParticipationRail` uses for the Tablero's gutter. It shipped at
+// **216 is a FLOOR, not a preference** — `CHART_COLUMN_WIDTH` below, now the
+// only place it is declared. It shipped at
 // 190 for one release and the count column printed itself on top of the bar:
 // `ParticipationSidebar`'s member row is a hard 150px INLINE bar (it cannot
 // shrink) + a 10px gap + a 24px count column, inside 12px of padding and a 1px
@@ -226,11 +228,21 @@ export interface PlannerGridProps {
  * header is stated in, and a FLOOR derived from `ParticipationSidebar`'s widest
  * row rather than a design preference. See the header.
  *
- * Exported for the same reason `ParticipationRail.RAIL_WIDTH` is: `xl:w-[216px]`
- * is a Tailwind literal that cannot be built from a constant at runtime (the JIT
- * only sees whole class names in the source), so the two can drift. The test
- * that re-derives the floor from `ParticipationSidebar` pins THIS number, and a
+ * Exported because `xl:w-[216px]` is a Tailwind literal that cannot be built
+ * from a constant at runtime (the JIT only sees whole class names in the
+ * source), so the constant and the rendered class can drift. The test that
+ * re-derives the floor from `ParticipationSidebar` pins THIS number, and a
  * second test pins the rendered literal against it.
+ *
+ * **This is now the ONLY declaration of the chart's width.** A retired gutter
+ * rail held a second copy, and the guard that kept the two equal went with it.
+ * 216 shipped at 190 for one release and the count column printed itself on top
+ * of the bar on every member row; the floor is derived from
+ * `ParticipationSidebar`'s widest row — a 150px inline bar that cannot shrink,
+ * a 10px gap, a 24px count column, 12px padding either side, a 1px border
+ * either side and the scroller's 2px right padding, 212px in total, measured in
+ * a real browser rather than read off the source. If either of the sidebar's
+ * two rows grows past this, the test fails rather than someone's screen.
  */
 export const CHART_COLUMN_WIDTH = 216;
 
@@ -1280,12 +1292,34 @@ export default function PlannerGrid(props: PlannerGridProps) {
   );
 
   // Full screen leaves the page entirely, and the portal is not decoration.
+  // ── The WebKit compositing failure, and why this portal is NOT removable ──
+  //
   // `.brand-admin-shell` carries `position: relative` + `isolation: isolate` +
   // `overflow: hidden`, and in real Safari a `position: fixed` descendant of
-  // that trio lays out and hit-tests correctly and paints NOTHING — the same
-  // WebKit compositing failure documented at length in `ParticipationRail.tsx`.
-  // A full-screen overlay is exactly such a descendant, so it goes on
-  // `document.body` for the same reason the Tablero's rail does.
+  // that trio lays out and hit-tests correctly and paints NOTHING. A full-screen
+  // overlay is exactly such a descendant, so it goes on `document.body`.
+  //
+  // This paragraph used to live in `ParticipationRail.tsx`, which was retired
+  // with the Tablero. It is reproduced here because it is the ONLY remaining
+  // record of a bug a reader will otherwise "fix" away:
+  //
+  // Per spec a `position: fixed` element whose containing block is the viewport
+  // is NOT clipped by an ancestor's `overflow: hidden` — `relative` does not
+  // establish a containing block for it, only `transform`/`filter`/
+  // `backdrop-filter`/`perspective`/`contain`/`container-type`/`will-change` do,
+  // and an audit of the live chain found none of those on any ancestor. Chromium
+  // paints correctly mounted in place, so a reader who checks the spec will
+  // conclude this portal is pointless and remove it.
+  //
+  // In real Safari it is not pointless. The element measures its correct box,
+  // reports `display: block` / `visibility: visible`, wins `elementFromPoint` at
+  // its own centre, accepts a `background-color` — and paints nothing. That
+  // fingerprint (correct layout, correct hit-testing, no paint) is a compositing
+  // failure, not a layout one, and the only thing separating it from every other
+  // painted element on the page is that ancestor chain. The portal takes it out
+  // of the chain entirely. It reaches the Capacitor iOS wrap too, same engine.
+  // The user confirmed the fix in real Safari; headless WebKit never reproduced
+  // the bug, so do not "verify" it away.
   //
   // WHAT THIS COSTS, so it is not mistaken for a bug: switching between the two
   // branches swaps a host element for a portal, so React rebuilds the DOM
@@ -1747,7 +1781,7 @@ function GridCellView({
   );
 }
 
-// ── Candidate picker row (mirrors SeatBoard's RosterRow) ─────────────────────
+// ── Candidate picker row ─────────────────────────────────────────────────────
 
 function CandidateRow({
   candidate,
@@ -1876,7 +1910,7 @@ function CandidateRow({
   );
 }
 
-// ── Add row form (mirrors SeatBoard's AddSeatForm) ───────────────────────────
+// ── Add row form ─────────────────────────────────────────────────────────────
 
 function AddRowForm({
   placeholder,

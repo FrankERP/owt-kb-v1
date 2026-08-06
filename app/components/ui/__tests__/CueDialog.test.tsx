@@ -102,13 +102,19 @@ describe("CueDialog", () => {
 /**
  * ── Focus satellites ───────────────────────────────────────────────────────
  *
- * The real case is the Tablero: `SeatBoard` mounts `ParticipationRail`, which
- * `createPortal`s itself onto `document.body` so WebKit will paint it, and the
- * rail's Voces/Instrumentos `<select>` therefore left the dialog's Tab ring.
- * These use a stand-in portal rather than the rail itself so they pin the
- * MECHANISM (`useCueDialogFocusSatellite` + the union + the ordering) and not
- * the rail's 1380px media query, which jsdom's `matchMedia` stub answers
- * `false` for unconditionally.
+ * The case this was built for was the Tablero, whose participation rail
+ * `createPortal`ed itself onto `document.body` so WebKit would paint it — and
+ * whose Voces/Instrumentos `<select>` therefore left the dialog's Tab ring.
+ * That surface has since been deleted, so THESE TESTS ARE NOW THE ONLY
+ * COVERAGE of the mechanism, and the reason `useCueDialogFocusSatellite`
+ * survives with no production caller: the next dialog descendant that portals a
+ * control out of the shell hits the same mouse-only regression.
+ *
+ * They always used a stand-in portal rather than the rail itself, so they pin
+ * the MECHANISM (`useCueDialogFocusSatellite` + the union + the ordering) and
+ * never depended on the retired component. The stand-in portals to
+ * `document.body` exactly as the rail did, so the satellite genuinely lands
+ * after the shell in the document, as in production.
  *
  * WHAT THESE CANNOT SEE: jsdom implements no sequential focus navigation, so a
  * `Tab` the trap deliberately does NOT intercept (every interior step) moves
@@ -118,7 +124,7 @@ describe("CueDialog", () => {
  */
 function Satellite({ target, children }: { target?: HTMLElement | null; children: React.ReactNode }) {
   const railRef = useCueDialogFocusSatellite();
-  // No `target` means `document.body`, which is what `ParticipationRail` does.
+  // No `target` means `document.body`, which is what the retired rail did.
   // React appends the portal's content at mount time, and the dialog's children
   // only mount once the provider's `[data-cue-dialog-root]` exists — so the
   // satellite genuinely lands AFTER the shell in the document, as in production.
