@@ -294,13 +294,38 @@ describe("PlannerGrid — cell density (D7)", () => {
       { date: "2026-08-09", rowId: "lead", memberIds: ["m1", "m2", "m3"], origin: "auto" },
     ];
     const onCellsChange = vi.fn();
-    const { container } = render(<PlannerGrid {...baseProps({ cells, onCellsChange })} />);
+    const { container, unmount } = render(<PlannerGrid {...baseProps({ cells, onCellsChange })} />);
     fireEvent.click(within(cellFor(container, "lead", "2026-08-09")).getByRole("button", { name: /ver 1 más/i }));
     fireEvent.click(screen.getByText("Mkz"));
     expect(onCellsChange).toHaveBeenCalledTimes(1);
     const next: GridCell[] = onCellsChange.mock.calls[0][0];
     const lead = next.find((c) => c.rowId === "lead" && c.columnId === SUNDAY_ONLY[0].columnId)!;
     expect(lead.occupants.map((o) => o.memberId).sort()).toEqual(["m1", "m2", "m3", "m4"].sort());
+
+    // Extended (T1, acceptance 3): the SAME invariant from the OTHER side of
+    // the threshold — a cell exactly AT target (2/2, no +N yet, opened by a
+    // plain click rather than the "ver N más" button) must still ADD rather
+    // than replace, and crossing into over-target for the FIRST time must
+    // still render the existing amber "por encima del objetivo" treatment —
+    // not a fresh code path that could silently skip it.
+    unmount();
+    const atTargetCells: InputGridCell[] = [
+      { date: "2026-08-09", rowId: "lead", memberIds: ["m1", "m2"], origin: "auto" },
+    ];
+    const onCellsChangeAtTarget = vi.fn();
+    const { container: atTargetContainer, unmount: unmountAtTarget } = render(
+      <PlannerGrid {...baseProps({ cells: atTargetCells, onCellsChange: onCellsChangeAtTarget })} />,
+    );
+    expect(within(cellFor(atTargetContainer, "lead", "2026-08-09")).queryByText(/^\+\d/)).toBeNull();
+    fireEvent.click(cellFor(atTargetContainer, "lead", "2026-08-09"));
+    fireEvent.click(screen.getByText("Liu"));
+    expect(onCellsChangeAtTarget).toHaveBeenCalledTimes(1);
+    const atTargetNext: GridCell[] = onCellsChangeAtTarget.mock.calls[0][0];
+    const leadAtTarget = atTargetNext.find((c) => c.rowId === "lead" && c.columnId === SUNDAY_ONLY[0].columnId)!;
+    expect(leadAtTarget.occupants.map((o) => o.memberId).sort()).toEqual(["m1", "m2", "m3"].sort());
+    unmountAtTarget();
+    render(<PlannerGrid {...baseProps({ cells: atTargetNext })} />);
+    expect(screen.getByText(/por encima del objetivo/i)).toBeTruthy();
   });
 
   it("an over-target solvable cell carries a Spanish text warning, not just a border color (Finding 6)", () => {
@@ -320,6 +345,10 @@ describe("PlannerGrid — cell density (D7)", () => {
     const { container } = render(<PlannerGrid {...baseProps({ cells, onCellsChange })} />);
     fireEvent.click(cellFor(container, "instrumento:Drums", "2026-08-09"));
     fireEvent.click(screen.getByText("Fanta"));
+    // Extended (T1): a replace-not-add regression could still leak a SECOND
+    // `onCellsChange` call (an add followed by a corrective replace) and this
+    // would read `calls[0][0]` as if nothing were wrong — pin the call count too.
+    expect(onCellsChange).toHaveBeenCalledTimes(1);
     const next: GridCell[] = onCellsChange.mock.calls[0][0];
     const drums = next.find((c) => c.rowId === "instrumento:Drums")!;
     expect(drums.occupants.map((o) => o.memberId).sort()).toEqual(["d1", "d2", "d3"].sort());
@@ -1127,6 +1156,43 @@ describe("PlannerGrid — P10, the override takes a second, deliberate action", 
     // A stale entry would silence E13 if the same person were ever re-seated.
     expect(next.overrides).toEqual([]);
     expect(next.overrideReasons).toEqual({});
+  });
+
+  it("prunes overrides and reasons PER MEMBER, in the SAME call as the write — a survivor's exception is untouched", () => {
+    // Two INDEPENDENTLY overridden members on one cell. The single-override
+    // fixture above (`OVERRIDDEN_PAIR`) cannot tell "prune the id that left"
+    // apart from "wipe overrides whenever the cell changes" — both produce
+    // `overrides: []`. A second, surviving override is the only way to prove
+    // `withUpdatedCell` keeps `prior.filter(id => seated.has(id))` selective,
+    // per `PlannerGrid.tsx:286-298`.
+    const twoOverrides: InputGridCell[] = [
+      {
+        date: SPECIAL_DATE,
+        rowId: "lead",
+        memberIds: ["m1", "m2", "m3"],
+        origin: "manual",
+        overrides: ["m2", "m3"],
+        overrideReasons: {
+          m2: "Regla: no puede coincidir con Frank",
+          m3: "Regla: excluido de *.Lead",
+        },
+      },
+    ];
+    const onCellsChange = vi.fn();
+    const { container } = render(<PlannerGrid {...specialProps({ cells: twoOverrides, onCellsChange })} />);
+    fireEvent.click(cellFor(container, "lead", SPECIAL_DATE));
+    fireEvent.click(candidateLi("Gaby"));
+    // The single-call contract: ONE `onCellsChange` carries both the occupant
+    // write AND the override prune — never a write followed by a separate
+    // reconciliation pass that could observe the two out of sync.
+    expect(onCellsChange).toHaveBeenCalledTimes(1);
+    const next = onCellsChange.mock.calls[0][0].find((c: GridCell) => c.rowId === "lead");
+    expect(next.occupants.map((o: { memberId: string }) => o.memberId)).toEqual(["m1", "m3"]);
+    // Gaby's exception leaves with her seat...
+    expect(next.overrides).toEqual(["m3"]);
+    // ...but Liu's survives, reason text untouched — a wholesale wipe would
+    // fail this exactly as it would fail the single-override case above.
+    expect(next.overrideReasons).toEqual({ m3: "Regla: excluido de *.Lead" });
   });
 
   it("flags a rule ADDED AFTER the override fresh, instead of pre-sanctioning it", () => {
