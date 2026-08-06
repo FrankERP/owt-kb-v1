@@ -89,6 +89,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
@@ -128,6 +129,20 @@ import {
   TONE_CLASS,
   describePreflightReason,
 } from "./serviceCardModel";
+import CueDialog from "../ui/CueDialog";
+// T4 of the drag-and-drop plan. `moveOccupant` imports `withUpdatedCell` back
+// out of this file, so these two modules are a cycle — a deliberate one: T2's
+// whole point is that the move composes THIS file's single write helper twice
+// rather than mutating cells itself. Both sides are hoisted function
+// declarations used only at event time, so nothing is read during module
+// evaluation.
+import { moveOccupant, type MoveOccupantEndpoint, type MoveOccupantSource } from "./moveOccupant";
+import {
+  canTouchColumn,
+  createMoveGate,
+  type MoveGateInput,
+  type MoveGateVerdict,
+} from "./moveGate";
 
 // `SolveDiagnostics` is not part of `plannerModel`'s exports (Task 2's scope
 // was the wire translation, not presentation) — it is the narrow slice of
@@ -169,6 +184,26 @@ export interface PlannerGridProps {
    * `handleConfirm` quietly posted nothing.
    */
   createBlockFor: (c: GridColumn) => "existing" | "created" | null;
+  /**
+   * P3 of the drag gate — may an occupant be DROPPED into this column?
+   *
+   * **Required, and required in both modes on purpose.** It is forwarded
+   * verbatim to `moveGate`'s `CreateModeGateInput.canReceive`, which is required
+   * there for the same reason: P3 is the one precondition whose absence loses
+   * data rather than merely permitting a bad edit — the removal lands on a
+   * column that IS created and the add on one that is not, so the person
+   * disappears from the month in one gesture, with no type error and no runtime
+   * signal that the check was skipped.
+   *
+   * This component cannot compute it. The authority is `isDraftCreatable`
+   * (`MonthGenerator.tsx`), which reads the session's `createdTargets` ref and
+   * the A1/A2 preflight snapshot — neither derivable from `columns`/`cells`, and
+   * neither reaching here through `skipped` (the admin's toggle alone) or
+   * `createBlockFor` (which answers a different question, and only for the
+   * header's copy). Stored mode never consults it: every stored column is a
+   * document that already exists.
+   */
+  canReceive: (c: GridColumn) => boolean;
   /** By opaque column id. */
   skipped: Set<string>;
   /**
@@ -276,6 +311,56 @@ function ownsEscape(target: EventTarget | null): boolean {
  */
 const FOCUSABLE_SELECTOR =
   'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
+// ── Drag and drop (T4) ───────────────────────────────────────────────────────
+//
+// **HTML5 drag, not pointer events**, and that choice carries DD8 for free.
+// `SetlistEditor.tsx:335-339` and `ProposalEditor.tsx:151-167` are both HTML5
+// (`draggable` + `onDragStart`/`onDragOver`/`onDrop`/`onDragEnd`), so this is
+// the idiom the repo already reads and reviews; and `dragstart` simply never
+// fires from a touch, which is exactly the desktop-only scope DD8 asks for —
+// with pointer events the touch case would have to be excluded by hand, and a
+// half-lifted chip that fights the grid's horizontal scroll is precisely what
+// DD8 rules out. T5's pick-then-place is what serves touch. The native drag also
+// scrolls nothing on its own, so DD9 (no edge auto-scroll) costs nothing here.
+//
+// Nothing marks whole rows or columns as valid targets: validity is computed
+// LAZILY, at the hovered cell and again at the drop. Marking every cell during a
+// drag would be one `rankCandidates` call per cell — ~100 on a ten-column month
+// — per `dragover`.
+
+/** A non-blocking line under the grid: a refusal, or acceptance 11's note. */
+interface DragNotice {
+  tone: "refusal" | "note";
+  message: string;
+}
+
+/**
+ * A C4 move the admin has been asked about and has not yet answered.
+ *
+ * It deliberately holds NO `cells` snapshot. See `forcePendingMove` for what it
+ * does instead and why.
+ */
+interface PendingMove {
+  source: MoveOccupantSource;
+  target: MoveOccupantEndpoint;
+  /** The rule's own wording, as the gate reported it when the drop landed. */
+  reason: string;
+  memberName: string;
+}
+
+/** Everything a cell and its chips need to take part in a drag. */
+interface CellDragHandlers {
+  /** P1, the one precondition cheap enough to answer per render. */
+  enabled: boolean;
+  source: MoveOccupantSource | null;
+  activeDropKey: string | null;
+  onOccupantDragStart: (event: ReactDragEvent, source: MoveOccupantSource) => void;
+  onOccupantDragEnd: () => void;
+  onCellDragOver: (event: ReactDragEvent, target: MoveOccupantEndpoint) => void;
+  onCellDragLeave: (target: MoveOccupantEndpoint) => void;
+  onCellDrop: (event: ReactDragEvent, target: MoveOccupantEndpoint) => void;
+}
 
 /**
  * Writes `memberIds` into one cell, and keeps `overrides` (P10) honest:
@@ -388,6 +473,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
     savedWindow,
     preflightFor,
     createBlockFor,
+    canReceive,
     skipped,
     unaddressableDates,
     unresolvedNames,
@@ -421,6 +507,18 @@ export default function PlannerGrid(props: PlannerGridProps) {
   const [confirmingAuto, setConfirmingAuto] = useState(false);
   const [removeError, setRemoveError] = useState<{ rowId: string; message: string } | null>(null);
   const [fullScreen, setFullScreen] = useState(false);
+  // ── Drag state (T4) ────────────────────────────────────────────────────────
+  // The occupant currently being dragged, or `null`. Held in state rather than
+  // in `dataTransfer` for the reason both shipped drags in this repo do
+  // (`SetlistEditor.tsx:335-339`, `ProposalEditor.tsx:151-167`): `dataTransfer`
+  // only yields its payload on `drop` in most engines, and `dragover` has to
+  // decide whether the cell under the cursor is a drop zone at all.
+  const [dragSource, setDragSource] = useState<MoveOccupantSource | null>(null);
+  /** `cellKey` of the hovered cell that WOULD accept the drop. */
+  const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
+  const [dragNotice, setDragNotice] = useState<DragNotice | null>(null);
+  /** A C4 move waiting on the force/desist prompt. See `forcePendingMove`. */
+  const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
   const pickerRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
 
@@ -580,6 +678,17 @@ export default function PlannerGrid(props: PlannerGridProps) {
   }
 
   /**
+   * The same hazard `activeRemoveError` guards, for the drag's line: a refusal
+   * like "Ya asignado en Lead" is true of one grid, and an edit through the
+   * picker can make it false while it is still on screen. The drag's own events
+   * already clear it (a new drag start, a hover that would be accepted), so this
+   * only has to cover the paths that change `cells` some other way.
+   */
+  function clearDragNotice() {
+    if (dragNotice) setDragNotice(null);
+  }
+
+  /**
    * The manual pick, and both of its refusals.
    *
    * TWO predicates, read separately and never merged into one: `blockedReason`
@@ -607,6 +716,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
   function toggleCandidate(row: GridRow, columnId: string, memberId: string, candidates: RankedCandidate[]) {
     if (mutationLocked) return;
     clearRemoveError();
+    clearDragNotice();
     const current =
       cellsByKey.get(cellKey(columnId, row.id))?.occupants.map((o) => o.memberId) ?? [];
     if (current.includes(memberId)) {
@@ -642,6 +752,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
   function overrideCandidate(row: GridRow, columnId: string, memberId: string, candidates: RankedCandidate[]) {
     if (mutationLocked) return;
     clearRemoveError();
+    clearDragNotice();
     const candidate = candidates.find((c) => c.id === memberId);
     if (!candidate?.ruleBlockedReason) return;
     // A BACKSTOP, and no test can kill this line ALONE: `CandidateRow` renders
@@ -667,6 +778,238 @@ export default function PlannerGrid(props: PlannerGridProps) {
       }),
     );
   }
+
+  // ── The drag, gated ────────────────────────────────────────────────────────
+
+  /**
+   * ONE gate instance for the lifetime of this component, so its verdict cache
+   * survives the `dragover` storm. It drops the whole cache the moment any input
+   * identity changes (`cells` above all), so no verdict can outlive the grid it
+   * was computed from.
+   */
+  const gate = useMemo(() => createMoveGate(), []);
+
+  /**
+   * The gate call, assembled in ONE place. `mode` selects the discriminated
+   * union member: create mode carries P3's `canReceive`, stored mode is typed to
+   * forbid it, and this is the only spot where the choice is made.
+   */
+  function judgeMove(source: MoveOccupantSource, target: MoveOccupantEndpoint): MoveGateVerdict {
+    const shared = {
+      cells,
+      rows,
+      columns,
+      members,
+      source,
+      target,
+      mutationLocked,
+      sundayDates,
+      sundayDatesForColumn,
+      config,
+    };
+    const input: MoveGateInput =
+      mode === "create" ? { ...shared, mode: "create", canReceive } : { ...shared, mode: "stored" };
+    return gate(input);
+  }
+
+  function clearDrag() {
+    setDragSource(null);
+    setDropTargetKey(null);
+  }
+
+  /**
+   * P1 and P2 for the SOURCE, answered at drag start rather than per render.
+   *
+   * `canTouchColumn` runs `serializeStoredColumn` over the whole column, so
+   * asking it for every chip on every render would be rows×columns serializer
+   * passes for a drag that may never happen. Asking once, when a drag actually
+   * starts, is the same answer for a fraction of the cost.
+   *
+   * A refused source is refused SILENTLY — `preventDefault` and nothing else.
+   * Both causes already say so on screen: `mutationLocked` renders every cell
+   * `cursor-not-allowed opacity-60`, and a stored column the serializer rejects
+   * is `readOnly`, which prints "Solo lectura: revisa la integridad del
+   * servicio." in its own header. A notice here would restate one of the gate's
+   * own strings from a second copy.
+   */
+  function handleOccupantDragStart(event: ReactDragEvent, source: MoveOccupantSource) {
+    const sourceColumn = columnById.get(source.columnId);
+    if (mutationLocked || !sourceColumn || !canTouchColumn({ mode, column: sourceColumn, rows, cells })) {
+      event.preventDefault();
+      return;
+    }
+    // Guarded because jsdom has no `DataTransfer`, and because the payload is
+    // not what carries the drag — `dragSource` is. Setting it anyway is what
+    // makes the native drag image and cursor behave on a real desktop.
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", source.memberId);
+    }
+    setDragNotice(null);
+    setDragSource(source);
+  }
+
+  /**
+   * The hovered cell, judged lazily.
+   *
+   * **`preventDefault` is the whole drop-zone contract in HTML5 drag**: without
+   * it the browser refuses the drop and paints the "no-drop" cursor. So a cell
+   * that fails P1–P3 or C1–C3 is left alone here and is genuinely not droppable
+   * — the refusal is not merely reported after the fact.
+   *
+   * `dragover` fires continuously, so this only writes state when the answer
+   * actually changes; between those writes nothing re-renders, so the gate's
+   * cache keeps every repeat call free.
+   */
+  function handleCellDragOver(event: ReactDragEvent, target: MoveOccupantEndpoint) {
+    if (!dragSource) return;
+    const verdict = judgeMove(dragSource, target);
+    if (verdict.kind === "not-permitted" || verdict.kind === "refused") {
+      if (dropTargetKey !== null) setDropTargetKey(null);
+      // C1/C2/C3 (and the preconditions) surface inline, in the gate's own
+      // wording — the picker's wording, since the gate takes it from
+      // `rankCandidates`. None of them offers a force (DD2).
+      if (dragNotice?.message !== verdict.reason) {
+        setDragNotice({ tone: "refusal", message: verdict.reason });
+      }
+      return;
+    }
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    const key = cellKey(target.columnId, target.rowId);
+    if (dropTargetKey !== key) setDropTargetKey(key);
+    if (dragNotice) setDragNotice(null);
+  }
+
+  function handleCellDragLeave(target: MoveOccupantEndpoint) {
+    if (dropTargetKey === cellKey(target.columnId, target.rowId)) setDropTargetKey(null);
+  }
+
+  /**
+   * The drop. The gate runs BEFORE anything is written, every time — a refused
+   * or not-permitted drop changes no state at all, which is what keeps
+   * `handleCellsChange` from marking the column touched (acceptance 8).
+   *
+   * Re-judged here rather than trusting `handleCellDragOver`'s verdict: the two
+   * are cheap (same cache) and the drop is the one that writes.
+   */
+  function handleCellDrop(event: ReactDragEvent, target: MoveOccupantEndpoint) {
+    event.preventDefault();
+    const source = dragSource;
+    clearDrag();
+    if (!source) return;
+    const verdict = judgeMove(source, target);
+    if (verdict.kind === "not-permitted" || verdict.kind === "refused") {
+      setDragNotice({ tone: "refusal", message: verdict.reason });
+      return;
+    }
+    if (verdict.kind === "prompt") {
+      setDragNotice(null);
+      setPendingMove({ source, target, reason: verdict.reason, memberName: memberName(source.memberId) });
+      return;
+    }
+    applyMove(source, target);
+  }
+
+  /**
+   * DD1 — the move, in ONE `onCellsChange`, through T2's primitive. A forced C4
+   * carries the gate's own `addOverride` in that same call, so the waiver is
+   * written with the seating rather than after it.
+   */
+  function applyMove(
+    source: MoveOccupantSource,
+    target: MoveOccupantEndpoint,
+    addOverride?: { memberId: string; reason: string },
+  ) {
+    clearRemoveError();
+    onCellsChange(moveOccupant(cells, source, target, addOverride));
+    setDragNotice(unavailabilityNoticeFor(source.memberId, target));
+  }
+
+  /**
+   * Acceptance 11 — unavailability is NOT a gate, and it is not a fifth
+   * constraint (see `moveGate`'s closing comment): the move has already been
+   * applied by the time this runs. It is a SIGNAL, and the drag must not be a
+   * weaker signal than the picker, which renders "No disp." on the same fact.
+   *
+   * Read through `rankFor` — the picker's own call — rather than off
+   * `member.unavailableDates`. That field is read in exactly one place
+   * (`candidateRanking.ts:199`), and a second reader here would be a second
+   * definition of "available" that could drift from the badge it is supposed to
+   * echo.
+   */
+  function unavailabilityNoticeFor(memberId: string, target: MoveOccupantEndpoint): DragNotice | null {
+    const row = rows.find((r) => r.id === target.rowId);
+    const column = columnById.get(target.columnId);
+    if (!row || !column) return null;
+    const candidate = rankFor(row, target.columnId).find((c) => c.id === memberId);
+    if (!candidate || candidate.available) return null;
+    const day = new Date(column.date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", {
+      day: "numeric",
+      month: "short",
+    });
+    return {
+      tone: "note",
+      message: `${candidate.name} no está disponible el ${day} — el movimiento se aplicó de todos modos.`,
+    };
+  }
+
+  /**
+   * C4, forced — and the answer to the prompt's asynchronous hazard.
+   *
+   * The move is RE-JUDGED against the live `cells` instead of being applied to a
+   * snapshot taken when the prompt opened. A snapshot would be worse than stale:
+   * `onCellsChange(moveOccupant(snapshot, …))` hands `MonthGenerator` a whole
+   * `cells` array built from the grid as it was, silently reverting anything
+   * that landed while the dialog was up (Auto finishing, a picker edit in
+   * another window of the same session). Re-judging keeps the write on today's
+   * array and costs one cached gate call.
+   *
+   * The override recorded is the RE-JUDGED verdict's, never the one shown when
+   * the prompt opened: it is the rule actually in force at the moment of the
+   * write, and `withUpdatedCell` scopes an override to the rule it names
+   * (`ruleViolationsForColumn`). Recording a rule that no longer applies would
+   * sanction nothing and silence nothing.
+   *
+   * The three other outcomes are all real: the conflict may have been resolved
+   * (`clean` — move, with no waiver to record), or the target may have become
+   * unreachable (`refused`/`not-permitted` — say so, write nothing).
+   */
+  function forcePendingMove() {
+    const pending = pendingMove;
+    setPendingMove(null);
+    if (!pending) return;
+    const verdict = judgeMove(pending.source, pending.target);
+    if (verdict.kind === "prompt") {
+      applyMove(pending.source, pending.target, verdict.addOverride);
+      return;
+    }
+    if (verdict.kind === "clean") {
+      applyMove(pending.source, pending.target);
+      return;
+    }
+    setDragNotice({ tone: "refusal", message: verdict.reason });
+  }
+
+  /**
+   * Desist. It writes NOTHING — no `onCellsChange`, no partial move, no touched
+   * column — so `cells` is byte-identical to what it was before the drop
+   * (acceptance 5).
+   */
+  function desistPendingMove() {
+    setPendingMove(null);
+  }
+
+  const cellDrag: CellDragHandlers = {
+    enabled: !mutationLocked,
+    source: dragSource,
+    activeDropKey: dropTargetKey,
+    onOccupantDragStart: handleOccupantDragStart,
+    onOccupantDragEnd: clearDrag,
+    onCellDragOver: handleCellDragOver,
+    onCellDragLeave: handleCellDragLeave,
+    onCellDrop: handleCellDrop,
+  };
 
   /**
    * Opens the picker and freezes the candidate ORDER as of right now.
@@ -742,11 +1085,22 @@ export default function PlannerGrid(props: PlannerGridProps) {
    * Full screen outranks the picker when both are up: the picker is visible and
    * usable inside full screen, so the first Escape returns the admin to the page
    * they came from and the second closes the picker.
+   *
+   * **The C4 prompt outranks BOTH, and it is not a priority rule this listener
+   * can win by stopping propagation.** `CueDialog` registers its own
+   * capture-phase Escape listener on `document`, and two capture listeners on
+   * the SAME node both run: `stopPropagation` below stops the event reaching
+   * other nodes, not other listeners here — only `stopImmediatePropagation`
+   * would do that, and using it would break `CueDialog`'s dismissal instead.
+   * So the collision is resolved by yielding: while a prompt is open this
+   * listener does nothing at all, and one Escape dismisses the prompt alone
+   * rather than also exiting full screen and stranding a pending move.
    */
   useEffect(() => {
     if (!openKey && !fullScreen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      if (pendingMove) return;
       // SCOPED to keystrokes that are not already spoken for. A capture-phase
       // listener on `document` sees Escape before the field it was typed into
       // does, so an unconditional one made Escape inside "Nuevo instrumento"
@@ -769,7 +1123,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
     };
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [openKey, fullScreen, closePicker]);
+  }, [openKey, fullScreen, closePicker, pendingMove]);
 
   /**
    * What `role="dialog" aria-modal="true"` promises, actually delivered.
@@ -810,6 +1164,13 @@ export default function PlannerGrid(props: PlannerGridProps) {
     for (const child of Array.from(body.children)) {
       if (!(child instanceof HTMLElement)) continue;
       if (overlay && (child === overlay || child.contains(overlay))) continue;
+      // `CueDialogProvider`'s portal target is a body child too, and inerting it
+      // would make every dialog raised FROM full screen unusable — the C4
+      // force/desist prompt above all, which is reachable by a drag inside this
+      // overlay. A dialog is a HIGHER layer than the surface that opened it, so
+      // it is the one thing here that must stay live; `CueDialog` runs its own
+      // focus trap and its own `inert` for the layers below it.
+      if (child.hasAttribute("data-cue-dialog-root")) continue;
       if (child.hasAttribute("inert")) continue;
       child.setAttribute("inert", "");
       inerted.push(child);
@@ -903,6 +1264,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
   function copyRowAcrossColumns(row: GridRow, sourceColumnId: string) {
     if (mutationLocked) return;
     clearRemoveError();
+    clearDragNotice();
     const sourceColumn = columnById.get(sourceColumnId);
     if (mode === "stored" && sourceColumn && "admission" in sourceColumn && sourceColumn.admission === "readOnly") return;
     const sourceIds =
@@ -1012,6 +1374,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
                 : undefined
             }
             activeColumnId={openCell?.rowId === row.id ? openCell.columnId : null}
+            drag={cellDrag}
             minWClass={cellMinW}
             labelMinWClass={labelMinW}
             stickyLabelClass={stickyLabel}
@@ -1028,6 +1391,28 @@ export default function PlannerGrid(props: PlannerGridProps) {
   const centre = (
     <div className="min-w-0 flex-1 space-y-4 xl:order-2">
       {gridBlock}
+      {/*
+        The drag's only words: a refusal the gate produced (C1/C2/C3, or a
+        precondition), or acceptance 11's non-blocking unavailability note after
+        a move that DID land.
+
+        BELOW the grid on purpose. A message above it would move every cell down
+        the moment it appeared — mid-drag — and the browser answers a cell moving
+        out from under the cursor with `dragleave`/`dragenter`, so the surface
+        would fight the interaction it is describing. Rendered in `centre` rather
+        than beside the Auto controls so it exists in full screen too, where
+        those controls are gone.
+      */}
+      {dragNotice && (
+        <p
+          role="status"
+          aria-live="polite"
+          data-drag-notice={dragNotice.tone}
+          className={`font-body text-xs ${dragNotice.tone === "refusal" ? "text-red-400" : "text-amber-400"}`}
+        >
+          {dragNotice.message}
+        </p>
+      )}
       {!fullScreen && (
         <div className="flex flex-wrap gap-3">
           <AddRowForm placeholder="Nuevo instrumento" onAdd={addInstrumentRow} disabled={mutationLocked} />
@@ -1288,6 +1673,58 @@ export default function PlannerGrid(props: PlannerGridProps) {
       )}
 
       {regions}
+
+      {/*
+        C4, and the ONLY constraint that gets a prompt (DD2). `CueDialog` rather
+        than a hand-rolled panel: it is this repo's portalled dialog, with the
+        focus trap, the layer stack and the safe-area padding already solved, and
+        its portal is what keeps the prompt visible in full screen — where this
+        surface is itself a `position: fixed` overlay and an in-flow dialog would
+        be painted inside the box the admin is dragging in.
+
+        Mounted conditionally (the `SetlistEditor.tsx:494` shape) rather than
+        always-mounted-with-`open={false}`: `CueDialog` throws outside a
+        `CueDialogProvider`, and this grid renders in unit tests that have no
+        provider and never raise a prompt.
+      */}
+      {pendingMove && (
+        <CueDialog
+          open
+          title="Forzar el movimiento"
+          label="Forzar el movimiento"
+          size="sm"
+          onDismiss={desistPendingMove}
+        >
+          <div className="space-y-4 p-6">
+            <p className="font-body text-sm text-[#C8D8EB]">
+              Una regla no permite mover a {pendingMove.memberName} aquí:
+            </p>
+            <p data-prompt-reason className="font-body text-sm text-red-400">
+              {pendingMove.reason}
+            </p>
+            <p className="font-body text-xs text-[#C8D8EB]/70">
+              Si lo mueves de todos modos, la regla queda anulada solo para esta casilla y se marca
+              ahí para que siga a la vista.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={forcePendingMove}
+                className="min-h-[44px] flex-1 rounded-lg border border-amber-500/40 px-3 font-label text-xs uppercase tracking-widest text-amber-400 hover:bg-amber-500/10"
+              >
+                Mover de todos modos
+              </button>
+              <button
+                type="button"
+                onClick={desistPendingMove}
+                className="min-h-[44px] flex-1 rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest hover:border-[#00bfff]"
+              >
+                Desistir
+              </button>
+            </div>
+          </div>
+        </CueDialog>
+      )}
     </div>
   );
 
@@ -1501,6 +1938,7 @@ function RowGroup({
   onCopy,
   mutationLocked,
   activeColumnId,
+  drag,
   minWClass,
   labelMinWClass,
   stickyLabelClass,
@@ -1526,6 +1964,7 @@ function RowGroup({
    * to.
    */
   activeColumnId: string | null;
+  drag: CellDragHandlers;
   minWClass: string;
   labelMinWClass: string;
   stickyLabelClass: string;
@@ -1591,6 +2030,7 @@ function RowGroup({
             onCopy={onCopy ? () => onCopy(column.columnId) : undefined}
             mutationLocked={mutationLocked}
             active={activeColumnId === column.columnId}
+            drag={drag}
             minWClass={minWClass}
           />
         );
@@ -1611,6 +2051,7 @@ function GridCellView({
   onCopy,
   mutationLocked,
   active,
+  drag,
   minWClass,
 }: {
   row: GridRow;
@@ -1625,6 +2066,7 @@ function GridCellView({
   mutationLocked: boolean;
   /** This cell is the one the picker column is showing. */
   active: boolean;
+  drag: CellDragHandlers;
   minWClass: string;
 }) {
   // D7: rows that CARRY a target cap at it, then a focusable `+N`. Rows that
@@ -1659,6 +2101,9 @@ function GridCellView({
   const overridden = seatedRules.filter((x) => x.v.overridden);
   const hiddenHasViolation = hiddenIds.some((id) => ruleOf(id)?.overridden === false);
 
+  const endpoint: MoveOccupantEndpoint = { rowId: row.id, columnId: column.columnId };
+  const isDropTarget = drag.activeDropKey === cellKey(column.columnId, row.id);
+
   return (
     <div
       role="button"
@@ -1671,6 +2116,14 @@ function GridCellView({
           onOpen();
         }
       }}
+      // The whole cell is the drop target — cell granularity, never seat-slot
+      // granularity. `onDragOver` is what decides whether this cell accepts the
+      // drop at all (it `preventDefault`s only when the gate permits the move),
+      // so a refused cell never reaches `onDrop`.
+      onDragOver={(e) => drag.onCellDragOver(e, endpoint)}
+      onDragLeave={() => drag.onCellDragLeave(endpoint)}
+      onDrop={(e) => drag.onCellDrop(e, endpoint)}
+      data-drop-target={isDropTarget ? "true" : undefined}
       data-row-id={row.id}
       data-date={column.date}
       data-column-id={column.columnId}
@@ -1683,7 +2136,9 @@ function GridCellView({
       aria-expanded={active ? true : undefined}
       className={`min-h-[44px] ${minWClass} rounded-lg border px-2 py-1.5 transition-colors ${
         overflow ? "border-amber-500/40 bg-amber-500/5" : "border-[#00bfff]/15 hover:border-[#00bfff]/40"
-      } ${mutationLocked ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${active ? "ring-2 ring-[#00bfff] ring-offset-2 ring-offset-[#010b17]" : ""}`}
+      } ${mutationLocked ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${active ? "ring-2 ring-[#00bfff] ring-offset-2 ring-offset-[#010b17]" : ""} ${
+        isDropTarget ? "border-[#00bfff] bg-[#00bfff]/10" : ""
+      }`}
     >
       <div className="flex flex-wrap gap-1">
         {visibleIds.length === 0 && memberIds.length === 0 && (
@@ -1699,9 +2154,34 @@ function GridCellView({
           // among the rows that hold the duplicate.
           const isDuplicate = duplicates.get(id)?.includes(row.id) ?? false;
           const ruleBroken = ruleOf(id)?.overridden === false;
+          const dragging =
+            drag.source?.memberId === id &&
+            drag.source.rowId === row.id &&
+            drag.source.columnId === column.columnId;
           return (
             <span
               key={id}
+              // T4 — the drag SOURCE, and the only one. Occupants past `target`
+              // are behind `+N` and have no chip, so a drag reaches visible
+              // occupants only; `+N` deliberately gets no second handle (it
+              // opens the picker, and DD11's picker-row path is T5's).
+              //
+              // Still a `<span>`, still non-focusable. Making it a `<button>`
+              // would nest one inside this cell's own `role="button"` — invalid
+              // ARIA, and its Enter would be swallowed by the ancestor's
+              // `onKeyDown` (which `preventDefault`s and opens the picker).
+              // Keyboard parity is T5's, and it has to restructure the cell's
+              // key handling to get it; this task does not pretend to.
+              draggable={drag.enabled}
+              onDragStart={(e) => {
+                // The cell is not draggable, so nothing competes for this event
+                // — stopped anyway so a future draggable ancestor cannot start a
+                // second drag from the same gesture.
+                e.stopPropagation();
+                drag.onOccupantDragStart(e, { rowId: row.id, columnId: column.columnId, memberId: id });
+              }}
+              onDragEnd={drag.onOccupantDragEnd}
+              data-occupant={id}
               // Legibility pass — the member chip is the thing the admin
               // actually reads across the whole month, and `text-[10px]` was
               // the smallest type on the surface. One step up, to `text-xs`.
@@ -1709,7 +2189,7 @@ function GridCellView({
                 isDuplicate || ruleBroken
                   ? "border-red-500/50 bg-red-500/10"
                   : "border-[#00bfff]/25 bg-[#00bfff]/10"
-              }`}
+              } ${drag.enabled ? "cursor-grab" : ""} ${dragging ? "opacity-30" : ""}`}
             >
               {memberName(id)}
               {(isDuplicate || ruleBroken) && " ⚠"}
