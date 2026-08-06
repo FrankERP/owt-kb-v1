@@ -65,6 +65,30 @@ Keep a running ledger: round number, verdict, and each blocker with your disposi
 - Detect flip-flop and surface evidence-supported judgment calls to the user.
 - Report rounds, tier, approved digest, changes, refutations, and remaining concerns.
 
+## Publish the ledger as a committed review log — required
+
+When the loop ends, write the ledger up as a durable file committed beside the plan:
+same directory, `<plan-basename>-review-log.md`. See
+`docs/superpowers/plans/2026-08-06-grid-drag-and-drop-review-log.md` for the shape.
+
+An approval recorded only as a status line in the plan is the author's unverifiable
+word. The digest pairing is checkable from the repository; "two fresh reviewers
+approved this digest" is not. The log is what makes the claim auditable by someone
+who was not present.
+
+Write it **after** the loop terminates. Never show it to a reviewer — publishing it
+mid-loop destroys the coldness the mechanism depends on.
+
+Record: the tier and why (including whether it was raised against the ladder rather
+than derived from it); a round table of digest, commit and verdict, marking where a
+critical streak reset and what reset it; every blocker with its disposition and the
+**evidence checked**; non-blocking items adopted and not adopted; **the author's own
+process failures** — a churn cap exceeded, a defect introduced mid-loop, a reviewer
+claim accepted without independent verification; and **post-approval changes**,
+listed separately and marked un-reviewed, since approval covers exactly one digest.
+
+State in the log that approval is not authorization to implement.
+
 ## Termination and guardrails
 
 - **Standard done = one fresh `APPROVED`. Critical done = two fresh sequential
@@ -89,3 +113,4 @@ Keep a running ledger: round number, verdict, and each blocker with your disposi
 | Running two reviewers at once | Sequential only — see step 4 |
 | Diluting the plan to force approval | Fix real blockers; refute wrong ones with evidence |
 | Looping forever on a judgment call | Escalate the disagreement to the user |
+| Recording the approval only as a status line | Commit a review log beside the plan; a status line is the author's unverifiable word |
