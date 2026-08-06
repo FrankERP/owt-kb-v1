@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-// The participation panel beside the two editing surfaces.
+// The participation panel beside the month grid, the one editing surface left.
 //
 // The ONE thing worth pinning here is that the panel counts the work in
 // progress, not just what is stored. A panel fed only `savedWindow` renders
@@ -11,29 +11,22 @@
 // being kept.
 //
 // The second thing, and the reason the grid's fixtures below carry a service
-// from a month nobody is planning: the grid's rail is SCOPED TO THE MONTH BEING
+// from a month nobody is planning: the grid's chart is SCOPED TO THE MONTH BEING
 // GENERATED (`participationSaved` in `MonthGenerator`) — the drafts on screen
-// plus everything already saved in that month, and nothing from any other. The
-// Tablero is deliberately NOT month-scoped: it edits one service on one date and
-// its `windowRoles` is a rolling 56-day window anchored at that date
-// (`ServicesPanel.recentRolesWindow`), which is the right baseline for a
-// one-service decision and the wrong one for "is this month fair".
+// plus everything already saved in that month, and nothing from any other. That
+// scope is the right baseline for "is this month fair", which is the only
+// question this surface asks.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import CueDialog from "@/app/components/ui/CueDialog";
-import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
 import MonthGenerator from "../MonthGenerator";
-import { MIN_WIDTH, RAIL_WIDTH } from "../ParticipationRail";
 import { CHART_COLUMN_WIDTH, PICKER_COLUMN_WIDTH } from "../PlannerGrid";
-import SeatBoard, { boardParticipationRoles } from "../SeatBoard";
 import { buildColumns, plannerParticipationRoles, type GridCell, type SavedRole } from "../plannerModel";
 import { computeParticipation, type ParticipantRole } from "@/app/utils/computeParticipation";
-import type { AssignedSeat, RankMember } from "../candidateRanking";
-import type { ServiceRole } from "../serviceCardModel";
+import type { RankMember } from "../candidateRanking";
 import { readyRules } from "./rulesHarness";
 
 afterEach(() => {
@@ -81,14 +74,14 @@ function savedSpecial(date: string, name: string, leadId: string): SavedRole {
 }
 
 /**
- * The rendered rail, wherever it landed.
+ * The rendered chart, wherever it landed.
  *
- * Two places, on purpose. The GUTTER placement is portalled to `document.body`
- * (`ParticipationRail`, and the WebKit reason is in its header), so it is not
- * under the render container; the in-flow fallback still is. Looking in the
- * container first and the document second finds exactly one either way — and
- * keeps every assertion below asking the same question it asked before the
- * portal, rather than being softened to accommodate it.
+ * It is an in-flow column now and always under the render container. The
+ * document-level fallback is kept deliberately: a retired gutter placement
+ * portalled the chart to `document.body`, and looking in the container first
+ * and the document second means these assertions ask the SAME question they
+ * asked before that placement existed and after it was removed. If a portal
+ * ever comes back, nothing here has to be softened to accommodate it.
  *
  * `selector` narrows to one surface where a test needs to; the default matches
  * either.
@@ -251,131 +244,19 @@ describe("plannerParticipationRoles — saved + drafts, each service once", () =
   });
 });
 
-// ─── The Tablero's arithmetic, without a DOM ─────────────────────────────────
-
-describe("boardParticipationRoles — the edited service, live", () => {
-  const assigned: AssignedSeat[] = [
-    { seatId: "lead", category: "voz", memberId: "m1" },
-    { seatId: "instrumento:Bass", category: "instrumento", memberId: "d1" },
-  ];
-
-  it("replaces the SAVED copy of the service being edited with the live seats", () => {
-    const saved = [
-      { ...savedSunday("2026-02-08", "m2"), _id: "role-1" },
-      savedSunday("2026-01-04", "m2"),
-    ];
-    const roles = boardParticipationRoles({
-      saved,
-      savedId: "role-1",
-      type: "sunday_role",
-      date: "2026-02-08",
-      assigned,
-      members,
-    });
-    const totals = computeParticipation(roles);
-    // Gaby held the Lead of role-1 when it was saved and has been swapped out:
-    // she keeps only her January service. Counting both copies would give her 2.
-    expect(totals.find((r) => r.name === "Gaby")!.total).toBe(1);
-    expect(totals.find((r) => r.name === "Frank")!.total).toBe(1);
-    expect(totals.find((r) => r.name === "Samo")!.instrWeeks).toBe(1);
-  });
-
-  it("drops nothing when there is no saved service yet (create mode)", () => {
-    const roles = boardParticipationRoles({
-      saved: [savedSunday("2026-01-04", "m2")],
-      savedId: undefined,
-      type: "sunday_role",
-      date: "2026-02-08",
-      assigned,
-      members,
-    });
-    const totals = computeParticipation(roles);
-    expect(totals.find((r) => r.name === "Gaby")!.total).toBe(1);
-    expect(totals.find((r) => r.name === "Frank")!.total).toBe(1);
-  });
-
-  it("counts the Coro seat and the FOH seat, not only Lead and instruments", () => {
-    // `inSeat("coro")` and `inCategory("foh")` were the two lines in
-    // `boardParticipationRoles` that no test touched: replacing either with `[]`
-    // left the whole suite green while the rail silently under-counted the
-    // people in those seats.
-    const roles = boardParticipationRoles({
-      saved: [],
-      type: "sunday_role",
-      date: "2026-02-08",
-      assigned: [
-        { seatId: "coro", category: "voz", memberId: "m3" },
-        { seatId: "foh:Sonido", category: "foh", memberId: "d1" },
-      ],
-      members,
-    });
-    const totals = computeParticipation(roles);
-    expect(totals.find((r) => r.name === "Liu")!.coro).toBe(1);
-    expect(totals.find((r) => r.name === "Liu")!.total).toBe(1);
-    expect(totals.find((r) => r.name === "Samo")!.fohWeeks).toBe(1);
-  });
-
-  it("drops the edited service by _id, not by date — the board can MOVE the date", () => {
-    // The date input is editable, so the live role's date is not the stored
-    // one's. A date match would keep the stored copy and count Gaby twice.
-    const roles = boardParticipationRoles({
-      saved: [{ ...savedSunday("2026-02-08", "m2"), _id: "role-1" }],
-      savedId: "role-1",
-      type: "sunday_role",
-      date: "2026-02-15",
-      assigned,
-      members,
-    });
-    const totals = computeParticipation(roles);
-    expect(totals.find((r) => r.name === "Gaby")).toBeUndefined();
-    expect(totals.find((r) => r.name === "Frank")!.total).toBe(1);
-  });
-
-  it("keeps the OTHER special saved on the date the edited one shares", () => {
-    // Two specials can share a date (`special_role:${date}:${name}`). Matching
-    // on date would drop both and erase a roster nobody is editing.
-    const roles = boardParticipationRoles({
-      saved: [
-        { ...savedSpecial("2026-02-11", "Vigilia", "m2"), _id: "role-1" },
-        { ...savedSpecial("2026-02-11", "Retiro", "m3"), _id: "role-2" },
-      ],
-      savedId: "role-1",
-      type: "special_role",
-      date: "2026-02-11",
-      assigned,
-      members,
-    });
-    const totals = computeParticipation(roles);
-    expect(totals.find((r) => r.name === "Liu")!.total).toBe(1); // Retiro, untouched
-    expect(totals.find((r) => r.name === "Gaby")).toBeUndefined(); // Vigilia's stored Lead, swapped out
-    expect(totals.find((r) => r.name === "Frank")!.total).toBe(1); // the live seats
-  });
-
-  it("round-trips an id with no member record rather than dropping the person", () => {
-    const roles = boardParticipationRoles({
-      saved: [],
-      type: "sunday_role",
-      date: "2026-02-08",
-      assigned: [{ seatId: "lead", category: "voz", memberId: "ghost" }],
-      members,
-    });
-    expect(roles[0].leads).toEqual([{ _id: "ghost" }]);
-  });
-});
-
 // ─── The planner grid, end to end ────────────────────────────────────────────
 
 /**
  * A wide (or deliberately narrow) viewport.
  *
- * The rail chooses its placement from `matchMedia` (`ParticipationRail`), and
- * jsdom neither implements `matchMedia` nor lays anything out — so a test that
- * does not stub it exercises the FALLBACK placement and nothing else. Both
- * surfaces need this, for opposite reasons: the Tablero renders no rail at all
- * below its threshold, while the grid's rail renders inline. Every `goToGrid`
- * test in this file predates the stub and therefore only ever rendered the
- * inline branch — which is how a select that overflowed the fixed rail by 47px
- * shipped under a green suite. The gutter branch is covered explicitly below.
+ * jsdom neither implements `matchMedia` nor lays anything out. The grid's chart
+ * consults no threshold at all any more — which is itself asserted below — so
+ * the stub's job here is the INVERSE of what it was: it proves the column
+ * renders identically at both widths rather than selecting between two
+ * placements. It is kept because the retired gutter placement branched on
+ * width, and every `goToGrid` test predating the stub only ever rendered the
+ * inline branch, which is how a select that overflowed by 47px shipped under a
+ * green suite. A width branch reappearing must fail here.
  *
  * `queries` records what the component ASKED for, so a test can prove which
  * threshold a surface used rather than inferring it from the answer.
@@ -626,7 +507,9 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
       // Nothing viewport-anchored: `fixed` inside `.brand-admin-shell` is the
       // shape that needed the portal, and re-introducing any of it here would
       // re-introduce the Safari paint bug along with it.
-      for (const cls of ["fixed", "left-2", "top-24", "top-20", `w-[${RAIL_WIDTH}px]`]) {
+      // The bare `w-[216px]` is the retired gutter's unprefixed width; the
+      // column's is `xl:`-prefixed, asserted below. Same number, different class.
+      for (const cls of ["fixed", "left-2", "top-24", "top-20", `w-[${CHART_COLUMN_WIDTH}px]`]) {
         expect(rail.className.split(/\s+/)).not.toContain(cls);
       }
       // The track width the layout arithmetic is stated in (`PlannerGrid.tsx`'s
@@ -643,13 +526,13 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
   }
 
   it("consults NO viewport threshold — the column is unconditional", () => {
-    // The grid's chart no longer goes through `ParticipationRail` at all, so it
-    // asks `matchMedia` nothing. A query reappearing here means someone put the
-    // branch back, and the 1512px laptop loses the chart again silently.
+    // The chart is an ordinary in-flow column and asks `matchMedia` nothing. A
+    // query reappearing here means someone put a width branch back, and the
+    // 1512px laptop loses the chart again silently — which is exactly how the
+    // retired gutter placement failed.
     const queries = stubWideViewport();
     goToGrid([]);
     expect(queries.filter((q) => q.includes("min-width"))).toEqual([]);
-    expect(queries).not.toContain(`(min-width: ${MIN_WIDTH.dialog}px)`);
   });
 
   it("gives the candidate picker its own column, only while a cell is active", () => {
@@ -1018,29 +901,6 @@ describe("the gutter rail renders outside the surfaces that swallow it", () => {
     }
   });
 
-  it("puts the Tablero's rail outside the dialog shell that carries the same trio", () => {
-    // `CueDialog`'s shell is `brand-facet-panel` — `relative` + `isolation:
-    // isolate` + `overflow: hidden`, the identical property set. `SeatBoard`
-    // renders its own markup here rather than through `CueDialog`, so the
-    // panel class is applied to a stand-in wrapper for the same reason as above.
-    stubWideViewport();
-    const panel = document.createElement("div");
-    panel.className = "brand-facet-panel";
-    document.body.appendChild(panel);
-    try {
-      const { container } = renderBoard({}, panel);
-      const rail = findRail(container, '[data-participation-rail="dialog"]') as HTMLElement;
-
-      expect(rail).not.toBeNull();
-      expect(rail.getAttribute("data-rail-placement")).toBe("gutter");
-      expect(rail.closest(".brand-facet-panel")).toBeNull();
-      expect(panel.contains(rail)).toBe(false);
-      expect(rail.parentElement).toBe(document.body);
-      expect(railTotal(container, "Gaby")).toBe(1);
-    } finally {
-      panel.remove();
-    }
-  });
 });
 
 describe("the picker's load figure is labelled, so it cannot pose as the rail's total", () => {
@@ -1059,258 +919,7 @@ describe("the picker's load figure is labelled, so it cannot pose as the rail's 
   });
 });
 
-// ─── The Tablero, end to end ─────────────────────────────────────────────────
-
-/**
- * The roster pane's row for a name. Once someone is seated their name also
- * appears as a seat chip and in the rail, so a bare `getByText` is ambiguous —
- * only the roster row is an `<li>` (the pattern `SeatBoard.test.tsx` uses).
- */
-function rosterRow(name: string): HTMLLIElement {
-  const li = screen
-    .getAllByText(name)
-    .map((el) => el.closest("li"))
-    .find((el): el is HTMLLIElement => el !== null);
-  if (!li) throw new Error(`no roster row for ${name}`);
-  return li;
-}
-
-const savedRole: ServiceRole = {
-  _id: "role-1",
-  _type: "sunday_role",
-  date: "2026-02-08",
-  leads: [{ _id: "m2", member_name: "Gaby" }],
-  bgvs: [],
-  chorus: [],
-  instruments: [],
-  foh: [],
-} as unknown as ServiceRole;
-
-function renderBoard(
-  props: Partial<React.ComponentProps<typeof SeatBoard>> = {},
-  // As `goToGrid`: a caller-supplied mount node, so a real `.brand-facet-panel`
-  // can sit above the board the way `CueDialog`'s shell does.
-  container?: HTMLElement,
-) {
-  return render(
-    <SeatBoard
-      initial={savedRole}
-      members={members}
-      windowRoles={[
-        { ...savedRole, _id: "role-1" } as unknown as ParticipantRole & { _id: string },
-        savedSunday("2026-01-04", "m1"),
-      ]}
-      onSubmit={vi.fn()}
-      onClose={vi.fn()}
-      loading={false}
-      {...props}
-    />,
-    container ? { container } : undefined,
-  );
-}
-
-describe("the Tablero's rail counts the seats being edited", () => {
-  it("renders no rail at all on a narrow viewport", () => {
-    stubWideViewport(false);
-    const { container } = renderBoard();
-    expect(findRail(container)).toBeNull();
-  });
-
-  it("counts the live seats, not the stored ones", () => {
-    stubWideViewport();
-    const { container } = renderBoard();
-
-    // Gaby is the SAVED Lead of the service being edited. Counting the stored
-    // copy as well as the live one would put her at 2.
-    expect(railTotal(container, "Gaby")).toBe(1);
-    expect(railTotal(container, "Frank")).toBe(1); // her January service, untouched
-
-    // The Lead seat takes two, so this ADDS Frank beside Gaby.
-    fireEvent.click(rosterRow("Frank"));
-    expect(railTotal(container, "Frank")).toBe(2);
-    expect(railTotal(container, "Gaby")).toBe(1);
-
-    // Un-seat Gaby: her only appearance anywhere was this service's live copy,
-    // so she leaves the chart entirely. If the saved copy of role-1 were still
-    // being counted she would stay at 1 here.
-    fireEvent.click(rosterRow("Gaby"));
-    expect(railTotal(container, "Gaby")).toBeNull();
-    expect(railTotal(container, "Frank")).toBe(2);
-  });
-
-  it("labels the board picker's load figure too — its drift is the mirror image", () => {
-    // Here the picker still counts the STORED copy of the service being edited
-    // (`rankCandidates` gets `windowRoles` untouched) while the rail swaps it for
-    // the live seats. Same screen, same person, two honest numbers.
-    stubWideViewport();
-    renderBoard();
-    expect(screen.getAllByText(/Carga para ordenar/).length).toBeGreaterThan(0);
-  });
-
-  it("counts a seat added to a service that has no saved copy yet", () => {
-    stubWideViewport();
-    const { container } = renderBoard({ initial: undefined, windowRoles: [] });
-    expect(findRail(container)).not.toBeNull();
-    expect(railTotal(container, "Liu")).toBeNull();
-
-    fireEvent.click(rosterRow("Liu"));
-    expect(railTotal(container, "Liu")).toBe(1);
-  });
-});
-
-/**
- * The rail's Voces/Instrumentos select, reachable by KEYBOARD — the whole board
- * inside a real `CueDialog`, not a stand-in.
- *
- * The portal that makes the rail visible in Safari (`ParticipationRail.tsx`)
- * takes it out of the dialog shell that `CueDialog` builds its Tab ring from, so
- * for one release the select was mouse-only. `SeatBoard` now registers the
- * portalled node as a focus SATELLITE (`useCueDialogFocusSatellite`); this is
- * the end-to-end proof that the wiring is connected, as opposed to
- * `CueDialog.test.tsx`, which pins the mechanism against a stand-in portal.
- *
- * jsdom performs no sequential focus navigation, so only the trap's two FORCED
- * moves are observable: Shift+Tab off the ring's first stop, and Tab off its
- * last. Those are exactly the two the fix changes.
- */
-describe("the Tablero's rail select is reachable by keyboard", () => {
-  function renderBoardInDialog() {
-    return render(
-      <CueDialogProvider>
-        <CueDialog open title="Editar servicio" onDismiss={vi.fn()}>
-          <SeatBoard
-            initial={savedRole}
-            members={members}
-            windowRoles={[{ ...savedRole, _id: "role-1" } as unknown as ParticipantRole & { _id: string }]}
-            onSubmit={vi.fn()}
-            onClose={vi.fn()}
-            loading={false}
-          />
-        </CueDialog>
-      </CueDialogProvider>,
-    );
-  }
-
-  /** The rail's own select, told apart from the board's date/type selects. */
-  function railSelect() {
-    const rail = document.body.querySelector<HTMLElement>('[data-participation-rail="dialog"]');
-    if (!rail) throw new Error("no participation rail rendered");
-    return within(rail).getByRole("combobox") as HTMLSelectElement;
-  }
-
-  it("Shift+Tab off the dialog's first stop lands on the rail's select", () => {
-    stubWideViewport();
-    renderBoardInDialog();
-
-    const close = screen.getByRole("button", { name: "Cerrar diálogo" });
-    // Opening the dialog still focuses the dialog itself, not the rail.
-    expect(document.activeElement).toBe(close);
-
-    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
-    expect(document.activeElement).toBe(railSelect());
-  });
-
-  it("Tab off the rail's select closes the cycle back into the dialog", () => {
-    stubWideViewport();
-    renderBoardInDialog();
-
-    const select = railSelect();
-    select.focus();
-    expect(document.activeElement).toBe(select);
-
-    fireEvent.keyDown(document, { key: "Tab" });
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cerrar diálogo" }));
-  });
-
-  it("operates the select from the keyboard and repaints the chart", () => {
-    stubWideViewport();
-    renderBoardInDialog();
-
-    const select = railSelect();
-    select.focus();
-    expect(select.value).toBe("voces");
-
-    // What a keyboard user's arrow-then-commit produces: a change event on the
-    // focused select. The chart must follow, and focus must stay put.
-    fireEvent.change(select, { target: { value: "instrumentos" } });
-    expect(railSelect().value).toBe("instrumentos");
-    expect(document.activeElement).toBe(railSelect());
-  });
-
-  it("keeps the dialog's own ring when the viewport is too narrow for a rail", () => {
-    // Nothing is registered, so this is the untouched behaviour every other
-    // CueDialog consumer gets.
-    stubWideViewport(false);
-    renderBoardInDialog();
-
-    expect(document.body.querySelector('[data-participation-rail="dialog"]')).toBeNull();
-    const close = screen.getByRole("button", { name: "Cerrar diálogo" });
-    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
-    expect(document.activeElement).not.toBe(close);
-    expect(close.closest('[role="dialog"]')?.contains(document.activeElement)).toBe(true);
-  });
-});
-
 // ─── The gutter thresholds, as STATED vs as coded ────────────────────────────
-
-/**
- * `ParticipationRail` owns the gutter width, and two other places describe it in
- * prose: the mount-site comment in `SeatBoard`, and the component table in
- * `UTILITIES_AND_COMPONENTS.md`. When the widths last moved, `MIN_WIDTH` and the
- * rail's own header were updated and the prose was not — leaving a reader who
- * derives the gutter arithmetic from a comment with the wrong answer, in a repo
- * where the comments are the design record.
- *
- * A static-analysis sync guard, in the shape `routeMatcher.test.ts` already uses
- * for the middleware matcher: nothing here renders, it just refuses to let the
- * prose and the constant disagree again.
- *
- * The PANEL half of this guard is gone with the panel placement — the planner
- * grid consults no threshold at all now. Its replacement is the layout guard
- * below, which pins the same kind of prose-vs-code drift for the three column
- * widths that took its place.
- */
-describe("the stated rail threshold matches MIN_WIDTH", () => {
-  const root = process.cwd();
-  const read = (p: string) => readFileSync(join(root, p), "utf8");
-  const railSrc = read("app/components/admin/ParticipationRail.tsx");
-  const minWidth = railSrc.match(/MIN_WIDTH[^=]*=\s*\{\s*dialog:\s*(\d+)\s*\}/);
-
-  it("extracts the width from the rail (the guard is worthless if this fails)", () => {
-    expect(minWidth, "could not extract MIN_WIDTH from ParticipationRail.tsx").toBeTruthy();
-  });
-
-  it("SeatBoard's mount comment states the dialog width", () => {
-    const stated = read("app/components/admin/SeatBoard.tsx").match(
-      /Below (\d+)px there is no gutter/,
-    );
-    expect(stated?.[1]).toBe(minWidth![1]);
-  });
-
-  it("UTILITIES_AND_COMPONENTS.md states it", () => {
-    const stated = read("docs/UTILITIES_AND_COMPONENTS.md").match(/the Tablero \(≥(\d+)px\)/);
-    expect(stated?.[1]).toBe(minWidth![1]);
-  });
-
-  it("the class the rail renders is the width the arithmetic is stated in", () => {
-    // `w-[216px]` is a Tailwind literal and cannot be built from `RAIL_WIDTH` at
-    // runtime, so the two can drift. This is the only thing that stops them.
-    expect(railSrc).toMatch(new RegExp(`w-\\[${RAIL_WIDTH}px\\]`));
-  });
-
-  it("nothing mounts the retired panel placement any more", () => {
-    // The one-word change that would quietly put a `position: fixed` element
-    // back inside `.brand-admin-shell` — where it lays out, hit-tests and paints
-    // nothing in Safari.
-    // Matched on the import and the JSX, not on the word: the mount site's
-    // comment names the retired component on purpose, so a reader who goes
-    // looking for it finds out why it is gone rather than that it never existed.
-    expect(railSrc).not.toMatch(/placement === "panel"|panel:\s*\d/);
-    const genSrc = read("app/components/admin/MonthGenerator.tsx");
-    expect(genSrc).not.toMatch(/import\s*\{[^}]*ParticipationRail/);
-    expect(genSrc).not.toMatch(/<ParticipationRail/);
-  });
-});
 
 /**
  * The three column widths, prose versus code.
@@ -1431,13 +1040,14 @@ describe("the planner's three column widths agree wherever they are written", ()
  * The PLANNER COLUMN's width, against the chart that has to fit inside it — the
  * hole that let a 190px column ship.
  *
- * `ParticipationRail`'s own floor guard (below) has existed all along, but it
- * pins `RAIL_WIDTH`, and the planner column is a different number in a different
- * file. Nothing tied `CHART_COLUMN_WIDTH` to `ParticipationSidebar` at all: the
+ * The retired gutter rail had a floor guard of its own, but it pinned the rail's
+ * width, and the planner column was a different number in a different file.
+ * Nothing tied `CHART_COLUMN_WIDTH` to `ParticipationSidebar` at all: the
  * three-width guard above compares 216/240 against PROSE in two comments, which
  * agree with each other perfectly whatever number they hold. So 190 passed every
  * test while the count column printed itself on top of the bar on every member
- * row.
+ * row. With the rail gone this is the ONLY guard left that reads the chart's
+ * real content floor, so it carries the whole weight.
  *
  * WHAT THIS CANNOT DO: prove the overlap is gone. jsdom lays nothing out. It
  * re-derives the floor from the sidebar's own source — the numbers a browser
@@ -1499,66 +1109,25 @@ describe("the planner's chart column is at least the chart's content floor", () 
     expect(memberRowFloor()).toBeGreaterThan(190);
   });
 
-  it("the gutter rail and the planner column share one floor", () => {
-    // Two surfaces, one chart. If they ever diverge, one of them is wrong — and
-    // the wrong one is whichever is smaller than `memberRowFloor()`.
-    expect(CHART_COLUMN_WIDTH).toBe(RAIL_WIDTH);
-  });
 });
 
 /**
- * `MIN_WIDTH` versus `RAIL_WIDTH`, through the formula the header comment
- * actually derives it by — not a regex-vs-import duplicate, which would compare
- * the same declaration to itself and could not fail short of the regex breaking
- * (that failure mode belongs to "extracts the width…" above).
+ * The chart's HEADER row, which no width arithmetic can catch.
  *
- * The header states: the rail needs `RAIL_WIDTH` + 8px (`left-2`) + 8px of air
- * clear of the container's content before the container's first pixel — 232px
- * today. That clearance feeds the threshold:
- *   • dialog: (W - 896) / 2 >= clearance   (max-w-4xl, no inset)
- * 896 is a page-layout fact (`CueDialog.tsx`'s `max-w-4xl`), not part of this
- * pair — it does not move when the rail's own width does, so it is fixed here
- * rather than re-derived. `RAIL_WIDTH` is the one input that can change (it did,
- * in the commit that stacked the sidebar's header row), and `MIN_WIDTH` must
- * stay at least the minimum that formula demands for whatever `RAIL_WIDTH`
- * currently is. A widened rail with a stale `MIN_WIDTH` is exactly the 47px
- * overlap the header's own history names.
- */
-describe("MIN_WIDTH still clears the gutter RAIL_WIDTH actually needs", () => {
-  const clearance = RAIL_WIDTH + 8 /* left-2 */ + 8 /* air */;
-  const dialogMinRequired = 896 + 2 * clearance;
-
-  it("the dialog threshold clears (W - 896) / 2 >= RAIL_WIDTH + 16", () => {
-    expect(MIN_WIDTH.dialog).toBeGreaterThanOrEqual(dialogMinRequired);
-  });
-});
-
-/**
- * The width FLOOR, against the chart that actually has to fit inside it.
+ * The member row is covered above, derived from the sidebar's own source. The
+ * header is a different failure: a `<select>` is as wide as its longest option,
+ * so while it sat BESIDE the title the header's demand was the SUM of the two
+ * (131 + 8 + 112 + 24 = 275), and no floor derived from the bar row can hold
+ * that. A real browser measured the chart at 262px of content in a 216px box,
+ * with the select's right edge 47px out over the planner grid. Stacking the
+ * header made each row ask for the WIDER of the two rather than their sum.
  *
- * `RAIL_WIDTH` is derived from the widest row in `ParticipationSidebar`, and that
- * derivation lives in a comment in a different file from the numbers it derives
- * from — which is exactly how the header row got left out of it and overflowed
- * the rail by 47px onto the planner grid. Widening the bar, the count column or
- * the padding without moving the floor (and the two thresholds that follow from
- * it) fails here rather than on someone's screen.
+ * This is a structural pin on `ParticipationSidebar`, not a numeric one — the
+ * arithmetic above cannot see it, which is precisely why it shipped broken.
  */
-describe("the rail's width floor still fits the chart inside it", () => {
+describe("the chart's header row cannot out-demand its column", () => {
   const root = process.cwd();
   const sidebarSrc = readFileSync(join(root, "app/components/admin/ParticipationSidebar.tsx"), "utf8");
-  const px = (re: RegExp, what: string, scale = 1) => {
-    const m = sidebarSrc.match(re);
-    expect(m, `could not read ${what} from ParticipationSidebar.tsx`).toBeTruthy();
-    return Number(m![1]) * scale;
-  };
-
-  it("the member row (bar + gap + count, inside the padding) fits", () => {
-    const bar = px(/style=\{\{ width: (\d+), background:/, "the bar's inline width");
-    const gap = px(/className="flex items-center gap-([\d.]+)/, "the row gap", 4);
-    const count = px(/min-w-\[(\d+)px\]/, "the count column");
-    const pad = px(/<aside className="[^"]*\bp-(\d+)\b/, "the aside padding", 4);
-    expect(bar + gap + count + 2 * pad).toBeLessThanOrEqual(RAIL_WIDTH);
-  });
 
   it("the header row cannot demand the select's intrinsic width", () => {
     // `w-full` inside a block header. Side by side with the title (the shipped

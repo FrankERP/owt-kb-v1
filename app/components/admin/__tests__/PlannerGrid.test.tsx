@@ -122,8 +122,7 @@ function cellForColumn(container: HTMLElement, rowId: string, columnId: string):
  * The candidate picker's <li> for a given name. Once a member is seated
  * anywhere, their name also renders as an occupant chip inside a grid cell,
  * so a bare `getByText` is ambiguous — this always resolves to the roster
- * row (the only occurrence that is an `<li>`), matching the pattern
- * `SeatBoard.test.tsx` uses for the same reason.
+ * row (the only occurrence that is an `<li>`).
  */
 function candidateLi(name: string): HTMLLIElement {
   const li = screen
@@ -499,7 +498,7 @@ describe("PlannerGrid — candidate order frozen while the picker is open", () =
 });
 
 describe("PlannerGrid — manual pick blocking (D6)", () => {
-  it("REFUSES a same-category double, exactly as SeatBoard does", () => {
+  it("REFUSES a same-category double — a data error, never a judgement call", () => {
     const cells: InputGridCell[] = [{ date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "manual" }];
     const onCellsChange = vi.fn();
     const { container } = render(<PlannerGrid {...baseProps({ cells, onCellsChange })} />);

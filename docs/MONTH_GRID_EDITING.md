@@ -24,7 +24,9 @@ for stored service rosters:
 - The grid supports whole-team swaps and complete section swaps across two
   services: Líderes, BGV, Coro, Instrumentos, or FOH.
 - The former `SeatBoard`/card-swap editor and rendered **Tablero** copy are
-  retired.
+  retired, and as of 2026-08-06 their source and tests are deleted
+  (`SeatBoard.tsx`, `ParticipationRail.tsx`, `enforceableConfig`). See the
+  dated note at the end of `docs/adr/0010-specials-fill-locally-not-in-the-solver.md`.
 - Card-owned delete, copy-instruments, publish/unpublish, setlist, proposal, and
   integrity workflows remain in `ServicesPanel`.
 

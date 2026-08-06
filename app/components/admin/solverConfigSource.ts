@@ -9,7 +9,7 @@
 // inside a try/catch. It turns a TRANSIENT FETCH FAILURE into "the rules are the
 // seeded defaults": the panel then shows a rule set nobody wrote, one edit plus
 // Guardar replaces the shared document wholesale, and because these are hard
-// blocks (E6, on both the planner grid and the Tablero), enforcement silently
+// blocks (E6, on the planner grid), enforcement silently
 // degrades to whatever the defaults say in the meantime. The live rules exist in
 // exactly one place; that trade is not recoverable.
 //
@@ -108,25 +108,6 @@ export function saveFailure(status: number, body: unknown): { message: string; s
   if (code === "invalid_request") return { message: SAVE_REJECTED_MESSAGE, stale: false };
   if (status === 403) return { message: SAVE_FORBIDDEN_MESSAGE, stale: false };
   return { message: `${SAVE_FAILED_MESSAGE} (error ${status})`, stale: false };
-}
-
-/**
- * The rules the **Tablero** enforces — `undefined` for everything but `ready`.
- *
- * `undefined` means "no rules here", never "use the defaults" (`SeatBoard`'s
- * `config` prop says the same). Three states map to it for three reasons:
- * loading and error because we do not know the rules, and **absent because
- * `DEFAULT_SOLVER_CONFIG` is nobody's decision** — a dataset with no shared
- * document must not make the service editor start hard-blocking picks against
- * six restrictions, five conflicts and a presence rule this team never wrote.
- * That is the surface's long-standing behaviour and this is what preserves it.
- *
- * The planner grid deliberately differs: it has always shown and enforced the
- * seed while no rules existed, and the rule panel's copy says which of the two
- * states it is in rather than claiming parity.
- */
-export function enforceableConfig(source: SolverConfigSource): SolverConfig | undefined {
-  return source.status === "ready" ? source.config : undefined;
 }
 
 /**

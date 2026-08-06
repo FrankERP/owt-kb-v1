@@ -14,9 +14,9 @@
 // The distinction that heuristic was approximating did NOT retire; it just stopped
 // being a heuristic. "Is this the team's rule set or a stand-in?" is now answered
 // by the server, as `SolverConfigSource`'s `ready` vs `absent` — see
-// `solverConfigSource.ts`. `enforceableConfig` is where the consequence lives:
-// only `ready` reaches the Tablero, so an absent document still cannot make that
-// surface hard-block against rules nobody wrote.
+// `solverConfigSource.ts`. The consequence lives in `absent` carrying no `rev`:
+// the defaults below are held in memory only and a save that would write them
+// over the shared document is unrepresentable.
 //
 // **The old booby trap is defused, and a smaller one replaced it.** Editing the
 // literal below used to make every already-persisted seed start enforcing,

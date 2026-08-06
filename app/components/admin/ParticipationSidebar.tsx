@@ -36,14 +36,17 @@ export function ParticipationSidebar({ roles, monthLabel }: { roles: Participant
         Side by side (the original `flex justify-between`) the header demanded
         the title's ~131px PLUS the select's intrinsic width — a `<select>` is as
         wide as its widest option, and "Instrumentos" makes that 112px. Measured
-        in a real browser that came to 262px of content inside a 216px rail: the
-        select's right edge landed 47px past the rail and printed itself over the
-        planner grid — the one thing `ParticipationRail` exists to prevent.
+        in a real browser that came to 262px of content inside a 216px column:
+        the select's right edge landed 47px past it and printed itself over the
+        planner grid — the exact overlap the column's width floor exists to
+        prevent.
 
         Stacked, each row asks for the WIDER of the two rather than their sum
         (~131px), and `w-full` caps the select at the content box instead of
-        letting its longest option set the width. See `ParticipationRail.tsx`'s
-        width derivation, which this is half of.
+        letting its longest option set the width. See `CHART_COLUMN_WIDTH` in
+        `PlannerGrid.tsx`, whose floor is derived from this file's own rows —
+        this header is the half of that derivation no arithmetic can see, and
+        `participationAlongside.test.tsx` pins it structurally for that reason.
 
         `min-h-[44px]`: below the gutter threshold this chart stacks inline on an
         iPad and in the Capacitor wrap, where this is a touch target.

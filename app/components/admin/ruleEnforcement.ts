@@ -176,9 +176,9 @@ export function parsePattern(pattern: string): ParsedPattern | null {
  *
  * **Without a `column` nothing matches.** The service half is half the pattern,
  * so a caller that omits the column has given every rule undefined scope —
- * answering "matches" there would apply `Sat.*` to a special. `SeatBoard` is the
- * one caller that could omit it (fact 25) and Task 9 threads it in; until then
- * its behaviour is provably unchanged.
+ * answering "matches" there would apply `Sat.*` to a special. Every live caller
+ * passes one; the `undefined` branch is the safe floor for any that cannot,
+ * never an invitation to guess a column.
  */
 export function patternMatches(
   pattern: string,
@@ -218,9 +218,9 @@ function ruleNameToCanonical(raw: string, members: RankMember[]): string | null 
  * here: an unresolvable name is equally broken for the solver, and this is the
  * only surface that says so.
  *
- * Task 8 merges this into `PlannerGrid`'s `unresolvedNames` prop; Task 9 puts
- * the same report on `SeatBoard`, so the warning follows the enforcement rather
- * than relying on the generator having been opened first.
+ * This feeds `PlannerGrid`'s `unresolvedNames` prop, so the warning travels
+ * with the enforcement rather than relying on the generator having been opened
+ * first.
  */
 export function unresolvedRuleNames(
   config: SolverConfig | undefined,
@@ -306,7 +306,7 @@ export interface EvaluateInput {
   assigned: AssignedSeat[];
   /** Required: `assigned` carries only ids, and rules name people by alias. */
   members: RankMember[];
-  /** Absent ⇒ no rules, no blocks. `SeatBoard` has none until Task 9. */
+  /** Absent ⇒ no rules, no blocks — never "fall back to the defaults". */
   config?: SolverConfig;
 }
 

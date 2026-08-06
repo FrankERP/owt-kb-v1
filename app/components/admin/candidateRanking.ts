@@ -103,10 +103,11 @@ export function rankCandidates(input: {
   assigned: AssignedSeat[];
   weeks?: number;
   /**
-   * The column being edited. **Optional** — `SeatBoard` called this with no
-   * column for two shipped releases and must keep compiling. Without it no
-   * pattern's service half can be matched, so every rule is out of scope and
-   * `ruleBlockedReason` stays `null`.
+   * The column being edited. **Optional**, and the fallback is deliberate:
+   * without it no pattern's service half can be matched, so every rule is out
+   * of scope and `ruleBlockedReason` stays `null`. Enforcing nothing is the
+   * honest answer when the caller cannot say which service it is ranking for —
+   * never a reason to guess a column.
    */
   column?: Pick<GridColumn, "type" | "date">;
   /** The month's full Sunday spine; only week exclusions need it (E7, E21). */
@@ -114,13 +115,11 @@ export function rankCandidates(input: {
   /**
    * The rules. **Optional, and absent means "no rules", never "the defaults".**
    *
-   * Both callers now pass one: `PlannerGrid` from the panel's edited copy, and
-   * `SeatBoard` from `enforceableConfig(rules.source)` — the shared Sanity
-   * document (P6, ADR-0010), which the cutover made the single source. It stays
-   * optional because `enforceableConfig` answers `undefined` in the three states
-   * where the rules are not known to be this team's (loading, failed read, no
-   * document), and in each of those this must keep the board's original
-   * behaviour of enforcing nothing rather than inventing refusals.
+   * `PlannerGrid`, the only caller, passes the panel's edited copy of the
+   * shared Sanity document (ADR-0010). It stays optional so a caller that does
+   * not know the rules — a loading or failed read — enforces nothing rather
+   * than inventing refusals against `DEFAULT_SOLVER_CONFIG`, which is nobody's
+   * decision (`solverConfigSource.ts`).
    */
   config?: SolverConfig;
 }): RankedCandidate[] {
@@ -133,20 +132,17 @@ export function rankCandidates(input: {
   //
   // **That is the only thing shared, and the sentence used to claim more.** The
   // rule is shared; the SET of services it is applied to is not, and since the
-  // participation rail landed beside both pickers the two numbers are on one
-  // screen and legitimately disagree. `PlannerGrid` passes `unionRoles` — the
-  // ranking lookback plus every draft on the grid, including columns that will
-  // never be created — while the rail counts the month's saved services plus
-  // only the creatable drafts (`plannerParticipationRoles`). `SeatBoard` passes
-  // `windowRoles` untouched, still counting the STORED copy of the service being
-  // edited, while its rail swaps that copy for the live seats
-  // (`boardParticipationRoles`). Both sides are right about their own question,
-  // and the rail is the more truthful about "has this month been fair" — so the
-  // divergence is not a bug to arithmetic away. It is why both pickers now
-  // LABEL this figure instead of rendering a bare number next to a chart of
-  // totals. Do not "reconcile" them by feeding one the other's roles: the
-  // picker's union is deliberate (a person seated three times earlier in this
-  // grid must rank lower for the fourth seat, before anything is saved).
+  // participation chart sits beside the picker the two numbers are on one screen
+  // and legitimately disagree. `PlannerGrid` passes `unionRoles` — the ranking
+  // lookback plus every draft on the grid, including columns that will never be
+  // created — while the chart counts the month's saved services plus only the
+  // creatable drafts (`plannerParticipationRoles`). Both sides are right about
+  // their own question, and the chart is the more truthful about "has this month
+  // been fair" — so the divergence is not a bug to arithmetic away. It is why
+  // the picker LABELS this figure instead of rendering a bare number next to a
+  // chart of totals. Do not "reconcile" them by feeding one the other's roles:
+  // the picker's union is deliberate (a person seated three times earlier in
+  // this grid must rank lower for the fourth seat, before anything is saved).
   //
   // computeParticipation
   // keeps `total` VOICE-ONLY (sunLead+satLead+sunBGV+satBGV+coro+especial) and
@@ -173,10 +169,11 @@ export function rankCandidates(input: {
 
   // A member can hold several seats on one service (D4: voz + instrumento is
   // real — Frank and Mkz both lead and play). A Map keyed by memberId would
-  // keep only the LAST seat built for that member, and SeatBoard builds
-  // `assigned` in seat order (voces, then instrumentos, then FOH), so an
-  // instrument seat would silently overwrite a voice one and hide the
-  // same-category conflict the block exists to catch. Keep every held seat.
+  // keep only the LAST seat built for that member, and a caller that builds
+  // `assigned` in seat order (voces, then instrumentos, then FOH) would have an
+  // instrument seat silently overwrite a voice one, hiding the same-category
+  // conflict the block exists to catch. This is not hypothetical: it is the bug
+  // that shipped. Keep every held seat.
   const seatsById = new Map<string, AssignedSeat[]>();
   for (const a of assigned) {
     const list = seatsById.get(a.memberId);

@@ -2013,8 +2013,8 @@ describe("MonthGenerator — the rules failed to load", () => {
 // against the shipped seed. Both are false after the cutover. The claim still
 // has two versions, but the branch is now a FACT rather than a heuristic:
 // whether the shared document exists. With no document there is nothing shared,
-// nothing saveable, and `enforceableConfig` gives the Tablero nothing — so that
-// state keeps its own honest sentence instead of a softened parity claim.
+// nothing saveable, and no `_rev` exists to save one — so that state keeps its
+// own honest sentence instead of a softened parity claim.
 describe("MonthGenerator — what the rule panel claims about other planner sessions", () => {
   const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] }];
   const PARITY = /al editar cualquier servicio de este mes/;
