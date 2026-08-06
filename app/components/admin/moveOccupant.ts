@@ -39,19 +39,23 @@ function findCell(cells: GridCell[], rowId: string, columnId: string): GridCell 
  * duplicate occupant in one cell (deliberately supported by
  * `reconcileOccupants`, `plannerModel.ts:60-63`, and reachable via the swap
  * route, `app/api/admin/roles/swap/route.ts:190-201`) loses one assignment
- * per drag, never every assignment of that member. Mirrors `reasonsFor`'s
- * one-copy-drop shape (`ruleEnforcement.ts:512-525`): filter with a single
- * "already dropped" flag, not a blanket `!==` filter.
+ * per drag, never every assignment of that member.
+ *
+ * This only has to get the COUNT right: it returns a plain member-id array,
+ * and `withUpdatedCell` → `reconcileOccupants` (`plannerModel.ts:65-75`) is
+ * what decides which PHYSICAL occupant (and its `itemKey`) survives, purely
+ * by re-matching against the cell's original occupants in order. Which of
+ * the two duplicate occupants this function's own filter drops first is not
+ * observable — `reconcileOccupants` always keeps the first prior occupant
+ * for the ids that remain, regardless of which one was targeted here. Uses
+ * `indexOf`/slice (not a blanket `!==` filter) to keep that "one, not all"
+ * semantics obvious at the call site.
  */
 function dropOneOccurrence(occupants: GridCell["occupants"], memberId: string): string[] {
-  let dropped = false;
-  return occupants
-    .filter((occupant) => {
-      if (dropped || occupant.memberId !== memberId) return true;
-      dropped = true;
-      return false;
-    })
-    .map((occupant) => occupant.memberId);
+  const memberIds = occupants.map((o) => o.memberId);
+  const index = memberIds.indexOf(memberId);
+  if (index === -1) return memberIds;
+  return [...memberIds.slice(0, index), ...memberIds.slice(index + 1)];
 }
 
 /**
@@ -66,10 +70,13 @@ function dropOneOccurrence(occupants: GridCell["occupants"], memberId: string): 
  * a special case: source === target means the member is trivially already
  * seated at the target, so the same C1 branch applies.
  *
- * If `source` names a cell not present in `cells`, there is nothing to move
- * (no chip could have been dragged from it); `cells` is returned unchanged
- * rather than letting `withUpdatedCell` materialize a new empty cell for a
- * position nothing actually occupies.
+ * If `source` names a cell not present in `cells`, OR `source.memberId` is
+ * not actually seated in that cell (stale drag state, a T3 gate bug, a wrong
+ * id), there is nothing to remove — `cells` is returned unchanged rather
+ * than dropping nothing at the source while still appending the member to
+ * the target, which would silently create a second occupant with no
+ * corresponding removal anywhere (the same "degrade to a no-op, not
+ * corruption" requirement C1 states above, applied to the source side).
  */
 export function moveOccupant(
   cells: GridCell[],
@@ -82,7 +89,8 @@ export function moveOccupant(
   if (alreadyAtTarget) return cells;
 
   const sourceCell = findCell(cells, source.rowId, source.columnId);
-  if (!sourceCell) return cells;
+  const memberAtSource = sourceCell?.occupants.some((o) => o.memberId === source.memberId) ?? false;
+  if (!sourceCell || !memberAtSource) return cells;
 
   const sourceMemberIds = dropOneOccurrence(sourceCell.occupants, source.memberId);
   const afterSource = withUpdatedCell(cells, source.rowId, source.columnId, sourceMemberIds);

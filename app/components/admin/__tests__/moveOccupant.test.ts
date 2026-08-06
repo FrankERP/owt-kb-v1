@@ -32,7 +32,7 @@ describe("moveOccupant", () => {
     expect(cells).toEqual(before);
   });
 
-  it("source holds the member twice: exactly one copy removed, and the SURVIVING copy is the one that keeps its stored item key", () => {
+  it("source holds the member twice: exactly one copy removed, one remains (DD10) — the surviving copy's `itemKey` is `reconcileOccupants`' pre-existing contract, not `dropOneOccurrence`'s: it always keeps the first prior occupant for an id that remains, so drop-first vs drop-last inside this module produces byte-identical output and this assertion cannot discriminate between them", () => {
     const cells: GridCell[] = [
       cell("BGV", "col-1", [
         { memberId: "m1", itemKey: "key-a" },
@@ -114,6 +114,40 @@ describe("moveOccupant", () => {
     expect(result.find((c) => c.rowId === "BGV" && c.columnId === "col-2")).not.toBe(target);
     expect(result.find((c) => c.rowId === "LEAD" && c.columnId === "col-1")).toBe(untouchedA);
     expect(result.find((c) => c.rowId === "CHORUS" && c.columnId === "col-2")).toBe(untouchedB);
+  });
+
+  it("source cell exists but does not seat `source.memberId`: returns cells unchanged, no phantom add at the target", () => {
+    const cells: GridCell[] = [
+      cell("BGV", "col-1", [{ memberId: "m2" }]), // m1 is not seated here
+      cell("LEAD", "col-1", []),
+    ];
+
+    const result = moveOccupant(
+      cells,
+      { rowId: "BGV", columnId: "col-1", memberId: "m1" },
+      { rowId: "LEAD", columnId: "col-1" },
+    );
+
+    expect(result).toBe(cells);
+  });
+
+  it("same-cell move on a cell holding the member twice: still a no-op via C1, and BOTH copies remain (neither is silently dropped)", () => {
+    const cells: GridCell[] = [
+      cell("BGV", "col-1", [
+        { memberId: "m1", itemKey: "key-a" },
+        { memberId: "m1", itemKey: "key-b" },
+      ]),
+    ];
+
+    const result = moveOccupant(
+      cells,
+      { rowId: "BGV", columnId: "col-1", memberId: "m1" },
+      { rowId: "BGV", columnId: "col-1" },
+    );
+
+    expect(result).toBe(cells);
+    const bgv = result.find((c) => c.rowId === "BGV" && c.columnId === "col-1");
+    expect(bgv?.occupants).toHaveLength(2);
   });
 
   it("source cell does not exist in `cells`: no spurious cell is created", () => {
