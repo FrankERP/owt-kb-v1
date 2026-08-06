@@ -2,8 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task.
 
-**Status:** `READY_FOR_ADVERSARIAL_REVIEW`. No unresolved blocking unknowns.
-**Risk tier:** **CRITICAL** — two sequential fresh approvals on byte-identical text.
+**Status:** `READY_FOR_ADVERSARIAL_REVIEW`. One open item **gates T3, not review**: D2's narrowing of the force affordance deviates from the user's literal words and is awaiting their confirmation.
+**Risk tier:** **CRITICAL**, two sequential fresh approvals on byte-identical text — a **deliberate raise, not an application of the ladder**. By CLAUDE.md's text this is "a client/UI consumer of an already-approved idempotent writer" and would be standard; it is raised because nothing downstream dedupes, so the client payload is the last line of defence.
 **Authorization:** this document does not authorize implementation.
 
 ## Original request
@@ -24,7 +24,7 @@
 
 **Invariants that must remain true.**
 - **D6:** no cell refuses an occupant for reasons of count, and none ever replaces one (`PlannerGrid.tsx:20-23`). Replacement is what evicted a drummer on 18 shipped services.
-- A person appears **at most once within a single cell**, and **at most once per seat category within a service**. Cross-category double duty (voz + instrumento) is legitimate and shipped — Frank and Mkz do it (`candidateRanking.ts:186-187`). A person may of course appear in many columns across a month.
+- A person appears **at most once within a single cell**, and **at most once per seat category within a service**. Cross-category double duty (voz + instrumento) is legitimate and shipped — Frank and Mkz do it (`candidateRanking.ts:170-176`). A person may of course appear in many columns across a month.
 - Stored mode emits a PATCH and a notification only for services actually changed.
 - `saturdarSongs` untouched; `_key` per Sanity array item; member-facing reads keep `published != false`.
 
@@ -66,17 +66,17 @@ Every constraint in this plan exists to keep a bad payload from being constructe
 | Nothing between the grid and Sanity dedupes; the duplicate warning is display-only. | `plannerSaveModel.ts:81-88`; `roleWriteRequest.ts:95-98`, `:154-162`; `plannerModel.ts:65-75`; `PlannerGrid.tsx:345-377`, `:1700` | The grid is the last line of defence. Drives the tier and C1/C2. |
 | A cell is mutated only through `withUpdatedCell(cells, rowId, columnId, memberIds, addOverride?)`; four call sites, all funnelling into one `onCellsChange`. | `PlannerGrid.tsx:292-298`, `:613`, `:619`, `:664`, `:915` | The move composes this function; it does not replace it. |
 | `addOverride` is "the ONLY way an entry is created" and carries the **rule waived**, not just the person; `withUpdatedCell` writes and prunes `overrides`/`overrideReasons` together so a reason can never outlive its seating. | `PlannerGrid.tsx:286-298` | A forced move must pass `addOverride` through, and a hand-rolled mutation would leave a stale override that silences E13's re-flag. |
-| D6 is stated in the file header and already pinned by tests. | `PlannerGrid.tsx:20-23`; `PlannerGrid.test.tsx:292`, `:315` | Drop-onto-at-target already behaves as the user asked. Extend those pins; do not duplicate them. |
+| D6 is stated in the file header and already pinned by tests. | `PlannerGrid.tsx:20-23`; `PlannerGrid.test.tsx:293`, `:316` | Drop-onto-at-target already behaves as the user asked. Extend those pins; do not duplicate them. |
 | `blockedReason` = `Ya asignado en {seat}`, raised when a member holds **another seat of the same category** in that column. | `candidateRanking.ts:190-195` | Defines C2. It is scoped to the column, so it must be re-evaluated against the **target** column, not the source. |
 | Seat `memberType` eligibility is enforced in **exactly one place** — the picker's candidate filter. Nothing in `plannerSaveModel.ts` or `roleWriteRequest.ts` checks it. | `candidateRanking.ts:185`; `seatModel.ts:29-31`, `:71`, `:76` | Defines C3. A drag that skips the picker skips the only gate. |
-| `ruleBlockedReason` = `Regla: no puede coincidir con {name}`, from `evaluate`. | `candidateRanking.ts:202`; `ruleEnforcement.ts:407` | The only forceable constraint. |
+| `ruleBlockedReason` = `Regla: no puede coincidir con {name}`, from `evaluate`. | `candidateRanking.ts:202`; `ruleEnforcement.ts:408` | The only forceable constraint. |
 | `evaluate` takes `assigned` as a caller-supplied list — but `blockingReasons` **returns `[]` immediately** when `assigned` already holds the member at `row.id` (E6/P9, the occupant of the cell being edited). | `ruleEnforcement.ts:285-311`, **`:351`** | Handing it post-move state would make **every** rule silently pass. This single line dictates the evaluation input below. |
 | `ruleViolationsForColumn`'s `reasonsFor` drops exactly one copy of the occupant's own seat from the pool before evaluating, so a duplicate still sees its other copy. | `ruleEnforcement.ts:512-525` | The precedent for constructing the evaluation input; do not re-derive it. |
 | `rankFor` evaluates with `sundayDatesForColumn?.(column) ?? sundayDates`, not bare `sundayDates`. | `PlannerGrid.tsx:544` | The gate must thread the same spine or E21 week exclusions disagree with the picker on the same seat. |
 | `admission === "readOnly"` stored columns render normally but are refused by both mutation paths, and `serializeStoredColumn` rejects them with `column_not_mutable`. | `PlannerGrid.tsx:907`, `:913`, `:1003`, `:978`; `plannerSaveModel.ts:65`; columns unfiltered at `MonthGenerator.tsx:1716-1721` | Drives P2. Touching one poisons the save for the **whole month**. |
 | `blockedReason` is computed from `assignedForColumn` — **that column only**. | `candidateRanking.ts:195`; `plannerModel.ts:1162-1174` | A member seated in another service is an ordinary unblocked candidate there, so a picker-row action cannot reach the cross-service case. Drives D6. |
 | Solvable rows cap rendered occupants at `target` behind a `+N` control. | `PlannerGrid.tsx:1692` | An over-target occupant may have no chip, so T4 must not assume every occupant is draggable. |
-| In create mode, `skipped` columns still render editable cells, and `cellsToDrafts` excludes them. | `PlannerGrid.tsx:1395`; `MonthGenerator.tsx:2134` | Drives P3: a move *into* a skipped column would delete the assignment from creation in one gesture. |
+| In create mode, `skipped` columns still render editable cells, and `cellsToDrafts` excludes them. | `PlannerGrid.tsx:1395`; `MonthGenerator.tsx:2135` | Drives P3: a move *into* a skipped column would delete the assignment from creation in one gesture. |
 | Stored-mode change tracking **already** diffs every column between old and new `cells` and marks each changed one. `columnId === role._id`. | `MonthGenerator.tsx:2118-2128`; `storedRoleReadModel.ts:114` | T6 is **verification, not wiring** — provided the drag is a single `onCellsChange`. |
 | `storedMutationLocked` guards `handleCellsChange` by dropping the write silently. | `MonthGenerator.tsx:2117` | Not a data hazard, but a drop would appear to succeed and revert. Drives P1. |
 | HTML5 drag-and-drop already has a precedent in this codebase. | `SetlistEditor.tsx:335-339` | T4 must state whether it reuses that idiom or introduces pointer events. |
@@ -128,7 +128,7 @@ C2 is the constraint that a naive "a move can't double someone, they leave the s
 | # | Decision | Rationale |
 |---|---|---|
 | **D1** | A drag is a **MOVE**: remove from source and add to target in **one** `cells` update, composing `withUpdatedCell` twice over one array. Never add-then-remove; never two updates against stale state; never a hand-rolled mutation. | The hazard the tier is set on. It also keeps `withUpdatedCell`'s override pruning, which a bespoke mutation would lose. |
-| **D2** | Three of the four constraints (C1, C2, C3) **refuse the drop and are never forceable**. Only C4 prompts. | **This narrows the literal request** — the user said "if a constraint exists … prompt an alert with option to force". Recorded as a deviation, not an oversight: forcing C1 or C2 would construct the duplicate `_ref` the whole tier is set on, and the shipped `overrideCandidate` already refuses to override `blockedReason` (`PlannerGrid.tsx:1049`), so a forceable C2 would make drag weaker than the picker. C3 is an eligibility gate nothing downstream re-checks. **Flagged to the user alongside this plan; confirm before T3.** |
+| **D2** | Three of the four constraints (C1, C2, C3) **refuse the drop and are never forceable**. Only C4 prompts. | **This narrows the literal request** — the user said "if a constraint exists … prompt an alert with option to force". Recorded as a deviation, not an oversight: forcing **C1** would construct the duplicate `_ref` the whole tier is set on. **C2** is a different harm — one person across two arrays, so double-counting in `computeParticipation` and divergence from the picker rather than a repeated `_ref` — and it is carried on its own by parity: the shipped `overridable` requires `!blockedReason` (`PlannerGrid.tsx:1812`, refused at `:653`), so a forceable C2 would make drag weaker than the picker. C3 is an eligibility gate nothing downstream re-checks. **Flagged to the user alongside this plan; confirm before T3.** |
 | **D3** | A forced C4 drop records the waived rule via `withUpdatedCell`'s `addOverride`, in the same single update — the same marker and rule-scoping as the shipped "Asignar de todos modos", cleared on removal. | Reuses a reviewed mechanism, and keeps the prompt meaningful rather than something learned to click through. |
 | **D4** | Dropping onto an **at-target** cell (over capacity, not over duplicate) **adds** and marks amber. | The user's decision, and already D6's behaviour. Distinct from C1: C1 is the same *person* twice, this is one more person than the seat wants. |
 | **D5** | Drag works **anywhere on the grid** — within a service and across services. | The user's ask. Cross-service is precisely why C2 must be re-evaluated on the target. |
@@ -165,13 +165,13 @@ T1–T6 are sequential layers of a single outcome, not separable deliverables. T
 The feature is inert until T4 wires the interaction, so T1–T3 can land without changing behaviour.
 
 ### T1 — Pin what must not move
-Tests only, against current code. Pin `withUpdatedCell`'s single-call contract and its override pruning; that a manual pick refuses a same-category double; that an at-target cell **adds** rather than replaces (extend `PlannerGrid.test.tsx:292`/`:315` rather than duplicating); that stored mode marks a role touched on any cell change. Prove each fails when inverted.
+Tests only, against current code. Pin `withUpdatedCell`'s single-call contract and its override pruning; that a manual pick refuses a same-category double; that an at-target cell **adds** rather than replaces (extend `PlannerGrid.test.tsx:293`/`:316` rather than duplicating); that stored mode marks a role touched on any cell change. Prove each fails when inverted.
 *Safe end state:* no production change. *Rollback:* revert the commit.
 
 ### T2 — The move primitive (acceptance 1, 2, 5)
 `(cells, source: {rowId, columnId, memberId}, target: {rowId, columnId}, addOverride?) → cells`. It **composes `withUpdatedCell` twice over one array** — source minus the member, target plus the member, `addOverride` forwarded to the target call — and returns one array for one `onCellsChange`. The `addOverride` parameter is not optional to the design: without it a forced C4 move would need a second update, which is the exact anti-pattern D1 forbids.
 
-Removal is **one copy, not all copies** (D10). Fixtures must include: target already holds the member (C1 — refused upstream, but the primitive must not produce `[X, X]` if called); **source holds the member twice, one copy remains** — assert *which* copy, since chips are keyed by member id (`PlannerGrid.tsx:1697`) and duplicate React keys make "which one did I grab" non-deterministic; a forced move, asserting the target's `overrideReasons` carries the waived rule and the source's overrides are pruned.
+Removal is **one copy, not all copies** (D10). Fixtures must include: target already holds the member (C1 — refused upstream, but the primitive must not produce `[X, X]` if called); **source holds the member twice, one copy remains** — assert *which* copy, since chips are keyed by member id (`PlannerGrid.tsx:1704`) and duplicate React keys make "which one did I grab" non-deterministic; a forced move, asserting the target's `overrideReasons` carries the waived rule and the source's overrides are pruned.
 *Safe end state:* exported, uncalled. *Rollback:* delete the module.
 
 ### T3 — Preconditions and the constraint gate (acceptance 4, 6, 7, 8)
@@ -190,7 +190,7 @@ Pointer drag at desktop width, drop targets at cell granularity, refusals surfac
 Endpoints failing P1–P3 are neither draggable nor droppable. Occupants beyond `target` are hidden behind `+N` and have no chip, so drag reaches only visible occupants; **D11's picker-row path covers the rest**, and T5 owns it. Do not add a second handle to `+N`.
 
 Two structural obstacles to settle in T4, not discover in T5:
-- **The occupant chip cannot simply become a button.** It is a non-focusable `<span>` (`PlannerGrid.tsx:1704-1719`) inside a cell that is itself `role="button"` with an `onKeyDown` that calls `e.preventDefault(); onOpen();` on Enter/Space (`:1666-1672`). A nested button is invalid ARIA *and* its Enter activation is swallowed by the ancestor. The cell's key handling must be restructured for T5's pick-then-place to work at all.
+- **The occupant chip cannot simply become a button.** It is a non-focusable `<span>` (`PlannerGrid.tsx:1703-1718`) inside a cell that is itself `role="button"` with an `onKeyDown` that calls `e.preventDefault(); onOpen();` on Enter/Space (`:1666-1672`). A nested button is invalid ARIA *and* its Enter activation is swallowed by the ancestor. The cell's key handling must be restructured for T5's pick-then-place to work at all.
 - **The C4 prompt collides with the grid's document-level capture Escape handler** (`PlannerGrid.tsx:746-772`), which `preventDefault`s and exits full screen or closes the picker unless `ownsEscape(event.target)` is true (`:262-269`, inputs only). Escape on the prompt would exit full screen and strand a pending move. Register the prompt with that handler or gate it.
 
 Compute drop validity **lazily** — at the hovered cell and on drop. Marking every cell during a drag is one `rankCandidates` call per cell (~100 on a ten-column month) per `dragover`. Any new `position: fixed` surface — drag ghost, prompt — needs a portal and a real-Safari check: a fixed element under an ancestor combining `isolation: isolate` with `overflow: hidden` is clipped in WebKit and not in Chromium.
@@ -198,6 +198,10 @@ Compute drop validity **lazily** — at the hovered cell and on drop. Marking ev
 
 ### T5 — Keyboard and touch parity (acceptance 10)
 The D6 pick-then-place: "marcar para mover" on an occupant chip **or on a seated member's row in the picker** (D11 — the only anchor for `+N`-hidden occupants), then activate a target cell. Same T2 primitive, same T3 gate, same prompt. Not a second mechanism and not a path around the constraints.
+
+**The source anchor must NOT sit inside `CandidateRow`'s existing `blocked` guard.** That guard gates `onClick`/`onKeyDown` on `!blocked`, and `overridable` further requires `!selected` (`PlannerGrid.tsx:1812`). Dropped inside it, a `+N`-hidden occupant who already holds a same-category double — precisely the person an admin most needs to relocate — would have no anchor at all, and acceptance 11's clean round-trip would not catch it. Eligibility is a question about the **target**, owned by T3; a source has no eligibility question.
+
+**Touch is carried by the picker-row anchor, not the chip.** The occupant chip is `px-1.5 py-0.5 text-xs` (`PlannerGrid.tsx:1708`) — around 20px tall, well under the 44px floor — and D8 routes the whole iOS wrap through this path. The picker row meets it; state which anchor is the touch target and verify the size.
 
 While a pick is pending, the target cell's shipped primary action (open the picker, `PlannerGrid.tsx:1666-1672`) must be suppressed — a test-pinned interaction, so change it deliberately. Cancelling a pending pick hits the same capture-phase Escape handler as the C4 prompt; register both together.
 *Safe end state:* additive. *Rollback:* revert.
@@ -209,7 +213,7 @@ Change tracking is already all-columns (`MonthGenerator.tsx:2118-2128`), so this
 
 Verify the way this repo already does: stub global `fetch` and assert the PATCH bodies and call count, as `MonthGenerator.stored.test.tsx:242-268` does for a single cell and `:270` does for the no-op case. That proves "both services PATCHed, untouched services silent" exactly, with zero remote effect. Assert against **`dirtyStoredColumns`** (`MonthGenerator.tsx:1723-1729`, `:2176`) — the semantic diff that actually decides what is PATCHed — not only the touched set, which drives `invalidStoredColumns` and the discard warning.
 
-Also, under the same stub: exercise one drag in **create mode**, including a create-blocked column; and assert the **partial-failure** case, since this plan sells the move as one operation while the save loop PATCHes sequentially (`:2176-2203`). Source-committed + target-failed leaves the person seated nowhere. The pre-drag two-edit workflow has the identical exposure and stays visible and retryable (`:2196-2213`), so this is a verification requirement, not a new guarantee to build.
+Also, under the same stub: exercise one drag in **create mode**, including a create-blocked column; and assert the **partial-failure** case, since this plan sells the move as one operation while the save loop PATCHes sequentially (`:2176-2203`). Source-committed + target-failed leaves the person seated nowhere. The pre-drag two-edit workflow has the identical exposure and stays visible and retryable (`:2196-2213`), so this is a verification requirement, not a new guarantee to build. **Name its notification consequence:** the loop `continue`s past a known failure (`:2196-2199`) and each PATCH independently fires `notifyRoleAssignments`/`queueRoleNotices` (`app/api/admin/roles/[id]/route.ts:399-418`), so source-committed + target-failed emails the member a removal with no matching addition. The exposure is unchanged, but the drag makes it **one gesture the admin perceives as atomic** where two edits made both steps visible. Record it in T7's ADR.
 
 If a deployed end-to-end save is ever wanted on top of this, it needs the isolated verification deployment or named documents, restoration steps, and explicit consent — it is **not** part of this plan.
 
