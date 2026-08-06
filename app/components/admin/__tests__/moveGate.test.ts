@@ -17,9 +17,17 @@ import {
   canTouchColumn,
   createMoveGate,
   evaluateMove,
+  type CreateModeGateInput,
   type MoveGateInput,
 } from "../moveGate";
-import { buildRows, type GridCell, type GridColumn, type SolverConfig } from "../plannerModel";
+import {
+  buildRows,
+  cellsToDrafts,
+  draftTargetKey,
+  type GridCell,
+  type GridColumn,
+  type SolverConfig,
+} from "../plannerModel";
 import type { RankMember } from "../candidateRanking";
 import type { StoredGridColumn } from "../storedRoleReadModel";
 
@@ -58,15 +66,48 @@ function cell(rowId: string, columnId: string, memberIds: string[]): GridCell {
   return { rowId, columnId, occupants: memberIds.map((memberId) => ({ memberId })), origin: "manual" };
 }
 
-function baseInput(overrides: Partial<MoveGateInput> & Pick<MoveGateInput, "cells" | "source" | "target">): MoveGateInput {
+function baseInput(
+  overrides: Partial<CreateModeGateInput> & Pick<CreateModeGateInput, "cells" | "source" | "target">,
+): CreateModeGateInput {
   return {
     mode: "create",
     rows: ROWS,
     columns: [COL_1, COL_2],
     members: MEMBERS,
     sundayDates: SUNDAYS,
+    // P3 is REQUIRED in create mode, so every fixture has to say something. The
+    // permissive answer is stated here once, and the P3 cases below override it
+    // with the real create-path authority.
+    canReceive: () => true,
     ...overrides,
   };
+}
+
+/**
+ * The create-gate authority, driven by the REAL `cellsToDrafts` and
+ * `draftTargetKey` rather than a stub that hard-codes a column id.
+ *
+ * `skippedColumnIds` is empty and `existingRoles` is empty, so no draft is
+ * `skipped` at all — the refusal comes from `createdTargets`, which is exactly
+ * the part of `isCreatable` (`MonthGenerator.tsx:2056-2060`) that is LARGER than
+ * `skipped` and the reason P3 is not a `skipped` check. The predicate's shape
+ * mirrors `isCreatable`; production must thread `MonthGenerator`'s own, never a
+ * second copy (see the fix report).
+ */
+function creatability(blockedColumnId: string) {
+  const cells = [cell("bgv", "col-1", ["gaby"]), cell("lead", "col-2", [])];
+  const columns = [COL_1, COL_2];
+  const drafts = cellsToDrafts(cells, columns, new Set(), [], []);
+  const blocked = columns.find((c) => c.columnId === blockedColumnId)!;
+  const createdTargets = new Set([draftTargetKey(blocked.type, blocked.date)]);
+  const canReceive = (column: GridColumn) => {
+    const key = draftTargetKey(column.type, column.date);
+    const draft = drafts.find((d) => draftTargetKey(d._type, d.date) === key);
+    if (!draft || draft.skipped) return false;
+    if (createdTargets.has(key)) return false;
+    return !draft.exists;
+  };
+  return { cells, columns, drafts, canReceive };
 }
 
 describe("assignedAfterSourceRemoval", () => {
@@ -212,7 +253,9 @@ describe("evaluateMove — acceptance 6 (C4) and 5 (T3's share)", () => {
         target: { rowId: "bgv", columnId: "col-2" },
         config,
         sundayDates: [],
-        sundayDatesForColumn: () => SUNDAYS,
+        // Answers only for the TARGET column, so a gate that threaded the source
+        // column instead gets `[]`, evaluates no week exclusion, and reads clean.
+        sundayDatesForColumn: (c) => (c.columnId === "col-2" ? SUNDAYS : []),
       }),
     );
 
@@ -236,6 +279,10 @@ describe("evaluateMove — acceptance 4 (clean) and 7 (the three refusals)", () 
     );
 
     expect(verdict).toEqual({ kind: "clean" });
+    // The clean verdict is a shared singleton, so it is frozen: a caller that
+    // annotated it (T4's unavailability note) would otherwise annotate every
+    // clean verdict this module has ever returned.
+    expect(Object.isFrozen(verdict)).toBe(true);
   });
 
   it("C1 — the target cell already holds the dragged member: refused, never forceable", () => {
@@ -449,15 +496,20 @@ describe("evaluateMove — acceptance 8 (the preconditions)", () => {
     expect(verdict.kind).toBe("clean");
   });
 
-  it("P3 — create mode refuses a target column that will never be written", () => {
-    const cells = [cell("bgv", "col-1", ["gaby"]), cell("lead", "col-2", [])];
+  it("P3 — create mode refuses a target column that will never be written, and the fixture's column is CREATE-BLOCKED, not merely skipped", () => {
+    const { cells, canReceive, drafts } = creatability("col-2");
+
+    // The distinction acceptance 8 asks for: `cellsToDrafts` says this draft is
+    // not skipped, and `isCreatable`'s `createdTargets` refusal is what blocks it.
+    const targetDraft = drafts.find((d) => draftTargetKey(d._type, d.date) === draftTargetKey(COL_2.type, COL_2.date));
+    expect(targetDraft?.skipped).toBe(false);
 
     const verdict = evaluateMove(
       baseInput({
         cells,
         source: { rowId: "bgv", columnId: "col-1", memberId: "gaby" },
         target: { rowId: "lead", columnId: "col-2" },
-        canReceive: (column) => column.columnId !== "col-2",
+        canReceive,
       }),
     );
 
@@ -467,18 +519,54 @@ describe("evaluateMove — acceptance 8 (the preconditions)", () => {
   });
 
   it("P3 is drop-side only — dragging OUT of a column that will never be written is legitimate", () => {
-    const cells = [cell("bgv", "col-1", ["gaby"]), cell("lead", "col-2", [])];
+    const { cells, canReceive } = creatability("col-1");
 
     const verdict = evaluateMove(
       baseInput({
         cells,
         source: { rowId: "bgv", columnId: "col-1", memberId: "gaby" },
         target: { rowId: "lead", columnId: "col-2" },
-        canReceive: (column) => column.columnId !== "col-1",
+        canReceive,
       }),
     );
 
     expect(verdict.kind).toBe("clean");
+  });
+
+  it("a row the target column does not show is never a drop zone — P2 cannot catch it, since it judges the column as it is NOW", () => {
+    const saturday: GridColumn = { columnId: "col-sat", date: "2026-09-12", type: "saturday_role" };
+    const cells = [cell("coro", "col-1", ["gaby"]), cell("coro", "col-sat", [])];
+
+    const verdict = evaluateMove(
+      baseInput({
+        cells,
+        columns: [COL_1, saturday],
+        source: { rowId: "coro", columnId: "col-1", memberId: "gaby" },
+        target: { rowId: "coro", columnId: "col-sat" },
+      }),
+    );
+
+    expect(verdict.kind).toBe("not-permitted");
+    if (verdict.kind !== "not-permitted") return;
+    expect(verdict.code).toBe("unresolved");
+  });
+
+  it("a target row whose seat cannot be built refuses instead of throwing inside a pointer handler", () => {
+    const rows = [...ROWS, { id: "tenor", label: "Tenor", category: "voz" as const, target: null }];
+    const cells = [cell("bgv", "col-1", ["gaby"]), cell("tenor", "col-1", [])];
+
+    const verdict = evaluateMove(
+      baseInput({
+        cells,
+        rows,
+        source: { rowId: "bgv", columnId: "col-1", memberId: "gaby" },
+        target: { rowId: "tenor", columnId: "col-1" },
+      }),
+    );
+
+    expect(verdict.kind).toBe("not-permitted");
+    if (verdict.kind !== "not-permitted") return;
+    expect(verdict.code).toBe("unresolved");
   });
 
   it("fails closed on an unresolvable endpoint rather than evaluating a guess", () => {
@@ -529,14 +617,19 @@ describe("canTouchColumn", () => {
 describe("createMoveGate — memoization", () => {
   it("returns the cached verdict for the same move while nothing changed", () => {
     const gate = createMoveGate();
+    // The C4 fixture ON PURPOSE: `evaluateMove` builds a fresh object for every
+    // prompt, so identity here can only come from the cache. A `clean` verdict
+    // would prove nothing — that path returns a module-level singleton, and the
+    // assertion would hold with the cache deleted.
     const input = baseInput({
-      cells: [cell("bgv", "col-1", ["gaby"]), cell("lead", "col-2", [])],
-      source: { rowId: "bgv", columnId: "col-1", memberId: "gaby" },
-      target: { rowId: "lead", columnId: "col-2" },
+      cells: [cell("lead", "col-1", ["frank"]), cell("bgv", "col-1", []), cell("bgv", "col-2", ["gaby"])],
+      source: { rowId: "bgv", columnId: "col-2", memberId: "gaby" },
+      target: { rowId: "bgv", columnId: "col-1" },
       config: CONFLICT_CONFIG,
     });
 
     const first = gate(input);
+    expect(first.kind).toBe("prompt");
     expect(gate({ ...input })).toBe(first);
   });
 

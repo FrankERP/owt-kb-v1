@@ -36,12 +36,14 @@ import { rankCandidates, type AssignedSeat, type RankMember } from "./candidateR
 import type { MoveOccupantEndpoint, MoveOccupantSource } from "./moveOccupant";
 import {
   assignedForColumn,
+  rowAppliesTo,
   seatDefForRow,
   type GridCell,
   type GridColumn,
   type GridRow,
   type SolverConfig,
 } from "./plannerModel";
+import type { SeatDef } from "./seatModel";
 import { serializeStoredColumn } from "./plannerSaveModel";
 import type { StoredGridColumn } from "./storedRoleReadModel";
 
@@ -86,8 +88,7 @@ const ALREADY_HERE_REASON = "Ya está en esta casilla";
 const UNKNOWN_MEMBER_REASON = "Miembro desconocido";
 const UNRESOLVED_REASON = "Movimiento no reconocido.";
 
-export interface MoveGateInput {
-  mode: MoveGateMode;
+interface MoveGateInputBase {
   cells: GridCell[];
   rows: GridRow[];
   columns: GridColumn[];
@@ -96,25 +97,54 @@ export interface MoveGateInput {
   target: MoveOccupantEndpoint;
   /** P1 — `mutationLocked`/`storedMutationLocked`. */
   mutationLocked?: boolean;
-  /**
-   * P3 — create mode only, and the TARGET side only: dragging OUT of a column
-   * that will never be written is legitimate (the removal is discarded, the add
-   * lands on a real column).
-   *
-   * Injected rather than computed here on purpose. The authority is
-   * `MonthGenerator`'s `isCreatable` (`MonthGenerator.tsx:2056-2060`), which
-   * reads `createdTargets` (a ref) and the A1/A2 preflight snapshot — neither is
-   * derivable from `columns`/`cells`. Threading the same predicate down is what
-   * keeps this and `cellsToDrafts` from drifting. Absent ⇒ every column may
-   * receive, which is the honest answer when the caller cannot say.
-   */
-  canReceive?: (column: GridColumn) => boolean;
   /** The month's FULL Sunday spine (E21) — week exclusions only. */
   sundayDates?: string[];
   /** Threaded for the TARGET column, matching `PlannerGrid.tsx:544`. */
   sundayDatesForColumn?: (column: GridColumn) => string[];
   config?: SolverConfig;
 }
+
+export interface CreateModeGateInput extends MoveGateInputBase {
+  mode: "create";
+  /**
+   * P3 — create mode only, and the TARGET side only: dragging OUT of a column
+   * that will never be written is legitimate (the removal is discarded, the add
+   * lands on a real column).
+   *
+   * **REQUIRED, and required at the type level on purpose.** P3 is the one
+   * precondition whose absence loses data rather than merely permitting a bad
+   * edit: the removal lands on a column that IS created and the add on one that
+   * is not, so the person disappears from the month in one gesture. An optional
+   * predicate would make that failure silent — no test, no type error, no
+   * runtime signal that P3 was skipped — so the caller must say, even if what it
+   * says is `() => true`.
+   *
+   * Injected rather than computed here, because the authority is
+   * `MonthGenerator`'s `isCreatable` (`MonthGenerator.tsx:2056-2060`): it reads
+   * `createdTargets` (a ref) and the A1/A2 preflight snapshot, neither of which
+   * is derivable from `columns`/`cells`. Re-deriving it here would create the
+   * SECOND definition P3 exists to prevent, so the one definition stays in
+   * `MonthGenerator` and is threaded down. What T4 must wire:
+   *
+   * ```ts
+   * canReceive={(column) => {
+   *   const draft = drafts.find(
+   *     (d) => draftTargetKey(d._type, d.date) === draftTargetKey(column.type, column.date),
+   *   );
+   *   return draft !== undefined && isCreatable(draft);
+   * }}
+   * ```
+   */
+  canReceive: (column: GridColumn) => boolean;
+}
+
+export interface StoredModeGateInput extends MoveGateInputBase {
+  mode: "stored";
+  /** No P3 in stored mode: every column is a document that already exists. */
+  canReceive?: never;
+}
+
+export type MoveGateInput = CreateModeGateInput | StoredModeGateInput;
 
 /**
  * P2 — may this column be touched at all?
@@ -209,6 +239,13 @@ export function evaluateMove(input: MoveGateInput): MoveGateVerdict {
   const targetColumn = columns.find((c) => c.columnId === target.columnId);
   const targetRow = rows.find((r) => r.id === target.rowId);
   if (!sourceColumn || !targetColumn || !targetRow) return unresolved();
+  // A row this column does not show is not a cell — `PlannerGrid.tsx:1574`
+  // renders a blank spacer for it, so nothing there can be a drop zone. Stated
+  // here as well because P2 CANNOT catch it: `serializeStoredColumn` judges the
+  // column as it is NOW, so a stored Saturday would pass P2 and only produce
+  // `hidden_saturday_chorus` after the drop had already landed — poisoning
+  // Guardar for the whole month, which is the exact harm P2 exists to avoid.
+  if (!rowAppliesTo(targetRow, targetColumn)) return unresolved();
   // Nothing to move. `moveOccupant` degrades to a no-op here; the gate says so
   // rather than letting a stale drag produce a "clean" verdict.
   const sourceCell = cells.find((c) => c.rowId === source.rowId && c.columnId === source.columnId);
@@ -226,7 +263,7 @@ export function evaluateMove(input: MoveGateInput): MoveGateVerdict {
   // P3 — DROP side only. Because a drag is a MOVE, dropping into a column that
   // is never created lands the removal on a column that IS created and the add
   // on one that is not: the person vanishes from the month in one gesture.
-  if (mode === "create" && input.canReceive && !input.canReceive(targetColumn)) {
+  if (input.mode === "create" && !input.canReceive(targetColumn)) {
     return { kind: "not-permitted", code: "P3", reason: NOT_CREATABLE_REASON };
   }
 
@@ -248,7 +285,13 @@ export function evaluateMove(input: MoveGateInput): MoveGateVerdict {
   // `assignedAfterSourceRemoval` matches on `source.rowId` and never on a seat
   // id: matching on the seat id would silently remove nothing on exactly those
   // rows, and the move would then be refused as a same-category double.
-  const seat = seatDefForRow(targetRow);
+  // `seatDefForRow` THROWS on a row it cannot recognise (a `voz` row whose id is
+  // not one of `VOICE_SEATS`). The picker meets that during a render, where a
+  // throw is loud; this gate runs inside a pointer handler, where it would break
+  // the drag with nothing caught and nothing said. A gate that cannot describe
+  // the target seat cannot judge the move, so it refuses instead.
+  const seat = seatDefForRowOrNull(targetRow);
+  if (!seat) return unresolved();
   const assigned = assignedAfterSourceRemoval({ cells, rows, source, targetColumnId: target.columnId });
   const ranked = rankCandidates({
     seat,
@@ -306,11 +349,24 @@ export function evaluateMove(input: MoveGateInput): MoveGateVerdict {
   return CLEAN;
 }
 
-/** One shared object, so a clean verdict is referentially stable for a memo. */
-const CLEAN: MoveGateVerdict = { kind: "clean" };
+/**
+ * One shared object, so a clean verdict is referentially stable for a memo —
+ * and frozen, because it is shared: a caller that annotated the verdict it got
+ * back (T4's unavailability note, say) would otherwise annotate every clean
+ * verdict the module has ever returned.
+ */
+const CLEAN: MoveGateVerdict = Object.freeze({ kind: "clean" as const });
 
 function unresolved(): MoveGateVerdict {
   return { kind: "not-permitted", code: "unresolved", reason: UNRESOLVED_REASON };
+}
+
+function seatDefForRowOrNull(row: GridRow): SeatDef | null {
+  try {
+    return seatDefForRow(row);
+  } catch {
+    return null;
+  }
 }
 
 /**
