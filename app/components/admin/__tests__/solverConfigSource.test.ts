@@ -202,16 +202,17 @@ describe("ServicesPanel wires ONE rule set to its roster surfaces", () => {
     "utf8",
   );
 
-  it("fetches the rules exactly once, in the panel that owns both surfaces", () => {
+  it("fetches the rules exactly once, in the panel that owns the roster surface", () => {
     expect(src).toContain("useSolverConfig");
     expect(src.match(/useSolverConfig\(\)/g) ?? []).toHaveLength(1);
   });
 
-  it("retires every SeatBoard mount after create and edit move to the month editor", () => {
-    const mounts = src.match(/<SeatBoard[\s\S]*?\/>/g) ?? [];
-    expect(mounts).toHaveLength(0);
-    expect(src).not.toContain('from "./SeatBoard"');
-  });
+  // The former "retires every SeatBoard mount" guard is deliberately gone. It
+  // asserted that this file contains no `<SeatBoard />` and no import of it —
+  // true, but unfalsifiable since `SeatBoard.tsx` was deleted: re-introducing
+  // either would be a `tsc` error, not a red test. A test that cannot fail
+  // reads as coverage and is not, which is the one thing this suite is here to
+  // avoid. What replaced it is the module itself no longer existing.
 
   it("hands every generator the SAME controller object", () => {
     // Two `useSolverConfig()` calls would read the same document through the
