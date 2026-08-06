@@ -2,7 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task.
 
-**Status:** `READY_FOR_ADVERSARIAL_REVIEW`. One open item **gates T3, not review**: D2's narrowing of the force affordance deviates from the user's literal words and is awaiting their confirmation.
+**Status:** **APPROVED** — two sequential fresh adversarial approvals on byte-identical text (md5 `6a9ae0449e9d3e1e2ddca55bafcd101c`, commit `074e6c3`), as the CRITICAL tier requires. Approval is not authorization to implement.
+**Open item — gates T3, not review:** D2's narrowing of the force affordance deviates from the user's literal words and is awaiting their confirmation.
 **Risk tier:** **CRITICAL**, two sequential fresh approvals on byte-identical text — a **deliberate raise, not an application of the ladder**. By CLAUDE.md's text this is "a client/UI consumer of an already-approved idempotent writer" and would be standard; it is raised because nothing downstream dedupes, so the client payload is the last line of defence.
 **Authorization:** this document does not authorize implementation.
 
