@@ -325,6 +325,9 @@ const FOCUSABLE_SELECTOR =
 
 // ── Drag and drop (T4) ───────────────────────────────────────────────────────
 //
+// DD7 (no swap by drag), DD8 (no touch drag) and DD9 (no edge auto-scroll) are
+// recorded in ADR-0012 — read it before "fixing" any of the three.
+//
 // **HTML5 drag, not pointer events**, and that choice carries DD8 for free.
 // `SetlistEditor.tsx:335-339` and `ProposalEditor.tsx:151-167` are both HTML5
 // (`draggable` + `onDragStart`/`onDragOver`/`onDrop`/`onDragEnd`), so this is
