@@ -2911,6 +2911,21 @@ export default function MonthGenerator({
     // TARGET (see `createdTargets`). This is the write that closes P2: from
     // here on `isCreatable` refuses every one of these targets, so no second
     // confirm — and no rename in between — can post them again.
+    //
+    // INVARIANT the drag gate's P3 cache depends on: this loop only runs a
+    // growing `createdTargets.current.add` when `created.size > 0`, and that
+    // is exactly the condition already guarded by `setDrafts` above — so every
+    // growth of this set is paired with a `drafts` identity change in the same
+    // tick. `canReceiveDrop` (below) closes over `createdTargets.current` and
+    // is memoized only on `[drafts, preflight, preflights]`; `createMoveGate`'s
+    // cache is keyed on `canReceiveDrop`'s identity (`moveGate.ts`, "cache
+    // dropped WHOLE the moment any input identity changes"). Grow this set
+    // without a paired `drafts` identity change and the P3 cache goes stale —
+    // a drag can be served a `clean` verdict for a column that was actually
+    // just created, and the person vanishes from the month in one gesture (the
+    // exact hazard P3 exists to prevent). If a future write to this ref is
+    // added on a path that does not already `setDrafts`, add one, or thread a
+    // fresh dependency into `canReceiveDrop`'s `useCallback` deps.
     for (const draft of toCreateNow) {
       if (created.has(draft.localId)) createdTargets.current.add(draftTargetKey(draft._type, draft.date));
     }
@@ -3409,6 +3424,19 @@ export default function MonthGenerator({
           diagnostics={diagnostics}
           config={solverConfig ?? undefined}
           sundayDates={sundayDatesFull}
+          // INLINE ON PURPOSE, for now — and worth knowing before "fixing" it.
+          // A fresh closure every render means the drag gate's WHOLE verdict
+          // cache (`moveGate.ts`'s `createMoveGate`, keyed in part on this
+          // prop's identity) is dropped on every `MonthGenerator` re-render,
+          // including the one `handleConfirm` triggers. That currently masks a
+          // narrower question: whether `canReceiveDrop`'s OWN identity tracks
+          // `createdTargets.current` correctly (see the invariant comment on
+          // that mutation, and `moveGate.ts`'s `createMoveGate`). Memoizing
+          // this closure would be a reasonable-looking perf pass, but it would
+          // remove that safety net and make the P3 cache depend ENTIRELY on
+          // the `createdTargets`/`canReceiveDrop`/`setDrafts` coupling holding
+          // — do so only alongside re-verifying that coupling, not as an
+          // unrelated cleanup.
           sundayDatesForColumn={(column) => ruleContextForTarget(column.type, column.date)?.sundayDates ?? []}
           /*
             The participation chart, handed to the grid as the LEFT COLUMN of

@@ -381,8 +381,21 @@ function seatDefForRowOrNull(row: GridRow): SeatDef | null {
  *
  * The cache is dropped WHOLE the moment any input identity changes — `cells`
  * above all, so a forced move can never be applied against a verdict computed
- * from a grid that has since moved. Reference equality only: every one of these
- * is a React prop or state value that is replaced, not mutated, on change.
+ * from a grid that has since moved. Reference equality only, which means the
+ * REAL contract is not "every dependency is a prop or state value" — it is
+ * narrower and easier to violate: every dependency must change IDENTITY
+ * whenever the answer it feeds into `evaluateMove` can change. Most of these
+ * are React props/state, replaced not mutated, so that holds for free.
+ * `canReceive` (P3) is the exception: `MonthGenerator`'s `canReceiveDrop`
+ * closes over `createdTargets.current`, a `Set` ref that is MUTATED in place
+ * (`MonthGenerator.tsx`, `handleConfirm`'s success loop), not replaced. This
+ * cache stays honest only because `MonthGenerator` upholds a side invariant
+ * this module cannot see or enforce: every growth of that set is paired with
+ * a `drafts` identity change in the same tick (`setDrafts` under the same
+ * `created.size > 0` guard), and `canReceiveDrop` is memoized on `drafts` —
+ * so the paired `setDrafts` is what gives `canReceive` a fresh identity here.
+ * See the invariant comment at that mutation site before touching either
+ * side of this coupling.
  */
 export function createMoveGate(): (input: MoveGateInput) => MoveGateVerdict {
   let deps: unknown[] | null = null;
