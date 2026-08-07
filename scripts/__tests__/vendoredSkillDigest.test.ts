@@ -41,7 +41,7 @@ const SKILL_DIR = join(process.cwd(), ".agents", "skills", "adversarial-plan-rev
 const EXPECTED_DIGESTS: Record<string, string> = {
   "SKILL.md": "d3616f880c7a2e0440309b471ba7e1a965c2b86878d940307267a833c35cdcd7",
   "agents/openai.yaml": "92ca8b13523357a7c2ddb1093c7ab4169450fd869eca2577e1c779e5bb573ac9",
-  "reviewer-brief.md": "5f955f3dd1dcbdbe07c4ce34dc0b56a23f8e56f7a8176e5d9c9dd82bfde93ed3",
+  "reviewer-brief.md": "88fea628e5262e349827bdbff3bb58c16d3603ee428ae8739c67253955572c8a",
 };
 
 const SYNC_REMEDIATION =

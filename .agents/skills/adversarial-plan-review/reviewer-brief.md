@@ -66,3 +66,7 @@ NON-BLOCKING (optional):
 ```
 
 Be specific and cite evidence — `file:line`, command output. "This might have issues" is worthless; "`post.author` is denormalised in `routes/x.ts:40` but also written by the migration, so they can diverge" is useful. Only return `VERDICT: APPROVED` when you found zero blocking issues.
+
+**After your verdict block**, add one final line so the coordinator can record the round in the repository's agent worklog:
+
+`WORKLOG: {"agent":"skeptical-reviewer","task":"<one line>","outcome":"approved|changes_required","summary":"<one line>"}`
