@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/sanity/lib/serverClient", () => ({ serverClient: {}, writeClient: {} }));
 // Same reason: assignmentEmail.ts also imports ./email, which imports the
 // "server-only" package guard — unresolvable outside a Next.js server build.
-vi.mock("../email", () => ({ sendEmail: vi.fn() }));
+vi.mock("../email", () => ({ sendEmail: vi.fn(), SEND_CONCURRENCY: 8 }));
 
 import { buildGroupedEmail } from "../notificationEmail";
 import type { Line } from "../outboxClassify";
