@@ -40,7 +40,32 @@ export const SEND_TIMEOUT_MS = 15_000;
  * Bounded, not unlimited: this dials a shared cPanel/Exim mailbox, which answers
  * a flood with `421 too many connections` rather than with speed.
  */
-export const SEND_CONCURRENCY = 8;
+export const SEND_CONCURRENCY = 1;
+
+/*
+ * WHY IT IS BACK TO 1, AND WHAT WOULD JUSTIFY RAISING IT.
+ *
+ * Raising it to 8 was reasoned from the probe and was WRONG in production. The
+ * 2026-08-07 rehearsal ran 16 sends, 8 in flight: every one hit the 15 s ceiling
+ * and `emailed` was 0 — worse than the serial run that had at least delivered
+ * one. Notably even the FIRST of the eight failed, which is not what a server
+ * that merely queues would do; opening the connections together degraded the
+ * send that would otherwise have completed in ~13.4 s.
+ *
+ * That result is CONFOUNDED and should not be over-read: `EMAIL_REDIRECT_TO`
+ * pointed every message at one Hotmail address, and Hotmail throttles a burst
+ * from one sender hard. So it is evidence against 8-to-one-domain, and says
+ * little about 8-to-seventeen-domains, which is the case that actually matters.
+ * The redirect is what made the rehearsal safe and is also what spoiled its
+ * measurement — worth knowing before designing the next one.
+ *
+ * 1 is therefore not a conclusion, it is the only setting with a confirmed
+ * production success. The wave machinery in stage 7 is unchanged and correct at
+ * any value; this constant is the whole knob. Raise it when there is a clean
+ * measurement against many recipient domains — or delete the question by moving
+ * to the Resend backend below, where a send is an HTTP call and none of this
+ * arithmetic applies.
+ */
 
 // Reuse pooled SMTP connections across a batch (and across warm invocations)
 // instead of opening a fresh auth per email. Setup is cheap here (see the probe

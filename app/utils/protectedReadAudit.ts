@@ -364,6 +364,14 @@ export const OPERATOR_TOOLING_ALLOWLIST: readonly AuditExemption[] = [
     removalOwner: "A3 verification tooling (never A2)",
   },
   {
+    file: "scripts/requeue-role-notices.mjs",
+    operation: "module",
+    reason:
+      "notification repair tool: READS the protected role document to recover its assignees and service date, and writes only notificationOutbox — the debounce queue, never protected content. Exists because the 2026-08-07 flush recovery discharged a 17-recipient batch with one delivery, and stage 8 consumes whether or not stage 7 reached anyone, so the notices were spent rather than retried. Dry-run by default; --apply guards the write; the notice shape comes from queueRoleNotices' own helpers rather than being rebuilt here",
+    removalOwner:
+      "operator repair tooling (never A2 — retire it when notification delivery is reliable enough that a spent batch cannot happen)",
+  },
+  {
     file: "scripts/backfill-legacy-seat-arrays.mjs",
     operation: "module",
     reason:
