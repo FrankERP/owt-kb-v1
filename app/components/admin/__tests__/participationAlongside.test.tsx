@@ -578,6 +578,12 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
     // A popover left focus somewhere sensible on its own because it sat next to
     // its trigger. A column on the far side of the grid does not: without this a
     // keyboard user restarts at the top of the page every time they close it.
+    //
+    // Focus lands on the cell's ACTION rather than the cell box (T5): the box
+    // used to be `role="button"` and answered Enter itself, and is a
+    // `role="group"` now that it holds focusable chips — so returning focus to
+    // the box would land the admin on something inert and cost them the "close,
+    // look, reopen" loop the shipped surface had.
     stubWideViewport();
     const { container } = goToGrid([]);
     const cell = container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]') as HTMLElement;
@@ -585,7 +591,8 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
     fireEvent.click(screen.getByRole("button", { name: "Cerrar" }));
 
     expect(container.querySelector("[data-candidate-picker]")).toBeNull();
-    expect(document.activeElement).toBe(cell);
+    expect(document.activeElement).toBe(cell.querySelector("[data-cell-action]"));
+    expect(cell.contains(document.activeElement)).toBe(true);
   });
 
   it("Escape closes the picker instead of the generator", () => {

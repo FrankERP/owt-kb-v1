@@ -913,6 +913,11 @@ export default function PlannerGrid(props: PlannerGridProps) {
    * (that is a question about the target, and `moveGate` owns it), so this is
    * reachable from a chip AND from a seated member's picker row even when that
    * row is refused as a *candidate* — see `CandidateRow`'s anchor.
+   *
+   * At most ONE source is ever armed. Marking somebody else REPLACES the mark
+   * rather than queueing a second one — two armed sources and one target cell
+   * would be a coin toss over who moves — and a drag started mid-pick does the
+   * same. The banner names whoever currently holds it.
    */
   function togglePickedMove(source: MoveOccupantSource) {
     // A BACKSTOP, and no test can kill this line alone: both anchors already
@@ -1165,9 +1170,16 @@ export default function PlannerGrid(props: PlannerGridProps) {
     setOpenCell(null);
     setOpenOrder(null);
     if (!target) return;
-    document
-      .querySelector<HTMLElement>(`[data-row-id="${target.rowId}"][data-column-id="${target.columnId}"]`)
-      ?.focus();
+    const cell = document.querySelector<HTMLElement>(
+      `[data-row-id="${target.rowId}"][data-column-id="${target.columnId}"]`,
+    );
+    // The cell's ACTION, not the cell box. The box used to be `role="button"`
+    // and answered Enter itself; it is a `role="group"` now (T5 — it holds
+    // focusable chips), so focusing it would land a keyboard user on something
+    // inert and cost them the "close, look, reopen" loop. The button inside is
+    // where that Enter went. Falls back to the box if there is no enabled action
+    // — a locked grid — so focus never drops to `<body>`.
+    (cell?.querySelector<HTMLElement>("[data-cell-action]:not([disabled])") ?? cell)?.focus();
   }, [openCell]);
 
   const openKey = openCell ? `${openCell.rowId}|${openCell.columnId}` : null;
@@ -1554,8 +1566,19 @@ export default function PlannerGrid(props: PlannerGridProps) {
             data-pick-active={pickedMove ? "true" : undefined}
             className="font-body text-xs text-[#00bfff]"
           >
+            {/*
+              The second sentence tracks what is actually possible. A pick can
+              only be ARMED while unlocked, but a save can start under one — and
+              "Elige la casilla de destino" would then be instructing the admin
+              to do the one thing every cell is refusing. Escape still cancels
+              either way, so that half of the sentence stands.
+            */}
             {pickedMove
-              ? `Marcado para mover: ${pickedMove.memberName} — desde ${pickedMove.fromLabel}. Elige la casilla de destino, o pulsa Esc para cancelar.`
+              ? `Marcado para mover: ${pickedMove.memberName} — desde ${pickedMove.fromLabel}. ${
+                  mutationLocked
+                    ? "Espera a que termine la operación pendiente, o pulsa Esc para cancelar."
+                    : "Elige la casilla de destino, o pulsa Esc para cancelar."
+                }`
               : ""}
           </p>
           {pickedMove && (
@@ -2434,16 +2457,19 @@ function GridCellView({
                 aria-disabled={pick.enabled ? undefined : "true"}
                 // The NAME is the action, because the action is what a button's
                 // name is for; the member is named inside it, and the ⚠ the sighted
-                // chip carries is spelled out rather than dropped.
+                // chip carries is spelled out rather than dropped. It describes
+                // the KEYBOARD activation, which is the one this role implies and
+                // the one assistive tech performs.
                 aria-label={`${marked ? "Cancelar el movimiento de" : "Marcar para mover a"} ${memberName(id)}${
                   isDuplicate || ruleBroken ? " (conflicto)" : ""
                 }`}
-                onClick={(e) => {
-                  // Without this the cell's own click runs too and the picker
-                  // opens on top of the pick that was just made.
-                  e.stopPropagation();
-                  pickChip();
-                }}
+                // NO `onClick`, deliberately (user ruling, 2026-08-06). A pointer
+                // click on a name keeps doing exactly what it always has: it
+                // falls through to the cell, which opens the picker — or places
+                // a pick in progress, like any other part of the cell. Marking
+                // from the chip is a KEYBOARD affordance only; a mouse marks
+                // from the picker-row anchor or simply drags, and touch is the
+                // picker row's job regardless (DD8 — this chip is ~20px).
                 onKeyDown={(e) => {
                   if (e.key !== "Enter" && e.key !== " ") return;
                   e.preventDefault();
@@ -2593,6 +2619,17 @@ function CandidateRow({
         if (!blocked) onToggle(candidate.id);
       }}
       onKeyDown={(e) => {
+        // THE ROW ITSELF, never a control inside it. This row is `role="button"`
+        // and holds two nested buttons; a keystroke aimed at one of them bubbles
+        // here, and this handler `preventDefault`s the button's own activation
+        // and runs the row's action instead. For a SEATED member that action is
+        // the REMOVAL branch of `onToggle`, so Enter on "Marcar para mover"
+        // un-seated the person it was meant to mark — a destructive keyboard
+        // path on the only anchor a `+N`-hidden occupant has. Guarded here
+        // rather than with a `stopPropagation` on each button so the whole class
+        // is closed, including "Asignar de todos modos" (safe today only because
+        // it renders exclusively while `blocked` short-circuits this handler).
+        if (e.target !== e.currentTarget) return;
         if (blocked) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
