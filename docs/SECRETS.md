@@ -134,8 +134,31 @@ Then confirm with a manual run as above.
 
 **How to rotate.** Reset the mailbox password in cPanel, then update `SMTP_PASS` in Vercel for Production *and* Preview, then redeploy. Note the blast radius is wider than the cron secret's: every outbound email — assignment notifications, the debounced notification sweep, proposal emails, and the outbox liveness alarm — is down between the reset and the redeploy.
 
+---
+
+## `EMAIL_REDIRECT_TO`
+
+**Not a secret** — an email address, and a deliberate safety valve. Documented here because it is the single most consequential non-secret in the mail path.
+
+**Needed in: nowhere, normally.** It must be **absent** in Production for the team to receive their own mail. Setting it is a temporary, reversible act.
+
+**Purpose.** When set, *every* outgoing email is redirected to that one address instead of its real recipient, with the intended recipient prefixed into the subject as `[→ real@address] …` (`outboxSweep.ts` stage 7). Nothing else changes: classification, grouping, the send loop, and stage 8's unconditional consume all behave exactly as in a real run. That is what makes it the only honest way to rehearse a fan-out — a completely real batch that reaches nobody.
+
+**Where the value came from.** Whoever is running the rehearsal. On 2026-08-07 it was set to the maintainer's own address to measure `msPerSend` for a 17-recipient batch without mailing the team.
+
+**How to set and unset.**
+
+```bash
+printf 'you@example.com' | npx vercel env add EMAIL_REDIRECT_TO production
+npx vercel env rm EMAIL_REDIRECT_TO production --yes
+```
+
+**A redeploy is required either way** — a running function keeps the value it booted with, so adding it without redeploying rehearses nothing and removing it without redeploying keeps mail redirected. Verify the alias moved before trusting either state.
+
+**Blast radius.** While it is set, *nobody on the team receives any notification* — and because the outbox consumes unconditionally with no retry, notices flushed during that window are **spent**, not queued. Leaving it set by accident is silent, total notification loss that still reports green. Unset it the moment the rehearsal ends, and confirm with `vercel env ls production`.
+
 ## Not yet documented
 
-Other variables in use — `SANITY_API_*`, `NEXTAUTH_*`, SMTP credentials for `contacto@oasis.mx`, `EMAIL_ALLOWLIST`, `EMAIL_REDIRECT_TO`, FCM push credentials, the solver's Secret Manager key — predate this file. Add each one here as it is next touched or rotated.
+Other variables in use — `SANITY_API_*`, `NEXTAUTH_*`, SMTP credentials for `contacto@oasis.mx`, `EMAIL_ALLOWLIST`, FCM push credentials, the solver's Secret Manager key — predate this file. Add each one here as it is next touched or rotated.
 
 Notification-outbox tuning knobs (`NOTIFY_DEBOUNCE_MINUTES`, `NOTIFY_MAX_WINDOW_MINUTES`, `NOTIFY_CLAIM_TTL_MINUTES`, `NOTIFY_SEND_BUDGET_MS`, `NOTIFY_FLUSH_EMAIL_LIMIT`, `NOTIFY_STALE_ALERT_HOURS`) are configuration, not secrets, and all have code defaults. They are specified in `docs/superpowers/specs/2026-07-27-service-notification-emails-design.md` §9.

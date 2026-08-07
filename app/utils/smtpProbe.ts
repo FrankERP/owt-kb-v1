@@ -33,6 +33,16 @@ export interface SmtpProbeReport {
   host?: string;
   port?: number;
   secure?: boolean;
+  /**
+   * Where mail is ACTUALLY going right now, or `null` for "to its real
+   * recipients". Reported first and unconditionally, because `EMAIL_REDIRECT_TO`
+   * is invisible from every other angle: a redirected deployment sends, logs and
+   * reports exactly like a healthy one while the team receives nothing, and the
+   * outbox consumes those notices anyway. Left set by accident it is silent,
+   * total notification loss that still looks green — so the safety valve gets a
+   * window, and a rehearsal can confirm it is on BEFORE queueing anything.
+   */
+  redirectTo?: string | null;
   /** Full setup on a fresh, unpooled transport: TCP + TLS + greeting + AUTH. */
   coldMs?: number | null;
   /** The same pooled transport asked a second time — the reuse cost. */
@@ -69,15 +79,18 @@ async function timedVerify(
 }
 
 export async function probeSmtp(): Promise<SmtpProbeReport> {
+  // Read before every early return below, so "where is mail going?" is answered
+  // even when the probe cannot reach the server at all.
+  const redirectTo = process.env.EMAIL_REDIRECT_TO?.trim() || null;
   // The probe sends nothing, but it does exercise the credentials against the
   // real server. A verification run is supposed to touch NOTHING outbound, so it
   // declines here too rather than making that promise almost true.
-  if (isDeliveryBlocked()) return { status: "delivery_blocked" };
+  if (isDeliveryBlocked()) return { status: "delivery_blocked", redirectTo };
 
   const host = process.env.SMTP_HOST;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
-  if (!host || !user || !pass) return { status: "unconfigured" };
+  if (!host || !user || !pass) return { status: "unconfigured", redirectTo };
 
   const port = Number(process.env.SMTP_PORT ?? 465);
   const secure = process.env.SMTP_SECURE != null ? process.env.SMTP_SECURE === "true" : port === 465;
@@ -110,6 +123,7 @@ export async function probeSmtp(): Promise<SmtpProbeReport> {
 
   return {
     status: "ok",
+    redirectTo,
     host, port, secure,
     coldMs, warmMs, secondColdMs,
     ...(Object.keys(errors).length ? { errors } : {}),
