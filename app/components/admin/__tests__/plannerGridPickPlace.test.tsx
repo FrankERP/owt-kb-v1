@@ -152,6 +152,21 @@ function pickerAnchorFor(name: string): HTMLButtonElement {
   }) as HTMLButtonElement;
 }
 
+/**
+ * The picker-row anchor activated THE WAY A KEYBOARD DOES IT, in the browser's
+ * own order: the keydown first (which the row this button sits in also sees —
+ * that row is `role="button"` with a handler of its own), then the click the
+ * browser synthesizes from it on a native button, which jsdom does not.
+ *
+ * Both halves matter. Enter on this anchor used to bubble to the row and run its
+ * REMOVAL branch, un-seating the person being marked and arming nothing — so a
+ * test that only clicks proves the keyboard path works when it does not.
+ */
+function activateAnchorWithKeyboard(anchor: HTMLElement, key: "Enter" | " " = "Enter") {
+  fireEvent.keyDown(anchor, { key });
+  fireEvent.click(anchor);
+}
+
 function occupantsOf(cells: GridCell[], rowId: string, columnId: string): string[] {
   return (
     cells.find((c) => c.rowId === rowId && c.columnId === columnId)?.occupants.map((o) => o.memberId) ?? []
@@ -200,19 +215,38 @@ describe("pick-then-place by keyboard (acceptance 10)", () => {
     expect(banner).toContain("6 sep");
   });
 
-  it("marks on a POINTER click of the chip too — deliberately, and instead of opening the picker", () => {
-    // A shipped-behaviour change, stated: a click on a name used to bubble to
-    // the cell and open the candidate list. The chip is now a control of its
-    // own, so it answers for itself; the rest of the cell still opens the list.
+  it("leaves a POINTER click on the chip alone — it opens the picker, as it always has", () => {
+    // USER RULING, 2026-08-06: marking from the chip is keyboard-only. A mouse
+    // click on a name keeps falling through to the cell, so the shipped
+    // interaction is untouched for every pointer user; a mouse marks from the
+    // picker-row anchor instead, or just drags.
     const onCellsChange = vi.fn();
     const cells = [cell("bgv", "col-1", ["gaby"]), cell("lead", "col-2", [])];
     const { container } = renderGrid(baseProps({ cells, onCellsChange }));
 
     fireEvent.click(chipIn(container, "bgv", "col-1", "gaby"));
 
-    expect(container.querySelector("[data-candidate-picker]")).toBeNull();
-    expect(pickBannerText(container)).toContain("Gaby");
+    expect(container.querySelector("[data-candidate-picker]")).not.toBeNull();
+    expect(pickBannerText(container)).toBe("");
     expect(onCellsChange).not.toHaveBeenCalled();
+  });
+
+  it("re-marks rather than queueing when another chip is activated mid-pick", () => {
+    const onCellsChange = vi.fn();
+    const cells = [cell("bgv", "col-1", ["gaby"]), cell("lead", "col-1", ["liu"]), cell("lead", "col-2", [])];
+    const { container } = renderGrid(baseProps({ cells, onCellsChange }));
+
+    pickChipWithKeyboard(chipIn(container, "bgv", "col-1", "gaby"));
+    pickChipWithKeyboard(chipIn(container, "lead", "col-1", "liu"));
+
+    // ONE armed source, and it is the newer one — two would make the next cell
+    // a coin toss over who moves.
+    expect(pickBannerText(container)).toContain("Liu");
+    expect(pickBannerText(container)).not.toContain("Gaby");
+    activateCell(container, "lead", "col-2");
+    const next = onCellsChange.mock.calls[0][0] as GridCell[];
+    expect(occupantsOf(next, "lead", "col-2")).toEqual(["liu"]);
+    expect(occupantsOf(next, "bgv", "col-1")).toEqual(["gaby"]);
   });
 
   it("a drag started while a pick is armed replaces it", () => {
@@ -423,6 +457,26 @@ describe("a pending pick takes over the target cell's activation", () => {
     expect(screen.getByText("Salir de pantalla completa (Esc)")).toBeTruthy();
   });
 
+  it("stops telling the admin to choose a cell once a save has locked them all", () => {
+    // A pick can only be ARMED while unlocked, but a save can start under one.
+    // Every cell then refuses, so "Elige la casilla de destino" would be
+    // instructing the admin to do the one thing nothing will accept.
+    const cells = [cell("bgv", "col-1", ["gaby"]), cell("lead", "col-2", [])];
+    const props = baseProps({ cells });
+    const { container, rerenderWith } = renderGrid(props);
+
+    pickChipWithKeyboard(chipIn(container, "bgv", "col-1", "gaby"));
+    expect(pickBannerText(container)).toContain("Elige la casilla de destino");
+
+    rerenderWith({ ...props, mode: "stored", mutationLocked: true });
+
+    expect(pickBannerText(container)).toContain("Gaby");
+    expect(pickBannerText(container)).not.toContain("Elige la casilla de destino");
+    expect(pickBannerText(container)).toContain("Espera a que termine");
+    // Escape is still honest — it does cancel while locked.
+    expect(pickBannerText(container)).toContain("Esc");
+  });
+
   it("drops a pick whose source has left the grid rather than writing a stale move", () => {
     const onCellsChange = vi.fn();
     const cells = [cell("bgv", "col-1", ["gaby"]), cell("lead", "col-2", [])];
@@ -469,10 +523,13 @@ describe("an occupant hidden behind +N can be moved out (acceptance 12)", () => 
     rerenderWith({ ...props, cells: afterDrop });
     expect(cellAt(container, "lead", "col-1").querySelector('[data-occupant="gaby"]')).toBeNull();
 
-    // 3. The picker row is the anchor — DD11's whole point.
+    // 3. The picker row is the anchor — DD11's whole point — and it is reached
+    //    BY KEYBOARD, which is the only reason this path exists at all.
     fireEvent.click(cellActionIn(container, "lead", "col-1"));
-    fireEvent.click(pickerAnchorFor("Gaby"));
+    activateAnchorWithKeyboard(pickerAnchorFor("Gaby"));
     expect(pickBannerText(container)).toContain("Gaby");
+    // Marking is not editing: the drop above is still the only write so far.
+    expect(onCellsChange).toHaveBeenCalledTimes(1);
 
     // 4. …and she lands somewhere reachable again.
     activateCell(container, "lead", "col-2");
@@ -480,6 +537,52 @@ describe("an occupant hidden behind +N can be moved out (acceptance 12)", () => 
     const next = onCellsChange.mock.calls[1][0] as GridCell[];
     expect(occupantsOf(next, "lead", "col-1")).toEqual(["frank", "liu"]);
     expect(occupantsOf(next, "lead", "col-2")).toEqual(["gaby"]);
+  });
+
+  it("marks from the keyboard WITHOUT un-seating the member it is marking", () => {
+    // THE MUTATION THIS CATCHES, and a defect this suite once shipped: the
+    // anchor is a nested `<button>` inside a `role="button"` row whose own
+    // Enter/Space handler calls `onToggle` — which, for a member already seated
+    // here, is the REMOVAL branch. The row must ignore keystrokes aimed at the
+    // controls inside it (`e.target !== e.currentTarget`); without that guard
+    // Enter on "Marcar para mover" un-seats the occupant, marks the column
+    // touched and arms no pick — the destructive opposite of the action's name,
+    // on the ONLY route a `+N`-hidden occupant has.
+    const onCellsChange = vi.fn();
+    const cells = [cell("lead", "col-1", ["gaby"]), cell("lead", "col-2", [])];
+    const { container } = renderGrid(baseProps({ cells, onCellsChange }));
+    fireEvent.click(cellActionIn(container, "lead", "col-1"));
+    // Not blocked, not overridable: the ordinary acceptance-12 row, where the
+    // row's own key handler is live.
+    expect(candidateLi("Gaby").getAttribute("aria-disabled")).toBeNull();
+
+    fireEvent.keyDown(pickerAnchorFor("Gaby"), { key: "Enter" });
+    expect(onCellsChange).not.toHaveBeenCalled();
+    fireEvent.keyDown(pickerAnchorFor("Gaby"), { key: " " });
+    expect(onCellsChange).not.toHaveBeenCalled();
+
+    // …and the activation the browser makes of that keystroke does mark.
+    fireEvent.click(pickerAnchorFor("Gaby"));
+    expect(pickBannerText(container)).toContain("Gaby");
+    // Still seated where she was: nothing has been written at all.
+    expect(onCellsChange).not.toHaveBeenCalled();
+    expect(chipIn(container, "lead", "col-1", "gaby")).toBeTruthy();
+  });
+
+  it("keeps the row's OWN Enter working — a keystroke on the row still toggles", () => {
+    // The guard above is scoped to keystrokes aimed at nested controls. The
+    // row's shipped behaviour (Enter un-seats a member seated here) must survive
+    // it, or the fix has traded one regression for another.
+    const onCellsChange = vi.fn();
+    const cells = [cell("lead", "col-1", ["gaby"])];
+    const { container } = renderGrid(baseProps({ cells, onCellsChange }));
+    fireEvent.click(cellActionIn(container, "lead", "col-1"));
+
+    fireEvent.keyDown(candidateLi("Gaby"), { key: "Enter" });
+
+    expect(onCellsChange).toHaveBeenCalledTimes(1);
+    const next = onCellsChange.mock.calls[0][0] as GridCell[];
+    expect(occupantsOf(next, "lead", "col-1")).toEqual([]);
   });
 
   it("keeps the anchor for a hidden occupant who ALSO holds a same-category double", () => {
@@ -499,7 +602,7 @@ describe("an occupant hidden behind +N can be moved out (acceptance 12)", () => 
     fireEvent.click(cellActionIn(container, "lead", "col-1"));
     expect(candidateLi("Gaby").getAttribute("aria-disabled")).toBe("true");
 
-    fireEvent.click(pickerAnchorFor("Gaby"));
+    activateAnchorWithKeyboard(pickerAnchorFor("Gaby"));
     activateCell(container, "lead", "col-2");
 
     const next = onCellsChange.mock.calls[0][0] as GridCell[];
