@@ -4,6 +4,13 @@
 > `fee03d8` and available in production at
 > [owt-backstage.vercel.app](https://owt-backstage.vercel.app). The tested
 > feature tree remains on `feat/month-grid-editing` and `preview`.
+>
+> **Drag and pick-then-place (2026-08-06):** the "Move interactions" section
+> below documents `feat/grid-drag-and-drop` (T1–T7,
+> `docs/superpowers/plans/2026-08-06-grid-drag-and-drop.md`), which is
+> implemented and tested but **not yet merged to `main` or deployed** as of
+> this writing — before-move editing (create/save, swap) above is what is
+> live in production.
 
 This is the current-state reference for editing stored service teams through
 the month grid. Detailed mutation-test evidence lives in the
@@ -86,6 +93,59 @@ spine, and reconciles by role ID outside the displayed-month filter. Invalid
 local changes, including blank special names, count as unsaved work, disable
 save, and participate in the close warning.
 
+## Move interactions: drag and pick-then-place
+
+Two ways to relocate one already-seated occupant to a different cell, before
+Guardar: dragging the occupant's chip (desktop, HTML5 `draggable` — `dragstart`
+never fires from a touch), or a keyboard/touch pick-then-place — "Marcar para
+mover" on a focusable chip (Enter/Space) or on the picker-row anchor, the only
+route for occupants hidden behind `+N` — then activating a target cell. Both
+compose the same move primitive (`moveOccupant.ts`) through the same gate
+(`moveGate.ts`), so they can never diverge on what is allowed. See
+[ADR 0012](adr/0012-grid-drag-excludes-swap-touch-and-auto-scroll.md) for what
+this deliberately excludes — swap by drag, touch drag, edge auto-scroll — and
+why pick-then-place, not a lifted chip, is what serves touch.
+
+Every proposed move is judged in order. **P1–P3** are preconditions: the
+mutation lock, whether the serializer will accept both touched columns
+(`moveGate.ts`'s `canTouchColumn`), and — create mode only — whether the
+target column will actually be created. Failing any precondition means the
+move is not evaluated at all. **C1–C4** are then judged: **C1** (already
+seated at the target), **C2** (a data error) and **C3** (wrong member type)
+all **refuse** and are never forceable. **C4** (a rule violation) is the only
+constraint that **prompts** — `PlannerGrid.tsx`'s "Forzar el movimiento"
+dialog, offering "Mover de todos modos" or "Desistir"; forcing records the
+waived rule at the target seat only, never the source. Unavailability is not a
+fifth constraint: it renders as a non-blocking note at the drop, the same sort
+penalty the picker already applies.
+
+All four constraints are judged against ONE list: the target column's
+occupancy with the source removal applied, and the dragged member **not yet
+placed** at the target seat (`moveGate.ts`'s `assignedAfterSourceRemoval`).
+This is deliberately **pre-placement, not post-move** — judging post-move
+state would let the self-exemption in `ruleEnforcement.ts:351` (a member is
+exempt from a rule at the seat they already occupy) swallow every constraint,
+and C4's prompt could never fire. `moveGate.ts` and `moveOccupant.ts` can be
+read directly against both claims.
+
+**DD10 — a move removes exactly one copy**, never every copy of a member
+duplicated in one cell (a state the section-swap route can create). Dropping
+the member id wholesale would silently delete a second assignment nobody
+asked to move; `moveOccupant.ts`'s `dropOneOccurrence` is where the one-copy
+rule is enforced.
+
+A move is local state until **Guardar cambios**, exactly like any other cell
+edit — by itself it produces no PATCH and no notification. See "Mutation
+outcomes and recovery" below for what happens when a cross-service move's save
+fails on only one side: T6's save loop is sequential and continues past a
+known failure, so a cross-service move whose source PATCH commits and target
+PATCH is rejected notifies the member of a removal with no matching addition,
+and it does so **for published (or grandfathered) services only** — draft
+edits stay silent (`app/api/admin/roles/[id]/route.ts:396-398`). The exposure
+predates the drag (the pre-drag two-edit workflow carried it too); the drag
+makes it feel like one atomic gesture where two edits made both steps
+visible. See ADR-0012.
+
 ## Swap contracts
 
 Whole-team swaps are allowed only when both services are Saturday or both are
@@ -159,11 +219,27 @@ with a toolbar fallback if the card is no longer visible.
 - `serviceRuleContext.ts`: owning-Sunday rule context.
 - `roleWriteOps.ts` and role routes: canonical members, bootstrap, topology.
 - `specialIdentityCoordinator.ts`: serialized special identity.
+- `moveGate.ts`: pre-placement move judgement (P1–P3, C1–C4) shared by drag
+  and pick-then-place.
+- `moveOccupant.ts`: the one move primitive both mechanisms call.
 
 ## Verification, review, and delivery
 
-Final repository gates, re-run on 2026-08-06 after the Tablero retirement
-(`50dd868`) deleted `SeatBoard.test.tsx` and trimmed six other test files:
+Final repository gates, re-run on 2026-08-06 after the grid drag-and-drop
+delivery (T1–T7, `docs/superpowers/plans/2026-08-06-grid-drag-and-drop.md`)
+added drag, pick-then-place, `moveGate`/`moveOccupant`, and this ADR:
+
+- `npm test`: **140 files, 3228 tests passed**. (135/3134 immediately before
+  this delivery, below; the file/test count grew with the move gate, move
+  primitive, drag, and pick-then-place coverage — see the implementation and
+  review-log docs under `docs/superpowers/plans/` for the phase-by-phase
+  detail.)
+- `npx tsc --noEmit`: passed.
+- `npx eslint .`: **0 errors**, 90 accepted backlog warnings (same backlog as
+  before this delivery — no new warnings).
+
+Prior gates, re-run on 2026-08-06 after the Tablero retirement (`50dd868`)
+deleted `SeatBoard.test.tsx` and trimmed six other test files:
 
 - `npm test`: **135 files, 3134 tests passed**. (134/3131 after that deletion;
   135/3134 once `scripts/__tests__/vendoredSkillDigest.test.ts` was added. It was
