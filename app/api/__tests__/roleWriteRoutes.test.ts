@@ -44,7 +44,7 @@ vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidatePa
 vi.mock("@/app/utils/push", () => ({ sendPush: (...a: unknown[]) => sendPushMock(...a) }));
 // PARTIAL: the send paths are spied, but `rolesForMember` stays real — it is the
 // seat-label vocabulary the queued outbox snapshot records.
-vi.mock("@/app/utils/email", () => ({ sendEmail: vi.fn() }));
+vi.mock("@/app/utils/email", () => ({ sendEmail: vi.fn(), SEND_CONCURRENCY: 8 }));
 vi.mock("@/app/utils/assignmentEmail", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/app/utils/assignmentEmail")>()),
   sendAssignmentEmails: (...a: unknown[]) => sendAssignmentEmailsMock(...a),
