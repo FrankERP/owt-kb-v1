@@ -1,0 +1,56 @@
+# The operator's answer to "is the mail path healthy, and where does the time go?"
+#
+# MANUAL ONLY — no `schedule:`. This is a diagnostic you reach for when the outbox
+# looks wrong, not a thing that runs on its own. It calls a route that connects,
+# greets, authenticates and quits: NO MAIL IS SENT, no notice is claimed, no
+# member is contacted. That is what makes it safe to point at production.
+#
+# It exists because reachability from a laptop proves nothing. On 2026-08-06 the
+# outbox stalled on SMTP sends that never completed, while the same server
+# answered a residential connection in under a second — the question was always
+# about Vercel's egress, and there was no way to stand there and look.
+#
+# Reading the output:
+#   · `coldMs`       one full setup: TCP, TLS, greeting, AUTH.
+#   · `warmMs`       the SAME pooled transport asked again. Near zero means
+#                    pooling works; close to `coldMs` means it does not, and
+#                    every message is paying full setup.
+#   · `secondColdMs` a second independent setup, so a one-off is distinguishable
+#                    from a standing cost.
+#
+# Repository secrets required: CRON_SECRET and APP_BASE_URL — the same two the
+# flush workflow uses. See docs/SECRETS.md.
+name: Probe the SMTP path
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Measure connect, greeting and AUTH
+        # Via `env:`, never interpolated into the script — `${{ }}` in a `run:`
+        # block composes the value into the command line itself, visible to `ps`.
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+        run: |
+          BODY=$(mktemp)
+          CODE=$(curl --silent --show-error --max-time 90 \
+            -o "$BODY" -w '%{http_code}' \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_BASE_URL/api/cron/smtp-probe")
+          echo "HTTP $CODE"
+          cat "$BODY"
+          echo
+          # Assert 200 explicitly rather than trusting `curl --fail`, which lets
+          # a 3xx through — the same trap that once made the flush job report
+          # green while the sweep never ran.
+          if [ "$CODE" != "200" ]; then
+            echo "::error::Expected HTTP 200 from the SMTP probe, got $CODE"
+            exit 1
+          fi
