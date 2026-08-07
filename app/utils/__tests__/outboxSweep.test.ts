@@ -105,7 +105,7 @@ vi.mock("@/sanity/lib/serverClient", () => ({
 // rather than referenced: `vi.mock` is hoisted above every const in this file.
 vi.mock("@/app/utils/email", () => ({
   sendEmail: (...a: unknown[]) => sendEmailMock(...a),
-  SEND_CONCURRENCY: 8,
+  SEND_CONCURRENCY: 8, SEND_TIMEOUT_MS: 15_000,
 }));
 vi.mock("@/app/utils/deliveryFirewall", () => ({
   isDeliveryBlocked: (...a: unknown[]) => isDeliveryBlockedMock(...a),
@@ -358,7 +358,7 @@ describe("sweepOutbox — grouping and fan-out", () => {
     expect((sendEmailMock.mock.calls[0][0] as { subject: string }).subject).toContain("El setlist cambió");
   });
 
-  it("sends a wave in flight together, not one recipient at a time", async () => {
+  it("never exceeds SEND_CONCURRENCY in flight, whatever that is set to", async () => {
     // The 2026-08-07 throughput defect. One send costs ~13 s against this mail
     // server — the probe put connect+AUTH at ~0.4 s of that, so the cost is the
     // message — and serialized that is ~220 s for a Sunday inside a 60 s
@@ -386,11 +386,13 @@ describe("sweepOutbox — grouping and fan-out", () => {
 
     expect(report.emailed).toBe(12);
     expect(report.unserved).toBe(0);
-    // Serialized, this peaks at 1 — which is precisely the bug.
-    expect(peakInFlight).toBeGreaterThan(1);
-    // …but bounded, because the far end is a shared cPanel mailbox that answers
-    // a flood with `421 too many connections` rather than with speed.
-    expect(peakInFlight).toBeLessThanOrEqual(8);
+    // Asserted against the constant rather than a hard-coded width, because the
+    // right width is an open question: 8 was tried in production and produced
+    // ZERO deliveries where serial produced one, so it is back to 1 pending a
+    // measurement that is not confounded by every message going to one domain.
+    // The machinery must be correct at whatever value that turns out to be.
+    const { SEND_CONCURRENCY } = await import("@/app/utils/email");
+    expect(peakInFlight).toBe(Math.min(SEND_CONCURRENCY, 12));
   });
 
   it("introduces a recipient absent from knownRecipients", async () => {
@@ -753,14 +755,19 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
     world.roles = { r1: roleDoc() };
     world.recipients = { r1: ["m1"] };
     world.members = members(["m1"]);
-    // Every read costs 3 s of wall clock — several times the whole send budget.
+    // Every read costs 3 s of wall clock — together, more than the send budget
+    // below, so a budget that charged for reads would have nothing left.
     operationalFetch.mockImplementation(async (query: string, params: Doc = {}) => {
       reads.push({ query, params });
       vi.setSystemTime(new Date(Date.now() + 3_000));
       return routeRead(query, params);
     });
 
-    const report = await sweepOutbox({ sendBudgetMs: 1_000 });
+    // 20 s, not the 1 s this once used: stage 7 now admits a wave only if the
+    // worst case (SEND_TIMEOUT_MS, 15 s) fits in what remains, so a budget under
+    // that admits nothing at all and would prove the opposite of the point. The
+    // read phase still costs more than this budget, which is what matters here.
+    const report = await sweepOutbox({ sendBudgetMs: 20_000 });
 
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
     expect(report.emailed).toBe(1);
@@ -823,6 +830,40 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
     const stopped = logSpy.mock.calls
       .map(([line]) => JSON.parse(String(line)) as Record<string, unknown>)
       .find((entry) => entry.event === "notify_sweep_send_budget_exhausted");
+    expect(stopped?.stoppedBy).toBe("sweep_deadline");
+    logSpy.mockRestore();
+  });
+
+  it("refuses a wave that could not finish before the deadline", async () => {
+    // Measured in production on 2026-08-07: `elapsedMs:57888` against a 45 s
+    // reserve, then the platform killed the function and stage 8 never ran.
+    // Asking "has the deadline passed?" admits a wave at 44 s that runs to 59 s.
+    // The question has to be "does the WORST CASE still fit?" — and since every
+    // send is bounded by SEND_TIMEOUT_MS, the worst case is knowable.
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    world.notices = [roleNotice()];
+    world.roles = { r1: roleDoc() };
+    world.recipients = { r1: ["m1"] };
+    world.members = members(["m1"]);
+    // Reads leave 4 s before the 45 s reserve — room by the old test, nowhere
+    // near enough for a send that may take 15 s.
+    let reads_ = 0;
+    operationalFetch.mockImplementation(async (query: string, params: Doc = {}) => {
+      reads.push({ query, params });
+      if (reads_++ === 0) vi.setSystemTime(new Date(Date.now() + 41_000));
+      return routeRead(query, params);
+    });
+
+    const report = await sweepOutbox();
+
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(report.unserved).toBe(1);
+    // The whole purpose of refusing: stage 8 still runs, so the batch is
+    // discharged instead of being re-offered to a sweep that dies the same way.
+    expect(report.consumed).toBe(1);
+    const stopped = logSpy.mock.calls
+      .map(([line]) => JSON.parse(String(line)) as Record<string, unknown>)
+      .find((e) => e.event === "notify_sweep_send_budget_exhausted");
     expect(stopped?.stoppedBy).toBe("sweep_deadline");
     logSpy.mockRestore();
   });

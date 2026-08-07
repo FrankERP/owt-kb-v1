@@ -182,11 +182,13 @@ describe("sendEmail — one send cannot outlive its host function", () => {
     expect(createTransportMock).toHaveBeenCalledTimes(1);
   });
 
-  it("sends wider than one connection at a time", async () => {
-    // The 2026-08-07 measurement: setup ~0.4 s, whole send ~13 s. With the cost
-    // in the message, one connection cannot serve a Sunday inside 60 s.
+  it("opens exactly as many connections as SEND_CONCURRENCY allows", async () => {
+    // Deliberately NOT asserting a particular width. 8 was tried in production
+    // and delivered nothing where serial delivered one, so the value is an open
+    // question; what must hold is that the pool is sized by the constant rather
+    // than by a number someone typed in a second place.
     const { SEND_CONCURRENCY } = await import("../email");
-    expect(SEND_CONCURRENCY).toBeGreaterThan(1);
+    expect(SEND_CONCURRENCY).toBeGreaterThanOrEqual(1);
     sendMailMock.mockResolvedValue({ messageId: "1" });
     const { sendEmail } = await import("../email");
     await sendEmail({ to: "a@b.com", subject: "s", html: "<p>h</p>" });
