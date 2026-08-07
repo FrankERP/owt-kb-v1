@@ -97,3 +97,41 @@ describe("probeSmtp", () => {
     expect(r.errors?.cold).toContain("timed out");
   });
 });
+
+describe("probeSmtp — the redirect window", () => {
+  beforeEach(() => {
+    verifyMock.mockReset(); createTransportMock.mockClear();
+    blockedMock.mockReturnValue(false); vi.resetModules();
+    process.env.SMTP_HOST = "mail.oasis.mx";
+    process.env.SMTP_USER = "contacto@oasis.mx";
+    process.env.SMTP_PASS = "secret";
+  });
+  afterEach(() => {
+    delete process.env.SMTP_HOST; delete process.env.SMTP_USER;
+    delete process.env.SMTP_PASS; delete process.env.EMAIL_REDIRECT_TO;
+  });
+
+  it("reports null when mail goes to its real recipients", async () => {
+    verifyMock.mockResolvedValue(true);
+    const { probeSmtp } = await import("../smtpProbe");
+    expect((await probeSmtp()).redirectTo).toBeNull();
+  });
+
+  it("names the address when EMAIL_REDIRECT_TO is diverting the team's mail", async () => {
+    // Invisible from every other angle: a redirected deployment sends, logs and
+    // reports exactly like a healthy one while nobody receives anything.
+    process.env.EMAIL_REDIRECT_TO = "  someone@example.com  ";
+    verifyMock.mockResolvedValue(true);
+    const { probeSmtp } = await import("../smtpProbe");
+    expect((await probeSmtp()).redirectTo).toBe("someone@example.com");
+  });
+
+  it("answers even when the server cannot be reached at all", async () => {
+    process.env.EMAIL_REDIRECT_TO = "someone@example.com";
+    delete process.env.SMTP_PASS;
+    const { probeSmtp } = await import("../smtpProbe");
+    const r = await probeSmtp();
+    expect(r.status).toBe("unconfigured");
+    expect(r.redirectTo).toBe("someone@example.com");
+  });
+});
