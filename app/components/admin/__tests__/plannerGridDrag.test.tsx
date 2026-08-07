@@ -15,6 +15,7 @@
 //   • the C4 force being applied to the `cells` captured when the prompt opened
 //     rather than the live one.
 import { cleanup, createEvent, fireEvent, render, screen, within } from "@testing-library/react";
+import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import PlannerGrid, { type PlannerGridProps } from "../PlannerGrid";
@@ -272,6 +273,44 @@ describe("a move blocked by a rule conflict (acceptance 5)", () => {
     expect(occupantsOf(next, "bgv", "col-2")).toEqual(["gaby"]);
   });
 
+  it("carries the unavailability NOTE on the FORCED path too (shares applyMove with a clean move)", () => {
+    // Gaby is BOTH ruled against Frank (col-2's Lead) AND unavailable on
+    // col-2's date — the same forced move must not lose the signal a CLEAN
+    // move already carries, since both go through `applyMove`.
+    const members = MEMBERS.map((m) => (m._id === "gaby" ? { ...m, unavailableDates: [COL_B.date] } : m));
+    const { container, onCellsChange } = conflictSetup({ members });
+    dragChipToCell(chipIn(container, "bgv", "col-1", "gaby"), cellAt(container, "bgv", "col-2"));
+
+    fireEvent.click(screen.getByText("Mover de todos modos"));
+
+    expect(onCellsChange).toHaveBeenCalledTimes(1);
+    const note = noticeText(container, "note");
+    expect(note).toContain("Gaby");
+    expect(note).toContain("no está disponible");
+  });
+
+  it("re-judges on FORCE: a source emptied while the prompt is open refuses, writes nothing, and the prompt resolves", () => {
+    const { container, props, rerenderWith, onCellsChange } = conflictSetup();
+    dragChipToCell(chipIn(container, "bgv", "col-1", "gaby"), cellAt(container, "bgv", "col-2"));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+
+    // Un-seat Gaby from the SOURCE cell while the prompt is up — the picker
+    // freeing her, another window of the same session, Auto re-running. There
+    // is nothing left to move.
+    const emptiedSource = props.cells.map((c) =>
+      c.rowId === "bgv" && c.columnId === "col-1" ? { ...c, occupants: [] } : c,
+    );
+    rerenderWith({ ...props, cells: emptiedSource });
+
+    fireEvent.click(screen.getByText("Mover de todos modos"));
+
+    // THE MUTATION THIS CATCHES: forcing against the STALE verdict computed
+    // when the prompt opened, instead of re-judging against live `cells`.
+    expect(onCellsChange).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(noticeText(container, "refusal")).toBe("Movimiento no reconocido.");
+  });
+
   it("Escape dismisses ONLY the prompt — full screen survives it", () => {
     const { onCellsChange } = conflictSetup();
     fireEvent.click(screen.getByText("⛶ Pantalla completa"));
@@ -456,6 +495,38 @@ describe("preconditions refuse with no state change (acceptance 8)", () => {
     expect(noticeText(container, "refusal")).toBe("Esta columna no se va a crear.");
   });
 
+  it("P3 — a column with NO draft at all is refused, the same fail-closed branch `canReceiveDrop` takes", () => {
+    // `MonthGenerator`'s `canReceiveDrop` looks up the target column in
+    // `drafts` by `draftTargetKey` BEFORE it ever asks `isDraftCreatable`; no
+    // match means "cannot know why there is no draft" and refuses outright
+    // (`MonthGenerator.tsx`'s own comment on that function). Distinct from the
+    // create-blocked case above, where a draft exists and IS the refusal
+    // reason — here there is no draft to consult at all, so a `drafts.find`
+    // that silently defaulted to "creatable" would be the mutation this test
+    // exists to catch.
+    const onCellsChange = vi.fn();
+    const cells = [cell("bgv", "col-1", ["gaby"]), cell("lead", "col-2", [])];
+    // Drafts built for COL_A only — COL_B (the drop target) has no entry.
+    const drafts = cellsToDrafts([cell("bgv", "col-1", [])], [COL_A], new Set(), [], []);
+    const canReceive = (column: GridColumn) => {
+      const key = draftTargetKey(column.type, column.date);
+      const draft = drafts.find((d) => draftTargetKey(d._type, d.date) === key);
+      if (!draft) return false;
+      return !draft.skipped && !draft.exists;
+    };
+    const { container } = renderGrid(baseProps({ cells, onCellsChange, canReceive }));
+
+    const { startRefused, droppable } = dragChipToCell(
+      chipIn(container, "bgv", "col-1", "gaby"),
+      cellAt(container, "lead", "col-2"),
+    );
+
+    expect(startRefused).toBe(false);
+    expect(droppable).toBe(false);
+    expect(onCellsChange).not.toHaveBeenCalled();
+    expect(noticeText(container, "refusal")).toBe("Esta columna no se va a crear.");
+  });
+
   it("P3 is DROP-side only — dragging OUT of a create-blocked column is legitimate", () => {
     const onCellsChange = vi.fn();
     const cells = [cell("bgv", "col-1", ["gaby"]), cell("lead", "col-2", [])];
@@ -470,6 +541,64 @@ describe("preconditions refuse with no state change (acceptance 8)", () => {
 
     expect(droppable).toBe(true);
     expect(onCellsChange).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── Finding 1 — the P3 cache must not outlive a live `canReceive` mutation ──
+//
+// `createMoveGate` caches a verdict per (source, target) and drops the WHOLE
+// cache only when one of its dependency identities changes — `canReceive`
+// among them. In production, `canReceive` is `MonthGenerator`'s
+// `canReceiveDrop`, which closes over `createdTargets.current` — a `Set` ref
+// MUTATED IN PLACE by `handleConfirm`, never replaced — so the cache stays
+// honest ONLY because that mutation is always paired, in the same tick, with a
+// `setDrafts` call that gives `canReceiveDrop` a fresh identity (see the
+// invariant comments at `MonthGenerator.tsx`'s `handleConfirm` and
+// `moveGate.ts`'s `createMoveGate`). This test drives that exact shape at the
+// level the cache actually lives (`PlannerGrid`'s one `gate` instance): a
+// `createdTargets`-shaped `Set`, mutated in place, paired with a re-render that
+// hands `canReceive` a NEW identity — the fix's contract — must invalidate a
+// `clean` verdict already cached for that column.
+
+describe("the P3 cache is invalidated when canReceive's identity changes (Finding 1)", () => {
+  it("refuses a drop the cache had already judged clean, once createdTargets mutates AND canReceive is re-identified", () => {
+    const onCellsChange = vi.fn();
+    const cells = [cell("bgv", "col-1", ["gaby"]), cell("lead", "col-2", [])];
+    // Mirrors `MonthGenerator`'s `createdTargets.current` — a `Set` MUTATED in
+    // place, never replaced, exactly like the ref `handleConfirm` writes.
+    const createdTargets = new Set<string>();
+    const canReceive = (column: GridColumn) => !createdTargets.has(draftTargetKey(column.type, column.date));
+    const props = baseProps({ cells, onCellsChange, canReceive });
+    const { container, rerenderWith } = renderGrid(props);
+
+    // SEED: col-2 is not yet "created", so this hover is legitimately `clean`
+    // — and the gate now caches that verdict for this exact source→target key.
+    const chip = chipIn(container, "bgv", "col-1", "gaby");
+    const target = cellAt(container, "lead", "col-2");
+    const dt = dataTransfer();
+    fireEvent(chip, createEvent.dragStart(chip, { dataTransfer: dt }));
+    const seedOver = createEvent.dragOver(target, { dataTransfer: dt });
+    fireEvent(target, seedOver);
+    expect(seedOver.defaultPrevented).toBe(true);
+
+    // THE MUTATION IN PRODUCTION'S SHAPE: `createdTargets` grows in place, and
+    // — the invariant `MonthGenerator` upholds — `canReceive` is re-identified
+    // in the SAME tick (there, because `setDrafts` ran; here, a fresh closure
+    // standing in for it).
+    createdTargets.add(draftTargetKey(COL_B.type, COL_B.date));
+    const freshCanReceive = (column: GridColumn) => !createdTargets.has(draftTargetKey(column.type, column.date));
+    rerenderWith({ ...props, canReceive: freshCanReceive });
+
+    const drop = createEvent.drop(target, { dataTransfer: dt });
+    fireEvent(target, drop);
+
+    // THE MUTATION THIS TEST CATCHES: `createMoveGate` serving the cached
+    // `clean` verdict instead of re-judging now that `canReceive` answers
+    // differently — reproduced by re-rendering with the SAME `canReceive`
+    // reference instead of `freshCanReceive` above (verified by hand; not left
+    // in the suite as a permanently-skipped duplicate).
+    expect(onCellsChange).not.toHaveBeenCalled();
+    expect(noticeText(container, "refusal")).toBe("Esta columna no se va a crear.");
   });
 });
 
@@ -536,6 +665,65 @@ describe("the drag's anchors", () => {
     });
     fireEvent(cellAt(container, "lead", "col-2"), over);
     expect(over.defaultPrevented).toBe(false);
+    expect(onCellsChange).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Finding 2 — a stale `dragSource` must not outlive its own drag ─────────
+//
+// If the chip that started a drag unmounts mid-gesture, React never fires its
+// `onDragEnd`, and `dragSource` would otherwise survive indefinitely. A LATER
+// drop anywhere on the page — including one that never touched this grid's
+// `onDragStart` at all, like a Finder drag — would then be gated and applied
+// as if the original gesture were still live. `cells` is deliberately left
+// UNCHANGED in both tests below: the source occupant is still there and the
+// move would otherwise be perfectly legal, so the ONLY thing that can stop it
+// is the window-level cleanup this fix adds — not `moveGate`'s unrelated
+// "nothing to move" precondition, which a changed `cells` would confound.
+//
+// `act()` wraps the raw `window.dispatchEvent` calls because React 18/19's
+// root renders updates asynchronously off a native (non-React-synthetic)
+// listener; without it the assertion below would race the state update this
+// fix depends on, rather than testing it.
+
+describe("a stale dragSource does not survive its own drag (Finding 2)", () => {
+  it("clears on a window-level dragend the chip's own onDragEnd never got to fire", () => {
+    const onCellsChange = vi.fn();
+    const cells = [cell("bgv", "col-1", ["gaby"]), cell("lead", "col-2", [])];
+    const { container } = renderGrid(baseProps({ cells, onCellsChange }));
+
+    const chip = chipIn(container, "bgv", "col-1", "gaby");
+    fireEvent(chip, createEvent.dragStart(chip, { dataTransfer: dataTransfer() }));
+
+    // Standing in for the chip's own `onDragEnd` never firing (its node is
+    // gone) — the window-level listener this fix registers instead.
+    act(() => window.dispatchEvent(new Event("dragend")));
+
+    // A later drop, anywhere — an external (Finder) drag would never have gone
+    // through this grid's `onDragStart`, so nothing here re-arms `dragSource`.
+    // The source is still fully intact in `cells`, so a live `dragSource`
+    // WOULD complete this move (acceptance 4 proves that shape elsewhere).
+    const drop = createEvent.drop(cellAt(container, "lead", "col-2"), { dataTransfer: dataTransfer() });
+    fireEvent(cellAt(container, "lead", "col-2"), drop);
+
+    expect(onCellsChange).not.toHaveBeenCalled();
+  });
+
+  it("a window-level drop also clears it, when the drag never reaches a valid cell", () => {
+    const onCellsChange = vi.fn();
+    const cells = [cell("bgv", "col-1", ["gaby"]), cell("lead", "col-2", [])];
+    const { container } = renderGrid(baseProps({ cells, onCellsChange }));
+
+    const chip = chipIn(container, "bgv", "col-1", "gaby");
+    fireEvent(chip, createEvent.dragStart(chip, { dataTransfer: dataTransfer() }));
+
+    // Simulates the native `drop` reaching `window` with no grid cell as its
+    // target — e.g. dropped on the page background.
+    act(() => window.dispatchEvent(new Event("drop")));
+
+    const drop = createEvent.drop(cellAt(container, "lead", "col-2"), { dataTransfer: dataTransfer() });
+    fireEvent(cellAt(container, "lead", "col-2"), drop);
+
     expect(onCellsChange).not.toHaveBeenCalled();
   });
 });

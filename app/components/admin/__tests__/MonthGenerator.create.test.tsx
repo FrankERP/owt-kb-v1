@@ -2355,4 +2355,74 @@ describe("MonthGenerator — the drag's create-mode drop guard (T4/P3)", () => {
     expect(leadsByDate.get("2026-02-01")).toEqual(["lead-1"]);
     expect(calls.some((c) => c.date === blockedDate)).toBe(false);
   });
+
+  // ─── The P3 cache must go stale-free across a REAL mutation of `createdTargets` ──
+  //
+  // `canReceiveDrop` closes over `createdTargets.current` — a `Set` ref MUTATED
+  // in place by `handleConfirm`, never replaced — and `moveGate.ts`'s drag gate
+  // caches its verdict on `canReceive`'s IDENTITY. The whole cache stays honest
+  // only because every growth of that set is paired, in the same tick, with a
+  // `setDrafts` call `canReceiveDrop` is memoized on (see the invariant comments
+  // at `MonthGenerator.tsx`'s `handleConfirm` and `moveGate.ts`'s
+  // `createMoveGate`).
+  //
+  // The test SEEDS the cache first — a `dragover` on Feb 15 BEFORE anything is
+  // created computes and caches a `clean` verdict for this exact source→target
+  // pair, same as a real hover, without writing anything. A PARTIAL create
+  // batch then commits Feb 15 (and only Feb 15) into `createdTargets`. The same
+  // still-armed drag is then DROPPED on Feb 15, through the REAL production
+  // wiring end to end (`canReceiveDrop`, `handleConfirm`, the real `PlannerGrid`
+  // gate) — this is the integration proof that the shipped coupling holds
+  // TODAY. It is not independently mutation-sensitive to `canReceive`'s own
+  // identity in isolation: `MonthGenerator` also hands `PlannerGrid` a fresh
+  // `sundayDatesForColumn` closure on every render (an inline prop, not
+  // memoized), which happens to drop the WHOLE gate cache on its own regardless
+  // of this coupling. That isolated mechanism — mutate `createdTargets` in
+  // place, and confirm the cache only invalidates when `canReceive` is
+  // re-identified — is pinned and mutation-tested directly against
+  // `PlannerGrid` in `plannerGridDrag.test.tsx` ("the P3 cache is invalidated
+  // when canReceive's identity changes"), where nothing else can mask it.
+  it("refuses a drag onto a column a partial create batch JUST created — the P3 cache is not left stale", async () => {
+    const CREATED_DATE = "2026-02-15";
+    const { fetchMock, calls } = stubRolesFetch((date) => (date === CREATED_DATE ? { ok: true } : { ok: false, status: 500 }));
+    const { container } = render(
+      <Gen members={ANA} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()}
+        preflight={makePreflight(() => "creatable")} />,
+    );
+    goToPreview(container, 2, 2026);
+    seatAnaOnFirstSunday(container);
+
+    // SEED the cache: a plain hover, nothing created yet, so it is legitimately
+    // `clean` — and the drag stays armed (no drop) all the way through confirm.
+    const chip = container.querySelector(
+      '[data-row-id="lead"][data-date="2026-02-01"] [data-occupant="lead-1"]',
+    )!;
+    const target = container.querySelector(`[data-row-id="lead"][data-date="${CREATED_DATE}"]`)!;
+    const dataTransfer = { effectAllowed: "", dropEffect: "", setData: () => {}, getData: () => "" };
+    fireEvent(chip, createEvent.dragStart(chip, { dataTransfer }));
+    const seedOver = createEvent.dragOver(target, { dataTransfer });
+    fireEvent(target, seedOver);
+    expect(seedOver.defaultPrevented).toBe(true); // droppable BEFORE the confirm
+
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    // Synchronization point: `setPushError` runs AFTER `createdTargets.current`
+    // is mutated and its paired `setDrafts` has committed, so waiting for the
+    // partial-failure message guarantees the mutation already happened.
+    await waitFor(() =>
+      expect(screen.getByText(/No se pudieron crear 3 de 4 servicios/)).toBeTruthy(),
+    );
+    // Confirms it really was a PARTIAL batch — Feb 15 the only success — so the
+    // refusal below is about a target that was JUST created, not one that was
+    // always going to be refused for some other reason.
+    expect(calls.map((c) => c.date).sort()).toEqual([...FEB_2026_SUNDAYS].sort());
+
+    // The SAME drag, still armed since the seed above never dropped, now
+    // dropped on Feb 15 — created by THIS confirm a moment ago.
+    fireEvent(target, createEvent.drop(target, { dataTransfer }));
+
+    expect(occupants(container, "2026-02-01")).toEqual(["lead-1"]);
+    expect(occupants(container, CREATED_DATE)).toEqual([]);
+    expect(container.textContent).toContain("Esta columna no se va a crear.");
+  });
 });

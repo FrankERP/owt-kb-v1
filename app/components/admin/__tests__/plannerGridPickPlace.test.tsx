@@ -231,6 +231,27 @@ describe("pick-then-place by keyboard (acceptance 10)", () => {
     expect(onCellsChange).not.toHaveBeenCalled();
   });
 
+  it("a POINTER click on ANOTHER occupant's chip, while a pick is armed, places onto THAT chip's cell", () => {
+    // The chip carries no `onClick` at all (same user ruling as above), so a
+    // click on it always falls through to the cell. While no pick is armed
+    // that means "open the picker" (pinned above); while one IS armed the
+    // cell's own action is "place here" — so clicking a chip that belongs to
+    // someone else entirely still targets that chip's CELL, not the chip's
+    // own occupant. Frank is not moved; Gaby lands beside him.
+    const onCellsChange = vi.fn();
+    const cells = [cell("bgv", "col-1", ["gaby"]), cell("bgv", "col-2", ["frank"])];
+    const { container } = renderGrid(baseProps({ cells, onCellsChange }));
+
+    pickChipWithKeyboard(chipIn(container, "bgv", "col-1", "gaby"));
+    fireEvent.click(chipIn(container, "bgv", "col-2", "frank"));
+
+    expect(onCellsChange).toHaveBeenCalledTimes(1);
+    const next = onCellsChange.mock.calls[0][0] as GridCell[];
+    expect(occupantsOf(next, "bgv", "col-1")).toEqual([]);
+    expect(occupantsOf(next, "bgv", "col-2")).toEqual(["frank", "gaby"]);
+    expect(pickBannerText(container)).toBe("");
+  });
+
   it("re-marks rather than queueing when another chip is activated mid-pick", () => {
     const onCellsChange = vi.fn();
     const cells = [cell("bgv", "col-1", ["gaby"]), cell("lead", "col-1", ["liu"]), cell("lead", "col-2", [])];
