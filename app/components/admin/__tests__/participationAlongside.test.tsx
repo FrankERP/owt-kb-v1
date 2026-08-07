@@ -808,19 +808,24 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
     expect(container.querySelector("[data-candidate-picker]")).toBeNull();
   });
 
-  it("announces aria-expanded on the active cell alone", () => {
+  it("announces aria-expanded on the active cell's action alone", () => {
     // `aria-expanded={active}` put `aria-expanded="false"` on EVERY cell — ~60
     // "collapsed" announcements on a ten-column month, on a grid whose cells are
-    // otherwise just seats.
+    // otherwise just seats. That is unchanged; what moved (T5) is WHICH element
+    // carries it. The cell is a `role="group"` now — a labelled container of
+    // controls, because it holds focusable chips — and `group` does not support
+    // `aria-expanded` in ARIA 1.2, so the property sits on the control that
+    // actually opens the picker.
     stubWideViewport();
     const { container } = goToGrid([]);
-    expect(container.querySelectorAll("[data-row-id][aria-expanded]").length).toBe(0);
+    expect(container.querySelectorAll("[aria-expanded]").length).toBe(0);
 
     fireEvent.click(container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]')!);
-    const expanded = container.querySelectorAll("[data-row-id][aria-expanded]");
+    const expanded = container.querySelectorAll("[aria-expanded]");
     expect(expanded.length).toBe(1);
     expect(expanded[0].getAttribute("aria-expanded")).toBe("true");
-    expect(expanded[0].getAttribute("data-row-id")).toBe("lead");
+    expect(expanded[0].hasAttribute("data-cell-action")).toBe(true);
+    expect(expanded[0].closest("[data-row-id]")?.getAttribute("data-row-id")).toBe("lead");
   });
 });
 

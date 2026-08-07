@@ -512,7 +512,7 @@ describe("dropping onto a date the member marked unavailable (acceptance 11)", (
 // ─── Scope guards ────────────────────────────────────────────────────────────
 
 describe("the drag's anchors", () => {
-  it("gives `+N` no second handle — DD11's picker row is T5's job", () => {
+  it("gives `+N` no second handle — DD11's picker row is where the tail is reached", () => {
     // Lead targets 2, so a third occupant is hidden behind `+1`.
     const cells = [cell("lead", "col-1", ["frank", "liu", "gaby"])];
     const { container } = renderGrid(baseProps({ cells }));
