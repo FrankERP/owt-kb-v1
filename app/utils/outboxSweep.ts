@@ -40,7 +40,7 @@ import { writeClient } from "@/sanity/lib/serverClient";
 
 import { getAllowlist, isEmailAllowed, rolesForMember } from "./assignmentEmail";
 import { isDeliveryBlocked } from "./deliveryFirewall";
-import { SEND_CONCURRENCY, sendEmail } from "./email";
+import { SEND_CONCURRENCY, SEND_TIMEOUT_MS, sendEmail } from "./email";
 import { buildGroupedEmail } from "./notificationEmail";
 import { wantsNotification } from "./notifyPrefs";
 import { assignedMemberRefsQuery } from "./notifyTargets";
@@ -628,8 +628,16 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
       // long the read phase took. Whichever trips first ends the stage — and
       // stopping early costs one batch its tail, while overrunning costs the
       // outbox its ability to make progress at all.
-      const budgetSpent = Date.now() - sendStartedAt >= sendBudgetMs;
-      const deadlineHit = Date.now() - sweepStartedAt >= SWEEP_DEADLINE_MS;
+      //
+      // ADMISSION, not just expiry: a wave is admitted only if its WORST CASE
+      // fits in what is left. Testing `elapsed >= deadline` asks whether the
+      // deadline has already passed, which lets a wave start at 44 s and run to
+      // 59 s — measured at 57 888 ms on 2026-08-07, past the 45 s reserve and
+      // into the platform's kill, so stage 8 never ran and the batch was
+      // re-offered to the next sweep. Every send is bounded by SEND_TIMEOUT_MS,
+      // so that IS the worst case and the reserve can actually be reserved.
+      const budgetSpent = Date.now() - sendStartedAt + SEND_TIMEOUT_MS > sendBudgetMs;
+      const deadlineHit = Date.now() - sweepStartedAt + SEND_TIMEOUT_MS > SWEEP_DEADLINE_MS;
       if (budgetSpent || deadlineHit) {
         report.unserved = entries.length - i;
         log("notify_sweep_send_budget_exhausted", {
