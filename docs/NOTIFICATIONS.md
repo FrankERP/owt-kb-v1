@@ -158,6 +158,24 @@ Things that are counter-intuitive and were each a real defect at some point.
   reliable hook to win from the sending side.
 - **Unpublishing does not notify, and a date move does not notify.** Both are
   deliberate; see spec §1 and §4.
+- **A batch larger than the budget is DESTROYED, not deferred — this is the open
+  wound.** Stage 8 consumes every claimed notice whatever stage 7 returned (§1,
+  best-effort, no retry). That is sound when `ms_per_send × EMAIL_LIMIT` fits the
+  budget, and catastrophic when it does not: at ~13 s per send only **two**
+  recipients are serviceable per sweep, so a 17-seat Sunday claims all 17, serves
+  2 and deletes 15. It happened on 2026-08-07 — one confirmed delivery out of 17,
+  and the notices gone. Until either `ms_per_send` or `NOTIFY_FLUSH_EMAIL_LIMIT`
+  comes down to meet §1's inequality, **any fan-out wider than two people is
+  mostly loss that still reports green.** Selection already knows how to leave
+  work behind (`report.deferred`); it is the limit that is wrong, not the
+  mechanism.
+- **The rehearsal harness distorts the thing it measures.** `EMAIL_REDIRECT_TO`
+  points every message at ONE address, so a fan-out that would have gone to 17
+  domains becomes 17 messages to one — and the big providers throttle exactly
+  that. The 2026-08-07 rehearsal at 8-wide concurrency returned 16 timeouts and
+  zero deliveries, which is strong evidence about one-domain bursts and weak
+  evidence about the real case. Use the redirect to prove *safety* and *shape*;
+  do not read throughput off it.
 - **The send cost is in the MESSAGE, not the connection — measured, not assumed.**
   `/api/cron/smtp-probe` (run it with the *Probe the SMTP path* workflow; it sends
   no mail) reported `coldMs:428, warmMs:328, secondColdMs:200` from production on
