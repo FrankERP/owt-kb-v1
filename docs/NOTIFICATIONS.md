@@ -158,6 +158,15 @@ Things that are counter-intuitive and were each a real defect at some point.
   reliable hook to win from the sending side.
 - **Unpublishing does not notify, and a date move does not notify.** Both are
   deliberate; see spec §1 and §4.
+- **The send cost is in the MESSAGE, not the connection — measured, not assumed.**
+  `/api/cron/smtp-probe` (run it with the *Probe the SMTP path* workflow; it sends
+  no mail) reported `coldMs:428, warmMs:328, secondColdMs:200` from production on
+  2026-08-07: TCP, TLS, greeting and AUTH together cost under half a second. A
+  whole send measured **~13.4 s**. So pooling is not what makes a batch fast and
+  never was; `maxConnections: 1` was the throughput ceiling itself, and stage 7
+  now sends in waves of `SEND_CONCURRENCY`. Before drawing conclusions from a slow
+  sweep, run the probe — reachability from a laptop says nothing about Vercel's
+  egress, and that confusion cost a day.
 - **`sendEmail` must resolve within `SEND_TIMEOUT_MS` (15 s), on every path.**
   Nodemailer's own defaults are connection 120 s, greeting 30 s and socket 600 s
   — each at or past the hosting route's `maxDuration = 60` — so a mail server
@@ -196,13 +205,20 @@ pipeline a received message does, with no SMTP credentials and nothing sent.
 
 ## Still open
 
-- **The send-budget measurement.** Spec §1 requires
-  `ms_per_send × NOTIFY_FLUSH_EMAIL_LIMIT < NOTIFY_SEND_BUDGET_MS`.
-  `MEASURED_MS_PER_SEND` in `outboxSweep.test.ts` is a **500 ms placeholder**.
-  Every sweep that sends now logs `notify_sweep_done` with a real `msPerSend`;
-  take the number from a production run and replace the placeholder.
-  `scripts/measure-send-budget.mjs` can measure locally, but needs the mailbox
-  password (not retrievable from Vercel — see `SECRETS.md`).
+- **The send-budget inequality does not hold, and the placeholder hid it.**
+  Spec §1 requires `ms_per_send × NOTIFY_FLUSH_EMAIL_LIMIT < NOTIFY_SEND_BUDGET_MS`.
+  `MEASURED_MS_PER_SEND` in `outboxSweep.test.ts` is **500 ms**, and production on
+  2026-08-07 measured **~13 400 ms** — 27× out. At face value that is
+  `13_400 × 40 = 536_000` against a 40 000 ms budget. Waves of `SEND_CONCURRENCY`
+  divide the effective cost (~1 675 ms at 8 wide), which still leaves
+  `1_675 × 40 = 67_000` over budget: `NOTIFY_FLUSH_EMAIL_LIMIT` of 40 is not
+  serviceable, and anything unserved is **destroyed**, because stage 8 consumes
+  unconditionally. Either the limit comes down to ~20 (which is only just above
+  the 12–20 seat Sunday it exists to protect), or `ms_per_send` comes down —
+  moving to the Resend backend `email.ts` already supports would make it a
+  non-question. Take the next real `msPerSend` from `notify_sweep_done` before
+  choosing. **Raising `MEASURED_MS_PER_SEND` to make the guard green remains the
+  one forbidden move** — the guard going red is the finding, not the problem.
 - **Outlook on Windows is untested.** macOS Outlook is WebKit, so the Word-engine
   question spec §6 raises — `border-radius` and `padding` on the key pills — is
   unanswered. Expected degradation is cosmetic: squared chips, tighter padding.

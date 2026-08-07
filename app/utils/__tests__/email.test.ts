@@ -160,9 +160,12 @@ describe("sendEmail — one send cannot outlive its host function", () => {
     expect(SEND_TIMEOUT_MS).toBeLessThan(60_000);
   });
 
-  it("drops the pooled connection a timed-out send still owns", async () => {
-    // maxConnections:1 — without this, every later recipient in the batch queues
-    // behind the abandoned conversation and burns its own full timeout.
+  it("leaves the pool up when one send times out, so its siblings survive", async () => {
+    // Sends run SEND_CONCURRENCY-wide. Tearing down the shared transport to
+    // reclaim one stuck connection would drop the connections carrying the other
+    // recipients — one stalled message becoming eight failures. `socketTimeout`
+    // reclaims at the right granularity instead: nodemailer destroys that one
+    // connection and the pool dials a replacement.
     vi.useFakeTimers();
     sendMailMock.mockReturnValueOnce(new Promise(() => {}));
     sendMailMock.mockResolvedValueOnce({ messageId: "2" });
@@ -171,12 +174,23 @@ describe("sendEmail — one send cannot outlive its host function", () => {
     const first = sendEmail({ to: "a@b.com", subject: "s", html: "<p>h</p>" });
     await vi.advanceTimersByTimeAsync(SEND_TIMEOUT_MS);
     expect((await first).ok).toBe(false);
-    expect(closeMock).toHaveBeenCalledTimes(1);
-    expect(createTransportMock).toHaveBeenCalledTimes(1);
+    expect(closeMock).not.toHaveBeenCalled();
 
     const second = await sendEmail({ to: "c@d.com", subject: "s", html: "<p>h</p>" });
     expect(second.ok).toBe(true);
-    // A SECOND transport: the cache was dropped rather than reused.
-    expect(createTransportMock).toHaveBeenCalledTimes(2);
+    // The SAME transport: one abandoned message does not cost the batch its pool.
+    expect(createTransportMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends wider than one connection at a time", async () => {
+    // The 2026-08-07 measurement: setup ~0.4 s, whole send ~13 s. With the cost
+    // in the message, one connection cannot serve a Sunday inside 60 s.
+    const { SEND_CONCURRENCY } = await import("../email");
+    expect(SEND_CONCURRENCY).toBeGreaterThan(1);
+    sendMailMock.mockResolvedValue({ messageId: "1" });
+    const { sendEmail } = await import("../email");
+    await sendEmail({ to: "a@b.com", subject: "s", html: "<p>h</p>" });
+    const calls = createTransportMock.mock.calls as unknown as Record<string, number>[][];
+    expect(calls[0][0].maxConnections).toBe(SEND_CONCURRENCY);
   });
 });

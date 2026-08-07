@@ -40,7 +40,7 @@ import { writeClient } from "@/sanity/lib/serverClient";
 
 import { getAllowlist, isEmailAllowed, rolesForMember } from "./assignmentEmail";
 import { isDeliveryBlocked } from "./deliveryFirewall";
-import { sendEmail } from "./email";
+import { SEND_CONCURRENCY, sendEmail } from "./email";
 import { buildGroupedEmail } from "./notificationEmail";
 import { wantsNotification } from "./notifyPrefs";
 import { assignedMemberRefsQuery } from "./notifyTargets";
@@ -598,7 +598,31 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
     // 12–20-seat Sunday services `EMAIL_LIMIT = 40` exists to protect. With the
     // clock here, §1's inequality means what §1 says it means.
     const sendStartedAt = Date.now();
-    for (let i = 0; i < entries.length; i++) {
+    // IN FLIGHT TOGETHER, in waves of SEND_CONCURRENCY. The probe on 2026-08-07
+    // measured setup at ~0.4 s against ~13 s for a whole send, so the cost is in
+    // the message and serial sends simply cannot serve a Sunday inside a 60 s
+    // function: one email went out and sixteen people were dropped, because
+    // stage 8 consumes whether or not stage 7 reached them. The clocks are checked
+    // per WAVE rather than per recipient — a wave is the smallest unit that can
+    // now be abandoned, and checking mid-wave would abandon sends already sent.
+    const sendOne = async (recipientId: string, lines: Line[]): Promise<void> => {
+      const m = byId.get(recipientId);
+      const email = m?.email?.trim().toLowerCase();
+      if (!m || !email || !isEmailAllowed(email, allow)) return;
+      const { subject, html } = buildGroupedEmail(
+        { name: m.alias || m.member_name || "", lines },
+        titles,
+      );
+      const res = await sendEmail({
+        to: redirectTo || email,
+        subject: redirectTo ? `[→ ${email}] ${subject}` : subject,
+        html,
+      });
+      if (res.ok) report.emailed++;
+      else logError("notify_sweep_send_failed", { memberId: recipientId, error: res.error });
+    };
+
+    for (let i = 0; i < entries.length; i += SEND_CONCURRENCY) {
       // Bounded by wall clock, on TWO clocks. The stage clock is §1's budget;
       // the sweep clock is the reserve that keeps stage 8 reachable no matter how
       // long the read phase took. Whichever trips first ends the stage — and
@@ -619,21 +643,11 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
         });
         break;
       }
-      const [recipientId, lines] = entries[i];
-      const m = byId.get(recipientId);
-      const email = m?.email?.trim().toLowerCase();
-      if (!m || !email || !isEmailAllowed(email, allow)) continue;
-      const { subject, html } = buildGroupedEmail(
-        { name: m.alias || m.member_name || "", lines },
-        titles,
+      // `sendEmail` never rejects, so one bad recipient cannot reject the wave
+      // and cost its siblings their sends.
+      await Promise.all(
+        entries.slice(i, i + SEND_CONCURRENCY).map(([recipientId, lines]) => sendOne(recipientId, lines)),
       );
-      const res = await sendEmail({
-        to: redirectTo || email,
-        subject: redirectTo ? `[→ ${email}] ${subject}` : subject,
-        html,
-      });
-      if (res.ok) report.emailed++;
-      else logError("notify_sweep_send_failed", { memberId: recipientId, error: res.error });
     }
     sendMs = Date.now() - sendStartedAt;
   } catch (err) {

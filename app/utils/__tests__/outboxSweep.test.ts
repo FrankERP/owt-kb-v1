@@ -101,7 +101,12 @@ vi.mock("@/sanity/lib/serverClient", () => ({
     transaction: () => writeClientTransaction(),
   },
 }));
-vi.mock("@/app/utils/email", () => ({ sendEmail: (...a: unknown[]) => sendEmailMock(...a) }));
+// Mirrors `email.ts`'s real value — the sweep sends in waves this wide. Inlined
+// rather than referenced: `vi.mock` is hoisted above every const in this file.
+vi.mock("@/app/utils/email", () => ({
+  sendEmail: (...a: unknown[]) => sendEmailMock(...a),
+  SEND_CONCURRENCY: 8,
+}));
 vi.mock("@/app/utils/deliveryFirewall", () => ({
   isDeliveryBlocked: (...a: unknown[]) => isDeliveryBlockedMock(...a),
 }));
@@ -351,6 +356,41 @@ describe("sweepOutbox — grouping and fan-out", () => {
     const recipients = sendEmailMock.mock.calls.map((c) => (c[0] as { to: string }).to).sort();
     expect(recipients).toEqual(team.map((m) => `${m}@example.com`).sort());
     expect((sendEmailMock.mock.calls[0][0] as { subject: string }).subject).toContain("El setlist cambió");
+  });
+
+  it("sends a wave in flight together, not one recipient at a time", async () => {
+    // The 2026-08-07 throughput defect. One send costs ~13 s against this mail
+    // server — the probe put connect+AUTH at ~0.4 s of that, so the cost is the
+    // message — and serialized that is ~220 s for a Sunday inside a 60 s
+    // function. The sweep emailed one person and dropped sixteen, because stage 8
+    // consumes whether or not stage 7 reached them.
+    const team = ids("m", 12);
+    world.notices = [setlistNotice({ knownRecipients: team })];
+    world.roles = { r2: roleDoc({ _id: "r2", _type: "saturday_role", week: "2026-08-08" }) };
+    world.recipients = { r2: team };
+    world.weekendSongs = { "saturdarSongs:2026-08-08": [storedSong("song1")] };
+    world.titles = { song1: "Santo" };
+    world.members = members(team);
+
+    let inFlight = 0;
+    let peakInFlight = 0;
+    sendEmailMock.mockImplementation(async () => {
+      inFlight++;
+      peakInFlight = Math.max(peakInFlight, inFlight);
+      await Promise.resolve();
+      inFlight--;
+      return { ok: true };
+    });
+
+    const report = await sweepOutbox();
+
+    expect(report.emailed).toBe(12);
+    expect(report.unserved).toBe(0);
+    // Serialized, this peaks at 1 — which is precisely the bug.
+    expect(peakInFlight).toBeGreaterThan(1);
+    // …but bounded, because the far end is a shared cPanel mailbox that answers
+    // a flood with `421 too many connections` rather than with speed.
+    expect(peakInFlight).toBeLessThanOrEqual(8);
   });
 
   it("introduces a recipient absent from knownRecipients", async () => {

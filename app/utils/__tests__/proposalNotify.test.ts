@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const sendEmailMock = vi.fn();
-vi.mock("../email", () => ({ sendEmail: (...a: unknown[]) => sendEmailMock(...a) }));
+vi.mock("../email", () => ({ sendEmail: (...a: unknown[]) => sendEmailMock(...a), SEND_CONCURRENCY: 8 }));
 
 const sendPushMock = vi.fn();
 vi.mock("../push", () => ({ sendPush: (...a: unknown[]) => sendPushMock(...a) }));

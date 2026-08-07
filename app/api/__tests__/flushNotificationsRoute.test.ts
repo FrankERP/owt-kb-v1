@@ -28,6 +28,7 @@ vi.mock("@/app/utils/outboxSweep", () => ({
 }));
 vi.mock("@/app/utils/email", () => ({
   sendEmail: (...a: unknown[]) => sendEmailMock(...a),
+  SEND_CONCURRENCY: 8,
 }));
 vi.mock("@/app/utils/push", () => ({ sendPush: (...a: unknown[]) => sendPushMock(...a) }));
 vi.mock("@/sanity/lib/operationalClient", () => ({
