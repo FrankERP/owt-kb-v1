@@ -35,6 +35,7 @@ const PUBLIC_ROUTES = [
   "/api/auth/sample", // NextAuth's own catch-all — it IS the login flow
   "/api/cron/flush-notifications", // Bearer CRON_SECRET, checked in-handler
   "/api/cron/service-reminders", // Bearer CRON_SECRET, checked in-handler
+  "/api/cron/smtp-probe", // Bearer CRON_SECRET, checked in-handler; sends no mail
   "/api/service-readiness-verification/identity", // A3 §4; fails closed with 404
   "/auth/not-a-member",
   "/auth/signin",
@@ -129,6 +130,10 @@ describe("auth middleware route matcher", () => {
     expect(changed.sort()).toEqual([
       "/api/cron/flush-notifications",
       "/api/cron/service-reminders",
+      // Diagnostic only: connect, greet, AUTH, QUIT. It sends no mail and reads
+      // no content, and like its siblings it authenticates with CRON_SECRET
+      // itself rather than through the session gate.
+      "/api/cron/smtp-probe",
     ]);
     // And the ones that changed became reachable, not the other way round.
     for (const p of changed) expect(middlewareRuns(p)).toBe(false);
