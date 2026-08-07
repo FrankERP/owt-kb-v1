@@ -728,6 +728,44 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
     logSpy.mockRestore();
   });
 
+  it("stops sending at the sweep's own deadline, so stage 8 always runs", async () => {
+    // The 2026-08-06 stall, in one test. Not charging the read phase to the send
+    // budget is correct for §1's inequality and fatal on its own: reads plus a
+    // full send budget can reach the hosting route's maxDuration, the process is
+    // killed before stage 8, the claims outlive it, the 5-minute lease re-offers
+    // the SAME batch, and the next sweep dies in the same place — forever. The
+    // second clock exists so the sweep gives up sending while it can still
+    // consume.
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    world.notices = [roleNotice()];
+    world.roles = { r1: roleDoc() };
+    world.recipients = { r1: ["m1"] };
+    world.members = members(["m1"]);
+    // A read phase slow enough to pass the sweep deadline before stage 7 starts.
+    // The send budget's own clock has not started, so only the sweep clock can
+    // stop this — which is exactly the case that used to be unguarded.
+    operationalFetch.mockImplementation(async (query: string, params: Doc = {}) => {
+      reads.push({ query, params });
+      vi.setSystemTime(new Date(Date.now() + 20_000));
+      return routeRead(query, params);
+    });
+
+    const report = await sweepOutbox();
+
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(report.unserved).toBe(1);
+    // The point of the whole exercise: the batch is discharged, so the next
+    // sweep gets new work instead of this one again.
+    expect(writeClientDelete).toHaveBeenCalled();
+    expect(report.consumed).toBe(1);
+
+    const stopped = logSpy.mock.calls
+      .map(([line]) => JSON.parse(String(line)) as Record<string, unknown>)
+      .find((entry) => entry.event === "notify_sweep_send_budget_exhausted");
+    expect(stopped?.stoppedBy).toBe("sweep_deadline");
+    logSpy.mockRestore();
+  });
+
   it("logs the observed send cost on completion, so ms_per_send stops being an assumption", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     world.notices = [roleNotice()];
