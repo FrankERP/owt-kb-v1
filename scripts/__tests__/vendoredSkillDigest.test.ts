@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join, relative, sep } from "node:path";
 
 /**
@@ -76,6 +77,52 @@ describe("vendored adversarial-plan-review skill", () => {
       "agents/openai.yaml",
       "reviewer-brief.md",
     ]);
+  });
+
+  it("keeps material clauses present in both agent-definition mirrors of the brief", () => {
+    // ~/.claude/agents/skeptical-reviewer.md and ~/.codex/agents/skeptical-reviewer.toml
+    // declare themselves "synced from reviewer-brief.md" for MATERIAL content, while
+    // deliberately adapting platform wording. Nothing guarded that declaration, and the
+    // 2026-08-06 audit found the prose had already forked (harmlessly, this time).
+    //
+    // This cannot be a byte comparison — the adaptation is intentional — so it pins the
+    // load-bearing clauses verbatim: the ones whose loss or rewording changes what a
+    // reviewer IS (read-only, memoryless, self-refuting, auditable verdict grammar).
+    // Every clause is asserted against the brief FIRST: rephrase it there and this test
+    // forces the mirror update and this list, in the same change, or goes red.
+    //
+    // The mirrors live outside the repo and do not exist in CI; like the digest pin
+    // above, this guard runs where the mirrors exist and skips loudly elsewhere.
+    const MATERIAL_CLAUSES = [
+      "**You are read-only.**",
+      "NO memory of any previous reviewer",
+      "**silently drop or weaken**",
+      "Refute your own blockers before reporting them.",
+      "VERDICT: APPROVED",
+      "VERDICT: CHANGES_REQUIRED",
+      "BLOCKING: (most severe first)",
+      'WORKLOG: {"agent":"skeptical-reviewer"',
+    ];
+    const brief = readFileSync(join(SKILL_DIR, "reviewer-brief.md"), "utf8");
+    for (const clause of MATERIAL_CLAUSES) {
+      expect(brief, `clause no longer in the brief itself: ${clause}`).toContain(clause);
+    }
+
+    const mirrors = [
+      join(homedir(), ".claude", "agents", "skeptical-reviewer.md"),
+      join(homedir(), ".codex", "agents", "skeptical-reviewer.toml"),
+    ].filter((p) => existsSync(p));
+    if (mirrors.length === 0) return; // CI: mirrors are machine-local, nothing to check.
+
+    for (const path of mirrors) {
+      const mirror = readFileSync(path, "utf8");
+      for (const clause of MATERIAL_CLAUSES) {
+        expect(
+          mirror,
+          `${path} declares itself synced from reviewer-brief.md but lost: ${clause}`,
+        ).toContain(clause);
+      }
+    }
   });
 
   it("keeps reviewer-brief.md as the ONLY copy of the reviewer contract", () => {
