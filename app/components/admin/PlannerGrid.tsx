@@ -864,6 +864,38 @@ export default function PlannerGrid(props: PlannerGridProps) {
   }
 
   /**
+   * Guards against a STALE `dragSource` outliving the drag that set it.
+   *
+   * The chip that started the drag carries `onDragEnd={drag.onOccupantDragEnd}`
+   * (`clearDrag`), which is how a drag normally ends. But if that chip UNMOUNTS
+   * mid-drag — Auto finishing, a re-render dropping the occupant, a picker edit
+   * from another tab of the same session — React never fires `dragend` on a node
+   * that is no longer there, and `dragSource` survives with nothing left to clear
+   * it. The hazard is not a second internal drag: any later native drop anywhere
+   * on the page, including an OS-level drag from Finder that never touched this
+   * grid's `onDragStart` at all, then lands on `handleCellDrop` with a `source`
+   * from a gesture that ended, gated as if it were live — the exact "person
+   * vanishes from the month" shape this whole feature exists to prevent.
+   *
+   * `dragend` and `drop` both bubble to `window` for any native drag that
+   * actually completes on THIS page, independently of which node started or
+   * ended it, so a window-level listener catches what the chip's own handler
+   * cannot. Registered only while a drag is in flight, and removed the moment
+   * `dragSource` clears by any other path — `clearDrag` is idempotent, so a
+   * legitimate in-grid drop that already cleared it costs nothing extra here.
+   */
+  useEffect(() => {
+    if (!dragSource) return;
+    const onExternalDragEnd = () => clearDrag();
+    window.addEventListener("dragend", onExternalDragEnd);
+    window.addEventListener("drop", onExternalDragEnd);
+    return () => {
+      window.removeEventListener("dragend", onExternalDragEnd);
+      window.removeEventListener("drop", onExternalDragEnd);
+    };
+  }, [dragSource]);
+
+  /**
    * P1 and P2 for the SOURCE, answered at drag start rather than per render.
    *
    * `canTouchColumn` runs `serializeStoredColumn` over the whole column, so
@@ -1909,8 +1941,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
               {pendingMove.reason}
             </p>
             <p className="font-body text-xs text-[#C8D8EB]/70">
-              Si lo mueves de todos modos, la regla queda anulada solo para esta casilla y se marca
-              ahí para que siga a la vista.
+              Si aplicas el movimiento de todos modos, la regla queda anulada solo para esta casilla
+              y se marca ahí para que siga a la vista.
             </p>
             <div className="flex flex-wrap gap-2">
               <button
