@@ -115,6 +115,17 @@ cadence.
 
 ## Agent skills
 
+### Agent worklog + HR review
+
+**Log every subagent dispatch** to `.agents/log/worklog.jsonl` (append-only, one JSON
+object per line). Agents end their reports with a `WORKLOG:` trailer; the **coordinator
+appends** the line — including `no_result` for dispatches that crashed and
+`coordinator-inline` for specialist-shaped work done inline rather than dispatched.
+At the end of an implementation cycle, after the code review and before reporting
+completion, dispatch `hr-officer` to review the log and roster. The gate is
+**advisory** — it never blocks a delivery, and HR proposes roster changes rather than
+making them. See `docs/agents/worklog.md`.
+
 ### Issue tracker
 
 Issues live in GitHub Issues (`FrankERP/owt-kb-v1`), managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
