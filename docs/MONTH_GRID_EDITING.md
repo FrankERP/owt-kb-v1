@@ -7,10 +7,12 @@
 >
 > **Drag and pick-then-place (2026-08-06):** the "Move interactions" section
 > below documents `feat/grid-drag-and-drop` (T1–T7,
-> `docs/superpowers/plans/2026-08-06-grid-drag-and-drop.md`), which is
-> implemented and tested but **not yet merged to `main` or deployed** as of
-> this writing — before-move editing (create/save, swap) above is what is
-> live in production.
+> `docs/superpowers/plans/2026-08-06-grid-drag-and-drop.md`), **released from
+> `main` at merge commit `47416b9`** and verified serving both
+> [owt-backstage.vercel.app](https://owt-backstage.vercel.app) (production)
+> and dev-owt-backstage.vercel.app (`preview` at `0f1eb4c`) the same night.
+> Two release checks remain open, per ADR-0012: a real-Safari pass on the C4
+> prompt in full screen, and iPadOS long-press drag behavior.
 
 This is the current-state reference for editing stored service teams through
 the month grid. Detailed mutation-test evidence lives in the
