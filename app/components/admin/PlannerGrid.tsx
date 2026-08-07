@@ -287,6 +287,17 @@ export const PICKER_COLUMN_WIDTH = 240;
 const cellKey = (columnId: string, rowId: string) => `${columnId}|${rowId}`;
 
 /**
+ * A service date as the admin reads it — "6 sep". Pinned to LOCAL NOON, never
+ * `new Date(iso)`: a bare parse of a `YYYY-MM-DD` is UTC midnight and prints the
+ * day before in America/Mexico_City.
+ */
+const shortDate = (iso: string) =>
+  new Date(iso.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", {
+    day: "numeric",
+    month: "short",
+  });
+
+/**
  * Controls whose own Escape means something, so the capture-phase listener does
  * not steal it. Text entry (revert / dismiss the completion popup) and a
  * `<select>` (close the dropdown) — never a checkbox, a radio or a button,
@@ -347,6 +358,36 @@ interface PendingMove {
   /** The rule's own wording, as the gate reported it when the drop landed. */
   reason: string;
   memberName: string;
+}
+
+/**
+ * DD12 — an occupant MARKED as the source of a move, waiting for a target.
+ *
+ * The pick-then-place trigger (T5), and the reason it exists: `dragstart` never
+ * fires from a touch and a 20px chip is not a 44px touch target, so without this
+ * the whole iOS wrap — and every keyboard — would be locked out of a move.
+ *
+ * It is a SELECTION, not a half-applied edit: nothing is written while one is
+ * held, and it holds no verdict either. The target is judged when the admin
+ * activates one, by the same `judgeMove` the drag calls.
+ */
+interface PickedMove {
+  source: MoveOccupantSource;
+  memberName: string;
+  /** Seat and date the pick was made from, for the banner. */
+  fromLabel: string;
+}
+
+/** Everything a cell and its chips need to take part in a pick-then-place. */
+interface CellPickHandlers {
+  /** The occupant currently marked, or `null`. */
+  source: MoveOccupantSource | null;
+  /** Their name, for the "place here" wording — `null` when nothing is marked. */
+  memberName: string | null;
+  /** P1, mirroring `CellDragHandlers.enabled`. */
+  enabled: boolean;
+  onPickOccupant: (source: MoveOccupantSource) => void;
+  onPlace: (target: MoveOccupantEndpoint) => void;
 }
 
 /** Everything a cell and its chips need to take part in a drag. */
@@ -519,6 +560,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
   const [dragNotice, setDragNotice] = useState<DragNotice | null>(null);
   /** A C4 move waiting on the force/desist prompt. See `forcePendingMove`. */
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
+  /** T5 — the occupant marked for a pick-then-place. See `PickedMove`. */
+  const [pickedMove, setPickedMove] = useState<PickedMove | null>(null);
   const pickerRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
 
@@ -846,7 +889,80 @@ export default function PlannerGrid(props: PlannerGridProps) {
       event.dataTransfer.setData("text/plain", source.memberId);
     }
     setDragNotice(null);
+    // One gesture at a time: a drag started while a pick is armed replaces it,
+    // rather than leaving two sources marked and the admin guessing which the
+    // next cell will move.
+    setPickedMove(null);
     setDragSource(source);
+  }
+
+  // ── The same move, picked and placed (T5) ──────────────────────────────────
+
+  /** A seat and a date in the grid's own words — "BGV — 6 sep". */
+  function endpointLabel(endpoint: MoveOccupantEndpoint): string {
+    const row = rows.find((r) => r.id === endpoint.rowId);
+    const column = columnById.get(endpoint.columnId);
+    if (!row || !column) return "";
+    return `${row.label} — ${shortDate(column.date)}`;
+  }
+
+  /**
+   * DD11/DD12 — mark an occupant as the SOURCE of a move, or un-mark them.
+   *
+   * Writes nothing and judges nothing: a source has no eligibility question
+   * (that is a question about the target, and `moveGate` owns it), so this is
+   * reachable from a chip AND from a seated member's picker row even when that
+   * row is refused as a *candidate* — see `CandidateRow`'s anchor.
+   */
+  function togglePickedMove(source: MoveOccupantSource) {
+    // A BACKSTOP, and no test can kill this line alone: both anchors already
+    // refuse while locked (the chip on `pick.enabled`, the picker row on
+    // `disabled`), which is also what renders them inert. Kept because this is
+    // the single entry point for arming a move and the cost is one line.
+    if (mutationLocked) return;
+    clearRemoveError();
+    clearDragNotice();
+    setPickedMove((prev) =>
+      prev &&
+      prev.source.memberId === source.memberId &&
+      prev.source.rowId === source.rowId &&
+      prev.source.columnId === source.columnId
+        ? null
+        : {
+            source,
+            memberName: memberName(source.memberId),
+            fromLabel: endpointLabel(source),
+          },
+    );
+  }
+
+  /**
+   * The place — the pick path's drop, and the same three outcomes.
+   *
+   * It runs `judgeMove` before anything is written, exactly as `handleCellDrop`
+   * does, and hands a C4 to the same `pendingMove` prompt. A refusal about THIS
+   * target leaves the pick armed so the next cell can be tried; a refusal about
+   * the SOURCE (it is gone from the grid — Auto finished, another window edited)
+   * disarms it, because there is no target that would make it true again.
+   */
+  function placePickedMove(target: MoveOccupantEndpoint) {
+    const picked = pickedMove;
+    if (!picked) return;
+    const verdict = judgeMove(picked.source, target);
+    if (verdict.kind === "not-permitted" || verdict.kind === "refused") {
+      setDragNotice({ tone: "refusal", message: verdict.reason });
+      if (verdict.kind === "not-permitted" ? verdict.code === "unresolved" : verdict.code === "unknown-member") {
+        setPickedMove(null);
+      }
+      return;
+    }
+    setPickedMove(null);
+    if (verdict.kind === "prompt") {
+      setDragNotice(null);
+      setPendingMove({ source: picked.source, target, reason: verdict.reason, memberName: picked.memberName });
+      return;
+    }
+    applyMove(picked.source, target);
   }
 
   /**
@@ -944,13 +1060,9 @@ export default function PlannerGrid(props: PlannerGridProps) {
     if (!row || !column) return null;
     const candidate = rankFor(row, target.columnId).find((c) => c.id === memberId);
     if (!candidate || candidate.available) return null;
-    const day = new Date(column.date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", {
-      day: "numeric",
-      month: "short",
-    });
     return {
       tone: "note",
-      message: `${candidate.name} no está disponible el ${day} — el movimiento se aplicó de todos modos.`,
+      message: `${candidate.name} no está disponible el ${shortDate(column.date)} — el movimiento se aplicó de todos modos.`,
     };
   }
 
@@ -999,6 +1111,14 @@ export default function PlannerGrid(props: PlannerGridProps) {
   function desistPendingMove() {
     setPendingMove(null);
   }
+
+  const cellPick: CellPickHandlers = {
+    source: pickedMove?.source ?? null,
+    memberName: pickedMove?.memberName ?? null,
+    enabled: !mutationLocked,
+    onPickOccupant: togglePickedMove,
+    onPlace: placePickedMove,
+  };
 
   const cellDrag: CellDragHandlers = {
     enabled: !mutationLocked,
@@ -1095,9 +1215,16 @@ export default function PlannerGrid(props: PlannerGridProps) {
    * So the collision is resolved by yielding: while a prompt is open this
    * listener does nothing at all, and one Escape dismisses the prompt alone
    * rather than also exiting full screen and stranding a pending move.
+   *
+   * **A pending PICK (T5) is registered here for the same reason and outranks
+   * the other two.** It is the most recent and most transient state on the
+   * surface, and cancelling it is what Escape means while it is armed — exiting
+   * full screen instead would leave a marked source with no visible banner. It
+   * also gives this listener a third reason to exist: a pick can be armed from a
+   * chip with no picker open and no full screen.
    */
   useEffect(() => {
-    if (!openKey && !fullScreen) return;
+    if (!openKey && !fullScreen && !pickedMove) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (pendingMove) return;
@@ -1115,6 +1242,10 @@ export default function PlannerGrid(props: PlannerGridProps) {
       if (ownsEscape(event.target)) return;
       event.preventDefault();
       event.stopPropagation();
+      if (pickedMove) {
+        setPickedMove(null);
+        return;
+      }
       if (fullScreen) {
         setFullScreen(false);
         return;
@@ -1123,7 +1254,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
     };
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [openKey, fullScreen, closePicker, pendingMove]);
+  }, [openKey, fullScreen, closePicker, pendingMove, pickedMove]);
 
   /**
    * What `role="dialog" aria-modal="true"` promises, actually delivered.
@@ -1375,6 +1506,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             }
             activeColumnId={openCell?.rowId === row.id ? openCell.columnId : null}
             drag={cellDrag}
+            pick={cellPick}
             minWClass={cellMinW}
             labelMinWClass={labelMinW}
             stickyLabelClass={stickyLabel}
@@ -1402,17 +1534,57 @@ export default function PlannerGrid(props: PlannerGridProps) {
         would fight the interaction it is describing. Rendered in `centre` rather
         than beside the Auto controls so it exists in full screen too, where
         those controls are gone.
+
+        ONE wrapper for both lines, so an idle grid pays a single `space-y-4`
+        gap for two permanently-mounted regions rather than two.
       */}
-      {dragNotice && (
+      <div className="space-y-2">
+        {/*
+          T5's pending pick, said out loud: WHO is marked and WHERE from, since
+          the source cell may be scrolled off screen (or hidden behind `+N`) by
+          the time the admin picks a target. Beside it, the way out that is not a
+          key — full screen has no Escape on a phone, and DD8 routes the whole iOS
+          wrap through this path.
+        */}
+        <div className="flex flex-wrap items-center gap-2">
+          <p
+            role="status"
+            aria-live="polite"
+            data-pick-banner
+            data-pick-active={pickedMove ? "true" : undefined}
+            className="font-body text-xs text-[#00bfff]"
+          >
+            {pickedMove
+              ? `Marcado para mover: ${pickedMove.memberName} — desde ${pickedMove.fromLabel}. Elige la casilla de destino, o pulsa Esc para cancelar.`
+              : ""}
+          </p>
+          {pickedMove && (
+            <button
+              type="button"
+              onClick={() => setPickedMove(null)}
+              className="min-h-[44px] rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest text-[#C8D8EB]/70 hover:border-[#00bfff]"
+            >
+              Cancelar el movimiento
+            </button>
+          )}
+        </div>
+        {/*
+          MOUNTED WHETHER OR NOT IT HAS ANYTHING TO SAY. A `role="status"` region
+          that appears with its text is announced unreliably — several screen
+          readers only watch regions that existed when the update landed — so the
+          region is permanent and only its content changes. The tone attribute
+          still appears only with a message, so `[data-drag-notice="…"]` remains
+          the honest "is there a notice" query.
+        */}
         <p
           role="status"
           aria-live="polite"
-          data-drag-notice={dragNotice.tone}
-          className={`font-body text-xs ${dragNotice.tone === "refusal" ? "text-red-400" : "text-amber-400"}`}
+          data-drag-notice={dragNotice?.tone}
+          className={`font-body text-xs ${dragNotice?.tone === "refusal" ? "text-red-400" : "text-amber-400"}`}
         >
-          {dragNotice.message}
+          {dragNotice?.message ?? ""}
         </p>
-      )}
+      </div>
       {!fullScreen && (
         <div className="flex flex-wrap gap-3">
           <AddRowForm placeholder="Nuevo instrumento" onAdd={addInstrumentRow} disabled={mutationLocked} />
@@ -1459,9 +1631,17 @@ export default function PlannerGrid(props: PlannerGridProps) {
                   ?.occupants.map((o) => o.memberId) ?? []
               ).includes(candidate.id)}
               mutationLocked={mutationLocked}
+              picked={
+                pickedMove?.source.memberId === candidate.id &&
+                pickedMove.source.rowId === openCell.rowId &&
+                pickedMove.source.columnId === openCell.columnId
+              }
               onToggle={(id) => toggleCandidate(openRow, openCell.columnId, id, openCandidates)}
               onOverride={(id) =>
                 overrideCandidate(openRow, openCell.columnId, id, openCandidates)
+              }
+              onPickSource={(id) =>
+                togglePickedMove({ rowId: openCell.rowId, columnId: openCell.columnId, memberId: id })
               }
             />
           ))}
@@ -1939,6 +2119,7 @@ function RowGroup({
   mutationLocked,
   activeColumnId,
   drag,
+  pick,
   minWClass,
   labelMinWClass,
   stickyLabelClass,
@@ -1965,6 +2146,7 @@ function RowGroup({
    */
   activeColumnId: string | null;
   drag: CellDragHandlers;
+  pick: CellPickHandlers;
   minWClass: string;
   labelMinWClass: string;
   stickyLabelClass: string;
@@ -2031,6 +2213,7 @@ function RowGroup({
             mutationLocked={mutationLocked}
             active={activeColumnId === column.columnId}
             drag={drag}
+            pick={pick}
             minWClass={minWClass}
           />
         );
@@ -2052,6 +2235,7 @@ function GridCellView({
   mutationLocked,
   active,
   drag,
+  pick,
   minWClass,
 }: {
   row: GridRow;
@@ -2067,6 +2251,7 @@ function GridCellView({
   /** This cell is the one the picker column is showing. */
   active: boolean;
   drag: CellDragHandlers;
+  pick: CellPickHandlers;
   minWClass: string;
 }) {
   // D7: rows that CARRY a target cap at it, then a focusable `+N`. Rows that
@@ -2104,18 +2289,52 @@ function GridCellView({
   const endpoint: MoveOccupantEndpoint = { rowId: row.id, columnId: column.columnId };
   const isDropTarget = drag.activeDropKey === cellKey(column.columnId, row.id);
 
+  /**
+   * The cell's own action, and the ONE place a pick takes it over (DD12).
+   *
+   * With a member marked, activating a cell PLACES them here — the shipped
+   * "open the candidate picker" is suppressed for the duration, deliberately and
+   * against tests that pinned it. Anything else would make the target ambiguous:
+   * the admin has said which person is moving, so the next cell they activate is
+   * a destination, not a list to browse.
+   */
+  const activate = () => {
+    if (mutationLocked) return;
+    if (pick.source) {
+      pick.onPlace(endpoint);
+      return;
+    }
+    onOpen();
+  };
+
   return (
     <div
-      role="button"
-      tabIndex={mutationLocked ? -1 : 0}
+      // NOT `role="button"` any more, and that is what T5 needed.
+      //
+      // A cell holds interactive children — `+N`, "Copiar a todo el mes", and
+      // now a focusable chip per occupant. `button` takes presentational
+      // children, so all of those were being flattened away by assistive tech,
+      // and a chip's Enter was swallowed by this element's own key handler
+      // before it could ever mean "marcar para mover". A `group` labelled with
+      // its seat and date describes what this box actually is: a named
+      // container of controls. `aria-disabled` is supported there; the one
+      // property `group` does NOT take is `aria-expanded`, which moved onto the
+      // control that does the expanding — see the overlay button below.
+      //
+      // The cell's own activation moved to the transparent full-bleed button
+      // below — a real `<button>`, so Enter and Space are the browser's, not a
+      // hand-rolled imitation.
+      role="group"
+      aria-label={`${row.label} — ${column.date}`}
+      // Focusable but NOT tabbable: `closePicker` hands focus back to this
+      // element by attribute lookup, which needs `-1`, while the tab order
+      // belongs to the controls inside.
+      tabIndex={-1}
       aria-disabled={mutationLocked ? "true" : undefined}
-      onClick={() => { if (!mutationLocked) onOpen(); }}
-      onKeyDown={(e) => {
-        if (!mutationLocked && (e.key === "Enter" || e.key === " ")) {
-          e.preventDefault();
-          onOpen();
-        }
-      }}
+      // KEPT as the pointer path: a click anywhere in the box that is not one of
+      // the controls means the cell itself. The overlay button stops its own
+      // click from arriving here twice.
+      onClick={activate}
       // The whole cell is the drop target — cell granularity, never seat-slot
       // granularity. `onDragOver` is what decides whether this cell accepts the
       // drop at all (it `preventDefault`s only when the gate permits the move),
@@ -2128,135 +2347,203 @@ function GridCellView({
       data-date={column.date}
       data-column-id={column.columnId}
       data-active={active ? "true" : undefined}
-      // Only where it says something. `aria-expanded={active}` emitted
-      // `aria-expanded="false"` on EVERY cell, so a screen reader announced
-      // "collapsed" ~60 times on a ten-column month — noise on a grid whose
-      // cells are, in the other 59 cases, just seats. At most one cell is the
-      // one the picker column is showing, and that one says so.
-      aria-expanded={active ? true : undefined}
-      className={`min-h-[44px] ${minWClass} rounded-lg border px-2 py-1.5 transition-colors ${
+      className={`relative min-h-[44px] ${minWClass} rounded-lg border px-2 py-1.5 transition-colors ${
         overflow ? "border-amber-500/40 bg-amber-500/5" : "border-[#00bfff]/15 hover:border-[#00bfff]/40"
       } ${mutationLocked ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${active ? "ring-2 ring-[#00bfff] ring-offset-2 ring-offset-[#010b17]" : ""} ${
         isDropTarget ? "border-[#00bfff] bg-[#00bfff]/10" : ""
       }`}
     >
-      <div className="flex flex-wrap gap-1">
-        {visibleIds.length === 0 && memberIds.length === 0 && (
-          <span className="font-body text-xs italic text-gray-600">Sin asignar</span>
-        )}
-        {visibleIds.map((id) => {
-          // Finding 1: `duplicates` is keyed by member alone across the whole
-          // date, so a member flagged for a same-category conflict (e.g.
-          // Lead+BGV) must NOT also light up on an unrelated row (e.g. Bass)
-          // just because they happen to appear in `duplicates` at all —
-          // legitimate cross-category double duty (voz + instrumento) is
-          // real and must never be flagged. Only flag when THIS row's id is
-          // among the rows that hold the duplicate.
-          const isDuplicate = duplicates.get(id)?.includes(row.id) ?? false;
-          const ruleBroken = ruleOf(id)?.overridden === false;
-          const dragging =
-            drag.source?.memberId === id &&
-            drag.source.rowId === row.id &&
-            drag.source.columnId === column.columnId;
-          return (
-            <span
-              key={id}
-              // T4 — the drag SOURCE, and the only one. Occupants past `target`
-              // are behind `+N` and have no chip, so a drag reaches visible
-              // occupants only; `+N` deliberately gets no second handle (it
-              // opens the picker, and DD11's picker-row path is T5's).
-              //
-              // Still a `<span>`, still non-focusable. Making it a `<button>`
-              // would nest one inside this cell's own `role="button"` — invalid
-              // ARIA, and its Enter would be swallowed by the ancestor's
-              // `onKeyDown` (which `preventDefault`s and opens the picker).
-              // Keyboard parity is T5's, and it has to restructure the cell's
-              // key handling to get it; this task does not pretend to.
-              draggable={drag.enabled}
-              onDragStart={(e) => {
-                // The cell is not draggable, so nothing competes for this event
-                // — stopped anyway so a future draggable ancestor cannot start a
-                // second drag from the same gesture.
+      {/*
+        The cell's activation, as a real button — invisible, full bleed, and
+        BEHIND everything else. It changes nothing visually (the content sits on
+        top of it, so a pointer still hits chips and `+N` first) and it is what
+        puts the cell in the tab order with a name and a role instead of a bare
+        focusable div.
+      */}
+      <button
+        type="button"
+        data-cell-action
+        disabled={mutationLocked}
+        onClick={(e) => {
+          e.stopPropagation();
+          activate();
+        }}
+        aria-label={
+          pick.source && pick.memberName
+            ? `Colocar a ${pick.memberName} en ${row.label} — ${column.date}`
+            : `Candidatos para ${row.label} — ${column.date}`
+        }
+        // ON THE CONTROL THAT EXPANDS, not on the cell: `aria-expanded` is a
+        // property of the thing you activate to reveal the picker, and `group`
+        // does not support it at all in ARIA 1.2 (jsx-a11y says so out loud).
+        // Still emitted ONLY where it says something — `aria-expanded={active}`
+        // once printed "collapsed" on all ~60 cells of a ten-column month.
+        aria-expanded={active ? true : undefined}
+        className="absolute inset-0 rounded-lg disabled:cursor-not-allowed"
+      />
+      {/*
+        `relative` is load-bearing: the overlay above is positioned, so without
+        it this static content would paint UNDER the button and nothing inside
+        would be clickable.
+      */}
+      <div className="relative">
+        <div className="flex flex-wrap gap-1">
+          {visibleIds.length === 0 && memberIds.length === 0 && (
+            <span className="font-body text-xs italic text-gray-600">Sin asignar</span>
+          )}
+          {visibleIds.map((id) => {
+            // Finding 1: `duplicates` is keyed by member alone across the whole
+            // date, so a member flagged for a same-category conflict (e.g.
+            // Lead+BGV) must NOT also light up on an unrelated row (e.g. Bass)
+            // just because they happen to appear in `duplicates` at all —
+            // legitimate cross-category double duty (voz + instrumento) is
+            // real and must never be flagged. Only flag when THIS row's id is
+            // among the rows that hold the duplicate.
+            const isDuplicate = duplicates.get(id)?.includes(row.id) ?? false;
+            const ruleBroken = ruleOf(id)?.overridden === false;
+            const dragging =
+              drag.source?.memberId === id &&
+              drag.source.rowId === row.id &&
+              drag.source.columnId === column.columnId;
+            const source: MoveOccupantSource = { rowId: row.id, columnId: column.columnId, memberId: id };
+            const marked =
+              pick.source?.memberId === id &&
+              pick.source.rowId === row.id &&
+              pick.source.columnId === column.columnId;
+            const pickChip = () => {
+              if (pick.enabled) pick.onPickOccupant(source);
+            };
+            return (
+              <span
+                key={id}
+                // T4 — the drag SOURCE, and T5's pick source. Occupants past
+                // `target` are behind `+N` and have no chip, so both reach visible
+                // occupants only; `+N` deliberately gets no second handle (DD11's
+                // picker-row anchor is the hidden tail's route).
+                //
+                // A `role="button"` SPAN, not a `<button>`, and the difference is
+                // the drag: this element carries `draggable` + `onDragStart`, and
+                // native drag from a `<button>` is inconsistent across engines —
+                // changing the tag would put T4's shipped interaction at risk to
+                // buy nothing. The cell above is no longer `role="button"`, so
+                // nothing flattens this one away, and its Enter/Space is handled
+                // here rather than swallowed by an ancestor. Same idiom as
+                // `CandidateRow`'s own row.
+                role="button"
+                tabIndex={pick.enabled ? 0 : -1}
+                aria-disabled={pick.enabled ? undefined : "true"}
+                // The NAME is the action, because the action is what a button's
+                // name is for; the member is named inside it, and the ⚠ the sighted
+                // chip carries is spelled out rather than dropped.
+                aria-label={`${marked ? "Cancelar el movimiento de" : "Marcar para mover a"} ${memberName(id)}${
+                  isDuplicate || ruleBroken ? " (conflicto)" : ""
+                }`}
+                onClick={(e) => {
+                  // Without this the cell's own click runs too and the picker
+                  // opens on top of the pick that was just made.
+                  e.stopPropagation();
+                  pickChip();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" && e.key !== " ") return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  pickChip();
+                }}
+                draggable={drag.enabled}
+                onDragStart={(e) => {
+                  // The cell is not draggable, so nothing competes for this event
+                  // — stopped anyway so a future draggable ancestor cannot start a
+                  // second drag from the same gesture.
+                  e.stopPropagation();
+                  drag.onOccupantDragStart(e, source);
+                }}
+                onDragEnd={drag.onOccupantDragEnd}
+                data-occupant={id}
+                data-picked={marked ? "true" : undefined}
+                // Legibility pass — the member chip is the thing the admin
+                // actually reads across the whole month, and `text-[10px]` was
+                // the smallest type on the surface. One step up, to `text-xs`.
+                className={`rounded-full border px-1.5 py-0.5 font-label text-xs text-[#C8D8EB] ${CARD_STYLE.longText} ${
+                  isDuplicate || ruleBroken
+                    ? "border-red-500/50 bg-red-500/10"
+                    : "border-[#00bfff]/25 bg-[#00bfff]/10"
+                } ${drag.enabled ? "cursor-grab" : "cursor-not-allowed"} ${dragging ? "opacity-30" : ""} ${
+                  marked ? "ring-2 ring-[#00bfff]" : ""
+                }`}
+              >
+                {memberName(id)}
+                {(isDuplicate || ruleBroken) && " ⚠"}
+              </span>
+            );
+          })}
+          {overflow && (
+            <button
+              type="button"
+              // DELIBERATELY NOT routed through `activate`: this is a disclosure,
+              // not the cell's action, and it is the only way to SEE the hidden
+              // tail — which is where DD11's source anchor lives. Suppressing it
+              // during a pick would make the `+N` occupant unreachable exactly
+              // when the admin is already moving somebody else.
+              onClick={(e) => {
                 e.stopPropagation();
-                drag.onOccupantDragStart(e, { rowId: row.id, columnId: column.columnId, memberId: id });
+                onOpen();
               }}
-              onDragEnd={drag.onOccupantDragEnd}
-              data-occupant={id}
-              // Legibility pass — the member chip is the thing the admin
-              // actually reads across the whole month, and `text-[10px]` was
-              // the smallest type on the surface. One step up, to `text-xs`.
-              className={`rounded-full border px-1.5 py-0.5 font-label text-xs text-[#C8D8EB] ${CARD_STYLE.longText} ${
-                isDuplicate || ruleBroken
-                  ? "border-red-500/50 bg-red-500/10"
-                  : "border-[#00bfff]/25 bg-[#00bfff]/10"
-              } ${drag.enabled ? "cursor-grab" : ""} ${dragging ? "opacity-30" : ""}`}
+              aria-label={`Ver ${hiddenCount} más en ${row.label}`}
+              // Sized with the member chips it stands in for.
+              className={`rounded-full border px-1.5 py-0.5 font-label text-xs ${
+                hiddenHasDuplicate || hiddenHasViolation
+                  ? "border-red-500/50 bg-red-500/10 text-red-400"
+                  : "border-amber-500/40 bg-amber-500/10 text-amber-400"
+              }`}
             >
-              {memberName(id)}
-              {(isDuplicate || ruleBroken) && " ⚠"}
-            </span>
-          );
-        })}
+              +{hiddenCount}
+              {(hiddenHasDuplicate || hiddenHasViolation) && " ⚠"}
+            </button>
+          )}
+        </div>
+        {/* Finding 6: the brief says a solvable cell over target "warns and
+            still accepts" — an amber border alone carries no words, so make
+            the warning legible as Spanish text, not just a color. */}
         {overflow && (
+          <p className="font-label text-[9px] uppercase tracking-widest text-amber-400">
+            Por encima del objetivo — se acepta de todos modos
+          </p>
+        )}
+        {/* E13 — a seated person a hard rule now refuses. Named in words, not just
+            a red border: the admin has to know WHICH rule to go and look at, and
+            the fix (open the cell, toggle them off) is only obvious once they do.
+            `evaluate`'s self-exemption is what keeps that toggle-off possible. */}
+        {flagged.map((x) => (
+          <p key={x.id} className={`font-body text-[9px] text-red-400 ${CARD_STYLE.longText}`}>
+            ⚠ {memberName(x.id)}: {x.v.reason}
+          </p>
+        ))}
+        {/* P10 — the persistent marker. An override is a deliberate exception, so
+            E13 stops re-flagging it; this is what keeps it VISIBLE rather than
+            silent, and it names the rule that was set aside. */}
+        {overridden.map((x) => (
+          <p key={x.id} className={`font-body text-[9px] text-amber-400 ${CARD_STYLE.longText}`}>
+            Regla anulada — {memberName(x.id)}: {x.v.reason}
+          </p>
+        ))}
+        {unfilled && (
+          <p className="font-label text-[9px] uppercase tracking-widest text-amber-400">Sin cubrir</p>
+        )}
+        {onCopy && memberIds.length > 0 && (
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onOpen();
+              if (!mutationLocked) onCopy();
             }}
-            aria-label={`Ver ${hiddenCount} más en ${row.label}`}
-            // Sized with the member chips it stands in for.
-            className={`rounded-full border px-1.5 py-0.5 font-label text-xs ${
-              hiddenHasDuplicate || hiddenHasViolation
-                ? "border-red-500/50 bg-red-500/10 text-red-400"
-                : "border-amber-500/40 bg-amber-500/10 text-amber-400"
-            }`}
+            disabled={mutationLocked}
+            className="mt-1 font-label text-[9px] uppercase tracking-widest text-[#C8D8EB]/40 hover:text-[#C8D8EB]/70"
           >
-            +{hiddenCount}
-            {(hiddenHasDuplicate || hiddenHasViolation) && " ⚠"}
+            Copiar a todo el mes
           </button>
         )}
       </div>
-      {/* Finding 6: the brief says a solvable cell over target "warns and
-          still accepts" — an amber border alone carries no words, so make
-          the warning legible as Spanish text, not just a color. */}
-      {overflow && (
-        <p className="font-label text-[9px] uppercase tracking-widest text-amber-400">
-          Por encima del objetivo — se acepta de todos modos
-        </p>
-      )}
-      {/* E13 — a seated person a hard rule now refuses. Named in words, not just
-          a red border: the admin has to know WHICH rule to go and look at, and
-          the fix (open the cell, toggle them off) is only obvious once they do.
-          `evaluate`'s self-exemption is what keeps that toggle-off possible. */}
-      {flagged.map((x) => (
-        <p key={x.id} className={`font-body text-[9px] text-red-400 ${CARD_STYLE.longText}`}>
-          ⚠ {memberName(x.id)}: {x.v.reason}
-        </p>
-      ))}
-      {/* P10 — the persistent marker. An override is a deliberate exception, so
-          E13 stops re-flagging it; this is what keeps it VISIBLE rather than
-          silent, and it names the rule that was set aside. */}
-      {overridden.map((x) => (
-        <p key={x.id} className={`font-body text-[9px] text-amber-400 ${CARD_STYLE.longText}`}>
-          Regla anulada — {memberName(x.id)}: {x.v.reason}
-        </p>
-      ))}
-      {unfilled && (
-        <p className="font-label text-[9px] uppercase tracking-widest text-amber-400">Sin cubrir</p>
-      )}
-      {onCopy && memberIds.length > 0 && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (!mutationLocked) onCopy();
-          }}
-          disabled={mutationLocked}
-          className="mt-1 font-label text-[9px] uppercase tracking-widest text-[#C8D8EB]/40 hover:text-[#C8D8EB]/70"
-        >
-          Copiar a todo el mes
-        </button>
-      )}
     </div>
   );
 }
@@ -2267,15 +2554,21 @@ function CandidateRow({
   candidate,
   selected,
   mutationLocked,
+  picked,
   onToggle,
   onOverride,
+  onPickSource,
 }: {
   candidate: RankedCandidate;
   selected: boolean;
   mutationLocked: boolean;
+  /** DD12 — this row's member is the one currently marked for moving. */
+  picked: boolean;
   onToggle: (id: string) => void;
   /** P10 — seat this rule-blocked candidate anyway. */
   onOverride: (id: string) => void;
+  /** DD11 — mark this SEATED member as the source of a move. */
+  onPickSource: (id: string) => void;
 }) {
   // TWO refusals, read as two predicates and never as `eligible` (which folds
   // in availability and belongs to the filler alone — see `toggleCandidate`).
@@ -2384,6 +2677,46 @@ function CandidateRow({
           className="mt-1.5 min-h-[44px] w-full rounded-lg border border-amber-500/40 px-2 font-label text-[10px] uppercase tracking-widest text-amber-400 hover:bg-amber-500/10"
         >
           Asignar de todos modos
+        </button>
+      )}
+      {/*
+        DD11 — the source anchor, and the ONLY handle a `+N`-hidden occupant has.
+        A drop onto an at-target cell appends (`withUpdatedCell`) and the cell
+        shows `slice(0, target)`, so the person just placed there has no chip at
+        all; this row is where they are still reachable.
+
+        **Deliberately OUTSIDE the `blocked` guard above.** `blocked` answers
+        "may this member be SEATED here", which is a question about the target
+        and belongs to `moveGate`. A source has no eligibility question — and the
+        occupant who most needs relocating is precisely the one `blocked` refuses:
+        someone in the `+N` tail who also holds a same-category double would
+        otherwise have no anchor anywhere in this UI. `mutationLocked` is the one
+        condition that does disable it, because nothing may be written at all
+        while it holds.
+
+        Rendered on `selected` — a member already seated in THIS cell. Not on a
+        candidate row, which is the column-scoped "traer aquí" DD12 rejected for
+        being unable to reach a cross-service move.
+
+        `min-h-[44px] w-full` is DD8's touch floor: this anchor, not the ~20px
+        chip, is what the iOS wrap taps.
+      */}
+      {selected && (
+        <button
+          type="button"
+          data-pick-source={candidate.id}
+          onClick={(e) => {
+            e.stopPropagation();
+            onPickSource(candidate.id);
+          }}
+          disabled={mutationLocked}
+          className={`mt-1.5 min-h-[44px] w-full rounded-lg border px-2 font-label text-[10px] uppercase tracking-widest disabled:opacity-50 ${
+            picked
+              ? "border-[#00bfff] bg-[#00bfff]/10 text-[#00bfff]"
+              : "border-[#00bfff]/25 text-[#C8D8EB]/70 hover:border-[#00bfff]"
+          }`}
+        >
+          {picked ? "Cancelar el movimiento" : "Marcar para mover"}
         </button>
       )}
     </li>
