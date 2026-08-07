@@ -260,13 +260,34 @@ async function resolveRecipients(notice: StoredNotice): Promise<string[]> {
 
 // ── Stage 4: classification against live state ──────────────────────────────
 
+/**
+ * Per-sweep memo for the subject read, reset at the top of every sweep.
+ *
+ * Notices are one per (member, subject), so a batch is naturally MANY notices
+ * over FEW subjects: the 2026-08-06 backlog was 28 role notices across exactly
+ * two Sunday services. Unmemoized that is 28 sequential round trips for two
+ * documents, and it was the read phase — not the sends — that pushed the sweep
+ * past its deadline once the batch grew.
+ *
+ * Every notice in one sweep therefore classifies against the subject as of the
+ * first read of it, which is if anything more coherent than each notice reading
+ * its own moment. Two overlapping sweeps in one warm instance can reset each
+ * other's memo; the cost is a repeated read, never a wrong one.
+ */
+let roleReadCache = new Map<string, Record<string, unknown> | null>();
+
 async function fetchRole(notice: StoredNotice): Promise<Record<string, unknown> | null> {
   if (!notice.roleId || !notice.roleType) return null;
+  const key = `${notice.roleType}:${notice.roleId}`;
+  const memo = roleReadCache.get(key);
+  if (memo !== undefined) return memo;
   const row = await operationalClient.fetch<Record<string, unknown> | null>(ROLE_QUERY, {
     roleType: notice.roleType,
     roleId: notice.roleId,
   });
-  return isObj(row) ? row : null;
+  const value = isObj(row) ? row : null;
+  roleReadCache.set(key, value);
+  return value;
 }
 
 async function classifyRoleNotice(notice: StoredNotice, today: string): Promise<Pair[]> {
@@ -381,9 +402,23 @@ function classifyNotice(notice: StoredNotice, today: string): Promise<Pair[]> {
  * One transaction PER NOTICE: a batched transaction would roll the whole batch
  * back on one conflict.
  */
+/**
+ * How many consumes are in flight at once.
+ *
+ * Still one transaction per notice — each asserts its OWN claim revision, and a
+ * batched transaction would abort the whole set on one conflict — but they no
+ * longer wait in line. Sequentially, an `EMAIL_LIMIT`-scale batch is that many
+ * round trips at the very end of the sweep, which is the least affordable moment
+ * it could ask for them: on 2026-08-07 a 29-notice batch reached stage 8 with
+ * ~12 s left and the function was killed partway through, leaving claims behind
+ * for the lease to re-offer. Bounded rather than unbounded so a large batch
+ * cannot open an arbitrary number of connections at once.
+ */
+const CONSUME_CONCURRENCY = 8;
+
 async function consume(claimed: ClaimedNotice[]): Promise<number> {
   let consumed = 0;
-  for (const c of claimed) {
+  const consumeOne = async (c: ClaimedNotice): Promise<void> => {
     try {
       await writeClient
         .transaction()
@@ -392,8 +427,13 @@ async function consume(claimed: ClaimedNotice[]): Promise<number> {
         .commit();
       consumed++;
     } catch (err) {
+      // Unchanged contract: one failed consume costs only its own notice, which
+      // the lease re-offers. It must never abort the rest of the batch.
       logError("notify_sweep_consume_failed", { id: c.notice._id }, err);
     }
+  };
+  for (let i = 0; i < claimed.length; i += CONSUME_CONCURRENCY) {
+    await Promise.all(claimed.slice(i, i + CONSUME_CONCURRENCY).map(consumeOne));
   }
   return consumed;
 }
@@ -407,6 +447,9 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
   const sweepStartedAt = Date.now();
   /** Stage-7 wall clock, set where stage 7 begins; `null` if it never ran. */
   let sendMs: number | null = null;
+  // Scoped to THIS sweep: stage 4 must classify against state read now, not
+  // against whatever a previous invocation of this warm instance saw.
+  roleReadCache = new Map();
   const report: SweepReport = { claimed: 0, emailed: 0, consumed: 0, deferred: 0, unserved: 0 };
 
   // ── 1. Gate ───────────────────────────────────────────────────────────────
