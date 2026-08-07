@@ -23,17 +23,37 @@ import { blockDelivery, recordDeliveryAttempt } from "./deliveryFirewall";
  */
 export const SEND_TIMEOUT_MS = 15_000;
 
-// Reuse one pooled SMTP connection across a batch (and across warm invocations)
-// instead of opening a fresh auth per email — gentler on the cPanel/MailBaby
-// server and much faster when notifying the whole team. maxConnections:1 keeps
-// sends serialized over a single connection.
+/**
+ * How many messages may be in flight at once — the throughput knob, sized from a
+ * measurement rather than from caution.
+ *
+ * `/api/cron/smtp-probe` run against production on 2026-08-07 reported
+ * `coldMs:428, warmMs:328, secondColdMs:200`: connect, TLS, greeting and AUTH all
+ * complete in well under half a second from Vercel. Yet one send measured ~13.4 s.
+ * The cost is therefore in the MESSAGE, not the connection — which is exactly the
+ * case pooling cannot help, and the reason `maxConnections: 1` had to go.
+ *
+ * Serialized, a 17-recipient service needed ~220 s and could not fit in a 60 s
+ * function at all; the sweep discharged one email and dropped the rest, because
+ * consumption is unconditional. In flight together they need ~3 rounds.
+ *
+ * Bounded, not unlimited: this dials a shared cPanel/Exim mailbox, which answers
+ * a flood with `421 too many connections` rather than with speed.
+ */
+export const SEND_CONCURRENCY = 8;
+
+// Reuse pooled SMTP connections across a batch (and across warm invocations)
+// instead of opening a fresh auth per email. Setup is cheap here (see the probe
+// numbers above), so the pool is no longer what makes a batch fast — it is
+// SEND_CONCURRENCY that does. The pool's job now is to hold those connections
+// open across the messages of one sweep.
 let cachedTransport: { key: string; transport: Transporter } | null = null;
 function smtpTransport(host: string, port: number, secure: boolean, user: string, pass: string): Transporter {
   const key = `${host}:${port}:${secure}:${user}`;
   if (cachedTransport?.key === key) return cachedTransport.transport;
   const transport = nodemailer.createTransport({
     host, port, secure, auth: { user, pass },
-    pool: true, maxConnections: 1, maxMessages: 100,
+    pool: true, maxConnections: SEND_CONCURRENCY, maxMessages: 100,
     // Every one of these overrides a default that outlives the hosting function.
     // They are the cheap, in-protocol half of the ceiling: they turn a dead peer
     // into a thrown error at a known moment instead of a silent hang.
@@ -48,23 +68,20 @@ function smtpTransport(host: string, port: number, secure: boolean, user: string
 }
 
 /**
- * Drop the pooled transport after a send we gave up on.
+ * WHY A TIMED-OUT SEND NO LONGER TEARS DOWN THE POOL.
  *
- * `maxConnections: 1` is what makes this necessary: an abandoned `sendMail` still
- * owns the single connection, so the next send would queue behind a conversation
- * nobody is waiting for and time out too — one stalled peer would cost every
- * remaining recipient in the batch its own full timeout. Closing forces the next
- * call to dial fresh.
+ * While `maxConnections` was 1, an abandoned `sendMail` owned the only connection
+ * and closing the transport was how the next send avoided queueing behind a
+ * conversation nobody was waiting for. With sends in flight together that same
+ * close is friendly fire: it would drop the connections carrying the other seven
+ * recipients, turning one stalled message into eight failures.
+ *
+ * `socketTimeout` (SEND_TIMEOUT_MS) is what reclaims a stuck connection now, and
+ * it does it at the right granularity — nodemailer destroys THAT connection and
+ * the pool dials a replacement, while its siblings carry on. The two bounds fire
+ * at the same moment by construction, so a send we abandon is a connection the
+ * pool is already discarding.
  */
-function dropTransport(): void {
-  const cached = cachedTransport;
-  cachedTransport = null;
-  try {
-    cached?.transport.close();
-  } catch {
-    // A transport we are already discarding cannot fail in a way that matters.
-  }
-}
 
 /**
  * `transport.sendMail`, bounded. Resolves within `ms` on every path — sent,
@@ -95,7 +112,7 @@ async function sendWithTimeout(
     if (outcome.kind === "timeout") {
       const error = `SMTP send timed out after ${ms}ms`;
       console.error("[email] SMTP send timed out:", { timeoutMs: ms, to: message.to });
-      dropTransport();
+      // The pool stays up on purpose — see the note above `sendWithTimeout`.
       return { ok: false, error };
     }
     if (outcome.kind === "failed") {
