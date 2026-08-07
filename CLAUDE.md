@@ -127,6 +127,15 @@ Default canonical labels: `needs-triage`, `needs-info`, `ready-for-agent`, `read
 Before implementing a substantial plan, use
 `.agents/skills/adversarial-plan-review/SKILL.md` and record its risk tier and rationale.
 
+That directory is a **vendored copy** of the canonical skill at
+`~/.agents/skills/adversarial-plan-review/` (shared with Codex). The two must stay
+byte-identical; `scripts/__tests__/vendoredSkillDigest.test.ts` fails loudly if this
+copy changes without its digest being updated. Change both in the same delivery.
+
+**Every completed review gets a committed review log** beside the plan —
+`<plan-basename>-review-log.md`, written after the loop and never shown to a
+reviewer. See `docs/superpowers/plans/2026-08-06-grid-drag-and-drop-review-log.md`.
+
 - **Standard risk (default):** one fresh cold `APPROVED`. Parent roadmaps and
   read/model/UI/cutover work stay standard unless they directly own a critical contract.
 - **Critical risk:** two sequential fresh `APPROVED` verdicts on byte-identical
