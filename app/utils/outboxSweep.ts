@@ -83,6 +83,25 @@ export const EMAIL_LIMIT = parsePositiveEnv(process.env.NOTIFY_FLUSH_EMAIL_LIMIT
 export const SEND_BUDGET_MS = parsePositiveEnv(process.env.NOTIFY_SEND_BUDGET_MS, 40_000);
 
 /**
+ * Wall clock measured from the TOP of the sweep, past which stage 7 refuses to
+ * start another send — the reserve that keeps stage 8 reachable.
+ *
+ * `SEND_BUDGET_MS` deliberately does not charge for the read phase, which is the
+ * right call for the inequality in §1 and the wrong one for staying alive: reads
+ * plus a full send budget can already reach the hosting route's `maxDuration = 60`
+ * on their own, and a sweep killed there never consumes what it claimed. The
+ * claims then outlive the process, the 5-minute lease re-offers exactly the same
+ * batch, and the next sweep dies in the same place — the outbox stops making
+ * progress permanently, which is how one slow evening on 2026-08-06 cost the team
+ * a day of notifications.
+ *
+ * So this is not a second send budget; it is the promise that stage 8 runs. 15 s
+ * of the route's 60 is what stage 8 needs for one `Patch.commit()` per claimed
+ * notice at `EMAIL_LIMIT`-scale batches, plus the response.
+ */
+const SWEEP_DEADLINE_MS = 45_000;
+
+/**
  * How many candidate notices one sweep looks at. `deferred` counts the due
  * notices left behind INSIDE this window; nothing accumulates in normal
  * operation, and §3's liveness alarm is what notices a backlog that does.
@@ -537,14 +556,23 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
     // clock here, §1's inequality means what §1 says it means.
     const sendStartedAt = Date.now();
     for (let i = 0; i < entries.length; i++) {
-      // Bounded by wall clock. Without this bound, a sweep killed mid-fan-out
-      // re-sends from the top on every lease expiry, forever.
-      if (Date.now() - sendStartedAt >= sendBudgetMs) {
+      // Bounded by wall clock, on TWO clocks. The stage clock is §1's budget;
+      // the sweep clock is the reserve that keeps stage 8 reachable no matter how
+      // long the read phase took. Whichever trips first ends the stage — and
+      // stopping early costs one batch its tail, while overrunning costs the
+      // outbox its ability to make progress at all.
+      const budgetSpent = Date.now() - sendStartedAt >= sendBudgetMs;
+      const deadlineHit = Date.now() - sweepStartedAt >= SWEEP_DEADLINE_MS;
+      if (budgetSpent || deadlineHit) {
         report.unserved = entries.length - i;
         log("notify_sweep_send_budget_exhausted", {
           unserved: report.unserved,
           emailed: report.emailed,
           sendBudgetMs,
+          // WHICH bound stopped the stage. `sweep_deadline` means the read phase
+          // is crowding out the sends and the budget is no longer the real limit.
+          stoppedBy: budgetSpent ? "send_budget" : "sweep_deadline",
+          elapsedMs: Date.now() - sweepStartedAt,
         });
         break;
       }
