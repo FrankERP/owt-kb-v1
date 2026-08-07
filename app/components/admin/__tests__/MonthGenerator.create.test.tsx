@@ -21,7 +21,7 @@
 //
 // Buttons are matched by their REAL computed labels (`Crear ${n} borrador(es)`
 // pluralised, and the literal "Crear y publicar"): a bare /Crear/ matches both.
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MonthGenerator from "../MonthGenerator";
@@ -2226,5 +2226,203 @@ describe("MonthGenerator — the year field", () => {
     expect(cellDates(container).every((d) => d.startsWith("2024-08-"))).toBe(true);
     fireEvent.blur(field);
     expect(field.value).toBe("2024");
+  });
+});
+
+// ─── T4 — the drag gate's P3 is wired to THIS component's create authority ───
+//
+// `PlannerGrid` owns the drag; what only this file can prove is that the
+// `canReceive` it receives is `isDraftCreatable` — the same predicate
+// `handleConfirm` and the footer buttons use — rather than a permissive stub or
+// a second copy of the rule. A create-blocked column is invisible to
+// `PlannerGrid`'s own props: `skipped` holds the admin's toggle alone, and a
+// `blocked` preflight never enters it.
+//
+// Why it matters more than an ordinary refusal: a drag is a MOVE. Drop into a
+// column that will never be written and the REMOVAL lands on a column that is
+// created while the ADD lands on one that is not — the person vanishes from the
+// month in one gesture, with nothing on screen to say so.
+describe("MonthGenerator — the drag's create-mode drop guard (T4/P3)", () => {
+  const ANA = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz"] }];
+
+  function seatAnaOnFirstSunday(container: HTMLElement) {
+    fireEvent.click(container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]')!);
+    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+    fireEvent.click(screen.getByText("Cerrar"));
+  }
+
+  function dragLeadTo(container: HTMLElement, date: string) {
+    const chip = container.querySelector(
+      '[data-row-id="lead"][data-date="2026-02-01"] [data-occupant="lead-1"]',
+    )!;
+    const target = container.querySelector(`[data-row-id="lead"][data-date="${date}"]`)!;
+    const dataTransfer = { effectAllowed: "", dropEffect: "", setData: () => {}, getData: () => "" };
+    fireEvent(chip, createEvent.dragStart(chip, { dataTransfer }));
+    const over = createEvent.dragOver(target, { dataTransfer });
+    fireEvent(target, over);
+    fireEvent(target, createEvent.drop(target, { dataTransfer }));
+    return { droppable: over.defaultPrevented };
+  }
+
+  const occupants = (container: HTMLElement, date: string) =>
+    Array.from(
+      container.querySelectorAll(`[data-row-id="lead"][data-date="${date}"] [data-occupant]`),
+    ).map((el) => el.getAttribute("data-occupant"));
+
+  it("refuses a drop onto a column the preflight says will never be created", () => {
+    const preflight = makePreflight((date) => (date === "2026-02-08" ? "blocked" : "creatable"));
+    const { container } = render(
+      <Gen members={ANA} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} preflight={preflight} />,
+    );
+    goToPreview(container, 2, 2026);
+    seatAnaOnFirstSunday(container);
+
+    const { droppable } = dragLeadTo(container, "2026-02-08");
+
+    expect(droppable).toBe(false);
+    expect(occupants(container, "2026-02-01")).toEqual(["lead-1"]);
+    expect(occupants(container, "2026-02-08")).toEqual([]);
+    expect(container.textContent).toContain("Esta columna no se va a crear.");
+  });
+
+  it("allows the same drop onto a creatable column — the guard is the authority, not a blanket refusal", () => {
+    const preflight = makePreflight((date) => (date === "2026-02-08" ? "blocked" : "creatable"));
+    const { container } = render(
+      <Gen members={ANA} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} preflight={preflight} />,
+    );
+    goToPreview(container, 2, 2026);
+    seatAnaOnFirstSunday(container);
+
+    const { droppable } = dragLeadTo(container, "2026-02-15");
+
+    expect(droppable).toBe(true);
+    expect(occupants(container, "2026-02-01")).toEqual([]);
+    expect(occupants(container, "2026-02-15")).toEqual(["lead-1"]);
+  });
+
+  // ─── T6 — what the drag CREATES, not only what it shows ────────────────────
+  //
+  // The two tests above stop at the grid: they prove the guard and the seats.
+  // Acceptance 9 is about what a save WRITES, and create mode's equivalent of a
+  // PATCH is the POST body of each draft. These two carry the same drags all the
+  // way to `stubRolesFetch`, so a move that looked right on screen but never
+  // reached `cellsToDrafts` — or a refusal that quietly changed a draft anyway —
+  // is caught here rather than at a service Frank has to un-create.
+
+  it("carries a permitted drag into the created bodies: source loses the lead, target gains it", async () => {
+    const { fetchMock, calls } = stubRolesFetch(() => ({ ok: true }));
+    const { container } = render(
+      <Gen members={ANA} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()}
+        preflight={makePreflight(() => "creatable")} />,
+    );
+    goToPreview(container, 2, 2026);
+    seatAnaOnFirstSunday(container);
+
+    dragLeadTo(container, "2026-02-15");
+    fireEvent.click(createButton());
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    const leadsByDate = new Map(calls.map((c) => [c.date, c.body.leads]));
+    // BOTH ends of the one gesture, in the write: the removal landed on the
+    // source draft and the addition on the target draft.
+    expect(leadsByDate.get("2026-02-01")).toEqual([]);
+    expect(leadsByDate.get("2026-02-15")).toEqual(["lead-1"]);
+    // The two Sundays nobody dragged into carry nothing new — create mode's
+    // reading of "services untouched by the drag emit no change".
+    expect(leadsByDate.get("2026-02-08")).toEqual([]);
+    expect(leadsByDate.get("2026-02-22")).toEqual([]);
+  });
+
+  it("leaves every created body untouched when the drop is refused (P3)", async () => {
+    const blockedDate = "2026-02-08";
+    const { fetchMock, calls } = stubRolesFetch(() => ({ ok: true }));
+    const { container } = render(
+      <Gen members={ANA} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()}
+        preflight={makePreflight((date) => (date === blockedDate ? "blocked" : "creatable"))} />,
+    );
+    goToPreview(container, 2, 2026);
+    seatAnaOnFirstSunday(container);
+
+    dragLeadTo(container, blockedDate);
+    fireEvent.click(createButton());
+
+    // A drag is a MOVE: the danger of a refused drop that half-applies is that
+    // the REMOVAL lands on a column that IS created while the addition lands on
+    // one that never will be — Ana would vanish from the month with nothing on
+    // screen to say so. Feb 1 still creates her.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    const leadsByDate = new Map(calls.map((c) => [c.date, c.body.leads]));
+    expect(leadsByDate.get("2026-02-01")).toEqual(["lead-1"]);
+    expect(calls.some((c) => c.date === blockedDate)).toBe(false);
+  });
+
+  // ─── The P3 cache must go stale-free across a REAL mutation of `createdTargets` ──
+  //
+  // `canReceiveDrop` closes over `createdTargets.current` — a `Set` ref MUTATED
+  // in place by `handleConfirm`, never replaced — and `moveGate.ts`'s drag gate
+  // caches its verdict on `canReceive`'s IDENTITY. The whole cache stays honest
+  // only because every growth of that set is paired, in the same tick, with a
+  // `setDrafts` call `canReceiveDrop` is memoized on (see the invariant comments
+  // at `MonthGenerator.tsx`'s `handleConfirm` and `moveGate.ts`'s
+  // `createMoveGate`).
+  //
+  // The test SEEDS the cache first — a `dragover` on Feb 15 BEFORE anything is
+  // created computes and caches a `clean` verdict for this exact source→target
+  // pair, same as a real hover, without writing anything. A PARTIAL create
+  // batch then commits Feb 15 (and only Feb 15) into `createdTargets`. The same
+  // still-armed drag is then DROPPED on Feb 15, through the REAL production
+  // wiring end to end (`canReceiveDrop`, `handleConfirm`, the real `PlannerGrid`
+  // gate) — this is the integration proof that the shipped coupling holds
+  // TODAY. It is not independently mutation-sensitive to `canReceive`'s own
+  // identity in isolation: `MonthGenerator` also hands `PlannerGrid` a fresh
+  // `sundayDatesForColumn` closure on every render (an inline prop, not
+  // memoized), which happens to drop the WHOLE gate cache on its own regardless
+  // of this coupling. That isolated mechanism — mutate `createdTargets` in
+  // place, and confirm the cache only invalidates when `canReceive` is
+  // re-identified — is pinned and mutation-tested directly against
+  // `PlannerGrid` in `plannerGridDrag.test.tsx` ("the P3 cache is invalidated
+  // when canReceive's identity changes"), where nothing else can mask it.
+  it("refuses a drag onto a column a partial create batch JUST created — the P3 cache is not left stale", async () => {
+    const CREATED_DATE = "2026-02-15";
+    const { fetchMock, calls } = stubRolesFetch((date) => (date === CREATED_DATE ? { ok: true } : { ok: false, status: 500 }));
+    const { container } = render(
+      <Gen members={ANA} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()}
+        preflight={makePreflight(() => "creatable")} />,
+    );
+    goToPreview(container, 2, 2026);
+    seatAnaOnFirstSunday(container);
+
+    // SEED the cache: a plain hover, nothing created yet, so it is legitimately
+    // `clean` — and the drag stays armed (no drop) all the way through confirm.
+    const chip = container.querySelector(
+      '[data-row-id="lead"][data-date="2026-02-01"] [data-occupant="lead-1"]',
+    )!;
+    const target = container.querySelector(`[data-row-id="lead"][data-date="${CREATED_DATE}"]`)!;
+    const dataTransfer = { effectAllowed: "", dropEffect: "", setData: () => {}, getData: () => "" };
+    fireEvent(chip, createEvent.dragStart(chip, { dataTransfer }));
+    const seedOver = createEvent.dragOver(target, { dataTransfer });
+    fireEvent(target, seedOver);
+    expect(seedOver.defaultPrevented).toBe(true); // droppable BEFORE the confirm
+
+    fireEvent.click(createButton());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    // Synchronization point: `setPushError` runs AFTER `createdTargets.current`
+    // is mutated and its paired `setDrafts` has committed, so waiting for the
+    // partial-failure message guarantees the mutation already happened.
+    await waitFor(() =>
+      expect(screen.getByText(/No se pudieron crear 3 de 4 servicios/)).toBeTruthy(),
+    );
+    // Confirms it really was a PARTIAL batch — Feb 15 the only success — so the
+    // refusal below is about a target that was JUST created, not one that was
+    // always going to be refused for some other reason.
+    expect(calls.map((c) => c.date).sort()).toEqual([...FEB_2026_SUNDAYS].sort());
+
+    // The SAME drag, still armed since the seed above never dropped, now
+    // dropped on Feb 15 — created by THIS confirm a moment ago.
+    fireEvent(target, createEvent.drop(target, { dataTransfer }));
+
+    expect(occupants(container, "2026-02-01")).toEqual(["lead-1"]);
+    expect(occupants(container, CREATED_DATE)).toEqual([]);
+    expect(container.textContent).toContain("Esta columna no se va a crear.");
   });
 });

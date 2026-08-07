@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SolveResponse } from "@/app/api/admin/solve/route";
 import { DayCard } from "@/app/components/DayCard";
 import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
@@ -36,6 +36,7 @@ import {
   unaddressableDates as computeUnaddressableDates,
   type DraftCard,
   type GridCell,
+  type GridColumn,
   type GridRow,
   type PersonRestriction,
   type SavedRole,
@@ -311,6 +312,61 @@ function buildUnavailabilityNotices(
     for (const s of specials)       if (unavailable.has(s.date)) out.push({ name, date: s.date, service: s.name });
   }
   return out.sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
+}
+
+/**
+ * **THE create-gate predicate — one definition, now four consumers.** It used to
+ * be written out three times (`candidates` in `handleConfirm`, `toCreate` and
+ * `notCreatable` at render), which is how a fix can land on the post path and
+ * miss the buttons: `toCreate` gates BOTH "Crear N borrador(es)" (its label AND
+ * its disabled state) and "Crear y publicar", so a draft this dialog has already
+ * created but which still passes `toCreate` produces a live button offering to
+ * create something `handleConfirm` will then decline to post — and
+ * `handleConfirm`'s `if (!toCreateNow.length) return` sets no `pushError`, so
+ * the admin is told nothing at all. Three surfaces, three different answers.
+ * Deriving all of them from this one function is what makes that state
+ * unrepresentable.
+ *
+ * The FOURTH consumer is the drag gate's P3
+ * (`moveGate.ts`'s `CreateModeGateInput.canReceive`): a drag is a MOVE, so
+ * dropping into a column that is never created lands the removal on a column
+ * that IS created and the add on one that is not — the person vanishes from the
+ * month in one gesture. That consumer is why this is a module-level function
+ * taking its dependencies as arguments rather than a closure over `preflights`
+ * and the `createdTargets` ref: `canReceive` is threaded into `PlannerGrid`, and
+ * a second copy of these three refusals living down there is exactly the drift
+ * P3 exists to prevent.
+ *
+ * The three refusals, in order:
+ *  - `skipped`: the admin's own Omitir toggle, or a stored document already
+ *    occupying this exact target (`cellsToDrafts`).
+ *  - `createdTargets`: THIS session already created this target. The only
+ *    signal that survives a rename (`previous: []` re-mints `localId`) and an
+ *    `existingRoles` refresh (`exists`/`isExisting` both go untrustworthy),
+ *    and the only defence against a second `special_role` on a date — the
+ *    preflight's special branch is name-blind and can answer nothing but
+ *    `creatable` (`serviceCardModel.ts`).
+ *  - the A1/A2 preflight when there is one; `!draft.exists` only as the
+ *    standalone dialog's fallback, where it also carries the retry semantics
+ *    (a failed draft keeps `exists: false` and stays postable).
+ */
+export function isDraftCreatable(input: {
+  draft: DraftCard;
+  /**
+   * `createdTargets.current` — the LIVE `Set`, passed at call time. It is
+   * mutated in place by `handleConfirm` and never re-created, so callers must
+   * read `.current` when they call rather than capturing it in a closure.
+   */
+  createdTargets: ReadonlySet<string>;
+  /** Whether the A1/A2 preflight channel exists at all (`!!preflight`). */
+  hasPreflight: boolean;
+  /** The preflight snapshot, keyed by `localId`. */
+  preflights: ReadonlyMap<string, TargetPreflight>;
+}): boolean {
+  const { draft, createdTargets, hasPreflight, preflights } = input;
+  if (draft.skipped) return false;
+  if (createdTargets.has(draftTargetKey(draft._type, draft.date))) return false;
+  return hasPreflight ? preflights.get(draft.localId)?.state === "creatable" : !draft.exists;
 }
 
 /**
@@ -2028,36 +2084,49 @@ export default function MonthGenerator({
   }, [drafts, preflight]);
 
   /**
-   * **THE create-gate predicate — one definition, three consumers.** It used to
-   * be written out three times (`candidates` in `handleConfirm`, `toCreate` and
-   * `notCreatable` at render), which is how a fix can land on the post path and
-   * miss the buttons: `toCreate` gates BOTH "Crear N borrador(es)" (its label
-   * AND its disabled state) and "Crear y publicar", so a draft this dialog has
-   * already created but which still passes `toCreate` produces a live button
-   * offering to create something `handleConfirm` will then decline to post —
-   * and `handleConfirm`'s `if (!toCreateNow.length) return` sets no
-   * `pushError`, so the admin is told nothing at all. Three surfaces, three
-   * different answers. Deriving all three from this one function is what makes
-   * that state unrepresentable.
-   *
-   * The three refusals, in order:
-   *  - `skipped`: the admin's own Omitir toggle, or a stored document already
-   *    occupying this exact target (`cellsToDrafts`).
-   *  - `createdTargets`: THIS session already created this target. The only
-   *    signal that survives a rename (`previous: []` re-mints `localId`) and an
-   *    `existingRoles` refresh (`exists`/`isExisting` both go untrustworthy),
-   *    and the only defence against a second `special_role` on a date — the
-   *    preflight's special branch is name-blind and can answer nothing but
-   *    `creatable` (`serviceCardModel.ts`).
-   *  - the A1/A2 preflight when there is one; `!d.exists` only as the
-   *    standalone dialog's fallback, where it also carries the retry semantics
-   *    (a failed draft keeps `exists: false` and stays postable).
+   * This session's binding of the module-level `isDraftCreatable` — see that
+   * function for why the predicate itself lives outside the component. Kept as
+   * a plain function, not a `useCallback`, so `createdTargets.current` is read
+   * when it is CALLED: `handleConfirm` mutates that set in place and no render
+   * follows, so a captured copy would answer with a stale month.
    */
   function isCreatable(d: DraftCard): boolean {
-    if (d.skipped) return false;
-    if (createdTargets.current.has(draftTargetKey(d._type, d.date))) return false;
-    return preflight ? preflights.get(d.localId)?.state === "creatable" : !d.exists;
+    return isDraftCreatable({
+      draft: d,
+      createdTargets: createdTargets.current,
+      hasPreflight: !!preflight,
+      preflights,
+    });
   }
+
+  /**
+   * P3 for the drag gate (`moveGate.ts`) — may an occupant be DROPPED into this
+   * column at all?
+   *
+   * The same `isDraftCreatable` verdict the footer buttons and `handleConfirm`
+   * use, resolved from column → draft by `draftTargetKey`, exactly as
+   * `createBlockFor` does. A column with no draft answers `false`: `PlannerGrid`
+   * cannot know why there is no draft, and "no draft" is never a licence to move
+   * somebody into a service this dialog is not going to write.
+   *
+   * Memoized because the drag gate caches its verdicts on the identity of its
+   * inputs (`createMoveGate`), and a fresh closure per render would drop that
+   * cache on every `dragover`.
+   */
+  const canReceiveDrop = useCallback(
+    (column: GridColumn): boolean => {
+      const key = draftTargetKey(column.type, column.date);
+      const draft = drafts.find((d) => draftTargetKey(d._type, d.date) === key);
+      if (!draft) return false;
+      return isDraftCreatable({
+        draft,
+        createdTargets: createdTargets.current,
+        hasPreflight: !!preflight,
+        preflights,
+      });
+    },
+    [drafts, preflight, preflights],
+  );
 
   function requestBack() {
     if (storedMode) {
@@ -2842,6 +2911,21 @@ export default function MonthGenerator({
     // TARGET (see `createdTargets`). This is the write that closes P2: from
     // here on `isCreatable` refuses every one of these targets, so no second
     // confirm — and no rename in between — can post them again.
+    //
+    // INVARIANT the drag gate's P3 cache depends on: this loop only runs a
+    // growing `createdTargets.current.add` when `created.size > 0`, and that
+    // is exactly the condition already guarded by `setDrafts` above — so every
+    // growth of this set is paired with a `drafts` identity change in the same
+    // tick. `canReceiveDrop` (below) closes over `createdTargets.current` and
+    // is memoized only on `[drafts, preflight, preflights]`; `createMoveGate`'s
+    // cache is keyed on `canReceiveDrop`'s identity (`moveGate.ts`, "cache
+    // dropped WHOLE the moment any input identity changes"). Grow this set
+    // without a paired `drafts` identity change and the P3 cache goes stale —
+    // a drag can be served a `clean` verdict for a column that was actually
+    // just created, and the person vanishes from the month in one gesture (the
+    // exact hazard P3 exists to prevent). If a future write to this ref is
+    // added on a path that does not already `setDrafts`, add one, or thread a
+    // fresh dependency into `canReceiveDrop`'s `useCallback` deps.
     for (const draft of toCreateNow) {
       if (created.has(draft.localId)) createdTargets.current.add(draftTargetKey(draft._type, draft.date));
     }
@@ -3315,6 +3399,16 @@ export default function MonthGenerator({
           savedWindow={savedWindow}
           preflightFor={col => storedMode ? null : (preflight ? preflight(col.type, col.date) : null)}
           createBlockFor={col => storedMode ? null : createBlockFor(col)}
+          /*
+            P3 — the drag gate's create-mode drop guard, and the ONE authority
+            for it (`isDraftCreatable`). Passed in stored mode too, where the
+            gate never consults it: every stored column is a document that
+            already exists, so there is nothing to refuse. `PlannerGrid` demands
+            it unconditionally for the reason `moveGate` demands it — a P3 that
+            can be forgotten is a P3 that loses somebody from the month with no
+            type error and no runtime signal.
+          */
+          canReceive={canReceiveDrop}
           skipped={skippedColumnIds}
           unaddressableDates={unaddressableDatesList}
           unresolvedNames={allUnresolvedNames}
@@ -3330,6 +3424,19 @@ export default function MonthGenerator({
           diagnostics={diagnostics}
           config={solverConfig ?? undefined}
           sundayDates={sundayDatesFull}
+          // INLINE ON PURPOSE, for now — and worth knowing before "fixing" it.
+          // A fresh closure every render means the drag gate's WHOLE verdict
+          // cache (`moveGate.ts`'s `createMoveGate`, keyed in part on this
+          // prop's identity) is dropped on every `MonthGenerator` re-render,
+          // including the one `handleConfirm` triggers. That currently masks a
+          // narrower question: whether `canReceiveDrop`'s OWN identity tracks
+          // `createdTargets.current` correctly (see the invariant comment on
+          // that mutation, and `moveGate.ts`'s `createMoveGate`). Memoizing
+          // this closure would be a reasonable-looking perf pass, but it would
+          // remove that safety net and make the P3 cache depend ENTIRELY on
+          // the `createdTargets`/`canReceiveDrop`/`setDrafts` coupling holding
+          // — do so only alongside re-verifying that coupling, not as an
+          // unrelated cleanup.
           sundayDatesForColumn={(column) => ruleContextForTarget(column.type, column.date)?.sundayDates ?? []}
           /*
             The participation chart, handed to the grid as the LEFT COLUMN of
