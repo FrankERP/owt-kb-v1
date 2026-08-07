@@ -158,6 +158,29 @@ Things that are counter-intuitive and were each a real defect at some point.
   reliable hook to win from the sending side.
 - **Unpublishing does not notify, and a date move does not notify.** Both are
   deliberate; see spec §1 and §4.
+- **`sendEmail` must resolve within `SEND_TIMEOUT_MS` (15 s), on every path.**
+  Nodemailer's own defaults are connection 120 s, greeting 30 s and socket 600 s
+  — each at or past the hosting route's `maxDuration = 60` — so a mail server
+  that accepts the connection and then stops answering does not fail the send, it
+  hangs the whole invocation until the platform kills it. `email.ts` overrides all
+  three and additionally races the conversation, because `socketTimeout` bounds
+  *inactivity*, not total duration. On a timeout the pooled transport is closed:
+  `maxConnections: 1` means an abandoned `sendMail` still owns the only
+  connection, so reusing it would make every remaining recipient in the batch
+  wait out its own full timeout.
+- **The send stage answers to two clocks, and the second one is not a budget.**
+  `NOTIFY_SEND_BUDGET_MS` deliberately starts at the first send and is never
+  charged for the read phase — correct for spec §1's inequality, and not a bound
+  on staying alive. `SWEEP_DEADLINE_MS` (45 s, measured from the top of the
+  sweep) is the reserve that keeps stage 8 reachable. Without it, reads plus a
+  full send budget reach `maxDuration` on their own, the process dies before it
+  consumes what it claimed, the 5-minute lease re-offers the identical batch, and
+  the next sweep dies in the same place. **This is not theoretical: it is what
+  happened.** On 2026-08-06 sends began stalling mid-conversation; 28 claimed
+  notices sat in `status:"sending"` for over a day, every flush run timed out at
+  60 s, and the team received nothing. `notify_sweep_send_budget_exhausted` now
+  carries `stoppedBy`, which names which clock stopped the stage — `sweep_deadline`
+  means the read phase is crowding out the sends.
 
 ## Verifying the templates
 
