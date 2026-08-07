@@ -2299,4 +2299,60 @@ describe("MonthGenerator — the drag's create-mode drop guard (T4/P3)", () => {
     expect(occupants(container, "2026-02-01")).toEqual([]);
     expect(occupants(container, "2026-02-15")).toEqual(["lead-1"]);
   });
+
+  // ─── T6 — what the drag CREATES, not only what it shows ────────────────────
+  //
+  // The two tests above stop at the grid: they prove the guard and the seats.
+  // Acceptance 9 is about what a save WRITES, and create mode's equivalent of a
+  // PATCH is the POST body of each draft. These two carry the same drags all the
+  // way to `stubRolesFetch`, so a move that looked right on screen but never
+  // reached `cellsToDrafts` — or a refusal that quietly changed a draft anyway —
+  // is caught here rather than at a service Frank has to un-create.
+
+  it("carries a permitted drag into the created bodies: source loses the lead, target gains it", async () => {
+    const { fetchMock, calls } = stubRolesFetch(() => ({ ok: true }));
+    const { container } = render(
+      <Gen members={ANA} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()}
+        preflight={makePreflight(() => "creatable")} />,
+    );
+    goToPreview(container, 2, 2026);
+    seatAnaOnFirstSunday(container);
+
+    dragLeadTo(container, "2026-02-15");
+    fireEvent.click(createButton());
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    const leadsByDate = new Map(calls.map((c) => [c.date, c.body.leads]));
+    // BOTH ends of the one gesture, in the write: the removal landed on the
+    // source draft and the addition on the target draft.
+    expect(leadsByDate.get("2026-02-01")).toEqual([]);
+    expect(leadsByDate.get("2026-02-15")).toEqual(["lead-1"]);
+    // The two Sundays nobody dragged into carry nothing new — create mode's
+    // reading of "services untouched by the drag emit no change".
+    expect(leadsByDate.get("2026-02-08")).toEqual([]);
+    expect(leadsByDate.get("2026-02-22")).toEqual([]);
+  });
+
+  it("leaves every created body untouched when the drop is refused (P3)", async () => {
+    const blockedDate = "2026-02-08";
+    const { fetchMock, calls } = stubRolesFetch(() => ({ ok: true }));
+    const { container } = render(
+      <Gen members={ANA} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()}
+        preflight={makePreflight((date) => (date === blockedDate ? "blocked" : "creatable"))} />,
+    );
+    goToPreview(container, 2, 2026);
+    seatAnaOnFirstSunday(container);
+
+    dragLeadTo(container, blockedDate);
+    fireEvent.click(createButton());
+
+    // A drag is a MOVE: the danger of a refused drop that half-applies is that
+    // the REMOVAL lands on a column that IS created while the addition lands on
+    // one that never will be — Ana would vanish from the month with nothing on
+    // screen to say so. Feb 1 still creates her.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    const leadsByDate = new Map(calls.map((c) => [c.date, c.body.leads]));
+    expect(leadsByDate.get("2026-02-01")).toEqual(["lead-1"]);
+    expect(calls.some((c) => c.date === blockedDate)).toBe(false);
+  });
 });
