@@ -728,6 +728,27 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
     logSpy.mockRestore();
   });
 
+  it("reads one subject once, however many notices share it", async () => {
+    // Notices are one per (member, subject), so a batch is many notices over few
+    // subjects. Unmemoized this was one round trip PER NOTICE for the same
+    // document — the read phase, not the sends, is what pushed the 2026-08-06
+    // backlog past the sweep deadline.
+    world.notices = [
+      roleNotice({ _id: "n1", memberId: "m1" }),
+      roleNotice({ _id: "n2", memberId: "m2" }),
+      roleNotice({ _id: "n3", memberId: "m3" }),
+    ];
+    world.roles = { r1: roleDoc() };
+    world.recipients = { r1: ["m1", "m2", "m3"] };
+    world.members = members(["m1", "m2", "m3"]);
+
+    const report = await sweepOutbox();
+
+    expect(report.claimed).toBe(3);
+    const roleReads = reads.filter((r) => r.params.roleId === "r1" && r.query.includes("foh_team"));
+    expect(roleReads).toHaveLength(1);
+  });
+
   it("stops sending at the sweep's own deadline, so stage 8 always runs", async () => {
     // The 2026-08-06 stall, in one test. Not charging the read phase to the send
     // budget is correct for §1's inequality and fatal on its own: reads plus a
