@@ -18,7 +18,8 @@ each exists:
 | `nodemailer: ^9.0.3` | **Load-bearing — see below.** Dedupes next-auth's copy onto 9. |
 | `minimatch: ^10.2.2` + `brace-expansion: ^5.0.9` | Move **together**. brace-expansion 2.x has no patched release for the ReDoS advisory, and minimatch 9 crashes at runtime with brace-expansion 5 (`brace_expansion_1.default is not a function`). Raised 5.0.8 → 5.0.9 on 2026-08-07 for CVE-2026-69152 (DoS via unbounded intermediate arrays, bypassing the earlier CVE-2026-14257 mitigation); minimatch 10 already accepts it, so this half moved alone. |
 | `postcss: ^8.5.10` | Next ships a bundled postcss; an override is the only way to pin it without downgrading Next. |
-| `js-yaml@3: 3.14.2` and `@vercel/frameworks: { js-yaml: ^3.15.0 }` | Version-scoped on purpose. The 4.x copy under ESLint is unaffected, so a blanket pin would be wrong. |
+| `js-yaml@3: ^3.15.1`, `js-yaml@4: ^4.3.1` and `@vercel/frameworks: { js-yaml: ^3.15.1 }` | Version-scoped on purpose — the tree holds a 3.x copy (under `@vercel/frameworks → @sanity/cli`) and a 4.x copy (under `@eslint/eslintrc`), and a blanket pin would drag one across a major. Both lines were raised on 2026-08-07 for CVE-2026-59870 (quadratic CPU in `!!omap` resolution). **The 4.x copy is no longer "unaffected"** — that earlier note was true only until this advisory, which patched both lines separately (3.15.1 and 4.3.1). |
+| `dompurify: ^3.4.13` | XSS via an IN_PLACE hook leaving a detached subtree executable. Blanket is right here: both copies (`isomorphic-dompurify@2.26.0` under `sanity`, `@2.36.0` under `@sanity/cli`) declare `^3.x` ranges that accept it. Added 2026-08-07. |
 | `sharp: ^0.35.0` | libvips CVEs; the vulnerable copy sits under Next. |
 | `adm-zip: ^0.6.0` | Under the Sanity CLI chain. |
 | `undici@6: ^6.28.0` and `undici@7: ^7.29.0` | Version-scoped on purpose, like `js-yaml@3` — the tree holds **two** undici majors and a blanket pin would force `@actions/http-client` (which declares `^6.23.0`) across a major. Both vulnerable copies sit under `@sanity/cli`: the 6.x line via `@sanity/template-validator → @actions/*`, the 7.x via `isomorphic-dompurify → jsdom@28`. Each replacement stays **inside** its consumer's declared range. Added 2026-08-07 for eight advisories (cookie-attribute injection, CRLF injection, retry-interceptor response desync, private-cache-directive disclosure). |
@@ -46,18 +47,21 @@ Revisit when a parent's patched release lands; drop the entry and re-run
 `@types/nodemailer` deliberately stays on `^8` — there is no v9 release. The
 mismatch is expected, not an oversight; typechecks pass.
 
-**What an override cannot reach (state at 2026-08-07).** The entries above clear
-the ten open Dependabot alerts of 2026-08-07 (eight `undici`, one
-`brace-expansion`, one `esbuild`) — the installed tree no longer contains a
-vulnerable version of any of them. `npm audit` still reports two root causes,
-both under `@sanity/cli`, neither fixable by pinning:
+**State at 2026-08-07: `npm audit` reports 0 vulnerabilities and GitHub reports
+no open Dependabot alerts.** Thirteen were closed that day — eight `undici`, one
+`brace-expansion`, one `esbuild`, two `js-yaml`, one `dompurify` — every one of
+them through this block, with no parent upgrade.
 
-- **js-yaml 3.x** (`@vercel/frameworks → @sanity/cli → sanity → next-sanity`).
-  CVE-2026-59870's fix was **not backported to 3.x**, so *every* 3.x release is
-  vulnerable and the existing `js-yaml@3` pin cannot resolve it. The four extra
-  audit lines naming `@vercel/frameworks`, `@sanity/cli`, `sanity` and
-  `next-sanity` are that one issue propagating up the chain, not four problems.
-- **dompurify ≤3.4.12** (`isomorphic-dompurify → @sanity/cli`).
+**Read an advisory's `first_patched_version`, not its title.** The js-yaml
+advisory is titled "CVE-2026-59870 fix **not backported**", which reads as "no
+patched release exists on this line". It is not what it means: both lines were
+patched separately (3.15.1 and 4.3.1), and this tree was sitting exactly one
+patch below each. `npm audit`'s vulnerable-range output (`3.0.0 - 3.15.0 ||
+4.0.0 - 4.3.0`) says so too, if read as an upper bound rather than a verdict.
+The same mistake was nearly made for `dompurify` (`<= 3.4.12`, patched 3.4.13).
+Before concluding that any advisory here is unreachable, check the patched
+version — `gh api repos/OWNER/REPO/dependabot/alerts` prints it per alert.
 
-Both need a `sanity` major (5 → 6), which is the parent upgrade this ADR rejects
-for security-patch work. Revisit with that upgrade, on its own plan.
+Four audit lines naming `@vercel/frameworks`, `@sanity/cli`, `sanity` and
+`next-sanity` were only the js-yaml issue propagating up the chain, not four
+separate problems — worth remembering when the next chain lights up.
