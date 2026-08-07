@@ -578,6 +578,12 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
     // A popover left focus somewhere sensible on its own because it sat next to
     // its trigger. A column on the far side of the grid does not: without this a
     // keyboard user restarts at the top of the page every time they close it.
+    //
+    // Focus lands on the cell's ACTION rather than the cell box (T5): the box
+    // used to be `role="button"` and answered Enter itself, and is a
+    // `role="group"` now that it holds focusable chips — so returning focus to
+    // the box would land the admin on something inert and cost them the "close,
+    // look, reopen" loop the shipped surface had.
     stubWideViewport();
     const { container } = goToGrid([]);
     const cell = container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]') as HTMLElement;
@@ -585,7 +591,8 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
     fireEvent.click(screen.getByRole("button", { name: "Cerrar" }));
 
     expect(container.querySelector("[data-candidate-picker]")).toBeNull();
-    expect(document.activeElement).toBe(cell);
+    expect(document.activeElement).toBe(cell.querySelector("[data-cell-action]"));
+    expect(cell.contains(document.activeElement)).toBe(true);
   });
 
   it("Escape closes the picker instead of the generator", () => {
@@ -808,19 +815,24 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
     expect(container.querySelector("[data-candidate-picker]")).toBeNull();
   });
 
-  it("announces aria-expanded on the active cell alone", () => {
+  it("announces aria-expanded on the active cell's action alone", () => {
     // `aria-expanded={active}` put `aria-expanded="false"` on EVERY cell — ~60
     // "collapsed" announcements on a ten-column month, on a grid whose cells are
-    // otherwise just seats.
+    // otherwise just seats. That is unchanged; what moved (T5) is WHICH element
+    // carries it. The cell is a `role="group"` now — a labelled container of
+    // controls, because it holds focusable chips — and `group` does not support
+    // `aria-expanded` in ARIA 1.2, so the property sits on the control that
+    // actually opens the picker.
     stubWideViewport();
     const { container } = goToGrid([]);
-    expect(container.querySelectorAll("[data-row-id][aria-expanded]").length).toBe(0);
+    expect(container.querySelectorAll("[aria-expanded]").length).toBe(0);
 
     fireEvent.click(container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]')!);
-    const expanded = container.querySelectorAll("[data-row-id][aria-expanded]");
+    const expanded = container.querySelectorAll("[aria-expanded]");
     expect(expanded.length).toBe(1);
     expect(expanded[0].getAttribute("aria-expanded")).toBe("true");
-    expect(expanded[0].getAttribute("data-row-id")).toBe("lead");
+    expect(expanded[0].hasAttribute("data-cell-action")).toBe(true);
+    expect(expanded[0].closest("[data-row-id]")?.getAttribute("data-row-id")).toBe("lead");
   });
 });
 

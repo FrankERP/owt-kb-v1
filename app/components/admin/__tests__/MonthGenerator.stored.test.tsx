@@ -267,6 +267,24 @@ describe("MonthGenerator — stored mode", () => {
     });
   });
 
+  it("marks the WHOLE role touched on ANY cell change, surfacing pre-existing invalid data only then", () => {
+    // A Saturday role carrying Chorus is invalid from CREATION (a Saturday has
+    // no Coro row — `hidden_saturday_chorus`, `plannerSaveModel.ts`), before any
+    // admin interaction — untouched, `invalidStoredColumns`
+    // (`MonthGenerator.tsx:1730-1731`) must stay silent about it: a legacy data
+    // error the admin never asked to fix must not nag on first paint.
+    // "Cambiar una celda" only rewrites this role's `lead` row, never its
+    // Chorus — if only ROWS were marked touched instead of the whole
+    // `columnId` (`role._id`, `storedRoleReadModel.ts:114`), this would still
+    // say nothing.
+    renderStored([role({ _type: "saturday_role" })]);
+    expect(screen.queryByText(/Corrige los datos inválidos/)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cambiar una celda" }));
+
+    expect(screen.getByText(/Corrige los datos inválidos/)).toBeTruthy();
+  });
+
   it("treats a semantically identical reorder as a no-op and sends no PATCH", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
