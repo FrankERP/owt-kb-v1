@@ -51,15 +51,24 @@ Measured on `main` today, `app/**/*.tsx` excluding `__tests__`:
 | Colour source | Count | Themeable today |
 |---|---:|---|
 | Bracketed hex (`text-[#00bfff]`) | 1,231 across 46 files | No |
-| Bare hex — inline styles, SVG attrs, runtime constants | 27 | No, and not via CSS vars either |
+| Bare hex — inline styles, SVG attrs, runtime constants | 27 | No — but reachable by CSS vars, see below |
 | Raw palette classes — `gray` 470 · `red` 189 · `amber` 88 · `yellow` 47 · `green` 44 · `orange` 20 · `purple` 14 · `blue` 9 | 881 | No |
 | `text-white` / `bg-black` etc. | 45 | No |
 | `brand-*` colour utilities | 213 | Yes |
 | **Total** | **2,397 across 64 files** | **~9% tokenised** |
 
+**The 27 bare-hex sites are not a special mechanism class.** 25 of them are SVG
+presentation attributes, inline styles and runtime constants (`icons.tsx`,
+`DayCard.tsx:33,43,53`, `ParticipationSidebar.tsx:6`, `CalendarView.tsx:193–195`), all of
+which accept `rgb(var(--x-rgb) / α)` or `currentColor` normally. Only two are genuinely
+unreachable by a CSS variable — `(client)/layout.tsx:42`'s `themeColor` string and the
+Google brand logo — and both are handled explicitly (§5). An earlier framing called the
+whole bucket unreachable, which would have led a child to build a runtime colour mechanism
+for sites that do not need one.
+
 Non-`.tsx` sources, excluded from the counts above but **included in the migration**:
 `app/components/admin/serviceCardModel.ts` carries **56 colour matches** in exported class
-strings consumed by six admin components. `app/utils/emailShell.ts` also carries colour and
+strings consumed by seven `.tsx` components. `app/utils/emailShell.ts` also carries colour and
 is **exempt by design** — the email palette is deliberately light.
 
 Of the 241 `dark:` variants across 39 files, the great majority carry a hex literal on both
@@ -166,7 +175,18 @@ static panel does not cover them.
 - `tailwind.config.ts` colour configuration, both token layers, and the typography theme.
 - `app/(admin)/layout.tsx` (§4.3).
 - `themePref` on `teamMembers`, its write route, the `/me` control, the `localStorage`
-  mirror, dynamic `viewport.themeColor`, the iOS status bar.
+  mirror, the provider's `defaultTheme` / `enableSystem` configuration (§9), the iOS status
+  bar.
+- **Theme-responsive `themeColor`, subject to invariant 17.** `(client)/layout.tsx:42` is a
+  static `themeColor: "#010b17"`. The native mechanism — `generateViewport()` reading the
+  session — **is forbidden here**: it makes the `(client)` root layout dynamic and de-ISRs
+  five statically-rendered routes. The requirement must be met **client-side**, by updating
+  the `<meta name="theme-color">` element when the theme changes. A child that cannot meet
+  it without a session read in a shared layout must leave `themeColor` static and record
+  that as a remnant, rather than trade ISR for it.
+- **`appleWebApp.statusBarStyle`**, currently the static `"black-translucent"` on both root
+  layouts (`(client)/layout.tsx:31`, `(admin)/layout.tsx:26`). It is theme-dependent on the
+  installed-PWA path and is subject to the same invariant-17 constraint as `themeColor`.
 - Verification scaffolding: colour inventory, snapshot guard, `brand.css` guard, theme
   gallery, read-only Playwright config, WCAG AA contrast gate, the colour lint rule.
 
@@ -181,7 +201,7 @@ static panel does not cover them.
 | `ios/App/App/Info.plist:57–58` (`UIStatusBarStyle` / `UIStatusBarStyleLightContent`), `android/…/values/styles.xml:7–8` | Native defaults. The iOS one is overridden **at runtime** by Child E's status-bar work; the static value stays | Documented remnants |
 | Raster brand assets — `/icons/backstage-v2-*.png`, `/LogoOasis.png` | Opaque `#010b17` tile marks, outside every glob | Decision, not omission |
 | The Google brand logo at `(client)/auth/signin/page.tsx` (`#4285F4 #34A853 #FBBC05 #EA4335`) | A third-party mark that must not be themed | Lint-exempt, with reason |
-| Building lint/test CI | `.github/workflows/` holds one cron file; no PR gate exists (CLAUDE.md mandates direct push) | Guards ride the existing `npm test` done-gate |
+| Building lint/test CI | `.github/workflows/` holds two cron files and neither has a `push` or `pull_request` trigger; no PR gate exists (CLAUDE.md mandates direct push) | Guards ride the existing `npm test` done-gate |
 
 ## 6. Invariants that must remain true
 
@@ -225,6 +245,15 @@ and currently green:
     `app/utils/routeMatcher.ts` and the two stay byte-identical.
 16. **Light mode ships for the whole app or not at all** (§4.1). Staging is on the default,
     never on the surface.
+17. **ISR must survive this delivery.** Nine `(client)` pages export `revalidate` —
+    `page.tsx:69`, `schedule/page.tsx:14`, `posts/[slug]/page.tsx:120`, `tag/page.tsx:27`,
+    `tag/[slug]/page.tsx:34`, `author/page.tsx:21`, `author/[slug]/page.tsx:21`,
+    `me/page.tsx:24`, `me/propose/[roleId]/page.tsx:8`. **`app/(client)/layout.tsx` reads no
+    session, cookies or headers today** (verified), which is what keeps `/`, `/schedule`,
+    `/posts/[slug]`, `/tag` and `/author` statically rendered. **No part of this delivery may
+    introduce a session, cookie or header read into a shared layout**, because that opts the
+    whole segment into dynamic rendering. CLAUDE.md makes ISR load-bearing, and ADR-0007
+    forbids exactly this. See the constraint on `themeColor` in §5.
 
 ## 7. Decisions
 
@@ -344,7 +373,7 @@ reasons.
   parity* — every **colour** `:root` custom property has a `.light` counterpart or sits on a
   reviewed theme-invariant allowlist. Parity is scoped to **colour** properties: four of the
   11 `:root` properties are non-colour (`--brand-radius-panel`, `--brand-radius-control`, two
-  `--brand-duration-*`, `brand.css:9–12`), and an unscoped parity assertion would demand a
+  `--brand-duration-*`, `brand.css:10–13` — note `:9` is `--brand-steel`, a colour), and an unscoped parity assertion would demand a
   nonsense `.light --brand-radius-panel`. Child A owns (a); (b) self-activates in Child D.
 - **The declaration set is a union.** `tailwind.config.ts:15–21` declares seven `brand.*`
   keys as `rgb(var(--brand-<name>) / <alpha-value>)` — the same variables `brand.css` uses,
@@ -365,8 +394,15 @@ reasons.
   `theme.typography` *replaces* the plugin stylesheet; v23 measured the compiled prose CSS
   collapsing from ~36.8 KB to ~187 bytes with zero `prose-sm` rules. `/posts/[slug]` uses
   `prose prose-sm sm:prose`, so song lyrics would render unstyled, silently.
-- **`--tw-prose-body: var(--ink)`, not `rgb(var(--ink))`** — the latter expands to
-  `rgb(rgb(…))`, is not a valid `<color>`, and is dropped.
+- **The prose mapping must match the token storage convention, and the convention decides
+  which form is correct.** D3 stores base roles as **triplets** (`--ink-rgb: 215 231 246`),
+  consumed as `rgb(var(--ink-rgb) / <alpha-value>)` — the convention `brand.css` already
+  uses. Under that convention the correct mapping is **`--tw-prose-body:
+  rgb(var(--ink-rgb))`**, and `var(--ink)` is what gets dropped unless a full-colour alias
+  `--ink` is also declared. v23 prescribed the opposite pairing, which is right only if the
+  bare name holds a complete colour function. **Child A must state the convention once, and
+  Child B must map prose to whichever form that convention makes valid** — getting it
+  backwards reintroduces the unstyled-lyrics regression with no build or lint signal.
 - **The obvious prose assertion is vacuous.** "The compiled prose block contains no `gray-`
   literal" can never fail: Tailwind resolves `theme(colors.gray[700])` to `#374151` at build
   time. A `#rrggbb`-only pattern is equally vacuous — typography emits five 3-digit `#fff`
@@ -388,9 +424,21 @@ reasons.
   is also why `brand.css` needs a class-keyed `color-scheme` branch, since the gallery
   removes the inline `documentElement.style.colorScheme` that currently masks the dark-only
   declaration.
-- **`useTheme().theme` returns `"dark"` for an unset member**, since next-themes seeds from
-  `localStorage.getItem(key) || defaultTheme`. The `/me` control must bind to the **server**
-  `themePref` (invariant 14).
+- **The provider's unset default is `"light"` today, not `"dark"` — removing `forcedTheme`
+  alone ships the inverse of D4 and D8.** next-themes 0.4.6 resolves
+  `defaultTheme = enableSystem ? "system" : "light"`, and
+  [`Provider.tsx:16`](../../../app/utils/Provider.tsx) passes `enableSystem={false}` with
+  **no `defaultTheme`**. Seeding is `localStorage.getItem(key) || defaultTheme`, so an unset
+  member resolves to **`"light"`**. Child E must therefore add an explicit
+  **`defaultTheme="dark"`**; "remove one line" is not the change. The derived requirement
+  that the `/me` control binds to the **server** `themePref` (invariant 14) still holds —
+  but it holds because the client seed is not the source of truth, not because that seed is
+  `"dark"`.
+- **`enableSystem={false}` blocks Child F's outcome, and fails silently.** With it false,
+  `themes` is `["light","dark"]` and `"system"` is never offered; applying `"system"` anyway
+  runs `classList.add("system")` after stripping `light`/`dark`, leaving **no theme class at
+  all** and no error. Child F must flip `enableSystem` to `true` as part of moving the
+  default to Follow System — it is not a cosmetic label change.
 - **`setTheme` has no falsy guard** — `setTheme(undefined)` writes the string `"undefined"`
   and `classList.add("undefined")` sticks permanently.
 - **`ios/App/App/Info.plist:59–60`** already sets `UIViewControllerBasedStatusBarAppearance`
@@ -434,7 +482,7 @@ Every requirement has exactly one primary owner. Cross-cutting verification is m
 | Token layer in `brand.css` + `tailwind.config.ts` | B | — |
 | Hex + `brand-*` → tokens, whole surface | B | — |
 | `serviceCardModel.ts` (non-JSX) migration | B | — |
-| `(admin)/layout.tsx` token migration | B | D makes it follow the theme |
+| `(admin)/layout.tsx` token migration | B | D authors its light values; it can only *follow* the theme at E, when `forcedTheme` goes |
 | 33 `.brand-*` rule bodies off retired variables | B | — |
 | Typography theme + `dark:prose-invert` removal | B | E verifies on device |
 | Computed-colour equality per migrated site | B | — |
@@ -449,8 +497,11 @@ Every requirement has exactly one primary owner. Cross-cutting verification is m
 | `GET /api/me` projection + write route (D15) | E | — |
 | `/me` control bound to server `themePref` | E | — |
 | `localStorage` mirror, sign-out, impersonation isolation | E | — |
-| Remove `forcedTheme`; dynamic `themeColor`; iOS status bar (A6) | E | — |
+| Remove `forcedTheme` **and add `defaultTheme="dark"`** (§9) | **E** | F depends on it |
+| Theme-responsive `themeColor` + `statusBarStyle`, **client-side only** (invariant 17) | **E** | — |
+| iOS status bar (A6) | E | — |
 | Unset stays distinguishable (invariant 14) | E | F depends on it |
+| **Flip `enableSystem` to `true`** (§9) | **F** | — |
 | Default → Follow System; Spanish announcement | F | — |
 | ADR-0008 superseded | F | — |
 | `docs/SECRETS.md` entry for the gallery flag | A | — |
