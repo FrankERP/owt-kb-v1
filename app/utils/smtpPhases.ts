@@ -78,6 +78,19 @@ function mayReceiveData(recipient: string, sendingMailbox: string): boolean {
   return recipient.trim().toLowerCase() === sendingMailbox.trim().toLowerCase();
 }
 
+/**
+ * What may be placed inside an SMTP command. Deliberately NOT a complete address
+ * grammar — the job is not to accept every legal mailbox, it is to guarantee that
+ * nothing reaching the wire can terminate a command. No whitespace of any kind
+ * (which excludes CR and LF), no angle brackets, no comma or semicolon.
+ *
+ * Address validation belongs at the boundary because the injection is a property
+ * of the TRANSPORT, not of any one caller: every command this file writes is
+ * newline-terminated, so an address carrying `\r\n` stops being data and becomes
+ * the next command.
+ */
+const SAFE_ADDRESS = /^[^\s<>@,;:"\\]+@[A-Za-z0-9.-]+$/;
+
 /** A probe message: unmistakable in an inbox, padded to a requested size. */
 function probeMessage(from: string, to: string, bodyBytes: number): string {
   const filler = "X".repeat(Math.max(0, bodyBytes));
@@ -194,8 +207,8 @@ function converse(
         // The measurement this file exists for. Anything the server does to
         // verify the recipient — including a callout to their MTA — is paid here.
         const rcptTo = await step("rcptToMs", `RCPT TO:<${recipient}>`);
-        // A refusal is still a timing, and still worth reporting.
-        codes[codes.length - 1] = rcptTo.slice(0, 3);
+        // A refusal is still a timing and still worth reporting, so this is
+        // deliberately not thrown on. `step` has already recorded the code.
 
         if (sendData) {
           const ready = await step("dataInitMs", "DATA");
@@ -246,6 +259,21 @@ export async function probeSmtpPhases(
   if (!host || !user || !pass || !from) return { status: "unconfigured" };
 
   const to = recipient?.trim() || user;
+  // BEFORE the DATA guard and before any socket, because this address is
+  // interpolated into an SMTP command and SMTP commands are newline-terminated.
+  // `trim()` removes surrounding whitespace only, so an interior CRLF survives
+  // it and ends the RCPT TO line early — everything after becomes commands the
+  // server executes. That is a full bypass of `mayReceiveData`: the DATA guard
+  // is gated on `opts.sendData`, so on the ordinary timing path the recipient
+  // was previously not validated at all, and an injected `DATA` sent real mail
+  // to an arbitrary address, authenticated as our own mailbox.
+  if (!SAFE_ADDRESS.test(to)) {
+    return {
+      status: "failed",
+      recipient: to,
+      error: "recipient is not a plain address; refusing to place it in an SMTP command",
+    };
+  }
   if (opts.sendData && !mayReceiveData(to, user)) {
     return {
       status: "failed",
