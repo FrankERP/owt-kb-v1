@@ -37,12 +37,12 @@ Every row was verified against the working tree during Child A's six review roun
 | Evidence | Planning implication |
 |---|---|
 | No colour inventory exists; every count in v23 and the parent is a hand-count, and three successive hand-counts each understated the surface | Step 1 is the first deliverable; everything downstream is written against its output |
-| `app/brand.css` is outside **lint** — `eslint.config.mjs` loads no CSS processor and `npx eslint app/brand.css` reports 0 errors — but it is **not ungated**: `app/components/admin/__tests__/participationAlongside.test.tsx:954` does `read("app/brand.css")` and five `it()` blocks assert against its contents, pinning `.brand-admin-frame` (`:990`), `.brand-admin-shell` (`:1016`) and `[data-route-main]:has(.planner-wide)` (`:1003`) | Step 4's guard is the only enforcement of **token/theme structure**, not the only enforcement of the file. **Two classes the inventory dispositions are already pinned by an existing test with a CLAUDE.md-documented rationale** — Children B and D must not assume `brand.css` is unguarded |
+| `app/brand.css` is outside **lint** — `eslint.config.mjs` loads no CSS processor and `npx eslint app/brand.css` reports 0 errors — but it is **not ungated**: `app/components/admin/__tests__/participationAlongside.test.tsx:954` does `read("app/brand.css")` and several `it()` blocks in that `describe` assert against its contents, pinning `.brand-admin-frame` (`:992`), `[data-route-main]:has(.planner-wide)` (`:1003`) and `.brand-admin-shell` (`:1015`) | Step 4's guard is the only enforcement of **token/theme structure**, not the only enforcement of the file. **Two classes the inventory dispositions are already pinned by an existing test with a CLAUDE.md-documented rationale** — Children B and D must not assume `brand.css` is unguarded |
 | An undeclared `var()` is invalid at computed-value time and the declaration is **dropped** | The `brand.css` failure mode is silent: the body wash and every inset highlight simply vanish |
 | `vitest.config.ts:15` includes only `app/**`, `scripts/**`, `e2e/**` | A guard outside those roots never matches and never runs — a silent no-op, not a failure |
 | `brand.css` has 11 `:root` properties: `:9` `--brand-steel` is a **colour**, `:10–13` are the four non-colour ones (`--brand-radius-panel`, `--brand-radius-control`, two `--brand-duration-*`) | The theme-parity assertion must be **colour-scoped**, and an allowlist built from the wrong line range would exempt a colour |
-| `brand.css` declares **17** `.brand-*` classes across **33** selector occurrences (35 textual matches minus two comment mentions at `:265,269`) | Any scan must not be line-anchored and must not count comments |
-| **Two** classes are colour-free: `.brand-admin-frame` (`brand.css:308–312`, indented inside `@media (min-width: 1280px)` opening at `:296`) and `.brand-admin-workspace` (`:332–334`, `min-width: 0`) | `^\.brand-` misses the first, which is why the class count is 17 not 16. Neither needs a light counterpart, so **Child D's set is 15** |
+| `brand.css` declares `.brand-*` classes across multiple selector occurrences, and two textual matches (`:265,269`) are inside comments | Any scan must strip comments and must not be line-anchored. **Exact totals are the generated inventory's to state**, not this table's — every hand-count in this plan's history has been wrong at least once |
+| **Two** classes are colour-free: `.brand-admin-frame` (`brand.css:308–312`, indented inside `@media (min-width: 1280px)` opening at `:296`) and `.brand-admin-workspace` (`:332–334`, `min-width: 0`) | `^\.brand-` misses the first, which is why a line-anchored scan under-counts. **Neither needs a light counterpart, so the parent's "17 light counterparts" is too high** — the exact figure comes from the generated `brand-class` rows, not from this table |
 | `brand.css`'s `:root` colour values are **bare RGB triplets** (`--brand-blackout: 1 11 23`) | They match none of the obvious literal categories; the inventory omits them unless a triplet category exists |
 | The only undeclared `var()` references anywhere in `app/**` + `tailwind.config.ts` are `--font-display` / `--font-body` / `--font-label` (`tailwind.config.ts:25–27`), emitted at runtime by `next/font` | An unscoped reference assertion goes red on day one |
 | Exactly two **colour** `var(--brand-*)` references live outside `brand.css`/`tailwind.config.ts`: `AdminPanel.tsx:399` (`--brand-beam`) and `(client)/admin/page.tsx:37` (`--brand-signal`) | Both name variables Child B retires; a file-scoped reference set cannot see them |
@@ -96,7 +96,7 @@ All 19 parent invariants. The three this plan can plausibly break:
 | `app/brand.css` | Dark-only tokens + 17 compositing classes | Gains `.light { color-scheme: light }` **after** `:root`. No other change |
 | `app/components/admin/__tests__/participationAlongside.test.tsx` | **Existing** `brand.css` gate — pins `.brand-admin-frame`, `.brand-admin-shell` and the width derivation | **Read, not modified.** Named so Children B and D know `brand.css` already has assertions with a CLAUDE.md-documented rationale |
 | `app/utils/protectedReadAudit.ts` | Exports `stripComments` (`:415`); enforcement for service-readiness protected reads | **Possibly modified** — if `stripComments` is extracted to a shared `.mjs`, this file imports it instead. `stripComments` also has an **in-module** caller at `protectedReadAudit.ts:780`, so any extraction must keep it re-exported from that module or `protectedReadAudit.test.ts:28` breaks. The module's only external importer is that test, so the blast radius is contained and test-covered |
-| `docs/superpowers/specs/2026-08-07-light-mode-member-first-scope.md` | Approved parent | **Modified** — status-line item count (nine → ten) and the §9 declaration-set correction, both disclosed post-approval |
+| `docs/superpowers/specs/2026-08-07-light-mode-member-first-scope.md` | Approved parent | **Modified**, both disclosed post-approval: the status-line item count (nine → **eleven**, adding §8.1a's split record and the §9 correction), and §9's declaration-set / `brand.css`-is-ungated corrections |
 | `docs/UTILITIES_AND_COMPONENTS.md` | Current record | Lists the new script and two guards |
 
 **Trust boundary: untouched.** No route, no handler, no session read, no data access, no
@@ -132,22 +132,42 @@ network. The only runtime artifact is one CSS declaration that nothing currently
   a migration target, and it sits on `<body>` in **both** root layouts
   (`(admin)/layout.tsx:42`, `(client)/layout.tsx:58`; the `<body>` opens at `:56` and `selection:bg-brand-beam/35` is at `:61`) — stripping it removes the app's entire
   body wash. This is the trap parent §9 names verbatim.
-  **Disposition for this category is a rule the script applies. This plan pre-bakes no
-  counts** — restating figures here is how the hand-count survives the tool meant to end it.
-  - a class whose rule bodies contain **no colour** → `exempt`, with the reason;
-  - a **rule body** containing colour → `B`, which rewrites it off the retired variables;
-  - a class **needing a light counterpart** → `D`.
+  **Category 13 emits two row kinds, because one key cannot carry both dispositions.** A
+  class-level key cannot say which of a class's rule bodies contains colour, and a body-level
+  key cannot say which class needs a light counterpart. So:
+  - **`brand-class` rows** — one per class, keyed **file + class + occurrence kind + occurrence
+    count**. Disposition `D` (needs a light counterpart) or `exempt` (no colour anywhere).
+  - **`brand-rule-body` rows** — one per rule body whose selector names a `.brand-*` class,
+    keyed **class(es) + body ordinal within the file**. Disposition `B` (contains colour, so
+    Child B rewrites it off the retired variables) or `exempt` (contains none).
+  - **`className` occurrences of a compositing class are dispositioned `keep`** — never
+    migrated, never removed, never rewritten. This is the row that protects `brand-atmosphere`
+    on both root layouts, and it is a disposition rather than an absence so that a reviewer can
+    see it was decided.
 
-  Two facts an implementer must not carry over from the parent, both measured on this tree:
-  - **There are two colour-free classes, not one.** `.brand-admin-frame`
-    (`brand.css:308–312`: `max-width` + two paddings) **and** `.brand-admin-workspace`
-    (`brand.css:332–334`: `min-width: 0`, used identically at `AdminPanel.tsx:634,647,657,664,671,680`).
-    Both are `exempt`. **So Child D's light-counterpart set is 15, not 17** — the parent's §5,
-    §8 and §12 all say 17, and A2's `swatches` fixture excludes only `.brand-admin-frame`.
-    All four are corrected from the generated inventory, not from this sentence.
-  - **33 counts selector *occurrences*; rule *bodies* are 32.** `brand.css:172` and `:173`
-    share one body at `:174–177`. Emit both figures separately — Child B rewrites bodies,
-    Child D reasons about classes, and one conflated number mis-sizes both.
+  **The disposition domain is therefore `B`, `C`, `D`, `keep`, `exempt`** — five values, not
+  three. Any earlier three-value statement in this plan is superseded by this list.
+
+  **Each child consumes the rows dispositioned TO it — never "everything minus `exempt`".**
+  That blacklist framing fails open: a row nobody thought to exempt lands in Child B's mapping
+  table by default, which is precisely how `brand-atmosphere`'s `className` occurrences would
+  have become migration targets and stripped the app's body wash. A whitelist fails closed, and
+  an unrecognised disposition is an error rather than a silent inclusion.
+
+  **This plan pre-bakes no counts.** Restating figures is how a hand-count survives the tool
+  built to end it, and this plan has already shipped two wrong ones. Two facts are recorded
+  only as things an implementer must not carry over **from the parent**, to be replaced by
+  generated output:
+  - **The parent's "17 light counterparts" is too high.** More than one class is colour-free —
+    `.brand-admin-frame` (`brand.css:308–312`) and `.brand-admin-workspace` (`:332–334`) both
+    are. The parent's §5, §8 and §12 all say 17, and A2's `swatches` fixture excludes only the
+    first. **All four are corrected from the generated `brand-class` rows, not from a number in
+    this sentence.**
+  - **Selector occurrences, rule bodies and classes are three different counts, and several
+    rule bodies are colour-free even where their class is not** — `.brand-navbar`'s body at
+    `brand.css:34–36` carries no colour while `:38–50` does. That is exactly why the two row
+    kinds exist: a class-level disposition cannot express it, and Child B sized by a class
+    count would be sized wrong.
 
   **If the generated output disagrees with any figure above, the output wins.** Do not narrow
   the rule until the count matches a number in a document.
@@ -160,7 +180,9 @@ network. The only runtime artifact is one CSS declaration that nothing currently
   live theming affordances — `app/(client)/globals.css` carries
   `-webkit-tap-highlight-color: transparent`, and the parent's §3 names `currentColor` as the
   intended mechanism for SVG fills. A scan that misses them under-reports the surface Child B
-  must reason about.
+  must reason about. **Their disposition is `keep`** — `bg-transparent`
+  (`serviceCardModel.ts:655`) and `currentColor` are already theme-agnostic, so they are
+  recorded and left alone rather than migrated.
 - **Three scanning rules, each of which has already caused a wrong count:**
   1. **Case-insensitive** — both `#010B17` and `#010b17` occur.
   2. **Never line-anchored** — `.brand-admin-frame` is indented and nested at `brand.css:308`;
@@ -168,9 +190,11 @@ network. The only runtime artifact is one CSS declaration that nothing currently
   3. **Strip comments** — `PlannerGrid.tsx:1497` names `#010b17` in prose. Reuse
      `stripComments` (`app/utils/protectedReadAudit.ts:415`) per parent §9. **Friction to
      resolve, not ignore:** the scanner is `.mjs` and `stripComments` is a `.ts` export, so a
-     plain-node import is not direct. Either run the scanner through the TS pipeline, extract
-     the helper to a shared `.mjs`, or record explicitly why a second implementation was
-     unavoidable. Do not silently write a second one.
+     plain-node import is not direct. **The precedent already exists in-tree:**
+     `app/utils/__tests__/protectedReadAudit.test.ts:31` imports a `scripts/**/*.mjs` module
+     from a `.ts` test and `tsc --noEmit` is green. Extract `stripComments` to a shared `.mjs`
+     and re-export it from `protectedReadAudit.ts` (which has an in-module caller at `:780`),
+     rather than writing a second implementation.
      **Grammar caveat, recorded:** `stripComments` implements a **JS/TS** comment grammar and
      the glob includes `.css`. `//` is not a CSS comment, so a future `url(https://…)` in a CSS
      file would be blanked to end-of-line. Verified safe today — `brand.css` and both
@@ -273,8 +297,11 @@ network. The only runtime artifact is one CSS declaration that nothing currently
 
 ### 4. The `brand.css` guard — two assertions, one dormant
 
-- **Purpose:** `brand.css` is the token file and sits outside every existing gate. Its failure
-  mode is silent deletion of the body wash and every inset highlight.
+- **Purpose:** `brand.css` is the token file. It is outside **lint** — no CSS processor — but
+  it is **not ungated**: `participationAlongside.test.tsx:954` reads it and asserts on
+  `.brand-admin-frame`, `.brand-admin-shell` and `[data-route-main]:has(.planner-wide)`. What
+  has **no** enforcement is its **token/theme structure**, and that is what this guard adds.
+  The failure mode it closes is silent deletion of the body wash and every inset highlight.
 - **(a) Reference integrity — ACTIVE NOW.** Every **colour** `var(--x)` referenced is declared.
   - **Reference set spans the inventory's glob** — `app/**/*.{tsx,ts,mjs,css}` **minus
     `__tests__`**, plus `tailwind.config.ts`. The exclusion is load-bearing here: without it the
@@ -373,7 +400,7 @@ network. The only runtime artifact is one CSS declaration that nothing currently
 | Snapshot is not line-keyed | An unrelated whitespace commit in a colour-bearing file leaves `npm test` green | The false-red that gets the guard deleted |
 | Glob covers `.ts` | `serviceCardModel.ts` contributes its 56 matches | The `.tsx`-only glob trap |
 | Scan is not line-anchored | `.brand-admin-frame` appears as an **`exempt`** row of the thirteenth category, and the class count is **17 / 33 occurrences**, not 16 | The line-anchored trap — and the 17/33 figures staying a hand-count |
-| No loose `brand-` match | `brand-atmosphere` produces **no category-10 row** (it is not a retired colour key) and **no `className` occurrence dispositioned as a removable utility**. Its **rule body** (`brand.css:16–26`, seven `rgb(var(--brand-*))` declarations) *is* dispositioned `B` — the body-wash rules must be rewritten off the retired variables, which is what parent §12 assigns to B | Stripping `brand-atmosphere` off both root layouts as if it were a retired utility |
+| No loose `brand-` match | `brand-atmosphere` produces **no category-10 row** (it is not a retired colour key) and **no `className` occurrence dispositioned as a removable utility**. Its **rule bodies** (`brand.css:16–26`) contain colour, so they *are* dispositioned `B` — the body-wash rules must be rewritten off the retired variables, which is what parent §12 assigns to B | Stripping `brand-atmosphere` off both root layouts as if it were a retired utility |
 | Comments are stripped | `PlannerGrid.tsx:1497` does **not** appear; `:1499` does | An invented colour decision |
 | Triplets are captured | The seven `:root` colour values appear | The token file omitting itself from its own inventory |
 | Pairs are emitted | `DayCard.tsx:37`'s `border-[#78350f] dark:border-[#f59e0b]` appears as two distinguishable rows **and** a recorded pair | A2's AA-gate input having no producer, and Child B being unable to map a literal to a composed token |
@@ -439,7 +466,7 @@ network. The only runtime artifact is one CSS declaration that nothing currently
   `.light` branch A2's provider-less gallery needs.
 - **Outputs promised:** **A2** consumes `.light { color-scheme }`, the vocabulary, **and the inventory's same-element pair relation**, which its AA-gate step derives the dark composited failing set from.
   **Child B** consumes the inventory **minus its `exempt` rows** as its mapping table, and the
-  vocabulary as its target. **Child C** consumes the per-family analysis.
+  vocabulary as its target. **Child C** consumes the per-family analysis and its `C` rows. **Child D** consumes the `brand-class` rows dispositioned `D` — which is what supersedes the parent's 17.
 - **Adversarial review order:** this plan (**Standard** — one fresh cold `APPROVED`), then A2,
   then Child B.
 - **Implementation authorization: not granted by this plan.**
