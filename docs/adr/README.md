@@ -54,3 +54,5 @@ wrote down why — a known gap, not a guess).
 | [0011](0011-serialize-special-identities-globally.md) | Serialize special-service identities with one global coordinator | Accepted |
 | [0012](0012-grid-drag-excludes-swap-touch-and-auto-scroll.md) | Grid drag moves one seat, desktop only, with no auto-scroll | Accepted |
 | [0013](0013-smtp-sends-stay-serial.md) | SMTP sends stay serial, and the recipient cap sits below the seat count | Accepted |
+- [ADR-0014: Two Playwright configs](0014-two-playwright-configs.md) — why the write-safety harness is not reused for visual regression
+- [ADR-0015: A third root layout, at a dynamic segment](0015-gallery-root-layout.md) — why the theme gallery's layout cannot be moved upward
