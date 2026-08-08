@@ -335,6 +335,29 @@ Here the vocabulary is an **output of Child A with acceptance criteria**, not an
   reading the config.
 - It is reviewed as a Child A artifact before any file changes.
 
+### 8.1a Child A was split into A1 and A2
+
+Recorded 2026-08-08, **after** this document's re-approval, so it is a disclosed
+post-approval change like the nine before it.
+
+Child A went through six adversarial rounds without approval. The finding that ended the loop
+was a *composition* failure — the theme gallery's three intended fixtures (the swatch
+inventory, an open `CueDialog`, and `PlannerGrid` in full screen) occlude and inert one
+another, and no stated assertion could see it. That is the signature of one artifact carrying
+two separable outcomes, so it was split:
+
+- **[A1 — measurement](../plans/2026-08-08-light-mode-A1-measurement.md):** the colour
+  inventory and its guard, the reconciliation, the palette-family analysis and token
+  vocabulary, both `brand.css` guards, and `.light { color-scheme }`. **No route**, which is
+  what keeps the trust boundary out of measurement work.
+- **[A2 — rendering](../plans/2026-08-08-light-mode-A2-rendering.md):** the gated gallery route
+  and its composition (one fixture per route), fixture hosting, the read-only VR harness and
+  its credential question, the `redesign/explore` polarity review, and this document's AA-gate
+  inputs.
+
+**Every "A" row in §12 and every "A" in the sequencing diagram below should be read as "A1
+and/or A2".** The split was verified to drop none of them.
+
 ### 8.2 Sequencing and prerequisites
 
 ```
