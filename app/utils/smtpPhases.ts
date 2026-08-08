@@ -206,9 +206,11 @@ function converse(
 
         // The measurement this file exists for. Anything the server does to
         // verify the recipient — including a callout to their MTA — is paid here.
-        const rcptTo = await step("rcptToMs", `RCPT TO:<${recipient}>`);
-        // A refusal is still a timing and still worth reporting, so this is
-        // deliberately not thrown on. `step` has already recorded the code.
+        // Deliberately not checked: a REFUSAL is still a timing, and the timing
+        // is the point. `step` has already recorded both the duration and the
+        // reply code, so a `550 no such user` reports as a fast rcptTo rather
+        // than aborting the run — which is exactly what a diagnostic should do.
+        await step("rcptToMs", `RCPT TO:<${recipient}>`);
 
         if (sendData) {
           const ready = await step("dataInitMs", "DATA");
