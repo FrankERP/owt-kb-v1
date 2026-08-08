@@ -468,11 +468,24 @@ scope and the un-enforced lint boundary named explicitly (§11).
 
 This artifact is self-contained and has no unresolved blocking unknowns.
 
-**Risk tier: Critical.** It governs a schema/data migration (`themePref` on `teamMembers`),
-a production write route, an auth/trust boundary (a new unauthenticated route, gated by
-`routeMatcher.test.ts`), and an irreversible remote release action (Studio schema deploy).
-Per CLAUDE.md this requires **two sequential fresh `APPROVED` verdicts on byte-identical
-text**, reviewers run one at a time, never exposed to prior findings.
+**Risk tier: Standard — one fresh cold `APPROVED`.**
+
+CLAUDE.md holds that parent roadmaps stay standard *unless they directly own a critical
+contract*. This document owns none: it states requirements and assigns them. The critical
+contracts are specified by children, and those children carry the critical tier:
+
+- **Child A — Critical.** It opens a new unauthenticated route (the theme gallery) behind
+  the `auth` matcher exclusion, changing an auth/trust boundary that
+  `routeMatcher.test.ts:52` exists to gate.
+- **Child E — Critical.** Schema/data migration (`themePref` on `teamMembers`), a
+  production write route, and an irreversible remote release action (Studio schema deploy).
+- **Children B, C, D, F — Standard.** Large and mechanical, but they change no
+  writer, trust boundary, migration, or remote release contract.
+
+The heaviest single item — Child B's ~1,000-site codemod — is *large*, not *critical*: it
+is reversible by tag, gated by computed-colour equality, and touches no trust boundary.
+Sizing it as critical would spend the scarce review budget on the phase least likely to
+lose data.
 
 **Child review order:** this parent first. Children are written only after it is approved,
 then reviewed in dependency order A → B → C → D → E → F.
