@@ -1,7 +1,7 @@
 # Scope spec: Light mode via role-based design tokens
 
 **Date:** 2026-08-07
-**Status:** Draft — not approved, not authorization to implement
+**Status:** APPROVED at digest `4fbc41c4c1bed034b16547d343c24948a9ac639ecd0c4282460e7f25193a8140` (round 4, commit `477399c`) — see the review log beside this file. **Approval authorizes writing the child plans, not implementing them.**
 **Artifact level:** Parent scope spec. Defines *what must be true*. Child implementation
 plans are written only after this document is approved.
 **Supersedes as the scoping authority:** `2026-07-29-light-mode-role-tokens-design.md`
