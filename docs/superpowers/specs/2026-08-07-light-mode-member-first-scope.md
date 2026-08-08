@@ -170,7 +170,7 @@ static panel does not cover them.
 - All 64 colour-bearing `.tsx` files and their 2,397 decisions.
 - `app/components/admin/serviceCardModel.ts` (56 decisions, non-JSX, strings feed
   `className`).
-- `app/brand.css` in full: the token layer, the `.light` branch, all **17** `.brand-*`
+- `app/brand.css` in full: the token layer, the `.light` branch, all **17** `.brand-*` (of which **15 need light counterparts** — generated; see below)
   compositing classes (**33** selector occurrences including pseudo-elements and states)
   and their light counterparts.
 - `tailwind.config.ts` colour configuration, both token layers, and the typography theme.
@@ -295,7 +295,7 @@ are **not** split because the document was long.
 | **A — Verification scaffolding** | Inventory, guards, gallery, VR harness exist. | No user-visible change. Dark-only, unchanged. The gallery is a **gated** route, reachable in production by any signed-in member — accepted (§8.4). | Revert; nothing user-facing moved. | Standard |
 | **B — Token layer + hex/`brand-*` migration** | All hex and `brand-*` utilities resolve through tokens. Dark values byte-identical. | Dark-only, visually identical except the enumerated normalisations. | Atomic. Tag before; a half-migrated token layer compiles and renders wrong. | Standard |
 | **C — Palette families** | The 881 raw palette classes and 45 `white`/`black` resolve through roles. | Dark-only, per-family visual deltas enumerated and reviewed. | Per colour family; each independently revertible. | Standard |
-| **D — Light counterpart design** | `.light` carries a designed counterpart for every token and all 17 `.brand-*` classes. Acceptance includes an **open `CueDialog`** and **`PlannerGrid` full-screen** (§4.4). | Light values exist but are **unreachable** — `forcedTheme="dark"` still in force. | Atomic. Tag before; the `brand.css` guard demands a full counterpart set. | Standard |
+| **D — Light counterpart design** | `.light` carries a designed counterpart for every token and the **15** `.brand-*` classes that carry colour (of 17 — generated). Acceptance includes an **open `CueDialog`** and **`PlannerGrid` full-screen** (§4.4). | Light values exist but are **unreachable** — `forcedTheme="dark"` still in force. | Atomic. Tag before; the `brand.css` guard demands a full counterpart set. | Standard |
 | **E — The setting** | `themePref`, `/me` control, mirror, `forcedTheme` removed, `themeColor`, iOS status bar. | Light mode reachable. Unset → Dark. | Re-add `forcedTheme="dark"`: one line, instant. | **Critical** |
 | **F — Staged rollout** | Default moves unset → Follow System; Spanish announcement; ADR-0008 superseded. | Members on system preference. | Revert the default constant. | Standard |
 
@@ -463,11 +463,14 @@ reasons.
   **key**, not a `var()`, so no `var()`-integrity guard covers it — that failure is Child B's
   to guard, since B is the change that removes the key.
 - **`brand-` means two things and only one is retired.** The 213 colour utilities are
-  retired; the **17 `.brand-<component>` compositing classes** are kept and given light
-  counterparts in Child D. A regex on `brand-` strips `brand-atmosphere` off both root
+  retired; the **17 `.brand-<component>` compositing classes** are kept, and the **15 of them
+  that carry colour** are given light counterparts in Child D. **Corrected 2026-08-08
+  (disclosed post-approval):** `.brand-admin-frame` and `.brand-admin-workspace` declare no
+  colour in any rule body, so neither needs one. The figure is A1's generated
+  `lightCounterpartClasses`, not a hand-count. A regex on `brand-` strips `brand-atmosphere` off both root
   layouts' `<body>`.
 - **Scans must not be line-anchored, and must not stop at `.tsx`.** `brand-admin-frame`
-  (`brand.css:308`) is indented and nested, so `^\.brand-` misses it — that is why the class
+  (`brand.css:322`, post-A1) is indented and nested, so `^\.brand-` misses it — that is why the class
   count is 17, not 16. `serviceCardModel.ts` holds 56 colour decisions in a `.ts` file. Both
   are inventory-glob failures, not judgement calls.
 - **`vitest.config.ts:15` includes only `app/**`, `scripts/**`, `e2e/**`.** A guard placed
@@ -581,7 +584,7 @@ Every requirement has exactly one primary owner. Cross-cutting verification is m
 | Raw palette + `white`/`black` → roles | C | — |
 | Colour lint rule, staged per family, with its `ignores` list | C | B lands the first clauses |
 | `.light` values for all colour tokens | D | — |
-| Light counterparts for 17 `.brand-*` classes | D | — |
+| Light counterparts for the **15** colour-carrying `.brand-*` classes (of 17 — generated) | D | — |
 | Distinct light accent value (A5) | D | AA matrix |
 | WCAG AA matrix, both themes | D | integration acceptance |
 | Open-dialog and full-screen-planner rendering, both themes | D | E on device |
