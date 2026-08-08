@@ -1,9 +1,14 @@
 # The operator's answer to "is the mail path healthy, and where does the time go?"
 #
 # MANUAL ONLY — no `schedule:`. This is a diagnostic you reach for when the outbox
-# looks wrong, not a thing that runs on its own. It calls a route that connects,
-# greets, authenticates and quits: NO MAIL IS SENT, no notice is claimed, no
-# member is contacted. That is what makes it safe to point at production.
+# looks wrong, not a thing that runs on its own. By default it connects, greets,
+# authenticates, asks about a recipient and quits: NO MAIL IS SENT, no notice is
+# claimed, no member is contacted. That is what makes it safe against production.
+#
+# The ONE exception is `data: 1`, which submits a real message so that content-
+# scanning time can be measured rather than inferred. It is refused for every
+# recipient except our own sending mailbox, in the route AND before a socket is
+# opened, so it can never become a way to mail a member from a URL.
 #
 # It exists because reachability from a laptop proves nothing. On 2026-08-06 the
 # outbox stalled on SMTP sends that never completed, while the same server
@@ -39,6 +44,22 @@ on:
         description: "Readings to take (1-5). More than one so a figure has variance behind it."
         required: false
         default: "3"
+      data:
+        description: >-
+          Set to 1 to actually submit a message and time DATA — the only option
+          here that sends anything. It is refused for every recipient except our
+          own sending mailbox, so leave `to` blank when using it. This is what
+          measures content-scanning time, which is the one phase a stop-before-
+          DATA probe can only infer.
+        required: false
+        default: "0"
+      bytes:
+        description: >-
+          Body padding for a DATA run. Real notification emails are HTML several
+          kilobytes long and scan cost tends to track size, so a timing taken on
+          a two-line message understates them. Try 0 and 20000 and compare.
+        required: false
+        default: "0"
 
 permissions: {}
 
@@ -57,6 +78,8 @@ jobs:
           # inside a `run:` block composes the value into the command line.
           PROBE_TO: ${{ inputs.to }}
           PROBE_REPEAT: ${{ inputs.repeat }}
+          PROBE_DATA: ${{ inputs.data }}
+          PROBE_BYTES: ${{ inputs.bytes }}
         run: |
           BODY=$(mktemp)
           # --get --data-urlencode so an address is escaped rather than pasted
@@ -64,6 +87,8 @@ jobs:
           CODE=$(curl --silent --show-error --max-time 90 --get \
             --data-urlencode "to=${PROBE_TO}" \
             --data-urlencode "repeat=${PROBE_REPEAT:-3}" \
+            --data-urlencode "data=${PROBE_DATA:-0}" \
+            --data-urlencode "bytes=${PROBE_BYTES:-0}" \
             -o "$BODY" -w '%{http_code}' \
             -H "Authorization: Bearer $CRON_SECRET" \
             "$APP_BASE_URL/api/cron/smtp-probe")
