@@ -13,7 +13,11 @@ values, not secrets.
 
 ## Status and contract
 
-- **Document status:** Draft — not reviewed, not approved, not authorization to implement.
+- **Document status:** **SUPERSEDED — do not implement.** Closed without approval after six
+  review rounds and split into
+  [A1 — measurement](2026-08-08-light-mode-A1-measurement.md) and
+  [A2 — rendering](2026-08-08-light-mode-A2-rendering.md). Retained for its evidence and for
+  the review log beside it; every verified finding was carried into the successors.
 - **Accepted requirement source:**
   [`2026-08-07-light-mode-member-first-scope.md`](../specs/2026-08-07-light-mode-member-first-scope.md).
   **The parent was amended in this same delivery and re-approved** at digest
