@@ -25,7 +25,7 @@ import { describe, expect, it, vi } from "vitest";
 // Next's bundler), and `serverClient` -> `sanity/env` (which asserts its
 // variables on import). Nothing here sends or reads, so both are stubbed, the
 // same way `assignmentEmail.test.ts` does it.
-vi.mock("../email", () => ({ sendEmail: vi.fn() }));
+vi.mock("../email", () => ({ sendEmail: vi.fn(), SEND_CONCURRENCY: 8, SEND_TIMEOUT_MS: 20_000 }));
 vi.mock("@/sanity/lib/serverClient", () => ({ serverClient: { fetch: vi.fn() } }));
 
 const { buildAssignmentEmail, buildBatchAssignmentEmail } = await import("../assignmentEmail");

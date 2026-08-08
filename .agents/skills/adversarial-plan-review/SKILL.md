@@ -36,6 +36,14 @@ Record the tier and rationale in the private ledger before starting a reviewer.
   protocol, rollback-sensitive data operation, or irreversible remote release action.
 - A client/UI artifact that only consumes an already-approved idempotent writer is
   standard unless it changes that writer's trust, payload, retry, or recovery contract.
+- **Incident and firefight work is not exempt.** A change to a production writer's
+  concurrency, batching, or deletion behaviour is critical risk whether it was
+  planned or discovered mid-fire. Under time pressure the bar reduces — to ONE
+  fresh approval on a one-paragraph hypothesis, no plan document required — but
+  never to zero. What the round is for is the VERIFIED ledger: an unverified
+  premise about a live system ("the server accepts sends in parallel") is exactly
+  what a reviewer catches and a hurry does not, and shipping one costs more time
+  than the round would have.
 
 When uncertain about a material hazard, ask the user or conservatively use critical.
 Do not raise the tier merely because an artifact is long. If you raise or lower the
