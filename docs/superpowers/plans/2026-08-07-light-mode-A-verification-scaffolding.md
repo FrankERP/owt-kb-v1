@@ -86,7 +86,8 @@ values, not secrets.
 
 ### Preserved invariants
 
-All 17 parent invariants. The four this plan can plausibly break:
+All 19 parent invariants (the parent gained two post-approval). The five this plan can
+plausibly break:
 
 - **#1 done-gate** — 0 eslint errors, and `npm test` green. Two failure modes below are
   specifically about this plan failing its own gate.
@@ -96,6 +97,8 @@ All 17 parent invariants. The four this plan can plausibly break:
 - **#16 whole-app** — nothing here ships a partial surface.
 - **#17 ISR** — nothing here may add a session, cookie or header read to a shared layout.
   The gallery has its own root layout and reads none.
+- **#3 secrets documentation** — step 6 may introduce or reuse VR credentials. Any variable
+  gets a `docs/SECRETS.md` entry in the same change.
 
 ## Affected boundaries
 
@@ -110,14 +113,18 @@ All 17 parent invariants. The four this plan can plausibly break:
 | `app/(gallery)/theme-gallery/[theme]/not-found.tsx` *(new)* | — | 404 boundary co-located at the root layout |
 | `app/utils/__tests__/routeMatcher.test.ts` | Asserts the public-route set | **Unchanged.** The new route is gated, so it never enters `ungated` and `PUBLIC_ROUTES` needs no entry — the guard passes by construction |
 | `playwright.vr.config.ts` *(new)* | — | Read-only VR config; starts no server that can write |
-| `docs/ROUTES.md`, `docs/adr/` | Current records | Route prose + row; ADR-0014 (two Playwright configs) and ADR-0015 (a third root layout at a dynamic segment) |
+| `docs/ROUTES.md`, `docs/adr/`, `docs/UTILITIES_AND_COMPONENTS.md`, `docs/SECRETS.md` | Current records | Route prose + row; ADR-0014 and ADR-0015; the new script and two guards listed in `UTILITIES_AND_COMPONENTS.md`; a `SECRETS.md` entry for any VR credential (step 6) |
 
 **Trust boundary: unchanged.** The gallery sits on a gated path, so this plan moves no trust
-boundary at all. **But it is not at the same trust level as `/me` or `/admin`, and this plan
-does not claim it is:** the gate is `proxy.ts`'s token check, not `requireActiveSession`, so a
-**disabled** member reaches the gallery where those routes would turn them away. The content
-is colour swatches, so the exposure is nil — stated because a blanket "same as every other
-route" would be false. It still renders **presentational components
+boundary at all. **It is not quite at the trust level of `/me` or `/admin`, and this plan
+does not claim it is** — but the reason is narrower than an earlier revision said, and the
+parent (§8.4) corrects it by name. A *refreshed* token is turned away: `proxy.ts:10–12`
+redirects any token without `sanityId`, and `auth.ts:247` returns
+`{...token, sanityId: undefined, role: undefined}` for an inactive member. The residual is a
+**stale cookie** — `withAuth` reads the JWT via `getToken` without running the `jwt` callback,
+and the gallery's provider-less layout mounts no `SessionProvider`, so visiting it triggers no
+refresh and a deactivation can be outlived there. Exposure is nil (colour swatches), but the
+gallery runs no in-handler guard, which `/me` and `/admin` do. It still renders **presentational components
 only**, reads no session itself, performs no fetch, and accepts exactly two `[theme]`
 values. External effects: none.
 
@@ -162,7 +169,12 @@ values. External effects: none.
     (`--brand-blackout: 1 11 23`) and match none of the categories above, so the inventory
     would omit the seven colour values in the token file itself. Add a triplet category or
     state the omission explicitly.
-  - **Whether the scanner strips comments must be decided and stated.** If it does not,
+  - **Comment handling: reuse `stripComments`.** Parent §9 directs children to reuse
+    `app/utils/protectedReadAudit.ts:415`'s `stripComments` rather than invent a second
+    answer. Friction to record: the scanner is `scripts/colour-inventory.mjs` and
+    `stripComments` is a `.ts` export, so a plain-node import is not direct — either run the
+    scanner through the TS pipeline, extract the helper to a shared `.mjs`, or state
+    explicitly why a second implementation was unavoidable.** If it does not,
     `PlannerGrid.tsx:1497` — a comment reading ``… `#010b17` is `--brand-blackout` …`` —
     becomes an inventory row for a colour decision that does not exist. Recommend stripping
     comments in `.tsx`/`.ts`/`.css` and recording the choice in the script's header.
@@ -223,7 +235,12 @@ values. External effects: none.
 - **Change:** add `.light { color-scheme: light; }` after `:root`. **Nothing else in
   `brand.css` changes.**
 - **Failure and recovery:** trivially revertible; affects only UA-chrome rendering.
-- **Verification:** a test asserts both declarations exist. Do **not** rely on next-themes'
+- **Verification:** a test asserts both declarations exist **and that `.light` is declared
+  AFTER `:root`**. Both selectors have specificity (0,1,0), so the override is pure source
+  order, and the parity guard checks presence rather than order — a `.light` block placed
+  above `:root` would pass every gate and theme nothing. This plan authors `brandCss.test.ts`,
+  so it is the cheapest place for that assertion; leaving it to Child D lets D regress it
+  silently. Do **not** rely on next-themes'
   inline style, and do not "clean it up" later.
 - **State after:** `.light` exists, holds one non-custom-property declaration. The parity
   guard therefore stays dormant (step 4).
@@ -308,7 +325,7 @@ values. External effects: none.
   authenticated, so an unvalidated segment is not a public injection vector — but reflecting
   arbitrary input into a root attribute is still wrong, and `dynamicParams = false` costs one
   line.
-- **No env flag, no build-time refusal, no `PUBLIC_ROUTES` entry, no new env var.** All four
+- **No env flag, no build-time refusal, no `PUBLIC_ROUTES` entry, and no new env var *for the gallery itself*.** (The VR harness is a separate question — step 6.) All four
   existed only to contain an unauthenticated route. A gated gallery in production is a page
   that logged-in team members can reach and that shows them colour swatches — the same trust
   level as every other route. **`routeMatcher.test.ts` needs no edit**: the route is gated, so
@@ -320,7 +337,7 @@ values. External effects: none.
   classes across their 33 selector occurrences —
   **except `.brand-admin-frame`, which cannot be rendered as a swatch.** It has no base rule:
   its only occurrence is `@media (min-width: 1280px) { .brand-admin-frame:has(.planner-wide) { … } }`
-  (`brand.css:301–311`), so a swatch of it renders nothing. Exercise it under that media query
+  (the `@media (min-width: 1280px)` block opens at `brand.css:296`; the rule body is `:308–312`), so a swatch of it renders nothing. Exercise it under that media query
   with a `.planner-wide` child, or record it as unexercisable — do not leave Child D reviewing
   an empty box. Plus a `prose` block, and stateless components.
   **Token swatches arrive in Child B** (tokens do not exist yet) and **the second theme in
@@ -334,13 +351,20 @@ values. External effects: none.
   innermost), so the gallery mounts it **directly**, without `SessionProvider` or
   `ThemeProvider`. **Verified:** `CueDialogProvider.tsx` references no `useSession`, no
   `fetch` and nothing from `next-auth`, so it is mountable standalone.
-- **Stateful admin panels are excluded throughout.** `AdminPanel.tsx:416` calls `useSession()`
+- **`PlannerGrid` full-screen IS hosted — it is not a stateful panel.** The parent makes
+  "`PlannerGrid` full-screen, both themes" part of Child D's acceptance and assigns **this
+  child** the light-capable host (§12). Verified: `PlannerGrid.tsx` contains **zero**
+  `fetch(`, `useSession` or `next-auth` references, its header states it is "fully
+  controlled", and `PlannerGrid.test.tsx` renders it with **no providers at all**. Host it in
+  `fullScreen` mode from a static props fixture modelled on that test's `baseProps()`. Its
+  `createPortal(surface, document.body)` path is exactly what makes it worth baselining.
+- **Session- or fetch-bearing panels are excluded** — the exclusion is by *dependency*, not by
+  the word "admin". `AdminPanel.tsx:416` calls `useSession()`
   (verified; throws without a `SessionProvider`), and the editor panels issue network fetches
   — e.g. `ProposalEditor.tsx:262` `fetch("/api/me/songs?…")` (verified). Putting them in a
   "hermetic" gallery fires more uncontrolled traffic than the one call the route group exists
-  to avoid. *(v23 cited `ServicesPanel.tsx:792` as a mount fetch; at that file's current 1,528
-  lines its `useEffect`s are focus management, not fetches. Excluded on the `useSession`/fetch
-  grounds above, not on that stale citation.)*
+  to avoid. *(v23 cited `ServicesPanel.tsx:792` as a mount fetch; that line is a `.sort()`.
+  Its real fetch is `:368`. Excluded on that, not on the stale citation.)*
 - **Honest coverage:** the gallery exercises the token layer, `brand.css` compositing and the
   portal path — **not** the bulk of the 1,231 hex sites. That is exactly why Child B's primary
   gate is equality by construction and not screenshots.
@@ -391,8 +415,19 @@ values. External effects: none.
   `requireHarnessConfig`, which throws without project `scbxomq9`, dataset
   `service-readiness-verification`, `ALLOW_SERVICE_READINESS_E2E_WRITES=true` and a bypass
   secret — an identity a read-only config cannot inherit. Expect to write a second, read-only
-  login path, and keep it incapable of writing. If that proves costly, take Child D's
-  baselines manually and record the decision. It must not be able to reach the production Sanity dataset or start
+  login path, and keep it incapable of writing.
+  **Credentials are the real cost, and they carry a documentation obligation.** The signin page
+  is a genuine email/password form (`(client)/auth/signin/page.tsx:107,117`), so a headless
+  login needs a member identity. The existing harness uses `SR_VERIFY_MEMBER_EMAIL` /
+  `SR_VERIFY_MEMBER_PASSWORD`, and **none of the 13 `SR_VERIFY_*` variables is documented in
+  `docs/SECRETS.md`** (verified) — so there is no entry to copy. **Any variable this step
+  introduces or reuses gets a `docs/SECRETS.md` entry in the same commit**: name, every
+  platform that needs it and every one that does not, where the value came from, how to
+  rotate, and the blast radius mid-rotation. Never the value. That is parent invariant 3 and
+  CLAUDE.md, and this plan is bound by it.
+  **Bounded default if credential provisioning is not settled:** take Child D's baselines
+  manually, record it, and leave VR automation to a follow-on. Do not invent credentials to
+  unblock a screenshot. It must not be able to reach the production Sanity dataset or start
   anything that writes. Add **two** ADRs — existing records run 0001–0013, so
   `adrIndex.test.ts` will accept **0014** and **0015** consecutively:
   `0014-two-playwright-configs.md`, and `0015-gallery-root-layout.md` for the third root
@@ -517,7 +552,7 @@ values. External effects: none.
 
 | Question | Why it matters | Recommendation and why | Owner | Blocking? | Bounded default |
 |---|---|---|---|---|---|
-| How the VR harness authenticates against a gated gallery | Step 6 cannot run headless without it | Reuse the repo's existing e2e auth approach rather than inventing a second one; the write-safety harness already solves login for `e2e/service-readiness` | A | **No** | Resolve at step 6; if it proves costly, take VR baselines manually for Child D and record it |
+| How the VR harness authenticates against a gated gallery | Step 6 cannot run headless without it | **Expect to write a second, read-only login path** — `fixtures.ts` sits behind `requireHarnessConfig` and cannot be inherited. Whichever credentials it uses get a `docs/SECRETS.md` entry in the same commit | A | **No** | Resolve at step 6; if it proves costly, take VR baselines manually for Child D and record it |
 | Whether the gallery renders one page per theme or one page with both | Affects VR baseline shape | One route per theme (`[theme]`), already implied by the segment — it is the only shape that lets a single baseline capture a whole theme | A | **No** | As specified |
 | Per-family mapping of `yellow`/`orange`/`amber` onto `warning-*` | Child C's collapse decisions | Keep families separate until step 2's analysis proves a collapse is safe; `red` → `negative-*` is settled in family only | A | **No** | Separate roles |
 
