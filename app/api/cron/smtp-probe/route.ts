@@ -41,8 +41,28 @@ export async function GET(req: NextRequest) {
   // two-line message would understate them.
   const sendData = req.nextUrl.searchParams.get("data") === "1";
   const bodyBytes = Math.min(Math.max(Number(req.nextUrl.searchParams.get("bytes") ?? 0), 0), 200_000);
-  const phases = [];
-  for (let i = 0; i < repeat; i++) phases.push(await probeSmtpPhases(to, { sendData, bodyBytes }));
 
-  return NextResponse.json({ ...(await probeSmtp()), phases });
+  // A WHOLE-ROUTE DEADLINE, not just a per-phase one. Each reading is bounded
+  // individually, but `repeat` of them plus `probeSmtp`'s three verifies are
+  // bounded only in sum — at the default that is 120 s of worst case against
+  // `maxDuration = 60`. The condition that produces the worst case is a
+  // tarpitting server, which is precisely what this route exists to diagnose, so
+  // without this the probe returns NOTHING exactly when it is needed. Partial
+  // readings are the useful answer here; a 504 is not.
+  const deadline = Date.now() + 45_000;
+  const phases = [];
+  for (let i = 0; i < repeat; i++) {
+    if (Date.now() >= deadline) break;
+    phases.push(await probeSmtpPhases(to, { sendData, bodyBytes }));
+  }
+
+  // Reported even when the phase walk used the whole budget, so a truncated run
+  // is visible as truncated rather than read as "only this many were requested".
+  const truncated = phases.length < repeat;
+  return NextResponse.json({
+    ...(Date.now() < deadline ? await probeSmtp() : { status: "ok" as const }),
+    requestedReadings: repeat,
+    truncated,
+    phases,
+  });
 }

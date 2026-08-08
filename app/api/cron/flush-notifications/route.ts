@@ -10,8 +10,8 @@ import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext
 // and layer 3 is daily, so when this stops, everything is up to 24 hours late —
 // which is what the liveness alarm in `/api/cron/service-reminders` watches for.
 //
-// One sweep can fan out dozens of emails over a pooled SMTP transport with
-// `maxConnections: 1`, so give it room; the sweep's own `NOTIFY_SEND_BUDGET_MS`
+// One sweep can fan out dozens of emails over a pooled SMTP transport whose width is
+// `SEND_CONCURRENCY`, so give it room; the sweep's own `NOTIFY_SEND_BUDGET_MS`
 // (40 s) is sized to finish inside this.
 export const maxDuration = 60;
 

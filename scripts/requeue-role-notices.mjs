@@ -15,10 +15,16 @@
 // minted here is shaped exactly like one minted by a real save. Hand-rolling the
 // shape is how a re-notify sends the wrong thing to the whole team.
 //
+// RUN IT WITH `tsx`, NOT BARE `node`. It imports helpers from `app/utils/*.ts`
+// so that a notice minted here cannot drift from one minted by a real save, and
+// those modules import each other with extensionless specifiers that Node's ESM
+// loader refuses. Bare `node` fails at import with ERR_MODULE_NOT_FOUND before
+// argv is even read — during an incident, holding the only recovery tool.
+//
 //   Dry run (default — writes nothing):
-//     node --env-file=.env.local scripts/requeue-role-notices.mjs <roleId> [...]
+//     npx tsx --env-file=.env.local scripts/requeue-role-notices.mjs <roleId> [...]
 //   Apply:
-//     node --env-file=.env.local scripts/requeue-role-notices.mjs <roleId> --apply
+//     npx tsx --env-file=.env.local scripts/requeue-role-notices.mjs <roleId> --apply
 //
 // `before.beforeRoles` is deliberately EMPTY for every member: from the
 // notification system's point of view these people have never been introduced to
@@ -28,7 +34,7 @@
 import { createClient } from "@sanity/client";
 
 import { buildUpsert, outboxId } from "../app/utils/outboxNotice.ts";
-import { normalizeStoredSeats, storedRoleDate } from "../app/utils/roleWriteRequest.ts";
+import { normalizeStoredSeats, seatAssignees, storedRoleDate } from "../app/utils/roleWriteRequest.ts";
 
 const APPLY = process.argv.includes("--apply");
 // `--now` collapses the 15-minute debounce to zero so the batch is due
@@ -58,19 +64,6 @@ const ROLE_QUERY = `*[_id == $id][0]{
   _id, _type, published, week, date, Lead, BGVs, Chorus, instruments, foh_team
 }`;
 
-/** Every member-referencing seat, via the same normalizer the writers use. */
-function assignedMembers(seats) {
-  return [
-    ...new Set([
-      ...(seats.leads ?? []),
-      ...(seats.bgvs ?? []),
-      ...(seats.chorus ?? []),
-      ...(seats.instruments ?? []).map((i) => i.personId),
-      ...(seats.foh ?? []).map((f) => f.personId),
-    ].filter(Boolean)),
-  ];
-}
-
 const now = new Date();
 let planned = 0;
 
@@ -93,7 +86,9 @@ for (const roleId of roleIds) {
   }
 
   const seats = normalizeStoredSeats(role);
-  const members = assignedMembers(seats);
+  // `seatAssignees`, not a local re-implementation: the five member-referencing
+  // seats are an invariant, and a copy here would silently miss a sixth.
+  const members = seatAssignees(seats);
   console.log(`\n${roleId}  ${role._type}  ${serviceDate}  → ${members.length} member(s)`);
 
   for (const memberId of members) {
