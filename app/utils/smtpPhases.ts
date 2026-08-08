@@ -46,9 +46,54 @@ export interface SmtpPhaseReport {
   mailFromMs?: number;
   /** The one to watch: recipient verification and any callout happen here. */
   rcptToMs?: number;
+  /** `DATA` → `354 go ahead`. The server agreeing to take content. */
+  dataInitMs?: number;
+  /**
+   * The terminating `.` → the final `250`. THE MEASUREMENT: everything the
+   * server does with the content before accepting it lives here, which on
+   * cPanel/Exim means SpamAssassin, ClamAV or rspamd on submission.
+   */
+  dataBodyMs?: number;
+  /** Body size actually submitted, since scan cost tends to track it. */
+  bodyBytes?: number;
   /** Final SMTP reply codes, in order. Codes only — never the credentials. */
   codes?: string[];
   error?: string;
+}
+
+/**
+ * THE GUARD ON `DATA`, and the reason this file can be pointed at production.
+ *
+ * Every path above stops at RCPT TO and delivers nothing. `DATA` is the one that
+ * actually submits a message, so it is allowed to exactly ONE address: the
+ * sending mailbox itself. Measuring content-scan time requires real content, and
+ * the only inbox that may receive it is our own.
+ *
+ * This is not a default that a query parameter can talk its way past — a
+ * mismatch refuses. Without it the probe would be a general-purpose way to mail
+ * any member from a URL, which is precisely what an operator tool must never
+ * quietly become.
+ */
+function mayReceiveData(recipient: string, sendingMailbox: string): boolean {
+  return recipient.trim().toLowerCase() === sendingMailbox.trim().toLowerCase();
+}
+
+/** A probe message: unmistakable in an inbox, padded to a requested size. */
+function probeMessage(from: string, to: string, bodyBytes: number): string {
+  const filler = "X".repeat(Math.max(0, bodyBytes));
+  return [
+    `From: ${from}`,
+    `To: ${to}`,
+    "Subject: [owt-backstage] SMTP phase probe — no action needed",
+    "MIME-Version: 1.0",
+    'Content-Type: text/plain; charset="utf-8"',
+    "",
+    "Automated timing probe from the OWT Backstage notification system.",
+    "It measures how long this server takes to accept a message. Nothing to do.",
+    "",
+    filler,
+    "",
+  ].join("\r\n");
 }
 
 /**
@@ -63,6 +108,8 @@ function converse(
   pass: string,
   from: string,
   recipient: string,
+  sendData: boolean,
+  bodyBytes: number,
 ): Promise<SmtpPhaseReport> {
   return new Promise((resolve) => {
     const codes: string[] = [];
@@ -150,7 +197,23 @@ function converse(
         // A refusal is still a timing, and still worth reporting.
         codes[codes.length - 1] = rcptTo.slice(0, 3);
 
-        // QUIT, never DATA. Nothing is submitted and nobody receives anything.
+        if (sendData) {
+          const ready = await step("dataInitMs", "DATA");
+          if (!ok(ready, "354")) throw new Error(`DATA: ${ready.slice(0, 80)}`);
+
+          const message = probeMessage(from, recipient, bodyBytes);
+          // Dot-stuffing: a line consisting of a single "." would otherwise end
+          // the message early. The generated body has none, but the transport
+          // rule belongs with the transport, not with an assumption about it.
+          const stuffed = message.replace(/\r\n\./g, "\r\n..");
+          // Timed from the terminating dot, because that is the instant the
+          // server has the whole message and starts doing things to it.
+          const accepted = await step("dataBodyMs", `${stuffed}\r\n.`);
+          if (!ok(accepted, "250")) throw new Error(`message rejected: ${accepted.slice(0, 80)}`);
+          phases.bodyBytes = Buffer.byteLength(message);
+        }
+
+        // QUIT. Without `sendData` nothing was ever submitted.
         socket.write("QUIT\r\n");
         finish({ status: "ok", recipient, ...phases, codes });
       } catch (err) {
@@ -172,13 +235,25 @@ function converse(
  * the building. Comparing that against an external address is what separates
  * "recipient callout" from "everything is slow".
  */
-export async function probeSmtpPhases(recipient?: string): Promise<SmtpPhaseReport> {
+export async function probeSmtpPhases(
+  recipient?: string,
+  opts: { sendData?: boolean; bodyBytes?: number } = {},
+): Promise<SmtpPhaseReport> {
   const host = process.env.SMTP_HOST;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
   const from = process.env.EMAIL_FROM?.match(/<([^>]+)>/)?.[1] ?? process.env.SMTP_USER;
   if (!host || !user || !pass || !from) return { status: "unconfigured" };
 
+  const to = recipient?.trim() || user;
+  if (opts.sendData && !mayReceiveData(to, user)) {
+    return {
+      status: "failed",
+      recipient: to,
+      error: `DATA is only permitted to the sending mailbox (${user}); refusing to submit a message to another address`,
+    };
+  }
+
   const port = Number(process.env.SMTP_PORT ?? 465);
-  return converse(host, port, user, pass, from, recipient?.trim() || user);
+  return converse(host, port, user, pass, from, to, opts.sendData === true, opts.bodyBytes ?? 0);
 }

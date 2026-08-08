@@ -34,8 +34,15 @@ export async function GET(req: NextRequest) {
   // a number has some variance behind it. DATA is never issued on any path.
   const to = req.nextUrl.searchParams.get("to") ?? undefined;
   const repeat = Math.min(Math.max(Number(req.nextUrl.searchParams.get("repeat") ?? 3), 1), 5);
+  // `data=1` is the only path that submits a message, and `probeSmtpPhases`
+  // refuses it for any recipient but the sending mailbox itself. `bytes` pads
+  // the body, because scan cost tends to track message size and our real
+  // notification emails are HTML several kilobytes long — a timing taken on a
+  // two-line message would understate them.
+  const sendData = req.nextUrl.searchParams.get("data") === "1";
+  const bodyBytes = Math.min(Math.max(Number(req.nextUrl.searchParams.get("bytes") ?? 0), 0), 200_000);
   const phases = [];
-  for (let i = 0; i < repeat; i++) phases.push(await probeSmtpPhases(to));
+  for (let i = 0; i < repeat; i++) phases.push(await probeSmtpPhases(to, { sendData, bodyBytes }));
 
   return NextResponse.json({ ...(await probeSmtp()), phases });
 }
