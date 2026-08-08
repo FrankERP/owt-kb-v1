@@ -15,8 +15,13 @@ values, not secrets.
 
 - **Document status:** Draft — not reviewed, not approved, not authorization to implement.
 - **Accepted requirement source:**
-  [`2026-08-07-light-mode-member-first-scope.md`](../specs/2026-08-07-light-mode-member-first-scope.md),
-  approved at digest `4fbc41c4c1bed034b16547d343c24948a9ac639ecd0c4282460e7f25193a8140`.
+  [`2026-08-07-light-mode-member-first-scope.md`](../specs/2026-08-07-light-mode-member-first-scope.md).
+  **The parent was amended in this same delivery** — its §8.4 records the gating decision, its
+  Child-A tier moves to Standard, and its two gallery-flag coverage rows are withdrawn. That
+  amendment makes the parent's earlier approval (digest
+  `4fbc41c4c1bed034b16547d343c24948a9ac639ecd0c4282460e7f25193a8140`) **stale**, so the parent
+  is re-reviewed **before** this plan is. Propagating rather than overriding is the rule this
+  plan's own step 7 states.
 - **Risk tier: Standard — one fresh cold `APPROVED`.** Derived from the ladder: this plan
   changes no writer, no trust boundary, no schema, no concurrency protocol and no remote
   release action. It reads files and adds tests.
@@ -106,8 +111,12 @@ All 17 parent invariants. The four this plan can plausibly break:
 | `playwright.vr.config.ts` *(new)* | — | Read-only VR config; starts no server that can write |
 | `docs/ROUTES.md`, `docs/adr/` | Current records | Route prose + row; ADR-0014 (two Playwright configs) and ADR-0015 (a third root layout at a dynamic segment) |
 
-**Trust boundary: unchanged.** The gallery sits on a gated path like every other route, so
-this plan moves no trust boundary at all. It still renders **presentational components
+**Trust boundary: unchanged.** The gallery sits on a gated path, so this plan moves no trust
+boundary at all. **But it is not at the same trust level as `/me` or `/admin`, and this plan
+does not claim it is:** the gate is `proxy.ts`'s token check, not `requireActiveSession`, so a
+**disabled** member reaches the gallery where those routes would turn them away. The content
+is colour swatches, so the exposure is nil — stated because a blanket "same as every other
+route" would be false. It still renders **presentational components
 only**, reads no session itself, performs no fetch, and accepts exactly two `[theme]`
 values. External effects: none.
 
@@ -275,8 +284,8 @@ values. External effects: none.
   so the middleware protects it exactly like `/admin` or `/me`, `PUBLIC_ROUTES` needs no
   entry, and `routeMatcher.test.ts` passes by construction. `layout.tsx` sits **at the
   dynamic segment**, not above it. Next 16 passes a layout only the params from the root segment down
-  to *that* layout, so a layout at `app/(gallery)/layout.tsx` sits three segments above
-  `[theme]` and receives `{}`. A layout with no `layout.js` above it *is* a root layout, so
+  to *that* layout, so a layout at `app/(gallery)/layout.tsx` sits two segments above
+  `[theme]` (`theme-gallery`, `[theme]`) and receives `{}`. A layout with no `layout.js` above it *is* a root layout, so
   this path is both valid and the only one that works. `(admin)` and `(client)` are already
   sibling root layouts, and there is no root `app/layout.tsx` — verified.
 - **The layout must:**
@@ -306,8 +315,13 @@ values. External effects: none.
   it — the walk enumerates `app/` on disk, so it *will* see the new route.
 - **No `proxy.ts` edit either.** The matcher gates everything not explicitly excluded, and
   `/theme-gallery/…` is not excluded.
-- **Gallery inventory — Phase A baselines only what exists.** Dark only: all 17 `.brand-*`
-  classes across their 33 selector occurrences, a `prose` block, and stateless components.
+- **Gallery inventory — Phase A baselines only what exists.** Dark only: the `.brand-*`
+  classes across their 33 selector occurrences —
+  **except `.brand-admin-frame`, which cannot be rendered as a swatch.** It has no base rule:
+  its only occurrence is `@media (min-width: 1280px) { .brand-admin-frame:has(.planner-wide) { … } }`
+  (`brand.css:301–311`), so a swatch of it renders nothing. Exercise it under that media query
+  with a `.planner-wide` child, or record it as unexercisable — do not leave Child D reviewing
+  an empty box. Plus a `prose` block, and stateless components.
   **Token swatches arrive in Child B** (tokens do not exist yet) and **the second theme in
   Child D** (light values do not exist yet). An earlier revision of v23 asked Phase 0 for
   "every token swatch in both themes", which it cannot produce.
@@ -343,7 +357,7 @@ values. External effects: none.
 - **`docs/ROUTES.md` needs more than a row.** Its opening states *"The app uses **two route
   groups**, each with its own root `<html>`/`<body>` layout"* (`:3`) and that there are no
   nested sub-tree layouts beyond those two group roots. Both go stale the moment `(gallery)`
-  exists. Update the prose **and** add the row with its "Public" column set — CLAUDE.md
+  exists. Update the prose **and** add its row, with the **Access** column set — `docs/ROUTES.md:34`'s header is `URL | File | Type | Access | Rendering | Description`; there is no "Public" column — CLAUDE.md
   requires docs current in the same delivery.
 - **Regenerate the inventory snapshot at the end of this step.** The gallery page is new
   source under `app/**` and will itself carry colour decisions, so the step-1 snapshot goes
@@ -354,7 +368,11 @@ values. External effects: none.
   no flag to leak, and no promotion path to reason about. The residual failure is a gallery
   that renders *wrongly* and gives Child D false confidence; that is what the assertions
   below are for. Recovery is deleting the route group.
-- **State after:** both themes renderable in dev and Preview; nothing reachable in production.
+- **State after:** both themes renderable for a signed-in member in dev, on Preview **and in
+  production**. That is the honest statement: with no env flag and no build-time refusal, the
+  gallery ships and any signed-in team member can reach it. It renders colour swatches and
+  nothing else. The parent records this as accepted (§8.4) and withdraws its earlier
+  production-404 requirement, which existed only to contain an unauthenticated route.
 
 ### 6. Read-only Playwright config and its ADR
 
@@ -367,8 +385,13 @@ values. External effects: none.
   `files: ["e2e/**"]`. A Playwright spec using a `use` fixture outside `e2e/**` fails
   `npx eslint .` on the day it lands — this plan's own done-gate. **It must authenticate**, because the gallery is
   now gated — a headless VR run gets the login page otherwise, and a baseline of the login
-  page is worse than no baseline. Reuse the repo's existing `e2e/` auth approach rather than
-  inventing a second one. It must not be able to reach the production Sanity dataset or start
+  page is worse than no baseline. **There may be nothing to reuse.** The only existing approach is
+  `e2e/service-readiness/fixtures.ts`, reachable only behind `playwright.config.ts:33`'s
+  `requireHarnessConfig`, which throws without project `scbxomq9`, dataset
+  `service-readiness-verification`, `ALLOW_SERVICE_READINESS_E2E_WRITES=true` and a bypass
+  secret — an identity a read-only config cannot inherit. Expect to write a second, read-only
+  login path, and keep it incapable of writing. If that proves costly, take Child D's
+  baselines manually and record the decision. It must not be able to reach the production Sanity dataset or start
   anything that writes. Add **two** ADRs — existing records run 0001–0013, so
   `adrIndex.test.ts` will accept **0014** and **0015** consecutively:
   `0014-two-playwright-configs.md`, and `0015-gallery-root-layout.md` for the third root
@@ -488,7 +511,6 @@ values. External effects: none.
 | `CueDialog` renders usefully with no `PlayerProvider` above it either | The portal fixture needs a second provider, or a stub | Step 5 | Mount `PlayerProvider` too if required — it is equally session-free. **Do not import `Provider`**, which pulls in `SessionProvider` and `ActivityPing` |
 | `redesign/explore` still resolves and is readable | The polarity decision stays asserted, not evidenced | Step 7 (branch and commit both verified to exist today) | Record D4 as unevidenced and raise it to the parent |
 | A read-only Playwright config can coexist without weakening the write-safety harness | VR either cannot run or the safety harness is loosened | Step 6 | Keep the harness intact and defer VR to Child D |
-| Adding one `PUBLIC_ROUTES` entry is the whole auth surface change | An unnoticed second route becomes public | `routeMatcher.test.ts` catches it by construction | The guard is the response |
 
 ## Open questions
 

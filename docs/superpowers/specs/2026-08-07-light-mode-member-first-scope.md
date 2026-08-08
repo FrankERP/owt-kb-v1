@@ -1,7 +1,7 @@
 # Scope spec: Light mode via role-based design tokens
 
 **Date:** 2026-08-07
-**Status:** APPROVED at digest `4fbc41c4c1bed034b16547d343c24948a9ac639ecd0c4282460e7f25193a8140` (round 4, commit `477399c`) — see the review log beside this file. **Approval authorizes writing the child plans, not implementing them.**
+**Status:** **AMENDED 2026-08-07 — the earlier approval is STALE and re-review is required.** Approved at digest `4fbc41c4c1bed034b16547d343c24948a9ac639ecd0c4282460e7f25193a8140` (round 4, commit `477399c`); §8.4, the Child-A tier and two §12 coverage rows changed afterwards, so that digest no longer describes this file. See the review log beside it. **Approval authorizes writing the child plans, not implementing them.**
 **Artifact level:** Parent scope spec. Defines *what must be true*. Child implementation
 plans are written only after this document is approved.
 **Supersedes as the scoping authority:** `2026-07-29-light-mode-role-tokens-design.md`
@@ -283,17 +283,25 @@ are **not** split because the document was long.
 
 | Child | Outcome | Safe end state | Rollback boundary | Tier |
 |---|---|---|---|---|
-| **A — Verification scaffolding** | Inventory, guards, gallery, VR harness exist. | No user-visible change. Dark-only, unchanged. | Revert; nothing user-facing moved. | **Critical** |
+| **A — Verification scaffolding** | Inventory, guards, gallery, VR harness exist. | No user-visible change. Dark-only, unchanged. The gallery is a **gated** route, reachable in production by any signed-in member — accepted (§8.4). | Revert; nothing user-facing moved. | Standard |
 | **B — Token layer + hex/`brand-*` migration** | All hex and `brand-*` utilities resolve through tokens. Dark values byte-identical. | Dark-only, visually identical except the enumerated normalisations. | Atomic. Tag before; a half-migrated token layer compiles and renders wrong. | Standard |
 | **C — Palette families** | The 881 raw palette classes and 45 `white`/`black` resolve through roles. | Dark-only, per-family visual deltas enumerated and reviewed. | Per colour family; each independently revertible. | Standard |
 | **D — Light counterpart design** | `.light` carries a designed counterpart for every token and all 17 `.brand-*` classes. Acceptance includes an **open `CueDialog`** and **`PlannerGrid` full-screen** (§4.4). | Light values exist but are **unreachable** — `forcedTheme="dark"` still in force. | Atomic. Tag before; the `brand.css` guard demands a full counterpart set. | Standard |
 | **E — The setting** | `themePref`, `/me` control, mirror, `forcedTheme` removed, `themeColor`, iOS status bar. | Light mode reachable. Unset → Dark. | Re-add `forcedTheme="dark"`: one line, instant. | **Critical** |
 | **F — Staged rollout** | Default moves unset → Follow System; Spanish announcement; ADR-0008 superseded. | Members on system preference. | Revert the default constant. | Standard |
 
-A and E are critical because A opens a new unauthenticated route past the `auth` matcher
-exclusion, and E performs a schema/data migration, a production write route, and an
+E is critical because it performs a schema/data migration, a production write route, and an
 irreversible Studio schema deploy. B is *large*, not critical: reversible by tag, gated by
 computed-colour equality, and it touches no trust boundary.
+
+**A was Critical and is now Standard (amended 2026-08-07, after this document's first
+approval).** The tier rested on A opening a new unauthenticated route past the `auth` matcher
+exclusion. Child A's review established that the stated justification for that placement —
+"it needs no matcher edit" — is true of a **gated** path as well (verified against the live
+matcher), so it justified neither, and the user chose the gated placement. A therefore
+changes no trust boundary: it adds a route the middleware protects exactly like `/admin`,
+`routeMatcher.test.ts` stays green **without being edited**, and there is no env flag,
+`PUBLIC_ROUTES` entry, `docs/SECRETS.md` entry or build-time refusal to review.
 
 ### 8.1 Why the token vocabulary is a Child A deliverable, not a section here
 
@@ -338,6 +346,27 @@ Strictly sequential. Each child's outputs are the next child's inputs:
 
 **No child may be skipped or run in parallel.** The one genuine parallelism — C's colour
 families — is internal to C.
+
+### 8.4 The theme gallery is gated, and reachable in production
+
+Amended 2026-08-07, after this document's first approval.
+
+The gallery sits on a **gated** path — not under `/auth/`, not public. Consequences, recorded
+so none of them is discovered later:
+
+- **It is deployed to production and reachable there by any signed-in team member.** It
+  renders colour swatches and nothing else: no session read of its own, no fetch, no data.
+  An earlier revision demanded a production 404, which only existed to contain an
+  *unauthenticated* route. That requirement is withdrawn, not quietly dropped.
+- **No env flag, no `docs/SECRETS.md` entry, no build-time refusal, no `PUBLIC_ROUTES`
+  entry.** All four existed solely to contain the public placement.
+- **`routeMatcher.test.ts` must stay green without being edited.** If the gallery ever appears
+  in `ungated`, the placement is wrong — the guard is the proof, not a formality.
+- **The gate is `proxy.ts`'s token check, not `requireActiveSession`.** A *disabled* member
+  therefore reaches the gallery, where `/me` and `/admin` would turn them away. The content is
+  colour swatches, so the exposure is nil — but the gallery is **not** at the same trust level
+  as those routes, and this document does not claim it is.
+- **The VR harness must authenticate.** That cost is real and belongs to Child A.
 
 ### 8.3 Integration acceptance
 
@@ -473,7 +502,7 @@ Every requirement has exactly one primary owner. Cross-cutting verification is m
 | Token vocabulary, reviewed (§8.1) | A | B applies it |
 | `brand.css` reference-integrity guard | A | B relies on it |
 | `brand.css` theme-parity guard, colour-scoped, staged | A authors | D activates |
-| Theme gallery + `PUBLIC_ROUTES` entry + prod 404 | A | — |
+| Theme gallery, on a **gated** route (§8.4) | A | `routeMatcher.test.ts` proves the gating, unedited |
 | Gallery must be able to host an open `CueDialog` (§4.4) | A | D exercises it |
 | Read-only Playwright config + its ADR | A | — |
 | `redesign/explore` / `7af69d8` polarity review | A | — |
@@ -504,7 +533,6 @@ Every requirement has exactly one primary owner. Cross-cutting verification is m
 | **Flip `enableSystem` to `true`** (§9) | **F** | — |
 | Default → Follow System; Spanish announcement | F | — |
 | ADR-0008 superseded | F | — |
-| `docs/SECRETS.md` entry for the gallery flag | A | — |
 | `DATA_MODEL.md`, `API_REFERENCE.md`, `ROUTES.md`, `UTILITIES_AND_COMPONENTS.md` | owning child | docs audit at each merge |
 | CLAUDE.md + AGENTS.md invariants, mirrored | B | guard 9 enforces |
 
