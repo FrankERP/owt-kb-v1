@@ -51,7 +51,7 @@ values, not secrets.
 | Evidence | Source | Planning implication |
 |---|---|---|
 | No colour inventory exists; every count in v23 and the parent is a hand-count | v23 §1.0; parent A1 | Step 1 is the first deliverable and everything else is written against its output |
-| `app/brand.css` sits outside every gate — `npx eslint app/brand.css` → 0 errors, no CSS processor in `eslint.config.mjs`, `tsc`/vitest blind to CSS | verified | Step 4's vitest guard is the *only* possible enforcement |
+| **[SUPERSEDED CLAIM — FALSE]** `app/brand.css` sits outside every gate — `npx eslint app/brand.css` → 0 errors, no CSS processor in `eslint.config.mjs`, `tsc`/vitest blind to CSS | verified | Step 4's vitest guard is the *only* possible enforcement |
 | An undeclared `var()` is invalid at computed-value time and the declaration is **dropped** | CSS spec; v23 §4 | The `brand.css` failure mode is silent — the body wash simply vanishes |
 | `vitest.config.ts:15` includes only `app/**`, `scripts/**`, `e2e/**` | verified | A guard outside those roots never runs — a silent no-op, not a failure |
 | `routeMatcher.test.ts:52` asserts `expect(ungated).toEqual(PUBLIC_ROUTES)` over an on-disk walk of `app/`; the walk maps `[x]` → `sample` and matches only `page`/`route` files | verified, `:1–52` | A new public route breaks `npm test` the moment it exists. `toEqual` on a **sorted** walk means position matters |
