@@ -61,7 +61,7 @@ Verified across Child A's six review rounds — including two reviewers who buil
 | `PlannerGridProps` requires seven function props (`preflightFor`, `createBlockFor`, `canReceive`, `onCellsChange`, `onRowsChange`, `onToggleSkip`, `onAuto`) | The fixture host must be a `"use client"` component; a server component cannot pass them |
 | `playwright.config.ts:33` throws via `requireHarnessConfig` without the verification identity, and has no `webServer` | A read-only VR config cannot reuse it |
 | `eslint.config.mjs:42` disables `react-hooks/rules-of-hooks` only for `files: ["e2e/**"]` | A Playwright spec outside `e2e/**` fails `npx eslint .` |
-| 14 `SR_VERIFY_*` variables exist; **zero** appear in `docs/SECRETS.md` | There is no entry to copy for a VR login |
+| 16 `SR_VERIFY_*` variables exist repo-wide; **zero** appear in `docs/SECRETS.md` | There is no entry to copy for a VR login |
 | `docs/ROUTES.md:3` says "two route groups"; `:25` says "No nested sub-tree layouts"; `:34`'s header has an **Access** column and no "Public" column | Prose and row both change |
 | ADRs run 0001–0013 | 0014 and 0015 are the next consecutive numbers `adrIndex.test.ts` accepts |
 
@@ -130,7 +130,8 @@ route exists**; it is one assertion and it is the whole auth story.
 
 ### Non-goals
 
-- **No inventory, no vocabulary, no `brand.css` guards, no `.light` branch.** All A1.
+- **No inventory categories, no vocabulary, no `brand.css` guards, no `.light` branch.** All
+  A1. **One exception, and it is a deliberate edit to an A1 deliverable** — see step 0.
 - **No token layer, no migrations, no lint rule.** Children B and C.
 - **No `.light` colour values.** Child D — so the `light` segment renders correctly-structured
   but *unstyled-for-light* output until then, which is expected and stated.
@@ -158,7 +159,7 @@ All 19 parent invariants. The four this plan can plausibly break:
 | `app/utils/__tests__/routeMatcher.test.ts` | Asserts the public-route set | **Unchanged.** The route is gated, so it never enters `ungated` |
 | `playwright.vr.config.ts` *(new)* + `e2e/theme-gallery/` *(new)* | — | Read-only VR config that starts nothing capable of writing |
 | `docs/ROUTES.md`, `docs/adr/`, `docs/UTILITIES_AND_COMPONENTS.md`, `docs/SECRETS.md` | Current records | Route prose + row; ADR-0014, ADR-0015; new components; any VR credential |
-| `docs/superpowers/specs/2026-08-07-light-mode-member-first-scope.md` | Approved parent | **Modified** — §5, §8 and §12's "17 light counterparts" corrected to the generated 15, disclosed post-approval |
+| `docs/superpowers/specs/2026-08-07-light-mode-member-first-scope.md` | Approved parent | **Modified** — the "17 light counterparts" claim in §5, §8, §9 **and** §12 corrected to the generated 15, disclosed post-approval. `:471`'s "17, not 16" is a different, correct claim and is left alone |
 
 **Trust boundary: unchanged.** The gallery sits on a gated path. It renders presentational
 components only, reads no session itself, performs no fetch and accepts exactly two `[theme]`
@@ -173,6 +174,31 @@ visiting triggers no refresh and a deactivation can be outlived there. Exposure 
 swatches — but the gallery runs no in-handler guard, which `/me` and `/admin` do.
 
 ## Ordered changes
+
+### 0. Exclude the gallery from the colour inventory — BEFORE the route exists
+
+**This is a done-gate blocker, not housekeeping.** `scripts/colour-inventory.mjs` walks all of
+`app/**` (`inGlob` excludes only `__tests__`), and `colourInventory.test.ts` deep-equals both
+the summary block and the compositing array against the committed artifact. **Verified by
+adding a stub `layout.tsx` + `page.tsx` under `app/(gallery)/`: two assertions fail
+immediately** — `filesScanned` rises, and every `brand-*` class the fixtures name adds a
+`className` row. The `swatches` fixture must name 15 `.brand-*` classes to render them, so the
+divergence is unavoidable, not incidental.
+
+**Decision: add `app/(gallery)` to the inventory's exclusion, with the rationale recorded in
+the script.** The alternative — regenerate and re-commit the artifact — was considered and
+rejected: it would fold the gallery's own colour usage into the surface Children B and C
+migrate, and a Child B that tokenised the swatch fixtures would leave them demonstrating
+nothing. **The gallery is a verification surface, not product colour.**
+
+- **Change:** `scripts/colour-inventory.mjs`'s `inGlob` excludes `app/(gallery)`; the reason is
+  a comment in the script, not just here. Add a test asserting the exclusion holds, so a later
+  widening of the glob cannot silently pull the gallery in.
+- **Consequence to state plainly:** the gallery's colour is then **unmeasured**, so a fixture
+  must not become a place where product colour hides. Fixtures render tokens and existing
+  components; they do not introduce new literals.
+- **Verification:** with the route group present, `npx vitest run` is green — the assertion
+  this step exists to satisfy.
 
 ### 1. The route group, root layout and fixture segment
 
@@ -201,11 +227,15 @@ swatches — but the gallery runs no in-handler guard, which `/me` and `/admin` 
   **Token swatches arrive with Child B** and **light values with Child D**; A2 baselines only
   what exists. **TWO classes are excluded and recorded as unexercisable, not one** — A1's
   generated inventory dispositions both `exempt` because neither carries colour in any rule
-  body: `.brand-admin-frame` (`brand.css:308–312`, inside `@media (min-width: 1280px)` opening
-  at `:296` — `max-width` and two paddings) and `.brand-admin-workspace` (`:332–334` —
-  `min-width: 0`). A swatch of either baselines nothing theme-relevant.
-  **The parent still says 17 in §5, §8 and §12.** That figure is superseded by the inventory;
-  correcting the parent is carried by this plan (see Affected boundaries).
+  body: `.brand-admin-frame` (`brand.css:322–326`, inside `@media (min-width: 1280px)` opening at
+  `:310` — `max-width` and two paddings) and `.brand-admin-workspace` (`:346–348` —
+  `min-width: 0`). *(A1's merge added 14 lines above these; earlier citations of `:308`/`:296`/
+  `:332` are pre-A1 and stale, including the parent's `:471`.)*. A swatch of either baselines nothing theme-relevant.
+  **The parent says 17 in FOUR places — §5 (`:173`), §8 (`:298`), §9 (`:466`) and §12
+  (`:584`)** — and correcting only three would leave §9 asserting the superseded figure in the
+  section Child D is most likely to read. All four are corrected by this plan.
+  **Leave `:471` alone:** "the class count is 17, not 16" is a different and correct claim
+  about the total, not about light counterparts.
 - **`dialog`** — one open `CueDialog`, mounting `CueDialogProvider` directly. Verified
   standalone-safe: no `useSession`, no `fetch`, nothing from `next-auth`.
 - **`planner`** — `PlannerGrid` from a static props fixture, full screen activated on mount.
@@ -213,11 +243,22 @@ swatches — but the gallery runs no in-handler guard, which `/me` and `/admin` 
   `ProposalEditor.tsx:262` fetches — but the exclusion is by **dependency**, not by the word
   "admin".
 - **Honest coverage:** these fixtures exercise the token layer, `brand.css` compositing and both
-  portal paths — **not** the bulk of the 1,231 hex sites. That is exactly why Child B's primary
+  portal paths — **not** the bulk of the 1,264 bracketed-hex rows (artifact). That is exactly why Child B's primary
   gate is equality by construction and not screenshots.
-- **Verification:** for each fixture, the intended subject is the **topmost painted body child**;
-  for `swatches`, the surface is **unobscured**. A bare "a portal node exists" assertion is
-  explicitly insufficient.
+- **Verification, and where it can actually run.** For each fixture the intended subject must
+  be the **topmost painted body child**, and for `swatches` the surface must be **unobscured**.
+  A bare "a portal node exists" assertion is explicitly insufficient — it passes in every
+  broken arrangement.
+  **These three assertions need real layout and paint, which means a real browser.** jsdom
+  cannot substitute: it performs no layout, so it can only produce the DOM-order check this
+  plan rejects. The gallery is gated, so a browser needs a session.
+  - **If the VR harness ships** (step 5), the three assertions live in it.
+  - **Under this plan's recommended default — VR deferred** — they are a **recorded manual
+    verification**: a headed run against `next start` with the developer's own session,
+    capturing one screenshot per fixture per theme plus a written check of each assertion,
+    committed beside the plan. That is weaker than an automated gate and is stated as such.
+  - **They are never silently skipped.** If neither path is taken, the stop condition below
+    fires and the fixtures do not ship.
 - **Stop condition:** if the planner's toggle cannot be activated, **stop**. Child D's acceptance
   depends on it, and silently baselining the collapsed grid is worse than no baseline.
 
@@ -243,7 +284,7 @@ swatches — but the gallery runs no in-handler guard, which `/me` and `/admin` 
   inventory of same-element pairs — **which A1 now emits as a first-class `pairs` output, with
   `alphaDiffers` per pair (88 of 100 pairs differ in alpha)** — and **re-derived at every Child
   C family merge**, since C
-  changes ~881 dark values, does not promise byte-identity, and its per-family diff gate is
+  changes 946 rows dispositioned `C` (artifact), does not promise byte-identity, and its per-family diff gate is
   contrast-blind; and the **recorded conservative backdrop assumption** — the lightest rendered
   `brand-atmosphere` point in dark. Conservative is load-bearing: unconstrained, an implementer
   picks a favourable backdrop and satisfies the gate while shipping a real failure.
@@ -253,8 +294,8 @@ swatches — but the gallery runs no in-handler guard, which `/me` and `/admin` 
 
 - **Purpose:** VR baselines. `playwright.config.ts` cannot be reused — it **throws** without the
   verification identity and has no `webServer` by design.
-- **Change:** `playwright.vr.config.ts`, read-only, `testDir` **under `e2e/`** — placement decides
-  a lint outcome: `rules-of-hooks` is an error under `next/core-web-vitals` and disabled only for
+- **Change:** `playwright.vr.config.ts`, read-only, `testDir` **under `e2e/`**, with specs named `*.spec.ts` — **not** `*.test.ts`, which
+  `vitest.config.ts:15` would sweep into `npm test`. Placement also decides a lint outcome: `rules-of-hooks` is an error under `next/core-web-vitals` and disabled only for
   `files: ["e2e/**"]`, so a `use` fixture elsewhere fails `npx eslint .` the day it lands. It must
   not reach the production Sanity dataset or start anything that writes.
 - **Credentials are the real cost, and they carry two obligations.** The signin page is a genuine
@@ -339,7 +380,7 @@ swatches — but the gallery runs no in-handler guard, which `/me` and `/admin` 
 | Question | Why it matters | Recommendation | Owner | Blocking? | Bounded default |
 |---|---|---|---|---|---|
 | Whether VR automation is worth provisioning credentials for | It re-tiers this plan to Critical | Defer. Child D needs *correct baselines*, not *automated* ones, and manual capture of six routes is cheap next to a secret-boundary review | A2 | **No** | Manual baselines; VR automation as a follow-on |
-| Whether the `swatches` fixture should paginate | A ~2,400-row inventory is unreviewable as one image | Group by role and capture per group once Child B's tokens exist; A2 baselines only the 33 `.brand-*` occurrences and a `prose` block | A2 | **No** | As recommended |
+| Whether the `swatches` fixture should paginate | A 2,649-row inventory (artifact) is unreviewable as one image | Group by role and capture per group once Child B's tokens exist; A2 baselines only the 33 `.brand-*` occurrences and a `prose` block | A2 | **No** | As recommended |
 
 **No blocking open questions.**
 

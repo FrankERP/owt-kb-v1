@@ -38,9 +38,22 @@ const EXTRA_FILES = ["tailwind.config.ts"];
 
 /** `__tests__` is excluded BY THE GLOB, not seeded as an exempt row — a row must
  *  exist to be dispositioned. Child B's codemod intersects its file set with
- *  `__tests__` separately, so colliding assertions move with the code they assert. */
+ *  `__tests__` separately, so colliding assertions move with the code they assert.
+ *
+ *  `app/(gallery)` is excluded for a different reason: it is the THEME GALLERY, a
+ *  verification surface rather than product colour. Its fixtures render tokens and
+ *  existing components in order to demonstrate them, so folding their `brand-*` usages
+ *  and swatch literals into the inventory would put them in Children B and C's
+ *  migration sets — and a Child B that tokenised the swatch fixtures would leave them
+ *  demonstrating nothing.
+ *
+ *  CONSEQUENCE, stated because it is a real cost: the gallery's colour is unmeasured,
+ *  so a fixture must never become a place where product colour hides. Fixtures render
+ *  tokens and existing components; they do not introduce new literals. */
+const EXCLUDED_TREES = ["__tests__", `app${path.sep}(gallery)`];
+
 function inGlob(rel) {
-  if (rel.includes("__tests__")) return false;
+  if (EXCLUDED_TREES.some((t) => rel.includes(t))) return false;
   return EXTENSIONS.has(path.extname(rel));
 }
 

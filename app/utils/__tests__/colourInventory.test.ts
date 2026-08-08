@@ -177,6 +177,20 @@ describe("colour inventory — the traps that produced wrong counts before", () 
     expect(admin.every((r) => r.category === 11)).toBe(true);
   });
 
+  it("excludes the theme gallery — it is a verification surface, not product colour", () => {
+    // A2's gallery renders tokens and existing components to DEMONSTRATE them. Folding
+    // its usages into the inventory would put them in Children B and C's migration sets,
+    // and a Child B that tokenised the swatch fixtures would leave them demonstrating
+    // nothing. Verified: without this exclusion, adding the route group fails both the
+    // summary and compositing assertions above.
+    expect(live.literalRows.some((r) => r.file.includes("(gallery)"))).toBe(false);
+    expect(
+      (live as unknown as { compositing: { file: string }[] }).compositing.some((r) =>
+        r.file.includes("(gallery)"),
+      ),
+    ).toBe(false);
+  });
+
   it("emits the light/dark pair relation Child B and A2 both consume", () => {
     expect(live.summary.pairs).toBeGreaterThan(0);
   });
