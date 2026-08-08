@@ -389,7 +389,19 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   <CRON_SECRET>` header or `?secret=`, compared to `process.env.CRON_SECRET`; 403 otherwise —
   **not** session-based). Finds members assigned to **tomorrow's** published services
   (America/Mexico_City) and pushes a `reminders` notification ("Sirves mañana"). Scheduled by
-  `vercel.json` at `0 1 * * *` (01:00 UTC daily). The only cron endpoint.
+  `vercel.json` at `0 1 * * *` (01:00 UTC daily). The only endpoint scheduled by `vercel.json` —
+  Vercel Hobby allows one cron per day, so the other two are driven by GitHub Actions.
+
+- **`GET /api/cron/flush-notifications`** — same secret-based auth (401 otherwise). Runs one
+  `sweepOutbox()` at full budget: the notification outbox's primary flush trigger. Driven every
+  five minutes by `.github/workflows/flush-notifications.yml`, never by `vercel.json`. See
+  `docs/NOTIFICATIONS.md`.
+
+- **`GET /api/cron/smtp-probe`** — same secret-based auth (401 otherwise). Diagnostic: times each
+  SMTP command against the configured mail server and reports whether `EMAIL_REDIRECT_TO` is
+  diverting mail. **Sends no mail** unless `?data=1`, which submits one message and is refused for
+  any recipient but our own sending mailbox. Query: `to`, `repeat` (1–5), `data`, `bytes`. Driven
+  manually by the *Probe the SMTP path* workflow.
 
 ---
 
