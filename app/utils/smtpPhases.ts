@@ -32,8 +32,13 @@ import "server-only";
 
 import tls from "node:tls";
 
-/** Bound the whole conversation well inside the hosting route's maxDuration. */
-const PHASE_TIMEOUT_MS = 20_000;
+/**
+ * Bound one whole conversation. Sized so that the hosting route can fit a few of
+ * these AND `probeSmtp`'s three verifies inside `maxDuration = 60` — see the
+ * budget arithmetic in the route. A healthy walk measures well under a second,
+ * so this is a give-up threshold, not a working allowance.
+ */
+export const PHASE_TIMEOUT_MS = 12_000;
 
 export interface SmtpPhaseReport {
   status: "ok" | "unconfigured" | "failed";
@@ -269,6 +274,13 @@ export async function probeSmtpPhases(
   // is gated on `opts.sendData`, so on the ordinary timing path the recipient
   // was previously not validated at all, and an injected `DATA` sent real mail
   // to an arbitrary address, authenticated as our own mailbox.
+  // `from` is interpolated into `MAIL FROM:` and into the message headers, so it
+  // needs the same guarantee as `to`. It comes from EMAIL_FROM rather than a
+  // query string — a different trust boundary, not a different wire format, and
+  // the rationale above is about the transport, not about any one caller.
+  if (!SAFE_ADDRESS.test(from)) {
+    return { status: "failed", error: "EMAIL_FROM does not yield a plain address" };
+  }
   if (!SAFE_ADDRESS.test(to)) {
     return {
       status: "failed",
