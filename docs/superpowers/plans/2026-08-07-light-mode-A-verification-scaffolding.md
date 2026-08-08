@@ -16,12 +16,13 @@ values, not secrets.
 - **Document status:** Draft — not reviewed, not approved, not authorization to implement.
 - **Accepted requirement source:**
   [`2026-08-07-light-mode-member-first-scope.md`](../specs/2026-08-07-light-mode-member-first-scope.md).
-  **The parent was amended in this same delivery** — its §8.4 records the gating decision, its
-  Child-A tier moves to Standard, and its two gallery-flag coverage rows are withdrawn. That
-  amendment makes the parent's earlier approval (digest
-  `4fbc41c4c1bed034b16547d343c24948a9ac639ecd0c4282460e7f25193a8140`) **stale**, so the parent
-  is re-reviewed **before** this plan is. Propagating rather than overriding is the rule this
-  plan's own step 7 states.
+  **The parent was amended in this same delivery and re-approved** at digest
+  `3a927bd8b70c3726134a5254e8e8c258a90eb689ba539397d7bcf0196abb1478` — its §8.4 records the
+  gating decision, this child's tier moves to Standard, and its two gallery-flag coverage rows
+  are withdrawn. Propagating rather than overriding is the rule this plan's own step 7 states,
+  and it was applied to this plan itself. The parent additionally assigns this child **a
+  light-capable host for Child D's two-theme checks** (§12) — the gallery's `[theme]` route
+  param is that mechanism, since nothing else can render light while `forcedTheme` is in force.
 - **Risk tier: Standard — one fresh cold `APPROVED`.** Derived from the ladder: this plan
   changes no writer, no trust boundary, no schema, no concurrency protocol and no remote
   release action. It reads files and adds tests.
