@@ -17,7 +17,7 @@ No secrets, credentials or personal data appear here. Colour literals are design
 - **Accepted requirement source:**
   [`2026-08-07-light-mode-member-first-scope.md`](../specs/2026-08-07-light-mode-member-first-scope.md),
   re-approved at digest `3a927bd8b70c3726134a5254e8e8c258a90eb689ba539397d7bcf0196abb1478`
-  (**eleven** non-blocking items folded in afterwards and recorded there as un-reviewed — nine at re-approval, plus §8.1a recording this split, plus the §9 declaration-set correction. **Both parent edits have landed** in the commit that carries this plan; A1 is the split's record, so it carries them.)
+  (**twelve** post-approval changes, all disclosed and **un-reviewed**: nine folded in at re-approval, plus §8.1a recording this split, plus §9's declaration-set correction, plus §9's `brand.css`-is-not-ungated correction. They landed across commits `d9589f9`, `02bdf8d` and `641e001`, **not** in the commit that created this plan. The parent's review log enumerates them.)
 - **Supersedes, jointly with A2:** `2026-08-07-light-mode-A-verification-scaffolding.md`,
   closed without approval. Its review log records what six rounds verified; **that evidence
   is inherited here rather than re-derived.**
@@ -122,21 +122,31 @@ occurrences.
 so "most specific wins" cannot adjudicate them: `fill="#4285F4"` is bare hex *and* an SVG
 attribute. **Rule: location beats syntax**, because the migration mechanism follows location —
 an SVG attribute becomes `currentColor` or `rgb(var(…))`, a class literal becomes a token.
-Order, most specific first: **13 → 12 → 9 → 8 → 7 → 6 → 5 → 11 → 10 → 3 → 4 → 1 → 2**. Under
-it, `AdminPanel.tsx:399`'s `shadow-[inset_0_0_0_1px_rgb(var(--brand-beam)/0.15)]` is **11** —
-correct, since its migration is a variable rename, not a literal swap.
+Order, most specific first: **13 → 12 → 11 → 9 → 8 → 7 → 6 → 5 → 10 → 3 → 4 → 1 → 2**.
+**11 precedes 6 and 5 deliberately** — it is strictly narrower, and it is the only category
+that routes a site to a *variable rename* rather than a literal swap. Under this order
+`AdminPanel.tsx:399`'s `shadow-[inset_0_0_0_1px_rgb(var(--brand-beam)/0.15)]` and
+`(client)/admin/page.tsx:37`'s `shadow-[0_0_10px_rgb(var(--brand-signal)/0.8)]` — the only two
+live colour `var(--brand-*)` sites in the app — are **11**. With 6 or 5 first they would reach
+Child B as literal-swap sites, which is wrong for both.
+**Category 5 excludes `rgb(`/`rgba(`/`hsl(` immediately followed by `var(`**, matching the lint
+rule the parent's §9 already prescribes; otherwise `tailwind.config.ts:15–21`'s seven
+`rgb(var(--brand-*) / <alpha-value>)` key values would match 5 rather than 10.
 
-**Category 13 emits two row kinds**, because one key cannot carry both dispositions:
+**Category 13 emits three row kinds**, because one key cannot carry every disposition:
 
 | Row kind | Key | Disposition |
 |---|---|---|
-| `brand-class` | file + class + occurrence kind + **occurrence count** | `D` (needs a light counterpart) or `exempt` (no colour anywhere) |
+| `brand-class` of kind **`selector`** | file + class + kind + **occurrence count** | `D` (needs a light counterpart) or `exempt` (no colour anywhere) |
 | `brand-rule-body` | class(es) + body ordinal within file | `B` (contains colour) or `exempt` |
-| `className` occurrence of a compositing class | — | **`keep`** — never migrated, removed or rewritten |
+| `brand-class` of kind **`className`** | file + class + kind + **occurrence count** | **`keep`** — never migrated, removed or rewritten |
 
-The occurrence count is load-bearing: without it a class's occurrences collapse to one key, and
+**Only kind `selector` carries `D`/`exempt`; kind `className` always carries `keep`.** Child D
+must never receive a `className` row — those are usage sites, not things needing a light
+counterpart.
+The occurrence count is load-bearing **on both kinds**: without it a class's occurrences collapse to one key, and
 deleting any occurrence that is not the last of its class in its file leaves the key set
-byte-identical and the guard green. `.brand-navbar` is why the two kinds exist — its body at
+byte-identical and the guard green. `.brand-admin-workspace`'s six byte-identical `className` uses (`AdminPanel.tsx:634,647,657,664,671,680`) are why the `className` kind must be counted too. `.brand-navbar` is why selector and body kinds are separate — its body at
 `brand.css:34–36` is colour-free while `:38–50` is not, which a class-level disposition cannot
 express.
 
@@ -164,13 +174,19 @@ disposition is an error.
 **Seeded exemptions, keyed by file + value, never by line range** (line-keyed seeds drift off
 their rows on the next edit): `emailShell.ts` — **9** literals after comment-stripping, not the
 12 a raw grep shows, or three seeded values never match a row; the Google mark in
-`signin/page.tsx`; the static `themeColor` in `(client)/layout.tsx`. `app/**/__tests__/**` is
+`signin/page.tsx`; the static `themeColor` in `(client)/layout.tsx`; and
+`appleWebApp.statusBarStyle: "black-translucent"` on both root layouts
+(`(client)/layout.tsx:31`, `(admin)/layout.tsx:26`) — a colour keyword Child E makes
+theme-responsive under parent invariant 17. `app/**/__tests__/**` is
 **excluded by the glob**, not seeded as a row.
 
 **Snapshot key: file + normalised utility + value multiset. Never line numbers.**
 - **"Normalised utility"** = property + variant chain, colour removed, **`dark:` preserved** —
   `dark:border-[#f59e0b]` normalises to `dark:border`, not `border`. Collapsing the variant
   merges both sides of a pair; dropping it loses which side is dark.
+- Categories **7, 8 and 9** have no utility either: key them on **file + carrier + value**,
+  where carrier is the CSS property (inline style), the attribute name (SVG), or the map key
+  (runtime) — e.g. `serviceCardModel.ts` + `sunday_role` + `#00bfff`.
 - Category 12 keys on **file + property name + value**; category 13 as tabled above.
 - The snapshot carries a **compared summary block** — class, occurrence and rule-body totals —
   **inside the assertion**, not in a human-only header, or no key can express them.
@@ -356,7 +372,7 @@ dormant. Inert until Child D.
 | Inventory is generated | Script + snapshot + guard | Three v23 hand-counts and two parent figures were each wrong | A script to maintain | A1 |
 | Snapshot key excludes line numbers | file + normalised utility + value multiset | A line-keyed snapshot flaps on unrelated commits, and a flapping guard gets deleted | Cannot detect a pure move | A1 |
 | Comment stripping reuses `stripComments` | Not a second implementation | Parent §9; the repo already solved it | `.mjs`/`.ts` import friction must be resolved explicitly | A1 |
-| Parity guard ships dormant | Self-activates on the first `.light` custom property | Landing it active fails this plan's own done-gate against all 11 `:root` properties | A dormant guard needs its own proof | A1 |
+| Parity guard ships dormant | Self-activates on the first `.light` custom property | Landing it active fails this plan's own done-gate against the 7 colour `:root` properties | A dormant guard needs its own proof | A1 |
 | Vocabulary is an output, not a spec section | Reviewed artifact | v23 froze 34 roles and called them "a floor" | Child B blocks on the review | A1 |
 | No route in this plan | Route lives in A2 | Keeps the trust boundary, and the Critical tier, out of measurement work | Two plans instead of one | split decision |
 
