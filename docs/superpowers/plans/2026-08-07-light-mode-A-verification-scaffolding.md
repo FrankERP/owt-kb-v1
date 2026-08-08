@@ -121,7 +121,24 @@ session, performs no fetch, and accepts exactly two `[theme]` values. External e
     `^\.brand-` pattern misses it. This is why the class count is 17, not 16.
   - **Must include `.ts`.** `serviceCardModel.ts` holds 56 colour decisions in exported class
     strings consumed by seven `.tsx` components.
-  - Each row is classified by **render surface** and by **migration child** (B or C).
+  - Each row is classified by **render surface** and by **disposition: `B`, `C`, or `exempt`**.
+    `exempt` rows carry a reason and the governing source. **The parent's four reviewed
+    exemptions are seeded before the first run** and must appear as `exempt`, never as `B`
+    or `C`:
+    - `app/utils/emailShell.ts` — **12 hex literals** (verified). The email palette is
+      deliberately light; CLAUDE.md records five failed attempts to hold a dark palette
+      against Outlook for Mac.
+    - `app/(client)/auth/signin/page.tsx:157–160` — the Google brand mark. A third-party
+      mark that must not be themed.
+    - `app/(client)/layout.tsx:42` — the static `themeColor` string. Not a class, not an
+      inline style, not an SVG attribute; Child E makes it theme-responsive under
+      invariant 17.
+    - `app/**/__tests__/**` — outside the glob, and lint-exempt, but the codemod's file set
+      is intersected with it so colliding assertions move with the code they assert.
+  - **Whether the scanner strips comments must be decided and stated.** If it does not,
+    `PlannerGrid.tsx:1497` — a comment reading ``… `#010b17` is `--brand-blackout` …`` —
+    becomes an inventory row for a colour decision that does not exist. Recommend stripping
+    comments in `.tsx`/`.ts`/`.css` and recording the choice in the script's header.
 - **Snapshot key:** file + normalised utility + value multiset. **Never line numbers** —
   lines are emitted for humans and excluded from the assertion, or any unrelated commit that
   shifts a line in a colour-bearing file turns `npm test` red on a tree that moves weekly.
@@ -141,7 +158,7 @@ session, performs no fetch, and accepts exactly two `[theme]` values. External e
 - **Change:** produce a short reconciliation note recording, at minimum:
   - the parent's §3 "25 of 27 bare-hex sites are reachable" should be **22** (27 − 4 Google
     literals − 1 `themeColor`);
-  - the parent's bare-hex list omits `ServiceReadinessCard.tsx:723` and `PlannerGrid.tsx:1497`;
+  - the parent's bare-hex list omits `ServiceReadinessCard.tsx:723` (verified: `color: isConflict ? "#f87171" : accentHex`). **`PlannerGrid.tsx:1497` is NOT a bare-hex site** — it is a comment; the real decision is the bracketed `bg-[#010b17]` at `:1499`, which belongs to the 1,231-bracketed bucket. Do not commit that as a finding;
   - any other divergence the generated inventory finds.
 - **Verification:** the note is committed beside the snapshot and cited by Child B's mapping
   table. **The inventory is authoritative; the parent's hand-counts are not.**
@@ -192,6 +209,21 @@ session, performs no fetch, and accepts exactly two `[theme]` values. External e
   `tailwind.config.ts`:
   - **(a) Reference integrity — ACTIVE NOW.** Every colour `var(--x)` referenced is declared,
     checked against the **union** of `brand.css` and `tailwind.config.ts` declarations.
+    **The reference set spans the same glob as the inventory — `app/**/*.{tsx,ts,mjs,css}`
+    plus `tailwind.config.ts` — not just those two files.** A file-scoped reference set
+    cannot detect the failure this guard exists for, and step 1 already proves references
+    live elsewhere: it lists `.tsx`/`.ts` arbitrary values referencing `var(--brand-*)` as
+    its own inventory category. **Verified, two live colour references sit outside both
+    files, and both name variables Child B retires:**
+    `app/components/admin/AdminPanel.tsx:399`
+    `shadow-[inset_0_0_0_1px_rgb(var(--brand-beam)/0.15)]`, and
+    `app/(client)/admin/page.tsx:37` `shadow-[0_0_10px_rgb(var(--brand-signal)/0.8)]`.
+    When Child B retires `--brand-beam` (parent D6) and `--brand-signal`, those two
+    declarations become invalid at computed-value time and are **dropped**: a file-scoped
+    guard stays green because it never reads `.tsx`; the inventory snapshot stays green
+    because the class string is unchanged; `tsc` and `eslint` are green; and the inset glow
+    and the admin-tab ring silently vanish. That is exactly the failure class this guard
+    exists to prevent, on exactly the variables named.
     `tailwind.config.ts:15–21` declares seven `brand.*` keys against the same variables, with
     live consumers including `selection:bg-brand-beam/35` on both root layouts, so a
     file-scoped check both misses Child B's rename and fails today. **Scoped to colour
@@ -206,7 +238,7 @@ session, performs no fetch, and accepts exactly two `[theme]` values. External e
     **Colour-scoped:** four of the 11 properties are non-colour (`brand.css:10–13`; note `:9`
     is `--brand-steel`, a colour), and an unscoped parity check would demand a nonsense
     `.light --brand-radius-panel`.
-  - The allowlist holds **only** those four non-colour properties. **`--brand-signal` must not
+  - **The allowlist and the colour scope are one rule, not two.** Because parity is colour-scoped, the four non-colour properties are already outside the assertion, so the allowlist starts empty and exists only to hold a future colour property somebody argues is genuinely theme-invariant — a claim that must be reviewed, never assumed. **`--brand-signal` must not
     be allowlisted** — it is a colour that Child B retires. Allowlisting a colour as
     "theme-invariant" is precisely the drift class this guard exists to catch.
 - **Placement:** under `app/utils/__tests__/`. A guard outside `vitest.config.ts:15`'s three
@@ -290,10 +322,33 @@ session, performs no fetch, and accepts exactly two `[theme]` values. External e
   **Vercel Preview** and local `.env.local`; explicitly **not** set in Production; not a
   secret (a boolean feature flag, so no rotation blast radius); and that setting it in
   Production would expose an unauthenticated route. **Never the value.**
-- **`docs/ROUTES.md`** gains a row with its "Public" column set.
+- **Co-locate `not-found.tsx` at `[theme]/`.** Next inserts the default not-found boundary at
+  the root layer and at the first-layer group route — `app/` and `app/(gallery)/` — both
+  **above** the `[theme]` root layout, so a 404 would render with no `<html>`/`<body>`. The
+  status is still 404 and no gallery content is served, so the trust boundary holds; but in
+  `next dev` it surfaces as "Missing `<html>` and `<body>` tags in the root layout" rather
+  than a clean 404 — on the path that is the *default* in production. A co-located
+  `not-found.tsx` fixes it.
+- **`docs/ROUTES.md` needs more than a row.** Its opening states *"The app uses **two route
+  groups**, each with its own root `<html>`/`<body>` layout"* (`:3`) and that there are no
+  nested sub-tree layouts beyond those two group roots. Both go stale the moment `(gallery)`
+  exists. Update the prose **and** add the row with its "Public" column set — CLAUDE.md
+  requires docs current in the same delivery.
+- **Regenerate the inventory snapshot at the end of this step.** The gallery page is new
+  source under `app/**` and will itself carry colour decisions, so the step-1 snapshot goes
+  stale and `npm test` goes red at merge until it is regenerated. Loud and trivially fixed,
+  but it is a done-gate failure if nobody says it.
 - **Failure and recovery:** the dangerous failure is the route reaching production
-  unauthenticated. Three independent defences: the env flag, the build-time refusal, and
-  `routeMatcher.test.ts`. Recovery is deleting the route group.
+  unauthenticated. Three defences: the env flag, the build-time refusal, and
+  `routeMatcher.test.ts`.
+  **They are not fully independent, and the plan should not claim they are.**
+  `assertDeploymentCoherence` runs at *build* time, so a Preview build made **with** the flag
+  set can later be **promoted** to Production without rebuilding — carrying the flag past the
+  refusal. The runtime env-flag check still gates the route on whatever env the promoted
+  deployment resolves, so the practical blast radius is a static swatch page with no session,
+  no fetch and no data access. Recorded so the defence is not overstated; if promotion is a
+  real workflow here, the runtime check — not the build check — is the load-bearing one.
+  Recovery is deleting the route group.
 - **State after:** both themes renderable in dev and Preview; nothing reachable in production.
 
 ### 6. Read-only Playwright config and its ADR
@@ -301,9 +356,14 @@ session, performs no fetch, and accepts exactly two `[theme]` values. External e
 - **Purpose:** VR baselines. `playwright.config.ts` cannot be reused — it is a write-safety
   harness that **throws** unless a whole verification identity is present, and has no
   `webServer` block by design.
-- **Change:** `playwright.vr.config.ts`, read-only, its own `testDir`. It must not be able to
+- **Change:** `playwright.vr.config.ts`, read-only, with its `testDir` **under `e2e/`** —
+  placement decides a lint outcome, not just tidiness. `react-hooks/rules-of-hooks` is an
+  error under `next/core-web-vitals`, and `eslint.config.mjs` disables it only for
+  `files: ["e2e/**"]`. A Playwright spec using a `use` fixture outside `e2e/**` fails
+  `npx eslint .` on the day it lands — this plan's own done-gate. It must not be able to
   reach the production Sanity dataset or start anything that writes. Add
-  `docs/adr/00NN-two-playwright-configs.md`.
+  `docs/adr/0014-two-playwright-configs.md` — existing records run 0001–0013, so 0014 is the
+  next consecutive number `adrIndex.test.ts` will accept.
 - **ADR mechanics — `adrIndex.test.ts` will fail otherwise:** link it from
   `docs/adr/README.md`, match `/^# ADR-\d{4}: .+/`, carry a `**Date:** … **Status:**` line,
   and number consecutively from 0001, all in the same commit.
@@ -436,7 +496,7 @@ session, performs no fetch, and accepts exactly two `[theme]` values. External e
   reviewed token vocabulary and its storage convention; an enforced `brand.css`; a
   two-theme-capable gallery including the portal path; a read-only VR harness; the AA gate's
   three inputs; an evidenced polarity decision.
-- **Outputs promised:** Child B consumes the inventory **as its mapping table** and the
+- **Outputs promised:** Child B consumes the inventory **minus its `exempt` rows** as its mapping table and the
   vocabulary as its target. Child C re-derives the composited failing set at every family
   merge. Child D takes the gallery, the VR harness and the AA inputs.
 - **Adversarial review order:** this plan (Critical — **two** sequential fresh `APPROVED`
