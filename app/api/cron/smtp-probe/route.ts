@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { probeSmtpPhases } from "@/app/utils/smtpPhases";
 import { probeSmtp } from "@/app/utils/smtpProbe";
 
 // WHY THIS ROUTE EXISTS.
@@ -27,5 +28,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  return NextResponse.json(await probeSmtp());
+  // Per-command timings, repeated, because the ~13 s figure that drove three
+  // deploys was inferred by subtraction from ONE successful send. `?to=` picks
+  // whose address RCPT TO asks about; `?repeat=` takes more than one reading so
+  // a number has some variance behind it. DATA is never issued on any path.
+  const to = req.nextUrl.searchParams.get("to") ?? undefined;
+  const repeat = Math.min(Math.max(Number(req.nextUrl.searchParams.get("repeat") ?? 3), 1), 5);
+  const phases = [];
+  for (let i = 0; i < repeat; i++) phases.push(await probeSmtpPhases(to));
+
+  return NextResponse.json({ ...(await probeSmtp()), phases });
 }
