@@ -12,9 +12,12 @@ import { probeSmtp } from "@/app/utils/smtpProbe";
 // question is always about Vercel's egress, and that is a place no local script
 // can stand.
 //
-// It authenticates like the other cron routes and it SENDS NO MAIL: connect,
-// greeting, AUTH, QUIT. Nothing is queued, nothing is claimed, no member is
-// contacted. That is what makes it safe to run whenever the outbox looks wrong.
+// It authenticates like the other cron routes. By default it SENDS NO MAIL:
+// connect, greeting, AUTH, RCPT TO, QUIT. Nothing is queued, nothing is claimed,
+// no member is contacted — which is what makes it safe whenever the outbox looks
+// wrong. The ONE exception is `?data=1`, which submits a real message so that
+// content-scanning time can be measured instead of inferred; it is refused for
+// every recipient except our own sending mailbox, before a socket is opened.
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
