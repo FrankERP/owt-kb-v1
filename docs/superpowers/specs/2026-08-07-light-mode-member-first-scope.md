@@ -67,13 +67,23 @@ Splitting the 2,397 decisions by render surface:
 
 | Surface | Decisions | Files |
 |---|---:|---:|
-| Admin panels (`components/admin/`, `(client)/admin/`, `(admin)/`) | **1,309 (55%)** | 18 |
-| Member-facing and shared shell | **1,088 (45%)** | 46 |
+| **Deferred** — admin panels (`components/admin/`, `(client)/admin/`) | **1,306 (54%)** | 17 |
+| **In scope** — member-facing, shared shell, and `(admin)/layout.tsx` | **1,091 (46%)** | 47 |
 
-The nine densest files in the repository are admin panels — `MonthGenerator.tsx` (302),
-`ServicesPanel.tsx` (130), `PlannerGrid.tsx` (124), `AdminPanel.tsx` (113),
-`ProposalsPanel.tsx` (103). Over half the rewrite, and the half that collides hardest with
-active feature development, is on screens that three people see.
+`app/(admin)/layout.tsx` (3 decisions) is counted **in scope**, not deferred, because D14
+puts the Studio chrome on themed tokens. The deferred set is therefore 17 files, not 18.
+
+**Seven of the nine densest files** in the repository are admin panels —
+`MonthGenerator.tsx` (302), `ServicesPanel.tsx` (130), `PlannerGrid.tsx` (124),
+`AdminPanel.tsx` (113), `ProposalsPanel.tsx` (103), `SongFormModal.tsx` (90),
+`SetlistEditor.tsx` (79). The other two are **in scope and stay in scope**:
+`me/propose/[roleId]/ProposalEditor.tsx` (139) is the second-densest file in the
+repository, and `AvailabilityCalendar.tsx` (96) the seventh. Children B and C inherit the
+densest non-admin file in the app, and must not be sized as though the hard files were all
+deferred.
+
+Over half the rewrite, and the half that collides hardest with active feature development,
+is on screens that three people see.
 
 **Decision: the first delivery covers the member surface. Admin panels are deferred,
 explicitly and visibly, not silently.** Approved by the user, 2026-08-07.
@@ -101,24 +111,64 @@ structural finding in this document.
 `AdminPanel` and sits inside the `(client)` root layout — the shell this delivery themes.
 
 So without an explicit carve-out, an administrator in light mode gets a light shell
-wrapping 1,309 hardcoded-dark decisions. Worse, the shared components used *inside* those
+wrapping 1,306 hardcoded-dark decisions. Worse, the shared components used *inside* those
 panels — `DayCard.tsx` (65), `CalendarView.tsx` (71), `AvailabilityCalendar.tsx` (96) — are
 in scope and would render light *within* a dark panel. That is a broken screen, and it is
 precisely the state ADR-0008 exists to prevent.
 
 **Requirement:** the `/admin` route subtree renders dark in both themes until the deferred
-admin migration lands. Because polarity is dark-in-`:root` / light-under-`.light`
-(Decision D4), the pin must **re-declare the dark token values on a wrapper element** in
-the `/admin` subtree, so tokenised shared components inside it resolve dark. Removing a
-class from `<html>` cannot achieve this. The mechanism, its test, and its removal
-condition belong to Child C.
+admin migration lands.
+
+**The pin is not one mechanism. Three independent cascade channels carry colour into that
+subtree, and a wrapper that only re-declares custom properties addresses exactly one of
+them.** All three are measured against the working tree:
+
+**Channel 1 — Tailwind `dark:` variants. 121 occurrences across 13 deferred admin files.**
+`tailwind.config.ts:10` sets `darkMode: "class"`, so these compile to a `.dark` **ancestor**
+selector, and next-themes removes `.dark` from `<html>` when light is active. Re-declaring
+custom properties on a descendant wrapper does not restore a `.dark` ancestor. Concretely,
+`AdminPanel.tsx:315` carries `bg-[#003572] dark:bg-[#00bfff]/20` — in light mode every
+primary button in the panel flips to solid navy — and `AdminPanel.tsx:409` carries
+`from-[#C8D8EB] dark:from-[#010b17]`, which becomes a pale smear across the tab bar.
+**The pin wrapper must therefore itself carry the `dark` class**, not merely dark values.
+
+**Channel 2 — `.light`-scoped counterparts for shared `.brand-*` classes.** Four
+compositing classes render inside `/admin` and are also used on the member surface:
+`brand-surface`, `brand-search-console`, `brand-section-heading`, `brand-member-row`.
+Child D authors light counterparts for these, and D2 mandates *counterpart design, not
+mechanical inversion* — which implies structurally different declarations, not only
+different `var()` values. **A `.light .brand-surface` rule that sets `background` or
+`box-shadow` directly cannot be overridden by a descendant wrapper that only re-declares
+custom properties.** This is a binding constraint on Child D, recorded in §8 and §12: light
+counterparts for these four classes must stay overridable by the pin, or the pin must
+re-assert them.
+
+**Channel 3 — translucent surfaces compositing against a backdrop outside the pin.**
+`.brand-admin-shell` is `rgb(var(--brand-blackout) / 0.56)`, `.brand-surface` `0.72`,
+`.brand-search-console` `0.64`, `.brand-member-row` `0.62`/`0.44`. Their backdrop is
+`brand-atmosphere bg-brand-blackout` on `<body>` in
+[`app/(client)/layout.tsx:57–61`](../../../app/(client)/layout.tsx) — **structurally outside
+any wrapper inside the `/admin` subtree**. With dark tokens correctly re-declared and the
+`dark` class correctly applied, those surfaces still composite to washed mid-tones over a
+light body wash. **The pin must establish its own opaque dark backdrop**, or the body
+background must itself be pinned for the `/admin` route.
+
+Removing a class from `<html>` cannot achieve any of this. The complete mechanism — all
+three channels — its test, and its removal condition belong to Child C, and its executable
+proof to Child D (§10 A2).
 
 ### 4.2a Three `.brand-*` compositing classes are admin-only
 
-Verified: of the 16 `.brand-*` base classes in `brand.css` (29 selector lines including
-pseudo-elements and states), three are consumed **only** by the deferred surface —
-`brand-admin-shell` (`(client)/admin/page.tsx:41`), `brand-admin-tabs`
-(`AdminPanel.tsx:392`) and `brand-admin-workspace` (`AdminPanel.tsx:634` and four more).
+Verified: `brand.css` declares **17** `.brand-*` base classes across 35 selector
+occurrences including pseudo-elements and states. **Four** are consumed only by the
+deferred surface — `brand-admin-shell` (`(client)/admin/page.tsx:41`), `brand-admin-tabs`
+(`AdminPanel.tsx:392`), `brand-admin-workspace` (`AdminPanel.tsx:634` and five more) and
+`brand-admin-frame` (`brand.css:308`, consumed at `(client)/admin/page.tsx:22`).
+
+`brand-admin-frame` carries no colour — it is a `:has(.planner-wide)` layout rule — so it
+needs no light counterpart. It is named here because a line-anchored `^\.brand-` scan
+misses it: it is indented and nested. **Child A's inventory must not use a line-anchored
+pattern**, or it will under-report this file the same way.
 
 This collides with two rules children would otherwise inherit unexamined:
 
@@ -126,11 +176,16 @@ This collides with two rules children would otherwise inherit unexamined:
 - Child D's rule bans raw colour literals inside `.brand-*` rules, which fires on the six
   pure-black shadows those classes share with the rest.
 
-Under D13 these three classes render only inside a subtree pinned dark, so light
-counterparts for them would be unreachable code that the guard nonetheless demands.
-**Child D must resolve this explicitly** — either an allowlist entry naming them as
-pinned-surface classes with a reason, or light values authored and left unused. Either is
-acceptable; discovering it mid-implementation is not.
+Under D13 the three colour-bearing admin classes render only inside a subtree pinned dark,
+so light counterparts for them would be unreachable code that the guard nonetheless
+demands. **Child D must resolve this explicitly** — either an allowlist entry naming them
+as pinned-surface classes with a reason, or light values authored and left unused. Either
+is acceptable; discovering it mid-implementation is not.
+
+Distinguish these from the **four shared** classes of §4.2 channel 2 (`brand-surface`,
+`brand-search-console`, `brand-section-heading`, `brand-member-row`), which render on
+**both** surfaces. Those do need light counterparts, and those counterparts must stay
+overridable by the pin.
 
 ### 4.3 `(admin)` chrome around `/studio` follows the theme
 
@@ -149,11 +204,19 @@ when it is two.
 
 ### In
 
-- The 46 member-surface files and their 1,088 colour decisions.
-- `app/brand.css` in full: the token layer, the `.light` branch, all 16 `.brand-*`
-  compositing classes (29 rules including pseudo-elements) and their light counterparts.
+- The 47 in-scope files and their 1,091 colour decisions (§4).
+- `app/brand.css` in full: the token layer, the `.light` branch, all 17 `.brand-*`
+  compositing classes (35 selector occurrences including pseudo-elements and states) and
+  their light counterparts, subject to §4.2a.
+- `app/(admin)/layout.tsx` — **its token migration belongs to Child B**, with the rest of
+  the `brand-*` retirement (§12). B retires the seven `brand.*` keys from
+  `tailwind.config.ts`, and `(admin)/layout.tsx:42` consumes three of them
+  (`bg-brand-blackout text-brand-frost selection:bg-brand-beam/35`). Left to Child D, those
+  utilities would compile to nothing for the whole B→D interval and the Studio chrome would
+  lose its background and text colour — contradicting B's own safe end state. D changes
+  only whether that chrome *follows the theme*, not whether it has colour at all.
 - `tailwind.config.ts` colour configuration, both token layers, and the typography theme.
-- `app/(admin)/layout.tsx` chrome (§4.3).
+- `app/(admin)/layout.tsx` theme-following behaviour (§4.3).
 - The `/admin` dark pin and its guard (§4.2).
 - `themePref` on `teamMembers`, its write route, the `/me` control, the `localStorage`
   mirror, dynamic `viewport.themeColor`, the iOS status bar.
@@ -164,7 +227,7 @@ when it is two.
 
 | Excluded | Why | Recorded as |
 |---|---|---|
-| The 18 admin panel files, 1,309 decisions | §4, deferred delivery | Follow-on scope, §11 |
+| The 17 admin panel files, 1,306 decisions | §4, deferred delivery | Follow-on scope, §11 |
 | Sanity Studio's internal theming at `/studio` | Third-party surface | D10 |
 | Email templates | Deliberately light; five attempts to hold dark against Outlook for Mac failed | CLAUDE.md landmine, `docs/NOTIFICATIONS.md` |
 | `manifest.webmanifest` `theme_color` / `background_color`, PWA splash | A static file cannot follow a per-user runtime preference | Permanent documented remnant |
@@ -233,7 +296,7 @@ Inherited from v23 and re-affirmed, or taken in this document. Each is binding o
 | D9 | Ship gate | WCAG AA across the ink × surface matrix, plus the colour lint rule, plus the staged default. | v23 |
 | D10 | Studio | Sanity Studio's internal theming is out of scope. | v23 |
 | D11 | Admin editability | `themePref` is member-only, never in `MemberForm`. | v23 |
-| D12 | **Scope** | **Member surface first. 18 admin panel files deferred.** | This doc, user 2026-08-07 |
+| D12 | **Scope** | **Member surface first. 17 admin panel files deferred.** | This doc, user 2026-08-07 |
 | D13 | **`/admin` subtree** | **Pinned dark in both themes via a wrapper that re-declares dark token values.** | This doc, derived (§4.2) |
 | D14 | **`(admin)` chrome** | **Follows the theme. Light chrome around a dark Studio panel is accepted.** | This doc, user 2026-08-07 |
 | D15 | **`themePref` delivery** | Extend the **existing** `GET /api/me` projection. A JWT claim is unsafe — the session carries a 30s-TTL `{_id, disabled, role}` projection. | This doc, correcting v23 |
@@ -248,8 +311,8 @@ which is the test for splitting. They are **not** split because the document was
 |---|---|---|---|
 | **A — Verification scaffolding** | The inventory, the guards, the gallery, the VR harness exist. | No user-visible change. App is dark-only, unchanged. | Revert; nothing user-facing moved. |
 | **B — Token layer + hex/`brand-*` migration** | Member-surface hex and `brand-*` utilities resolve through tokens. Dark values byte-identical. | Dark-only app, visually identical except the enumerated normalisations. | Atomic. Tag before; a half-migrated token layer compiles and renders wrong. |
-| **C — Palette families + `/admin` pin** | The ~881 raw palette classes and 45 `white`/`black` in scope resolve through roles; `/admin` pinned dark. | Dark-only, per-family visual deltas enumerated and reviewed. | Per colour family; each family independently revertible. |
-| **D — Light counterpart design** | `.light` carries a designed counterpart for every token and all 16 `.brand-*` classes. | Light values exist but are **unreachable** — `forcedTheme="dark"` still in force. | Atomic. Tag before; the `brand.css` guard demands a full counterpart set. |
+| **C — Palette families + `/admin` pin** | The in-scope raw palette classes and `white`/`black` uses resolve through roles; `/admin` pinned dark across all three channels of §4.2. **A subset of the 881 palette and 45 `white`/`black` measured app-wide — Child A's inventory produces the exact in-scope figure, and C is not sized until it does.** | Dark-only, per-family visual deltas enumerated and reviewed. | Per colour family; each family independently revertible. |
+| **D — Light counterpart design** | `.light` carries a designed counterpart for every token and all 17 `.brand-*` classes. **Acceptance also requires: the `/admin` pin still holds across all three channels (§4.2), proven executably — D is the first phase where `.light` values exist to prove it against.** | Light values exist but are **unreachable** — `forcedTheme="dark"` still in force. | Atomic. Tag before; the `brand.css` guard demands a full counterpart set. |
 | **E — The setting** | `themePref`, the `/me` control, the mirror, `forcedTheme` removed, `themeColor`, iOS status bar. | Light mode reachable. Unset → Dark. | Re-add `forcedTheme="dark"`: one line, instant. |
 | **F — Staged rollout** | Default moves unset → Follow System; Spanish announcement. | Members on system preference. | Revert the default constant. |
 
@@ -330,7 +393,7 @@ its conclusions sometimes rested on false reasons.
   one file over, with live consumers including `selection:bg-brand-beam/35` on **both**
   root layouts. A file-scoped guard both misses the rename and fails today.
 - **`brand-` means two things and only one is retired.** The ~213 colour utilities are
-  retired; the **16 `.brand-<component>` compositing classes** are kept and given light
+  retired; the **17 `.brand-<component>` compositing classes** are kept and given light
   counterparts in Child D. A regex on `brand-` strips `brand-atmosphere` off both root
   layouts' `<body>`.
 - **`vitest.config.ts:15` includes only `app/**`, `scripts/**`, `e2e/**`.** A guard placed
@@ -374,20 +437,27 @@ its conclusions sometimes rested on false reasons.
 | # | Assumption | Impact if false | Validation point |
 |---|---|---|---|
 | A1 | The 45/55 member/admin split is stable enough to plan against. | Child B/C scope grows. | Child A's generated inventory re-derives it. Counts have moved every week; the split ratio has not been measured twice. |
-| A2 | Shared components used by both surfaces can be tokenised without breaking the pinned `/admin` subtree. | D13's pin mechanism fails and admin screens break. | Child C must prove it with a rendering test, not by inspection. |
+| A2 | Shared components used by both surfaces can be tokenised without breaking the pinned `/admin` subtree. | D13's pin mechanism fails and admin screens break. | **Child D, not Child C.** At C's end state `forcedTheme="dark"` is still in force and `.light` holds no values, so a light-mode render test written at C resolves every token to its `:root` dark value and passes vacuously, and a `dark:`-channel test cannot fail because `<html>` always carries `.dark`. C builds the pin and may assert its structure; **D owns the executable proof**, because D is where `.light` values first exist. If C wants earlier signal it must synthesise a `.light` root with stub values — and say so, rather than shipping a test that cannot fail. |
 | A3 | Deferring admin does not strand a member-reachable screen. | A member hits an unthemed screen. | Child A's inventory must classify every file by render surface, and the classification is reviewed. |
 | A4 | The lint ban can be scoped to in-scope files without becoming unenforceable. | Drift returns to the themed surface. | Child C. The scoped rule must fail on a new literal in an in-scope file. |
+| A6 | `@capacitor/status-bar` can be added and verified on a real device. | §8.3 item 7 gates acceptance on device verification, and CLAUDE.md records Apple Developer enrollment as in progress. **Verified: the plugin is not in `package.json` today.** Child E must add it and run `npx cap sync` plus a native rebuild. | Child E. **Fallback if enrollment is still pending:** ship E without the status-bar plugin, leave the native bar at its `Info.plist` default, and record it as a known remnant — the web surface is unaffected. This must not silently block the whole delivery. |
 | A5 | `#00bfff` reads acceptably as the accent on light surfaces. | **Believed false already.** Measured: `#00bfff` on `#ffffff` is **2.12:1**, against `#010b17` it is **9.32:1**. It fails AA for text and for UI components on any light surface, so D6's "`#00bfff` wins" is a *dark-side* decision only. | Child D must design a distinct light accent value and must not reuse `#00bfff` for foreground roles on light surfaces. Recorded here so Child D does not inherit D6 as a both-themes constraint. |
 
 ## 11. Follow-on scope, named so it is a decision
 
-**The 18 admin panel files and their 1,309 colour decisions are deferred, not cancelled.**
+**The 17 admin panel files and their 1,306 colour decisions are deferred, not cancelled.**
+(`app/(admin)/layout.tsx` is in scope — §4, §5.)
 
 While deferred:
 
-- `/admin` is pinned dark (D13) and a test asserts it.
+- `/admin` is pinned dark across all three channels (§4.2) and a test asserts it.
 - The colour lint ban does **not** cover `components/admin/**`, so those files keep
   drifting. This is the accepted cost of D12 and must be stated in the superseding ADR.
+  **Mechanism:** §9 prescribes an explicit `files: ["app/**"]` block, but
+  `app/components/admin/**` is *inside* `app/**`, so scoping alone does not exclude it. The
+  clause needs an explicit `ignores` list carrying all three exemptions —
+  `app/components/admin/**`, `app/utils/emailShell.ts`, and `app/**/__tests__/**` — each
+  with its reason recorded beside the rule. Child C owns it.
 - ADR-0008 is superseded **partially**: the forced-dark decision is lifted for the member
   surface and retained, with a reason, for admin.
 
@@ -414,11 +484,14 @@ Every requirement has exactly one primary owner. Cross-cutting verification is m
 | Typography theme + `dark:prose-invert` removal | B | E verifies on device |
 | Computed-colour equality per migrated site | B | — |
 | Raw palette + `white`/`black` → roles | C | — |
-| `/admin` dark pin + test (D13) | C | E verifies in light |
-| Colour lint rule, staged per family | C | B lands the first clauses |
+| `/admin` dark pin — all 3 channels, built (D13, §4.2) | C | — |
+| `/admin` pin — **executable proof in light** | **D** | E re-verifies on the real setting |
+| Colour lint rule, staged per family, with its `ignores` list | C | B lands the first clauses |
+| `(admin)/layout.tsx` token migration | **B** | D makes it follow the theme |
 | `.light` values for all tokens | D | — |
-| Light counterparts for 16 `.brand-*` classes | D | — |
-| Resolution for the 3 admin-only `.brand-*` classes (§4.2a) | D | C's pin makes them unreachable |
+| Light counterparts for 17 `.brand-*` classes | D | — |
+| The 4 shared `.brand-*` counterparts stay pin-overridable (§4.2 ch. 2) | D | C's pin depends on it |
+| Resolution for the 3 colour-bearing admin-only `.brand-*` classes (§4.2a) | D | C's pin makes them unreachable |
 | Distinct light accent value; `#00bfff` not reused on light (A5) | D | AA matrix |
 | WCAG AA matrix, both themes | D | integration acceptance |
 | `(admin)` chrome follows theme (D14) | D | E |
