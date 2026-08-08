@@ -60,6 +60,9 @@ like any other cycle. Incident work runs with the least scrutiny, which makes it
 cycle most worth closing properly. The 2026-08-07 SMTP incident (an afternoon of
 production commits, zero entries) is the case this rule exists for.
 
+An entry's `outcome` reflects the agent's own verdict, not the cycle's mood: a report
+carrying any Important finding logs as `findings`, never `ok`.
+
 A missing or malformed line is an `hr-officer` finding, never a runtime error. Nothing
 in the app reads this file.
 
