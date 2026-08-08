@@ -17,7 +17,7 @@ No secrets, credentials or personal data appear here. Colour literals are design
 - **Accepted requirement source:**
   [`2026-08-07-light-mode-member-first-scope.md`](../specs/2026-08-07-light-mode-member-first-scope.md),
   re-approved at digest `3a927bd8b70c3726134a5254e8e8c258a90eb689ba539397d7bcf0196abb1478`
-  (nine non-blocking items folded in afterwards, recorded there as un-reviewed).
+  (**ten** non-blocking items folded in afterwards and recorded there as un-reviewed — nine at re-approval, plus §8.1a recording this split. The parent's status line still says nine; correcting it is this plan's to carry, since this plan is the split's record.)
 - **Supersedes, jointly with A2:** `2026-08-07-light-mode-A-verification-scaffolding.md`,
   closed without approval. Its review log records what six rounds verified; **that evidence
   is inherited here rather than re-derived.**
@@ -137,6 +137,16 @@ network. The only runtime artifact is one CSS declaration that nothing currently
     carries no colour either;
   - the **33 rule bodies** → `B`, which rewrites them off the retired variables;
   - the **17 classes needing light counterparts** → `D`.
+- **Categories are not mutually exclusive; state a precedence order.** Bare hex overlaps
+  inline styles, SVG attributes and runtime maps — `fill="#4285F4"` at `signin/page.tsx:157` is
+  both. Assign each site **exactly one** category by a stated precedence (most specific wins),
+  or the "authoritative" total double-counts and step 2's reconciliation against the parent's
+  2,397 is not comparing like with like.
+- **Cover colour keywords, not just `white`/`black`.** `transparent` and `currentColor` are
+  live theming affordances — `app/(client)/globals.css` carries
+  `-webkit-tap-highlight-color: transparent`, and the parent's §3 names `currentColor` as the
+  intended mechanism for SVG fills. A scan that misses them under-reports the surface Child B
+  must reason about.
 - **Three scanning rules, each of which has already caused a wrong count:**
   1. **Case-insensitive** — both `#010B17` and `#010b17` occur.
   2. **Never line-anchored** — `.brand-admin-frame` is indented and nested at `brand.css:308`;
@@ -165,6 +175,23 @@ network. The only runtime artifact is one CSS declaration that nothing currently
   above are cited with today's line numbers for a human reader, but the seed data must key on
   file + literal value — otherwise the exemption drifts off its rows on the next unrelated edit,
   which is the same defect the snapshot key exists to avoid.
+- **"Normalised utility" is defined here, because the key's stability is a stop condition.**
+  A utility normalises to its **property + variant chain**, with the colour value removed and
+  the `dark:` variant **preserved as part of the key** — `dark:border-[#f59e0b]` normalises to
+  `dark:border`, not to `border`. Collapsing the variant merges both sides of a pair into one
+  undifferentiated row; dropping it loses which literal is the dark side. On the parent's
+  worked example (`DayCard.tsx:37` `border-[#78350f] dark:border-[#f59e0b]`) the two sides must
+  remain distinguishable rows.
+- **Emit the pair relation as a first-class output.** For every element carrying a
+  light/dark pair on the same property, record both sides and their relation. Three consumers
+  depend on it and none can derive it from per-literal rows:
+  1. **Step 3 criterion 3** — composed, alpha-baked tokens exist because the parent measured
+     **169 of 225** adjacent same-utility pairs differing in *alpha*, not just colour;
+  2. **Child B**, which cannot map a literal to a composed token without knowing its partner;
+  3. **A2's AA-gate work**, which derives the dark composited failing set from the
+     nesting map **plus this inventory's same-element pairs**. Without this output that input
+     has no producer, and the parent's D9 ship gate loses an input — the failure mode the
+     parent itself calls "the gate that gets waived".
 - **Snapshot key: file + normalised utility + value multiset. Never line numbers.** Lines are
   emitted for humans and excluded from the assertion. A line-keyed snapshot turns `npm test`
   red on any unrelated commit that shifts a line in a colour-bearing file — in a tree that
@@ -228,9 +255,21 @@ network. The only runtime artifact is one CSS declaration that nothing currently
     `(client)/admin/page.tsx:37` (`--brand-signal`), both naming variables Child B retires.
     A file-scoped guard stays green because it never reads `.tsx`, the snapshot stays green
     because the class string is unchanged, and the inset glow and admin-tab ring vanish.
-  - **Declaration set is the union** of `brand.css` and `tailwind.config.ts`. The latter
-    declares seven `brand.*` keys against the same variables, with live consumers including
-    `selection:bg-brand-beam/35` on both root layouts.
+  - **Declaration set is `brand.css`'s custom-property declarations ONLY.** An earlier revision
+    called it "the union of `brand.css` and `tailwind.config.ts`". **That is wrong and would
+    disable the guard:** `tailwind.config.ts` declares **zero** custom properties (verified) —
+    `:15–21` and `:25–27` contain only `var()` *references*. Harvesting "declarations" from it
+    makes every `--brand-*` self-declaring, so after Child B renames `--brand-beam` the
+    reference at `AdminPanel.tsx:399` stays green and the admin-tab ring vanishes silently —
+    precisely the failure this guard exists to prevent. It would also render the `--font-*`
+    exclusion list dead code. **`tailwind.config.ts` belongs to the *reference* set**, where
+    this plan already correctly puts it.
+  - **A `var()`-integrity guard does not cover Tailwind *utility* references, and this plan
+    does not pretend otherwise.** `selection:bg-brand-beam/35` on both root layouts
+    (`(client)/layout.tsx:58`, `(admin)/layout.tsx:42`) consumes the `brand.beam` **key**, not
+    a `var()`. Deleting that key silently drops the utility. **That failure is Child B's to
+    guard** — it is the change that removes the key — and is recorded here so the gap is a
+    decision rather than an oversight.
   - **Colour-scoped, and the mechanism is stated once here.** Classify *declared* variables by
     value shape, and treat an *undeclared* reference as a colour **unless it appears on a named
     non-colour exclusion list** — which today holds exactly the three `--font-*` names
@@ -259,7 +298,7 @@ network. The only runtime artifact is one CSS declaration that nothing currently
     the drift class this guard exists to catch.
 - **Placement:** under `app/utils/__tests__/`. Outside `vitest.config.ts:15`'s three roots a
   guard never matches and never runs.
-- **Verification:** (a) fails against a scratch `var(--nonexistent)`. (b) is proven green today
+- **Verification:** (a) is proven by a **committed** unit test over a synthetic source string — not a manual scratch edit, which leaves no artifact. The same standard this plan applies to the scanner and to (b). (b) is proven green today
   **and proven to fire**, by a unit test feeding it a synthetic `.light` block with one custom
   property and one missing counterpart. **A dormant guard nobody has seen fail is not a guard.**
 - **State after:** the token file has enforcement for the first time.
@@ -303,6 +342,9 @@ network. The only runtime artifact is one CSS declaration that nothing currently
 | No loose `brand-` match | `brand-atmosphere` is **never** dispositioned `B` or `C` | Stripping the body wash off both root layouts |
 | Comments are stripped | `PlannerGrid.tsx:1497` does **not** appear; `:1499` does | An invented colour decision |
 | Triplets are captured | The seven `:root` colour values appear | The token file omitting itself from its own inventory |
+| Pairs are emitted | `DayCard.tsx:37`'s `border-[#78350f] dark:border-[#f59e0b]` appears as two distinguishable rows **and** a recorded pair | A2's AA-gate input having no producer, and Child B being unable to map a literal to a composed token |
+| Categories do not double-count | `signin/page.tsx:157` (`fill="#4285F4"`) occupies exactly one category | An inflated "authoritative" total that cannot reconcile against the parent |
+| Occurrences and bodies are separate figures | Both emitted; `brand.css:172–173` share one body | Mis-sizing Child B (bodies) and Child D (classes) from one conflated number |
 | Exemptions survive | `emailShell.ts`, the Google mark and the static `themeColor` are `exempt`, not `B`/`C` | Child B tokenising the email palette — which `emailTemplateGallery.test.ts` cannot catch, since it asserts `bgcolor` presence but never that a colour is a literal |
 | Reference integrity | Guard fails on a scratch `var(--nonexistent)`; green today | Child B's silent-drop rename failure |
 | Reference set is not file-scoped | Guard sees `AdminPanel.tsx:399` and `(client)/admin/page.tsx:37` | The exact two references Child B's retirement breaks |
@@ -361,7 +403,7 @@ network. The only runtime artifact is one CSS declaration that nothing currently
 - **Prerequisites supplied to later plans:** the generated inventory and its guard; the
   reviewed token vocabulary and its stated storage convention; an enforced `brand.css`; the
   `.light` branch A2's provider-less gallery needs.
-- **Outputs promised:** **A2** consumes `.light { color-scheme }` and the vocabulary.
+- **Outputs promised:** **A2** consumes `.light { color-scheme }`, the vocabulary, **and the inventory's same-element pair relation**, which its AA-gate step derives the dark composited failing set from.
   **Child B** consumes the inventory **minus its `exempt` rows** as its mapping table, and the
   vocabulary as its target. **Child C** consumes the per-family analysis.
 - **Adversarial review order:** this plan (**Standard** — one fresh cold `APPROVED`), then A2,
