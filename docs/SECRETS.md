@@ -165,7 +165,7 @@ npx vercel env rm EMAIL_REDIRECT_TO production --yes
 
 **Why it is set.** It caps the DISTINCT RECIPIENTS one sweep may claim. That cap is what makes stage 8's unconditional delete safe: a sweep is supposed to fully discharge everything it claims, so anything it claims and cannot send is **destroyed**, not retried. When `ms_per_send` is unknown or bad, a low value turns that risk into a bounded experiment — selection claims only what it can serve and leaves the rest **pending and unclaimed** (`report.deferred`), which the next sweep picks up.
 
-**Set to `2` on 2026-08-07.** First `3`, to take a real `msPerSend` reading for external recipients while risking three notices instead of seventeen; that reading came back at **14 413 ms per send**, which makes exactly TWO sends fit the 40 s budget — so the cap is now the serviceable count itself, and a sweep claims nothing it cannot send. Restore the default of 40 only once `ms_per_send` is small enough to justify it.
+**Currently ABSENT — the code default of 40 applies.** It was set to `3` on 2026-08-07 to take a real `msPerSend` reading (which came back at **14 413 ms**), then to `2` because two sends are what fit a 40 s budget serially. Both are removed, and the reason is the product requirement rather than the arithmetic: a month of roles is published at once, so one sweep owes ~20 people a single grouped email covering their whole month, and stage 6 can only group what stage 3 claimed. A low cap makes the fan-out lossless and FRAGMENTED — per-service singles instead of one monthly email — which is the wrong failure. The cap must therefore stay above the month's distinct recipients, and `SEND_CONCURRENCY` is what has to make that many sends fit.
 
 **How to unset (restore the code default of 40):**
 
