@@ -165,7 +165,13 @@ npx vercel env rm EMAIL_REDIRECT_TO production --yes
 
 **Why it is set.** It caps the DISTINCT RECIPIENTS one sweep may claim. That cap is what makes stage 8's unconditional delete safe: a sweep is supposed to fully discharge everything it claims, so anything it claims and cannot send is **destroyed**, not retried. When `ms_per_send` is unknown or bad, a low value turns that risk into a bounded experiment — selection claims only what it can serve and leaves the rest **pending and unclaimed** (`report.deferred`), which the next sweep picks up.
 
-**Currently ABSENT — the code default of 40 applies.** It was set to `3` on 2026-08-07 to take a real `msPerSend` reading (which came back at **14 413 ms**), then to `2` because two sends are what fit a 40 s budget serially. Both are removed, and the reason is the product requirement rather than the arithmetic: a month of roles is published at once, so one sweep owes ~20 people a single grouped email covering their whole month, and stage 6 can only group what stage 3 claimed. A low cap makes the fan-out lossless and FRAGMENTED — per-service singles instead of one monthly email — which is the wrong failure. The cap must therefore stay above the month's distinct recipients, and `SEND_CONCURRENCY` is what has to make that many sends fit.
+**Set to `2` — the number of sends that actually fit a 40 s budget at the measured ~14 s each.** It is the lesser of two bad options, and both are worth understanding before anyone changes it.
+
+The cap governs what a sweep **claims**, and claiming is what commits a notice to being deleted whether or not it was sent. Above the serviceable count, the excess is destroyed. Below the month's distinct-recipient count, the fan-out fragments, because stage 6 can only group what stage 3 claimed — and a month of roles is published at once, so the requirement is ONE grouped email per member covering their whole month. So: high loses mail, low fragments it. `2` chooses fragmentation, because losing it is worse.
+
+**This does not protect `setlist` notices.** One setlist notice carries ALL of a service's participants in a single document, so it cannot be split by any cap: it is taken alone, over budget, and everyone past the second recipient is destroyed. That gap closes only when `ms_per_send` comes down or the sweep stops consuming what it never attempted — see `docs/NOTIFICATIONS.md`.
+
+Raise it to the default of 40 the moment a send costs under ~2 s, and not before.
 
 **How to unset (restore the code default of 40):**
 

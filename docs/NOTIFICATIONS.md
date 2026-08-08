@@ -158,6 +158,26 @@ Things that are counter-intuitive and were each a real defect at some point.
   reliable hook to win from the sending side.
 - **Unpublishing does not notify, and a date move does not notify.** Both are
   deliberate; see spec §1 and §4.
+- **Concurrency does not help. Tested twice, and it makes things worse.**
+  2026-08-08, ten messages in flight to ten DIFFERENT gmail addresses:
+  `sendMs: 20020`, `emailed: 2`, and eight `SMTP send timed out after 20000ms`.
+  In twenty seconds with ten connections open the server accepted **two** —
+  the same rate it manages serially. The server serializes acceptance for remote
+  recipients, so concurrency buys no throughput while turning would-be successes
+  into destroyed notices (stage 8 consumes regardless). `SEND_CONCURRENCY` stays
+  at 1, and the wave machinery in stage 7 stays with it, because both become
+  correct the moment the server does. **Do not re-raise it on the reasoning that
+  pooling or parallelism "should" help — that reasoning has now failed twice
+  against measurement.**
+- **Therefore the grouped monthly email cannot be delivered by tuning this
+  codebase.** ~20 recipients × ~14 s is far past the hosting function's 60 s
+  ceiling at any concurrency and any cap. Two things can fix it, and nothing else
+  can: the **~14 s remote accept on the mail server**, or a change so the sweep
+  **re-pends notices it never attempted instead of consuming them** — which would
+  give grouped-and-lossless delivery spread over several sweeps, since a
+  recipient's notices stay together and are either all served or all returned.
+  The second is a change to the consume contract and needs a plan and review; the
+  first is one setting on someone else's box and fixes everything at once.
 - **Remote recipients cost ~14 s to ACCEPT; local ones cost 67 ms. That is the
   whole problem, and it is server-side.** Measured 2026-08-08 with
   `/api/cron/smtp-probe` (the *Probe the SMTP path* workflow): to a LOCAL
