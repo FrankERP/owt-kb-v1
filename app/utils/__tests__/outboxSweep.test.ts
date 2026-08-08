@@ -764,7 +764,7 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
     });
 
     // 20 s, not the 1 s this once used: stage 7 now admits a wave only if the
-    // worst case (SEND_TIMEOUT_MS, 15 s) fits in what remains, so a budget under
+    // worst case (SEND_TIMEOUT_MS, 20 s) fits in what remains, so a budget under
     // that admits nothing at all and would prove the opposite of the point. The
     // read phase still costs more than this budget, which is what matters here.
     const report = await sweepOutbox({ sendBudgetMs: 20_000 });
@@ -876,7 +876,7 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
     world.recipients = { r1: ["m1"] };
     world.members = members(["m1"]);
     // Reads leave 4 s before the 45 s reserve — room by the old test, nowhere
-    // near enough for a send that may take 15 s.
+    // near enough for a send that may take 20 s.
     let reads_ = 0;
     operationalFetch.mockImplementation(async (query: string, params: Doc = {}) => {
       reads.push({ query, params });

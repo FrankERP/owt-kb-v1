@@ -40,21 +40,10 @@ export const SEND_TIMEOUT_MS = 20_000;
  */
 
 /**
- * How many messages may be in flight at once — the throughput knob, sized from a
- * measurement rather than from caution.
+ * How many messages may be in flight at once. **One**, and the block below is
+ * why — it is a measured result, not caution and not a starting point.
  *
- * `/api/cron/smtp-probe` run against production on 2026-08-07 reported
- * `coldMs:428, warmMs:328, secondColdMs:200`: connect, TLS, greeting and AUTH all
- * complete in well under half a second from Vercel. Yet one send measured ~13.4 s.
- * The cost is therefore in the MESSAGE, not the connection — which is exactly the
- * case pooling cannot help, and the reason `maxConnections: 1` had to go.
- *
- * Serialized, a 17-recipient service needed ~220 s and could not fit in a 60 s
- * function at all; the sweep discharged one email and dropped the rest, because
- * consumption is unconditional. In flight together they need ~3 rounds.
- *
- * Bounded, not unlimited: this dials a shared cPanel/Exim mailbox, which answers
- * a flood with `421 too many connections` rather than with speed.
+ * It also feeds `maxConnections`, so the pool is exactly as wide as this.
  */
 export const SEND_CONCURRENCY = 1;
 

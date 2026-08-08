@@ -484,6 +484,18 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
   const selected: StoredNotice[] = [];
   const union = new Set<string>();
   for (let i = 0; i < due.length; i++) {
+    // The sweep clock reaches stage 2 as well. `resolveRecipients` is one serial
+    // round trip per candidate for setlist and leadNotes notices, up to
+    // SCAN_LIMIT of them, and nothing here was bounded: a large batch of those
+    // could spend the whole sweep SELECTING and leave stage 8 to be killed —
+    // the original wedge, through a path stage 7's two clocks never see.
+    // Breaking here is entirely safe: nothing has been claimed yet, so the
+    // remainder simply stays pending for the next sweep.
+    if (Date.now() - sweepStartedAt >= SWEEP_DEADLINE_MS) {
+      report.deferred = due.length - i;
+      log("notify_sweep_select_deadline", { deferred: report.deferred, selected: selected.length });
+      break;
+    }
     const notice = due[i];
     const recipients = await resolveRecipients(notice);
     if (!selected.length && recipients.length > emailLimit) {
@@ -569,6 +581,15 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
     // ── 4. Classify ─────────────────────────────────────────────────────────
     const pairs: Pair[] = [];
     for (const c of claimed) {
+      // Bounded for the same reason stage 2 is, and it matters MORE here because
+      // these notices are already claimed: overrunning means the function dies
+      // before stage 8 and the lease has to re-offer them. Stopping early only
+      // costs the tail its classification — those notices are still consumed
+      // below, which is the standing best-effort contract, not a new loss.
+      if (Date.now() - sweepStartedAt >= SWEEP_DEADLINE_MS) {
+        log("notify_sweep_classify_deadline", { classified: pairs.length, claimed: claimed.length });
+        break;
+      }
       try {
         pairs.push(...(await classifyNotice(c.notice, today)));
       } catch (err) {
