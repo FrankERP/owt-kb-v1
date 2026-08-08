@@ -56,10 +56,36 @@ export const SEND_TIMEOUT_MS = 20_000;
  * Bounded, not unlimited: this dials a shared cPanel/Exim mailbox, which answers
  * a flood with `421 too many connections` rather than with speed.
  */
-export const SEND_CONCURRENCY = 10;
+export const SEND_CONCURRENCY = 1;
 
 /*
- * WHY 10, AND WHY THE EARLIER "8 DELIVERS ZERO" RESULT DOES NOT SETTLE IT.
+ * TESTED TWICE, AT 8 AND AT 10. CONCURRENCY DOES NOT WORK AGAINST THIS SERVER.
+ *
+ * 2026-08-08, ten messages in flight to TEN DIFFERENT gmail addresses, with the
+ * claim phase fixed so stage 7 genuinely ran: `sendMs: 20020`, `emailed: 2`, and
+ * eight `SMTP send timed out after 20000ms`. In twenty seconds with ten
+ * connections open the server accepted TWO messages — the same ~1-per-12-seconds
+ * it manages serially. The earlier 8-wide result was dismissable as a
+ * single-domain artifact; this one is not, and the two agree.
+ *
+ * So the server serializes acceptance for remote recipients at a fixed rate, and
+ * concurrency buys nothing while costing a great deal: every message that cannot
+ * be accepted inside SEND_TIMEOUT_MS is a notification DESTROYED, because stage 8
+ * consumes regardless. Ten wide turned two successes into two successes and eight
+ * losses. Serial is not a compromise here, it is strictly better.
+ *
+ * The consequence for the product requirement is worth stating plainly rather
+ * than leaving in the arithmetic: a monthly role publish owes ~20 people one
+ * grouped email each, and 20 × ~14 s is far past the hosting function's 60 s
+ * ceiling at ANY concurrency. That requirement cannot be met by tuning this
+ * file. It needs the ~14 s remote accept fixed on the mail server, or the sweep
+ * changed so that notices it never attempted are re-pended instead of consumed.
+ *
+ * Kept as a named constant, and the wave machinery in stage 7 kept with it,
+ * because both become correct the moment the server does — not because the value
+ * is in doubt.
+ *
+ * Historical note on why this was ever raised:
  *
  * The load this exists for is a MONTHLY ROLE PUBLISH: a month's services are
  * generated and published together, so one sweep owes ~20 people an email each
