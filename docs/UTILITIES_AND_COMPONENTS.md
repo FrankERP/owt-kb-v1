@@ -102,11 +102,37 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
 - **`focusTrap.ts`** (`trapTabTarget` pure tab math) + **`useFocusTrap.ts`** (WAI-ARIA dialog
   focus hook).
 
+### Colour inventory & token guards (light-mode migration, Child A1)
+- **`scripts/colour-inventory.mjs`** — emits every colour decision in `app/**` (plus
+  `tailwind.config.ts`, a named out-of-glob input) as stable, sorted JSON, each row
+  dispositioned to the child that owns it: `B`, `C`, `D`, `keep` or `exempt`. Run
+  `node scripts/colour-inventory.mjs`; `--stdout` prints without writing. **Importing the
+  module is pure** — side effects run only when it is the entry point, because the guard
+  imports it and an import that wrote the artifact would make the comparison vacuous.
+  **This output supersedes every hand-count in the planning documents.**
+- **`scripts/lib/strip-comments.mjs`** — blanks comments while preserving byte offsets, so a
+  colour named in prose is never counted. Takes `{ syntax: "js" | "css" }`: `//` is a comment
+  in JS/TS and is **not** one in CSS, where blanking to end-of-line would corrupt any
+  `url(https://…)`. `protectedReadAudit.ts` re-exports it, so there is one implementation.
+- **`__tests__/colourInventory.test.ts`** — fails when a live scan diverges from the committed
+  artifact. Keyed on file + normalised utility + value, **never line numbers**, so an
+  unrelated commit that shifts a line leaves it green by design. Also proves the scanner
+  detects each category against a synthetic source.
+- **`__tests__/brandCss.test.ts`** — structural guard for the token file. (a) every colour
+  `var()` referenced across `app/**` + `tailwind.config.ts` is declared **in `brand.css`
+  only** — `tailwind.config.ts` declares zero custom properties, so treating it as a
+  declaration source would make the guard permanently green. (b) theme parity, **dormant**
+  until `.light` declares its first custom property in Child D. Note `brand.css` is outside
+  *lint* but not ungated: `admin/__tests__/participationAlongside.test.tsx` also pins it.
+
 ### Types & providers
 - **`interface.tsx`** — shared domain TS interfaces (no runtime): `Post`, `Tag`, `Author`,
   `TeamMember`, `SundayRole`/`SaturdayRole`/`SpecialRole`, `SetlistProposal`, etc.
-- **`Provider.tsx`** — client root provider: `SessionProvider` → `ThemeProvider` (dark default,
-  `enableSystem={false}`) → `PlayerProvider`.
+- **`Provider.tsx`** — client root provider: `SessionProvider` → `ThemeProvider`
+  (`forcedTheme="dark"`, `enableSystem={false}`) → `PlayerProvider` → `CueDialogProvider`.
+  **Note for the light-mode migration:** with `enableSystem={false}` and no `defaultTheme`,
+  next-themes resolves `defaultTheme` to `"light"` — so removing `forcedTheme` alone would
+  ship unset members into *light*. Child E must add `defaultTheme="dark"` explicitly.
 
 ---
 

@@ -205,12 +205,72 @@ mechanism that resolves the first two.
 - The round-1 artifact asserted "the nine densest files are admin panels" when the author's own
   measurement, taken minutes earlier, showed seven of nine. Data in hand, overstated anyway.
 
+## Amendment cycle — rounds 5 and 6, and re-approval
+
+**Logged 2026-08-08. This section was owed from the moment the amendment landed and was not
+written at the time — a CLAUDE.md violation (every completed review gets a committed log), and
+one that A1 was papering over by citing items as "recorded there" when nothing recorded them.**
+
+Child A's review established that the gallery's `/auth/` placement had no justification that
+discriminated it from a gated path, and the user chose gating on 2026-08-07. That changed
+requirements this document owned, so its round-4 approval at `4fbc41c4` went **stale** and it
+was re-reviewed.
+
+| Round | Digest | Commit | Verdict |
+|---|---|---|---|
+| 5 | `5518b06c…` | `b5fc015` | `CHANGES_REQUIRED` |
+| 6 | `3a927bd8…` | `9151750` | **`APPROVED`** |
+
+**Round 5's blocker.** §6 invariant 8 still read "The theme gallery is such a route" — an
+unauthenticated one — while §8.4, §8 and §12 said the opposite. §6 is the document's most
+normative section, so a child resolving the conflict toward it would have rebuilt the public
+placement, re-added a `PUBLIC_ROUTES` entry, and reopened the trust-boundary change the
+Critical→Standard drop depends on being absent. Fixed.
+
+**Also corrected in round 5, and worth recording because the conclusion was right for a wrong
+reason:** §8.4 claimed the gallery's token-only gate lets a *disabled* member in. It does not —
+`proxy.ts:10–12` redirects any token without `sanityId`, and `auth.ts:247` strips it for an
+inactive member. The real residual is narrower: `withAuth` reads the JWT via `getToken` without
+running the `jwt` callback, and the provider-less layout mounts no `SessionProvider`, so a stale
+cookie can outlive a deactivation there.
+
+**Round 6 returned `APPROVED`** at digest `3a927bd8b70c3726134a5254e8e8c258a90eb689ba539397d7bcf0196abb1478`,
+with nine non-blocking items. Byte identity was verified across the recorded round digest, the
+post-verdict snapshot and the canonical file.
+
 ## Post-approval changes
 
-**One, disclosed:** the artifact's `**Status:**` line was updated from "Draft — not approved"
-to record the approval and its digest. This is metadata, not a requirement, and no other byte
-changed. The approved content digest above remains the authoritative reference; anything
-beyond that line falls outside this approval.
+**Twelve, all disclosed and all un-reviewed.** The approved content digest above remains the
+authoritative reference; everything here falls outside that approval.
+
+1–9. The nine non-blocking items from round 6, folded in immediately after approval: two §6
+invariants Child E lands on (cache invalidation; client mutation handlers); a D13 carve-out for
+the gallery, which is the one production route that ignores `themePref`; a §12 row assigning
+Child A a light-capable host for Child D's two-theme checks; comment-handling guidance pointing
+at the repo's existing `stripComments`; the `.light`-after-`:root` source-order requirement;
+the `TextSizeControl`/`textZoom` precedent for Child E; and two citation corrections.
+
+10. **§8.1a** — records that Child A was split into A1 (measurement) and A2 (rendering) after
+six rounds without approval, and that every "A" row in §12 should be read as "A1 and/or A2".
+
+11. **§9 declaration-set correction** — the section said "the declaration set is a union" of
+`brand.css` and `tailwind.config.ts`. False: that file declares **zero** custom properties. As
+written it would have made the guard permanently green against the rename it exists to catch.
+
+12. **§9 `brand.css`-is-not-ungated correction** — the section said `brand.css` "sits outside
+every gate" and that "`tsc` and vitest are blind to it". False:
+`app/components/admin/__tests__/participationAlongside.test.tsx:954` reads the file and pins
+`.brand-admin-frame` (`:992`), `[data-route-main]:has(.planner-wide)` (`:1003`) and
+`.brand-admin-shell` (`:1015`). **This claim survived ten review rounds across three
+artifacts** — every reviewer checked the two tools the claim named, and nobody grepped for a
+reader of the file. It matters because Child B rewrites the rule bodies of two classes that
+test already pins.
+
+Items 10–12 landed in commits `d9589f9`, `02bdf8d` and `641e001`.
+
+**Two of these three corrections fix claims that were false in an approved document.** That is
+the honest state: approval at `3a927bd8` certifies that a cold reviewer found no blocking issue
+at that digest, not that every sentence in it is true.
 
 ## Guarantees
 

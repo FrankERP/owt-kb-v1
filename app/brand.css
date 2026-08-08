@@ -13,6 +13,20 @@
   --brand-duration-reveal: 210ms;
 }
 
+/* Light branch. `:root` above hardcodes `color-scheme: dark`, which is masked in the
+   app by next-themes' `enableColorScheme` inline style — but A2's theme gallery runs
+   with NO provider, which removes that mask, and Child E needs this branch regardless.
+
+   MUST stay AFTER `:root`: both selectors are specificity (0,1,0), so the override is
+   pure source order, and the parity guard checks presence rather than order. A `.light`
+   block placed above `:root` passes every gate and themes nothing.
+
+   Holds `color-scheme` ONLY. Child D adds the colour custom properties, and doing so
+   self-activates the theme-parity assertion in `app/utils/__tests__/brandCss.test.ts`. */
+.light {
+  color-scheme: light;
+}
+
 .brand-atmosphere {
   background-color: rgb(var(--brand-blackout));
   background-image:
