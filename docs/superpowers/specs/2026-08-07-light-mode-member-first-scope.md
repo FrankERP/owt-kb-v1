@@ -1,7 +1,7 @@
 # Scope spec: Light mode via role-based design tokens
 
 **Date:** 2026-08-07
-**Status:** **APPROVED (re-approved after amendment)** at digest `3a927bd8b70c3726134a5254e8e8c258a90eb689ba539397d7bcf0196abb1478`, round 2 of the re-review, commit `9151750`. Nine non-blocking items were folded in afterwards and are listed as **post-approval, un-reviewed** in the review log beside this file. **Approval authorizes writing the child plans, not implementing them.**
+**Status:** **APPROVED (re-approved after amendment)** at digest `3a927bd8b70c3726134a5254e8e8c258a90eb689ba539397d7bcf0196abb1478`, round 2 of the re-review, commit `9151750`. **Ten** non-blocking items were folded in afterwards (nine at re-approval, plus §8.1a recording the A1/A2 split, plus this §9 correction) and are listed as **post-approval, un-reviewed** in the review log beside this file. **Approval authorizes writing the child plans, not implementing them.**
 **Artifact level:** Parent scope spec. Defines *what must be true*. Child implementation
 plans are written only after this document is approved.
 **Supersedes as the scoping authority:** `2026-07-29-light-mode-role-tokens-design.md`
@@ -444,10 +444,16 @@ reasons.
   11 `:root` properties are non-colour (`--brand-radius-panel`, `--brand-radius-control`, two
   `--brand-duration-*`, `brand.css:10–13` — note `:9` is `--brand-steel`, a colour), and an unscoped parity assertion would demand a
   nonsense `.light --brand-radius-panel`. Child A owns (a); (b) self-activates in Child D.
-- **The declaration set is a union.** `tailwind.config.ts:15–21` declares seven `brand.*`
-  keys as `rgb(var(--brand-<name>) / <alpha-value>)` — the same variables `brand.css` uses,
-  one file over, with live consumers including `selection:bg-brand-beam/35` on **both** root
-  layouts. A file-scoped guard both misses the rename and fails today.
+- **The declaration set is `brand.css` only — an earlier revision of this section said "a
+  union" with `tailwind.config.ts`, and that was false on both halves.** Corrected 2026-08-08
+  (disclosed post-approval). `tailwind.config.ts:15–21` declares **zero** custom properties; it
+  only *references* the same variables through seven `brand.*` keys. Treating it as a
+  declaration source makes every `--brand-*` self-declaring, so the guard goes permanently
+  green against exactly the rename it exists to catch. And a `brand.css`-scoped guard does
+  **not** "fail today" — verified green. `tailwind.config.ts` belongs to the **reference** set.
+  Separately, `selection:bg-brand-beam/35` on both root layouts consumes the `brand.beam`
+  **key**, not a `var()`, so no `var()`-integrity guard covers it — that failure is Child B's
+  to guard, since B is the change that removes the key.
 - **`brand-` means two things and only one is retired.** The 213 colour utilities are
   retired; the **17 `.brand-<component>` compositing classes** are kept and given light
   counterparts in Child D. A regex on `brand-` strips `brand-atmosphere` off both root
