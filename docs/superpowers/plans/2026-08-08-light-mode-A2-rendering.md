@@ -159,7 +159,7 @@ All 19 parent invariants. The four this plan can plausibly break:
 | `app/utils/__tests__/routeMatcher.test.ts` | Asserts the public-route set | **Unchanged.** The route is gated, so it never enters `ungated` |
 | `playwright.vr.config.ts` *(new)* + `e2e/theme-gallery/` *(new)* | — | Read-only VR config that starts nothing capable of writing |
 | `docs/ROUTES.md`, `docs/adr/`, `docs/UTILITIES_AND_COMPONENTS.md`, `docs/SECRETS.md` | Current records | Route prose + row; ADR-0014, ADR-0015; new components; any VR credential |
-| `docs/superpowers/specs/2026-08-07-light-mode-member-first-scope.md` | Approved parent | **Modified** — the "17 light counterparts" claim in §5, §8, §9 **and** §12 corrected to the generated 15, disclosed post-approval. `:471`'s "17, not 16" is a different, correct claim and is left alone |
+| `docs/superpowers/specs/2026-08-07-light-mode-member-first-scope.md` | Approved parent | **Modified** — the "17 light counterparts" claim in §5, §8, §9 **and** §12 corrected to the generated 15, disclosed post-approval. `:473–474`'s "17, not 16" is a different, correct claim and is left alone |
 
 **Trust boundary: unchanged.** The gallery sits on a gated path. It renders presentational
 components only, reads no session itself, performs no fetch and accepts exactly two `[theme]`
@@ -255,8 +255,8 @@ nothing. **The gallery is a verification surface, not product colour.**
   generated inventory dispositions both `exempt` because neither carries colour in any rule
   body: `.brand-admin-frame` (`brand.css:322–326`, inside `@media (min-width: 1280px)` opening at
   `:310` — `max-width` and two paddings) and `.brand-admin-workspace` (`:346–348` —
-  `min-width: 0`). *(A1's merge added 14 lines above these; earlier citations of `:308`/`:296`/
-  `:332` are pre-A1 and stale, including the parent's `:471`.)*. A swatch of either baselines nothing theme-relevant.
+  `min-width: 0`). *(A1's merge added 14 lines above these; any citation of `:308`/`:296`/`:332` is pre-A1 and
+  stale. The parent's own copy was corrected in the same commit as this note.)*. A swatch of either baselines nothing theme-relevant.
   **The parent said 17 in FOUR places — §5 (`:173`), §8 (`:298`), §9 (`:466`) and §12
   (`:587`) — and all four are now corrected (landed at `bb1270d`)** — and correcting only three would leave §9 asserting the superseded figure in the
   section Child D is most likely to read. All four are corrected by this plan.
