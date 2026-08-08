@@ -864,6 +864,72 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
     expect(peakInFlight).toBeLessThanOrEqual(8);
   });
 
+  it("abandons a selection it ran out of time to serve, rather than claiming it", async () => {
+    // Claiming is what commits a notice to deletion. A sweep that reaches the
+    // deadline during SELECTION is already too slow to send, so claiming there
+    // hands stage 4 work it cannot classify — and stage 8 deletes it regardless.
+    // Unclaimed notices are simply still pending, so this path costs a delay and
+    // cannot cost a notification.
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    world.notices = [roleNotice({ _id: "n1", memberId: "m1" }), roleNotice({ _id: "n2", memberId: "m2" })];
+    world.roles = { r1: roleDoc() };
+    world.recipients = { r1: ["m1", "m2"] };
+    world.members = members(["m1", "m2"]);
+    // The due-notices read alone blows the sweep deadline.
+    operationalFetch.mockImplementation(async (query: string, params: Doc = {}) => {
+      reads.push({ query, params });
+      vi.setSystemTime(new Date(Date.now() + 46_000));
+      return routeRead(query, params);
+    });
+
+    const report = await sweepOutbox();
+
+    expect(report.claimed).toBe(0);
+    expect(writeClientPatch).not.toHaveBeenCalled();
+    expect(writeClientDelete).not.toHaveBeenCalled();
+    // Nothing destroyed — everything is still waiting for the next sweep.
+    expect(report.deferred).toBeGreaterThan(0);
+    logSpy.mockRestore();
+  });
+
+  it("counts a tail it could not classify as unserved, so the loss is visible", async () => {
+    // An unclassified notice produces no line, never reaches stage 7's entries,
+    // and so cannot be counted there — yet stage 8 deletes it anyway. The first
+    // version of this guard left that gap and reported `unserved: 0` while
+    // destroying the tail, which reads as GREEN to the workflow gate whose only
+    // job is catching exactly this.
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const team = ids("m", 4);
+    world.notices = team.map((m, i) => roleNotice({ _id: `n${i}`, memberId: m }));
+    world.roles = { r1: roleDoc() };
+    world.recipients = { r1: team };
+    world.members = members(team);
+
+    // Reads are fast enough to select and claim; classification then runs out of
+    // clock on its very first notice.
+    let classifyReads = 0;
+    operationalFetch.mockImplementation(async (query: string, params: Doc = {}) => {
+      reads.push({ query, params });
+      if (query.includes("foh_team") && classifyReads++ === 0) {
+        vi.setSystemTime(new Date(Date.now() + 46_000));
+      }
+      return routeRead(query, params);
+    });
+
+    const report = await sweepOutbox();
+
+    // Everything claimed is consumed — that contract is unchanged...
+    expect(report.claimed).toBe(4);
+    expect(report.consumed).toBe(4);
+    expect(report.emailed).toBe(0);
+    // ...and EVERY notice nobody emailed is reported. These are one-recipient
+    // `role` notices, so the accounting has to close exactly: asserting merely
+    // `unserved > 0` would pass on stage 7's contribution alone and miss a whole
+    // unclassified tail being deleted silently, which is the actual defect.
+    expect(report.emailed + report.unserved).toBe(report.claimed);
+    logSpy.mockRestore();
+  });
+
   it("refuses a wave that could not finish before the deadline", async () => {
     // Measured in production on 2026-08-07: `elapsedMs:57888` against a 45 s
     // reserve, then the platform killed the function and stage 8 never ran.

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { probeSmtpPhases } from "@/app/utils/smtpPhases";
-import { probeSmtp } from "@/app/utils/smtpProbe";
+import { PHASE_TIMEOUT_MS, probeSmtpPhases } from "@/app/utils/smtpPhases";
+import { PROBE_TIMEOUT_MS, probeSmtp } from "@/app/utils/smtpProbe";
 
 // WHY THIS ROUTE EXISTS.
 //
@@ -34,7 +34,8 @@ export async function GET(req: NextRequest) {
   // Per-command timings, repeated, because the ~13 s figure that drove three
   // deploys was inferred by subtraction from ONE successful send. `?to=` picks
   // whose address RCPT TO asks about; `?repeat=` takes more than one reading so
-  // a number has some variance behind it. DATA is never issued on any path.
+  // a number has some variance behind it. DATA is issued only for `?data=1`,
+  // and only ever to our own mailbox.
   const to = req.nextUrl.searchParams.get("to") ?? undefined;
   const repeat = Math.min(Math.max(Number(req.nextUrl.searchParams.get("repeat") ?? 3), 1), 5);
   // `data=1` is the only path that submits a message, and `probeSmtpPhases`
@@ -45,27 +46,39 @@ export async function GET(req: NextRequest) {
   const sendData = req.nextUrl.searchParams.get("data") === "1";
   const bodyBytes = Math.min(Math.max(Number(req.nextUrl.searchParams.get("bytes") ?? 0), 0), 200_000);
 
-  // A WHOLE-ROUTE DEADLINE, not just a per-phase one. Each reading is bounded
-  // individually, but `repeat` of them plus `probeSmtp`'s three verifies are
-  // bounded only in sum — at the default that is 120 s of worst case against
-  // `maxDuration = 60`. The condition that produces the worst case is a
-  // tarpitting server, which is precisely what this route exists to diagnose, so
-  // without this the probe returns NOTHING exactly when it is needed. Partial
-  // readings are the useful answer here; a 504 is not.
+  // ADMISSION AGAINST THE WORST CASE, not "has the deadline passed" — the same
+  // distinction the sweep had to learn. Each reading may take PHASE_TIMEOUT_MS
+  // and `probeSmtp` may take three PROBE_TIMEOUT_MS, so checking only whether
+  // the deadline has already passed admits ~60 s of work at 44.9 s and lands
+  // past `maxDuration`. That returns NOTHING, under exactly the tarpit
+  // condition this route exists to diagnose. Partial readings are the useful
+  // answer; a 504 is not.
+  //
+  // The budget closes: 45 s deadline, readings admitted while 12 s remain, and
+  // `probeSmtp` admitted only while 24 s remain — so the worst admitted tail
+  // ends at 44 s + 12 s, or 21 s + 24 s, both inside `maxDuration = 60`.
   const deadline = Date.now() + 45_000;
   const phases = [];
   for (let i = 0; i < repeat; i++) {
-    if (Date.now() >= deadline) break;
+    if (Date.now() + PHASE_TIMEOUT_MS > deadline) break;
     phases.push(await probeSmtpPhases(to, { sendData, bodyBytes }));
   }
 
-  // Reported even when the phase walk used the whole budget, so a truncated run
-  // is visible as truncated rather than read as "only this many were requested".
-  const truncated = phases.length < repeat;
+  // `probeSmtp` runs three verifies, so it needs three budgets reserved. When
+  // there is no room it is SKIPPED rather than truncated mid-flight — but
+  // `redirectTo` is still read and reported, because "is the team's mail being
+  // diverted?" must never depend on how much clock was left. It is a
+  // `process.env` read and costs nothing.
+  const room = Date.now() + 3 * PROBE_TIMEOUT_MS <= deadline;
+  const smtp = room
+    ? await probeSmtp()
+    : { status: "skipped" as const, redirectTo: process.env.EMAIL_REDIRECT_TO?.trim() || null };
+
   return NextResponse.json({
-    ...(Date.now() < deadline ? await probeSmtp() : { status: "ok" as const }),
+    ...smtp,
     requestedReadings: repeat,
-    truncated,
+    // Visible as truncated rather than read as "only this many were requested".
+    truncated: phases.length < repeat,
     phases,
   });
 }

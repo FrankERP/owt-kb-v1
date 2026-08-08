@@ -489,11 +489,19 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
     // SCAN_LIMIT of them, and nothing here was bounded: a large batch of those
     // could spend the whole sweep SELECTING and leave stage 8 to be killed —
     // the original wedge, through a path stage 7's two clocks never see.
-    // Breaking here is entirely safe: nothing has been claimed yet, so the
-    // remainder simply stays pending for the next sweep.
+    // Reaching here means the sweep is already too slow to send anything, so it
+    // ABANDONS THE SELECTION TOO rather than claiming it. Nothing has been
+    // claimed yet, and an unclaimed notice is simply still pending — so this
+    // path costs a delay and cannot cost a notification. Claiming a batch this
+    // late would hand stage 4 work it has no time to classify, which is how the
+    // first version of this guard turned a stall into silent deletion.
     if (Date.now() - sweepStartedAt >= SWEEP_DEADLINE_MS) {
-      report.deferred = due.length - i;
-      log("notify_sweep_select_deadline", { deferred: report.deferred, selected: selected.length });
+      report.deferred = due.length - i + selected.length;
+      log("notify_sweep_select_deadline", {
+        deferred: report.deferred,
+        abandonedSelection: selected.length,
+      });
+      selected.length = 0;
       break;
     }
     const notice = due[i];
@@ -580,16 +588,28 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
   try {
     // ── 4. Classify ─────────────────────────────────────────────────────────
     const pairs: Pair[] = [];
+    let classified = 0;
     for (const c of claimed) {
       // Bounded for the same reason stage 2 is, and it matters MORE here because
       // these notices are already claimed: overrunning means the function dies
-      // before stage 8 and the lease has to re-offer them. Stopping early only
-      // costs the tail its classification — those notices are still consumed
-      // below, which is the standing best-effort contract, not a new loss.
+      // before stage 8 and the lease has to re-offer them.
+      //
+      // THE TAIL IS COUNTED AS UNSERVED, and that is the whole point. An
+      // unclassified notice produces no line, so it never reaches stage 7's
+      // entries and stage 7 cannot count it — yet stage 8 deletes it anyway.
+      // The first version of this guard left that gap, which reported
+      // `unserved: 0` while destroying the tail and so read as GREEN to the very
+      // workflow gate added alongside it to catch exactly this.
       if (Date.now() - sweepStartedAt >= SWEEP_DEADLINE_MS) {
-        log("notify_sweep_classify_deadline", { classified: pairs.length, claimed: claimed.length });
+        report.unserved += claimed.length - classified;
+        log("notify_sweep_classify_deadline", {
+          classified,
+          claimed: claimed.length,
+          unclassified: claimed.length - classified,
+        });
         break;
       }
+      classified++;
       try {
         pairs.push(...(await classifyNotice(c.notice, today)));
       } catch (err) {
@@ -688,7 +708,9 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
       const budgetSpent = Date.now() - sendStartedAt + SEND_TIMEOUT_MS > sendBudgetMs;
       const deadlineHit = Date.now() - sweepStartedAt + SEND_TIMEOUT_MS > SWEEP_DEADLINE_MS;
       if (budgetSpent || deadlineHit) {
-        report.unserved = entries.length - i;
+        // `+=`, not `=`: stage 4 may already have recorded a tail it could not
+        // classify, and overwriting that would hide it again.
+        report.unserved += entries.length - i;
         log("notify_sweep_send_budget_exhausted", {
           unserved: report.unserved,
           emailed: report.emailed,

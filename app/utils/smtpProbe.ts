@@ -25,11 +25,16 @@ import nodemailer from "nodemailer";
 
 import { isDeliveryBlocked } from "./deliveryFirewall";
 
-/** Bound every phase well inside the hosting route's `maxDuration`. */
-const PROBE_TIMEOUT_MS = 20_000;
+/**
+ * Bound ONE verify. Three of them run per `probeSmtp`, so the route reserves
+ * `3 × PROBE_TIMEOUT_MS` before admitting it — which is why this is 8 s and not
+ * 20 s: at 20 s the reserve alone (60 s) exceeds any budget that fits
+ * `maxDuration`, and the call could never be admitted at all.
+ */
+export const PROBE_TIMEOUT_MS = 8_000;
 
 export interface SmtpProbeReport {
-  status: "ok" | "unconfigured" | "delivery_blocked";
+  status: "ok" | "unconfigured" | "delivery_blocked" | "skipped";
   host?: string;
   port?: number;
   secure?: boolean;
