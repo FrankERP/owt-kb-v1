@@ -56,31 +56,35 @@ export const SEND_TIMEOUT_MS = 20_000;
  * Bounded, not unlimited: this dials a shared cPanel/Exim mailbox, which answers
  * a flood with `421 too many connections` rather than with speed.
  */
-export const SEND_CONCURRENCY = 1;
+export const SEND_CONCURRENCY = 10;
 
 /*
- * WHY IT IS BACK TO 1, AND WHAT WOULD JUSTIFY RAISING IT.
+ * WHY 10, AND WHY THE EARLIER "8 DELIVERS ZERO" RESULT DOES NOT SETTLE IT.
  *
- * Raising it to 8 was reasoned from the probe and was WRONG in production. The
- * 2026-08-07 rehearsal ran 16 sends, 8 in flight: every one hit the 15 s ceiling
- * and `emailed` was 0 — worse than the serial run that had at least delivered
- * one. Notably even the FIRST of the eight failed, which is not what a server
- * that merely queues would do; opening the connections together degraded the
- * send that would otherwise have completed in ~13.4 s.
+ * The load this exists for is a MONTHLY ROLE PUBLISH: a month's services are
+ * generated and published together, so one sweep owes ~20 people an email each
+ * covering every service they serve that month. (August 2026: 7 services, 88
+ * seats.) Grouping is the product requirement — one email per member listing
+ * their month — and grouping only happens for recipients served in the SAME
+ * sweep, because stage 6 groups what stage 3 claimed. Per-service singles are
+ * fine for setlist notices; they are wrong for a monthly publish.
  *
- * That result is CONFOUNDED and should not be over-read: `EMAIL_REDIRECT_TO`
- * pointed every message at one Hotmail address, and Hotmail throttles a burst
- * from one sender hard. So it is evidence against 8-to-one-domain, and says
- * little about 8-to-seventeen-domains, which is the case that actually matters.
- * The redirect is what made the rehearsal safe and is also what spoiled its
- * measurement — worth knowing before designing the next one.
+ * That makes serial sends unusable rather than merely slow. At ~14.4 s each,
+ * one 40 s budget serves two people, so a 20-recipient month either fragments
+ * across ten sweeps or loses fifteen — and the cap is a choice between those two
+ * failures, not a fix for either. Only concurrency reconciles them:
  *
- * 1 is therefore not a conclusion, it is the only setting with a confirmed
- * production success. The wave machinery in stage 7 is unchanged and correct at
- * any value; this constant is the whole knob. Raise it when there is a clean
- * measurement against many recipient domains — or delete the question by moving
- * to the Resend backend below, where a send is an HTTP call and none of this
- * arithmetic applies.
+ *     ceil(recipients / SEND_CONCURRENCY) × 14.4 s  <  SEND_BUDGET_MS
+ *
+ * At 10 wide, 17-20 recipients need two waves (~29 s), inside the 40 s budget
+ * with the admission check's 20 s reserve still honoured.
+ *
+ * The 2026-08-07 run at 8 wide returned zero deliveries, and that is why this is
+ * a TEST rather than a settled value: every message in it went to ONE Hotmail
+ * address via EMAIL_REDIRECT_TO, which is the shape a provider throttles hardest.
+ * It was never evidence about many messages to many domains. Reverting to 1 was
+ * right while that was the only data; it is not a reason to leave the product
+ * requirement unmet without measuring the case that actually occurs.
  */
 
 // Reuse pooled SMTP connections across a batch (and across warm invocations)

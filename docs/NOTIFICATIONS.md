@@ -171,6 +171,20 @@ Things that are counter-intuitive and were each a real defect at some point.
   `cp1-dal1.bioxnet.com` takes fourteen seconds to accept a remote message when a
   local one takes 67 ms — everything on this page downstream of that number gets
   easier the moment it comes down.
+- **The load that matters is a MONTHLY ROLE PUBLISH, and grouping is the
+  requirement — not a nicety.** A month's services are generated and published
+  together, so one sweep owes every affected member ONE email covering every
+  service they serve that month. August 2026 is 7 services and 88 seats over
+  ~20 people. Stage 6 groups what stage 3 claimed, so grouping only happens for
+  recipients served in the SAME sweep — which makes
+  `NOTIFY_FLUSH_EMAIL_LIMIT` a product setting, not just a safety valve: below
+  the month's distinct-recipient count the fan-out fragments into per-service
+  singles. (Singles are correct for **setlist** notices, which are published one
+  service at a time. They are wrong for a role publish.) The consequence is that
+  serial sends are not merely slow but unusable, and
+  `ceil(recipients / SEND_CONCURRENCY) × ms_per_send < NOTIFY_SEND_BUDGET_MS` is
+  the inequality the design actually has to satisfy — §1's version assumes
+  concurrency of one.
 - **A batch larger than the budget is DESTROYED, not deferred — this is the open
   wound.** Stage 8 consumes every claimed notice whatever stage 7 returned (§1,
   best-effort, no retry). That is sound when `ms_per_send × EMAIL_LIMIT` fits the
