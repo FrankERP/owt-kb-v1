@@ -136,3 +136,61 @@ describe("probeSmtpPhases", () => {
     expect(connectMock).not.toHaveBeenCalled();
   });
 });
+
+describe("probeSmtpPhases — the DATA guard", () => {
+  beforeEach(() => {
+    connectMock.mockClear(); vi.resetModules();
+    process.env.SMTP_HOST = "mail.oasis.mx";
+    process.env.SMTP_USER = "contacto@oasis.mx";
+    process.env.SMTP_PASS = "s3cret";
+    process.env.EMAIL_FROM = "Oasis <contacto@oasis.mx>";
+  });
+  afterEach(() => {
+    delete process.env.SMTP_HOST; delete process.env.SMTP_USER;
+    delete process.env.SMTP_PASS; delete process.env.EMAIL_FROM;
+  });
+
+  it("REFUSES to submit a message to anyone but the sending mailbox", async () => {
+    // The property that keeps an operator tool from quietly becoming a way to
+    // mail any member from a URL. It must refuse before opening a socket.
+    socket = new FakeSocket([...OK_SCRIPT]);
+    const { probeSmtpPhases } = await import("../smtpPhases");
+    const r = await probeSmtpPhases("someone@example.com", { sendData: true });
+    expect(r.status).toBe("failed");
+    expect(r.error).toContain("only permitted to the sending mailbox");
+    expect(connectMock).not.toHaveBeenCalled();
+  });
+
+  it("is case- and whitespace-insensitive about that match", async () => {
+    socket = new FakeSocket([...OK_SCRIPT, "354 go ahead", "250 OK id=1"]);
+    const { probeSmtpPhases } = await import("../smtpPhases");
+    const run = probeSmtpPhases("  CONTACTO@Oasis.MX  ", { sendData: true });
+    socket.greet("220 mail.oasis.mx ESMTP Exim");
+    expect((await run).status).toBe("ok");
+  });
+
+  it("times DATA in two parts, splitting the handover from the scan", async () => {
+    socket = new FakeSocket([...OK_SCRIPT, "354 go ahead", "250 OK id=1"]);
+    const { probeSmtpPhases } = await import("../smtpPhases");
+    const run = probeSmtpPhases("contacto@oasis.mx", { sendData: true, bodyBytes: 1_000 });
+    socket.greet("220 mail.oasis.mx ESMTP Exim");
+    const r = await run;
+    expect(r.status).toBe("ok");
+    expect(typeof r.dataInitMs).toBe("number");
+    expect(typeof r.dataBodyMs).toBe("number");
+    // Padding is real bytes on the wire, so a size-dependent scan cost shows up.
+    expect(r.bodyBytes).toBeGreaterThan(1_000);
+    expect(socket.written).toContain("DATA");
+    expect(socket.written.at(-1)).toBe("QUIT");
+  });
+
+  it("still sends no DATA when it is not asked for", async () => {
+    socket = new FakeSocket([...OK_SCRIPT]);
+    const { probeSmtpPhases } = await import("../smtpPhases");
+    const run = probeSmtpPhases("contacto@oasis.mx");
+    socket.greet("220 mail.oasis.mx ESMTP Exim");
+    const r = await run;
+    expect(socket.written).not.toContain("DATA");
+    expect(r.dataBodyMs).toBeUndefined();
+  });
+});
