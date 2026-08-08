@@ -142,7 +142,7 @@ and `AvailabilityCalendar.tsx` the seventh. **These nine files alone are 1,176 d
 ### 4.3 `(admin)` chrome and `/studio`
 
 `app/(admin)/` contains **only** `/studio` (verified: `globals.css`, `layout.tsx`,
-`studio/[[...tool]]/page.tsx`). Its `layout.tsx:42` body carries
+`studio/[[...tool]]/page.tsx`). Its `layout.tsx` `<body>` opens at `:42` with its `className` on `:43`, carrying
 `brand-atmosphere min-h-screen bg-brand-blackout font-body text-brand-frost
 selection:bg-brand-beam/35`.
 
@@ -201,7 +201,7 @@ static panel does not cover them.
 | `ios/App/App/Info.plist:57–58` (`UIStatusBarStyle` / `UIStatusBarStyleLightContent`), `android/…/values/styles.xml:7–8` | Native defaults. The iOS one is overridden **at runtime** by Child E's status-bar work; the static value stays | Documented remnants |
 | Raster brand assets — `/icons/backstage-v2-*.png`, `/LogoOasis.png` | Opaque `#010b17` tile marks, outside every glob | Decision, not omission |
 | The Google brand logo at `(client)/auth/signin/page.tsx` (`#4285F4 #34A853 #FBBC05 #EA4335`) | A third-party mark that must not be themed | Lint-exempt, with reason |
-| Building lint/test CI | `.github/workflows/` holds two cron files and neither has a `push` or `pull_request` trigger; no PR gate exists (CLAUDE.md mandates direct push) | Guards ride the existing `npm test` done-gate |
+| Building lint/test CI | `.github/workflows/` holds two workflows — one `schedule:` cron and one `workflow_dispatch:`-only diagnostic — and neither has a `push` or `pull_request` trigger; no PR gate exists (CLAUDE.md mandates direct push) | Guards ride the existing `npm test` done-gate |
 
 ## 6. Invariants that must remain true
 
@@ -224,8 +224,10 @@ and currently green:
 
 8. `app/utils/__tests__/routeMatcher.test.ts:52` asserts `ungated` equals `PUBLIC_ROUTES`
    (`:34–42`) by walking `app/` on disk. **Any new unauthenticated route breaks `npm test`
-   the moment it exists.** The theme gallery is such a route. This is the auth review, not
-   a formality.
+   the moment it exists.** **The theme gallery is deliberately NOT such a route** (§8.4): it
+   sits on a gated path, so it must never appear in `ungated`, and this guard must stay green
+   **without being edited**. If a child finds itself adding a `PUBLIC_ROUTES` entry for the
+   gallery, the placement is wrong — that entry is the signal, not the fix.
 9. `app/utils/__tests__/agentDocsParity.test.ts` asserts `CLAUDE.md` and `AGENTS.md` are
    byte-identical after normalisation. Both must be edited in the same commit.
 10. `app/utils/__tests__/adrIndex.test.ts` requires every `docs/adr/NNNN-*.md` to be linked
@@ -347,27 +349,6 @@ Strictly sequential. Each child's outputs are the next child's inputs:
 **No child may be skipped or run in parallel.** The one genuine parallelism — C's colour
 families — is internal to C.
 
-### 8.4 The theme gallery is gated, and reachable in production
-
-Amended 2026-08-07, after this document's first approval.
-
-The gallery sits on a **gated** path — not under `/auth/`, not public. Consequences, recorded
-so none of them is discovered later:
-
-- **It is deployed to production and reachable there by any signed-in team member.** It
-  renders colour swatches and nothing else: no session read of its own, no fetch, no data.
-  An earlier revision demanded a production 404, which only existed to contain an
-  *unauthenticated* route. That requirement is withdrawn, not quietly dropped.
-- **No env flag, no `docs/SECRETS.md` entry, no build-time refusal, no `PUBLIC_ROUTES`
-  entry.** All four existed solely to contain the public placement.
-- **`routeMatcher.test.ts` must stay green without being edited.** If the gallery ever appears
-  in `ungated`, the placement is wrong — the guard is the proof, not a formality.
-- **The gate is `proxy.ts`'s token check, not `requireActiveSession`.** A *disabled* member
-  therefore reaches the gallery, where `/me` and `/admin` would turn them away. The content is
-  colour swatches, so the exposure is nil — but the gallery is **not** at the same trust level
-  as those routes, and this document does not claim it is.
-- **The VR harness must authenticate.** That cost is real and belongs to Child A.
-
 ### 8.3 Integration acceptance
 
 Accepted when, and only when:
@@ -383,6 +364,35 @@ Accepted when, and only when:
 7. iOS cold start paints correctly with no inversion flash; the status bar is readable in
    light — subject to A6's fallback.
 8. ADR-0008 is superseded.
+
+### 8.4 The theme gallery is gated, and reachable in production
+
+Amended 2026-08-07, after this document's first approval.
+
+The gallery sits on a **gated** path — not under `/auth/`, not public. Consequences, recorded
+so none of them is discovered later:
+
+- **It is deployed to production and reachable there by any signed-in team member.** It
+  renders colour swatches and nothing else: no session read of its own, no fetch, no data.
+  An earlier revision demanded a production 404, which only existed to contain an
+  *unauthenticated* route. That requirement is withdrawn, not quietly dropped.
+- **No env flag, no `docs/SECRETS.md` entry, no build-time refusal, no `PUBLIC_ROUTES`
+  entry.** All four existed solely to contain the public placement.
+- **`routeMatcher.test.ts` must stay green without being edited.** If the gallery ever appears
+  in `ungated`, the placement is wrong — the guard is the proof, not a formality.
+- **The gate is `proxy.ts`'s middleware check, not `requireActiveSession`.** An earlier
+  wording claimed this lets a *disabled* member reach the gallery. **That reason is wrong and
+  is corrected here:** `proxy.ts:10–12` redirects any token without `sanityId` to
+  `/auth/not-a-member`, and `auth.ts:246` returns `{...token, sanityId: undefined}` for a
+  member `getMemberAccess` reports inactive — so a disabled member is turned away from the
+  gallery too. The residual gap is narrower and worth naming precisely: `withAuth` reads the
+  JWT cookie via `getToken` without running the `jwt` callback, and the gallery's
+  provider-less root layout mounts no `SessionProvider`, so visiting it triggers no session
+  refresh and a **stale cookie** can outlive a deactivation there. Exposure is still nil —
+  the page is colour swatches — but the gallery does not run the in-handler guard `/me` and
+  `/admin` run, and this document does not claim it does.
+- **The VR harness must authenticate.** That cost is real and belongs to Child A.
+
 
 ## 9. Inherited technical constraints
 
@@ -445,7 +455,7 @@ reasons.
   carrying `app/utils/emailShell.ts`, `app/**/__tests__/**`, the Google logo lines, and
   `(client)/layout.tsx`'s static `themeColor` until Child E makes it dynamic.
 - **Test files must be migrated with the code they assert**, and are lint-exempt.
-  `globalIgnores` does not exclude tests, three already carry hex, and the contrast matrix
+  `globalIgnores` does not exclude tests, **four** already carry hex, and the contrast matrix
   and computed-colour tests *must* name colours by value.
 - **next-themes 0.4.6 makes a nested `ThemeProvider` a literal pass-through**
   (`useContext(L) ? Fragment : X`), so `forcedTheme="dark"` cannot be overridden from inside
