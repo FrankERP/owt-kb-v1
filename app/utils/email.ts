@@ -74,6 +74,9 @@ export const SEND_CONCURRENCY = 1;
  * because both become correct the moment the server does — not because the value
  * is in doubt.
  *
+ * Recorded as ADR-0013 (docs/adr/0013-smtp-sends-stay-serial.md), which also
+ * carries the two things that would retire it.
+ *
  * Historical note on why this was ever raised:
  *
  * The load this exists for is a MONTHLY ROLE PUBLISH: a month's services are
@@ -130,11 +133,15 @@ function smtpTransport(host: string, port: number, secure: boolean, user: string
 /**
  * WHY A TIMED-OUT SEND NO LONGER TEARS DOWN THE POOL.
  *
- * While `maxConnections` was 1, an abandoned `sendMail` owned the only connection
- * and closing the transport was how the next send avoided queueing behind a
- * conversation nobody was waiting for. With sends in flight together that same
- * close is friendly fire: it would drop the connections carrying the other seven
- * recipients, turning one stalled message into eight failures.
+ * An earlier version closed the whole transport on a timeout. At
+ * `maxConnections: 1` that was defensible — the abandoned `sendMail` owned the
+ * only connection, and closing was how the next send avoided queueing behind a
+ * conversation nobody was waiting for. It stopped being defensible the moment
+ * sends could run alongside each other, where the same close is friendly fire:
+ * it drops the connections carrying every other recipient in the wave, turning
+ * one stalled message into a wave of failures. The width is back to 1 today, but
+ * the teardown is not coming back with it — `socketTimeout` is simply the better
+ * mechanism at any width.
  *
  * `socketTimeout` (SEND_TIMEOUT_MS) is what reclaims a stuck connection now, and
  * it does it at the right granularity — nodemailer destroys THAT connection and

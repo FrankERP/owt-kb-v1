@@ -155,6 +155,8 @@ npx vercel env rm EMAIL_REDIRECT_TO production --yes
 
 **A redeploy is required either way** — a running function keeps the value it booted with, so adding it without redeploying rehearses nothing and removing it without redeploying keeps mail redirected. Verify the alias moved before trusting either state.
 
+**Check `preview` too, not just `production`.** Every sender reads this variable in whatever environment it runs, and Preview deploys against the **real Sanity dataset and the real team** — so a rehearsal set on `preview` and forgotten silently swallows mail from that branch. Substitute `preview` for `production` in both commands, or confirm it is absent there.
+
 **Blast radius.** While it is set, *nobody on the team receives any notification* — and because the outbox consumes unconditionally with no retry, notices flushed during that window are **spent**, not queued. Leaving it set by accident is silent, total notification loss that still reports green. Unset it the moment the rehearsal ends, and confirm with `vercel env ls production`.
 
 ---
@@ -162,6 +164,8 @@ npx vercel env rm EMAIL_REDIRECT_TO production --yes
 ## `NOTIFY_FLUSH_EMAIL_LIMIT` (when overridden in Vercel)
 
 **Not a secret** — a tuning knob with a code default of 40. Listed here only because it is currently **set in Production**, and a knob set in a dashboard with no record is exactly what this file exists to prevent.
+
+**Needed in: Vercel Production only.** Not in GitHub Actions — the flush workflow only curls the route and never reads this. Not in `.env.local`, and not on Preview unless you are deliberately rehearsing there.
 
 **Why it is set.** It caps the DISTINCT RECIPIENTS one sweep may claim. That cap is what makes stage 8's unconditional delete safe: a sweep is supposed to fully discharge everything it claims, so anything it claims and cannot send is **destroyed**, not retried. When `ms_per_send` is unknown or bad, a low value turns that risk into a bounded experiment — selection claims only what it can serve and leaves the rest **pending and unclaimed** (`report.deferred`), which the next sweep picks up.
 
@@ -173,9 +177,10 @@ The cap governs what a sweep **claims**, and claiming is what commits a notice t
 
 Raise it to the default of 40 the moment a send costs under ~2 s, and not before.
 
-**How to unset (restore the code default of 40):**
+**How to set and unset:**
 
 ```bash
+printf '2' | npx vercel env add NOTIFY_FLUSH_EMAIL_LIMIT production
 npx vercel env rm NOTIFY_FLUSH_EMAIL_LIMIT production --yes
 ```
 

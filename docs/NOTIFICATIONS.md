@@ -93,6 +93,50 @@ A healthy run prints `HTTP 200` and a report like
 asserts the status code explicitly rather than relying on `curl --fail`, which
 ignores 3xx — see the landmine below.
 
+**A red run does not always mean the cron is broken.** The job also fails when the
+report carries `unserved > 0`, which means the opposite of a dead trigger: the
+sweep ran, claimed those recipients, never reached them, and — because stage 8
+consumes whatever was claimed — **deleted their notifications**. Nothing else
+reports it. The outbox is empty afterwards, so the staleness alarm sees nothing
+wrong and the route still answers 200; going red here is the only signal mail was
+lost. `deferred > 0` is the healthy counterpart: work left *unclaimed* for the
+next sweep, which is not loss.
+
+**Is the mail path healthy, and where is its time going?**
+
+```bash
+gh workflow run "Probe the SMTP path"
+```
+
+Connects, greets, authenticates, asks about a recipient, quits — **no mail sent**
+— and reports per-command timings, so "sending is slow" becomes a statement about
+which SMTP phase is slow. Reachability from a laptop proves nothing; this measures
+Vercel's egress, which is the only path that matters. Inputs:
+
+| input | meaning |
+|---|---|
+| `to` | whose address `RCPT TO` asks about. Blank = our own mailbox (LOCAL, no callout). An external address tests whether Exim calls out to their MTA |
+| `repeat` | readings to take, 1–5, so a figure has variance behind it |
+| `data` | `1` submits a REAL message and times `DATA` — the only option that sends anything. Refused for every recipient but our own sending mailbox |
+| `bytes` | body padding for a `data` run; scan cost tracks size, so compare `0` against `20000` |
+
+It also reports `redirectTo`, which is the only way to see whether
+`EMAIL_REDIRECT_TO` is quietly diverting the whole team's mail.
+
+**Put back notices a lossy flush spent.** After a sweep reports `unserved > 0`,
+those notifications are gone; this re-queues them for the affected services:
+
+```bash
+npx tsx --env-file=.env.local scripts/requeue-role-notices.mjs <roleId> [<roleId>…]
+```
+
+Dry run by default — add `--apply` to write, `--now` to skip the debounce. **Run
+it with `tsx`, not bare `node`:** it imports the real `queueRoleNotices` helpers so
+a notice minted here cannot drift in shape from one minted by a save, and those
+modules use extensionless specifiers Node's ESM loader refuses. Members already
+notified will receive a duplicate — that is usually the right trade against
+someone never being told they serve.
+
 **Inspect the outbox** (Studio → the read-only *Cola de avisos* pane, or GROQ):
 
 ```groq
@@ -116,7 +160,7 @@ pending notification.
 | `NOTIFY_MAX_WINDOW_MINUTES` | 60 | Hard ceiling from first queue; defeats starvation |
 | `NOTIFY_CLAIM_TTL_MINUTES` | 5 | Lease on a claimed notice; expiry makes it due again |
 | `NOTIFY_SEND_BUDGET_MS` | 40000 | Wall-clock bound on the send loop |
-| `NOTIFY_FLUSH_EMAIL_LIMIT` | 40 | Max recipients per sweep — **must exceed the largest per-service seat count** |
+| `NOTIFY_FLUSH_EMAIL_LIMIT` | 40 | Max recipients per sweep. **Currently overridden to `2` in Vercel Production — see `SECRETS.md`.** The "must exceed the largest per-service seat count" rule the default encodes is knowingly suspended there; see *Still open* |
 | `NOTIFY_STALE_ALERT_HOURS` | 6 | Oldest age that trips the alarm |
 
 All have code defaults and are validated (empty, non-numeric, zero and negative
@@ -166,7 +210,7 @@ Things that are counter-intuitive and were each a real defect at some point.
   recipients, so concurrency buys no throughput while turning would-be successes
   into destroyed notices (stage 8 consumes regardless). `SEND_CONCURRENCY` stays
   at 1, and the wave machinery in stage 7 stays with it, because both become
-  correct the moment the server does. **Do not re-raise it on the reasoning that
+  correct the moment the server does. Recorded as **ADR-0013**. **Do not re-raise it on the reasoning that
   pooling or parallelism "should" help — that reasoning has now failed twice
   against measurement.**
 - **Therefore the grouped monthly email cannot be delivered by tuning this
@@ -224,24 +268,32 @@ Things that are counter-intuitive and were each a real defect at some point.
   evidence about the real case. Use the redirect to prove *safety* and *shape*;
   do not read throughput off it.
 - **The send cost is in the MESSAGE, not the connection — measured, not assumed.**
-  `/api/cron/smtp-probe` (run it with the *Probe the SMTP path* workflow; it sends
-  no mail) reported `coldMs:428, warmMs:328, secondColdMs:200` from production on
-  2026-08-07: TCP, TLS, greeting and AUTH together cost under half a second. A
-  whole send measured **~13.4 s**. So pooling is not what makes a batch fast and
-  never was; `maxConnections: 1` was the throughput ceiling itself, and stage 7
-  now sends in waves of `SEND_CONCURRENCY`. Before drawing conclusions from a slow
-  sweep, run the probe — reachability from a laptop says nothing about Vercel's
-  egress, and that confusion cost a day.
-- **`sendEmail` must resolve within `SEND_TIMEOUT_MS` (15 s), on every path.**
+  `/api/cron/smtp-probe` (the *Probe the SMTP path* workflow; it sends no mail
+  except on the explicit `data: 1` path, which submits only to our own mailbox)
+  reported `coldMs:428, warmMs:328, secondColdMs:200` from production on
+  2026-08-07: TCP, TLS, greeting and AUTH together cost under half a second,
+  against a whole send of ~13.4 s. So pooling is not what makes a batch fast —
+  setup is already cheap. **This is where the reasoning went wrong at the time:**
+  "therefore `maxConnections: 1` is the ceiling, so widen it" seemed to follow and
+  did not, because the server serializes acceptance regardless. See the
+  concurrency landmine above; that conclusion was tested twice and refuted twice.
+  Before drawing conclusions from a slow sweep, run the probe — reachability from
+  a laptop says nothing about Vercel's egress, and that confusion cost a day.
+- **`sendEmail` must resolve within `SEND_TIMEOUT_MS` (20 s), on every path.**
   Nodemailer's own defaults are connection 120 s, greeting 30 s and socket 600 s
   — each at or past the hosting route's `maxDuration = 60` — so a mail server
   that accepts the connection and then stops answering does not fail the send, it
   hangs the whole invocation until the platform kills it. `email.ts` overrides all
   three and additionally races the conversation, because `socketTimeout` bounds
-  *inactivity*, not total duration. On a timeout the pooled transport is closed:
-  `maxConnections: 1` means an abandoned `sendMail` still owns the only
-  connection, so reusing it would make every remaining recipient in the batch
-  wait out its own full timeout.
+  *inactivity*, not total duration. A timed-out send does **not** tear down the
+  pool — `socketTimeout` equals `SEND_TIMEOUT_MS`, so nodemailer destroys that one
+  connection and dials a replacement at the same moment we abandon it, which is
+  reclamation at the right granularity. (An earlier version closed the whole
+  transport. That was defensible at `maxConnections: 1` and became friendly fire
+  the moment sends could run alongside each other.) The ceiling is 20 s rather
+  than 15 s because a typical send measured 14.4 s: at 15 s a merely
+  slower-than-average send was killed, and a killed send is a notification
+  destroyed.
 - **The send stage answers to two clocks, and the second one is not a budget.**
   `NOTIFY_SEND_BUDGET_MS` deliberately starts at the first send and is never
   charged for the read phase — correct for spec §1's inequality, and not a bound
@@ -270,20 +322,31 @@ pipeline a received message does, with no SMTP credentials and nothing sent.
 
 ## Still open
 
-- **The send-budget inequality does not hold, and the placeholder hid it.**
-  Spec §1 requires `ms_per_send × NOTIFY_FLUSH_EMAIL_LIMIT < NOTIFY_SEND_BUDGET_MS`.
-  `MEASURED_MS_PER_SEND` in `outboxSweep.test.ts` is **500 ms**, and production on
-  2026-08-07 measured **~13 400 ms** — 27× out. At face value that is
-  `13_400 × 40 = 536_000` against a 40 000 ms budget. Waves of `SEND_CONCURRENCY`
-  divide the effective cost (~1 675 ms at 8 wide), which still leaves
-  `1_675 × 40 = 67_000` over budget: `NOTIFY_FLUSH_EMAIL_LIMIT` of 40 is not
-  serviceable, and anything unserved is **destroyed**, because stage 8 consumes
-  unconditionally. Either the limit comes down to ~20 (which is only just above
-  the 12–20 seat Sunday it exists to protect), or `ms_per_send` comes down —
-  moving to the Resend backend `email.ts` already supports would make it a
-  non-question. Take the next real `msPerSend` from `notify_sweep_done` before
-  choosing. **Raising `MEASURED_MS_PER_SEND` to make the guard green remains the
-  one forbidden move** — the guard going red is the finding, not the problem.
+- **The send-budget inequality holds only because the limit was cut to 2, and
+  that is a trade, not a fix.** Spec §1 requires
+  `ms_per_send × NOTIFY_FLUSH_EMAIL_LIMIT < NOTIFY_SEND_BUDGET_MS`. Production
+  measured `ms_per_send` = **14 413 ms** (2026-08-08), against the 500 ms
+  `MEASURED_MS_PER_SEND` placeholder in `outboxSweep.test.ts` — 29× out. At the
+  code default of 40 that is `14 413 × 40 = 576 520` against a 40 000 ms budget,
+  and everything unserved is **destroyed**, because stage 8 consumes
+  unconditionally. Production therefore runs `NOTIFY_FLUSH_EMAIL_LIMIT = 2`, where
+  `14 413 × 2 = 28 826 < 40 000` and the inequality is satisfied. Concurrency
+  cannot widen this — see the landmine above.
+
+  What that buys and what it costs: role notices are now lossless and
+  **fragmented** (a member's month arrives as several emails instead of one),
+  which is the wrong shape for a monthly publish but the right side of "wrong".
+  **It does nothing for `setlist` notices**, which carry every participant in ONE
+  document and so cannot be split by any cap — they are taken alone, over budget,
+  and everyone past the second recipient is destroyed.
+
+  Two things close this, and no amount of tuning does: the **~14 s remote accept
+  on the mail server**, or **re-pending notices the sweep never attempted instead
+  of consuming them** (grouped *and* lossless across several sweeps, since a
+  recipient's notices stay together). The second changes the consume contract and
+  needs a plan and review. **Raising `MEASURED_MS_PER_SEND` to make the guard
+  green remains the one forbidden move** — the guard is green today only because
+  it asserts the default limit of 40, not the 2 production runs.
 - **Outlook on Windows is untested.** macOS Outlook is WebKit, so the Word-engine
   question spec §6 raises — `border-radius` and `padding` on the key pills — is
   unanswered. Expected degradation is cosmetic: squared chips, tighter padding.
