@@ -337,7 +337,8 @@ swatches — but the gallery runs no in-handler guard, which `/me` and `/admin` 
 ## Handoff
 
 - **Prerequisites consumed from A1:** `.light { color-scheme: light }`, the token vocabulary and
-  its stated storage convention.
+  its stated storage convention, **and the inventory's same-element pair relation**, which step 4
+  derives the dark composited failing set from. A1's Handoff promises all four.
 - **Outputs promised:** **Child B** gets a swatch surface for its token layer and the `prose`
   fixture for its typography change. **Child C** re-derives the composited failing set at every
   family merge. **Child D** gets three fixtures per theme, the VR harness (or the recorded manual
