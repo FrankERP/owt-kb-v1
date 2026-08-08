@@ -24,6 +24,21 @@ name: Probe the SMTP path
 
 on:
   workflow_dispatch:
+    inputs:
+      to:
+        description: >-
+          Whose address RCPT TO asks about. Blank uses our own mailbox — a LOCAL
+          recipient the server verifies without leaving the building. Give an
+          EXTERNAL address to see whether Exim is doing a callout to their MTA:
+          local fast + external slow is that diagnosis, and it is per-message,
+          which is why connection pooling never helped. Nothing is delivered
+          either way — the conversation stops before DATA.
+        required: false
+        default: ""
+      repeat:
+        description: "Readings to take (1-5). More than one so a figure has variance behind it."
+        required: false
+        default: "3"
 
 permissions: {}
 
@@ -38,9 +53,17 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          # Inputs travel through env for the same reason the secrets do: `${{ }}`
+          # inside a `run:` block composes the value into the command line.
+          PROBE_TO: ${{ inputs.to }}
+          PROBE_REPEAT: ${{ inputs.repeat }}
         run: |
           BODY=$(mktemp)
-          CODE=$(curl --silent --show-error --max-time 90 \
+          # --get --data-urlencode so an address is escaped rather than pasted
+          # into the query string, and an empty `to` still means "our mailbox".
+          CODE=$(curl --silent --show-error --max-time 90 --get \
+            --data-urlencode "to=${PROBE_TO}" \
+            --data-urlencode "repeat=${PROBE_REPEAT:-3}" \
             -o "$BODY" -w '%{http_code}' \
             -H "Authorization: Bearer $CRON_SECRET" \
             "$APP_BASE_URL/api/cron/smtp-probe")
