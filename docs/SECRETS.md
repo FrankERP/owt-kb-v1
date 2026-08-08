@@ -157,6 +157,26 @@ npx vercel env rm EMAIL_REDIRECT_TO production --yes
 
 **Blast radius.** While it is set, *nobody on the team receives any notification* — and because the outbox consumes unconditionally with no retry, notices flushed during that window are **spent**, not queued. Leaving it set by accident is silent, total notification loss that still reports green. Unset it the moment the rehearsal ends, and confirm with `vercel env ls production`.
 
+---
+
+## `NOTIFY_FLUSH_EMAIL_LIMIT` (when overridden in Vercel)
+
+**Not a secret** — a tuning knob with a code default of 40. Listed here only because it is currently **set in Production**, and a knob set in a dashboard with no record is exactly what this file exists to prevent.
+
+**Why it is set.** It caps the DISTINCT RECIPIENTS one sweep may claim. That cap is what makes stage 8's unconditional delete safe: a sweep is supposed to fully discharge everything it claims, so anything it claims and cannot send is **destroyed**, not retried. When `ms_per_send` is unknown or bad, a low value turns that risk into a bounded experiment — selection claims only what it can serve and leaves the rest **pending and unclaimed** (`report.deferred`), which the next sweep picks up.
+
+**Set to `3` on 2026-08-07** to take a real `msPerSend` reading for external recipients after a lossy flush, risking three notices instead of seventeen.
+
+**How to unset (restore the code default of 40):**
+
+```bash
+npx vercel env rm NOTIFY_FLUSH_EMAIL_LIMIT production --yes
+```
+
+**A redeploy is required** for either direction to reach a running function.
+
+**Blast radius.** While it is low, a service whose fan-out exceeds it is split across sweeps — some members hear now and the rest on a later flush. That is the deliberate trade: slower, but nothing is deleted unsent. Leaving it low permanently is not harmful, only slow; raising it above what the send path can actually service in `NOTIFY_SEND_BUDGET_MS` is what silently loses mail.
+
 ## Not yet documented
 
 Other variables in use — `SANITY_API_*`, `NEXTAUTH_*`, SMTP credentials for `contacto@oasis.mx`, `EMAIL_ALLOWLIST`, FCM push credentials, the solver's Secret Manager key — predate this file. Add each one here as it is next touched or rotated.
