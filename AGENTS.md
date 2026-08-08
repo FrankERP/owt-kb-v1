@@ -159,6 +159,11 @@ reviewer. See `docs/superpowers/plans/2026-08-06-grid-drag-and-drop-review-log.m
   schema/data migration, multi-document transaction/concurrency/recovery protocol,
   or irreversible remote release action. A client/UI consumer of an already-approved
   idempotent writer stays standard unless it changes one of those contracts.
+- **Incidents are not exempt.** A change to a production writer's concurrency,
+  batching, or deletion behaviour is critical whether planned or discovered
+  mid-fire. Under time pressure the bar drops to ONE fresh `APPROVED` on a
+  one-paragraph hypothesis — no plan document — but never to zero. The 2026-08-07
+  outbox incident shipped ten deploys with no round and paid for it twice.
 - Run reviewers **one at a time** and never expose prior findings. After two
   substantive `CHANGES_REQUIRED` rounds for one artifact, stop and reassess with the user.
 - After each implementation phase, run a fresh code review plus the documented
