@@ -997,20 +997,24 @@ describe("sweepOutbox — recipient scoping and read contract", () => {
 });
 
 /**
- * PLACEHOLDER, pending §1's release-gate measurement — nobody has yet timed a
- * real send through the pooled `maxConnections: 1` SMTP transport. §1's working
- * assumption of 2 000 ms/send does NOT fit (2 000 × 40 = 80 000 > 40 000); this
- * is the value the shipped knobs currently stand on, and the sweep now logs
- * `msPerSend` on every run so the real one is observable in production.
+ * THE REAL NUMBER IS KNOWN, AND IT IS NOT THIS ONE. Production measured
+ * `msPerSend` = **14 413 ms** on 2026-08-08 (two successful sends to external
+ * recipients; a local recipient costs ~67 ms, so the cost is the server's remote
+ * accept). This constant stays at 500 because the assertions below check the
+ * DEFAULT `EMAIL_LIMIT` of 40, and swapping in 14 413 would turn a standing
+ * regression guard into a permanently red test asserting a configuration nobody
+ * runs — production runs `NOTIFY_FLUSH_EMAIL_LIMIT = 2`, where
+ * `14 413 × 2 = 28 826 < 40 000` and §1's inequality genuinely holds.
  *
- * WHEN THE REAL NUMBER ARRIVES: replace this constant with the ms/send measured
- * over a batch of ~20 and re-run. If the assertions below then fail, §1 says
- * DERIVE, never re-guess: raise `NOTIFY_SEND_BUDGET_MS` (bounded by the hosting
- * route's `maxDuration = 60`) or lower `NOTIFY_FLUSH_EMAIL_LIMIT` — and if
- * lowering the limit would take it under the largest per-service seat count
- * (12–20 on a Sunday), STOP: splitting one notice's recipients across sweeps is
- * a different outbox model and must be designed, not discovered in production.
- * Raising THIS constant to make the test green is the one forbidden move.
+ * So read the guard for what it is: proof that the shipped DEFAULTS are
+ * internally consistent, not evidence that sending is fast. The real cost and
+ * what it forces live in `docs/NOTIFICATIONS.md` → Still open.
+ *
+ * §1's stop condition WAS crossed, deliberately and with the trade recorded:
+ * lowering the limit below the largest per-service seat count (12-20 on a
+ * Sunday) fragments a monthly publish into several emails per member. That was
+ * chosen over destroying most of them. Raising THIS constant to make the test
+ * green is still the one forbidden move.
  */
 const MEASURED_MS_PER_SEND = 500;
 

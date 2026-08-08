@@ -53,3 +53,4 @@ wrote down why — a known gap, not a guess).
 | [0010](0010-specials-fill-locally-not-in-the-solver.md) | Fill special services locally; move the rules to Sanity | Accepted — P6 implemented 2026-08-03 |
 | [0011](0011-serialize-special-identities-globally.md) | Serialize special-service identities with one global coordinator | Accepted |
 | [0012](0012-grid-drag-excludes-swap-touch-and-auto-scroll.md) | Grid drag moves one seat, desktop only, with no auto-scroll | Accepted |
+| [0013](0013-smtp-sends-stay-serial.md) | SMTP sends stay serial, and the recipient cap sits below the seat count | Accepted |
