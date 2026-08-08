@@ -416,6 +416,14 @@ function classifyNotice(notice: StoredNotice, today: string): Promise<Pair[]> {
  */
 const CONSUME_CONCURRENCY = 8;
 
+/**
+ * How many claims are in flight at once. Same shape and same reason as
+ * `CONSUME_CONCURRENCY`, at the other end of the sweep — stage 3 pays one round
+ * trip per notice too, and it pays them BEFORE any email is sent, so a serial
+ * claim of a large batch consumes the budget that batch needed.
+ */
+const CLAIM_CONCURRENCY = 8;
+
 async function consume(claimed: ClaimedNotice[]): Promise<number> {
   let consumed = 0;
   const consumeOne = async (c: ClaimedNotice): Promise<void> => {
@@ -513,7 +521,18 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
   // sweep on one conflict; the intended behaviour is that a failed claim drops
   // only that notice (another sweeper has it, or a writer just re-pended it).
   const claimed: ClaimedNotice[] = [];
-  for (const notice of selected) {
+  // IN WAVES, for the same reason stage 8 is: one round trip per notice, taken
+  // serially, is a cost that scales with the batch and is paid BEFORE a single
+  // email is sent. A monthly role publish is the large-batch case by design —
+  // and on 2026-08-08 a 27-notice claim took 27.7 s of a 45 s sweep, so stage 7
+  // was refused its first wave and the whole batch was consumed with
+  // `emailed: 0`. The sweep spent its life taking ownership of work it then had
+  // no time to do.
+  //
+  // Still one `Patch.commit()` per notice, each asserting its OWN revision: a
+  // batched transaction would abort every claim on one conflict, and a lost
+  // claim is supposed to cost only its own notice.
+  const claimOne = async (notice: StoredNotice): Promise<ClaimedNotice | null> => {
     try {
       const patched = await writeClient
         .patch(notice._id)
@@ -525,13 +544,22 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
         // Nothing to assert later, so this notice cannot be consumed safely.
         // Drop it and let the lease expiry re-offer it.
         logError("notify_sweep_claim_unrevisioned", { id: notice._id });
-        continue;
+        return null;
       }
-      claimed.push({ notice, claimRev });
+      return { notice, claimRev };
     } catch (err) {
       logError("notify_sweep_claim_lost", { id: notice._id }, err);
+      return null;
     }
+  };
+  const claimStartedAt = Date.now();
+  for (let i = 0; i < selected.length; i += CLAIM_CONCURRENCY) {
+    const wave = await Promise.all(selected.slice(i, i + CLAIM_CONCURRENCY).map(claimOne));
+    // `map` preserves order, so classification and therefore the line order
+    // inside each grouped email are unchanged by the waves.
+    for (const c of wave) if (c) claimed.push(c);
   }
+  const claimMs = Date.now() - claimStartedAt;
   report.claimed = claimed.length;
   if (!claimed.length) return report;
 
@@ -673,6 +701,11 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
       ...report,
       elapsedMs: Date.now() - sweepStartedAt,
       sendMs,
+      // Stage 3's own cost, broken out because it is the one phase that scales
+      // with the batch and is paid before anything is sent. A sweep that reports
+      // `emailed: 0` with a large `claimMs` did not fail to send — it never got
+      // to try, which reads identically in every other field.
+      claimMs,
       msPerSend: sendMs !== null && report.emailed > 0 ? Math.round(sendMs / report.emailed) : null,
       emailLimit,
       sendBudgetMs,
