@@ -19,8 +19,11 @@ Credential *names* appear; no values.
   [`2026-08-07-light-mode-member-first-scope.md`](../specs/2026-08-07-light-mode-member-first-scope.md),
   re-approved at digest `3a927bd8b70c3726134a5254e8e8c258a90eb689ba539397d7bcf0196abb1478`.
 - **Depends on A1** — [`2026-08-08-light-mode-A1-measurement.md`](2026-08-08-light-mode-A1-measurement.md).
-  A1 supplies `.light { color-scheme: light }` and the token vocabulary. **A2 cannot start
-  before A1 merges**, because the provider-less gallery removes the inline `colorScheme` mask.
+  **A1 is implemented and merged** (`792c72a`, deployed and alias-verified). It supplies
+  `.light { color-scheme: light }` in `brand.css`, the generated inventory at
+  `app/utils/__tests__/__fixtures__/colour-inventory.json`, and its family/vocabulary analysis
+  at `2026-08-08-light-mode-A1-inventory-reconciliation.md`. **Every figure below comes from
+  that artifact, not from the parent's hand-counts** — where they disagree, the artifact wins.
 - **Supersedes, jointly with A1:** `2026-08-07-light-mode-A-verification-scaffolding.md`.
 - **Risk tier: Standard — one fresh cold `APPROVED`.** Derived from the ladder. The gallery is
   a **gated** route: verified against the live matcher, `/theme-gallery/*` is protected exactly
@@ -90,7 +93,7 @@ planner}` — with `dynamicParams = false` on **both** segments' behalf, so any 
 
 | Fixture | Renders | Why it is alone |
 |---|---|---|
-| `swatches` | The 17 `.brand-*` classes across their 33 selector occurrences, a `prose` block, stateless components, and (from Child B) token swatches | Nothing portals over it, nothing inerts it, and the page can scroll for a `fullPage` capture |
+| `swatches` | The **15** `.brand-*` classes that carry colour (of 17 total, across 33 selector occurrences — generated), a `prose` block, stateless components, and (from Child B) token swatches | Nothing portals over it, nothing inerts it, and the page can scroll for a `fullPage` capture |
 | `dialog` | One open `CueDialog` | Its `z-[90]` backdrop is the intended subject, not an occluder |
 | `planner` | `PlannerGrid` with full screen **activated** | Its opaque `z-50` overlay is the intended subject; no dialog exists to inert the toggle |
 
@@ -155,6 +158,7 @@ All 19 parent invariants. The four this plan can plausibly break:
 | `app/utils/__tests__/routeMatcher.test.ts` | Asserts the public-route set | **Unchanged.** The route is gated, so it never enters `ungated` |
 | `playwright.vr.config.ts` *(new)* + `e2e/theme-gallery/` *(new)* | — | Read-only VR config that starts nothing capable of writing |
 | `docs/ROUTES.md`, `docs/adr/`, `docs/UTILITIES_AND_COMPONENTS.md`, `docs/SECRETS.md` | Current records | Route prose + row; ADR-0014, ADR-0015; new components; any VR credential |
+| `docs/superpowers/specs/2026-08-07-light-mode-member-first-scope.md` | Approved parent | **Modified** — §5, §8 and §12's "17 light counterparts" corrected to the generated 15, disclosed post-approval |
 
 **Trust boundary: unchanged.** The gallery sits on a gated path. It renders presentational
 components only, reads no session itself, performs no fetch and accepts exactly two `[theme]`
@@ -192,13 +196,16 @@ swatches — but the gallery runs no in-handler guard, which `/me` and `/admin` 
 
 ### 2. The three fixtures
 
-- **`swatches`** — the 17 `.brand-*` classes across 33 selector occurrences, a `prose` block
+- **`swatches`** — the **15 colour-carrying** `.brand-*` classes, a `prose` block
   (Child B removes `dark:prose-invert`, so this is where that lands), and stateless components.
   **Token swatches arrive with Child B** and **light values with Child D**; A2 baselines only
-  what exists. **`.brand-admin-frame` is excluded and recorded as unexercisable** — its only
-  rule (`brand.css:308–312`, inside `@media (min-width: 1280px)` opening at `:296`) declares
-  `max-width` and padding and **no colour at all**, so a swatch of it would baseline nothing
-  theme-relevant.
+  what exists. **TWO classes are excluded and recorded as unexercisable, not one** — A1's
+  generated inventory dispositions both `exempt` because neither carries colour in any rule
+  body: `.brand-admin-frame` (`brand.css:308–312`, inside `@media (min-width: 1280px)` opening
+  at `:296` — `max-width` and two paddings) and `.brand-admin-workspace` (`:332–334` —
+  `min-width: 0`). A swatch of either baselines nothing theme-relevant.
+  **The parent still says 17 in §5, §8 and §12.** That figure is superseded by the inventory;
+  correcting the parent is carried by this plan (see Affected boundaries).
 - **`dialog`** — one open `CueDialog`, mounting `CueDialogProvider` directly. Verified
   standalone-safe: no `useSession`, no `fetch`, nothing from `next-auth`.
 - **`planner`** — `PlannerGrid` from a static props fixture, full screen activated on mount.
@@ -233,7 +240,9 @@ swatches — but the gallery runs no in-handler guard, which `/me` and `/admin` 
   checklist. **A ship gate whose inputs live in no plan is the gate that gets waived.**
 - **Change:** the **surface-nesting map** (hand-authored, reviewed — the only producer of
   cross-component pairs); the **dark composited failing set**, derived from that map plus A1's
-  inventory of same-element pairs — and **re-derived at every Child C family merge**, since C
+  inventory of same-element pairs — **which A1 now emits as a first-class `pairs` output, with
+  `alphaDiffers` per pair (88 of 100 pairs differ in alpha)** — and **re-derived at every Child
+  C family merge**, since C
   changes ~881 dark values, does not promise byte-identity, and its per-family diff gate is
   contrast-blind; and the **recorded conservative backdrop assumption** — the lightest rendered
   `brand-atmosphere` point in dark. Conservative is load-bearing: unconstrained, an implementer
