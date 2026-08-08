@@ -16,6 +16,8 @@
 //
 // This module performs no I/O; the test supplies git-tracked paths and sources.
 
+import { stripComments } from "../../scripts/lib/strip-comments.mjs";
+
 export const PROTECTED_TYPES = [
   "sunday_role",
   "saturday_role",
@@ -411,63 +413,12 @@ export const DEFENSIVE_TYPE_REJECTION_GUARDS: readonly AuditExemption[] = [
  * Blank out `//` and block comments while preserving byte offsets, so a protected
  * type named in prose (e.g. the posts/[id] guard comment) is never evidence.
  * String and template-literal bodies (including `${}` interpolations) are kept.
+ *
+ * Re-exported from `scripts/lib/strip-comments.mjs`, which is the single
+ * implementation — `scripts/colour-inventory.mjs` needs the same one, and a
+ * second copy would drift. Importers of this module are unaffected.
  */
-export function stripComments(src: string): string {
-  const out = src.split("");
-  const stack: Array<{ kind: "tpl" } | { kind: "expr"; depth: number }> = [];
-  const n = src.length;
-  let i = 0;
-  const blank = (from: number, to: number) => {
-    for (let k = from; k < to && k < n; k++) if (src[k] !== "\n") out[k] = " ";
-  };
-  while (i < n) {
-    const top = stack[stack.length - 1];
-    if (top && top.kind === "tpl") {
-      const c = src[i];
-      if (c === "\\") { i += 2; continue; }
-      if (c === "`") { stack.pop(); i++; continue; }
-      if (c === "$" && src[i + 1] === "{") { stack.push({ kind: "expr", depth: 0 }); i += 2; continue; }
-      i++;
-      continue;
-    }
-    const c = src[i];
-    if (c === "/" && src[i + 1] === "/") {
-      let j = i;
-      while (j < n && src[j] !== "\n") j++;
-      blank(i, j);
-      i = j;
-      continue;
-    }
-    if (c === "/" && src[i + 1] === "*") {
-      let j = i + 2;
-      while (j < n && !(src[j] === "*" && src[j + 1] === "/")) j++;
-      const end = Math.min(j + 2, n);
-      blank(i, end);
-      i = end;
-      continue;
-    }
-    if (c === '"' || c === "'") {
-      let j = i + 1;
-      while (j < n && src[j] !== c) {
-        if (src[j] === "\\") j++;
-        else if (src[j] === "\n") break;
-        j++;
-      }
-      i = j + 1;
-      continue;
-    }
-    if (c === "`") { stack.push({ kind: "tpl" }); i++; continue; }
-    if (top && top.kind === "expr") {
-      if (c === "{") top.depth++;
-      else if (c === "}") {
-        if (top.depth === 0) { stack.pop(); i++; continue; }
-        top.depth--;
-      }
-    }
-    i++;
-  }
-  return out.join("");
-}
+export { stripComments };
 
 interface Region { operation: string; start: number; end: number }
 
