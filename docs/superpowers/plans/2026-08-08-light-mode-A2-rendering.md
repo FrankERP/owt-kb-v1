@@ -93,7 +93,7 @@ planner}` — with `dynamicParams = false` on **both** segments' behalf, so any 
 
 | Fixture | Renders | Why it is alone |
 |---|---|---|
-| `swatches` | The **15** `.brand-*` classes that carry colour (of 17 total, across 33 selector occurrences — generated), a `prose` block, stateless components, and (from Child B) token swatches | Nothing portals over it, nothing inerts it, and the page can scroll for a `fullPage` capture |
+| `swatches` | The **15** `.brand-*` classes that carry colour (of 17 total, across 33 selector occurrences — generated), a `prose` block, stateless presentational components — **name them in the fixture, do not leave the set to the implementer**; start from `SectionNav`, `TextSizeControl` and `ui/CueDialogStatus`, none of which read a session or fetch — and (from Child B) token swatches | Nothing portals over it, nothing inerts it, and the page can scroll for a `fullPage` capture |
 | `dialog` | One open `CueDialog` | Its `z-[90]` backdrop is the intended subject, not an occluder |
 | `planner` | `PlannerGrid` with full screen **activated** | Its opaque `z-50` overlay is the intended subject; no dialog exists to inert the toggle |
 
@@ -153,7 +153,7 @@ All 19 parent invariants. The four this plan can plausibly break:
 
 | Component | Current responsibility | Planned responsibility |
 |---|---|---|
-| `app/(gallery)/theme-gallery/[theme]/layout.tsx` *(new)* | — | Root layout: `<html class={theme}>`, the three font `.variable` classes, `(client)/globals.css` + `brand.css`, **no provider** |
+| `app/(gallery)/theme-gallery/[theme]/layout.tsx` *(new)* | — | Root layout: `<html class={theme}>`, the three font `.variable` classes, `(client)/globals.css` + `brand.css`, **`brand-atmosphere …` on `<body>`**, **no provider** |
 | `app/(gallery)/theme-gallery/[theme]/[fixture]/page.tsx` *(new)* | — | Dispatches to one of three fixtures; `generateStaticParams` + `dynamicParams = false` |
 | Gallery fixture components *(new, `"use client"`)* | — | Static props fixtures; the planner host activates full screen on mount |
 | `app/utils/__tests__/routeMatcher.test.ts` | Asserts the public-route set | **Unchanged.** The route is gated, so it never enters `ungated` |
@@ -175,7 +175,7 @@ swatches — but the gallery runs no in-handler guard, which `/me` and `/admin` 
 
 ## Ordered changes
 
-### 0. Exclude the gallery from the colour inventory — BEFORE the route exists
+### 0. Exclude the gallery from the colour inventory — BEFORE the route exists · **LANDED at `bb1270d`**
 
 **This is a done-gate blocker, not housekeeping.** `scripts/colour-inventory.mjs` walks all of
 `app/**` (`inGlob` excludes only `__tests__`), and `colourInventory.test.ts` deep-equals both
@@ -197,8 +197,15 @@ nothing. **The gallery is a verification surface, not product colour.**
 - **Consequence to state plainly:** the gallery's colour is then **unmeasured**, so a fixture
   must not become a place where product colour hides. Fixtures render tokens and existing
   components; they do not introduce new literals.
-- **Verification:** with the route group present, `npx vitest run` is green — the assertion
-  this step exists to satisfy.
+- **Verification:** with the route group present, `npx vitest run` is green — the assertion this
+  step exists to satisfy, and verified both ways before and after the exclusion.
+  **The exclusion guard is vacuous until fixtures exist.** It asserts the *absence* of
+  `(gallery)` rows, which passes trivially today; it only becomes a real guard once fixtures
+  carrying `brand-*` classes land. Do not read today's green as proof.
+- **A second app-wide walk exists and is deliberately NOT excluded.** `brandCss.test.ts` also
+  walks `app/`, but it is a *positive* guard — every colour `var()` referenced must be declared
+  — so a gallery file can only fail it by referencing an undeclared token, which is exactly the
+  outcome we want.
 
 ### 1. The route group, root layout and fixture segment
 
@@ -209,6 +216,25 @@ nothing. **The gallery is a verification surface, not product colour.**
   no storage; apply `${displayFont.variable} ${bodyFont.variable} ${labelFont.variable}`; import
   `app/(client)/globals.css` **specifically** and `app/brand.css`; and **not** import
   `app/utils/Provider`.
+- **`<body>` carries `brand-atmosphere font-body min-h-screen bg-brand-blackout text-brand-frost`**
+  — the same set both real root layouts carry (`(client)/layout.tsx:56–63`,
+  `(admin)/layout.tsx:38–40`), minus `selection:bg-brand-beam/35`, which is a text-selection
+  affordance no baseline exercises. **This decides whether the baselines are valid at all, and
+  it is not cosmetic:**
+  - `.brand-atmosphere` (`brand.css:30–41`) is the opaque page wash — `background-color:
+    rgb(var(--brand-blackout))` plus six gradient layers. Without it on `<body>`, the fixtures
+    paint over the bare UA canvas.
+  - **14 of the 15 colour-carrying `.brand-*` classes are alpha-composited over whatever sits
+    behind them** — `.brand-surface` (`brand.css:124–133`) is a `linear-gradient` at 0.68/0.82/
+    0.76 over `rgb(var(--brand-console) / 0.72)`, and `brand.css` carries 59
+    `rgb(var(--brand-*) / α)` declarations. On the wrong backdrop every one of those baselines
+    is wrong in a way a reviewer cannot see.
+  - **Step 4's AA input depends on it.** The "recorded conservative backdrop assumption — the
+    lightest rendered `brand-atmosphere` point in dark" is **not observable** in a gallery whose
+    body does not render `brand-atmosphere`.
+  This plan already applies exactly this reasoning to fonts ("absent them, every baseline
+  renders at fallback metrics and Child D's review is invalid"). The backdrop deserves the same
+  treatment, in the one place that decides it.
 - **Segment validation:** `generateStaticParams` enumerating theme × fixture, plus
   `export const dynamicParams = false`. `generateStaticParams` alone does not 404 —
   `dynamicParams` defaults to `true`. Verified empirically: with it set, `next start` returns
@@ -231,10 +257,10 @@ nothing. **The gallery is a verification surface, not product colour.**
   `:310` — `max-width` and two paddings) and `.brand-admin-workspace` (`:346–348` —
   `min-width: 0`). *(A1's merge added 14 lines above these; earlier citations of `:308`/`:296`/
   `:332` are pre-A1 and stale, including the parent's `:471`.)*. A swatch of either baselines nothing theme-relevant.
-  **The parent says 17 in FOUR places — §5 (`:173`), §8 (`:298`), §9 (`:466`) and §12
-  (`:584`)** — and correcting only three would leave §9 asserting the superseded figure in the
+  **The parent said 17 in FOUR places — §5 (`:173`), §8 (`:298`), §9 (`:466`) and §12
+  (`:587`) — and all four are now corrected (landed at `bb1270d`)** — and correcting only three would leave §9 asserting the superseded figure in the
   section Child D is most likely to read. All four are corrected by this plan.
-  **Leave `:471` alone:** "the class count is 17, not 16" is a different and correct claim
+  **Leave `:473–474` alone:** "the class count is 17, not 16" is a different and correct claim
   about the total, not about light counterparts.
 - **`dialog`** — one open `CueDialog`, mounting `CueDialogProvider` directly. Verified
   standalone-safe: no `useSession`, no `fetch`, nothing from `next-auth`.
@@ -302,7 +328,7 @@ nothing. **The gallery is a verification surface, not product colour.**
   email/password form (`(client)/auth/signin/page.tsx:107,117`), so headless login needs a member
   identity. The existing harness uses `SR_VERIFY_MEMBER_EMAIL`/`SR_VERIFY_MEMBER_PASSWORD` behind
   `requireHarnessConfig`, which a read-only config cannot inherit — so expect to write a second,
-  read-only login path and keep it incapable of writing. **None of the 14 `SR_VERIFY_*` variables
+  read-only login path and keep it incapable of writing. **None of the 16 `SR_VERIFY_*` variables
   is documented in `docs/SECRETS.md`**, so there is no entry to copy.
   1. **Any variable introduced or reused gets a `docs/SECRETS.md` entry in the same commit** —
      name, every platform that needs it and every one that does not, where the value came from,
@@ -336,6 +362,7 @@ nothing. **The gallery is a verification surface, not product colour.**
 | Invalid segment 404s | A served-route check in the VR config, **or a local `next start` check** if VR is deferred | Arbitrary input reflected into a root attribute. A `curl` against Preview proves nothing — SSO answers first with a 302 |
 | Theme class is applied | Assert `<html class>` for both segments | The false-confidence trap: a surviving `dark:` variant rendering its light-intended base |
 | Fonts are real | Assert the three `.variable` classes on `<html>` | Every baseline at fallback metrics, invalidating Child D's review |
+| Backdrop is real | Assert `brand-atmosphere` is on `<body>` in **both** segments | 14 alpha-composited `.brand-*` baselines painted over the bare UA canvas, and step 4's AA backdrop input unobservable |
 | `swatches` is unobscured | Assert no fixed full-viewport body child overlays it | The occlusion class that split Child A |
 | `dialog` subject is on top | Assert the dialog layer is the topmost painted body child | A baseline of the page behind the dialog |
 | `planner` genuinely entered full screen | Assert the planner overlay is the topmost painted body child — **not merely that a portal node exists** | The silent failure where D baselines the collapsed grid |
