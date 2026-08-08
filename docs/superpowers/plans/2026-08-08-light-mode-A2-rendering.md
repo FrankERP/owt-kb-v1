@@ -26,8 +26,9 @@ Credential *names* appear; no values.
   that artifact, not from the parent's hand-counts** — where they disagree, the artifact wins.
 - **Supersedes, jointly with A1:** `2026-08-07-light-mode-A-verification-scaffolding.md`.
 - **Risk tier: Standard — one fresh cold `APPROVED`.** Derived from the ladder. The gallery is
-  a **gated** route: verified against the live matcher, `/theme-gallery/*` is protected exactly
-  like `/admin`, `routeMatcher.test.ts` stays green **without being edited**, and there is no
+  a **gated** route: verified against the live matcher, `/theme-gallery/*` is protected by the same
+  middleware as `/admin` (though **not** by the same in-handler guard — see Affected
+  boundaries), `routeMatcher.test.ts` stays green **without being edited**, and there is no
   env flag, `PUBLIC_ROUTES` entry, `docs/SECRETS.md` entry or build-time refusal. No writer, no
   schema, no migration, no remote release action.
   **One condition re-opens the tier** — see step 5: if VR credentials are provisioned, that is
@@ -218,16 +219,18 @@ nothing. **The gallery is a verification surface, not product colour.**
   `app/utils/Provider`.
 - **`<body>` carries `brand-atmosphere font-body min-h-screen bg-brand-blackout text-brand-frost`**
   — the same set both real root layouts carry (`(client)/layout.tsx:56–63`,
-  `(admin)/layout.tsx:38–40`), minus `selection:bg-brand-beam/35`, which is a text-selection
+  `(admin)/layout.tsx:41–43`), minus `selection:bg-brand-beam/35`, which is a text-selection
   affordance no baseline exercises. **This decides whether the baselines are valid at all, and
   it is not cosmetic:**
-  - `.brand-atmosphere` (`brand.css:30–41`) is the opaque page wash — `background-color:
+  - `.brand-atmosphere` (`brand.css:30–40`) is the opaque page wash — `background-color:
     rgb(var(--brand-blackout))` plus six gradient layers. Without it on `<body>`, the fixtures
     paint over the bare UA canvas.
   - **14 of the 15 colour-carrying `.brand-*` classes are alpha-composited over whatever sits
-    behind them** — `.brand-surface` (`brand.css:124–133`) is a `linear-gradient` at 0.68/0.82/
-    0.76 over `rgb(var(--brand-console) / 0.72)`, and `brand.css` carries 59
-    `rgb(var(--brand-*) / α)` declarations. On the wrong backdrop every one of those baselines
+    behind them** — `.brand-surface` (`brand.css:124–134`) is a `linear-gradient` at 0.68/0.82/
+    0.76 over `rgb(var(--brand-console) / 0.72)`, and `brand.css` carries **65**
+    `rgb(var(--brand-*) / α)` occurrences (measured with the repo's own `stripComments`; an
+    earlier revision said 59, which matched nothing under any reading — a hand-count in a plan
+    whose contract is that generated output wins). On the wrong backdrop every one of those baselines
     is wrong in a way a reviewer cannot see.
   - **Step 4's AA input depends on it.** The "recorded conservative backdrop assumption — the
     lightest rendered `brand-atmosphere` point in dark" is **not observable** in a gallery whose
@@ -256,7 +259,7 @@ nothing. **The gallery is a verification surface, not product colour.**
   body: `.brand-admin-frame` (`brand.css:322–326`, inside `@media (min-width: 1280px)` opening at
   `:310` — `max-width` and two paddings) and `.brand-admin-workspace` (`:346–348` —
   `min-width: 0`). *(A1's merge added 14 lines above these; any citation of `:308`/`:296`/`:332` is pre-A1 and
-  stale. The parent's own copy was corrected in the same commit as this note.)*. A swatch of either baselines nothing theme-relevant.
+  stale. The parent's own copy was corrected at `bb1270d`.)*. A swatch of either baselines nothing theme-relevant.
   **The parent said 17 in FOUR places — §5 (`:173`), §8 (`:298`), §9 (`:466`) and §12
   (`:587`) — and all four are now corrected (landed at `bb1270d`)** — and correcting only three would leave §9 asserting the superseded figure in the
   section Child D is most likely to read. All four are corrected by this plan.
@@ -399,7 +402,7 @@ nothing. **The gallery is a verification surface, not product colour.**
 |---|---|---|---|
 | A second dynamic segment under `[theme]` keeps the root layout valid | The route shape collapses | Step 1 — the layout needs only `theme`, and params flow root-downward | Flatten to three sibling routes under `[theme]` (`/swatches`, `/dialog`, `/planner`), all still gated |
 | `PlannerGrid` renders acceptably from a synthetic props fixture | The planner baseline is unrepresentative | Step 2, against the tests' `baseProps()` | Record what the fixture cannot represent, so Child D does not over-read the baseline |
-| Activating the toggle on mount is reliable in a headless run | D baselines a collapsed grid | Step 2's topmost-child assertion | The assertion **is** the response — it fails the build rather than shipping a false baseline |
+| Activating the toggle on mount is reliable in a headless run | D baselines a collapsed grid | Step 2's topmost-child assertion | **If VR ships**, the assertion fails the build. **Under the recommended VR-deferred default there is no build to fail** — it is a recorded manual check, which is weaker, and the stop condition is what prevents the fixtures shipping unverified |
 | A read-only VR config can authenticate without new credentials | Step 5 re-tiers the plan | Step 5 | Take baselines manually and defer VR automation |
 
 ## Open questions
@@ -407,7 +410,7 @@ nothing. **The gallery is a verification surface, not product colour.**
 | Question | Why it matters | Recommendation | Owner | Blocking? | Bounded default |
 |---|---|---|---|---|---|
 | Whether VR automation is worth provisioning credentials for | It re-tiers this plan to Critical | Defer. Child D needs *correct baselines*, not *automated* ones, and manual capture of six routes is cheap next to a secret-boundary review | A2 | **No** | Manual baselines; VR automation as a follow-on |
-| Whether the `swatches` fixture should paginate | A 2,649-row inventory (artifact) is unreviewable as one image | Group by role and capture per group once Child B's tokens exist; A2 baselines only the 33 `.brand-*` occurrences and a `prose` block | A2 | **No** | As recommended |
+| Whether the `swatches` fixture should paginate | A 2,649-row inventory (artifact) is unreviewable as one image | Group by role and capture per group once Child B's tokens exist; A2 baselines the **15 colour-carrying classes**; the 33 figure counts selector *occurrences* across all 17 and includes pseudo-element and state selectors a static capture cannot reach and a `prose` block | A2 | **No** | As recommended |
 
 **No blocking open questions.**
 
