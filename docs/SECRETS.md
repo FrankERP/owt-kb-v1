@@ -165,7 +165,7 @@ npx vercel env rm EMAIL_REDIRECT_TO production --yes
 
 **Why it is set.** It caps the DISTINCT RECIPIENTS one sweep may claim. That cap is what makes stage 8's unconditional delete safe: a sweep is supposed to fully discharge everything it claims, so anything it claims and cannot send is **destroyed**, not retried. When `ms_per_send` is unknown or bad, a low value turns that risk into a bounded experiment — selection claims only what it can serve and leaves the rest **pending and unclaimed** (`report.deferred`), which the next sweep picks up.
 
-**Set to `3` on 2026-08-07** to take a real `msPerSend` reading for external recipients after a lossy flush, risking three notices instead of seventeen.
+**Set to `2` on 2026-08-07.** First `3`, to take a real `msPerSend` reading for external recipients while risking three notices instead of seventeen; that reading came back at **14 413 ms per send**, which makes exactly TWO sends fit the 40 s budget — so the cap is now the serviceable count itself, and a sweep claims nothing it cannot send. Restore the default of 40 only once `ms_per_send` is small enough to justify it.
 
 **How to unset (restore the code default of 40):**
 

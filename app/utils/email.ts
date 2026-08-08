@@ -21,7 +21,23 @@ import { blockDelivery, recordDeliveryAttempt } from "./deliveryFirewall";
  * lives HERE, in the one function that talks to SMTP, so that the sweep's
  * between-sends budget check is once again a valid bound on the stage.
  */
-export const SEND_TIMEOUT_MS = 15_000;
+export const SEND_TIMEOUT_MS = 20_000;
+
+/*
+ * WHY 20 s AND NOT 15. Measured 2026-08-08, two successful sends to external
+ * recipients: `msPerSend` 14 413 ms. A 15 s ceiling sits 600 ms above the
+ * AVERAGE, so a send only slightly slower than typical is killed — and a killed
+ * send is a notification destroyed, because stage 8 consumes regardless. One
+ * already died at exactly 15 000 ms. This costs nothing: the admission check in
+ * stage 7 reserves the ceiling out of the budget either way, and at 14.4 s per
+ * send the count that fits in 40 s is two at 15 s and two at 20 s.
+ *
+ * The 14.4 s itself is NOT normal and is not ours: the same server accepts a
+ * 20 KB message for a LOCAL recipient in 67 ms (`/api/cron/smtp-probe?data=1`).
+ * Only remote recipients cost this, which points at the server delivering
+ * synchronously instead of queueing. Fixing that upstream makes this constant
+ * irrelevant; until then it is what keeps a typical send from being thrown away.
+ */
 
 /**
  * How many messages may be in flight at once — the throughput knob, sized from a
