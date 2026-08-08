@@ -478,7 +478,7 @@ directly rather than judging a single run "comfortable":
   incompatible with one document per subject. That is a different outbox model
   and must be designed deliberately, not discovered in production.
 
-> **2026-08-08 — measured, and the stop condition above WAS crossed.**
+> **2026-08-07 — measured, and the stop condition above WAS crossed.**
 > `ms_per_send` = **14 413 ms**, not the 2 000 ms this section assumes: at the
 > default limit that is `14 413 × 40 = 576 520` against a 40 000 ms budget. The
 > derivation ran out of room — `NOTIFY_SEND_BUDGET_MS` cannot rise far behind a

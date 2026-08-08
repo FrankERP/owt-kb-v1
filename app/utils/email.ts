@@ -24,7 +24,7 @@ import { blockDelivery, recordDeliveryAttempt } from "./deliveryFirewall";
 export const SEND_TIMEOUT_MS = 20_000;
 
 /*
- * WHY 20 s AND NOT 15. Measured 2026-08-08, two successful sends to external
+ * WHY 20 s AND NOT 15. Measured 2026-08-07, two successful sends to external
  * recipients: `msPerSend` 14 413 ms. A 15 s ceiling sits 600 ms above the
  * AVERAGE, so a send only slightly slower than typical is killed — and a killed
  * send is a notification destroyed, because stage 8 consumes regardless. One
@@ -50,7 +50,7 @@ export const SEND_CONCURRENCY = 1;
 /*
  * TESTED TWICE, AT 8 AND AT 10. CONCURRENCY DOES NOT WORK AGAINST THIS SERVER.
  *
- * 2026-08-08, ten messages in flight to TEN DIFFERENT gmail addresses, with the
+ * 2026-08-07, ten messages in flight to TEN DIFFERENT gmail addresses, with the
  * claim phase fixed so stage 7 genuinely ran: `sendMs: 20020`, `emailed: 2`, and
  * eight `SMTP send timed out after 20000ms`. In twenty seconds with ten
  * connections open the server accepted TWO messages — the same ~1-per-12-seconds
