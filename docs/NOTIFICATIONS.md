@@ -158,6 +158,19 @@ Things that are counter-intuitive and were each a real defect at some point.
   reliable hook to win from the sending side.
 - **Unpublishing does not notify, and a date move does not notify.** Both are
   deliberate; see spec §1 and §4.
+- **Remote recipients cost ~14 s to ACCEPT; local ones cost 67 ms. That is the
+  whole problem, and it is server-side.** Measured 2026-08-08 with
+  `/api/cron/smtp-probe` (the *Probe the SMTP path* workflow): to a LOCAL
+  recipient the entire SMTP conversation — connect, TLS, `EHLO`, `AUTH`,
+  `MAIL FROM`, `RCPT TO`, `DATA` and a 20 KB body — completes in **under 600 ms**,
+  with the body accepted in 67 ms. `RCPT TO` for an external address is equally
+  fast (~35 ms), so it is not recipient callout verification. Yet a real send to
+  an external recipient measured **`msPerSend` 14 413 ms** across two successful
+  sends. Accepting for remote delivery is the only step left, which points at the
+  server delivering synchronously rather than queueing. Ask the host why
+  `cp1-dal1.bioxnet.com` takes fourteen seconds to accept a remote message when a
+  local one takes 67 ms — everything on this page downstream of that number gets
+  easier the moment it comes down.
 - **A batch larger than the budget is DESTROYED, not deferred — this is the open
   wound.** Stage 8 consumes every claimed notice whatever stage 7 returned (§1,
   best-effort, no retry). That is sound when `ms_per_send × EMAIL_LIMIT` fits the

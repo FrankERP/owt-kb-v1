@@ -91,7 +91,7 @@ vi.mock("@/sanity/lib/serverClient", () => ({
 vi.mock("@/app/utils/push", () => ({ sendPush: (...a: unknown[]) => sendPushMock(...a) }));
 // assignmentEmail.ts also imports ./email, which imports the "server-only"
 // package guard — unresolvable outside a Next.js server build.
-vi.mock("@/app/utils/email", () => ({ sendEmail: vi.fn(), SEND_CONCURRENCY: 8, SEND_TIMEOUT_MS: 15_000 }));
+vi.mock("@/app/utils/email", () => ({ sendEmail: vi.fn(), SEND_CONCURRENCY: 8, SEND_TIMEOUT_MS: 20_000 }));
 // PARTIAL on purpose: the two send paths are spied, but `rolesForMember` is the
 // REAL seat-label vocabulary. Stubbing it would let the "each member's OWN seat
 // labels" assertion pass against a label set the emails never use.

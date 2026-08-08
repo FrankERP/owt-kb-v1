@@ -105,7 +105,7 @@ vi.mock("@/sanity/lib/serverClient", () => ({
 // rather than referenced: `vi.mock` is hoisted above every const in this file.
 vi.mock("@/app/utils/email", () => ({
   sendEmail: (...a: unknown[]) => sendEmailMock(...a),
-  SEND_CONCURRENCY: 8, SEND_TIMEOUT_MS: 15_000,
+  SEND_CONCURRENCY: 8, SEND_TIMEOUT_MS: 20_000,
 }));
 vi.mock("@/app/utils/deliveryFirewall", () => ({
   isDeliveryBlocked: (...a: unknown[]) => isDeliveryBlockedMock(...a),
