@@ -478,6 +478,26 @@ directly rather than judging a single run "comfortable":
   incompatible with one document per subject. That is a different outbox model
   and must be designed deliberately, not discovered in production.
 
+> **2026-08-07 — measured, and the stop condition above WAS crossed.**
+> `ms_per_send` = **14 413 ms**, not the 2 000 ms this section assumes: at the
+> default limit that is `14 413 × 40 = 576 520` against a 40 000 ms budget. The
+> derivation ran out of room — `NOTIFY_SEND_BUDGET_MS` cannot rise far behind a
+> 60 s `maxDuration`, and concurrency was tried at 8 and at 10 and made things
+> strictly worse (the server serializes acceptance for remote recipients; a local
+> one costs 67 ms). Production therefore runs `NOTIFY_FLUSH_EMAIL_LIMIT = 2` —
+> **below the 12–20 floor this section says to stop at** — chosen knowingly,
+> because at the default the excess is not delayed but destroyed.
+>
+> The consequences are exactly the ones predicted here and are not resolved: a
+> monthly role publish fragments into several emails per member instead of one,
+> and a `setlist` notice — every participant in ONE document — cannot be split by
+> any cap, so it is still taken alone, over budget, and truncated. The two real
+> fixes are the ~14 s remote accept at the mail server, or re-pending notices the
+> sweep never attempted instead of consuming them, which IS the different outbox
+> model named above and still wants designing rather than discovering. See
+> `docs/NOTIFICATIONS.md` → *Still open* and `docs/SECRETS.md` →
+> `NOTIFY_FLUSH_EMAIL_LIMIT`.
+
 **Layer 2 derates both knobs, not just one.** It halves the recipient limit *and*
 the send budget, so the inequality holds identically there. An earlier draft
 halved only the limit, which would have let a layer-2 sweep spend a full 40 s

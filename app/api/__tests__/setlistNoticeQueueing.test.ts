@@ -44,7 +44,7 @@ vi.mock("@/app/utils/revalidate", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidatePathMock(...a) }));
 vi.mock("@/app/utils/push", () => ({ sendPush: (...a: unknown[]) => sendPushMock(...a) }));
-vi.mock("@/app/utils/email", () => ({ sendEmail: vi.fn() }));
+vi.mock("@/app/utils/email", () => ({ sendEmail: vi.fn(), SEND_CONCURRENCY: 8, SEND_TIMEOUT_MS: 20_000 }));
 vi.mock("@/app/utils/proposalNotify", () => ({
   notifyProposalSubmitted: (...a: unknown[]) => notifyProposalSubmittedMock(...a),
 }));

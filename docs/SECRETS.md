@@ -134,8 +134,62 @@ Then confirm with a manual run as above.
 
 **How to rotate.** Reset the mailbox password in cPanel, then update `SMTP_PASS` in Vercel for Production *and* Preview, then redeploy. Note the blast radius is wider than the cron secret's: every outbound email — assignment notifications, the debounced notification sweep, proposal emails, and the outbox liveness alarm — is down between the reset and the redeploy.
 
+---
+
+## `EMAIL_REDIRECT_TO`
+
+**Not a secret** — an email address, and a deliberate safety valve. Documented here because it is the single most consequential non-secret in the mail path.
+
+**Needed in: nowhere, normally.** It must be **absent** in Production for the team to receive their own mail. Setting it is a temporary, reversible act.
+
+**Purpose.** When set, *every* outgoing email is redirected to that one address instead of its real recipient, with the intended recipient prefixed into the subject as `[→ real@address] …` (`outboxSweep.ts` stage 7). Nothing else changes: classification, grouping, the send loop, and stage 8's unconditional consume all behave exactly as in a real run. That is what makes it the only honest way to rehearse a fan-out — a completely real batch that reaches nobody.
+
+**Where the value came from.** Whoever is running the rehearsal. On 2026-08-07 it was set to the maintainer's own address to measure `msPerSend` for a 17-recipient batch without mailing the team.
+
+**How to set and unset.**
+
+```bash
+printf 'you@example.com' | npx vercel env add EMAIL_REDIRECT_TO production
+npx vercel env rm EMAIL_REDIRECT_TO production --yes
+```
+
+**A redeploy is required either way** — a running function keeps the value it booted with, so adding it without redeploying rehearses nothing and removing it without redeploying keeps mail redirected. Verify the alias moved before trusting either state.
+
+**Check `preview` too, not just `production`.** Every sender reads this variable in whatever environment it runs, and Preview deploys against the **real Sanity dataset and the real team** — so a rehearsal set on `preview` and forgotten silently swallows mail from that branch. Substitute `preview` for `production` in both commands, or confirm it is absent there.
+
+**Blast radius.** While it is set, *nobody on the team receives any notification* — and because the outbox consumes unconditionally with no retry, notices flushed during that window are **spent**, not queued. Leaving it set by accident is silent, total notification loss that still reports green. Unset it the moment the rehearsal ends, and confirm with `vercel env ls production`.
+
+---
+
+## `NOTIFY_FLUSH_EMAIL_LIMIT` (when overridden in Vercel)
+
+**Not a secret** — a tuning knob with a code default of 40. Listed here only because it is currently **set in Production**, and a knob set in a dashboard with no record is exactly what this file exists to prevent.
+
+**Needed in: Vercel Production only.** Not in GitHub Actions — the flush workflow only curls the route and never reads this. Not in `.env.local`, and not on Preview unless you are deliberately rehearsing there.
+
+**Why it is set.** It caps the DISTINCT RECIPIENTS one sweep may claim. That cap is what makes stage 8's unconditional delete safe: a sweep is supposed to fully discharge everything it claims, so anything it claims and cannot send is **destroyed**, not retried. When `ms_per_send` is unknown or bad, a low value turns that risk into a bounded experiment — selection claims only what it can serve and leaves the rest **pending and unclaimed** (`report.deferred`), which the next sweep picks up.
+
+**Set to `2` — the number of sends that actually fit a 40 s budget at the measured ~14 s each.** It is the lesser of two bad options, and both are worth understanding before anyone changes it.
+
+The cap governs what a sweep **claims**, and claiming is what commits a notice to being deleted whether or not it was sent. Above the serviceable count, the excess is destroyed. Below the month's distinct-recipient count, the fan-out fragments, because stage 6 can only group what stage 3 claimed — and a month of roles is published at once, so the requirement is ONE grouped email per member covering their whole month. So: high loses mail, low fragments it. `2` chooses fragmentation, because losing it is worse.
+
+**This does not protect `setlist` notices.** One setlist notice carries ALL of a service's participants in a single document, so it cannot be split by any cap: it is taken alone, over budget, and everyone past the second recipient is destroyed. That gap closes only when `ms_per_send` comes down or the sweep stops consuming what it never attempted — see `docs/NOTIFICATIONS.md`.
+
+Raise it to the default of 40 the moment a send costs under ~2 s, and not before.
+
+**How to set and unset:**
+
+```bash
+printf '2' | npx vercel env add NOTIFY_FLUSH_EMAIL_LIMIT production
+npx vercel env rm NOTIFY_FLUSH_EMAIL_LIMIT production --yes
+```
+
+**A redeploy is required** for either direction to reach a running function.
+
+**Blast radius.** While it is low, a service whose fan-out exceeds it is split across sweeps — some members hear now and the rest on a later flush. That is the deliberate trade: slower, but nothing is deleted unsent. Leaving it low permanently is not harmful, only slow; raising it above what the send path can actually service in `NOTIFY_SEND_BUDGET_MS` is what silently loses mail.
+
 ## Not yet documented
 
-Other variables in use — `SANITY_API_*`, `NEXTAUTH_*`, SMTP credentials for `contacto@oasis.mx`, `EMAIL_ALLOWLIST`, `EMAIL_REDIRECT_TO`, FCM push credentials, the solver's Secret Manager key — predate this file. Add each one here as it is next touched or rotated.
+Other variables in use — `SANITY_API_*`, `NEXTAUTH_*`, SMTP credentials for `contacto@oasis.mx`, `EMAIL_ALLOWLIST`, FCM push credentials, the solver's Secret Manager key — predate this file. Add each one here as it is next touched or rotated.
 
 Notification-outbox tuning knobs (`NOTIFY_DEBOUNCE_MINUTES`, `NOTIFY_MAX_WINDOW_MINUTES`, `NOTIFY_CLAIM_TTL_MINUTES`, `NOTIFY_SEND_BUDGET_MS`, `NOTIFY_FLUSH_EMAIL_LIMIT`, `NOTIFY_STALE_ALERT_HOURS`) are configuration, not secrets, and all have code defaults. They are specified in `docs/superpowers/specs/2026-07-27-service-notification-emails-design.md` §9.

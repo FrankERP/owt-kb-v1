@@ -101,7 +101,12 @@ vi.mock("@/sanity/lib/serverClient", () => ({
     transaction: () => writeClientTransaction(),
   },
 }));
-vi.mock("@/app/utils/email", () => ({ sendEmail: (...a: unknown[]) => sendEmailMock(...a) }));
+// Mirrors `email.ts`'s real value — the sweep sends in waves this wide. Inlined
+// rather than referenced: `vi.mock` is hoisted above every const in this file.
+vi.mock("@/app/utils/email", () => ({
+  sendEmail: (...a: unknown[]) => sendEmailMock(...a),
+  SEND_CONCURRENCY: 8, SEND_TIMEOUT_MS: 20_000,
+}));
 vi.mock("@/app/utils/deliveryFirewall", () => ({
   isDeliveryBlocked: (...a: unknown[]) => isDeliveryBlockedMock(...a),
 }));
@@ -351,6 +356,43 @@ describe("sweepOutbox — grouping and fan-out", () => {
     const recipients = sendEmailMock.mock.calls.map((c) => (c[0] as { to: string }).to).sort();
     expect(recipients).toEqual(team.map((m) => `${m}@example.com`).sort());
     expect((sendEmailMock.mock.calls[0][0] as { subject: string }).subject).toContain("El setlist cambió");
+  });
+
+  it("never exceeds SEND_CONCURRENCY in flight, whatever that is set to", async () => {
+    // The 2026-08-07 throughput defect. One send costs ~13 s against this mail
+    // server — the probe put connect+AUTH at ~0.4 s of that, so the cost is the
+    // message — and serialized that is ~220 s for a Sunday inside a 60 s
+    // function. The sweep emailed one person and dropped sixteen, because stage 8
+    // consumes whether or not stage 7 reached them.
+    const team = ids("m", 12);
+    world.notices = [setlistNotice({ knownRecipients: team })];
+    world.roles = { r2: roleDoc({ _id: "r2", _type: "saturday_role", week: "2026-08-08" }) };
+    world.recipients = { r2: team };
+    world.weekendSongs = { "saturdarSongs:2026-08-08": [storedSong("song1")] };
+    world.titles = { song1: "Santo" };
+    world.members = members(team);
+
+    let inFlight = 0;
+    let peakInFlight = 0;
+    sendEmailMock.mockImplementation(async () => {
+      inFlight++;
+      peakInFlight = Math.max(peakInFlight, inFlight);
+      await Promise.resolve();
+      inFlight--;
+      return { ok: true };
+    });
+
+    const report = await sweepOutbox();
+
+    expect(report.emailed).toBe(12);
+    expect(report.unserved).toBe(0);
+    // Asserted against the constant rather than a hard-coded width, because the
+    // right width is an open question: 8 was tried in production and produced
+    // ZERO deliveries where serial produced one, so it is back to 1 pending a
+    // measurement that is not confounded by every message going to one domain.
+    // The machinery must be correct at whatever value that turns out to be.
+    const { SEND_CONCURRENCY } = await import("@/app/utils/email");
+    expect(peakInFlight).toBe(Math.min(SEND_CONCURRENCY, 12));
   });
 
   it("introduces a recipient absent from knownRecipients", async () => {
@@ -713,18 +755,212 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
     world.roles = { r1: roleDoc() };
     world.recipients = { r1: ["m1"] };
     world.members = members(["m1"]);
-    // Every read costs 3 s of wall clock — several times the whole send budget.
+    // Every read costs 3 s of wall clock — together, more than the send budget
+    // below, so a budget that charged for reads would have nothing left.
     operationalFetch.mockImplementation(async (query: string, params: Doc = {}) => {
       reads.push({ query, params });
       vi.setSystemTime(new Date(Date.now() + 3_000));
       return routeRead(query, params);
     });
 
-    const report = await sweepOutbox({ sendBudgetMs: 1_000 });
+    // 20 s, not the 1 s this once used: stage 7 now admits a wave only if the
+    // worst case (SEND_TIMEOUT_MS, 20 s) fits in what remains, so a budget under
+    // that admits nothing at all and would prove the opposite of the point. The
+    // read phase still costs more than this budget, which is what matters here.
+    const report = await sweepOutbox({ sendBudgetMs: 20_000 });
 
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
     expect(report.emailed).toBe(1);
     expect(report.unserved).toBe(0);
+    logSpy.mockRestore();
+  });
+
+  it("reads one subject once, however many notices share it", async () => {
+    // Notices are one per (member, subject), so a batch is many notices over few
+    // subjects. Unmemoized this was one round trip PER NOTICE for the same
+    // document — the read phase, not the sends, is what pushed the 2026-08-06
+    // backlog past the sweep deadline.
+    world.notices = [
+      roleNotice({ _id: "n1", memberId: "m1" }),
+      roleNotice({ _id: "n2", memberId: "m2" }),
+      roleNotice({ _id: "n3", memberId: "m3" }),
+    ];
+    world.roles = { r1: roleDoc() };
+    world.recipients = { r1: ["m1", "m2", "m3"] };
+    world.members = members(["m1", "m2", "m3"]);
+
+    const report = await sweepOutbox();
+
+    expect(report.claimed).toBe(3);
+    const roleReads = reads.filter((r) => r.params.roleId === "r1" && r.query.includes("foh_team"));
+    expect(roleReads).toHaveLength(1);
+  });
+
+  it("stops sending at the sweep's own deadline, so stage 8 always runs", async () => {
+    // The 2026-08-06 stall, in one test. Not charging the read phase to the send
+    // budget is correct for §1's inequality and fatal on its own: reads plus a
+    // full send budget can reach the hosting route's maxDuration, the process is
+    // killed before stage 8, the claims outlive it, the 5-minute lease re-offers
+    // the SAME batch, and the next sweep dies in the same place — forever. The
+    // second clock exists so the sweep gives up sending while it can still
+    // consume.
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    world.notices = [roleNotice()];
+    world.roles = { r1: roleDoc() };
+    world.recipients = { r1: ["m1"] };
+    world.members = members(["m1"]);
+    // A read phase slow enough to pass the sweep deadline before stage 7 starts.
+    // The send budget's own clock has not started, so only the sweep clock can
+    // stop this — which is exactly the case that used to be unguarded.
+    operationalFetch.mockImplementation(async (query: string, params: Doc = {}) => {
+      reads.push({ query, params });
+      vi.setSystemTime(new Date(Date.now() + 20_000));
+      return routeRead(query, params);
+    });
+
+    const report = await sweepOutbox();
+
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(report.unserved).toBe(1);
+    // The point of the whole exercise: the batch is discharged, so the next
+    // sweep gets new work instead of this one again.
+    expect(writeClientDelete).toHaveBeenCalled();
+    expect(report.consumed).toBe(1);
+
+    const stopped = logSpy.mock.calls
+      .map(([line]) => JSON.parse(String(line)) as Record<string, unknown>)
+      .find((entry) => entry.event === "notify_sweep_send_budget_exhausted");
+    expect(stopped?.stoppedBy).toBe("sweep_deadline");
+    logSpy.mockRestore();
+  });
+
+  it("claims in waves, so a large batch does not spend the budget taking ownership", async () => {
+    // 2026-08-07: a 27-notice claim took 27.7 s of a 45 s sweep, stage 7 was
+    // refused its first wave, and the batch was consumed with `emailed: 0` —
+    // the sweep spent its life taking ownership of work it then had no time to
+    // do. A monthly role publish is the large-batch case BY DESIGN, so this is
+    // the normal path, not an edge one.
+    const team = ids("m", 16);
+    world.notices = team.map((m, i) => roleNotice({ _id: `n${i}`, memberId: m }));
+    world.roles = { r1: roleDoc() };
+    world.recipients = { r1: team };
+    world.members = members(team);
+
+    let inFlight = 0;
+    let peakInFlight = 0;
+    patchCommit.mockImplementation(async () => {
+      inFlight++;
+      peakInFlight = Math.max(peakInFlight, inFlight);
+      await Promise.resolve();
+      inFlight--;
+      return { _rev: "rev-claimed" };
+    });
+
+    const report = await sweepOutbox();
+
+    expect(report.claimed).toBe(16);
+    // Serially this peaks at 1, which is the defect.
+    expect(peakInFlight).toBeGreaterThan(1);
+    expect(peakInFlight).toBeLessThanOrEqual(8);
+  });
+
+  it("abandons a selection it ran out of time to serve, rather than claiming it", async () => {
+    // Claiming is what commits a notice to deletion. A sweep that reaches the
+    // deadline during SELECTION is already too slow to send, so claiming there
+    // hands stage 4 work it cannot classify — and stage 8 deletes it regardless.
+    // Unclaimed notices are simply still pending, so this path costs a delay and
+    // cannot cost a notification.
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    world.notices = [roleNotice({ _id: "n1", memberId: "m1" }), roleNotice({ _id: "n2", memberId: "m2" })];
+    world.roles = { r1: roleDoc() };
+    world.recipients = { r1: ["m1", "m2"] };
+    world.members = members(["m1", "m2"]);
+    // The due-notices read alone blows the sweep deadline.
+    operationalFetch.mockImplementation(async (query: string, params: Doc = {}) => {
+      reads.push({ query, params });
+      vi.setSystemTime(new Date(Date.now() + 46_000));
+      return routeRead(query, params);
+    });
+
+    const report = await sweepOutbox();
+
+    expect(report.claimed).toBe(0);
+    expect(writeClientPatch).not.toHaveBeenCalled();
+    expect(writeClientDelete).not.toHaveBeenCalled();
+    // Nothing destroyed — everything is still waiting for the next sweep.
+    expect(report.deferred).toBeGreaterThan(0);
+    logSpy.mockRestore();
+  });
+
+  it("counts a tail it could not classify as unserved, so the loss is visible", async () => {
+    // An unclassified notice produces no line, never reaches stage 7's entries,
+    // and so cannot be counted there — yet stage 8 deletes it anyway. The first
+    // version of this guard left that gap and reported `unserved: 0` while
+    // destroying the tail, which reads as GREEN to the workflow gate whose only
+    // job is catching exactly this.
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const team = ids("m", 4);
+    world.notices = team.map((m, i) => roleNotice({ _id: `n${i}`, memberId: m }));
+    world.roles = { r1: roleDoc() };
+    world.recipients = { r1: team };
+    world.members = members(team);
+
+    // Reads are fast enough to select and claim; classification then runs out of
+    // clock on its very first notice.
+    let classifyReads = 0;
+    operationalFetch.mockImplementation(async (query: string, params: Doc = {}) => {
+      reads.push({ query, params });
+      if (query.includes("foh_team") && classifyReads++ === 0) {
+        vi.setSystemTime(new Date(Date.now() + 46_000));
+      }
+      return routeRead(query, params);
+    });
+
+    const report = await sweepOutbox();
+
+    // Everything claimed is consumed — that contract is unchanged...
+    expect(report.claimed).toBe(4);
+    expect(report.consumed).toBe(4);
+    expect(report.emailed).toBe(0);
+    // ...and EVERY notice nobody emailed is reported. These are one-recipient
+    // `role` notices, so the accounting has to close exactly: asserting merely
+    // `unserved > 0` would pass on stage 7's contribution alone and miss a whole
+    // unclassified tail being deleted silently, which is the actual defect.
+    expect(report.emailed + report.unserved).toBe(report.claimed);
+    logSpy.mockRestore();
+  });
+
+  it("refuses a wave that could not finish before the deadline", async () => {
+    // Measured in production on 2026-08-07: `elapsedMs:57888` against a 45 s
+    // reserve, then the platform killed the function and stage 8 never ran.
+    // Asking "has the deadline passed?" admits a wave at 44 s that runs to 59 s.
+    // The question has to be "does the WORST CASE still fit?" — and since every
+    // send is bounded by SEND_TIMEOUT_MS, the worst case is knowable.
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    world.notices = [roleNotice()];
+    world.roles = { r1: roleDoc() };
+    world.recipients = { r1: ["m1"] };
+    world.members = members(["m1"]);
+    // Reads leave 4 s before the 45 s reserve — room by the old test, nowhere
+    // near enough for a send that may take 20 s.
+    let reads_ = 0;
+    operationalFetch.mockImplementation(async (query: string, params: Doc = {}) => {
+      reads.push({ query, params });
+      if (reads_++ === 0) vi.setSystemTime(new Date(Date.now() + 41_000));
+      return routeRead(query, params);
+    });
+
+    const report = await sweepOutbox();
+
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(report.unserved).toBe(1);
+    // The whole purpose of refusing: stage 8 still runs, so the batch is
+    // discharged instead of being re-offered to a sweep that dies the same way.
+    expect(report.consumed).toBe(1);
+    const stopped = logSpy.mock.calls
+      .map(([line]) => JSON.parse(String(line)) as Record<string, unknown>)
+      .find((e) => e.event === "notify_sweep_send_budget_exhausted");
+    expect(stopped?.stoppedBy).toBe("sweep_deadline");
     logSpy.mockRestore();
   });
 
@@ -827,20 +1063,24 @@ describe("sweepOutbox — recipient scoping and read contract", () => {
 });
 
 /**
- * PLACEHOLDER, pending §1's release-gate measurement — nobody has yet timed a
- * real send through the pooled `maxConnections: 1` SMTP transport. §1's working
- * assumption of 2 000 ms/send does NOT fit (2 000 × 40 = 80 000 > 40 000); this
- * is the value the shipped knobs currently stand on, and the sweep now logs
- * `msPerSend` on every run so the real one is observable in production.
+ * THE REAL NUMBER IS KNOWN, AND IT IS NOT THIS ONE. Production measured
+ * `msPerSend` = **14 413 ms** on 2026-08-07 (two successful sends to external
+ * recipients; a local recipient costs ~67 ms, so the cost is the server's remote
+ * accept). This constant stays at 500 because the assertions below check the
+ * DEFAULT `EMAIL_LIMIT` of 40, and swapping in 14 413 would turn a standing
+ * regression guard into a permanently red test asserting a configuration nobody
+ * runs — production runs `NOTIFY_FLUSH_EMAIL_LIMIT = 2`, where
+ * `14 413 × 2 = 28 826 < 40 000` and §1's inequality genuinely holds.
  *
- * WHEN THE REAL NUMBER ARRIVES: replace this constant with the ms/send measured
- * over a batch of ~20 and re-run. If the assertions below then fail, §1 says
- * DERIVE, never re-guess: raise `NOTIFY_SEND_BUDGET_MS` (bounded by the hosting
- * route's `maxDuration = 60`) or lower `NOTIFY_FLUSH_EMAIL_LIMIT` — and if
- * lowering the limit would take it under the largest per-service seat count
- * (12–20 on a Sunday), STOP: splitting one notice's recipients across sweeps is
- * a different outbox model and must be designed, not discovered in production.
- * Raising THIS constant to make the test green is the one forbidden move.
+ * So read the guard for what it is: proof that the shipped DEFAULTS are
+ * internally consistent, not evidence that sending is fast. The real cost and
+ * what it forces live in `docs/NOTIFICATIONS.md` → Still open.
+ *
+ * §1's stop condition WAS crossed, deliberately and with the trade recorded:
+ * lowering the limit below the largest per-service seat count (12-20 on a
+ * Sunday) fragments a monthly publish into several emails per member. That was
+ * chosen over destroying most of them. Raising THIS constant to make the test
+ * green is still the one forbidden move.
  */
 const MEASURED_MS_PER_SEND = 500;
 

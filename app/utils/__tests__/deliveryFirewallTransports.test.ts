@@ -110,7 +110,7 @@ vi.mock("next/server", async (importOriginal) => {
 /* ── Real app modules under test ─────────────────────────────────────────── */
 
 import { DELIVERY_MODE_DISABLED, DELIVERY_MODE_ENV } from "@/app/utils/deliveryFirewall";
-import { sendEmail } from "@/app/utils/email";
+import { SEND_CONCURRENCY, SEND_TIMEOUT_MS, sendEmail } from "@/app/utils/email";
 import { getMessaging } from "@/app/utils/firebaseAdmin";
 import { sendPush } from "@/app/utils/push";
 import { sendAssignmentEmails, sendAssignmentEmailsBatch } from "@/app/utils/assignmentEmail";
@@ -581,8 +581,17 @@ describe("an absent delivery mode delivers unchanged", () => {
       secure: true,
       auth: { user: "contacto@oasis.mx", pass: "s3cret" },
       pool: true,
-      maxConnections: 1,
+      // Was 1. The probe showed the cost is per-MESSAGE, not per-connection, so
+      // serializing over one connection was the throughput ceiling itself.
+      maxConnections: SEND_CONCURRENCY,
       maxMessages: 100,
+      // The timeout set is part of the pinned options, not incidental: every one
+      // of nodemailer's defaults outlives the hosting function's maxDuration, so
+      // dropping them would restore the hang that stalled the outbox for a day on
+      // 2026-08-06. See SEND_TIMEOUT_MS in `email.ts`.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: SEND_TIMEOUT_MS,
     });
     expect(sendMail).toHaveBeenCalledWith({
       from: "Oasis <contacto@oasis.mx>",

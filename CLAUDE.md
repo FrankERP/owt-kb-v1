@@ -109,8 +109,11 @@ honesty gate (empty runs over churn).
   hold a dark palette against Outlook for Mac failed (spec §6 has the table).
   Client dark-mode transforms assume email is light; there is no reliable hook to
   win from the sending side. Don't "restore the brand colours".
-- `MEASURED_MS_PER_SEND` in `outboxSweep.test.ts` is a **placeholder** pending a
-  real production `notify_sweep_done` reading — see `docs/NOTIFICATIONS.md`.
+- `MEASURED_MS_PER_SEND` in `outboxSweep.test.ts` is **500 ms and deliberately
+  not the real number** — production measured 14 413 ms/send (2026-08-07). The
+  guard asserts the shipped *defaults* are consistent; production runs
+  `NOTIFY_FLUSH_EMAIL_LIMIT=2`, where the inequality holds. Raising the constant
+  to keep it green is the one forbidden move — see `docs/NOTIFICATIONS.md`.
 
 ## Agent skills
 
@@ -155,6 +158,11 @@ reviewer. See `docs/superpowers/plans/2026-08-06-grid-drag-and-drop-review-log.m
   schema/data migration, multi-document transaction/concurrency/recovery protocol,
   or irreversible remote release action. A client/UI consumer of an already-approved
   idempotent writer stays standard unless it changes one of those contracts.
+- **Incidents are not exempt.** A change to a production writer's concurrency,
+  batching, or deletion behaviour is critical whether planned or discovered
+  mid-fire. Under time pressure the bar drops to ONE fresh `APPROVED` on a
+  one-paragraph hypothesis — no plan document — but never to zero. The 2026-08-07
+  outbox incident shipped ten deploys with no round and paid for it twice.
 - Run reviewers **one at a time** and never expose prior findings. After two
   substantive `CHANGES_REQUIRED` rounds for one artifact, stop and reassess with the user.
 - After each implementation phase, run a fresh code review plus the documented

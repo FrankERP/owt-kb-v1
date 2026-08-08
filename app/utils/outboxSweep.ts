@@ -40,7 +40,7 @@ import { writeClient } from "@/sanity/lib/serverClient";
 
 import { getAllowlist, isEmailAllowed, rolesForMember } from "./assignmentEmail";
 import { isDeliveryBlocked } from "./deliveryFirewall";
-import { sendEmail } from "./email";
+import { SEND_CONCURRENCY, SEND_TIMEOUT_MS, sendEmail } from "./email";
 import { buildGroupedEmail } from "./notificationEmail";
 import { wantsNotification } from "./notifyPrefs";
 import { assignedMemberRefsQuery } from "./notifyTargets";
@@ -81,6 +81,25 @@ export const EMAIL_LIMIT = parsePositiveEnv(process.env.NOTIFY_FLUSH_EMAIL_LIMIT
  * `ms_per_send × EMAIL_LIMIT < SEND_BUDGET_MS − read_time`.
  */
 export const SEND_BUDGET_MS = parsePositiveEnv(process.env.NOTIFY_SEND_BUDGET_MS, 40_000);
+
+/**
+ * Wall clock measured from the TOP of the sweep, past which stage 7 refuses to
+ * start another send — the reserve that keeps stage 8 reachable.
+ *
+ * `SEND_BUDGET_MS` deliberately does not charge for the read phase, which is the
+ * right call for the inequality in §1 and the wrong one for staying alive: reads
+ * plus a full send budget can already reach the hosting route's `maxDuration = 60`
+ * on their own, and a sweep killed there never consumes what it claimed. The
+ * claims then outlive the process, the 5-minute lease re-offers exactly the same
+ * batch, and the next sweep dies in the same place — the outbox stops making
+ * progress permanently, which is how one slow evening on 2026-08-06 cost the team
+ * a day of notifications.
+ *
+ * So this is not a second send budget; it is the promise that stage 8 runs. 15 s
+ * of the route's 60 is what stage 8 needs for one `Patch.commit()` per claimed
+ * notice at `EMAIL_LIMIT`-scale batches, plus the response.
+ */
+const SWEEP_DEADLINE_MS = 45_000;
 
 /**
  * How many candidate notices one sweep looks at. `deferred` counts the due
@@ -241,13 +260,34 @@ async function resolveRecipients(notice: StoredNotice): Promise<string[]> {
 
 // ── Stage 4: classification against live state ──────────────────────────────
 
+/**
+ * Per-sweep memo for the subject read, reset at the top of every sweep.
+ *
+ * Notices are one per (member, subject), so a batch is naturally MANY notices
+ * over FEW subjects: the 2026-08-06 backlog was 28 role notices across exactly
+ * two Sunday services. Unmemoized that is 28 sequential round trips for two
+ * documents, and it was the read phase — not the sends — that pushed the sweep
+ * past its deadline once the batch grew.
+ *
+ * Every notice in one sweep therefore classifies against the subject as of the
+ * first read of it, which is if anything more coherent than each notice reading
+ * its own moment. Two overlapping sweeps in one warm instance can reset each
+ * other's memo; the cost is a repeated read, never a wrong one.
+ */
+let roleReadCache = new Map<string, Record<string, unknown> | null>();
+
 async function fetchRole(notice: StoredNotice): Promise<Record<string, unknown> | null> {
   if (!notice.roleId || !notice.roleType) return null;
+  const key = `${notice.roleType}:${notice.roleId}`;
+  const memo = roleReadCache.get(key);
+  if (memo !== undefined) return memo;
   const row = await operationalClient.fetch<Record<string, unknown> | null>(ROLE_QUERY, {
     roleType: notice.roleType,
     roleId: notice.roleId,
   });
-  return isObj(row) ? row : null;
+  const value = isObj(row) ? row : null;
+  roleReadCache.set(key, value);
+  return value;
 }
 
 async function classifyRoleNotice(notice: StoredNotice, today: string): Promise<Pair[]> {
@@ -362,9 +402,31 @@ function classifyNotice(notice: StoredNotice, today: string): Promise<Pair[]> {
  * One transaction PER NOTICE: a batched transaction would roll the whole batch
  * back on one conflict.
  */
+/**
+ * How many consumes are in flight at once.
+ *
+ * Still one transaction per notice — each asserts its OWN claim revision, and a
+ * batched transaction would abort the whole set on one conflict — but they no
+ * longer wait in line. Sequentially, an `EMAIL_LIMIT`-scale batch is that many
+ * round trips at the very end of the sweep, which is the least affordable moment
+ * it could ask for them: on 2026-08-07 a 29-notice batch reached stage 8 with
+ * ~12 s left and the function was killed partway through, leaving claims behind
+ * for the lease to re-offer. Bounded rather than unbounded so a large batch
+ * cannot open an arbitrary number of connections at once.
+ */
+const CONSUME_CONCURRENCY = 8;
+
+/**
+ * How many claims are in flight at once. Same shape and same reason as
+ * `CONSUME_CONCURRENCY`, at the other end of the sweep — stage 3 pays one round
+ * trip per notice too, and it pays them BEFORE any email is sent, so a serial
+ * claim of a large batch consumes the budget that batch needed.
+ */
+const CLAIM_CONCURRENCY = 8;
+
 async function consume(claimed: ClaimedNotice[]): Promise<number> {
   let consumed = 0;
-  for (const c of claimed) {
+  const consumeOne = async (c: ClaimedNotice): Promise<void> => {
     try {
       await writeClient
         .transaction()
@@ -373,8 +435,13 @@ async function consume(claimed: ClaimedNotice[]): Promise<number> {
         .commit();
       consumed++;
     } catch (err) {
+      // Unchanged contract: one failed consume costs only its own notice, which
+      // the lease re-offers. It must never abort the rest of the batch.
       logError("notify_sweep_consume_failed", { id: c.notice._id }, err);
     }
+  };
+  for (let i = 0; i < claimed.length; i += CONSUME_CONCURRENCY) {
+    await Promise.all(claimed.slice(i, i + CONSUME_CONCURRENCY).map(consumeOne));
   }
   return consumed;
 }
@@ -388,6 +455,9 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
   const sweepStartedAt = Date.now();
   /** Stage-7 wall clock, set where stage 7 begins; `null` if it never ran. */
   let sendMs: number | null = null;
+  // Scoped to THIS sweep: stage 4 must classify against state read now, not
+  // against whatever a previous invocation of this warm instance saw.
+  roleReadCache = new Map();
   const report: SweepReport = { claimed: 0, emailed: 0, consumed: 0, deferred: 0, unserved: 0 };
 
   // ── 1. Gate ───────────────────────────────────────────────────────────────
@@ -414,6 +484,26 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
   const selected: StoredNotice[] = [];
   const union = new Set<string>();
   for (let i = 0; i < due.length; i++) {
+    // The sweep clock reaches stage 2 as well. `resolveRecipients` is one serial
+    // round trip per candidate for setlist and leadNotes notices, up to
+    // SCAN_LIMIT of them, and nothing here was bounded: a large batch of those
+    // could spend the whole sweep SELECTING and leave stage 8 to be killed —
+    // the original wedge, through a path stage 7's two clocks never see.
+    // Reaching here means the sweep is already too slow to send anything, so it
+    // ABANDONS THE SELECTION TOO rather than claiming it. Nothing has been
+    // claimed yet, and an unclaimed notice is simply still pending — so this
+    // path costs a delay and cannot cost a notification. Claiming a batch this
+    // late would hand stage 4 work it has no time to classify, which is how the
+    // first version of this guard turned a stall into silent deletion.
+    if (Date.now() - sweepStartedAt >= SWEEP_DEADLINE_MS) {
+      report.deferred = due.length - i + selected.length;
+      log("notify_sweep_select_deadline", {
+        deferred: report.deferred,
+        abandonedSelection: selected.length,
+      });
+      selected.length = 0;
+      break;
+    }
     const notice = due[i];
     const recipients = await resolveRecipients(notice);
     if (!selected.length && recipients.length > emailLimit) {
@@ -451,7 +541,18 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
   // sweep on one conflict; the intended behaviour is that a failed claim drops
   // only that notice (another sweeper has it, or a writer just re-pended it).
   const claimed: ClaimedNotice[] = [];
-  for (const notice of selected) {
+  // IN WAVES, for the same reason stage 8 is: one round trip per notice, taken
+  // serially, is a cost that scales with the batch and is paid BEFORE a single
+  // email is sent. A monthly role publish is the large-batch case by design —
+  // and on 2026-08-07 a 27-notice claim took 27.7 s of a 45 s sweep, so stage 7
+  // was refused its first wave and the whole batch was consumed with
+  // `emailed: 0`. The sweep spent its life taking ownership of work it then had
+  // no time to do.
+  //
+  // Still one `Patch.commit()` per notice, each asserting its OWN revision: a
+  // batched transaction would abort every claim on one conflict, and a lost
+  // claim is supposed to cost only its own notice.
+  const claimOne = async (notice: StoredNotice): Promise<ClaimedNotice | null> => {
     try {
       const patched = await writeClient
         .patch(notice._id)
@@ -463,13 +564,22 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
         // Nothing to assert later, so this notice cannot be consumed safely.
         // Drop it and let the lease expiry re-offer it.
         logError("notify_sweep_claim_unrevisioned", { id: notice._id });
-        continue;
+        return null;
       }
-      claimed.push({ notice, claimRev });
+      return { notice, claimRev };
     } catch (err) {
       logError("notify_sweep_claim_lost", { id: notice._id }, err);
+      return null;
     }
+  };
+  const claimStartedAt = Date.now();
+  for (let i = 0; i < selected.length; i += CLAIM_CONCURRENCY) {
+    const wave = await Promise.all(selected.slice(i, i + CLAIM_CONCURRENCY).map(claimOne));
+    // `map` preserves order, so classification and therefore the line order
+    // inside each grouped email are unchanged by the waves.
+    for (const c of wave) if (c) claimed.push(c);
   }
+  const claimMs = Date.now() - claimStartedAt;
   report.claimed = claimed.length;
   if (!claimed.length) return report;
 
@@ -478,7 +588,28 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
   try {
     // ── 4. Classify ─────────────────────────────────────────────────────────
     const pairs: Pair[] = [];
+    let classified = 0;
     for (const c of claimed) {
+      // Bounded for the same reason stage 2 is, and it matters MORE here because
+      // these notices are already claimed: overrunning means the function dies
+      // before stage 8 and the lease has to re-offer them.
+      //
+      // THE TAIL IS COUNTED AS UNSERVED, and that is the whole point. An
+      // unclassified notice produces no line, so it never reaches stage 7's
+      // entries and stage 7 cannot count it — yet stage 8 deletes it anyway.
+      // The first version of this guard left that gap, which reported
+      // `unserved: 0` while destroying the tail and so read as GREEN to the very
+      // workflow gate added alongside it to catch exactly this.
+      if (Date.now() - sweepStartedAt >= SWEEP_DEADLINE_MS) {
+        report.unserved += claimed.length - classified;
+        log("notify_sweep_classify_deadline", {
+          classified,
+          claimed: claimed.length,
+          unclassified: claimed.length - classified,
+        });
+        break;
+      }
+      classified++;
       try {
         pairs.push(...(await classifyNotice(c.notice, today)));
       } catch (err) {
@@ -536,22 +667,17 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
     // 12–20-seat Sunday services `EMAIL_LIMIT = 40` exists to protect. With the
     // clock here, §1's inequality means what §1 says it means.
     const sendStartedAt = Date.now();
-    for (let i = 0; i < entries.length; i++) {
-      // Bounded by wall clock. Without this bound, a sweep killed mid-fan-out
-      // re-sends from the top on every lease expiry, forever.
-      if (Date.now() - sendStartedAt >= sendBudgetMs) {
-        report.unserved = entries.length - i;
-        log("notify_sweep_send_budget_exhausted", {
-          unserved: report.unserved,
-          emailed: report.emailed,
-          sendBudgetMs,
-        });
-        break;
-      }
-      const [recipientId, lines] = entries[i];
+    // IN FLIGHT TOGETHER, in waves of SEND_CONCURRENCY. The probe on 2026-08-07
+    // measured setup at ~0.4 s against ~13 s for a whole send, so the cost is in
+    // the message and serial sends simply cannot serve a Sunday inside a 60 s
+    // function: one email went out and sixteen people were dropped, because
+    // stage 8 consumes whether or not stage 7 reached them. The clocks are checked
+    // per WAVE rather than per recipient — a wave is the smallest unit that can
+    // now be abandoned, and checking mid-wave would abandon sends already sent.
+    const sendOne = async (recipientId: string, lines: Line[]): Promise<void> => {
       const m = byId.get(recipientId);
       const email = m?.email?.trim().toLowerCase();
-      if (!m || !email || !isEmailAllowed(email, allow)) continue;
+      if (!m || !email || !isEmailAllowed(email, allow)) return;
       const { subject, html } = buildGroupedEmail(
         { name: m.alias || m.member_name || "", lines },
         titles,
@@ -563,6 +689,44 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
       });
       if (res.ok) report.emailed++;
       else logError("notify_sweep_send_failed", { memberId: recipientId, error: res.error });
+    };
+
+    for (let i = 0; i < entries.length; i += SEND_CONCURRENCY) {
+      // Bounded by wall clock, on TWO clocks. The stage clock is §1's budget;
+      // the sweep clock is the reserve that keeps stage 8 reachable no matter how
+      // long the read phase took. Whichever trips first ends the stage — and
+      // stopping early costs one batch its tail, while overrunning costs the
+      // outbox its ability to make progress at all.
+      //
+      // ADMISSION, not just expiry: a wave is admitted only if its WORST CASE
+      // fits in what is left. Testing `elapsed >= deadline` asks whether the
+      // deadline has already passed, which lets a wave start at 44 s and run to
+      // 59 s — measured at 57 888 ms on 2026-08-07, past the 45 s reserve and
+      // into the platform's kill, so stage 8 never ran and the batch was
+      // re-offered to the next sweep. Every send is bounded by SEND_TIMEOUT_MS,
+      // so that IS the worst case and the reserve can actually be reserved.
+      const budgetSpent = Date.now() - sendStartedAt + SEND_TIMEOUT_MS > sendBudgetMs;
+      const deadlineHit = Date.now() - sweepStartedAt + SEND_TIMEOUT_MS > SWEEP_DEADLINE_MS;
+      if (budgetSpent || deadlineHit) {
+        // `+=`, not `=`: stage 4 may already have recorded a tail it could not
+        // classify, and overwriting that would hide it again.
+        report.unserved += entries.length - i;
+        log("notify_sweep_send_budget_exhausted", {
+          unserved: report.unserved,
+          emailed: report.emailed,
+          sendBudgetMs,
+          // WHICH bound stopped the stage. `sweep_deadline` means the read phase
+          // is crowding out the sends and the budget is no longer the real limit.
+          stoppedBy: budgetSpent ? "send_budget" : "sweep_deadline",
+          elapsedMs: Date.now() - sweepStartedAt,
+        });
+        break;
+      }
+      // `sendEmail` never rejects, so one bad recipient cannot reject the wave
+      // and cost its siblings their sends.
+      await Promise.all(
+        entries.slice(i, i + SEND_CONCURRENCY).map(([recipientId, lines]) => sendOne(recipientId, lines)),
+      );
     }
     sendMs = Date.now() - sendStartedAt;
   } catch (err) {
@@ -580,6 +744,11 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
       ...report,
       elapsedMs: Date.now() - sweepStartedAt,
       sendMs,
+      // Stage 3's own cost, broken out because it is the one phase that scales
+      // with the batch and is paid before anything is sent. A sweep that reports
+      // `emailed: 0` with a large `claimMs` did not fail to send — it never got
+      // to try, which reads identically in every other field.
+      claimMs,
       msPerSend: sendMs !== null && report.emailed > 0 ? Math.round(sendMs / report.emailed) : null,
       emailLimit,
       sendBudgetMs,
