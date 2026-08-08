@@ -110,7 +110,7 @@ plausibly break:
 | `app/brand.css` | Dark-only tokens + 17 compositing classes | Gains a `.light { color-scheme: light }` block. **No other change** |
 | `app/(gallery)/theme-gallery/[theme]/layout.tsx` *(new)* | — | Root layout: emits `<html class={theme}>`, fonts, `brand.css`, `(client)/globals.css`, **no provider** |
 | `app/(gallery)/theme-gallery/[theme]/page.tsx` *(new)* | — | Renders the gallery inventory |
-| `app/(gallery)/theme-gallery/[theme]/not-found.tsx` *(new)* | — | 404 boundary co-located at the root layout |
+| `app/(gallery)/theme-gallery/[theme]/` gallery fixtures *(new)* | — | Static props fixtures + the wrapper that activates `PlannerGrid`'s full-screen toggle. **`PlannerGrid.tsx` itself is not modified** |
 | `app/utils/__tests__/routeMatcher.test.ts` | Asserts the public-route set | **Unchanged.** The new route is gated, so it never enters `ungated` and `PUBLIC_ROUTES` needs no entry — the guard passes by construction |
 | `playwright.vr.config.ts` *(new)* | — | Read-only VR config; starts no server that can write |
 | `docs/ROUTES.md`, `docs/adr/`, `docs/UTILITIES_AND_COMPONENTS.md`, `docs/SECRETS.md` | Current records | Route prose + row; ADR-0014 and ADR-0015; the new script and two guards listed in `UTILITIES_AND_COMPONENTS.md`; a `SECRETS.md` entry for any VR credential (step 6) |
@@ -195,8 +195,11 @@ values. External effects: none.
 - **Purpose:** the parent's round-4 review left three counted items deliberately unfixed to
   preserve the approved digest. This is where they resolve.
 - **Change:** produce a short reconciliation note recording, at minimum:
-  - the parent's §3 "25 of 27 bare-hex sites are reachable" should be **22** (27 − 4 Google
-    literals − 1 `themeColor`);
+  - the parent's §3 bare-hex wording still wobbles between *sites* and *literals*: `:60` calls
+    27 "sites" while `:63` calls the Google logo "one site but four literals". Under the
+    current wording the reachable-**site** count is **22** (27 − 4 Google literals − 1
+    `themeColor`). Re-anchor to the text actually on disk — the parent no longer contains the
+    "25 of 27" sentence an earlier revision of this plan quoted;
   - the parent's bare-hex list omits `ServiceReadinessCard.tsx:723` (verified: `color: isConflict ? "#f87171" : accentHex`). **`PlannerGrid.tsx:1497` is NOT a bare-hex site** — it is a comment; the real decision is the bracketed `bg-[#010b17]` at `:1499`, which belongs to the 1,231-bracketed bucket. Do not commit that as a finding;
   - any other divergence the generated inventory finds.
 - **Verification:** the note is committed beside the snapshot and cited by Child B's mapping
@@ -355,15 +358,28 @@ values. External effects: none.
   "`PlannerGrid` full-screen, both themes" part of Child D's acceptance and assigns **this
   child** the light-capable host (§12). Verified: `PlannerGrid.tsx` contains **zero**
   `fetch(`, `useSession` or `next-auth` references, its header states it is "fully
-  controlled", and `PlannerGrid.test.tsx` renders it with **no providers at all**. Host it in
-  `fullScreen` mode from a static props fixture modelled on that test's `baseProps()`. Its
-  `createPortal(surface, document.body)` path is exactly what makes it worth baselining.
+  `PlannerGrid.test.tsx` renders it with **no providers at all**.
+  **`fullScreen` is NOT a prop — it is internal state, and entering it requires an
+  interaction.** `PlannerGridProps` (`:163`) does not declare it; it is
+  `useState(false)` at `:553`, set only by the toggle at `:1823`, and the repo's own tests
+  enter it by clicking: `fireEvent.click(screen.getByRole("button", { name: /Pantalla
+  completa/ }))` (`participationAlongside.test.tsx:660`). A static render therefore takes the
+  `: surface` branch and **never reaches** `createPortal(surface, document.body)` at `:2008`
+  — the very path worth baselining.
+  **Mechanism, stated rather than assumed:** the gallery renders `PlannerGrid` from a static
+  props fixture modelled on the tests' `baseProps()`, and full screen is entered by
+  *activating* "⛶ Pantalla completa" — either by the VR harness as a step before the
+  snapshot, or by a small gallery-local client wrapper that clicks it on mount. Whichever is
+  chosen, it has a silent-failure mode: if the activation does not happen, Child D baselines
+  the collapsed grid while believing it saw full screen. The verification below closes that.
+  **This plan does not add a `fullScreen` prop to `PlannerGrid`** — that would be a
+  production-component change outside this child's boundary.
 - **Session- or fetch-bearing panels are excluded** — the exclusion is by *dependency*, not by
   the word "admin". `AdminPanel.tsx:416` calls `useSession()`
   (verified; throws without a `SessionProvider`), and the editor panels issue network fetches
   — e.g. `ProposalEditor.tsx:262` `fetch("/api/me/songs?…")` (verified). Putting them in a
   "hermetic" gallery fires more uncontrolled traffic than the one call the route group exists
-  to avoid. *(v23 cited `ServicesPanel.tsx:792` as a mount fetch; that line is a `.sort()`.
+  to avoid. *(v23 cited `ServicesPanel.tsx:792` as a mount fetch; that line is a bare `)`.
   Its real fetch is `:368`. Excluded on that, not on the stale citation.)*
 - **Honest coverage:** the gallery exercises the token layer, `brand.css` compositing and the
   portal path — **not** the bulk of the 1,231 hex sites. That is exactly why Child B's primary
@@ -372,13 +388,16 @@ values. External effects: none.
   write the theme class, a surviving `dark:` variant silently renders its **light-intended
   base** while the real app renders the dark side. Assert the class is on `<html>` for both
   segments.
-- **Co-locate `not-found.tsx` at `[theme]/`.** Next inserts the default not-found boundary at
-  the root layer and at the first-layer group route — `app/` and `app/(gallery)/` — both
-  **above** the `[theme]` root layout, so a 404 would render with no `<html>`/`<body>`. The
-  status is still 404 and no gallery content is served, so the trust boundary holds; but in
-  `next dev` it surfaces as "Missing `<html>` and `<body>` tags in the root layout" rather
-  than a clean 404 — on the path that is the *default* in production. A co-located
-  `not-found.tsx` fixes it.
+- **A co-located `not-found.tsx` is optional, and an earlier revision's reason for it was
+  false.** That revision claimed a `dynamicParams` miss would render with no `<html>`/`<body>`
+  and surface in `next dev` as "Missing `<html>` and `<body>` tags". **Tested empirically on
+  `next@16.2.12` with this repo's exact shape (no `app/layout.tsx`): `/theme-gallery/EVIL`
+  returns a clean 404 with a complete `<body>` in both `next start` and `next dev`**, served
+  by Next's built-in `/_not-found`; a co-located file's own markup never appears, and removing
+  it changes nothing. A `dynamicParams` miss resolves *before* the `[theme]` segment matches,
+  so its boundary is above the segment by construction. Add the file only if you want to catch
+  an explicit `notFound()` thrown from inside the page — and say so, rather than repeating the
+  false rationale.
 - **`docs/ROUTES.md` needs more than a row.** Its opening states *"The app uses **two route
   groups**, each with its own root `<html>`/`<body>` layout"* (`:3`) and that there are no
   nested sub-tree layouts beyond those two group roots. Both go stale the moment `(gallery)`
@@ -419,12 +438,17 @@ values. External effects: none.
   **Credentials are the real cost, and they carry a documentation obligation.** The signin page
   is a genuine email/password form (`(client)/auth/signin/page.tsx:107,117`), so a headless
   login needs a member identity. The existing harness uses `SR_VERIFY_MEMBER_EMAIL` /
-  `SR_VERIFY_MEMBER_PASSWORD`, and **none of the 13 `SR_VERIFY_*` variables is documented in
+  `SR_VERIFY_MEMBER_PASSWORD`, and **none of the 14 `SR_VERIFY_*` variables is documented in
   `docs/SECRETS.md`** (verified) — so there is no entry to copy. **Any variable this step
   introduces or reuses gets a `docs/SECRETS.md` entry in the same commit**: name, every
   platform that needs it and every one that does not, where the value came from, how to
   rotate, and the blast radius mid-rotation. Never the value. That is parent invariant 3 and
   CLAUDE.md, and this plan is bound by it.
+  **Taking the credential path re-opens the tier question.** This plan is Standard because it
+  touches no writer, no schema, no matcher and no secret. Provisioning a real member identity
+  for headless login is a secret/auth-boundary change on CLAUDE.md's Critical list — and
+  Preview writes to the production Sanity dataset. If step 6 goes that way, re-tier and
+  re-review rather than inheriting Standard.
   **Bounded default if credential provisioning is not settled:** take Child D's baselines
   manually, record it, and leave VR automation to a follow-on. Do not invent credentials to
   unblock a screenshot. It must not be able to reach the production Sanity dataset or start
@@ -501,9 +525,10 @@ values. External effects: none.
 | Theme-parity guard is dormant **and works** | Green today; fires on a synthetic `.light` block with a missing counterpart | A guard that is green because it never runs |
 | Guards actually execute | Files live under `app/utils/__tests__/`; the suite count rises from 142 | A guard placed outside vitest's roots — a silent no-op |
 | Gallery is **gated** | `routeMatcher.test.ts` stays green with **no edit** — the new route must not appear in `ungated` | A placement mistake that silently makes it public |
-| Gallery 404s on an invalid segment | A served-route check in the VR config | Arbitrary input reflected into a root attribute |
+| Gallery 404s on an invalid segment | A served-route check in the VR config — **or, if step 6's manual fallback is taken, a recorded `curl` against Preview** | Arbitrary input reflected into a root attribute |
 | Gallery applies the theme class | Assert `<html class>` for both segments | The false-confidence trap: `dark:` variants rendering their light base |
 | Gallery renders an open `CueDialog` | Gallery renders it; VR covers it | The portal path being invisible to every later screenshot |
+| `PlannerGrid` full screen is genuinely entered | Assert a portal node exists under `document.body` while full screen is on — not merely that the component rendered | The silent failure where D baselines the collapsed grid believing it is full screen |
 | Fonts are real, not fallback | Assert the three `.variable` classes on `<html>` | Every VR baseline at fallback metrics, invalidating Child D's review |
 | Done-gate | `npx tsc --noEmit`, `npm test`, `npx eslint .` = 0 errors | Regression against the 142/3,275 baseline |
 
@@ -521,7 +546,10 @@ values. External effects: none.
   - the inventory cannot produce a stable key → stop; every later child depends on it;
   - step 7 contradicts D4 → **stop and propagate to the parent**; its approval becomes stale;
   - the gallery cannot host `CueDialog` without a session → stop and re-plan the fixture
-    rather than importing `Provider`.
+    rather than importing `Provider`;
+  - `PlannerGrid`'s full-screen toggle cannot be activated in the gallery → stop. Child D's
+    acceptance depends on it, and silently baselining the collapsed grid is worse than having
+    no baseline.
 - **Rollback:** `git revert` the merge. Nothing user-facing exists to restore, no data has
   moved, and no remote state changed. The gallery route group can be deleted outright.
 - **Restoration verification:** `npm test` green at 142 files / 3,275 tests, and
