@@ -834,6 +834,36 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
     logSpy.mockRestore();
   });
 
+  it("claims in waves, so a large batch does not spend the budget taking ownership", async () => {
+    // 2026-08-08: a 27-notice claim took 27.7 s of a 45 s sweep, stage 7 was
+    // refused its first wave, and the batch was consumed with `emailed: 0` —
+    // the sweep spent its life taking ownership of work it then had no time to
+    // do. A monthly role publish is the large-batch case BY DESIGN, so this is
+    // the normal path, not an edge one.
+    const team = ids("m", 16);
+    world.notices = team.map((m, i) => roleNotice({ _id: `n${i}`, memberId: m }));
+    world.roles = { r1: roleDoc() };
+    world.recipients = { r1: team };
+    world.members = members(team);
+
+    let inFlight = 0;
+    let peakInFlight = 0;
+    patchCommit.mockImplementation(async () => {
+      inFlight++;
+      peakInFlight = Math.max(peakInFlight, inFlight);
+      await Promise.resolve();
+      inFlight--;
+      return { _rev: "rev-claimed" };
+    });
+
+    const report = await sweepOutbox();
+
+    expect(report.claimed).toBe(16);
+    // Serially this peaks at 1, which is the defect.
+    expect(peakInFlight).toBeGreaterThan(1);
+    expect(peakInFlight).toBeLessThanOrEqual(8);
+  });
+
   it("refuses a wave that could not finish before the deadline", async () => {
     // Measured in production on 2026-08-07: `elapsedMs:57888` against a 45 s
     // reserve, then the platform killed the function and stage 8 never ran.
