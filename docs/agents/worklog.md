@@ -53,6 +53,16 @@ Two entries agents cannot report for themselves, and the coordinator must write:
   the recruiting signal: recurring inline work with no owner is how `hr-officer` spots
   a role the roster is missing. Do not omit these to keep the log tidy.
 
+**Incidents and firefights count as cycles.** Nobody logs mid-fire, and nobody is
+expected to — backfill the entries once the fire is out (out-of-order timestamps are
+fine; the file is append-only) and dispatch `hr-officer` over the incident window
+like any other cycle. Incident work runs with the least scrutiny, which makes it the
+cycle most worth closing properly. The 2026-08-07 SMTP incident (an afternoon of
+production commits, zero entries) is the case this rule exists for.
+
+An entry's `outcome` reflects the agent's own verdict, not the cycle's mood: a report
+carrying any Important finding logs as `findings`, never `ok`.
+
 A missing or malformed line is an `hr-officer` finding, never a runtime error. Nothing
 in the app reads this file.
 
@@ -60,7 +70,9 @@ in the app reads this file.
 
 At the end of an implementation cycle — after the post-phase code review, before the
 completion report — dispatch `hr-officer`. It reviews entries since its own last log
-entry and returns `STAFF REVIEW` / `FINDINGS` / `PROPOSALS`.
+entry **in file order** (not timestamp order — backfilled entries carry older
+timestamps but land later in the file) and returns `STAFF REVIEW` / `FINDINGS` /
+`PROPOSALS`.
 
 The gate is **advisory**: HR findings never block a delivery, and HR proposes roster
 changes (new agents, retirements, merges) as drafts for the user to approve. It never
