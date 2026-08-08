@@ -1,6 +1,6 @@
 # ADR-0013: Keep SMTP sends serial, and the recipient cap below the seat count
 
-**Date:** 2026-08-08 · **Status:** Accepted
+**Date:** 2026-08-07 · **Status:** Accepted
 
 ## Context
 

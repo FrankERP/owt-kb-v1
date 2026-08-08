@@ -111,7 +111,7 @@ cadence.
   Client dark-mode transforms assume email is light; there is no reliable hook to
   win from the sending side. Don't "restore the brand colours".
 - `MEASURED_MS_PER_SEND` in `outboxSweep.test.ts` is **500 ms and deliberately
-  not the real number** — production measured 14 413 ms/send (2026-08-08). The
+  not the real number** — production measured 14 413 ms/send (2026-08-07). The
   guard asserts the shipped *defaults* are consistent; production runs
   `NOTIFY_FLUSH_EMAIL_LIMIT=2`, where the inequality holds. Raising the constant
   to keep it green is the one forbidden move — see `docs/NOTIFICATIONS.md`.

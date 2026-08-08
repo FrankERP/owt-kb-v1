@@ -203,7 +203,7 @@ Things that are counter-intuitive and were each a real defect at some point.
 - **Unpublishing does not notify, and a date move does not notify.** Both are
   deliberate; see spec §1 and §4.
 - **Concurrency does not help. Tested twice, and it makes things worse.**
-  2026-08-08, ten messages in flight to ten DIFFERENT gmail addresses:
+  2026-08-07, ten messages in flight to ten DIFFERENT gmail addresses:
   `sendMs: 20020`, `emailed: 2`, and eight `SMTP send timed out after 20000ms`.
   In twenty seconds with ten connections open the server accepted **two** —
   the same rate it manages serially. The server serializes acceptance for remote
@@ -223,7 +223,7 @@ Things that are counter-intuitive and were each a real defect at some point.
   The second is a change to the consume contract and needs a plan and review; the
   first is one setting on someone else's box and fixes everything at once.
 - **Remote recipients cost ~14 s to ACCEPT; local ones cost 67 ms. That is the
-  whole problem, and it is server-side.** Measured 2026-08-08 with
+  whole problem, and it is server-side.** Measured 2026-08-07 with
   `/api/cron/smtp-probe` (the *Probe the SMTP path* workflow): to a LOCAL
   recipient the entire SMTP conversation — connect, TLS, `EHLO`, `AUTH`,
   `MAIL FROM`, `RCPT TO`, `DATA` and a 20 KB body — completes in **under 600 ms**,
@@ -325,7 +325,7 @@ pipeline a received message does, with no SMTP credentials and nothing sent.
 - **The send-budget inequality holds only because the limit was cut to 2, and
   that is a trade, not a fix.** Spec §1 requires
   `ms_per_send × NOTIFY_FLUSH_EMAIL_LIMIT < NOTIFY_SEND_BUDGET_MS`. Production
-  measured `ms_per_send` = **14 413 ms** (2026-08-08), against the 500 ms
+  measured `ms_per_send` = **14 413 ms** (2026-08-07), against the 500 ms
   `MEASURED_MS_PER_SEND` placeholder in `outboxSweep.test.ts` — 29× out. At the
   code default of 40 that is `14 413 × 40 = 576 520` against a 40 000 ms budget,
   and everything unserved is **destroyed**, because stage 8 consumes
