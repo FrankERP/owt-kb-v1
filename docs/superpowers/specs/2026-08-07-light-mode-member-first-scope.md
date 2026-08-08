@@ -431,9 +431,17 @@ so children inherit them rather than rediscovering them. Children must re-verify
 relying on any of them, per v23's own warning that its conclusions sometimes rested on false
 reasons.
 
-- **`brand.css` sits outside every gate.** `eslint.config.mjs` loads only
-  `eslint-config-next` with no CSS processor — `npx eslint app/brand.css` reports 0 errors.
-  `tsc` and vitest are blind to it. A `var()` referencing an undeclared property is invalid
+- **`brand.css` is outside *lint*, but it is NOT ungated.** Corrected 2026-08-08 (disclosed
+  post-approval). `eslint.config.mjs` loads only `eslint-config-next` with no CSS processor, so
+  `npx eslint app/brand.css` reports 0 errors, and `tsc` never reads it. **But vitest is not
+  blind to it:** `app/components/admin/__tests__/participationAlongside.test.tsx:954` does
+  `read("app/brand.css")` and five `it()` blocks assert against its contents, pinning
+  `.brand-admin-frame` (`:990`), `.brand-admin-shell` (`:1016`) and
+  `[data-route-main]:has(.planner-wide)` (`:1003`), with a rationale CLAUDE.md documents.
+  This claim survived ten review rounds across three artifacts before anyone read that file.
+  **Children B and D must not treat `brand.css` as unguarded** — two of the classes the
+  inventory dispositions are already pinned, and a "cleanup" that breaks those regexes turns
+  `npm test` red. A `var()` referencing an undeclared property is invalid
   at computed-value time and is **dropped silently**, taking `.brand-atmosphere`'s body wash
   or `.brand-surface`'s inset highlights with it. The guard that asserts every referenced
   colour `var()` is declared is what makes Child B mechanical.
