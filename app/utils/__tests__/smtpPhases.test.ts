@@ -194,3 +194,60 @@ describe("probeSmtpPhases — the DATA guard", () => {
     expect(r.dataBodyMs).toBeUndefined();
   });
 });
+
+describe("probeSmtpPhases — SMTP command injection", () => {
+  beforeEach(() => {
+    connectMock.mockClear(); vi.resetModules();
+    process.env.SMTP_HOST = "mail.oasis.mx";
+    process.env.SMTP_USER = "contacto@oasis.mx";
+    process.env.SMTP_PASS = "s3cret";
+    process.env.EMAIL_FROM = "Oasis <contacto@oasis.mx>";
+  });
+  afterEach(() => {
+    delete process.env.SMTP_HOST; delete process.env.SMTP_USER;
+    delete process.env.SMTP_PASS; delete process.env.EMAIL_FROM;
+  });
+
+  // The recipient reaches the wire inside `RCPT TO:<...>`, and SMTP commands end
+  // at a newline. `trim()` strips only the OUTSIDE, so an interior CRLF used to
+  // end the command early and turn everything after it into commands the server
+  // executes — including DATA to an arbitrary address, as our own mailbox. The
+  // DATA guard did not catch it: that guard only runs when sendData is set, and
+  // the injection works on the ordinary timing path where it never ran.
+  const INJECTIONS = [
+    "contacto@oasis.mx>\r\nRCPT TO:<victim@example.com",
+    "contacto@oasis.mx>\r\nDATA\r\nSubject: x\r\n\r\nbody\r\n.\r\nNOOP ",
+    "contacto@oasis.mx>\nRCPT TO:<victim@example.com",
+    "victim@example.com>\rQUIT",
+  ];
+
+  for (const payload of INJECTIONS) {
+    it(`refuses a recipient carrying a line break: ${JSON.stringify(payload.slice(0, 32))}…`, async () => {
+      socket = new FakeSocket([...OK_SCRIPT]);
+      const { probeSmtpPhases } = await import("../smtpPhases");
+      const r = await probeSmtpPhases(payload);
+      expect(r.status).toBe("failed");
+      expect(r.error).toContain("refusing to place it in an SMTP command");
+      // Refused BEFORE any socket exists — nothing was ever written.
+      expect(connectMock).not.toHaveBeenCalled();
+    });
+  }
+
+  it("refuses on the DATA path too, before the sending-mailbox comparison", async () => {
+    socket = new FakeSocket([...OK_SCRIPT]);
+    const { probeSmtpPhases } = await import("../smtpPhases");
+    const r = await probeSmtpPhases("contacto@oasis.mx>\r\nRCPT TO:<victim@example.com", {
+      sendData: true,
+    });
+    expect(r.status).toBe("failed");
+    expect(connectMock).not.toHaveBeenCalled();
+  });
+
+  it("still accepts an ordinary external address", async () => {
+    socket = new FakeSocket([...OK_SCRIPT]);
+    const { probeSmtpPhases } = await import("../smtpPhases");
+    const run = probeSmtpPhases("someone@example.com");
+    socket.greet("220 mail.oasis.mx ESMTP Exim");
+    expect((await run).status).toBe("ok");
+  });
+});
