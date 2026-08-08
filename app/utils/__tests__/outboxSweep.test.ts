@@ -835,7 +835,7 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
   });
 
   it("claims in waves, so a large batch does not spend the budget taking ownership", async () => {
-    // 2026-08-08: a 27-notice claim took 27.7 s of a 45 s sweep, stage 7 was
+    // 2026-08-07: a 27-notice claim took 27.7 s of a 45 s sweep, stage 7 was
     // refused its first wave, and the batch was consumed with `emailed: 0` —
     // the sweep spent its life taking ownership of work it then had no time to
     // do. A monthly role publish is the large-batch case BY DESIGN, so this is
@@ -998,7 +998,7 @@ describe("sweepOutbox — recipient scoping and read contract", () => {
 
 /**
  * THE REAL NUMBER IS KNOWN, AND IT IS NOT THIS ONE. Production measured
- * `msPerSend` = **14 413 ms** on 2026-08-08 (two successful sends to external
+ * `msPerSend` = **14 413 ms** on 2026-08-07 (two successful sends to external
  * recipients; a local recipient costs ~67 ms, so the cost is the server's remote
  * accept). This constant stays at 500 because the assertions below check the
  * DEFAULT `EMAIL_LIMIT` of 40, and swapping in 14 413 would turn a standing

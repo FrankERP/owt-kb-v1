@@ -536,7 +536,7 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
   // IN WAVES, for the same reason stage 8 is: one round trip per notice, taken
   // serially, is a cost that scales with the batch and is paid BEFORE a single
   // email is sent. A monthly role publish is the large-batch case by design —
-  // and on 2026-08-08 a 27-notice claim took 27.7 s of a 45 s sweep, so stage 7
+  // and on 2026-08-07 a 27-notice claim took 27.7 s of a 45 s sweep, so stage 7
   // was refused its first wave and the whole batch was consumed with
   // `emailed: 0`. The sweep spent its life taking ownership of work it then had
   // no time to do.
