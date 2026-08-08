@@ -23,6 +23,7 @@ each exists:
 | `sharp: ^0.35.0` | libvips CVEs; the vulnerable copy sits under Next. |
 | `adm-zip: ^0.6.0` | Under the Sanity CLI chain. |
 | `undici@6: ^6.28.0` and `undici@7: ^7.29.0` | Version-scoped on purpose, like `js-yaml@3` — the tree holds **two** undici majors and a blanket pin would force `@actions/http-client` (which declares `^6.23.0`) across a major. Both vulnerable copies sit under `@sanity/cli`: the 6.x line via `@sanity/template-validator → @actions/*`, the 7.x via `isomorphic-dompurify → jsdom@28`. Each replacement stays **inside** its consumer's declared range. Added 2026-08-07 for eight advisories (cookie-attribute injection, CRLF injection, retry-interceptor response desync, private-cache-directive disclosure). |
+| `nanoid@3: ^3.3.17` and `nanoid@5: ^5.1.16` | Version-scoped like `js-yaml` and `undici` — the tree holds a 3.x copy (under `postcss`, `@sanity/client`, `sanity`) and a 5.x copy (under `@sanity/mutate`, `@sanity/cli`, `@sanity/bifur-client`), and the two advisories patch the lines separately. A blanket pin would drag the 3.x consumers across two majors. Both replacements stay **inside** every consumer's declared range (`^3.3.11`/`^3.3.16` accept 3.3.17; `^5.1.3`/`^5.1.6` accept 5.1.16), so unlike the `esbuild` entry below this needs no functional waiver — though it was verified anyway: `next build` including the embedded Studio, and `sanity schema validate`. No 4.x copy exists, which matters because the 5.x advisory's range starts at 4.0.0 and there is no 4.x patch. Added 2026-08-07 for two DoS advisories (GHSA-2v37-7h3g-55p8, non-secure generators looping on zero size; GHSA-28wg-ghj8-5hjv, custom generators looping on negative size). |
 | `esbuild: ^0.28.1` | **Deliberately outside a declared range — do not "correct" it.** `vite@7.3.5` (Sanity CLI chain) declares `esbuild ^0.27.0`, which excludes the patched 0.28.1; `vite@8` (vitest) already accepts `^0.27.0 \|\| ^0.28.0` as an optional peer, and `tsx` shipped 0.28.1 before this. Verified functional rather than assumed: `vite@7.3.5`'s `transformWithEsbuild` runs correctly against 0.28.1, and `sanity schema validate` passes (traced to confirm it really loads the overridden esbuild through the CLI's vite). That exercises the config-load path — `schema validate`/`schema deploy` — **not** vite's full bundling pipeline. The durable reason that gap is safe: this app never bundles through the Sanity CLI. The Studio is embedded with `next-sanity`'s `<NextStudio>` and built by Next itself (`app/(admin)/studio/[[...tool]]/page.tsx`), so `sanity build` / `sanity dev` are not part of any workflow here. If someone does start running `sanity dev` locally, re-verify this pin. Drop the entry once the Sanity CLI's vite moves to 0.28. |
 
 ## Rejected
@@ -48,9 +49,12 @@ Revisit when a parent's patched release lands; drop the entry and re-run
 mismatch is expected, not an oversight; typechecks pass.
 
 **State at 2026-08-07: `npm audit` reports 0 vulnerabilities and GitHub reports
-no open Dependabot alerts.** Thirteen were closed that day — eight `undici`, one
-`brace-expansion`, one `esbuild`, two `js-yaml`, one `dompurify` — every one of
-them through this block, with no parent upgrade.
+no open Dependabot alerts.** Fifteen were closed that day — eight `undici`, one
+`brace-expansion`, one `esbuild`, two `js-yaml`, one `dompurify`, two `nanoid` —
+every one of them through this block, with no parent upgrade. The last two
+surfaced hours after the first thirteen, which is the ordinary rhythm of this
+block rather than a sign the earlier sweep missed something: advisories land when
+they land, and the block is the standing mechanism for absorbing them.
 
 **Read an advisory's `first_patched_version`, not its title.** The js-yaml
 advisory is titled "CVE-2026-59870 fix **not backported**", which reads as "no
