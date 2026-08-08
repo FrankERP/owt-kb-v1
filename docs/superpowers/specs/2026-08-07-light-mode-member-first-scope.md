@@ -1,7 +1,7 @@
 # Scope spec: Light mode via role-based design tokens
 
 **Date:** 2026-08-07
-**Status:** **AMENDED 2026-08-07 — the earlier approval is STALE and re-review is required.** Approved at digest `4fbc41c4c1bed034b16547d343c24948a9ac639ecd0c4282460e7f25193a8140` (round 4, commit `477399c`); §8.4, the Child-A tier and two §12 coverage rows changed afterwards, so that digest no longer describes this file. See the review log beside it. **Approval authorizes writing the child plans, not implementing them.**
+**Status:** **APPROVED (re-approved after amendment)** at digest `3a927bd8b70c3726134a5254e8e8c258a90eb689ba539397d7bcf0196abb1478`, round 2 of the re-review, commit `9151750`. Nine non-blocking items were folded in afterwards and are listed as **post-approval, un-reviewed** in the review log beside this file. **Approval authorizes writing the child plans, not implementing them.**
 **Artifact level:** Parent scope spec. Defines *what must be true*. Child implementation
 plans are written only after this document is approved.
 **Supersedes as the scoping authority:** `2026-07-29-light-mode-role-tokens-design.md`
@@ -57,12 +57,13 @@ Measured on `main` today, `app/**/*.tsx` excluding `__tests__`:
 | `brand-*` colour utilities | 213 | Yes |
 | **Total** | **2,397 across 64 files** | **~9% tokenised** |
 
-**The 27 bare-hex sites are not a special mechanism class.** 25 of them are SVG
+**The 27 bare-hex sites are not a special mechanism class.** Most are SVG
 presentation attributes, inline styles and runtime constants (`icons.tsx`,
 `DayCard.tsx:33,43,53`, `ParticipationSidebar.tsx:6`, `CalendarView.tsx:193–195`), all of
-which accept `rgb(var(--x-rgb) / α)` or `currentColor` normally. Only two are genuinely
-unreachable by a CSS variable — `(client)/layout.tsx:42`'s `themeColor` string and the
-Google brand logo — and both are handled explicitly (§5). An earlier framing called the
+which accept `rgb(var(--x-rgb) / α)` or `currentColor` normally. Only two *sites* are genuinely unreachable by a CSS variable —
+`(client)/layout.tsx:42`'s `themeColor` string and the Google brand logo (which is one site
+but four literals, `signin/page.tsx:157–160`) — and both are handled explicitly (§5). Exact
+per-category figures are Child A's inventory to produce, not this table's (A1). An earlier framing called the
 whole bucket unreachable, which would have led a child to build a runtime colour mechanism
 for sites that do not need one.
 
@@ -142,7 +143,7 @@ and `AvailabilityCalendar.tsx` the seventh. **These nine files alone are 1,176 d
 ### 4.3 `(admin)` chrome and `/studio`
 
 `app/(admin)/` contains **only** `/studio` (verified: `globals.css`, `layout.tsx`,
-`studio/[[...tool]]/page.tsx`). Its `layout.tsx` `<body>` opens at `:42` with its `className` on `:43`, carrying
+`studio/[[...tool]]/page.tsx`). Its `layout.tsx` `<body>` opens at `:41` with its `className` on `:42`, carrying
 `brand-atmosphere min-h-screen bg-brand-blackout font-body text-brand-frost
 selection:bg-brand-beam/35`.
 
@@ -256,6 +257,12 @@ and currently green:
     introduce a session, cookie or header read into a shared layout**, because that opts the
     whole segment into dynamic rendering. CLAUDE.md makes ISR load-bearing, and ADR-0007
     forbids exactly this. See the constraint on `themeColor` in §5.
+18. **Cache invalidation (CLAUDE.md).** Admin/API routes that mutate content must call the
+    matching `revalidate*` util in `app/utils/revalidate.ts` (or `revalidatePath`), or the ISR
+    page stays stale. **Child E ships a mutating write route** and lands squarely on this.
+19. **Client mutation handlers (CLAUDE.md).** They must wrap `fetch` in try/catch/finally,
+    check `res.ok`, reset their loading flag, and never close-as-success on failure.
+    **Child E's `/me` theme control is such a handler.**
 
 ## 7. Decisions
 
@@ -267,13 +274,13 @@ and currently green:
 | D4 | Polarity | Dark in `:root`, light under `.light`. Backstage ships unset→Dark, so dark is the base. | v23 |
 | D5 | Sequencing | Tokens first, light second, the setting last. | v23 |
 | D6 | Accent, dark side | `#00bfff` wins for **dark**. `--brand-beam` `#12C8F4` is retired. Light needs its own value — see A5. | v23, qualified here |
-| D7 | Persistence | Server-persisted `themePref` on `teamMembers`, mirrored to `localStorage` so `next-themes` paints before hydration. | v23 |
+| D7 | Persistence | Server-persisted `themePref` on `teamMembers`, mirrored to `localStorage` so `next-themes` paints before hydration. **Child E must follow the shape of the existing member preference** — `TextSizeControl.tsx` + `app/utils/textZoom.ts` + `TextScaleBootstrap` — rather than invent a second one. That precedent is localStorage-only; D7 deliberately adds server persistence, which is the only intended difference. | v23, precedent named here |
 | D8 | Default | Unset → Dark at ship; staged to Follow System later, after a volunteer week. | v23 |
 | D9 | Ship gate | WCAG AA across the ink × surface matrix, plus the colour lint rule, plus the staged default. | v23 |
 | D10 | Studio | Sanity Studio's internal theming is out of scope. | v23 |
 | D11 | Admin editability | `themePref` is member-only, never in `MemberForm`. | v23 |
 | D12 | **Scope** | **The whole surface — all 2,397 decisions. Nothing deferred.** A member-first scope was tried and rejected on evidence (§4.1). | This doc, user 2026-08-07 |
-| D13 | **No pinned surface** | **No route renders a theme other than the member's choice.** There is no dark island, and none may be introduced. | This doc, derived from §4.1 |
+| D13 | **No pinned surface** | **No route renders a theme other than the member's choice.** There is no dark island, and none may be introduced. **One recorded exception: the theme gallery** (§8.4), which is provider-less by design so it can render *both* themes from a route param, and is therefore the one production route that ignores `themePref`. It is a swatch page for reviewers, not a product surface — which is why §4.1's containment argument does not apply to it. | This doc, derived from §4.1 |
 | D14 | **`(admin)` chrome** | **Follows the theme. Light chrome around a dark Studio panel is accepted.** | This doc, user 2026-08-07 |
 | D15 | **`themePref` delivery** | Extend the **existing** `GET /api/me` projection. A JWT claim is unsafe — the session carries a 30s-TTL `{_id, disabled, role}` projection (`app/utils/memberAccess.ts:3,26`). | This doc, correcting v23 |
 
@@ -383,7 +390,7 @@ so none of them is discovered later:
 - **The gate is `proxy.ts`'s middleware check, not `requireActiveSession`.** An earlier
   wording claimed this lets a *disabled* member reach the gallery. **That reason is wrong and
   is corrected here:** `proxy.ts:10–12` redirects any token without `sanityId` to
-  `/auth/not-a-member`, and `auth.ts:246` returns `{...token, sanityId: undefined}` for a
+  `/auth/not-a-member`, and `auth.ts:247` returns `{...token, sanityId: undefined, role: undefined}` for a
   member `getMemberAccess` reports inactive — so a disabled member is turned away from the
   gallery too. The residual gap is narrower and worth naming precisely: `withAuth` reads the
   JWT cookie via `getToken` without running the `jwt` callback, and the gallery's
@@ -446,6 +453,15 @@ reasons.
   literal" can never fail: Tailwind resolves `theme(colors.gray[700])` to `#374151` at build
   time. A `#rrggbb`-only pattern is equally vacuous — typography emits five 3-digit `#fff`
   literals and two `rgb(… / 10%)` kbd shadows.
+- **Decide comment handling explicitly.** A source-text lint or inventory rule fires on colour
+  tokens inside comments — `PlannerGrid.tsx:1497` names `#010b17` in prose, and
+  `brand.css:265,269` name `.brand-admin-shell` — while an AST rule does not. The repo already
+  ships `stripComments` (`app/utils/protectedReadAudit.ts:415`) for exactly this class of
+  problem; reuse it rather than inventing a second answer.
+- **`.light` must be declared AFTER `:root` in `brand.css`.** Both selectors have specificity
+  (0,1,0), so the light override depends entirely on source order — and the theme-parity guard
+  checks presence, not order. A `.light` block placed above `:root` passes every gate and
+  themes nothing.
 - **Lint regex traps.** Ban `rgb(`/`rgba(`/`hsl(` **only when not followed by `var(`** —
   `(rgba?|hsla?)\((?!\s*var\()` — or the rule forbids its own prescribed fix. Do **not**
   anchor with `\b`: `_` is a word character, so `\b(rgba?)\(` fails to match
@@ -532,6 +548,7 @@ Every requirement has exactly one primary owner. Cross-cutting verification is m
 | Distinct light accent value (A5) | D | AA matrix |
 | WCAG AA matrix, both themes | D | integration acceptance |
 | Open-dialog and full-screen-planner rendering, both themes | D | E on device |
+| A light-capable host for D's two-theme checks while `forcedTheme` is still in force | **A** | D consumes it. The gallery route param is the mechanism — nothing else can render light before E |
 | `themePref` schema + Studio deploy | E | — |
 | `GET /api/me` projection + write route (D15) | E | — |
 | `/me` control bound to server `themePref` | E | — |
