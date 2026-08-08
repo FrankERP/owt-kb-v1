@@ -143,7 +143,7 @@ describe("colour inventory — dispositions are a whitelist, and every row carri
 
 describe("colour inventory — the traps that produced wrong counts before", () => {
   const live = build() as unknown as {
-    summary: { pairs: number; byCategory: Record<string, number> };
+    summary: { pairs: number; pairsDifferingInAlpha: number; byCategory: Record<string, number> };
     literalRows: Row[];
     compositing: { kind: string; class?: string; count?: number }[];
   };
@@ -179,5 +179,21 @@ describe("colour inventory — the traps that produced wrong counts before", () 
 
   it("emits the light/dark pair relation Child B and A2 both consume", () => {
     expect(live.summary.pairs).toBeGreaterThan(0);
+  });
+
+  it("captures Tailwind's opacity modifier, which sits OUTSIDE the bracket", () => {
+    // `bg-[#003572]/50` — the alpha is not part of the arbitrary value. Dropping it
+    // makes the composed-token layer un-derivable, because that layer exists ONLY to
+    // express pairs whose two sides differ in alpha.
+    const withAlpha = live.literalRows.filter((r) => (r as { alpha?: string | null }).alpha);
+    expect(withAlpha.length).toBeGreaterThan(0);
+    expect(withAlpha.every((r) => /\/\d{1,3}$/.test(r.value))).toBe(true);
+  });
+
+  it("most light/dark pairs differ in ALPHA — the composed-token layer's whole reason", () => {
+    // A theme-invariant opacity modifier cannot express "opaque navy in light, 20%
+    // cyan in dark". If this ever drops to zero, alpha capture has regressed.
+    expect(live.summary.pairsDifferingInAlpha).toBeGreaterThan(0);
+    expect(live.summary.pairsDifferingInAlpha).toBeGreaterThan(live.summary.pairs / 2);
   });
 });
