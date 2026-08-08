@@ -109,10 +109,10 @@ const CATEGORIES = [
   // the parent's §9 prescribes. Without it, tailwind.config.ts's seven
   // `rgb(var(--brand-*) / <alpha-value>)` key values would land here instead of 10.
   { id: 5, name: "rgb-hsl-literal", syntax: /\b(?:rgba?|hsla?)\((?!\s*var\()[^)]*\)/gi },
-  { id: 10, name: "retired-brand-colour-key", syntax: new RegExp(`\\b(?:${COLOUR_UTILITIES}|selection:bg|selection:text)-brand-(blackout|console|deck|beam|signal|frost|steel)\\b`, "gi") },
-  { id: 3, name: "raw-palette-class", syntax: new RegExp(`\\b(?:${COLOUR_UTILITIES})-(?:${PALETTE_FAMILIES})-\\d{2,3}\\b`, "gi") },
+  { id: 10, name: "retired-brand-colour-key", syntax: new RegExp(`\\b(?:${COLOUR_UTILITIES}|selection:bg|selection:text)-brand-(?:blackout|console|deck|beam|signal|frost|steel)(?:\\/\\d{1,3})?\\b`, "gi") },
+  { id: 3, name: "raw-palette-class", syntax: new RegExp(`\\b(?:${COLOUR_UTILITIES})-(?:${PALETTE_FAMILIES})-\\d{2,3}(?:\\/\\d{1,3})?\\b`, "gi") },
   { id: 4, name: "colour-keyword", syntax: new RegExp(`\\b(?:${COLOUR_UTILITIES})-(?:white|black|transparent|current)\\b|\\bcurrentColor\\b|\\btransparent\\b`, "g") },
-  { id: 1, name: "bracketed-hex", syntax: /\[#[0-9a-f]{3,8}(?:\/\d{1,3})?\]/gi },
+  { id: 1, name: "bracketed-hex", syntax: /\[#[0-9a-f]{3,8}\](?:\/\d{1,3})?/gi },
   { id: 2, name: "bare-hex", syntax: /#[0-9a-f]{3,8}\b/gi },
 ];
 
@@ -198,6 +198,11 @@ function scanFile(rel) {
         category: id,
         categoryName: CATEGORIES.find((c) => c.id === id)?.name ?? cat.name,
         value,
+        // Tailwind's opacity modifier sits OUTSIDE the bracket (`bg-[#003572]/50`),
+        // so it must be captured separately or the composed-token layer has no input:
+        // ~14 composed tokens exist precisely because a pair's two sides differ in
+        // ALPHA, not in colour.
+        alpha: (value.match(/\/(\d{1,3})$/) ?? [null, null])[1],
         utility: normaliseUtility(src, start),
         carrier: id === 8 ? m[1] : null,
         line: lineOf(src, start), // informational only — see the artifact header
@@ -314,13 +319,27 @@ function pairsFor(rows) {
     const bare = r.utility.replace(/(^|:)dark:/, "$1").replace(/^dark:/, "");
     const k = `${r.file}|${bare}`;
     if (!byFileUtility.has(k)) byFileUtility.set(k, { light: [], dark: [] });
-    (r.utility.startsWith("dark:") ? byFileUtility.get(k).dark : byFileUtility.get(k).light).push(r.value);
+    (r.utility.startsWith("dark:") ? byFileUtility.get(k).dark : byFileUtility.get(k).light)
+      .push({ value: r.value, alpha: r.alpha ?? null });
   }
   const pairs = [];
   for (const [k, v] of [...byFileUtility].sort()) {
     if (!v.light.length || !v.dark.length) continue;
     const [file, utility] = k.split("|");
-    pairs.push({ file, utility, light: [...v.light].sort(), dark: [...v.dark].sort() });
+    const byValue = (a, b) => a.value.localeCompare(b.value);
+    const light = [...v.light].sort(byValue);
+    const dark = [...v.dark].sort(byValue);
+    const alphaSet = (xs) => JSON.stringify([...new Set(xs.map((x) => x.alpha ?? "100"))].sort());
+    pairs.push({
+      file,
+      utility,
+      light,
+      dark,
+      // The single most load-bearing fact about a pair: does it differ in alpha?
+      // If so it needs a COMPOSED token — a theme-invariant opacity modifier cannot
+      // express "opaque navy in light, 20% cyan in dark".
+      alphaDiffers: alphaSet(light) !== alphaSet(dark),
+    });
   }
   return pairs;
 }
@@ -395,6 +414,7 @@ function build() {
     compositingRuleBodies: compositing.filter((r) => r.kind === "rule-body").length,
     lightCounterpartClasses: new Set(compositing.filter((r) => r.kind === "selector" && r.disposition === "D").map((r) => r.class)).size,
     pairs: pairs.length,
+    pairsDifferingInAlpha: pairs.filter((p) => p.alphaDiffers).length,
   };
 
   return {
