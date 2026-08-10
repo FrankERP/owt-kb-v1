@@ -325,35 +325,71 @@ function scanCompositingClasses(files) {
 // token without its partner; and A2's AA-gate step.
 // ---------------------------------------------------------------------------
 
-function pairsFor(rows) {
-  const byFileUtility = new Map();
-  for (const r of rows) {
-    if (!r.utility) continue;
-    const bare = r.utility.replace(/(^|:)dark:/, "$1").replace(/^dark:/, "");
-    const k = `${r.file}|${bare}`;
-    if (!byFileUtility.has(k)) byFileUtility.set(k, { light: [], dark: [] });
-    (r.utility.startsWith("dark:") ? byFileUtility.get(k).dark : byFileUtility.get(k).light)
-      .push({ value: r.value, alpha: r.alpha ?? null });
-  }
+/**
+ * PER-ELEMENT pairs — the input Child B needs to map a literal to a composed token.
+ *
+ * A pair is `X-[c]` and `dark:X-[c2]` on the SAME element, i.e. inside one class-string
+ * region. An earlier revision grouped by file + utility, which collapsed every `bg-` use
+ * in a file into a single "pair" carrying 21 values per side — a usable signal that most
+ * pairs differ in alpha, but useless for mapping, because it cannot say WHICH light value
+ * partners WHICH dark one.
+ *
+ * The composed-token layer exists precisely because a theme-invariant opacity modifier
+ * cannot express "opaque navy in light, 20% cyan in dark" — so the mapping needs the
+ * partner, not a bag of values.
+ */
+function pairsFor(files) {
   const pairs = [];
-  for (const [k, v] of [...byFileUtility].sort()) {
-    if (!v.light.length || !v.dark.length) continue;
-    const [file, utility] = k.split("|");
-    const byValue = (a, b) => a.value.localeCompare(b.value);
-    const light = [...v.light].sort(byValue);
-    const dark = [...v.dark].sort(byValue);
-    const alphaSet = (xs) => JSON.stringify([...new Set(xs.map((x) => x.alpha ?? "100"))].sort());
-    pairs.push({
-      file,
-      utility,
-      light,
-      dark,
-      // The single most load-bearing fact about a pair: does it differ in alpha?
-      // If so it needs a COMPOSED token — a theme-invariant opacity modifier cannot
-      // express "opaque navy in light, 20% cyan in dark".
-      alphaDiffers: alphaSet(light) !== alphaSet(dark),
+  // A class-string region: the contents of a quoted string or template literal that
+  // contains at least one `dark:` variant. Scanning regions rather than whole files is
+  // what makes the pairing per-element.
+  const REGION = /(["'`])((?:[^"'`\\]|\\.)*?dark:(?:[^"'`\\]|\\.)*?)\1/g;
+  const COLOURED = /(?:^|\s)((?:[a-z-]+:)*)(bg|text|border|ring|divide|from|via|to|fill|stroke|placeholder|shadow|outline|decoration|caret|accent)-(\[[^\]]+\]|[a-z]+-\d{2,3}|white|black|transparent|brand-[a-z]+)(\/\d{1,3})?/g;
+
+  for (const rel of files) {
+    const src = stripComments(readFileSync(path.join(REPO_ROOT, rel), "utf8"), {
+      syntax: syntaxFor(rel),
     });
+    for (const region of src.matchAll(REGION)) {
+      const text = region[2];
+      const light = new Map();
+      const dark = new Map();
+      COLOURED.lastIndex = 0;
+      let m;
+      while ((m = COLOURED.exec(text))) {
+        const variants = (m[1] ?? "").split(":").filter(Boolean);
+        const isDark = variants.includes("dark");
+        // The variant chain WITHOUT `dark:` is the pairing key: `hover:dark:bg` and
+        // `hover:bg` are two sides of one pair; `hover:bg` and `bg` are not.
+        const chain = variants.filter((v) => v !== "dark");
+        const key = [...chain, m[2]].join(":");
+        const entry = { value: m[3], alpha: m[4] ? m[4].slice(1) : null };
+        (isDark ? dark : light).set(key, entry);
+      }
+      for (const [key, l] of light) {
+        const d = dark.get(key);
+        if (!d) continue;
+        pairs.push({
+          file: rel,
+          utility: key,
+          light: l.value,
+          lightAlpha: l.alpha,
+          dark: d.value,
+          darkAlpha: d.alpha,
+          // The load-bearing fact: differing alpha means this site CANNOT use a base role
+          // with an opacity modifier and needs a composed, alpha-baked token.
+          alphaDiffers: (l.alpha ?? "100") !== (d.alpha ?? "100"),
+        });
+      }
+    }
   }
+  pairs.sort(
+    (a, b) =>
+      a.file.localeCompare(b.file) ||
+      a.utility.localeCompare(b.utility) ||
+      a.light.localeCompare(b.light) ||
+      a.dark.localeCompare(b.dark),
+  );
   return pairs;
 }
 
@@ -404,7 +440,7 @@ function build() {
   );
 
   const compositing = scanCompositingClasses(files);
-  const pairs = pairsFor(literalRows);
+  const pairs = pairsFor(files);
 
   // The compared summary block — INSIDE the assertion, not a human-only header.
   // No key can express these totals, so they are stated and compared directly.

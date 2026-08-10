@@ -195,6 +195,22 @@ describe("colour inventory — the traps that produced wrong counts before", () 
     expect(live.summary.pairs).toBeGreaterThan(0);
   });
 
+  it("pairs are PER-ELEMENT, not per file+utility", () => {
+    // An earlier revision grouped by file + utility, which collapsed every `bg-` use in a
+    // file into one "pair" carrying 21 values per side — a usable signal that most pairs
+    // differ in alpha, but useless for MAPPING, because it cannot say which light value
+    // partners which dark one. Child B needs the partner.
+    const pairs = (live as unknown as { pairs: { light: string; dark: string }[] }).pairs;
+    expect(pairs.length).toBeGreaterThan(0);
+    for (const p of pairs) {
+      expect(typeof p.light).toBe("string");
+      expect(typeof p.dark).toBe("string");
+      // One value per side. A `+`-joined bag is the old, too-coarse shape.
+      expect(p.light).not.toContain("+");
+      expect(p.dark).not.toContain("+");
+    }
+  });
+
   it("captures Tailwind's opacity modifier, which sits OUTSIDE the bracket", () => {
     // `bg-[#003572]/50` — the alpha is not part of the arbitrary value. Dropping it
     // makes the composed-token layer un-derivable, because that layer exists ONLY to

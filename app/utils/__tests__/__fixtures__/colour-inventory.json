@@ -35,8 +35,8 @@
     "compositingClassNameOccurrences": 68,
     "compositingRuleBodies": 32,
     "lightCounterpartClasses": 15,
-    "pairs": 100,
-    "pairsDifferingInAlpha": 88
+    "pairs": 246,
+    "pairsDifferingInAlpha": 166
   },
   "literalRows": [
     {
@@ -32658,6005 +32658,2215 @@
     {
       "file": "app/(client)/auth/not-a-member/page.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/auth/not-a-member/page.tsx",
       "utility": "hover:bg",
-      "light": [
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/author/[slug]/page.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/error.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/error.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/25",
-          "alpha": "25"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "25",
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/error.tsx",
       "utility": "hover:bg",
-      "light": [
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/loading.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#001f3f]/60",
-          "alpha": "60"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#001f3f]",
+      "darkAlpha": "60",
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/loading.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/me/loading.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#001f3f]/60",
-          "alpha": "60"
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#001f3f]",
+      "darkAlpha": "60",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/(client)/me/loading.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "10",
+      "dark": "[#00bfff]",
+      "darkAlpha": null,
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/(client)/me/loading.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "10",
+      "dark": "[#00bfff]",
+      "darkAlpha": null,
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/me/loading.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/me/page.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-green-500/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-red-500/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-yellow-500/40",
-          "alpha": "40"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/(client)/me/page.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#003572]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        },
-        {
-          "value": "[#020f1c]",
-          "alpha": null
-        },
-        {
-          "value": "[#020f1c]",
-          "alpha": null
-        },
-        {
-          "value": "[#0a1929]",
-          "alpha": null
-        },
-        {
-          "value": "[#C8D8EB]/95",
-          "alpha": "95"
-        },
-        {
-          "value": "bg-black",
-          "alpha": null
-        },
-        {
-          "value": "bg-gray-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-green-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-green-500/5",
-          "alpha": "5"
-        },
-        {
-          "value": "bg-red-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-red-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-red-900/80",
-          "alpha": "80"
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        },
-        {
-          "value": "bg-yellow-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-yellow-500/15",
-          "alpha": "15"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#010b17]/95",
-          "alpha": "95"
-        },
-        {
-          "value": "[#0a1929]",
-          "alpha": null
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "5",
+      "dark": "[#00bfff]",
+      "darkAlpha": "5",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#0a1929]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
+      "utility": "bg",
+      "light": "[#C8D8EB]",
+      "lightAlpha": "95",
+      "dark": "[#010b17]",
+      "darkAlpha": "95",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/25",
-          "alpha": "25"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/60",
-          "alpha": "60"
-        },
-        {
-          "value": "border-gray-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-gray-700/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-green-500/20",
-          "alpha": "20"
-        },
-        {
-          "value": "border-green-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-red-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-red-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-red-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-yellow-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-yellow-500/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-yellow-500/40",
-          "alpha": "40"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
       "utility": "hover:bg",
-      "light": [
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "bg-red-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-yellow-500/10",
-          "alpha": "10"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
+      "utility": "hover:bg",
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/posts/[slug]/loading.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#001f3f]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#C8D8EB]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#C8D8EB]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#C8D8EB]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#C8D8EB]/15",
-          "alpha": "15"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00162e]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        }
-      ],
+      "light": "[#001f3f]",
+      "lightAlpha": null,
+      "dark": "[#00162e]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/(client)/posts/[slug]/loading.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": null,
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/posts/[slug]/loading.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "15",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/(client)/posts/[slug]/loading.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "15",
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/posts/[slug]/page.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/12",
-          "alpha": "12"
-        },
-        {
-          "value": "[#00bfff]/12",
-          "alpha": "12"
-        },
-        {
-          "value": "bg-brand-beam",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "10",
+      "dark": "[#00bfff]",
+      "darkAlpha": "5",
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/posts/[slug]/page.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-brand-beam/15",
-          "alpha": "15"
-        },
-        {
-          "value": "border-brand-steel/10",
-          "alpha": "10"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/(client)/posts/[slug]/page.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/posts/[slug]/page.tsx",
       "utility": "text",
-      "light": [
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/70",
-          "alpha": "70"
-        },
-        {
-          "value": "[#C8D8EB]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#C8D8EB]/60",
-          "alpha": "60"
-        },
-        {
-          "value": "[#C8D8EB]/60",
-          "alpha": "60"
-        },
-        {
-          "value": "[#C8D8EB]/60",
-          "alpha": "60"
-        },
-        {
-          "value": "text-brand-beam/70",
-          "alpha": "70"
-        },
-        {
-          "value": "text-brand-frost",
-          "alpha": null
-        },
-        {
-          "value": "text-brand-frost",
-          "alpha": null
-        },
-        {
-          "value": "text-brand-steel/70",
-          "alpha": "70"
-        },
-        {
-          "value": "text-brand-steel/70",
-          "alpha": "70"
-        },
-        {
-          "value": "text-brand-steel/70",
-          "alpha": "70"
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#C8D8EB]/50",
-          "alpha": "50"
-        },
-        {
-          "value": "[#C8D8EB]/50",
-          "alpha": "50"
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        }
-      ],
+      "light": "[#C8D8EB]",
+      "lightAlpha": "60",
+      "dark": "[#C8D8EB]",
+      "darkAlpha": "50",
       "alphaDiffers": true
+    },
+    {
+      "file": "app/(client)/posts/[slug]/page.tsx",
+      "utility": "text",
+      "light": "[#C8D8EB]",
+      "lightAlpha": "60",
+      "dark": "[#C8D8EB]",
+      "darkAlpha": "50",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/(client)/posts/[slug]/page.tsx",
+      "utility": "text",
+      "light": "gray-500",
+      "lightAlpha": null,
+      "dark": "gray-400",
+      "darkAlpha": null,
+      "alphaDiffers": false
     },
     {
       "file": "app/(client)/posts/not-found.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/posts/not-found.tsx",
       "utility": "hover:bg",
-      "light": [
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/schedule/loading.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#001f3f]/60",
-          "alpha": "60"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#001f3f]",
+      "darkAlpha": "60",
       "alphaDiffers": true
     },
     {
       "file": "app/(client)/schedule/loading.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
       "alphaDiffers": true
     },
     {
       "file": "app/components/AddToCalendarButton.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/AuthorSearchList.tsx",
-      "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/AuthorSearchList.tsx",
-      "utility": "hover:border",
-      "light": [
-        {
-          "value": "[#003572]/50",
-          "alpha": "50"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/40",
-          "alpha": "40"
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/AvailabilityCalendar.tsx",
-      "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]/50",
-          "alpha": "50"
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/70",
-          "alpha": "70"
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        },
-        {
-          "value": "bg-gray-600",
-          "alpha": null
-        },
-        {
-          "value": "bg-orange-400/60",
-          "alpha": "60"
-        },
-        {
-          "value": "bg-orange-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "bg-orange-500/50",
-          "alpha": "50"
-        },
-        {
-          "value": "bg-white",
-          "alpha": null
-        },
-        {
-          "value": "bg-white",
-          "alpha": null
-        },
-        {
-          "value": "bg-white",
-          "alpha": null
-        },
-        {
-          "value": "bg-white",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/AvailabilityCalendar.tsx",
-      "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#003572]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "[#003572]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "[#003572]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "[#003572]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "[#003572]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "[#003572]/50",
-          "alpha": "50"
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "border-orange-400",
-          "alpha": null
-        },
-        {
-          "value": "border-orange-500/50",
-          "alpha": "50"
-        },
-        {
-          "value": "border-red-500/20",
-          "alpha": "20"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/AvailabilityCalendar.tsx",
-      "utility": "hover:bg",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-orange-500/40",
-          "alpha": "40"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/CalendarView.tsx",
-      "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/50",
-          "alpha": "50"
-        },
-        {
-          "value": "[#003572]/50",
-          "alpha": "50"
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#4c1d95]/50",
-          "alpha": "50"
-        },
-        {
-          "value": "[#78350f]/50",
-          "alpha": "50"
-        },
-        {
-          "value": "[#a78bfa]",
-          "alpha": null
-        },
-        {
-          "value": "[#f59e0b]",
-          "alpha": null
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/CalendarView.tsx",
-      "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "[#00bfff]/50",
-          "alpha": "50"
-        },
-        {
-          "value": "[#00bfff]/50",
-          "alpha": "50"
-        },
-        {
-          "value": "[#a78bfa]/50",
-          "alpha": "50"
-        },
-        {
-          "value": "[#f59e0b]/50",
-          "alpha": "50"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/CalendarView.tsx",
-      "utility": "text",
-      "light": [
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#a78bfa]",
-          "alpha": null
-        },
-        {
-          "value": "[#C8D8EB]",
-          "alpha": null
-        },
-        {
-          "value": "[#C8D8EB]",
-          "alpha": null
-        },
-        {
-          "value": "[#C8D8EB]",
-          "alpha": null
-        },
-        {
-          "value": "[#f59e0b]",
-          "alpha": null
-        },
-        {
-          "value": "text-black",
-          "alpha": null
-        },
-        {
-          "value": "text-black",
-          "alpha": null
-        },
-        {
-          "value": "text-black",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        }
-      ],
-      "alphaDiffers": false
-    },
-    {
-      "file": "app/components/ChordChart.tsx",
-      "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#003572]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-gray-300",
-          "alpha": null
-        },
-        {
-          "value": "bg-white",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "bg-gray-600",
-          "alpha": null
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/ChordChart.tsx",
-      "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/25",
-          "alpha": "25"
-        },
-        {
-          "value": "[#003572]/25",
-          "alpha": "25"
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "[#00bfff]/60",
-          "alpha": "60"
-        },
-        {
-          "value": "border-transparent",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/ChordChart.tsx",
-      "utility": "text",
-      "light": [
-        {
-          "value": "[#001f3f]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/70",
-          "alpha": "70"
-        },
-        {
-          "value": "[#00bfff]/90",
-          "alpha": "90"
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/DayCard.tsx",
-      "utility": "bg",
-      "light": [
-        {
-          "value": "[#4c1d95]",
-          "alpha": null
-        },
-        {
-          "value": "[#78350f]",
-          "alpha": null
-        },
-        {
-          "value": "bg-brand-blackout/35",
-          "alpha": "35"
-        },
-        {
-          "value": "bg-brand-deck/80",
-          "alpha": "80"
-        },
-        {
-          "value": "bg-brand-signal/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-gray-200",
-          "alpha": null
-        },
-        {
-          "value": "bg-gray-800/50",
-          "alpha": "50"
-        },
-        {
-          "value": "bg-gray-800/50",
-          "alpha": "50"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#1c0800]",
-          "alpha": null
-        },
-        {
-          "value": "[#1e0a3c]",
-          "alpha": null
-        },
-        {
-          "value": "bg-gray-800",
-          "alpha": null
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/DayCard.tsx",
-      "utility": "border",
-      "light": [
-        {
-          "value": "[#4c1d95]",
-          "alpha": null
-        },
-        {
-          "value": "[#5b21b6]",
-          "alpha": null
-        },
-        {
-          "value": "[#78350f]",
-          "alpha": null
-        },
-        {
-          "value": "[#92400e]",
-          "alpha": null
-        },
-        {
-          "value": "border-brand-beam/25",
-          "alpha": "25"
-        },
-        {
-          "value": "border-brand-beam/45",
-          "alpha": "45"
-        },
-        {
-          "value": "border-brand-frost/10",
-          "alpha": "10"
-        },
-        {
-          "value": "border-brand-signal/35",
-          "alpha": "35"
-        },
-        {
-          "value": "border-brand-steel/12",
-          "alpha": "12"
-        },
-        {
-          "value": "border-gray-700",
-          "alpha": null
-        },
-        {
-          "value": "border-gray-700",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#a78bfa]",
-          "alpha": null
-        },
-        {
-          "value": "[#a78bfa]",
-          "alpha": null
-        },
-        {
-          "value": "[#f59e0b]",
-          "alpha": null
-        },
-        {
-          "value": "[#f59e0b]",
-          "alpha": null
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/DayCard.tsx",
-      "utility": "text",
-      "light": [
-        {
-          "value": "[#3dff7c]",
-          "alpha": null
-        },
-        {
-          "value": "[#3dff7c]",
-          "alpha": null
-        },
-        {
-          "value": "[#a78bfa]",
-          "alpha": null
-        },
-        {
-          "value": "[#a78bfa]/70",
-          "alpha": "70"
-        },
-        {
-          "value": "[#C8D8EB]/70",
-          "alpha": "70"
-        },
-        {
-          "value": "[#C8D8EB]/70",
-          "alpha": "70"
-        },
-        {
-          "value": "[#C8D8EB]/90",
-          "alpha": "90"
-        },
-        {
-          "value": "[#f59e0b]",
-          "alpha": null
-        },
-        {
-          "value": "[#f59e0b]/70",
-          "alpha": "70"
-        },
-        {
-          "value": "text-amber-400",
-          "alpha": null
-        },
-        {
-          "value": "text-amber-400",
-          "alpha": null
-        },
-        {
-          "value": "text-brand-beam",
-          "alpha": null
-        },
-        {
-          "value": "text-brand-beam/70",
-          "alpha": "70"
-        },
-        {
-          "value": "text-brand-frost",
-          "alpha": null
-        },
-        {
-          "value": "text-brand-frost/55",
-          "alpha": "55"
-        },
-        {
-          "value": "text-brand-frost/70",
-          "alpha": "70"
-        },
-        {
-          "value": "text-brand-signal",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#C8D8EB]/50",
-          "alpha": "50"
-        },
-        {
-          "value": "[#C8D8EB]/50",
-          "alpha": "50"
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/EditSongButton.tsx",
-      "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#0a1929]",
-          "alpha": null
-        },
-        {
-          "value": "bg-brand-blackout/35",
-          "alpha": "35"
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/EditSongButton.tsx",
-      "utility": "hover:bg",
-      "light": [
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/Header.tsx",
-      "utility": "shadow",
-      "light": [
-        {
-          "value": "[#002249]",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        }
-      ],
-      "alphaDiffers": false
-    },
-    {
-      "file": "app/components/NavMenu.tsx",
-      "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#C8D8EB]",
-          "alpha": null
-        },
-        {
-          "value": "bg-red-500",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#0a1929]",
-          "alpha": null
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/NavMenu.tsx",
-      "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#C8D8EB]",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/NavMenu.tsx",
-      "utility": "hover:bg",
-      "light": [
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        }
-      ],
-      "alphaDiffers": false
-    },
-    {
-      "file": "app/components/NavMenu.tsx",
-      "utility": "text",
-      "light": [
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-white",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        }
-      ],
-      "alphaDiffers": false
-    },
-    {
-      "file": "app/components/ProfilePanel.tsx",
-      "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "bg-black",
-          "alpha": null
-        },
-        {
-          "value": "bg-red-900/20",
-          "alpha": "20"
-        },
-        {
-          "value": "bg-red-900/80",
-          "alpha": "80"
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#0a1929]",
-          "alpha": null
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/ProfilePanel.tsx",
-      "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-red-700",
-          "alpha": null
-        },
-        {
-          "value": "border-red-800",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/ProfilePanel.tsx",
-      "utility": "hover:bg",
-      "light": [
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/SectionNav.tsx",
-      "utility": "bg",
-      "light": [
-        {
-          "value": "[#C8D8EB]/90",
-          "alpha": "90"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#010b17]/90",
-          "alpha": "90"
-        }
-      ],
-      "alphaDiffers": false
-    },
-    {
-      "file": "app/components/SectionNav.tsx",
-      "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "border-transparent",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/SectionNav.tsx",
-      "utility": "hover:text",
-      "light": [
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        }
-      ],
-      "alphaDiffers": false
-    },
-    {
-      "file": "app/components/SectionNav.tsx",
-      "utility": "text",
-      "light": [
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        }
-      ],
-      "alphaDiffers": false
-    },
-    {
-      "file": "app/components/SongAudioSection.tsx",
-      "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/25",
-          "alpha": "25"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/50",
-          "alpha": "50"
-        },
-        {
-          "value": "[#00bfff]/50",
-          "alpha": "50"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/SongAudioSection.tsx",
-      "utility": "hover:text",
-      "light": [
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        }
-      ],
-      "alphaDiffers": false
-    },
-    {
-      "file": "app/components/SongAudioSection.tsx",
-      "utility": "text",
-      "light": [
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        }
-      ],
-      "alphaDiffers": false
-    },
-    {
-      "file": "app/components/SongSheet.tsx",
-      "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/25",
-          "alpha": "25"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "[#00bfff]/50",
-          "alpha": "50"
-        },
-        {
-          "value": "[#C8D8EB]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#C8D8EB]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "border-brand-beam/10",
-          "alpha": "10"
-        },
-        {
-          "value": "border-brand-beam/10",
-          "alpha": "10"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/25",
-          "alpha": "25"
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/TagSearchList.tsx",
-      "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "border-brand-beam/15",
-          "alpha": "15"
-        },
-        {
-          "value": "border-brand-steel/10",
-          "alpha": "10"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/TextSizeControl.tsx",
-      "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/25",
-          "alpha": "25"
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/TextSizeControl.tsx",
-      "utility": "text",
-      "light": [
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-600",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#C8D8EB]/70",
-          "alpha": "70"
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/ActivityPanel.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#003572]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "bg-blue-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-gray-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-gray-600",
-          "alpha": null
-        },
-        {
-          "value": "bg-gray-700",
-          "alpha": null
-        },
-        {
-          "value": "bg-green-500",
-          "alpha": null
-        },
-        {
-          "value": "bg-green-500",
-          "alpha": null
-        },
-        {
-          "value": "bg-green-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-red-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-red-500/70",
-          "alpha": "70"
-        },
-        {
-          "value": "bg-red-900/20",
-          "alpha": "20"
-        },
-        {
-          "value": "bg-yellow-500",
-          "alpha": null
-        },
-        {
-          "value": "bg-yellow-500",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ActivityPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "10",
+      "dark": "[#00bfff]",
+      "darkAlpha": "5",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ActivityPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "5",
+      "dark": "[#00bfff]",
+      "darkAlpha": "5",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/ActivityPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/ActivityPanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/ActivityPanel.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "border-blue-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-gray-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-green-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-red-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-red-800",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/ActivityPanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "10",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/ActivityPanel.tsx",
       "utility": "hover:bg",
-      "light": [
-        {
-          "value": "[#003572]/5",
-          "alpha": "5"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "5",
+      "dark": "[#00bfff]",
+      "darkAlpha": "5",
       "alphaDiffers": false
     },
     {
       "file": "app/components/admin/AdminPanel.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        },
-        {
-          "value": "bg-black",
-          "alpha": null
-        },
-        {
-          "value": "bg-blue-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-brand-beam/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-brand-beam/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-brand-beam/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-brand-beam/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-gray-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-gray-600",
-          "alpha": null
-        },
-        {
-          "value": "bg-gray-600",
-          "alpha": null
-        },
-        {
-          "value": "bg-green-500",
-          "alpha": null
-        },
-        {
-          "value": "bg-green-500",
-          "alpha": null
-        },
-        {
-          "value": "bg-purple-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-red-800/60",
-          "alpha": "60"
-        },
-        {
-          "value": "bg-red-900/20",
-          "alpha": "20"
-        },
-        {
-          "value": "bg-red-900/20",
-          "alpha": "20"
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#0a1929]",
-          "alpha": null
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/AdminPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/AdminPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/AdminPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "10",
+      "dark": "[#00bfff]",
+      "darkAlpha": "5",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/AdminPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "10",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/AdminPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#0a1929]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/AdminPanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/AdminPanel.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-blue-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-brand-beam/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-gray-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-purple-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-red-800",
-          "alpha": null
-        },
-        {
-          "value": "border-red-800",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/AdminPanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "15",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/AdminPanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/AdminPanel.tsx",
       "utility": "from",
-      "light": [
-        {
-          "value": "[#C8D8EB]",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        }
-      ],
+      "light": "[#C8D8EB]",
+      "lightAlpha": null,
+      "dark": "[#010b17]",
+      "darkAlpha": null,
       "alphaDiffers": false
     },
     {
       "file": "app/components/admin/AdminPanel.tsx",
       "utility": "hover:bg",
-      "light": [
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-brand-beam",
-          "alpha": null
-        },
-        {
-          "value": "bg-brand-beam/25",
-          "alpha": "25"
-        },
-        {
-          "value": "bg-red-500/20",
-          "alpha": "20"
-        },
-        {
-          "value": "bg-red-700/60",
-          "alpha": "60"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/AdminPanel.tsx",
+      "utility": "hover:bg",
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/AdminPanel.tsx",
       "utility": "text",
-      "light": [
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/60",
-          "alpha": "60"
-        },
-        {
-          "value": "[#C8D8EB]/50",
-          "alpha": "50"
-        },
-        {
-          "value": "text-blue-400",
-          "alpha": null
-        },
-        {
-          "value": "text-brand-beam",
-          "alpha": null
-        },
-        {
-          "value": "text-brand-beam",
-          "alpha": null
-        },
-        {
-          "value": "text-brand-beam",
-          "alpha": null
-        },
-        {
-          "value": "text-brand-beam",
-          "alpha": null
-        },
-        {
-          "value": "text-brand-frost/80",
-          "alpha": "80"
-        },
-        {
-          "value": "text-brand-steel/60",
-          "alpha": "60"
-        },
-        {
-          "value": "text-brand-steel/60",
-          "alpha": "60"
-        },
-        {
-          "value": "text-brand-steel/60",
-          "alpha": "60"
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-600",
-          "alpha": null
-        },
-        {
-          "value": "text-purple-400",
-          "alpha": null
-        },
-        {
-          "value": "text-red-400",
-          "alpha": null
-        },
-        {
-          "value": "text-red-400",
-          "alpha": null
-        },
-        {
-          "value": "text-red-400",
-          "alpha": null
-        },
-        {
-          "value": "text-white",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#C8D8EB]/35",
-          "alpha": "35"
-        }
-      ],
+      "light": "[#C8D8EB]",
+      "lightAlpha": "50",
+      "dark": "[#C8D8EB]",
+      "darkAlpha": "35",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/AvailabilityPanel.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/70",
-          "alpha": "70"
-        },
-        {
-          "value": "[#4c1d95]",
-          "alpha": null
-        },
-        {
-          "value": "[#78350f]",
-          "alpha": null
-        },
-        {
-          "value": "[#C8D8EB]",
-          "alpha": null
-        },
-        {
-          "value": "[#C8D8EB]",
-          "alpha": null
-        },
-        {
-          "value": "bg-amber-500",
-          "alpha": null
-        },
-        {
-          "value": "bg-amber-500",
-          "alpha": null
-        },
-        {
-          "value": "bg-amber-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-amber-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-amber-500/5",
-          "alpha": "5"
-        },
-        {
-          "value": "bg-gray-700",
-          "alpha": null
-        },
-        {
-          "value": "bg-gray-800/30",
-          "alpha": "30"
-        },
-        {
-          "value": "bg-green-500/5",
-          "alpha": "5"
-        },
-        {
-          "value": "bg-red-500",
-          "alpha": null
-        },
-        {
-          "value": "bg-red-500",
-          "alpha": null
-        },
-        {
-          "value": "bg-red-500/20",
-          "alpha": "20"
-        },
-        {
-          "value": "bg-red-500/20",
-          "alpha": "20"
-        },
-        {
-          "value": "bg-red-500/5",
-          "alpha": "5"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#001f3f]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        },
-        {
-          "value": "[#1c0800]",
-          "alpha": null
-        },
-        {
-          "value": "[#1e0a3c]",
-          "alpha": null
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#001f3f]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/AvailabilityPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "10",
+      "dark": "[#00bfff]",
+      "darkAlpha": "5",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/AvailabilityPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/AvailabilityPanel.tsx",
+      "utility": "bg",
+      "light": "[#4c1d95]",
+      "lightAlpha": null,
+      "dark": "[#1e0a3c]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/AvailabilityPanel.tsx",
+      "utility": "bg",
+      "light": "[#78350f]",
+      "lightAlpha": null,
+      "dark": "[#1c0800]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/AvailabilityPanel.tsx",
+      "utility": "bg",
+      "light": "[#C8D8EB]",
+      "lightAlpha": null,
+      "dark": "[#010b17]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/AvailabilityPanel.tsx",
+      "utility": "bg",
+      "light": "[#C8D8EB]",
+      "lightAlpha": null,
+      "dark": "[#010b17]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/AvailabilityPanel.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-amber-500/20",
-          "alpha": "20"
-        },
-        {
-          "value": "border-amber-500/25",
-          "alpha": "25"
-        },
-        {
-          "value": "border-amber-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-gray-700/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-green-500/25",
-          "alpha": "25"
-        },
-        {
-          "value": "border-red-500/25",
-          "alpha": "25"
-        },
-        {
-          "value": "border-red-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-red-500/50",
-          "alpha": "50"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "10",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/ContentPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/ContentPanel.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "bg-red-800/60",
-          "alpha": "60"
-        },
-        {
-          "value": "bg-red-900/20",
-          "alpha": "20"
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#0a1929]",
-          "alpha": null
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "10",
+      "dark": "[#00bfff]",
+      "darkAlpha": "5",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ContentPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "5",
+      "dark": "[#00bfff]",
+      "darkAlpha": "5",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/ContentPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ContentPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "10",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/ContentPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#0a1929]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/ContentPanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "15",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/ContentPanel.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-red-800",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ContentPanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "15",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/ContentPanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/ContentPanel.tsx",
       "utility": "hover:bg",
-      "light": [
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-red-500/20",
-          "alpha": "20"
-        },
-        {
-          "value": "bg-red-700/60",
-          "alpha": "60"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/ContentPanel.tsx",
       "utility": "hover:border",
-      "light": [
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/IntegrityQueuePanel.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "bg-yellow-500/5",
-          "alpha": "5"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "5",
+      "dark": "[#00bfff]",
+      "darkAlpha": null,
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/IntegrityQueuePanel.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/25",
-          "alpha": "25"
-        },
-        {
-          "value": "border-green-500/25",
-          "alpha": "25"
-        },
-        {
-          "value": "border-red-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-yellow-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-yellow-500/30",
-          "alpha": "30"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/IntegrityQueuePanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/IntegrityQueuePanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/MonthGenerator.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#001830]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "[#001830]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "[#001830]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#0a1929]",
-          "alpha": null
-        },
-        {
-          "value": "[#0a1929]",
-          "alpha": null
-        },
-        {
-          "value": "bg-amber-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-amber-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-amber-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-amber-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-amber-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-blue-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-green-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-green-500/20",
-          "alpha": "20"
-        },
-        {
-          "value": "bg-green-500/5",
-          "alpha": "5"
-        },
-        {
-          "value": "bg-orange-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-orange-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-purple-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-purple-500/20",
-          "alpha": "20"
-        },
-        {
-          "value": "bg-purple-500/5",
-          "alpha": "5"
-        },
-        {
-          "value": "bg-red-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-red-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-red-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-red-500/20",
-          "alpha": "20"
-        },
-        {
-          "value": "bg-red-500/20",
-          "alpha": "20"
-        },
-        {
-          "value": "bg-red-500/5",
-          "alpha": "5"
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        },
-        {
-          "value": "bg-yellow-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-yellow-500/15",
-          "alpha": "15"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/MonthGenerator.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/25",
-          "alpha": "25"
-        },
-        {
-          "value": "[#00bfff]/25",
-          "alpha": "25"
-        },
-        {
-          "value": "[#00bfff]/25",
-          "alpha": "25"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "[#00bfff]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-amber-300/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-amber-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-amber-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-blue-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-green-500/20",
-          "alpha": "20"
-        },
-        {
-          "value": "border-green-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-green-500/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-orange-500/25",
-          "alpha": "25"
-        },
-        {
-          "value": "border-orange-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-purple-500/20",
-          "alpha": "20"
-        },
-        {
-          "value": "border-purple-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-purple-500/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-red-500/20",
-          "alpha": "20"
-        },
-        {
-          "value": "border-red-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-red-500/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-red-500/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-yellow-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-yellow-500/30",
-          "alpha": "30"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/MonthGenerator.tsx",
       "utility": "hover:bg",
-      "light": [
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "bg-green-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-green-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "bg-purple-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-purple-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "bg-red-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-red-500/30",
-          "alpha": "30"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "utility": "hover:bg",
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "utility": "hover:bg",
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "utility": "hover:bg",
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/ParticipationSidebar.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#C8D8EB]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        }
-      ],
+      "light": "[#C8D8EB]",
+      "lightAlpha": "40",
+      "dark": "[#010b17]",
+      "darkAlpha": null,
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/ParticipationSidebar.tsx",
       "utility": "text",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#C8D8EB]",
-          "alpha": null
-        },
-        {
-          "value": "[#C8D8EB]",
-          "alpha": null
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/ParticipationSidebar.tsx",
+      "utility": "text",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#C8D8EB]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/ParticipationSidebar.tsx",
+      "utility": "text",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#C8D8EB]",
+      "darkAlpha": null,
       "alphaDiffers": false
     },
     {
       "file": "app/components/admin/PlannerGrid.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/70",
-          "alpha": "70"
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        },
-        {
-          "value": "bg-amber-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-amber-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-amber-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-amber-500/5",
-          "alpha": "5"
-        },
-        {
-          "value": "bg-gray-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-gray-700",
-          "alpha": null
-        },
-        {
-          "value": "bg-red-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-red-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-red-500/5",
-          "alpha": "5"
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/PlannerGrid.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/PlannerGrid.tsx",
       "utility": "hover:bg",
-      "light": [
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "bg-amber-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-amber-500/10",
-          "alpha": "10"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/ProposalsPanel.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#003572]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "bg-gray-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-green-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-green-500/5",
-          "alpha": "5"
-        },
-        {
-          "value": "bg-red-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-red-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-red-800/60",
-          "alpha": "60"
-        },
-        {
-          "value": "bg-red-900/20",
-          "alpha": "20"
-        },
-        {
-          "value": "bg-red-900/80",
-          "alpha": "80"
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        },
-        {
-          "value": "bg-yellow-500",
-          "alpha": null
-        },
-        {
-          "value": "bg-yellow-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-yellow-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-yellow-500/15",
-          "alpha": "15"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#0a1929]",
-          "alpha": null
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ProposalsPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ProposalsPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ProposalsPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "10",
+      "dark": "[#00bfff]",
+      "darkAlpha": "5",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ProposalsPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#0a1929]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/ProposalsPanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/ProposalsPanel.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-gray-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-green-500/20",
-          "alpha": "20"
-        },
-        {
-          "value": "border-green-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-red-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-red-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-red-500/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-red-800",
-          "alpha": null
-        },
-        {
-          "value": "border-yellow-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-yellow-500/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-yellow-500/40",
-          "alpha": "40"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "10",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/ProposalsPanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ProposalsPanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ProposalsPanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ProposalsPanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ProposalsPanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/ProposalsPanel.tsx",
       "utility": "hover:bg",
-      "light": [
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "bg-red-700/60",
-          "alpha": "60"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ProposalsPanel.tsx",
+      "utility": "hover:bg",
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/ProposalsPanel.tsx",
       "utility": "text",
-      "light": [
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/60",
-          "alpha": "60"
-        },
-        {
-          "value": "[#C8D8EB]",
-          "alpha": null
-        },
-        {
-          "value": "text-black",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-300",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-300",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500/80",
-          "alpha": "80"
-        },
-        {
-          "value": "text-green-400",
-          "alpha": null
-        },
-        {
-          "value": "text-green-400",
-          "alpha": null
-        },
-        {
-          "value": "text-green-400",
-          "alpha": null
-        },
-        {
-          "value": "text-red-200/70",
-          "alpha": "70"
-        },
-        {
-          "value": "text-red-200/90",
-          "alpha": "90"
-        },
-        {
-          "value": "text-red-300",
-          "alpha": null
-        },
-        {
-          "value": "text-red-400",
-          "alpha": null
-        },
-        {
-          "value": "text-red-400",
-          "alpha": null
-        },
-        {
-          "value": "text-red-400",
-          "alpha": null
-        },
-        {
-          "value": "text-red-400",
-          "alpha": null
-        },
-        {
-          "value": "text-yellow-200/90",
-          "alpha": "90"
-        },
-        {
-          "value": "text-yellow-200/90",
-          "alpha": "90"
-        },
-        {
-          "value": "text-yellow-400",
-          "alpha": null
-        },
-        {
-          "value": "text-yellow-400",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        }
-      ],
-      "alphaDiffers": true
+      "light": "[#C8D8EB]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/serviceCardModel.ts",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#001f3f]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/serviceCardModel.ts",
+      "utility": "bg",
+      "light": "[#4c1d95]",
+      "lightAlpha": null,
+      "dark": "[#1e0a3c]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/serviceCardModel.ts",
+      "utility": "bg",
+      "light": "[#78350f]",
+      "lightAlpha": null,
+      "dark": "[#1c0800]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/serviceCardModel.ts",
+      "utility": "border",
+      "light": "[#002249]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/serviceCardModel.ts",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/serviceCardModel.ts",
+      "utility": "border",
+      "light": "[#4c1d95]",
+      "lightAlpha": null,
+      "dark": "[#a78bfa]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/serviceCardModel.ts",
+      "utility": "border",
+      "light": "[#5b21b6]",
+      "lightAlpha": null,
+      "dark": "[#a78bfa]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/serviceCardModel.ts",
+      "utility": "border",
+      "light": "[#78350f]",
+      "lightAlpha": null,
+      "dark": "[#f59e0b]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/serviceCardModel.ts",
+      "utility": "border",
+      "light": "[#92400e]",
+      "lightAlpha": null,
+      "dark": "[#f59e0b]",
+      "darkAlpha": null,
+      "alphaDiffers": false
     },
     {
       "file": "app/components/admin/ServiceReadinessCard.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#03101f]",
-          "alpha": null
-        },
-        {
-          "value": "bg-gray-800/60",
-          "alpha": "60"
-        },
-        {
-          "value": "bg-white",
-          "alpha": null
-        },
-        {
-          "value": "bg-white",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        }
-      ],
-      "alphaDiffers": true
+      "light": "[#003572]",
+      "lightAlpha": "10",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/ServiceReadinessCard.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "10",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": false
     },
     {
       "file": "app/components/admin/ServiceReadinessCard.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/25",
-          "alpha": "25"
-        },
-        {
-          "value": "[#00bfff]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-gray-200",
-          "alpha": null
-        },
-        {
-          "value": "border-gray-700",
-          "alpha": null
-        },
-        {
-          "value": "border-red-500",
-          "alpha": null
-        },
-        {
-          "value": "border-transparent",
-          "alpha": null
-        },
-        {
-          "value": "border-white",
-          "alpha": null
-        },
-        {
-          "value": "border-white",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "border-gray-800",
-          "alpha": null
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/ServiceReadinessCard.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/ServiceReadinessCard.tsx",
+      "utility": "border",
+      "light": "gray-200",
+      "lightAlpha": null,
+      "dark": "gray-800",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/ServicesPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/ServicesPanel.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#C8D8EB]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "bg-amber-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-amber-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-amber-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-orange-600/70",
-          "alpha": "70"
-        },
-        {
-          "value": "bg-red-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-red-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-red-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-red-800/60",
-          "alpha": "60"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        },
-        {
-          "value": "[#0a1929]",
-          "alpha": null
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ServicesPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "10",
+      "dark": "[#00bfff]",
+      "darkAlpha": "5",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ServicesPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ServicesPanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#0a1929]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/ServicesPanel.tsx",
+      "utility": "bg",
+      "light": "[#C8D8EB]",
+      "lightAlpha": "40",
+      "dark": "[#010b17]",
+      "darkAlpha": null,
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/ServicesPanel.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/60",
-          "alpha": "60"
-        },
-        {
-          "value": "border-amber-500/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-amber-500/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-amber-500/50",
-          "alpha": "50"
-        },
-        {
-          "value": "border-amber-500/50",
-          "alpha": "50"
-        },
-        {
-          "value": "border-red-400/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-red-400/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-red-500/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-red-500/50",
-          "alpha": "50"
-        },
-        {
-          "value": "border-red-500/50",
-          "alpha": "50"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "15",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ServicesPanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "15",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ServicesPanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ServicesPanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/ServicesPanel.tsx",
       "utility": "hover:bg",
-      "light": [
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-amber-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-amber-500/20",
-          "alpha": "20"
-        },
-        {
-          "value": "bg-amber-500/20",
-          "alpha": "20"
-        },
-        {
-          "value": "bg-orange-600",
-          "alpha": null
-        },
-        {
-          "value": "bg-red-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-red-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-red-700/60",
-          "alpha": "60"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/ServicesPanel.tsx",
+      "utility": "hover:bg",
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/ServicesPanel.tsx",
       "utility": "text",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "text-amber-200",
-          "alpha": null
-        },
-        {
-          "value": "text-amber-200",
-          "alpha": null
-        },
-        {
-          "value": "text-amber-200/90",
-          "alpha": "90"
-        },
-        {
-          "value": "text-amber-300",
-          "alpha": null
-        },
-        {
-          "value": "text-amber-400",
-          "alpha": null
-        },
-        {
-          "value": "text-amber-400",
-          "alpha": null
-        },
-        {
-          "value": "text-amber-400",
-          "alpha": null
-        },
-        {
-          "value": "text-amber-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-200",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-300",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-300",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-300",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-300",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-300",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-300",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-300",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-400",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-500",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-600",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-600",
-          "alpha": null
-        },
-        {
-          "value": "text-gray-600",
-          "alpha": null
-        },
-        {
-          "value": "text-red-200",
-          "alpha": null
-        },
-        {
-          "value": "text-red-200",
-          "alpha": null
-        },
-        {
-          "value": "text-red-300",
-          "alpha": null
-        },
-        {
-          "value": "text-red-300",
-          "alpha": null
-        },
-        {
-          "value": "text-red-300",
-          "alpha": null
-        },
-        {
-          "value": "text-red-400",
-          "alpha": null
-        },
-        {
-          "value": "text-red-400",
-          "alpha": null
-        },
-        {
-          "value": "text-red-400",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/SetlistEditor.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/SetlistEditor.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#001830]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#001830]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#001830]/50",
-          "alpha": "50"
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        },
-        {
-          "value": "[#C8D8EB]",
-          "alpha": null
-        },
-        {
-          "value": "bg-red-500/20",
-          "alpha": "20"
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        },
-        {
-          "value": "bg-yellow-500/20",
-          "alpha": "20"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#0a1929]",
-          "alpha": null
-        }
-      ],
-      "alphaDiffers": true
+      "light": "[#C8D8EB]",
+      "lightAlpha": null,
+      "dark": "[#0a1929]",
+      "darkAlpha": null,
+      "alphaDiffers": false
     },
     {
       "file": "app/components/admin/SetlistEditor.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/25",
-          "alpha": "25"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]/50",
-          "alpha": "50"
-        },
-        {
-          "value": "border-gray-700/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-red-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-yellow-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-yellow-500/40",
-          "alpha": "40"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/SetlistEditor.tsx",
       "utility": "hover:bg",
-      "light": [
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "bg-yellow-500/10",
-          "alpha": "10"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/SongFormModal.tsx",
       "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        },
-        {
-          "value": "[#C8D8EB]",
-          "alpha": null
-        },
-        {
-          "value": "bg-black",
-          "alpha": null
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#010b17]",
-          "alpha": null
-        },
-        {
-          "value": "[#0a1929]",
-          "alpha": null
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "5",
+      "dark": "[#00bfff]",
+      "darkAlpha": "5",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/SongFormModal.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/SongFormModal.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/SongFormModal.tsx",
+      "utility": "bg",
+      "light": "[#010b17]",
+      "lightAlpha": null,
+      "dark": "[#010b17]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/SongFormModal.tsx",
+      "utility": "bg",
+      "light": "[#C8D8EB]",
+      "lightAlpha": null,
+      "dark": "[#0a1929]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/SongFormModal.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/admin/SongFormModal.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/SongFormModal.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#003572]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "15",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/SongFormModal.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "15",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/SongFormModal.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "15",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/SongFormModal.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/admin/SongFormModal.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
       "alphaDiffers": true
     },
     {
       "file": "app/components/admin/SongFormModal.tsx",
       "utility": "hover:bg",
-      "light": [
-        {
-          "value": "[#003572]/80",
-          "alpha": "80"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        },
-        {
-          "value": "[#00bfff]/5",
-          "alpha": "5"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]/30",
-          "alpha": "30"
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
       "alphaDiffers": true
     },
     {
-      "file": "app/components/admin/serviceCardModel.ts",
-      "utility": "bg",
-      "light": [
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/10",
-          "alpha": "10"
-        },
-        {
-          "value": "[#00bfff]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#4c1d95]",
-          "alpha": null
-        },
-        {
-          "value": "[#78350f]",
-          "alpha": null
-        },
-        {
-          "value": "[#a78bfa]/15",
-          "alpha": "15"
-        },
-        {
-          "value": "[#a78bfa]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "[#f59e0b]/20",
-          "alpha": "20"
-        },
-        {
-          "value": "bg-amber-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-gray-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-green-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-orange-500/15",
-          "alpha": "15"
-        },
-        {
-          "value": "bg-red-500/10",
-          "alpha": "10"
-        },
-        {
-          "value": "bg-transparent",
-          "alpha": null
-        },
-        {
-          "value": "bg-yellow-500/15",
-          "alpha": "15"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#001f3f]",
-          "alpha": null
-        },
-        {
-          "value": "[#1c0800]",
-          "alpha": null
-        },
-        {
-          "value": "[#1e0a3c]",
-          "alpha": null
-        }
-      ],
-      "alphaDiffers": true
-    },
-    {
-      "file": "app/components/admin/serviceCardModel.ts",
+      "file": "app/components/AuthorSearchList.tsx",
       "utility": "border",
-      "light": [
-        {
-          "value": "[#002249]",
-          "alpha": null
-        },
-        {
-          "value": "[#003572]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]/40",
-          "alpha": "40"
-        },
-        {
-          "value": "[#4c1d95]",
-          "alpha": null
-        },
-        {
-          "value": "[#5b21b6]",
-          "alpha": null
-        },
-        {
-          "value": "[#78350f]",
-          "alpha": null
-        },
-        {
-          "value": "[#92400e]",
-          "alpha": null
-        },
-        {
-          "value": "[#a78bfa]/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-amber-500/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-gray-500/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-gray-600/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-green-500/40",
-          "alpha": "40"
-        },
-        {
-          "value": "border-orange-500/30",
-          "alpha": "30"
-        },
-        {
-          "value": "border-red-500/50",
-          "alpha": "50"
-        },
-        {
-          "value": "border-yellow-400/30",
-          "alpha": "30"
-        }
-      ],
-      "dark": [
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#00bfff]",
-          "alpha": null
-        },
-        {
-          "value": "[#a78bfa]",
-          "alpha": null
-        },
-        {
-          "value": "[#a78bfa]",
-          "alpha": null
-        },
-        {
-          "value": "[#f59e0b]",
-          "alpha": null
-        },
-        {
-          "value": "[#f59e0b]",
-          "alpha": null
-        }
-      ],
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "15",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/AuthorSearchList.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "15",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/AuthorSearchList.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "15",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/AuthorSearchList.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/AuthorSearchList.tsx",
+      "utility": "hover:border",
+      "light": "[#003572]",
+      "lightAlpha": "50",
+      "dark": "[#00bfff]",
+      "darkAlpha": "40",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/AvailabilityCalendar.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/AvailabilityCalendar.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/AvailabilityCalendar.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/AvailabilityCalendar.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/AvailabilityCalendar.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "40",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/AvailabilityCalendar.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "40",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/AvailabilityCalendar.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "40",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/AvailabilityCalendar.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "50",
+      "dark": "[#00bfff]",
+      "darkAlpha": "15",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/AvailabilityCalendar.tsx",
+      "utility": "hover:bg",
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/AvailabilityCalendar.tsx",
+      "utility": "hover:bg",
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/CalendarView.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/CalendarView.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/CalendarView.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/CalendarView.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/CalendarView.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/CalendarView.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/CalendarView.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/CalendarView.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/CalendarView.tsx",
+      "utility": "text",
+      "light": "gray-400",
+      "lightAlpha": null,
+      "dark": "gray-400",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/ChordChart.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "5",
+      "dark": "[#00bfff]",
+      "darkAlpha": "5",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/ChordChart.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "5",
+      "dark": "[#00bfff]",
+      "darkAlpha": "5",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/ChordChart.tsx",
+      "utility": "bg",
+      "light": "gray-300",
+      "lightAlpha": null,
+      "dark": "gray-600",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/ChordChart.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "25",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/ChordChart.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "25",
+      "dark": "[#00bfff]",
+      "darkAlpha": "15",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/ChordChart.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/ChordChart.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/ChordChart.tsx",
+      "utility": "text",
+      "light": "gray-500",
+      "lightAlpha": null,
+      "dark": "gray-400",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/ChordChart.tsx",
+      "utility": "text",
+      "light": "gray-500",
+      "lightAlpha": null,
+      "dark": "gray-500",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/DayCard.tsx",
+      "utility": "bg",
+      "light": "[#4c1d95]",
+      "lightAlpha": null,
+      "dark": "[#1e0a3c]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/DayCard.tsx",
+      "utility": "bg",
+      "light": "[#78350f]",
+      "lightAlpha": null,
+      "dark": "[#1c0800]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/DayCard.tsx",
+      "utility": "bg",
+      "light": "gray-200",
+      "lightAlpha": null,
+      "dark": "gray-800",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/DayCard.tsx",
+      "utility": "border",
+      "light": "[#4c1d95]",
+      "lightAlpha": null,
+      "dark": "[#a78bfa]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/DayCard.tsx",
+      "utility": "border",
+      "light": "[#5b21b6]",
+      "lightAlpha": null,
+      "dark": "[#a78bfa]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/DayCard.tsx",
+      "utility": "border",
+      "light": "[#78350f]",
+      "lightAlpha": null,
+      "dark": "[#f59e0b]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/DayCard.tsx",
+      "utility": "border",
+      "light": "[#92400e]",
+      "lightAlpha": null,
+      "dark": "[#f59e0b]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/DayCard.tsx",
+      "utility": "text",
+      "light": "[#C8D8EB]",
+      "lightAlpha": "70",
+      "dark": "[#C8D8EB]",
+      "darkAlpha": "50",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/DayCard.tsx",
+      "utility": "text",
+      "light": "[#C8D8EB]",
+      "lightAlpha": "70",
+      "dark": "[#C8D8EB]",
+      "darkAlpha": "50",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/EditSongButton.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/EditSongButton.tsx",
+      "utility": "hover:bg",
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/Header.tsx",
+      "utility": "shadow",
+      "light": "[#002249]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/NavMenu.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/NavMenu.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/NavMenu.tsx",
+      "utility": "bg",
+      "light": "[#C8D8EB]",
+      "lightAlpha": null,
+      "dark": "[#0a1929]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/NavMenu.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "15",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/NavMenu.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/NavMenu.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/NavMenu.tsx",
+      "utility": "border",
+      "light": "[#C8D8EB]",
+      "lightAlpha": null,
+      "dark": "[#010b17]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/NavMenu.tsx",
+      "utility": "hover:bg",
+      "light": "[#003572]",
+      "lightAlpha": "10",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/NavMenu.tsx",
+      "utility": "text",
+      "light": "gray-500",
+      "lightAlpha": null,
+      "dark": "gray-400",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/ProfilePanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/ProfilePanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": "5",
+      "dark": "[#00bfff]",
+      "darkAlpha": "5",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/ProfilePanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/ProfilePanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/ProfilePanel.tsx",
+      "utility": "bg",
+      "light": "[#003572]",
+      "lightAlpha": null,
+      "dark": "[#0a1929]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/ProfilePanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/ProfilePanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "10",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/ProfilePanel.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "10",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/ProfilePanel.tsx",
+      "utility": "hover:bg",
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/ProfilePanel.tsx",
+      "utility": "hover:bg",
+      "light": "[#003572]",
+      "lightAlpha": "80",
+      "dark": "[#00bfff]",
+      "darkAlpha": "30",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/SectionNav.tsx",
+      "utility": "bg",
+      "light": "[#C8D8EB]",
+      "lightAlpha": "90",
+      "dark": "[#010b17]",
+      "darkAlpha": "90",
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/SectionNav.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "15",
+      "dark": "[#00bfff]",
+      "darkAlpha": "10",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/SectionNav.tsx",
+      "utility": "hover:text",
+      "light": "[#00bfff]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/SectionNav.tsx",
+      "utility": "text",
+      "light": "gray-500",
+      "lightAlpha": null,
+      "dark": "gray-400",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/SongAudioSection.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "25",
+      "dark": "[#00bfff]",
+      "darkAlpha": "15",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/SongAudioSection.tsx",
+      "utility": "hover:text",
+      "light": "[#00bfff]",
+      "lightAlpha": null,
+      "dark": "[#00bfff]",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/SongAudioSection.tsx",
+      "utility": "text",
+      "light": "gray-500",
+      "lightAlpha": null,
+      "dark": "gray-400",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/SongSheet.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "30",
+      "dark": "[#00bfff]",
+      "darkAlpha": "25",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/TagSearchList.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "15",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/TextSizeControl.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "20",
+      "dark": "[#00bfff]",
+      "darkAlpha": "15",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/TextSizeControl.tsx",
+      "utility": "border",
+      "light": "[#003572]",
+      "lightAlpha": "25",
+      "dark": "[#00bfff]",
+      "darkAlpha": "20",
+      "alphaDiffers": true
+    },
+    {
+      "file": "app/components/TextSizeControl.tsx",
+      "utility": "text",
+      "light": "gray-500",
+      "lightAlpha": null,
+      "dark": "gray-400",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/TextSizeControl.tsx",
+      "utility": "text",
+      "light": "gray-500",
+      "lightAlpha": null,
+      "dark": "gray-400",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/TextSizeControl.tsx",
+      "utility": "text",
+      "light": "gray-600",
+      "lightAlpha": null,
+      "dark": "[#C8D8EB]",
+      "darkAlpha": "70",
       "alphaDiffers": true
     }
   ]
