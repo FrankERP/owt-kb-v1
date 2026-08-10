@@ -5,8 +5,8 @@
 > "bring light mode back." — Child B of the approved parent scope spec.
 
 This is the largest child: **1,628 literal rows across 65 files**, plus 22 `brand.css` rule
-bodies and the typography theme. It ships **dark-only** and, apart from one licensed
-normalisation, the app must render **identically** afterwards.
+bodies and the typography theme. It ships **dark-only** and, apart from **two** licensed
+normalisations, the app must render **identically** afterwards.
 
 No secrets, credentials or personal data appear here. Colour literals are design values.
 
@@ -23,19 +23,28 @@ No secrets, credentials or personal data appear here. Colour literals are design
 - **Risk tier: Standard — one fresh cold `APPROVED`.** Large is not critical. B changes no
   writer, no schema, no migration, no auth boundary, no secret, no remote release action. It
   is reversible by tag, and its correctness gate is mechanical rather than a judgement call.
-- **Safe ending state:** dark-only, visually identical except the one licensed diff. Every
+- **Safe ending state:** dark-only, visually identical except the two licensed diffs. Every
   gate green. **`.light` still carries only `color-scheme`** — Child D adds values.
 
-## The one licensed diff, and nothing else
+## The TWO licensed diffs, and nothing else
 
-`--brand-beam` is `18 200 244` (`#12C8F4`). The accent is `#00bfff` = `0 191 255` (parent
-D6). Retiring beam onto accent is **a real colour change** on 87 utility usages and 29
-`brand.css` occurrences — including `.brand-atmosphere`'s body wash, every glow, and
-`selection:bg-brand-beam/35` on both root layouts.
+**1. `--brand-beam` `18 200 244` (`#12C8F4`) → `--accent` `0 191 255` (`#00bfff`)** — parent
+D6. **32** `brand.css` occurrences (29 alpha-bearing, plus three alpha-free at `:120`,
+`:182`, `:219`) and **87** utility usages, including `.brand-atmosphere`'s body wash, every
+glow, and `selection:bg-brand-beam/35` on both root layouts.
 
-**That is the only visual diff this plan may produce.** Six of the seven retired `--brand-*`
-are value-identical renames (`blackout`, `console`, `deck`, `signal`, `frost`, `steel`). Any
-other diff is a defect.
+**2. `#3dff7c` `61 255 124` → `--positive-fg` `55 245 138`** — **6 rows**: two bracketed
+(`DayCard.tsx`) and four `rgba(61,255,124,·)` at .10/.3/.5/.8. Two greens exist —
+`--brand-signal` `#37f58a` on 13 sites and `#3dff7c` on 6 — and the role takes signal's value
+because it carries more than twice the usage.
+
+**An earlier revision of this plan said there was one licensed diff and that six of seven
+retired variables were value-identical renames. That was false:** `--brand-signal` is
+`55 245 138`, not `#3dff7c`. **Five** are value-identical (`blackout`, `console`, `deck`,
+`frost`, `steel`). Built to the old claim, the equality harness would have failed on 13 sites
+or an implementer would have silently collapsed two distinct greens.
+
+**Both diffs are enumerated site-by-site and reviewed. Any third diff is a defect.**
 
 ## Slicing — and why B is sliceable even though the parent calls it atomic
 
@@ -50,10 +59,10 @@ So:
 
 | Slice | Content | Why it is safe alone |
 |---|---|---|
-| **B1** | Add the token layer: 16 base roles in `brand.css` `:root`, their Tailwind keys, the 24 composed tokens. **Remove nothing.** | Purely additive. Old `--brand-*` and `brand.*` keys still exist and still work. Renders identically |
+| **B1** | Add the token layer: 18 base roles in `brand.css` `:root`, their Tailwind keys, the 24 composed tokens. **Remove nothing.** | Purely additive. Old `--brand-*` and `brand.*` keys still exist and still work. Renders identically |
 | **B2** | Rewrite the 22 colour-bearing `brand.css` rule bodies onto the new variables | Same computed values except beam→accent. `brand.css`'s own guards cover it |
 | **B3…Bn** | Migrate call sites in batches by file, densest first | Both old and new spellings work throughout, so every batch is independently revertible |
-| **B-final** | Remove the seven retired `--brand-*` declarations and their `brand.*` Tailwind keys; land the lint clause banning them | **Atomic, and only safe when zero call sites remain.** This is the transition the parent means |
+| **B-final** | Remove the seven retired `--brand-*` declarations and their `brand.*` Tailwind keys; land the lint clauses B owns; re-point the last A1/A2 guard assertions | **Atomic, and only safe when zero call sites remain.** This is the transition the parent means |
 
 **Each slice merges to `main` on its own green gate.** B-final is gated on a count, not on
 judgement: the inventory must report **zero** rows in category 10.
@@ -62,8 +71,15 @@ judgement: the inventory must report **zero** rows in category 10.
 
 ### B1 — the token layer (additive)
 
-- **`app/brand.css` `:root`** gains the 16 base-role triplets from the vocabulary, each
+- **`app/brand.css` `:root`** gains the **18** base-role triplets from the vocabulary, each
   `--x-rgb`. The seven `--brand-*` colour variables stay for now.
+- **The vocabulary does not cover 28 of B's rows, and B must decide each before batching.**
+  The roles describe the category-1 bracketed-hex surface; B's disposition also carries a
+  six-hue **categorical** map (`ParticipationSidebar.tsx:6`), 8 `rgba()` belonging to Child C's
+  `red`/`amber` families, 4 `rgba(61,255,124,·)` that follow licensed diff 2, 6 black shadow
+  literals, and 4 `white` SVG attributes that are C's. The vocabulary's "Literals in Child B's
+  set with NO role here" table assigns each with its count. **B adds at most a `--chart-1…6`
+  scale and an `--elevation` role; it does not pre-empt C's families.**
 - **`tailwind.config.ts`** gains a key per base role as
   `rgb(var(--x-rgb) / <alpha-value>)`, and a key per composed token. **The seven `brand.*`
   keys stay for now.**
@@ -81,15 +97,23 @@ judgement: the inventory must report **zero** rows in category 10.
 ### B2 — `brand.css` rule bodies
 
 - Rewrite the **22 colour-bearing rule bodies** off `--brand-*` onto the new roles.
-- **`--brand-beam` → `--accent-rgb` is the licensed diff**; every other substitution is
+- **`--brand-beam` → `--accent-rgb` is licensed diff 1**; `--brand-signal` → `--positive-fg`
+  is value-identical (both `55 245 138`); every other substitution in this file is
   value-identical.
-- **The `*-rgb` suffix is where this goes wrong silently.** `rgb(var(--accent-rgb) / 0.11)`
-  is valid; `rgb(var(--accent))` expands to `rgb(rgb(…))`, is not a valid `<color>`, and is
-  **dropped** — taking `.brand-atmosphere`'s entire body wash with it, with every gate green.
-- **Verification:** the `(variable, alpha)` pair multiset is unchanged **per occurrence**,
-  except on beam lines. `brand.css` carries 65 `rgb(var(--brand-*) / α)` occurrences across
-  56 lines; a per-*line* extractor silently skips the multi-variable lines, so the assertion
-  is per occurrence. Plus `participationAlongside.test.tsx` — which already pins
+- **The `*-rgb` suffix is where this goes wrong.** `rgb(var(--accent-rgb) / 0.11)` is valid;
+  `rgb(var(--accent))` expands to `rgb(rgb(…))`, is not a valid `<color>`, and is **dropped** —
+  taking `.brand-atmosphere`'s body wash with it. **A1's reference-integrity guard does catch
+  an undeclared `var(--accent)`** (`brandCss.test.ts` fires on it), so this is not invisible to
+  every gate — but it *is* invisible to the multiset assertion if that is scoped to
+  alpha-bearing occurrences only.
+- **Verification:** the `(variable, alpha|none)` multiset is unchanged **per occurrence**,
+  except on the enumerated beam occurrences. `brand.css` carries **69** colour
+  `rgb(var(--brand-*)…)` occurrences: 65 alpha-bearing across 56 lines, plus **four
+  alpha-free** at `:31` (`.brand-atmosphere`'s base `background-color` — the body wash
+  itself), `:120`, `:182` and `:219`. **Three of those four are beam.** A multiset scoped to
+  alpha-bearing occurrences misses them entirely, and a per-*line* extractor also skips the
+  multi-variable lines — so the assertion is per occurrence, and `none` counts as an alpha
+  value. Plus `participationAlongside.test.tsx` — which already pins
   `.brand-admin-frame`, `.brand-admin-shell` and `[data-route-main]:has(.planner-wide)` — must
   stay green untouched.
 
@@ -105,17 +129,54 @@ than 50 rows.**
   is a light accent in most of its 243 sites and a dark-native surface where it has no
   `dark:` sibling.
 - **Pairs drive composed tokens.** 246 per-element pairs, **166 differing in alpha** — those
-  take a composed token. The 80 that do not may use a base role with an opacity modifier.
+  take a composed token. Of the 80 that do not, **12 are palette pairs belonging to Child C**,
+  so B's share is **68**, and those may use a base role with an opacity modifier.
+- **Snapshot the `pairs` relation into the handoff before B-final.** It is the only generated
+  record of which light literal partnered which dark one, and regenerating the inventory batch
+  by batch overwrites it — leaving Child D's light design to reconstruct it from git history.
 - **`dark:` variants are deleted only once the composed token carries both sides**, never
   before. Deleting one early flips the dark side from 20% to 100%.
-- **Non-JSX sites are in scope**: `serviceCardModel.ts` (56 rows in exported class strings
-  consumed by 7 components) and `(admin)/layout.tsx`.
+- **Non-JSX sites are in scope**: `serviceCardModel.ts` (**36** of its 57 rows are B's; the
+  other 20 are C's palette classes) consumed by 8 `.tsx` components and 3 `.ts` modules, and
+  `(admin)/layout.tsx`.
+- **The theme gallery is IN B's set, and the inventory cannot see it.** A2 excluded
+  `app/(gallery)` from the inventory deliberately — it is a verification surface, not product
+  colour — but its layout is live code carrying retired keys:
+  `app/(gallery)/theme-gallery/[theme]/layout.tsx:75` is
+  `brand-atmosphere font-body min-h-screen bg-brand-blackout text-brand-frost`, and
+  `SwatchesFixture.tsx` carries `dark:prose-invert`. Three consequences, all checkable:
+  1. B-final's `brand-<colour>` lint clause fires there unless `app/(gallery)/**` is on the
+     `ignores` list — so `npx eslint .` cannot reach 0 errors;
+  2. left alone, deleting `brand.frost` silently drops the gallery's ink **while
+     `themeGallery.test.ts` keeps asserting `bg-brand-blackout`** — a green guard describing a
+     dead class, on the one surface Child D reviews light values against;
+  3. B's typography change lands half-applied unless `SwatchesFixture.tsx`'s
+     `dark:prose-invert` goes with `(client)/posts/[slug]/page.tsx:326`.
+  **Decision: migrate the gallery with B, and update `themeGallery.test.ts`'s assertions in
+  the same commit.** Do NOT add it to `ignores` — that would leave live code on retired keys.
 - **Test files move with the code they assert.** They are lint-exempt but not migration-exempt:
   the codemod's file set is intersected with `app/**/__tests__/**`, and colliding assertions
   are updated in the same commit. Known collisions include `PlannerGrid.test.tsx`'s
   `bg-[#00bfff]/70` and `border-[#00bfff] bg-[#00bfff]/10` selectors.
 - **Verification per batch:** computed-colour equality per site (below), plus the inventory
   regenerated and its guard green.
+
+### B-guards — re-point the A1/A2 assertions B's own success invalidates
+
+**B breaks four shipped guard assertions by succeeding.** None is a colour literal a codemod
+rewrites, so "the codemod's file set is intersected with `__tests__`" cannot produce them —
+and that intersection is in any case **empty**, since the inventory excludes `__tests__`.
+Each must be re-pointed deliberately, in the slice that invalidates it:
+
+| Assertion | Why B breaks it | Re-point |
+|---|---|---|
+| `colourInventory.test.ts:226–227` — `pairsDifferingInAlpha > 0` **and** `> pairs / 2` | Of 246 pairs, 234 involve hex and **all 12 non-hex pairs have `alphaDiffers: false`**. B deletes every hex `dark:` variant, and `pairsFor`'s `COLOURED` regex cannot match token classes, so at B-final the value is **0** — while the assertion's own comment reads "if this ever drops to zero, alpha capture has regressed", i.e. a **false diagnosis** | Move the alpha fire-proof onto a **synthetic source**, where it tests the scanner rather than the tree's current contents |
+| `colourInventory.test.ts:172–178` — `AdminPanel.tsx` has category-11 `var(--brand-beam)` rows | That row is B's to migrate | Re-point to a synthetic source, or delete with the reason recorded |
+| `brandCss.test.ts:116–117` — `AdminPanel.tsx` references `--brand-beam`; `(client)/admin/page.tsx` references `--brand-signal` | Both are B rows | Re-point to whichever colour `var()` references remain, or synthetic |
+| `brandCss.test.ts:145` — `(client)/layout.tsx` contains `selection:bg-brand-beam` | A B row | Re-point to the successor utility |
+
+**This slice lands with the batch that invalidates each assertion, never after.** A guard left
+asserting a removed premise is worse than no guard: it is green and wrong.
 
 ### B-final — remove the retired keys, and land the lint clause
 
@@ -131,6 +192,11 @@ than 50 rows.**
   - Under an explicit `files: ["app/**"]` block — `eslint.config.mjs`'s rules block has no
     `files` key, so unscoped clauses fire on `tailwind.config.ts`, `scripts/`, `e2e/` and
     `sanity/`.
+  - **Comment handling must be decided, as the parent's §9 requires.** A source-text rule
+    fires on colours named in prose — the gallery's `page.tsx` and `PlannerFixture.tsx` both
+    name `#010b17` in comments — while an AST rule does not. `no-restricted-syntax` with
+    `Literal`/`TemplateElement` selectors is AST-based and therefore does not fire on
+    comments; state that explicitly rather than leaving it implied.
   - **`ignores`** must carry `app/components/admin/**` (Child C's families still live there),
     `app/utils/emailShell.ts`, `app/**/__tests__/**`, the Google mark, and
     `(client)/layout.tsx`'s static `themeColor`.
@@ -167,8 +233,15 @@ Screenshots cannot vouch for 1,628 sites across stateful panels on live data. Th
   is how this gate silently passes).
 - It compares **sites, not classes**: a codemod that maps every class correctly but drops one
   from a `className` would otherwise pass.
-- **Every site must resolve identically, except the enumerated beam→accent sites**, which are
-  listed explicitly and reviewed.
+- **Every site must resolve identically, except the enumerated sites of the two licensed
+  diffs**, which are listed explicitly and reviewed.
+- **What "the same site" means across a `dark:` pair must be settled first.** Before migration
+  a paired element carries two declarations (`bg-[#003572] dark:bg-[#00bfff]/20`); after it
+  carries one composed token. The comparison is therefore **per (site, theme)**: resolve the
+  element's colour with the `dark` class present and again without it, and require both to
+  match their pre-migration counterparts. A resolver over `:root` alone cannot express the
+  dark side at all — **this is the first thing the prove-on-one-file step must settle, and if
+  it cannot be settled the harness is not buildable and B stops.**
 - It runs per batch and is committed, so a later batch cannot silently regress an earlier one.
 
 ## Verification
@@ -177,13 +250,15 @@ Screenshots cannot vouch for 1,628 sites across stateful panels on live data. Th
 |---|---|---|
 | Tokens exist and are well-named | Test: every vocabulary role is a custom property **and** a Tailwind key; no key starts with a utility prefix | `.border-border-accent`, and a role that exists in CSS but not Tailwind |
 | B1 changes nothing visually | Equality harness with an empty migration set | An "additive" slice that was not |
-| `brand.css` bodies preserved | `(variable, alpha)` multiset unchanged **per occurrence**, beam lines excepted | A `*-rgb` slip dropping the body wash, invisible to every other gate |
+| `brand.css` bodies preserved | `(variable, alpha)` multiset unchanged **per occurrence**, beam lines excepted | A `*-rgb` slip on one of the four alpha-free occurrences, including the body wash's own base colour |
 | Existing `brand.css` pins hold | `participationAlongside.test.tsx` green **untouched** | Breaking a documented layout guard while rewriting the file |
 | Every migrated site | Computed-colour equality, sites not classes | Any diff outside the licensed one |
 | Retired keys are gone | Inventory category 10 reports **zero** | Removing keys while call sites remain — the one unsafe transition |
 | Utility references covered | A test that fails if a `brand.*` key is deleted while a `bg-brand-*` usage remains | The failure a `var()`-integrity guard structurally cannot see |
 | Prose survives | No hex, no `rgb(`-without-`var(`, `--tw-prose-body` → ink role, `.prose-sm` still emitted | The `theme.typography` collapse — unstyled lyrics, no signal |
 | Tests move with code | `PlannerGrid.test.tsx` selectors updated in the same commit | `npm test` red at the batch merge |
+| A1/A2 guards re-pointed | The four enumerated assertions updated in the slice that invalidates each | A green guard asserting a premise B removed — worse than no guard |
+| Gallery migrated, not ignored | `themeGallery.test.ts` asserts the successor utilities; no `app/(gallery)` entry in `ignores` | Live code left on retired keys, with a green guard describing a dead class |
 | Done-gate | `tsc`, `npm test`, `eslint .` = 0 errors, per slice | — |
 
 ## Rollout and rollback
