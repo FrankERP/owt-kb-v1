@@ -46,8 +46,13 @@ compiles to `.border-border-accent`, while `.border-accent` silently resolves to
 
 ## Layer 1 — base roles
 
-Derived from the 20 distinct hex values carrying 1,264 bracketed sites, plus the seven
-retired `--brand-*` colour variables. Counts are inventory rows.
+**18 roles**, derived from the 20 distinct hex values carrying 1,264 bracketed sites, plus
+the seven retired `--brand-*` colour variables. Counts are inventory rows.
+
+**Two are named here rather than left as unnamed "· deep" entries in the state tables
+below**, because they carry 6 rows between them and a mapping table cannot target a
+description: `--warning-surface-deep-rgb: 28 8 0` (`#1c0800`, 3) and
+`--info-surface-deep-rgb: 30 10 60` (`#1e0a3c`, 3).
 
 ### Accent
 
@@ -98,7 +103,7 @@ no design intent distinguishes them. Child B's diff list must enumerate these 13
 |---|---|---|---|
 | **warning** | `--warning-fg-rgb: 245 158 11` (`#f59e0b`, 14) | `--warning-surface-rgb: 120 53 15` (`#78350f`, 7) · deep `28 8 0` (`#1c0800`, 3) | `--warning-border-rgb: 146 64 14` (`#92400e`, 2) |
 | **info** | `--info-fg-rgb: 167 139 250` (`#a78bfa`, 30) | `--info-surface-rgb: 76 29 149` (`#4c1d95`, 7) · deep `30 10 60` (`#1e0a3c`, 3) | `--info-border-rgb: 91 33 182` (`#5b21b6`, 2) |
-| **positive** | `--positive-fg-rgb: 61 255 124` (`#3dff7c`, 2) · also `--brand-signal` `55 245 138` | — | — |
+| **positive** | `--positive-fg-rgb: 55 245 138` (`--brand-signal`, 13 sites) | — | — |
 | **negative** | `--negative-fg-rgb: 248 113 113` (`#f87171`, 1) | — | — |
 
 `positive` and `negative` have foreground only **today**. Child C's `red` family (192 rows, 9
@@ -113,13 +118,25 @@ made against its own per-family diff list, not pre-empted here.**
 | `--brand-console` | `--surface-console` | |
 | `--brand-deck` | `--surface-raised` | |
 | `--brand-beam` `18 200 244` | `--accent` `0 191 255` | **A real value change** — parent D6. The only §3.3-style normalisation in Layer 1, and it repaints the atmosphere |
-| `--brand-signal` | `--positive-fg` | |
+| `--brand-signal` `55 245 138` | `--positive-fg` `55 245 138` | identical value — the role takes signal's value, not `#3dff7c`'s |
 | `--brand-frost` | `--ink` | identical value |
 | `--brand-steel` | `--ink-dim` | identical value |
 
-**Six of seven are value-identical renames. Only `--brand-beam` changes colour**, and it does
-so on 29 of `brand.css`'s own occurrences plus 88 utility usages — which is why Child B's
-equality gate must license exactly that diff and nothing else.
+**Five of seven are value-identical renames. TWO change colour**, and both are licensed
+normalisations Child B must enumerate:
+
+1. **`--brand-beam` `18 200 244` → `--accent` `0 191 255`** — parent D6. **32** `brand.css`
+   occurrences (29 alpha-bearing plus three alpha-free at `:120`, `:182`, `:219`) and 87
+   utility usages, including `.brand-atmosphere`'s wash and `selection:bg-brand-beam/35` on
+   both root layouts.
+2. **`#3dff7c` `61 255 124` → `--positive-fg` `55 245 138`** — **2 sites**. Two greens exist:
+   `--brand-signal` `#37f58a` on 13 sites and `#3dff7c` on 2. The role takes signal's value
+   because it carries six times the usage, so the two `#3dff7c` sites change. An earlier
+   revision of this document claimed `--brand-signal` mapped onto `#3dff7c` and called the
+   pair value-identical — **it is not**, and building to that claim would have made the
+   equality harness fail on 13 sites or silently collapse two distinct greens.
+
+Every other diff is a defect.
 
 **Non-colour `--brand-*` are untouched:** `--brand-radius-panel`, `--brand-radius-control`,
 `--brand-duration-fast`, `--brand-duration-reveal`. They are outside the codemod, outside the
@@ -161,6 +178,25 @@ alpha; applying `/20` on top is a bug. Child B's lint rule bans opacity modifier
 keys.
 
 ---
+
+## Literals in Child B's set with NO role here
+
+The roles above cover the **category-1 bracketed hex** surface. Child B's disposition also
+carries rows these roles do not describe, and B must decide each explicitly rather than
+discover it mid-codemod:
+
+| Rows | What | Whose call |
+|---:|---|---|
+| **6** | `ParticipationSidebar.tsx:6` — a **categorical** map: `#1D9E75 #378ADD #7F77DD #888780 #BA7517 #D9534F`, one row each. Six hues chosen to be distinguishable from one another, not to express a semantic state | **B**, and a semantic role set is the wrong shape. Either a `--chart-1…6` scale, or record it exempt as a data-encoding palette. *(The file's other 13 B rows are ordinary accent/ink literals the roles above do cover.)* |
+| **4** | `ServiceReadinessCard.tsx:716–736` — `rgba(239,68,68,·)` at .10/.18/.45/.7, i.e. `red-500` | **C's family.** B must not pre-empt it |
+| **4** | `DayCard.tsx` — `rgba(251,191,36,·)` at .10/.35/.6/.65, i.e. `amber-400` | **C's family**, same |
+| **4** | `DayCard.tsx` — `rgba(61,255,124,·)` at .10/.3/.5/.8, i.e. the second green `#3dff7c` | **B** — these follow the `#3dff7c` → `--positive-fg` normalisation above, so they are part of licensed diff 2 and must be enumerated with it |
+| **6** | `rgb(0 0 0 / α)` shadows in `brand.css` at .14/.16/.2/.2/.24/.28, plus `rgba(0, 0, 0, 0.1)` at `tailwind.config.ts:38` | **B** — an `--elevation` role, or recorded as intentionally literal. Note `tailwind.config.ts:38` is outside the `app/**` glob and reachable only as a named out-of-glob input |
+| **4** | `stroke="white"` ×2 and `fill="white"` ×2 — SVG presentation attributes | **C** — `white`/`black` is staged last. They take `currentColor` or a role, not a literal |
+
+**"The mapping table is the inventory" is true of dispositions, not of tokens.** The
+inventory says *which child owns a row*; this document says *what a row becomes*, and for the
+**28 rows** above it currently says nothing.
 
 ## What this vocabulary does NOT decide
 
