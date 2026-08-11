@@ -223,11 +223,25 @@ describe("brand.css rule bodies — B2's invariant, which later slices must not 
   const OCCURRENCE = /rgb\(\s*var\((--[a-z0-9-]+)\)\s*(?:\/\s*([0-9.]+)\s*)?\)/g;
   const RETIRED_COLOUR = /^--brand-(blackout|console|deck|beam|signal|frost|steel)$/;
 
-  /** Everything after the `:root` block — i.e. the rule bodies. */
+  /**
+   * The rule bodies: everything after BOTH declaration blocks, `:root` and `.light`.
+   *
+   * An earlier revision sliced from the end of `:root` only, which left `.light`
+   * inside "rule bodies". That is harmless today — `.light` carries just
+   * `color-scheme` — but Child D fills it with the light halves of these same
+   * tokens, and 20 of the 23 composed ones are spelled `rgb(var(--accent-deep-rgb) / a)`.
+   * Those would have been counted, pushing the 69 past its pin and failing on
+   * CORRECT work. The cheap repair then is to bump the literal, which is the
+   * MEASURED_MS_PER_SEND move CLAUDE.md names as the one forbidden fix. So the
+   * boundary is drawn where it belongs instead.
+   */
   function ruleBodies(source: string): string {
     const rootStart = source.indexOf(":root {");
     expect(rootStart, ":root block not found").toBeGreaterThan(-1);
-    return source.slice(source.indexOf("}", rootStart) + 1);
+    const afterRoot = source.indexOf("}", rootStart) + 1;
+    const lightStart = source.indexOf(".light", afterRoot);
+    if (lightStart === -1) return source.slice(afterRoot);
+    return source.slice(source.indexOf("}", lightStart) + 1);
   }
 
   function occurrences(source: string) {
@@ -260,6 +274,26 @@ describe("brand.css rule bodies — B2's invariant, which later slices must not 
     const all = occurrences(bodies).filter((o) => /^--(accent|ink|surface|warning|info|positive|negative)/.test(o.name));
     expect(all.length).toBe(69);
     expect(all.filter((o) => o.alpha === "none").length).toBe(4);
+  });
+
+  it("every rgb(var(x)) in a body names a TRIPLET — the rgb(rgb(...)) trap", () => {
+    // B2's characteristic defect, and the one the rest of this file could not see.
+    // Layer-2 tokens are already complete colours, so `rgb(var(--surface-accent-solid))`
+    // expands to `rgb(rgb(0 191 255 / .2))` — not a valid <color>, so the browser drops
+    // the whole declaration and the element renders with no colour at all.
+    //
+    // Nothing else catches it. The retired-reference check above passes, because the
+    // name is not a --brand-* one. brandCss.test.ts's dangling-reference guard passes
+    // too, because the composed token IS declared. Only the -rgb suffix distinguishes
+    // "triplet, safe to wrap" from "colour, must not be wrapped".
+    const wrapped = occurrences(bodies).filter((o) => !o.name.endsWith("-rgb"));
+    expect(wrapped.map((o) => o.name)).toEqual([]);
+  });
+
+  it("FIRE-PROOF: a composed token wrapped in rgb() is caught", () => {
+    const synthetic = ":root { --x: 1; }\n.light { color-scheme: light; }\n.a { color: rgb(var(--surface-accent-solid)); }";
+    const wrapped = occurrences(ruleBodies(synthetic)).filter((o) => !o.name.endsWith("-rgb"));
+    expect(wrapped.map((o) => o.name)).toEqual(["--surface-accent-solid"]);
   });
 
   it("does NOT touch the non-colour --brand-* four, which are outside B entirely", () => {
