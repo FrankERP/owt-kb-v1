@@ -33,10 +33,10 @@ const STATUS_LABEL: Record<ProposalStatus, string> = {
 };
 
 const STATUS_STYLE: Record<ProposalStatus, string> = {
-  draft: "border-surface-accent-30 text-gray-400 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent",
-  pending: "border-yellow-500/40 text-yellow-400 hover:border-yellow-400",
-  approved: "border-green-500/40 text-green-400 cursor-default",
-  changes_requested: "border-red-500/40 text-red-400 hover:border-red-300",
+  draft: "border-surface-accent-30 text-mono-400 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent",
+  pending: "border-recency-fg/40 text-recency-strong hover:border-recency-strong",
+  approved: "border-positive-deep/40 text-positive-strong cursor-default",
+  changes_requested: "border-negative-strong/40 text-negative-fg hover:border-negative-muted",
 };
 
 export default async function MePage() {
@@ -301,7 +301,7 @@ export default async function MePage() {
       return (
         <Link
           href={`/me/propose/${doc._id}`}
-          className="mt-3 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed border-surface-accent-30 font-label text-xs uppercase tracking-widest text-gray-500 hover:border-accent dark:hover:border-dashed hover:text-accent transition-colors"
+          className="mt-3 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed border-surface-accent-30 font-label text-xs uppercase tracking-widest text-mono-500 hover:border-accent dark:hover:border-dashed hover:text-accent transition-colors"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
@@ -353,7 +353,7 @@ export default async function MePage() {
               <h2 className="font-display text-center text-2xl md:text-3xl font-bold mb-2">
                 Mis próximos servicios
               </h2>
-              <div className="flex flex-col items-center gap-3 py-20 text-gray-600">
+              <div className="flex flex-col items-center gap-3 py-20 text-mono-600">
                 <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
                   <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />

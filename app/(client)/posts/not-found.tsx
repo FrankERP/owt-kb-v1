@@ -17,7 +17,7 @@ export default function SongNotFound() {
 
       <div className="space-y-2">
         <h1 className="font-display text-2xl md:text-3xl font-bold">Canción no encontrada</h1>
-        <p className="font-body text-sm text-gray-400 max-w-sm mx-auto">
+        <p className="font-body text-sm text-mono-400 max-w-sm mx-auto">
           Esta canción no existe o su enlace cambió. Puede que haya sido movida o eliminada.
         </p>
       </div>

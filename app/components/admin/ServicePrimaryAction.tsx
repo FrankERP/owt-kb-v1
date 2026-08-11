@@ -13,18 +13,18 @@ import type { PrimaryActionProps } from "./serviceCardModel";
 
 /** Cyan = the actionable default; red for an integrity blocker; grey when disabled. */
 function toneClass(props: PrimaryActionProps): string {
-  if (props.disabled) return "border-gray-600/50 bg-transparent text-gray-500 cursor-not-allowed";
+  if (props.disabled) return "border-mono-600/50 bg-transparent text-mono-500 cursor-not-allowed";
   switch (props.kind) {
     case "review_data":
     case "review_duplicate_roles":
     case "review_setlist_data":
-      return "border-red-500/50 bg-red-500/10 text-red-200 hover:bg-red-500/20";
+      return "border-negative-strong/50 bg-negative-strong/10 text-negative-soft hover:bg-negative-strong/20";
     case "resolve_conflict":
-      return "border-red-500/50 bg-red-500/10 text-red-200 hover:bg-red-500/20";
+      return "border-negative-strong/50 bg-negative-strong/10 text-negative-soft hover:bg-negative-strong/20";
     case "retry_load":
-      return "border-amber-500/50 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20";
+      return "border-warning-fg/50 bg-warning-fg/10 text-warning-faint hover:bg-warning-fg/20";
     case "publish":
-      return "border-green-500/50 bg-green-500/10 text-green-300 hover:bg-green-500/20";
+      return "border-positive-deep/50 bg-positive-deep/10 text-positive-soft hover:bg-positive-deep/20";
     default:
       return "border-accent/50 bg-accent/10 text-accent hover:bg-accent/20";
   }
@@ -52,7 +52,7 @@ export default function ServicePrimaryAction({
         {action.label}
       </button>
       {action.reason && (
-        <p className={`font-body text-[11px] text-amber-400/90 ${CARD_STYLE.longText}`}>
+        <p className={`font-body text-[11px] text-warning-strong/90 ${CARD_STYLE.longText}`}>
           {action.reason}
         </p>
       )}

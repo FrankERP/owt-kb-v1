@@ -69,7 +69,7 @@ function SignInForm() {
           </p>
         </div>
 
-        <section className="brand-facet-panel rounded-[var(--brand-radius-panel)] border border-ink-dim/20 bg-surface-console/75 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.28)] backdrop-blur-sm sm:p-6">
+        <section className="brand-facet-panel rounded-[var(--brand-radius-panel)] border border-ink-dim/20 bg-surface-console/75 p-5 shadow-[0_24px_80px_rgb(var(--elevation-rgb)/0.28)] backdrop-blur-sm sm:p-6">
           <div className="mb-5">
             <h2 className="font-label text-[11px] uppercase tracking-[0.22em] text-accent">Acceso del equipo</h2>
             <p className="mt-1 font-body text-sm text-ink-dim">Inicia sesión para ver tus servicios y canciones.</p>
@@ -77,7 +77,7 @@ function SignInForm() {
 
           {/* Error */}
           {errorMsg && (
-            <p className="mb-4 text-sm text-red-300 bg-red-950/35 border border-red-500/30 rounded-[var(--brand-radius-control)] px-4 py-3">
+            <p className="mb-4 text-sm text-negative-muted bg-negative-surface-deepest/35 border border-negative-strong/30 rounded-[var(--brand-radius-control)] px-4 py-3">
               {errorMsg}
             </p>
           )}

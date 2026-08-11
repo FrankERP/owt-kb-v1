@@ -191,7 +191,7 @@ describe("dropping onto a cell already at target (acceptance 3)", () => {
 
     rerenderWith({ ...props, cells: next });
     const target = cellAt(container, "lead", "col-2");
-    expect(target.className).toContain("border-amber-500/40");
+    expect(target.className).toContain("border-warning-fg/40");
     expect(target.textContent).toContain("Por encima del objetivo — se acepta de todos modos");
   });
 });

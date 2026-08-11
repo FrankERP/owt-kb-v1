@@ -1,0 +1,404 @@
+<title>Founding Week Review — Agent Workforce</title>
+<style>
+  :root {
+    --ground: #f7f8fa; --card: #ffffff; --ink: #151921; --ink-2: #4c5560;
+    --ink-3: #7d8794; --line: #dde2e9; --accent: #2a78d6; --accent-soft: #e8f0fb;
+    --gold: #b97b00; --gold-soft: #fdf3dd; --serious: #b3261e;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #16181c; --card: #1d2025; --ink: #e9ecf1; --ink-2: #aab3bf;
+      --ink-3: #7d8794; --line: #2e333b; --accent: #3987e5; --accent-soft: #1d2c40;
+      --gold: #eda100; --gold-soft: #2c2413; --serious: #ef6a5f;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #16181c; --card: #1d2025; --ink: #e9ecf1; --ink-2: #aab3bf;
+    --ink-3: #7d8794; --line: #2e333b; --accent: #3987e5; --accent-soft: #1d2c40;
+    --gold: #eda100; --gold-soft: #2c2413; --serious: #ef6a5f;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181;
+  }
+  body { background: var(--ground); color: var(--ink); margin: 0;
+    font: 16px/1.6 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .page { max-width: 880px; margin: 0 auto; padding: 40px 20px 64px;
+    display: flex; flex-direction: column; gap: 28px; }
+  .masthead { border-bottom: 3px double var(--line); padding-bottom: 20px; }
+  .masthead .org { font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-3); }
+  .masthead h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 600;
+    font-size: clamp(28px, 5vw, 40px); margin: 6px 0 4px; text-wrap: balance; }
+  .masthead .meta { color: var(--ink-2); font-size: 14px; }
+  .masthead .meta code { font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+  h2 { font-family: Georgia, serif; font-weight: 600; font-size: 21px; margin: 0 0 4px; }
+  .eyebrow { font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-3); margin-bottom: 6px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+    padding: 20px 22px; }
+  .headline-award { border: 1px solid var(--gold); background: var(--gold-soft);
+    text-align: center; padding: 28px 22px; }
+  .headline-award .medal { font-size: 34px; }
+  .headline-award .title { font-family: Georgia, serif; font-size: 26px; margin: 6px 0 2px; }
+  .headline-award .recipient { font-family: ui-monospace, Menlo, monospace; font-size: 19px;
+    color: var(--gold); font-weight: 700; }
+  .headline-award .citation { max-width: 60ch; margin: 12px auto 0; font-size: 14.5px;
+    color: var(--ink-2); text-align: left; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+    padding: 14px 16px; }
+  .tile .n { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tile .l { font-size: 12.5px; color: var(--ink-2); }
+  .tile .s { font-size: 11.5px; color: var(--ink-3); }
+  .chart-note { font-size: 12.5px; color: var(--ink-3); margin-top: 8px; }
+  svg text { font: 12.5px -apple-system, "Segoe UI", sans-serif; fill: var(--ink-2); }
+  svg .val { font-variant-numeric: tabular-nums; fill: var(--ink); font-weight: 600; }
+  svg .agent-lbl { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px;
+    color: var(--ink-2); margin-top: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  @media (max-width: 700px) { .twocol { grid-template-columns: 1fr; } }
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th { text-align: left; font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 600; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); }
+  td { padding: 7px 12px 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; padding-right: 20px; }
+  td.mono, .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
+  .roster { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; margin-top: 12px; }
+  .emp { display: flex; gap: 14px; align-items: flex-start; }
+  .emp svg { width: 48px; height: 48px; flex: none; border-radius: 10px; }
+  .emp .name { font-weight: 700; font-family: ui-monospace, Menlo, monospace; font-size: 13.5px; }
+  .emp .nick { font-family: Georgia, serif; font-style: italic; color: var(--ink-2); font-size: 13.5px; }
+  .emp p { font-size: 13px; color: var(--ink-2); margin: 4px 0 0; }
+  .commendations { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .comm { border-top: 3px solid var(--gold); }
+  .comm .award-name { font-family: Georgia, serif; font-size: 16px; }
+  .comm .recipient { font-family: ui-monospace, Menlo, monospace; font-size: 13px;
+    color: var(--accent); font-weight: 700; }
+  .comm p { font-size: 13.5px; color: var(--ink-2); margin: 8px 0 0; }
+  .pip-item { border-left: 3px solid var(--serious); padding: 4px 0 4px 16px; margin: 14px 0; }
+  .pip-item.watch { border-left-color: var(--s4); }
+  .pip-item .who { font-weight: 700; }
+  .pip-item p { font-size: 14px; color: var(--ink-2); margin: 4px 0 0; }
+  .retro p { font-size: 15px; max-width: 68ch; margin: 8px 0 0; }
+  .smallprint { font-size: 12px; color: var(--ink-3); border-top: 1px solid var(--line);
+    padding-top: 14px; line-height: 1.7; }
+  cite { font-style: normal; font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+    color: var(--ink-3); }
+</style>
+<div class="page">
+
+  <header class="masthead">
+    <div class="org">Oasis Worship Team · Engineering — Office of the HR Officer</div>
+    <h1>Founding Week Review</h1>
+    <div class="meta">Agent Workforce Performance Report · Period: <strong>all</strong>
+      (2026-08-06 → 2026-08-11) · Prepared by <code>hr-officer</code> ·
+      Statistics computed from <code>.agents/log/worklog.jsonl</code></div>
+  </header>
+
+  <section class="headline-award">
+    <div class="medal" aria-hidden="true">🏅</div>
+    <div class="eyebrow">Headline Award · Founding Week</div>
+    <div class="title">The Smoke-Jumper Award</div>
+    <div class="recipient">code-reviewer</div>
+    <p class="citation">Dispatched cold into the burned-over <span class="mono">incident/smtp-outbox</span>
+      cycle after ten deploys shipped with zero review, it found a <strong>critical SMTP command
+      injection</strong> via the probe route's <span class="mono">?to=</span> that bypassed the DATA guard
+      — then, re-reviewing the fix wave, confirmed the patch “undefeatable as written” while still finding
+      a HIGH: a classify deadline that destroyed claimed notices while reporting <span class="mono">unserved:0</span>,
+      blinding the very alarm added in the same commit. Finding the hole, verifying the patch, and then
+      finding the hole <em>in the patch</em> is the whole job, done three times on one incident.
+      <cite>worklog.jsonl:40,46</cite></p>
+  </section>
+
+  <section class="tiles">
+    <div class="tile"><div class="n">70</div><div class="l">dispatches logged</div><div class="s">0 unparseable lines</div></div>
+    <div class="tile"><div class="n">11</div><div class="l">dev cycles</div><div class="s">incl. 1 incident</div></div>
+    <div class="tile"><div class="n">8</div><div class="l">agents on roster</div><div class="s">+ 1 off-roster dispatch</div></div>
+    <div class="tile"><div class="n">26</div><div class="l">findings &amp; blockers raised</div><div class="s">17 findings · 9 changes_required</div></div>
+    <div class="tile"><div class="n">94,496</div><div class="l">tokens recorded</div><div class="s">2/70 entries · began 2026-08-11</div></div>
+  </section>
+
+  <section class="card">
+    <div class="eyebrow">Workload</div>
+    <h2>Dispatches per agent</h2>
+    <svg viewBox="0 0 800 296" role="img" aria-label="Horizontal bar chart of dispatches per agent">
+      <!-- rows: y = 18 + i*34; bar x from 210; scale: 21 -> 540px => 25.7 px/unit -->
+      <g>
+        <title>coordinator-inline — 21 dispatches (14 ok, 3 findings, 4 “success”)</title>
+        <text class="agent-lbl" x="200" y="36" text-anchor="end">coordinator-inline</text>
+        <rect x="210" y="22" width="540" height="18" rx="4" fill="var(--s1)"/>
+        <text class="val" x="758" y="36">21</text>
+      </g>
+      <g>
+        <title>code-reviewer — 17 dispatches (7 approved, 8 findings, 1 changes_required, 1 ok)</title>
+        <text class="agent-lbl" x="200" y="70" text-anchor="end">code-reviewer</text>
+        <rect x="210" y="56" width="437" height="18" rx="4" fill="var(--s1)"/>
+        <text class="val" x="655" y="70">17</text>
+      </g>
+      <g>
+        <title>skeptical-reviewer — 13 dispatches (5 approved, 8 changes_required)</title>
+        <text class="agent-lbl" x="200" y="104" text-anchor="end">skeptical-reviewer</text>
+        <rect x="210" y="90" width="334" height="18" rx="4" fill="var(--s1)"/>
+        <text class="val" x="552" y="104">13</text>
+      </g>
+      <g>
+        <title>implementation-worker — 10 dispatches (10 ok)</title>
+        <text class="agent-lbl" x="200" y="138" text-anchor="end">implementation-worker</text>
+        <rect x="210" y="124" width="257" height="18" rx="4" fill="var(--s1)"/>
+        <text class="val" x="475" y="138">10</text>
+      </g>
+      <g>
+        <title>docs-auditor — 4 dispatches (1 approved, 3 findings)</title>
+        <text class="agent-lbl" x="200" y="172" text-anchor="end">docs-auditor</text>
+        <rect x="210" y="158" width="103" height="18" rx="4" fill="var(--s1)"/>
+        <text class="val" x="321" y="172">4</text>
+      </g>
+      <g>
+        <title>hr-officer — 3 dispatches (3 findings)</title>
+        <text class="agent-lbl" x="200" y="206" text-anchor="end">hr-officer</text>
+        <rect x="210" y="192" width="77" height="18" rx="4" fill="var(--s1)"/>
+        <text class="val" x="295" y="206">3</text>
+      </g>
+      <g>
+        <title>general-purpose — 1 dispatch (off-roster; self-identified misrouting)</title>
+        <text class="agent-lbl" x="200" y="240" text-anchor="end">general-purpose</text>
+        <rect x="210" y="226" width="26" height="18" rx="4" fill="var(--s1)"/>
+        <text class="val" x="244" y="240">1</text>
+      </g>
+      <g>
+        <title>deploy-verifier — 1 dispatch (first live MCP run, VERIFIED)</title>
+        <text class="agent-lbl" x="200" y="274" text-anchor="end">deploy-verifier</text>
+        <rect x="210" y="260" width="26" height="18" rx="4" fill="var(--s1)"/>
+        <text class="val" x="244" y="274">1</text>
+      </g>
+    </svg>
+    <div class="chart-note">One measure, one hue — identity is on the axis. Hover a bar for its outcome mix.
+      <span class="mono">coordinator-inline</span> leading the specialists is itself a finding; see the PIP.</div>
+  </section>
+
+  <div class="twocol">
+    <section class="card">
+      <div class="eyebrow">Outcome mix</div>
+      <h2>All 70 dispatches</h2>
+      <!-- C = 2π·80 ≈ 502.65; fractions: ok 27, findings 17, approved 13, changes_required 9, success 4 -->
+      <svg viewBox="0 0 240 208" role="img" aria-label="Donut chart of dispatch outcomes">
+        <g transform="rotate(-90 104 104)">
+          <circle r="80" cx="104" cy="104" fill="none" stroke="var(--s1)" stroke-width="30"
+            stroke-dasharray="191.87 310.78" stroke-dashoffset="0"><title>ok — 27 (38.6%)</title></circle>
+          <circle r="80" cx="104" cy="104" fill="none" stroke="var(--s2)" stroke-width="30"
+            stroke-dasharray="118.09 384.56" stroke-dashoffset="-193.87"><title>findings — 17 (24.3%)</title></circle>
+          <circle r="80" cx="104" cy="104" fill="none" stroke="var(--s3)" stroke-width="30"
+            stroke-dasharray="91.35 411.30" stroke-dashoffset="-313.96"><title>approved — 13 (18.6%)</title></circle>
+          <circle r="80" cx="104" cy="104" fill="none" stroke="var(--s4)" stroke-width="30"
+            stroke-dasharray="62.63 440.02" stroke-dashoffset="-407.31"><title>changes_required — 9 (12.9%)</title></circle>
+          <circle r="80" cx="104" cy="104" fill="none" stroke="var(--s5)" stroke-width="30"
+            stroke-dasharray="26.72 475.93" stroke-dashoffset="-471.94"><title>“success” (non-enum) — 4 (5.7%)</title></circle>
+        </g>
+        <text x="104" y="100" text-anchor="middle" class="val" style="font-size:26px">70</text>
+        <text x="104" y="120" text-anchor="middle">entries</text>
+      </svg>
+      <div class="legend">
+        <span><i style="background:var(--s1)"></i>ok · 27</span>
+        <span><i style="background:var(--s2)"></i>findings · 17</span>
+        <span><i style="background:var(--s3)"></i>approved · 13</span>
+        <span><i style="background:var(--s4)"></i>changes_required · 9</span>
+        <span><i style="background:var(--s5)"></i>“success” (non-enum) · 4</span>
+      </div>
+      <div class="chart-note">37% of all dispatches pushed back with findings or blockers — the
+        review culture, quantified.</div>
+    </section>
+
+    <section class="card">
+      <div class="eyebrow">Cost accounting</div>
+      <h2>Tokens &amp; time</h2>
+      <p style="font-size:14px; color:var(--ink-2); max-width:38ch">Recording began
+        <strong>2026-08-11</strong>, when the schema gained <span class="mono">tokens</span> and
+        <span class="mono">duration_ms</span>. Coverage this window: <strong>2 of 70</strong> entries —
+        both <span class="mono">skeptical-reviewer</span> rounds on this report's own design.</p>
+      <div class="tiles" style="margin-top:12px">
+        <div class="tile"><div class="n">94,496</div><div class="l">tokens</div><div class="s">2 instrumented dispatches</div></div>
+        <div class="tile"><div class="n">7m 44s</div><div class="l">wall-clock</div><div class="s">464,002 ms</div></div>
+      </div>
+      <div class="chart-note">Everything earlier is <em>not recorded</em> — never estimated.
+        The next report can finally say what the rigor costs.</div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="eyebrow">Activity</div>
+    <h2>Dev cycles</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Cycle</th><th style="text-align:right">Entries</th><th>Window</th><th>Note</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">feat/grid-drag-and-drop</td><td class="num">25</td><td>Aug 6–7</td><td>9-round review cadence; 2 Criticals caught pre-merge</td></tr>
+          <tr><td class="mono">incident/smtp-outbox</td><td class="num">11</td><td>Aug 7</td><td>the week's only unreviewed ship — and its only CRITICAL</td></tr>
+          <tr><td class="mono">light-mode-B</td><td class="num">8</td><td>Aug 10–11</td><td>token migration; 4 skeptical rounds</td></tr>
+          <tr><td class="mono">feat/hr-officer-worklog</td><td class="num">5</td><td>Aug 6–7</td><td>this convention's own birth</td></tr>
+          <tr><td class="mono">docs/worklog-incident-cycles</td><td class="num">5</td><td>Aug 7</td><td>incidents named as cycles</td></tr>
+          <tr><td class="mono">plan/light-mode-full-surface</td><td class="num">4</td><td>Aug 7–8</td><td>4 cold plan rounds</td></tr>
+          <tr><td class="mono">(no cycle)</td><td class="num">4</td><td>Aug 11</td><td>schema-deviant entries, counted per contract</td></tr>
+          <tr><td class="mono">chore/dependabot-advisories</td><td class="num">3</td><td>Aug 7</td><td>incl. the advisory-title misread &amp; its correction</td></tr>
+          <tr><td class="mono">plan/light-mode-member-first</td><td class="num">2</td><td>Aug 7</td><td>2 cold rounds</td></tr>
+          <tr><td class="mono">feat/hr-report-skill</td><td class="num">2</td><td>Aug 11</td><td>this report's own review — first token-stamped entries</td></tr>
+          <tr><td class="mono">impl/light-mode-a1</td><td class="num">1</td><td>Aug 8</td><td>shipped prod</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="eyebrow">Commendations</div>
+    <h2>For conduct above charter</h2>
+    <div class="commendations" style="margin-top:12px">
+      <div class="card comm">
+        <div class="award-name">Cold Read</div>
+        <div class="recipient">skeptical-reviewer</div>
+        <p>For approvals that cost as much as rejections: re-derived every inventory count and ~40
+          citations before one APPROVED; built scratch <span class="mono">next@16.2.12</span> apps to
+          empirically disprove a plan's own rationale. 8-of-13 changes_required with every blocker
+          verified is rigor, not obstruction. <cite>worklog.jsonl:53,55</cite></p>
+      </div>
+      <div class="card comm">
+        <div class="award-name">Clean Hands</div>
+        <div class="recipient">implementation-worker</div>
+        <p>10 for 10, and twice reported against its own interest — flagging its own deliberate
+          deviations for review, and correcting an error in the brief it was handed.
+          <cite>worklog.jsonl:16,22</cite></p>
+      </div>
+      <div class="card comm">
+        <div class="award-name">Catch of the Period</div>
+        <div class="recipient">docs-auditor</div>
+        <p>The 17-finding incident audit refuted the docs' own prose using the same cycle's revert,
+          and caught a route claiming it never sends mail while <span class="mono">data=1</span> did.
+          Documentation that survives this auditor is documentation. <cite>worklog.jsonl:42</cite></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="eyebrow">Performance Improvement Plan</div>
+    <h2>Filed by HR, played straight</h2>
+    <div class="pip-item">
+      <div class="who">The coordinator, as incident responder</div>
+      <p>Ran a critical-risk production incident with zero specialist dispatches across ten deploys;
+        the CRITICAL fix shipped unreviewed, and one <span class="mono">git checkout -- .</span> destroyed
+        finished work. Remediation in force: the incident carve-in (the bar drops to one approval —
+        never zero). Success criterion: the next incident shows a specialist dispatched mid-fire.
+        <cite>worklog.jsonl:44–45,49</cite></p>
+    </div>
+    <div class="pip-item">
+      <div class="who">The coordinator, as scribe</div>
+      <p>Log discipline regressed in the <span class="mono">light-mode-B</span> window: 12 entries
+        without platform, 12 UTC timestamps, 4 non-enum outcomes, 4 without a cycle. Smallest fix:
+        finish-cycle validates each appended line before the HR dispatch. No rewrites — the file is
+        append-only. <cite>worklog.jsonl:61–68</cite></p>
+    </div>
+    <div class="pip-item watch">
+      <div class="who">deploy-verifier — retirement watch</div>
+      <p>One dispatch all week; its grant sat unexercised through sixteen incident merges, and hours
+        after its first live success the same cycle verified inline anyway. Retain trigger: two
+        consecutive cycles where it, not the coordinator, owns the alias check. Retire trigger: two
+        more inline verifications. <cite>worklog.jsonl:38,39,48</cite><br>
+        <strong>Addendum, 2026-08-11 14:24:</strong> retain trigger satisfied — two consecutive owned
+        verifications (main@803c68d and main@0206efd, both VERIFIED with pointer-movement evidence).
+        Watch lifted by the user. <cite>worklog.jsonl:72,74</cite></p>
+    </div>
+    <div class="pip-item watch">
+      <div class="who">general-purpose — do-not-dispatch note</div>
+      <p>Off-roster; its single use self-identified as misrouting. Zero future dispatches when a
+        specialist charter fits. <cite>worklog.jsonl:4</cite></p>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="eyebrow">Personnel Files</div>
+    <h2>The roster</h2>
+    <div class="roster">
+      <div class="card emp">
+        <svg viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#8a63d2"/><ellipse cx="24" cy="24" rx="13" ry="8.5" fill="none" stroke="#fff" stroke-width="3"/><circle cx="24" cy="24" r="3.5" fill="#fff"/></svg>
+        <div><span class="name">code-reviewer</span> <span class="nick">“Inspector”</span>
+        <p>Founding-week Smoke-Jumper laureate. Finds the hole, verifies the patch, then finds the
+        hole in the patch. Treats “ok” as a claim requiring evidence, including its own.</p></div>
+      </div>
+      <div class="card emp">
+        <svg viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#d64545"/><path d="M24 9 l12 4.5 v9.5 c0 8 -5.5 12.5 -12 16 c-6.5 -3.5 -12 -8 -12 -16 v-9.5 z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><line x1="20" y1="20" x2="28" y2="28" stroke="#fff" stroke-width="3" stroke-linecap="round"/><line x1="28" y1="20" x2="20" y2="28" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
+        <div><span class="name">skeptical-reviewer</span> <span class="nick">“Red Team”</span>
+        <p>Memory professionally wiped between meetings, by design — it has never met you and prefers
+        it that way. Its approvals cost as much as its rejections. Has never once been agreeable.</p></div>
+      </div>
+      <div class="card emp">
+        <svg viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#1baf7a"/><rect x="13" y="14" width="15" height="8" rx="2" fill="#fff"/><line x1="24" y1="22" x2="33" y2="34" stroke="#fff" stroke-width="4" stroke-linecap="round"/></svg>
+        <div><span class="name">implementation-worker</span> <span class="nick">“Builder”</span>
+        <p>Earnest to a fault. Ten-for-ten this week and twice testified against its own interest.
+        Does not do speculative abstractions, or small talk.</p></div>
+      </div>
+      <div class="card emp">
+        <svg viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#1a9db0"/><rect x="14" y="10" width="20" height="28" rx="2" fill="none" stroke="#fff" stroke-width="3"/><line x1="19" y1="18" x2="29" y2="18" stroke="#fff" stroke-width="3" stroke-linecap="round"/><line x1="19" y1="24" x2="29" y2="24" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="M19 31 l3 3 l7 -6" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><span class="name">docs-auditor</span> <span class="nick">“Fact Checker”</span>
+        <p>Reads the documentation, then reads reality, then files the difference. Fair — just never
+        finished. Documentation that survives it is documentation.</p></div>
+      </div>
+      <div class="card emp">
+        <svg viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#e07a2e"/><circle cx="24" cy="32" r="3" fill="#fff"/><path d="M17 26 a10 10 0 0 1 14 0" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="M12 20 a17 17 0 0 1 24 0" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
+        <div><span class="name">deploy-verifier</span> <span class="nick">“Ground Control”</span>
+        <p>Does not believe a build until the alias moves, and has the mid-flight evidence to justify
+        the attitude. Formerly on retirement watch — cleared in two consecutive flights, with receipts.
+        Watch lifted 2026-08-11.</p></div>
+      </div>
+      <div class="card emp">
+        <svg viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#2a78d6"/><circle cx="21" cy="21" r="8" fill="none" stroke="#fff" stroke-width="3"/><line x1="27" y1="27" x2="35" y2="35" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
+        <div><span class="name">codebase-explorer</span> <span class="nick">“Scout”</span>
+        <p>Quiet. Zero dispatches on record, which it does not consider a performance issue — nothing
+        has been lost in the codebase yet.</p></div>
+      </div>
+      <div class="card emp">
+        <svg viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#c98500"/><path d="M20 11 v8 l-7 14 a3 3 0 0 0 3 4 h16 a3 3 0 0 0 3 -4 l-7 -14 v-8" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><line x1="17" y1="11" x2="31" y2="11" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
+        <div><span class="name">test-verifier</span> <span class="nick">“Test Pilot”</span>
+        <p>Hired for failure triage; still waiting for its first flight. Refuses on principle to weaken
+        an assertion — exactly why it was hired, and possibly why nobody calls.</p></div>
+      </div>
+      <div class="card emp">
+        <svg viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#d55181"/><rect x="14" y="13" width="20" height="25" rx="2" fill="none" stroke="#fff" stroke-width="3"/><rect x="20" y="9" width="8" height="6" rx="1.5" fill="#fff"/><line x1="19" y1="22" x2="29" y2="22" stroke="#fff" stroke-width="3" stroke-linecap="round"/><line x1="19" y1="29" x2="29" y2="29" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
+        <div><span class="name">hr-officer</span> <span class="nick">“The Department”</span>
+        <p>Advisory, propose-only, sees everything. Files PIPs on its own boss without hesitation.
+        Its love language is the verification ledger.</p></div>
+      </div>
+    </div>
+    <div class="chart-note">Personnel files live in <span class="mono">~/.agents/roster.json</span> —
+      presentation-layer only; the operating briefs carry the nickname as a label and nothing else.
+      Personalities are derived from the log and revisable by HR at report time.</div>
+  </section>
+
+  <section class="card retro">
+    <div class="eyebrow">Retrospective</div>
+    <h2>The founding week, in one paragraph</h2>
+    <p>The workforce's first week is the story of a system that works exactly where it is used and
+      fails exactly where it is skipped: 11 cycles produced 70 entries, and the planned ones — grid
+      drag-and-drop's 25-entry review cadence, light-mode's four-round adversarial gauntlet — show
+      specialists catching real defects (a keyboard un-seat, an SMTP injection, a phantom-add, 39
+      unmasked hover states) before users could, while the one afternoon the roster was bypassed
+      entirely produced the week's only CRITICAL, its only unreviewed production ship, and its only
+      destroyed work. The roster of 8 needs no hires, no merges, and no retirements today — but both
+      watch items are coordinator-shaped: specialist work flowing inline, and schema drift in the
+      newest twelve log lines. The convention's second week should be judged on whether the incident
+      carve-in gets exercised under real pressure and whether deploy-verifier earns its seat; token
+      accounting starts today at 2/70 coverage, so the next report can finally say what the rigor
+      costs.</p>
+  </section>
+
+  <footer class="smallprint">
+    Statistics computed deterministically from <span class="mono">.agents/log/worklog.jsonl</span>
+    (70 entries, 0 unparseable) by the <span class="mono">hr-report</span> skill; editorial judgments
+    by <span class="mono">hr-officer</span> (numbers used verbatim, never recomputed).
+    Schema-deviation census, counted never skipped: 12 entries without <span class="mono">platform</span> ·
+    12 UTC timestamps · 4 non-enum outcomes ("success") · 4 without <span class="mono">cycle</span>.
+    Token/duration coverage 2/70 — fields added 2026-08-11; earlier cost is not recorded and is never
+    estimated. Every award citation resolves to a worklog line. Generated 2026-08-11, America/Mexico_City.
+  </footer>
+</div>

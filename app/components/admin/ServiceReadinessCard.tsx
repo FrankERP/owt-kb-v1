@@ -246,7 +246,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                       <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
                       <div
                         role="menu"
-                        className={`absolute right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-accent/25 bg-surface-overlay-deep py-1 shadow-xl shadow-black/50 ${CARD_STYLE.menu}`}
+                        className={`absolute right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-accent/25 bg-surface-overlay-deep py-1 shadow-xl shadow-elevation/50 ${CARD_STYLE.menu}`}
                       >
                         {instrPills.length > 0 && (
                           <MenuItem
@@ -335,14 +335,14 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                   {buildRuns(songs).map((run) => {
                     const renderRow = (entry: SetlistSong, n: number) => (
                       <div className="flex min-w-0 items-start gap-2">
-                        <span className="mt-0.5 w-5 shrink-0 text-sm text-gray-500">{n}.</span>
+                        <span className="mt-0.5 w-5 shrink-0 text-sm text-mono-500">{n}.</span>
                         <div className="min-w-0">
                           <span
                             className={`font-body text-sm font-semibold ${CARD_STYLE.longText}`}
                           >
                             {entry.song.title}
                           </span>
-                          <span className="text-sm text-gray-500"> — {entry.song.author}</span>
+                          <span className="text-sm text-mono-500"> — {entry.song.author}</span>
                           <div className="mt-0.5 flex items-center gap-2">
                             <span
                               className={`font-label text-xs font-semibold ${CARD_ACCENT[role._type]}`}
@@ -352,7 +352,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                             {entry.play_key &&
                               entry.song.key &&
                               entry.play_key !== entry.song.key && (
-                                <span className="rounded border border-gray-700 bg-gray-800/60 px-1.5 py-0.5 font-label text-[11px] leading-tight text-gray-500">
+                                <span className="rounded border border-mono-700 bg-mono-800/60 px-1.5 py-0.5 font-label text-[11px] leading-tight text-mono-500">
                                   orig. {entry.song.key}
                                 </span>
                               )}
@@ -421,7 +421,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                   ([section, arr, lbl]) =>
                     arr.length > 0 && (
                       <div key={section} className="flex min-w-0 flex-wrap items-start gap-2">
-                        <span className="w-12 shrink-0 pt-0.5 font-label text-[10px] uppercase tracking-widest text-gray-600">
+                        <span className="w-12 shrink-0 pt-0.5 font-label text-[10px] uppercase tracking-widest text-mono-600">
                           {lbl}
                         </span>
                         <div className="flex min-w-0 flex-wrap gap-1">
@@ -457,7 +457,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                   ([section, arr, lbl]) =>
                     arr.length > 0 && (
                       <div key={section} className="flex min-w-0 flex-wrap items-start gap-2">
-                        <span className="w-12 shrink-0 pt-0.5 font-label text-[10px] uppercase tracking-widest text-gray-600">
+                        <span className="w-12 shrink-0 pt-0.5 font-label text-[10px] uppercase tracking-widest text-mono-600">
                           {lbl}
                         </span>
                         <div className="flex min-w-0 flex-wrap gap-1">
@@ -496,11 +496,11 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                     ),
                 )}
                 {!hasTeam && (
-                  <p className="font-body text-xs italic text-gray-600">Sin miembros asignados</p>
+                  <p className="font-body text-xs italic text-mono-600">Sin miembros asignados</p>
                 )}
               </div>
             ) : hasTeam ? (
-              <section className={songs.length > 0 ? "border-t border-gray-200 pt-4 dark:border-gray-800" : ""}>
+              <section className={songs.length > 0 ? "border-t border-mono-200 pt-4 dark:border-mono-800" : ""}>
                 <div className="space-y-3">
                   {(role.leads ?? []).length + (role.bgvs ?? []).length + (role.chorus ?? []).length >
                     0 && (
@@ -578,7 +578,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
               </section>
             ) : (
               songs.length === 0 && (
-                <p className="font-body text-xs italic text-gray-600">Sin información todavía.</p>
+                <p className="font-body text-xs italic text-mono-600">Sin información todavía.</p>
               )
             )}
           </div>
@@ -607,7 +607,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
           : isCardSelected || (copyMode && isCopySource)
             ? `${CARD_BORDER[role._type]} ring-2 ring-accent/40 shadow-md`
             : highlightConflict
-              ? "border-2 border-red-500 shadow-lg shadow-red-500/30 ring-2 ring-red-500/40"
+              ? "border-2 border-negative-strong shadow-lg shadow-negative-strong/30 ring-2 ring-negative-strong/40"
               : `${CARD_BORDER[role._type]} shadow-md`
       }`}
     >
@@ -677,7 +677,7 @@ function VocalCol({
   if (members.length === 0) return <div />;
   return (
     <div className="min-w-0">
-      <p className="mb-0.5 font-label text-[11px] uppercase tracking-widest text-gray-400">
+      <p className="mb-0.5 font-label text-[11px] uppercase tracking-widest text-mono-400">
         {label}
       </p>
       <p className={`font-body text-sm leading-snug ${CARD_STYLE.longText}`}>
@@ -685,7 +685,7 @@ function VocalCol({
           <span key={m._key ?? m._id}>
             {i > 0 && ", "}
             {conflictIds.has(m._id) ? (
-              <span title={notes.get(m._id)} className="font-semibold text-red-400">
+              <span title={notes.get(m._id)} className="font-semibold text-negative-fg">
                 ⚠&nbsp;{dn(m)}
               </span>
             ) : (
@@ -715,16 +715,16 @@ function TeamRow({
     <div
       className="flex min-w-0 items-stretch overflow-hidden rounded-lg"
       style={{
-        border: isConflict ? "1px solid rgba(239,68,68,0.7)" : `1px solid ${themeColour(accentVar, 0.251)}`,
+        border: isConflict ? "1px solid rgb(var(--negative-strong-rgb) / 0.7)" : `1px solid ${themeColour(accentVar, 0.251)}`,
       }}
     >
       <span
         className="flex min-w-[3.5rem] shrink-0 items-center justify-center rounded-l-[7px] px-2.5 font-label text-xs uppercase tracking-wide"
         style={{
-          background: isConflict ? "rgba(239,68,68,0.18)" : `${themeColour(accentVar, 0.0941)}`,
+          background: isConflict ? "rgb(var(--negative-strong-rgb) / 0.18)" : `${themeColour(accentVar, 0.0941)}`,
           color: isConflict ? themeColour("--negative-fg-rgb") : themeColour(accentVar),
           borderRight: isConflict
-            ? "1px solid rgba(239,68,68,0.45)"
+            ? "1px solid rgb(var(--negative-strong-rgb) / 0.45)"
             : `1px solid ${themeColour(accentVar, 0.1882)}`,
         }}
       >
@@ -733,9 +733,9 @@ function TeamRow({
       <span
         title={isConflict && conflictNote ? conflictNote : undefined}
         className={`flex min-w-[3.5rem] items-center justify-center gap-1 px-3 py-1.5 font-body text-sm leading-tight ${CARD_STYLE.longText} ${
-          isConflict ? "font-semibold text-red-400" : ""
+          isConflict ? "font-semibold text-negative-fg" : ""
         }`}
-        style={isConflict ? { background: "rgba(239,68,68,0.10)" } : undefined}
+        style={isConflict ? { background: "rgb(var(--negative-strong-rgb) / 0.10)" } : undefined}
       >
         {isConflict && <span aria-hidden="true">⚠</span>}
         {value}
@@ -761,8 +761,8 @@ function MemberChip({
         isSource
           ? "scale-105 border-accent bg-accent/30 text-accent ring-1 ring-accent/50"
           : onClick
-            ? "cursor-pointer border-accent/20 bg-accent/10 text-gray-400 hover:border-accent/40 hover:bg-accent/20 hover:text-accent"
-            : "border-accent/20 bg-accent/10 text-gray-400"
+            ? "cursor-pointer border-accent/20 bg-accent/10 text-mono-400 hover:border-accent/40 hover:bg-accent/20 hover:text-accent"
+            : "border-accent/20 bg-accent/10 text-mono-400"
       }`}
     >
       {name}
@@ -825,7 +825,7 @@ function MenuItem({
         disabled={disabled}
         title={disabled ? (gate?.reason ?? undefined) : undefined}
         className={`flex min-h-[44px] w-full min-w-0 items-center gap-2.5 px-3 text-left text-sm transition-colors disabled:opacity-40 ${
-          danger ? "text-red-300 hover:bg-red-500/15" : "text-ink-muted hover:bg-white/10"
+          danger ? "text-negative-muted hover:bg-negative-strong/15" : "text-ink-muted hover:bg-white/10"
         }`}
       >
         <span className="shrink-0 opacity-80">{icon}</span>
@@ -833,7 +833,7 @@ function MenuItem({
       </button>
       {disabled && gate?.reason && (
         // `role="none"` so this explanatory line is not read as a menu item.
-        <p role="none" className={`px-3 pb-1.5 font-body text-[11px] text-amber-400/80 ${CARD_STYLE.longText}`}>
+        <p role="none" className={`px-3 pb-1.5 font-body text-[11px] text-warning-strong/80 ${CARD_STYLE.longText}`}>
           {gate.reason}
         </p>
       )}

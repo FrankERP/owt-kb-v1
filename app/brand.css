@@ -92,6 +92,27 @@
      literal gives Child D nothing to change. */
   --elevation-rgb: 0 0 0;
 
+  /* WHITE AND BLACK ARE NOT ROLES, and Child C decided that deliberately.
+     45 rows keep `bg-white`, `text-white`, `bg-black`, `text-black`,
+     `border-white`, `border-black` and `stroke-white` as literals.
+
+     They are theme ANCHORS, not palette entries. `text-white` on a coloured badge
+     means "maximum contrast against this fill", and that stays true in a light
+     theme — tokenising it onto a role would make it themeable and therefore wrong.
+
+     Only the two `shadow-black/NN` rows moved, to --elevation, because a shadow IS
+     a themed thing: a light theme wants its shadows warmer and weaker than pure
+     black, and a literal gives Child D nothing to change.
+
+     NO LINT RULE COVERS THE 45. A palette-family clause keys on `-\d{2,3}` and
+     cannot match a keyword, so there is nothing for them to be exempt from — an
+     earlier draft of C promised an exemption that would have guarded against a rule
+     that does not exist. Recorded here instead, which is the honest mechanism.
+
+     CHILD D SHOULD RE-EXAMINE THIS RATHER THAN INHERIT IT. It is a real narrowing
+     of "the whole app surface": a `text-white` sitting on a badge whose fill becomes
+     light in D stops meaning "maximum contrast" and starts meaning "invisible". */
+
   /* Six CATEGORICAL hues (ParticipationSidebar), chosen to be distinguishable
      from one another rather than to express a state — so no semantic role fits,
      and the vocabulary correctly said a semantic set is the wrong shape. Named
@@ -103,6 +124,88 @@
   --chart-especial-rgb: 217 83 79;   /* #D9534F */
   --chart-instr-rgb: 186 117 23;     /* #BA7517 */
   --chart-foh-rgb: 136 135 128;      /* #888780 */
+
+  /* ---- Child C, Layer 1 continued: the palette families ------------------
+     34 roles carrying Tailwind's EXACT palette values. Child C ships zero
+     licensed diffs: every one of the 36 (family, shade) pairs it migrates maps
+     to a role whose triplet equals the palette value it replaces, so nothing
+     renders differently. Any visual diff at C is a defect, not a normalisation.
+
+     Two of the 36 needed no new role. red-400 IS --negative-fg and amber-500 IS
+     --warning-fg, because Child B derived those from bare-hex sites spelling the
+     same values — the palette class and the hex literal were always the same
+     colour written two ways.
+
+     THE GRAY SCALE IS CALLED `mono`, AND THE NAME IS LOAD-BEARING. `neutral` is
+     one of Tailwind's own 22 families and the inventory scanner lists it in
+     PALETTE_FAMILIES, so `text-neutral-500` would be re-scanned as a palette class
+     and dispositioned straight back to Child C — the migration would run and the
+     count would not move. `slate`, `zinc` and `stone` fail identically.
+
+     Why a scale at all, rather than folding gray onto --ink-*: measured, the
+     collapse repaints 475 rows. gray-500 alone is 243 rows sitting distance 56
+     from --ink-dim, in lightness AND hue — Tailwind's grays are neutral, the ink
+     roles are blue-tinted. Frank chose zero repaint (2026-08-11). The cost is that
+     the role layer goes 30 -> 64 and Child D designs a light counterpart for each;
+     the alternative was to spend it on silent repaints of a UI the team uses
+     weekly, decided inside a migration slice where no reviewer would see it.
+
+     yellow, orange and amber deliberately do NOT collapse onto one --warning-*.
+     Parent spec Q1 asked; the answer is usage, not colour distance: amber warns
+     (ImpersonationBanner), yellow marks recency (ActivityPanel's "Reciente"),
+     orange encodes availability states (AvailabilityCalendar). purple and blue are
+     categorical badges rather than links or info, so they are named for their hue —
+     the same reasoning that produced the --chart-* roles above. */
+
+  /* gray -> --mono-* : gray — a scale, kept as a scale */
+  --mono-200-rgb: 229 231 235;                /* gray-200 #e5e7eb */
+  --mono-300-rgb: 209 213 219;                /* gray-300 #d1d5db */
+  --mono-400-rgb: 156 163 175;                /* gray-400 #9ca3af */
+  --mono-500-rgb: 107 114 128;                /* gray-500 #6b7280 */
+  --mono-600-rgb: 75 85 99;                   /* gray-600 #4b5563 */
+  --mono-700-rgb: 55 65 81;                   /* gray-700 #374151 */
+  --mono-800-rgb: 31 41 55;                   /* gray-800 #1f2937 */
+
+  /* red -> --negative-* : red */
+  --negative-faint-rgb: 254 226 226;          /* red-100 #fee2e2 */
+  --negative-soft-rgb: 254 202 202;           /* red-200 #fecaca */
+  --negative-muted-rgb: 252 165 165;          /* red-300 #fca5a5 */
+  --negative-strong-rgb: 239 68 68;           /* red-500 #ef4444 */
+  --negative-border-rgb: 185 28 28;           /* red-700 #b91c1c */
+  --negative-surface-rgb: 153 27 27;          /* red-800 #991b1b */
+  --negative-surface-deep-rgb: 127 29 29;     /* red-900 #7f1d1d */
+  --negative-surface-deepest-rgb: 69 10 10;   /* red-950 #450a0a */
+
+  /* amber -> --warning-* : amber */
+  --warning-faint-rgb: 253 230 138;           /* amber-200 #fde68a */
+  --warning-soft-rgb: 252 211 77;             /* amber-300 #fcd34d */
+  --warning-strong-rgb: 251 191 36;           /* amber-400 #fbbf24 */
+
+  /* yellow -> --recency-* : yellow */
+  --recency-faint-rgb: 254 240 138;           /* yellow-200 #fef08a */
+  --recency-soft-rgb: 253 224 71;             /* yellow-300 #fde047 */
+  --recency-strong-rgb: 250 204 21;           /* yellow-400 #facc15 */
+  --recency-fg-rgb: 234 179 8;                /* yellow-500 #eab308 */
+
+  /* green -> --positive-* : green */
+  --positive-soft-rgb: 134 239 172;           /* green-300 #86efac */
+  --positive-strong-rgb: 74 222 128;          /* green-400 #4ade80 */
+  --positive-deep-rgb: 34 197 94;             /* green-500 #22c55e */
+
+  /* orange -> --availability-* : orange */
+  --availability-faint-rgb: 254 215 170;      /* orange-200 #fed7aa */
+  --availability-soft-rgb: 253 186 116;       /* orange-300 #fdba74 */
+  --availability-strong-rgb: 251 146 60;      /* orange-400 #fb923c */
+  --availability-fg-rgb: 249 115 22;          /* orange-500 #f97316 */
+  --availability-deep-rgb: 234 88 12;         /* orange-600 #ea580c */
+
+  /* purple -> --badge-violet-* : purple */
+  --badge-violet-fg-rgb: 192 132 252;         /* purple-400 #c084fc */
+  --badge-violet-deep-rgb: 168 85 247;        /* purple-500 #a855f7 */
+
+  /* blue -> --badge-azure-* : blue */
+  --badge-azure-fg-rgb: 96 165 250;           /* blue-400 #60a5fa */
+  --badge-azure-deep-rgb: 59 130 246;         /* blue-500 #3b82f6 */
 
   /* ---- Child B, Layer 2: 23 composed tokens ------------------------------
      These exist because 166 of the 246 per-element light/dark pairs differ in

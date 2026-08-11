@@ -136,14 +136,35 @@ function normaliseAlpha(raw) {
 
 /** Category 13 is handled separately — it emits three row kinds, not literals. */
 const CATEGORIES = [
-  { id: 12, name: "css-custom-property-triplet", syntax: /--([a-z-]+):\s*(\d{1,3}\s+\d{1,3}\s+\d{1,3})\s*;/gi, cssOnly: true },
+  // `[a-z0-9-]+`, not `[a-z-]+`. A role name may contain digits — Child C's gray scale is
+  // `--mono-200-rgb` through `--mono-800-rgb` — and the narrower class silently emitted NO
+  // ROW for them. Not a miscount: a row that does not exist cannot be dispositioned, so
+  // seven roles covering 475 rows would have been invisible to the artifact this file's own
+  // header calls authoritative.
+  //
+  // Count-neutral when widened: every digit-bearing custom property today is a composed
+  // token — 18 of the 23 carry digits — and their values are `rgb(var(…))` rather than a
+  // bare triplet, so they still fail the value clause. Verified before the change, and
+  // `byCategory[12]` stayed at 30 across it.
+  { id: 12, name: "css-custom-property-triplet", syntax: /--([a-z0-9-]+):\s*(\d{1,3}\s+\d{1,3}\s+\d{1,3})\s*;/gi, cssOnly: true },
   { id: 11, name: "arbitrary-value-var-brand", syntax: /\[[^\]]*\bvar\(--brand-[a-z-]+\)[^\]]*\]/gi },
   { id: 9, name: "runtime-colour-map", syntax: null }, // resolved by location, below
   // Only COLOUR-shaped values. `fill="none"` is not a colour decision, and counting
   // it inflates the surface Child B is sized against.
   { id: 8, name: "svg-attribute", syntax: /\b(fill|stroke|stop-color|flood-color|lighting-color)=["'](#[0-9a-f]{3,8}|rgba?\([^)]*\)|hsla?\([^)]*\)|currentColor|white|black)["']/gi },
   { id: 7, name: "inline-style", syntax: null }, // resolved by location, below
-  { id: 6, name: "arbitrary-value-colour-no-hash", syntax: /\[[^\]]*\b(?:rgba?|hsla?)\([^\]]*\][^\]]*\]|\[[^\]]*\b(?:rgba?|hsla?)\([^)]*\)[^\]]*\]/gi },
+  // NO `\b` ANCHOR, and this is not a style preference.
+  //
+  // Tailwind writes spaces as UNDERSCORES inside an arbitrary value, so a shadow reads
+  // `shadow-[0_0_0_1px_rgb(0_191_255/0.45)]`. `_` is a word character, so `\b(?:rgba?)\(`
+  // asserts a boundary that is not there and the match fails silently.
+  //
+  // Child B's plan documented this trap — for the LINT RULE it prescribed — and nobody
+  // checked whether the SCANNER had the same bug. It did, from A1 onwards, and it hid two
+  // real rows from every child: `ProposalsPanel.tsx:154` (accent) and
+  // `signin/page.tsx:72` (a black shadow). Both are inside `shadow-[…]`, both follow an
+  // underscore.
+  { id: 6, name: "arbitrary-value-colour-no-hash", syntax: /\[[^\]]*(?:rgba?|hsla?)\((?!\s*var\()[^\]]*\]/gi },
   // Category 5 EXCLUDES rgb( immediately followed by var( — matching the lint rule
   // the parent's §9 prescribes. Without it, tailwind.config.ts's seven
   // `rgb(var(--brand-*) / <alpha-value>)` key values would land here instead of 10.
@@ -151,7 +172,15 @@ const CATEGORIES = [
   { id: 10, name: "retired-brand-colour-key", syntax: new RegExp(`\\b(?:${COLOUR_UTILITIES}|selection:bg|selection:text)-brand-(?:blackout|console|deck|beam|signal|frost|steel)(?:\\/\\d{1,3})?\\b`, "gi") },
   { id: 3, name: "raw-palette-class", syntax: new RegExp(`\\b(?:${COLOUR_UTILITIES})-(?:${PALETTE_FAMILIES})-\\d{2,3}(?:\\/\\d{1,3})?\\b`, "gi") },
   { id: 4, name: "colour-keyword", syntax: new RegExp(`\\b(?:${COLOUR_UTILITIES})-(?:white|black|transparent|current)\\b|\\bcurrentColor\\b|\\btransparent\\b`, "g") },
-  { id: 1, name: "bracketed-hex", syntax: /\[#[0-9a-f]{3,8}\](?:\/\d{1,3})?/gi },
+  // The opacity modifier accepts BOTH spellings: `/50` and `/[0.04]`. Matching only the
+  // first drops the bracket form out of `value`, so `normaliseAlpha` below has nothing
+  // to work with and the row records NO alpha — which reads as fully opaque.
+  //
+  // Third instance of this exact family. B4 fixed the PAIR extractor's copy of this
+  // alternation and did not fix category 1's; C's guard, rewritten onto a synthetic
+  // source, is what surfaced the remainder. 15 usages in this tree spell alpha in
+  // brackets.
+  { id: 1, name: "bracketed-hex", syntax: /\[#[0-9a-f]{3,8}\](?:\/(?:\d{1,3}|\[[0-9.]+\]))?/gi },
   { id: 2, name: "bare-hex", syntax: /#[0-9a-f]{3,8}\b/gi },
 ];
 
@@ -199,11 +228,37 @@ function classifyLocation(src, index) {
   return null;
 }
 
+/**
+ * Scan ARBITRARY TEXT into literal rows — the same path `scanFile` uses, exposed so a
+ * guard can prove the scanner's behaviour against a synthetic source instead of against
+ * the tree's current contents.
+ *
+ * This exists because of a defect class the light-mode programme hit three times: an
+ * assertion that counts a population in the live tree marches to ZERO as a migration
+ * SUCCEEDS, and then reads as a broken scanner. `colourInventory.test.ts` documents one
+ * such fix already; Child C drained a second (every alpha-bearing row was a palette
+ * class, so `withAlpha > 0` failed the moment the last family migrated).
+ *
+ * `pairsIn()` is NOT a substitute: it exercises a different alpha path (`COLOURED`'s
+ * own group) from the one `scanFile` uses (`value.match`), so a proof written through
+ * it would guard the wrong code.
+ *
+ * @param {string} text  source to scan
+ * @param {string} [rel] a pretend path — only its extension matters, for CSS-vs-JS
+ */
+export function scanText(text, rel = "synthetic.tsx") {
+  return scanSource(stripComments(text, { syntax: syntaxFor(rel) }), rel, rel.endsWith(".css"));
+}
+
 function scanFile(rel) {
   const abs = path.join(REPO_ROOT, rel);
   const raw = readFileSync(abs, "utf8");
   const src = stripComments(raw, { syntax: syntaxFor(rel) });
   const isCss = rel.endsWith(".css");
+  return scanSource(src, rel, isCss);
+}
+
+function scanSource(src, rel, isCss) {
   const rows = [];
   const claimed = []; // [start, end) spans already assigned, so nothing double-counts
 
@@ -463,6 +518,10 @@ const TOKEN_LAYER_ROLES = new RegExp(
       // Added in B4: the shadow black and the six categorical hues.
       "elevation",
       "chart-lead", "chart-bgv", "chart-coro", "chart-especial", "chart-instr", "chart-foh",
+      // Child C's 34 palette-family roles. Without these the category-12 scan
+      // dispositions them to B, and C1 — a slice that migrates nothing — would move
+      // byDisposition.B from 124 to 158.
+      "mono-200", "mono-300", "mono-400", "mono-500", "mono-600", "mono-700", "mono-800", "negative-faint", "negative-soft", "negative-muted", "negative-strong", "negative-border", "negative-surface", "negative-surface-deep", "negative-surface-deepest", "warning-faint", "warning-soft", "warning-strong", "recency-faint", "recency-soft", "recency-strong", "recency-fg", "positive-soft", "positive-strong", "positive-deep", "availability-faint", "availability-soft", "availability-strong", "availability-fg", "availability-deep", "badge-violet-fg", "badge-violet-deep", "badge-azure-fg", "badge-azure-deep",
     ].join("|") +
     ")-rgb:",
 );

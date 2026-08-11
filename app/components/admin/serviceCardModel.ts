@@ -176,8 +176,8 @@ export const SERVICE_LABEL: Record<ServiceType, string> = {
 };
 
 export const SERVICE_BADGE: Record<ServiceType, string> = {
-  sunday_role: "bg-orange-500/15 text-orange-400 border border-orange-500/30",
-  saturday_role: "bg-yellow-500/15 text-yellow-400 border border-yellow-400/30",
+  sunday_role: "bg-availability-fg/15 text-availability-strong border border-availability-fg/30",
+  saturday_role: "bg-recency-fg/15 text-recency-strong border border-recency-strong/30",
   special_role: "bg-info-fg/15 text-info-fg border border-info-fg/30",
 };
 
@@ -661,11 +661,11 @@ export type ReadinessTone = "ok" | "approved" | "warn" | "error" | "unknown" | "
 /** Dark-mode-only tone classes. Purple is never a readiness tone. */
 export const TONE_CLASS: Record<ReadinessTone, string> = {
   ok: "border-accent/40 bg-accent/10 text-accent",
-  approved: "border-green-500/40 bg-green-500/10 text-green-400",
-  warn: "border-amber-500/40 bg-amber-500/10 text-amber-400",
-  error: "border-red-500/50 bg-red-500/10 text-red-300",
-  unknown: "border-gray-500/40 bg-gray-500/10 text-gray-300",
-  neutral: "border-gray-600/40 bg-transparent text-gray-400",
+  approved: "border-positive-deep/40 bg-positive-deep/10 text-positive-strong",
+  warn: "border-warning-fg/40 bg-warning-fg/10 text-warning-strong",
+  error: "border-negative-strong/50 bg-negative-strong/10 text-negative-muted",
+  unknown: "border-mono-500/40 bg-mono-500/10 text-mono-300",
+  neutral: "border-mono-600/40 bg-transparent text-mono-400",
 };
 
 // ── Blocking issue copy ──────────────────────────────────────────────────────

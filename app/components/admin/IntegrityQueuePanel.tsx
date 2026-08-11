@@ -193,10 +193,10 @@ export default function IntegrityQueuePanel({
 
   const toneStyle =
     tone === "clean"
-      ? "border-green-500/25 text-green-400"
+      ? "border-positive-deep/25 text-positive-strong"
       : tone === "unknown"
-        ? "border-yellow-500/30 text-yellow-400"
-        : "border-red-500/30 text-red-400";
+        ? "border-recency-fg/30 text-recency-strong"
+        : "border-negative-strong/30 text-negative-fg";
 
   return (
     <section
@@ -224,7 +224,7 @@ export default function IntegrityQueuePanel({
             >
               {INTEGRITY_QUEUE_TITLE}
             </span>
-            <span className="block font-body text-xs text-gray-400">
+            <span className="block font-body text-xs text-mono-400">
               {integrityQueueSummary(queue)}
             </span>
           </span>
@@ -237,7 +237,7 @@ export default function IntegrityQueuePanel({
         <button
           type="button"
           onClick={loadAll}
-          className="min-h-[44px] shrink-0 rounded-lg border border-surface-accent-30 px-3 font-label text-[11px] uppercase tracking-widest text-gray-400 transition-colors hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          className="min-h-[44px] shrink-0 rounded-lg border border-surface-accent-30 px-3 font-label text-[11px] uppercase tracking-widest text-mono-400 transition-colors hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           Recargar
         </button>
@@ -245,11 +245,11 @@ export default function IntegrityQueuePanel({
 
       {/* Honest partial-source state: never a clean zero. */}
       {queue.incomplete && (
-        <div className="mx-3 mb-2 rounded-lg border border-yellow-500/30 bg-yellow-500/5 px-3 py-2 sm:mx-4">
-          <p className="font-body text-xs text-yellow-200/90">{INTEGRITY_INCOMPLETE_NOTE}</p>
+        <div className="mx-3 mb-2 rounded-lg border border-recency-fg/30 bg-recency-fg/5 px-3 py-2 sm:mx-4">
+          <p className="font-body text-xs text-recency-faint/90">{INTEGRITY_INCOMPLETE_NOTE}</p>
           <ul className="mt-1 space-y-0.5">
             {queue.unproven.map((u) => (
-              <li key={u.source} className="font-body text-xs text-yellow-200/70">
+              <li key={u.source} className="font-body text-xs text-recency-faint/70">
                 {u.state === "loading" ? "Cargando" : "Falló"}:{" "}
                 {DOMAIN_LABEL[
                   INTEGRITY_DOMAINS.find((d) => INTEGRITY_DOMAIN_SOURCE[d] === u.source) ?? "roles"
@@ -271,7 +271,7 @@ export default function IntegrityQueuePanel({
 
       <div id="integrity-queue-body" hidden={!open}>
         {queue.count === 0 ? (
-          <p className="px-3 pb-3 font-body text-xs text-gray-500 sm:px-4">
+          <p className="px-3 pb-3 font-body text-xs text-mono-500 sm:px-4">
             {queue.incomplete
               ? "No se encontraron problemas en los dominios que sí se pudieron leer."
               : "Ningún documento quedó fuera de un servicio válido."}
@@ -331,7 +331,7 @@ function QueueEntry({
         <span className="font-body text-sm font-semibold [overflow-wrap:anywhere]">
           {INTEGRITY_KIND_LABEL[entry.kind]}
         </span>
-        <span className="font-mono text-[11px] text-gray-400 [overflow-wrap:anywhere]">
+        <span className="font-mono text-[11px] text-mono-400 [overflow-wrap:anywhere]">
           {entry.ids.join(" · ") || "(sin id)"}
         </span>
       </button>
@@ -357,8 +357,8 @@ function QueueEntry({
 
 function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <p className="min-w-0 font-body text-xs text-gray-400 [overflow-wrap:anywhere]">
-      <span className="font-label uppercase tracking-widest text-gray-500">{label}: </span>
+    <p className="min-w-0 font-body text-xs text-mono-400 [overflow-wrap:anywhere]">
+      <span className="font-label uppercase tracking-widest text-mono-500">{label}: </span>
       <span className={mono ? "font-mono" : undefined}>{value}</span>
     </p>
   );

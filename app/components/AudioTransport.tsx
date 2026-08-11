@@ -41,14 +41,14 @@ export default function AudioTransport({
       <div className="min-w-0 flex-1">
         <div className="mb-2 flex items-baseline gap-2">
           <span className="truncate font-body text-xs font-semibold">{track.songTitle}</span>
-          <span className="max-w-[8rem] shrink-0 truncate font-label text-[11px] uppercase tracking-widest text-gray-500">{track.title}</span>
+          <span className="max-w-[8rem] shrink-0 truncate font-label text-[11px] uppercase tracking-widest text-mono-500">{track.title}</span>
           {track.tone && (
             <span className="shrink-0 font-label text-[11px] text-accent/60">{track.tone}</span>
           )}
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="w-8 shrink-0 text-right font-label text-[11px] tabular-nums text-gray-600">
+          <span className="w-8 shrink-0 text-right font-label text-[11px] tabular-nums text-mono-600">
             {fmtTime(currentTime)}
           </span>
           <div
@@ -83,7 +83,7 @@ export default function AudioTransport({
             />
             <div className="absolute inset-y-0 -bottom-1 -top-1 left-0 right-0 opacity-0 group-hover:opacity-100" style={{ cursor: "pointer" }} />
           </div>
-          <span className="w-8 shrink-0 font-label text-[11px] tabular-nums text-gray-600">
+          <span className="w-8 shrink-0 font-label text-[11px] tabular-nums text-mono-600">
             {fmtTime(duration)}
           </span>
         </div>
@@ -91,7 +91,7 @@ export default function AudioTransport({
 
       <button
         onClick={onClose}
-        className="-mr-1 shrink-0 rounded-lg p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-300"
+        className="-mr-1 shrink-0 rounded-lg p-2 text-mono-500 transition-colors hover:bg-white/5 hover:text-mono-300"
         aria-label={`Cerrar reproductor de ${track.songTitle} — ${track.title}`}
       >
         <CloseIcon />

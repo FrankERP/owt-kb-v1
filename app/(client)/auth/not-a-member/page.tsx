@@ -9,7 +9,7 @@ export default function NotAMemberPage() {
       <div className="w-full max-w-sm text-center space-y-6">
         <Image src="/LogoOasis.png" alt="Oasis Worship Team" width={56} height={56} className="mx-auto" />
         <h1 className="font-display text-xl uppercase tracking-wide">Acceso no autorizado</h1>
-        <p className="font-body text-sm text-gray-400">
+        <p className="font-body text-sm text-mono-400">
           Tu cuenta no está registrada como miembro del equipo. Contacta a un
           administrador para que te agreguen, o si iniciaste sesión con la cuenta
           equivocada, cierra sesión e intenta con otra.

@@ -579,7 +579,7 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
       { date: "2026-08-09", rowId: "instrumento:Bass", memberIds: ["m1"], origin: "manual" },
     ];
     const { container } = render(<PlannerGrid {...baseProps({ cells })} />);
-    expect(container.querySelectorAll(".border-red-500\\/50").length).toBe(0);
+    expect(container.querySelectorAll(".border-negative-strong\\/50").length).toBe(0);
   });
 
   it("flags a same-category duplicate on its own two rows WITHOUT bleeding onto a legitimate cross-category cell for the same member (Finding 1)", () => {
@@ -601,7 +601,7 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
     expect(within(leadCell).getByText(/⚠/)).toBeTruthy();
     expect(within(bgvCell).getByText(/⚠/)).toBeTruthy();
     expect(within(bassCell).queryByText(/⚠/)).toBeNull();
-    expect(bassCell.querySelectorAll(".border-red-500\\/50").length).toBe(0);
+    expect(bassCell.querySelectorAll(".border-negative-strong\\/50").length).toBe(0);
   });
 
   it("flags duplicates in BOTH categories when a member is doubled in each", () => {

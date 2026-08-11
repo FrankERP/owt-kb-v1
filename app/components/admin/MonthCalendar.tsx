@@ -291,8 +291,8 @@ export default function MonthCalendar({
 
   return (
     <div className="space-y-2">
-      <label className="font-label text-xs uppercase tracking-widest text-gray-500">Fechas</label>
-      <p className="font-body text-xs text-gray-500">
+      <label className="font-label text-xs uppercase tracking-widest text-mono-500">Fechas</label>
+      <p className="font-body text-xs text-mono-500">
         Domingos y sábados se generan por defecto: toca una fecha para quitarla. Toca cualquier otro
         día para crear un servicio especial.
       </p>
@@ -301,7 +301,7 @@ export default function MonthCalendar({
         {WEEKDAY_HEADERS.map((h) => (
           <span
             key={h}
-            className="font-label text-[10px] uppercase tracking-widest text-gray-500 text-center py-1"
+            className="font-label text-[10px] uppercase tracking-widest text-mono-500 text-center py-1"
           >
             {h}
           </span>
@@ -319,10 +319,10 @@ export default function MonthCalendar({
           const tone = selected
             ? dow === 0
               ? "border-accent/50 bg-accent/10 text-accent"
-              : "border-yellow-400/50 bg-yellow-400/10 text-yellow-400"
+              : "border-recency-strong/50 bg-recency-strong/10 text-recency-strong"
             : special
               ? "border-info-fg/50 bg-info-fg/10 text-info-fg"
-              : "border-accent/15 text-gray-500 hover:border-accent/40 hover:text-ink-muted";
+              : "border-accent/15 text-mono-500 hover:border-accent/40 hover:text-ink-muted";
           return (
             <button
               key={date}
@@ -355,7 +355,7 @@ export default function MonthCalendar({
               )}
               {existing && (
                 <span
-                  className="font-label text-[8px] uppercase tracking-widest text-amber-400 leading-none"
+                  className="font-label text-[8px] uppercase tracking-widest text-warning-strong leading-none"
                   aria-label={`Ya existe un servicio el ${longDate(date)}`}
                 >
                   ya existe
@@ -443,7 +443,7 @@ export default function MonthCalendar({
                     onRemoveSpecial(s.date);
                   }}
                   aria-label={`Quitar servicio especial del ${longDate(s.date)}`}
-                  className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-[10px] uppercase tracking-widest text-gray-400 hover:border-red-400/50 hover:text-red-400 transition-colors"
+                  className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-[10px] uppercase tracking-widest text-mono-400 hover:border-negative-fg/50 hover:text-negative-fg transition-colors"
                 >
                   Quitar
                 </button>
@@ -453,7 +453,7 @@ export default function MonthCalendar({
       )}
 
       {notice && (
-        <p role="status" className="font-body text-xs text-amber-400 bg-amber-500/10 rounded-lg px-3 py-2">
+        <p role="status" className="font-body text-xs text-warning-strong bg-warning-fg/10 rounded-lg px-3 py-2">
           {notice}
         </p>
       )}

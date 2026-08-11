@@ -45,10 +45,10 @@ function calendarDaysAgo(iso: string): number {
 
 function activityStatus(lastActive: string | null): { color: string; label: string } {
   const days = daysSince(lastActive);
-  if (days === null)  return { color: "bg-gray-700",      label: "Sin actividad" };
-  if (days <= 7)      return { color: "bg-green-500",     label: "Activo" };
-  if (days <= 30)     return { color: "bg-yellow-500",    label: "Reciente" };
-  return               { color: "bg-red-500/70",          label: "Inactivo" };
+  if (days === null)  return { color: "bg-mono-700",      label: "Sin actividad" };
+  if (days <= 7)      return { color: "bg-positive-deep",     label: "Activo" };
+  if (days <= 30)     return { color: "bg-recency-fg",    label: "Reciente" };
+  return               { color: "bg-negative-strong/70",          label: "Inactivo" };
 }
 
 function formatDate(iso: string) {
@@ -79,12 +79,12 @@ function Avatar({ name }: { name: string }) {
 
 function ProviderBadge({ provider }: { provider: string }) {
   const colors: Record<string, string> = {
-    google:      "bg-red-500/15 text-red-400 border-red-500/30",
-    credentials: "bg-green-500/15 text-green-400 border-green-500/30",
-    azure:       "bg-blue-500/15 text-blue-400 border-blue-500/30",
+    google:      "bg-negative-strong/15 text-negative-fg border-negative-strong/30",
+    credentials: "bg-positive-deep/15 text-positive-strong border-positive-deep/30",
+    azure:       "bg-badge-azure-deep/15 text-badge-azure-fg border-badge-azure-deep/30",
   };
   return (
-    <span className={`font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${colors[provider] ?? "bg-gray-500/15 text-gray-400 border-gray-500/30"}`}>
+    <span className={`font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${colors[provider] ?? "bg-mono-500/15 text-mono-400 border-mono-500/30"}`}>
       {PROVIDER_LABEL[provider] ?? provider}
     </span>
   );
@@ -119,7 +119,7 @@ export default function ActivityPanel() {
   }
 
   if (error) {
-    return <p className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-xl px-4 py-3">{error}</p>;
+    return <p className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-xl px-4 py-3">{error}</p>;
   }
 
   return (
@@ -127,16 +127,16 @@ export default function ActivityPanel() {
       {/* Summary stats */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Activos esta semana",  value: activeThisWeek,  dot: "bg-green-500"  },
-          { label: "Activos este mes",     value: activeThisMonth, dot: "bg-yellow-500" },
-          { label: "Sin actividad",        value: neverActive,     dot: "bg-gray-600"   },
+          { label: "Activos esta semana",  value: activeThisWeek,  dot: "bg-positive-deep"  },
+          { label: "Activos este mes",     value: activeThisMonth, dot: "bg-recency-fg" },
+          { label: "Sin actividad",        value: neverActive,     dot: "bg-mono-600"   },
         ].map((stat) => (
           <div key={stat.label} className="rounded-xl border border-edge-accent-subtle bg-accent/5 px-4 py-3 text-center">
             <div className="flex items-center justify-center gap-1.5 mb-1">
               <span className={`w-2 h-2 rounded-full shrink-0 ${stat.dot}`} />
               <p className="font-display text-2xl leading-none">{stat.value}</p>
             </div>
-            <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">{stat.label}</p>
+            <p className="font-label text-[10px] uppercase tracking-widest text-mono-500">{stat.label}</p>
           </div>
         ))}
       </div>
@@ -160,7 +160,7 @@ export default function ActivityPanel() {
                       <span className="font-label text-[11px] uppercase tracking-widest text-accent/60">&ldquo;{m.alias}&rdquo;</span>
                     )}
                   </div>
-                  <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 mt-0.5">
+                  <p className="font-label text-[11px] uppercase tracking-widest text-mono-500 mt-0.5">
                     {m.lastActive
                       ? `Última actividad: ${formatDate(m.lastActive)}`
                       : "Sin actividad registrada"}
@@ -170,7 +170,7 @@ export default function ActivityPanel() {
                 {/* Status dot + label */}
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className={`w-2 h-2 rounded-full ${status.color}`} />
-                  <span className="font-label text-[10px] uppercase tracking-widest text-gray-500 hidden sm:inline">
+                  <span className="font-label text-[10px] uppercase tracking-widest text-mono-500 hidden sm:inline">
                     {status.label}
                   </span>
                 </div>
@@ -180,7 +180,7 @@ export default function ActivityPanel() {
                   <svg
                     width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                    className={`text-gray-500 shrink-0 transition-transform ${expanded === m._id ? "rotate-180" : ""}`}
+                    className={`text-mono-500 shrink-0 transition-transform ${expanded === m._id ? "rotate-180" : ""}`}
                   >
                     <polyline points="6 9 12 15 18 9" />
                   </svg>
@@ -193,13 +193,13 @@ export default function ActivityPanel() {
                   {/* Last seen vs last login */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="font-label text-[10px] uppercase tracking-widest text-gray-600 mb-0.5">Última visita</p>
+                      <p className="font-label text-[10px] uppercase tracking-widest text-mono-600 mb-0.5">Última visita</p>
                       <p className="font-body text-xs">
                         {m.lastSeen ? formatDateTime(m.lastSeen) : "—"}
                       </p>
                     </div>
                     <div>
-                      <p className="font-label text-[10px] uppercase tracking-widest text-gray-600 mb-0.5">Último inicio de sesión</p>
+                      <p className="font-label text-[10px] uppercase tracking-widest text-mono-600 mb-0.5">Último inicio de sesión</p>
                       <p className="font-body text-xs">
                         {m.lastLogin ? formatDateTime(m.lastLogin) : "—"}
                       </p>
@@ -209,13 +209,13 @@ export default function ActivityPanel() {
                   {/* Login history */}
                   {m.events.length > 0 && (
                     <div>
-                      <p className="font-label text-[10px] uppercase tracking-widest text-gray-600 mb-1.5">
+                      <p className="font-label text-[10px] uppercase tracking-widest text-mono-600 mb-1.5">
                         Historial de accesos ({m.loginCount})
                       </p>
                       <div className="space-y-1">
                         {m.events.map((e) => (
                           <div key={e._id} className="flex items-center justify-between gap-4">
-                            <span className="font-body text-xs text-gray-400">{formatDateTime(e.timestamp)}</span>
+                            <span className="font-body text-xs text-mono-400">{formatDateTime(e.timestamp)}</span>
                             <ProviderBadge provider={e.provider} />
                           </div>
                         ))}

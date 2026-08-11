@@ -36,7 +36,7 @@ export default function SectionNav({ sections }: { sections: Section[] }) {
             className={`font-label text-xs uppercase tracking-widest px-4 py-3 border-b-2 transition-colors whitespace-nowrap shrink-0 ${
               active === s.id
                 ? "border-accent text-accent"
-                : "border-transparent text-gray-500 dark:text-gray-400 hover:text-accent dark:hover:text-accent"
+                : "border-transparent text-mono-500 dark:text-mono-400 hover:text-accent dark:hover:text-accent"
             }`}
           >
             {s.label}

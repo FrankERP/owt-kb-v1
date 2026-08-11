@@ -76,9 +76,9 @@ const ROLES: { value: OWTRole; label: string }[] = [
 
 const ROLE_BADGE: Record<OWTRole, string> = {
   "super-admin":    "bg-accent/15 text-accent border border-accent/30",
-  "admin":          "bg-blue-500/15 text-blue-400 border border-blue-500/30",
-  "content-editor": "bg-purple-500/15 text-purple-400 border border-purple-500/30",
-  "member":         "bg-gray-500/15 text-gray-400 border border-gray-500/30",
+  "admin":          "bg-badge-azure-deep/15 text-badge-azure-fg border border-badge-azure-deep/30",
+  "content-editor": "bg-badge-violet-deep/15 text-badge-violet-fg border border-badge-violet-deep/30",
+  "member":         "bg-mono-500/15 text-mono-400 border border-mono-500/30",
 };
 
 const ROLE_LABEL: Record<OWTRole, string> = {
@@ -253,19 +253,19 @@ export function MemberForm({
       className="space-y-4"
     >
       <div className="space-y-1">
-        <label className="font-label text-xs uppercase tracking-widest text-gray-500">Nombre</label>
+        <label className="font-label text-xs uppercase tracking-widest text-mono-500">Nombre</label>
         <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} required minLength={2} placeholder="Nombre completo" />
       </div>
       <div className="space-y-1">
-        <label className="font-label text-xs uppercase tracking-widest text-gray-500">Alias</label>
+        <label className="font-label text-xs uppercase tracking-widest text-mono-500">Alias</label>
         <input className={inputCls} value={alias} onChange={(e) => setAlias(e.target.value)} placeholder="Nombre corto o apodo (opcional)" />
       </div>
       <div className="space-y-1">
-        <label className="font-label text-xs uppercase tracking-widest text-gray-500">Email</label>
+        <label className="font-label text-xs uppercase tracking-widest text-mono-500">Email</label>
         <input className={inputCls} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="correo@ejemplo.com" />
       </div>
       <div className="space-y-1">
-        <label className="font-label text-xs uppercase tracking-widest text-gray-500">Rol</label>
+        <label className="font-label text-xs uppercase tracking-widest text-mono-500">Rol</label>
         <select className={selectCls} value={role} onChange={(e) => setRole(e.target.value as OWTRole)}>
           {ROLES.map((r) => (
             <option key={r.value} value={r.value}>{r.label}</option>
@@ -273,7 +273,7 @@ export function MemberForm({
         </select>
       </div>
       <div className="space-y-2">
-        <label className="font-label text-xs uppercase tracking-widest text-gray-500">Tipo</label>
+        <label className="font-label text-xs uppercase tracking-widest text-mono-500">Tipo</label>
         <div className="flex gap-2">
           {MEMBER_TYPES.map(({ value, label }) => {
             const active = memberType.includes(value);
@@ -285,7 +285,7 @@ export function MemberForm({
                 className={`flex-1 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
                   active
                     ? "border-accent bg-accent/15 text-accent"
-                    : "border-accent/20 text-gray-500 hover:border-accent/50"
+                    : "border-accent/20 text-mono-500 hover:border-accent/50"
                 }`}
               >
                 {label}
@@ -296,7 +296,7 @@ export function MemberForm({
       </div>
       {initial && (
         <div className="space-y-3 pt-1">
-          <label className="font-label text-xs uppercase tracking-widest text-gray-500">Correos</label>
+          <label className="font-label text-xs uppercase tracking-widest text-mono-500">Correos</label>
           <EmailPrefToggles
             values={emailPrefs}
             onToggle={handleTogglePref}
@@ -346,16 +346,16 @@ function PasswordForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <p className="font-body text-sm text-gray-400">
+      <p className="font-body text-sm text-mono-400">
         Establecer contraseña para <span className="text-accent">{member.member_name}</span>
       </p>
-      {err && <p className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">{err}</p>}
+      {err && <p className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-lg px-3 py-2">{err}</p>}
       <div className="space-y-1">
-        <label className="font-label text-xs uppercase tracking-widest text-gray-500">Nueva contraseña</label>
+        <label className="font-label text-xs uppercase tracking-widest text-mono-500">Nueva contraseña</label>
         <input className={inputCls} type="password" value={pw} onChange={(e) => setPw(e.target.value)} required minLength={8} placeholder="Mínimo 8 caracteres" />
       </div>
       <div className="space-y-1">
-        <label className="font-label text-xs uppercase tracking-widest text-gray-500">Confirmar contraseña</label>
+        <label className="font-label text-xs uppercase tracking-widest text-mono-500">Confirmar contraseña</label>
         <input className={inputCls} type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required placeholder="Repetir contraseña" />
       </div>
       <div className="flex gap-3 pt-1">
@@ -685,7 +685,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
         <div>
           <h1 className="font-display text-2xl uppercase tracking-wide">Miembros</h1>
           {!loading && (
-            <p className="font-label text-xs uppercase tracking-widest text-gray-500 mt-0.5">
+            <p className="font-label text-xs uppercase tracking-widest text-mono-500 mt-0.5">
               {query.trim() && filteredMembers.length !== members.length
                 ? `${filteredMembers.length} de ${members.length} ${members.length === 1 ? "miembro" : "miembros"}`
                 : `${members.length} ${members.length === 1 ? "miembro" : "miembros"}`
@@ -764,7 +764,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
         {/* Row 2: search */}
         <div className="brand-search-console relative">
           <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-mono-500 pointer-events-none"
             width="14" height="14" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
           >
@@ -779,7 +779,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
           {query && (
             <button
               onClick={() => setQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-accent transition-colors text-lg leading-none"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-mono-500 hover:text-accent transition-colors text-lg leading-none"
             >
               ×
             </button>
@@ -797,17 +797,17 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
       )}
 
       {error && (
-        <p className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-xl px-4 py-3">{error}</p>
+        <p className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-xl px-4 py-3">{error}</p>
       )}
 
       {/* Members list */}
       {!loading && !error && (
         <div className="space-y-2">
           {members.length === 0 && (
-            <p className="font-body text-sm text-gray-500 text-center py-12">No hay miembros todavía.</p>
+            <p className="font-body text-sm text-mono-500 text-center py-12">No hay miembros todavía.</p>
           )}
           {members.length > 0 && filteredMembers.length === 0 && (
-            <p className="font-body text-sm text-gray-500 text-center py-12">
+            <p className="font-body text-sm text-mono-500 text-center py-12">
               Sin resultados para &ldquo;{query}&rdquo;
             </p>
           )}
@@ -837,7 +837,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
                 <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                   <p className="font-body text-sm text-surface-ink-l50-d35 truncate">{m.email}</p>
                   {(m.memberType ?? []).map(t => (
-                    <span key={t} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-accent/10 text-gray-400 border border-accent/15">
+                    <span key={t} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-accent/10 text-mono-400 border border-accent/15">
                       {TYPE_LABEL[t] ?? t}
                     </span>
                   ))}
@@ -852,7 +852,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
               {/* Password indicator */}
               <span
                 title={m.hasPassword ? "Tiene contraseña" : "Sin contraseña"}
-                className={`w-2 h-2 rounded-full shrink-0 ${m.hasPassword ? "bg-green-500" : "bg-gray-600"}`}
+                className={`w-2 h-2 rounded-full shrink-0 ${m.hasPassword ? "bg-positive-deep" : "bg-mono-600"}`}
               />
 
               {/* Actions */}
@@ -879,9 +879,9 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
 
       {/* Legend */}
       {!loading && members.length > 0 && (
-        <p className="font-label text-[11px] uppercase tracking-widest text-gray-600 flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Con contraseña
-          <span className="w-2 h-2 rounded-full bg-gray-600 inline-block ml-2" /> Solo SSO
+        <p className="font-label text-[11px] uppercase tracking-widest text-mono-600 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-positive-deep inline-block" /> Con contraseña
+          <span className="w-2 h-2 rounded-full bg-mono-600 inline-block ml-2" /> Solo SSO
         </p>
       )}
 
@@ -922,14 +922,14 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
 
       {modal?.type === "delete" && (
         <Modal title="Eliminar miembro" onClose={closeModal} status={modalError}>
-          <p className="font-body text-sm text-gray-400">
-            ¿Eliminar a <span className="text-red-400 font-semibold">{modal.member.member_name}</span>? Esta acción no se puede deshacer.
+          <p className="font-body text-sm text-mono-400">
+            ¿Eliminar a <span className="text-negative-fg font-semibold">{modal.member.member_name}</span>? Esta acción no se puede deshacer.
           </p>
           <div className="flex gap-3 pt-1">
             <button onClick={closeModal} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
               Cancelar
             </button>
-            <button onClick={handleDelete} disabled={submitting} className="flex-1 py-2 rounded-lg bg-red-800/60 hover:bg-red-700/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+            <button onClick={handleDelete} disabled={submitting} className="flex-1 py-2 rounded-lg bg-negative-surface/60 hover:bg-negative-border/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
               {submitting ? "Eliminando..." : "Eliminar"}
             </button>
           </div>
@@ -945,7 +945,7 @@ function ActionBtn({ onClick, title, danger, children }: { onClick: () => void; 
     <button
       onClick={onClick}
       title={title}
-      className={`p-1.5 rounded-lg transition-colors ${danger ? "hover:bg-red-500/20 hover:text-red-400 text-gray-500" : "hover:bg-accent/10 hover:text-accent text-gray-500"}`}
+      className={`p-1.5 rounded-lg transition-colors ${danger ? "hover:bg-negative-strong/20 hover:text-negative-fg text-mono-500" : "hover:bg-accent/10 hover:text-accent text-mono-500"}`}
     >
       {children}
     </button>
