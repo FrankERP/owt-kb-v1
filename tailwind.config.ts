@@ -59,6 +59,52 @@ const config: Config = {
 				"chart-instr": "rgb(var(--chart-instr-rgb) / <alpha-value>)",
 				"chart-foh": "rgb(var(--chart-foh-rgb) / <alpha-value>)",
 
+				// Child C — the palette families. 34 roles carrying Tailwind's exact
+				// values, so the migration renders byte-identically. See brand.css for
+				// why the gray scale is `mono` and not `neutral`.
+
+				"mono-200": "rgb(var(--mono-200-rgb) / <alpha-value>)",
+				"mono-300": "rgb(var(--mono-300-rgb) / <alpha-value>)",
+				"mono-400": "rgb(var(--mono-400-rgb) / <alpha-value>)",
+				"mono-500": "rgb(var(--mono-500-rgb) / <alpha-value>)",
+				"mono-600": "rgb(var(--mono-600-rgb) / <alpha-value>)",
+				"mono-700": "rgb(var(--mono-700-rgb) / <alpha-value>)",
+				"mono-800": "rgb(var(--mono-800-rgb) / <alpha-value>)",
+
+				"negative-faint": "rgb(var(--negative-faint-rgb) / <alpha-value>)",
+				"negative-soft": "rgb(var(--negative-soft-rgb) / <alpha-value>)",
+				"negative-muted": "rgb(var(--negative-muted-rgb) / <alpha-value>)",
+				"negative-strong": "rgb(var(--negative-strong-rgb) / <alpha-value>)",
+				"negative-border": "rgb(var(--negative-border-rgb) / <alpha-value>)",
+				"negative-surface": "rgb(var(--negative-surface-rgb) / <alpha-value>)",
+				"negative-surface-deep": "rgb(var(--negative-surface-deep-rgb) / <alpha-value>)",
+				"negative-surface-deepest": "rgb(var(--negative-surface-deepest-rgb) / <alpha-value>)",
+
+				"warning-faint": "rgb(var(--warning-faint-rgb) / <alpha-value>)",
+				"warning-soft": "rgb(var(--warning-soft-rgb) / <alpha-value>)",
+				"warning-strong": "rgb(var(--warning-strong-rgb) / <alpha-value>)",
+
+				"recency-faint": "rgb(var(--recency-faint-rgb) / <alpha-value>)",
+				"recency-soft": "rgb(var(--recency-soft-rgb) / <alpha-value>)",
+				"recency-strong": "rgb(var(--recency-strong-rgb) / <alpha-value>)",
+				"recency-fg": "rgb(var(--recency-fg-rgb) / <alpha-value>)",
+
+				"positive-soft": "rgb(var(--positive-soft-rgb) / <alpha-value>)",
+				"positive-strong": "rgb(var(--positive-strong-rgb) / <alpha-value>)",
+				"positive-deep": "rgb(var(--positive-deep-rgb) / <alpha-value>)",
+
+				"availability-faint": "rgb(var(--availability-faint-rgb) / <alpha-value>)",
+				"availability-soft": "rgb(var(--availability-soft-rgb) / <alpha-value>)",
+				"availability-strong": "rgb(var(--availability-strong-rgb) / <alpha-value>)",
+				"availability-fg": "rgb(var(--availability-fg-rgb) / <alpha-value>)",
+				"availability-deep": "rgb(var(--availability-deep-rgb) / <alpha-value>)",
+
+				"badge-violet-fg": "rgb(var(--badge-violet-fg-rgb) / <alpha-value>)",
+				"badge-violet-deep": "rgb(var(--badge-violet-deep-rgb) / <alpha-value>)",
+
+				"badge-azure-fg": "rgb(var(--badge-azure-fg-rgb) / <alpha-value>)",
+				"badge-azure-deep": "rgb(var(--badge-azure-deep-rgb) / <alpha-value>)",
+
 				// Child B, Layer 2 — the 23 composed tokens. These bake their own alpha
 				// and are therefore NOT alpha-capable: no `<alpha-value>`, and an
 				// opacity modifier on one is a bug that B-final's lint clause bans.
