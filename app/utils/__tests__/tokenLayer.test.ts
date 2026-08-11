@@ -208,3 +208,73 @@ describe("token layer — reference integrity from Tailwind into brand.css", () 
     }
   });
 });
+
+describe("brand.css rule bodies — B2's invariant, which later slices must not undo", () => {
+  // B2 rewrote all 69 colour `rgb(var(--brand-*) …)` occurrences in rule BODIES onto
+  // the new roles. The seven `--brand-*` DECLARATIONS deliberately survive until
+  // B-final, so a grep for the name alone proves nothing — the invariant is about
+  // where they are USED.
+  //
+  // Without this, a later batch could reintroduce `rgb(var(--brand-beam) / 0.2)` into
+  // a rule body, every gate would stay green, and B-final would then remove the
+  // declaration underneath it: the body compiles, the declaration is dropped as
+  // invalid, and the element silently loses its colour.
+
+  const OCCURRENCE = /rgb\(\s*var\((--[a-z0-9-]+)\)\s*(?:\/\s*([0-9.]+)\s*)?\)/g;
+  const RETIRED_COLOUR = /^--brand-(blackout|console|deck|beam|signal|frost|steel)$/;
+
+  /** Everything after the `:root` block — i.e. the rule bodies. */
+  function ruleBodies(source: string): string {
+    const rootStart = source.indexOf(":root {");
+    expect(rootStart, ":root block not found").toBeGreaterThan(-1);
+    return source.slice(source.indexOf("}", rootStart) + 1);
+  }
+
+  function occurrences(source: string) {
+    return [...source.matchAll(OCCURRENCE)].map((m) => ({ name: m[1], alpha: m[2] ?? "none" }));
+  }
+
+  const bodies = ruleBodies(css);
+
+  it("no rule body references a retired --brand-* COLOUR variable", () => {
+    const offenders = occurrences(bodies).filter((o) => RETIRED_COLOUR.test(o.name));
+    expect(offenders.map((o) => `${o.name}/${o.alpha}`)).toEqual([]);
+  });
+
+  it("FIRE-PROOF: a reintroduced beam reference is caught", () => {
+    const synthetic = ":root { --x: 1; }\n.a { color: rgb(var(--brand-beam) / 0.2); }";
+    const offenders = occurrences(ruleBodies(synthetic)).filter((o) => RETIRED_COLOUR.test(o.name));
+    expect(offenders).toEqual([{ name: "--brand-beam", alpha: "0.2" }]);
+  });
+
+  it("the seven declarations still exist — B2 rewrote bodies, B-final removes these", () => {
+    for (const r of ["blackout", "console", "deck", "beam", "signal", "frost", "steel"]) {
+      expect(DECLARED.has(`--brand-${r}`), `--brand-${r}`).toBe(true);
+    }
+  });
+
+  it("counts the migrated occurrences, alpha-free ones included", () => {
+    // 69 colour occurrences moved: 65 alpha-bearing plus FOUR alpha-free. A check
+    // scoped to alpha-bearing values misses the alpha-free ones entirely — and three
+    // of those four were beam, including `.brand-atmosphere`'s own body wash.
+    const all = occurrences(bodies).filter((o) => /^--(accent|ink|surface|warning|info|positive|negative)/.test(o.name));
+    expect(all.length).toBe(69);
+    expect(all.filter((o) => o.alpha === "none").length).toBe(4);
+  });
+
+  it("does NOT touch the non-colour --brand-* four, which are outside B entirely", () => {
+    // radius and duration are not colour: the vocabulary leaves them alone, they are
+    // outside the codemod and outside the lint rule, and they are why the B-final gate
+    // can never demand category 11 reach zero — 7 of its 9 rows are radius.
+    for (const keep of ["radius-panel", "radius-control", "duration-fast", "duration-reveal"]) {
+      expect(DECLARED.has(`--brand-${keep}`), `--brand-${keep} declaration`).toBe(true);
+    }
+    // Their USAGE splits across two files, which is why an earlier revision of this
+    // test asserted all four appear in brand.css and went red: only the two duration
+    // variables are used here. Both radius variables are consumed exclusively from
+    // components (signin/page.tsx, DayCard.tsx) — the category-11 rows B never touches.
+    expect(bodies).toContain("var(--brand-duration-fast)");
+    expect(bodies).toContain("var(--brand-duration-reveal)");
+    expect(bodies).not.toContain("var(--brand-radius-");
+  });
+});
