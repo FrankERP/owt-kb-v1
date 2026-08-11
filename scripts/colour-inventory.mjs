@@ -413,6 +413,10 @@ const TOKEN_LAYER_ROLES = new RegExp(
       "warning-fg", "warning-surface", "warning-border",
       "info-fg", "info-surface", "info-border",
       "positive-fg", "negative-fg",
+      // Added in slice B3: two "deep" surfaces the vocabulary folded into one slot,
+      // and three overlay navies B preserves rather than collapsing.
+      "warning-surface-deep", "info-surface-deep",
+      "surface-overlay", "surface-overlay-deep", "surface-overlay-deepest",
     ].join("|") +
     ")-rgb:",
 );

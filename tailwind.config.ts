@@ -53,6 +53,16 @@ const config: Config = {
 				"positive-fg": "rgb(var(--positive-fg-rgb) / <alpha-value>)",
 				"negative-fg": "rgb(var(--negative-fg-rgb) / <alpha-value>)",
 
+				// Added in B3 — five values that render with no role in the vocabulary.
+				// The two "deep" surfaces are the DARK halves of pairs whose light halves
+				// the vocabulary named; the three overlay navies are drift that B preserves
+				// rather than collapses. See brand.css for why.
+				"warning-surface-deep": "rgb(var(--warning-surface-deep-rgb) / <alpha-value>)",
+				"info-surface-deep": "rgb(var(--info-surface-deep-rgb) / <alpha-value>)",
+				"surface-overlay": "rgb(var(--surface-overlay-rgb) / <alpha-value>)",
+				"surface-overlay-deep": "rgb(var(--surface-overlay-deep-rgb) / <alpha-value>)",
+				"surface-overlay-deepest": "rgb(var(--surface-overlay-deepest-rgb) / <alpha-value>)",
+
 				// Child B, Layer 2 — the 23 composed tokens. These bake their own alpha
 				// and are therefore NOT alpha-capable: no `<alpha-value>`, and an
 				// opacity modifier on one is a bug that B-final's lint clause bans.
