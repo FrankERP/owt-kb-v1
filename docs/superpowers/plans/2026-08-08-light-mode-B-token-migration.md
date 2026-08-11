@@ -36,7 +36,7 @@ D6. Four site classes, and the enumeration is closed only because all four are l
 | `brand.css` occurrences | **32** | 29 alpha-bearing plus three alpha-free at `:120`, `:182`, `:219`; includes `.brand-atmosphere`'s wash and every glow |
 | Utility usages (**category 10**) | **87** | including `selection:bg-brand-beam/35` on both root layouts |
 | **Category 11** — `AdminPanel.tsx:399` | **1** | `shadow-[inset_0_0_0_1px_rgb(var(--brand-beam)/0.15)]`. Beam rows partition `{10: 87, 11: 1, 12: 1}`, so "87 utilities" is exactly the category-10 set and **does not** contain this one |
-| **Bare hex** — `DayCard.tsx:33` | **1 declaration, ~10 rendered consumers** | `accentHex: "#12c8f4"` — beam's exact value spelled as a literal. See below |
+| **Bare hex** — `DayCard.tsx:33` | **1 declaration, 11 same-file consumers + 1 prop crossing into `PracticePlaylistButton`** | `accentHex: "#12c8f4"` — beam's exact value spelled as a literal. See below |
 
 **`DayCard.tsx:33` is the one that would have been missed, and it is member-facing.**
 `accentHex` is the Sunday theme's accent, consumed as **inline style** at `:127`, `:186`,
