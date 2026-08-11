@@ -90,10 +90,15 @@ foreground, and collapsing them would change 78 sites.
 | `--surface-console-rgb` | `7 22 36` | `--brand-console` | 1 |
 | `--surface-sunken-rgb` | `0 31 63` | `#001f3f` | 7 |
 
-**A deliberate collapse, recorded with its count.** Five further near-identical navies —
-`#001830` (6), `#00162e` (2), `#020f1c` (2), `#002249` (2), `#03101f` (1) — collapse onto
-`--surface-sunken`, **13 sites**. They are within a few units of each other per channel and
-no design intent distinguishes them. Child B's diff list must enumerate these 13.
+**A deliberate collapse, recorded with its count.** Five further near-identical navies
+collapse onto `--surface-sunken`, **14 rows**: `#001830` (6, all in `MonthGenerator` and
+`SetlistEditor`), `#002249` (**3**), `#00162e` (2), `#020f1c` (2), `#03101f` (1). They sit
+within a few units of each other per channel and no design intent distinguishes them.
+
+**One of the 14 is not a class.** `icons.tsx` carries `fill="#002249"` — a category-8 SVG
+attribute, so it migrates to `currentColor` or `rgb(var(--surface-sunken-rgb))` rather than to
+a utility. An earlier revision counted only category-1 rows and reported 13; the collapse is
+14, and Child B's diff list must enumerate all of them.
 
 ### Semantic states — three slots each
 
@@ -215,7 +220,7 @@ inventory says *which child owns a row*; this document says *what a row becomes*
 
 | Criterion | Met |
 |---|---|
-| Every (family, shade) pair represented, or each collapse recorded with its site count | **Deferred to Child C by design**; the 5-navy collapse (13 sites) and the 17-combination tail are recorded here |
+| Every (family, shade) pair represented, or each collapse recorded with its site count | **Deferred to Child C by design**; the 5-navy collapse (14 rows, one of them an SVG attribute) and the 17-combination tail are recorded here |
 | Three slots — fg, surface, border — for every state needing them | `warning` and `info` have all three; `positive`/`negative` have fg only today, and C decides the rest |
 | Composed, alpha-baked tokens for alpha-differing pairs | 24 combinations, 166 sites, generated |
 | Naming rule: no key begins with a utility prefix | Every Layer-1 key is a bare role name; the Layer-2 caution is noted above |
