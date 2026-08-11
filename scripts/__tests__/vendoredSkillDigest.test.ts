@@ -45,7 +45,7 @@ const EXPECTED_DIGESTS: Record<string, string> = {
   // updated in the same change and verified byte-identical with `diff -q`.
   "SKILL.md": "2dc338377204f974e4a00c2f63b2a8528650f946bd9ee0bd1fe8700c5069bcfd",
   "agents/openai.yaml": "92ca8b13523357a7c2ddb1093c7ab4169450fd869eca2577e1c779e5bb573ac9",
-  "reviewer-brief.md": "88fea628e5262e349827bdbff3bb58c16d3603ee428ae8739c67253955572c8a",
+  "reviewer-brief.md": "cc569efa0a766fcc0da62dd10d4ff325cf101bd76980910995cfc86b54aeb01c",
 };
 
 const SYNC_REMEDIATION =
