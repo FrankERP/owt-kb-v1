@@ -206,9 +206,33 @@ that made B sliceable.
 `TOKEN_LAYER_ROLES` (`scripts/colour-inventory.mjs`) enumerates Child B's 30 roles **by
 name**, and category 12 dispositions any `--*-rgb` declaration *not* on that list to `B`.
 Today `byCategory[12]` is 30, all `keep`. Adding 34 declarations without extending the list
-sends all 34 to disposition `B`, so `byDisposition.B` jumps from 102 to 136 on a slice whose
-entire claim is that it changes nothing. **Expected after C1: `byCategory[12]` = 64, all
-`keep`; `byDisposition.B` unchanged at 102.**
+sends all 34 to disposition `B`, on a slice whose entire claim is that it changes nothing.
+
+**Expected after C1, quoted as the artifact actually reports them:**
+
+| Key | Before C1 | After C1 |
+|---|---:|---:|
+| `summary.byCategory["12"]` | 30 | **64** |
+| `summary.byDisposition.B` | **124** | **124** (unchanged) |
+| category-12 rows dispositioned `keep` | 30 | **64** |
+
+**`byDisposition.B` is 124, not 102.** An earlier revision of this plan said 102, which is
+the count of *literal* rows with disposition `B`; the summary key folds in the 22
+`compositing` rows as well (`build()` adds `compositing` to `byDisposition` but not to
+`byCategory`). An implementer who landed C1 correctly and checked the named key would have
+found 124 where the plan promised 102, and either hunted a regression that does not exist or
+"corrected" the artifact. The scanner's own header states the rule that violates: **if the
+generated output disagrees with any figure in any planning document, the output wins.**
+
+**A second scanner defect had to be fixed before C1 was possible at all**, found in review
+round 2. Category 12's property regex was `--([a-z-]+):` — no digits — so `--mono-500-rgb`
+and its six siblings matched *nothing* and emitted **no row**. Not a miscount: a row that
+does not exist cannot be dispositioned, so the seven roles covering C's densest 475 rows
+would have been invisible to the artifact this programme treats as authoritative, and
+`byCategory[12]` would have reached 57 rather than 64. Widened to `--([a-z0-9-]+):` at
+`2965d3e`'s successor, verified count-neutral first: the only digit-bearing custom properties
+today are the 18 composed tokens, whose values are `rgb(var(…))` rather than bare triplets,
+so they still fail the value clause. `byCategory[12]` stayed at 30 across the change.
 
 **Each slice merges to `main` on its own green gate**, with a code review, exactly as B's did.
 
@@ -258,6 +282,12 @@ coverage. The 45 rows are recorded in `brand.css` and enforced by nothing, delib
 
 ## Verification
 
+- **`summary.pairs` and `lightCounterpartClasses` move at C2, and that is expected.** All 12
+  surviving pairs are `gray`, so collapsing them takes `pairs` to **0**. The guard compares the
+  whole artifact, so it regenerates regardless — but naming the fields here keeps C2's diff
+  review honest, rather than leaving a reviewer to wonder whether a drop to zero is success or
+  a scanner regression. It is success: B hit the same shape and had to move that assertion onto
+  a synthetic source for exactly this reason.
 - **Primary gate — the inventory.** `disposition === "C"` must fall from 948 to **45** (the
   `white`/`black` rows that stay literal). Generated, not counted by hand.
 - **Zero-diff gate.** For every migrated row, the role's triplet must equal the palette
@@ -276,6 +306,11 @@ coverage. The 45 rows are recorded in `brand.css` and enforced by nothing, delib
   C4**; `PlannerGrid.test.tsx:582` and `:604` assert `.border-red-500\/50` has length 0 and go
   **vacuously true at C3** — a dead guard that still passes, which is worse than a failing one.
   Budget all three in their slices and re-point rather than delete.
+- **The gallery is unmeasured but linted.** `app/(gallery)` is excluded from the inventory
+  (`EXCLUDED_TREES`) yet sits inside the eslint block's `files: ["app/**/*.{ts,tsx}"]` with no
+  ignore. It carries **0 palette classes and 0 `rgb()` literals** as of `fbedd70`, so
+  C-final reaches 0 errors — but it is the one surface D and E will keep extending, and a
+  palette class added there would fail the clause without ever appearing in a count.
 - **Browser**: the theme gallery's `dark` route before and after each slice.
 - `npx tsc --noEmit`, `npm test`, `npx eslint .` at **0 errors**, per slice.
 

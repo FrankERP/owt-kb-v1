@@ -136,7 +136,16 @@ function normaliseAlpha(raw) {
 
 /** Category 13 is handled separately — it emits three row kinds, not literals. */
 const CATEGORIES = [
-  { id: 12, name: "css-custom-property-triplet", syntax: /--([a-z-]+):\s*(\d{1,3}\s+\d{1,3}\s+\d{1,3})\s*;/gi, cssOnly: true },
+  // `[a-z0-9-]+`, not `[a-z-]+`. A role name may contain digits — Child C's gray scale is
+  // `--mono-200-rgb` through `--mono-800-rgb` — and the narrower class silently emitted NO
+  // ROW for them. Not a miscount: a row that does not exist cannot be dispositioned, so
+  // seven roles covering 475 rows would have been invisible to the artifact this file's own
+  // header calls authoritative.
+  //
+  // Count-neutral when widened: the only digit-bearing custom properties today are the 18
+  // composed tokens, whose values are `rgb(var(…))` rather than a bare triplet, so they
+  // still fail the value clause. Verified before the change.
+  { id: 12, name: "css-custom-property-triplet", syntax: /--([a-z0-9-]+):\s*(\d{1,3}\s+\d{1,3}\s+\d{1,3})\s*;/gi, cssOnly: true },
   { id: 11, name: "arbitrary-value-var-brand", syntax: /\[[^\]]*\bvar\(--brand-[a-z-]+\)[^\]]*\]/gi },
   { id: 9, name: "runtime-colour-map", syntax: null }, // resolved by location, below
   // Only COLOUR-shaped values. `fill="none"` is not a colour decision, and counting
