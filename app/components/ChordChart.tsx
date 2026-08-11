@@ -151,7 +151,7 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
               className={`font-label text-xs uppercase tracking-widest px-4 py-1.5 rounded-full border transition-colors ${
                 i === activeIdx
                   ? "border-accent bg-accent/15 text-accent"
-                  : "border-surface-accent-l25-d20 text-gray-500 hover:border-accent/50 hover:text-accent"
+                  : "border-surface-accent-l25-d20 text-gray-500 hover:border-accent/50 dark:hover:border-surface-accent-l25-d20 hover:text-accent"
               }`}
             >
               {c.key || `Tonalidad ${i + 1}`}
@@ -183,7 +183,7 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
                         ? "border-accent bg-accent text-surface-sunken font-bold"
                         : isNative
                         ? "border-accent/60 text-accent"
-                        : "border-surface-accent-l25-d15 text-gray-500 dark:text-gray-500 hover:border-accent/50 hover:text-accent"
+                        : "border-surface-accent-l25-d15 text-gray-500 dark:text-gray-500 hover:border-accent/50 dark:hover:border-surface-accent-l25-d15 hover:text-accent"
                     }`}
                   >
                     {note}

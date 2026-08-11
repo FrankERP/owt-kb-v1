@@ -335,7 +335,7 @@ export function SongForm({
               type="button"
               onPointerDown={(e) => e.preventDefault()}
               onClick={() => insertLabel(label)}
-              className="font-label text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-surface-accent-20 text-gray-500 hover:text-accent hover:border-accent/40 transition-colors whitespace-nowrap"
+              className="font-label text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-surface-accent-20 text-gray-500 hover:text-accent hover:border-accent/40 dark:hover:border-surface-accent-20 transition-colors whitespace-nowrap"
             >
               {label}
             </button>
@@ -346,7 +346,7 @@ export function SongForm({
             onPointerDown={(e) => e.preventDefault()}
             onClick={() => wrapSelection("**")}
             title="Negrita — seleccionar texto y pulsar"
-            className="font-body text-sm font-bold w-7 h-7 flex items-center justify-center rounded border border-surface-accent-20 text-gray-500 hover:text-accent hover:border-accent/40 transition-colors shrink-0"
+            className="font-body text-sm font-bold w-7 h-7 flex items-center justify-center rounded border border-surface-accent-20 text-gray-500 hover:text-accent hover:border-accent/40 dark:hover:border-surface-accent-20 transition-colors shrink-0"
           >
             B
           </button>
@@ -355,7 +355,7 @@ export function SongForm({
             onPointerDown={(e) => e.preventDefault()}
             onClick={() => wrapSelection("*")}
             title="Cursiva — seleccionar texto y pulsar"
-            className="font-body text-sm italic w-7 h-7 flex items-center justify-center rounded border border-surface-accent-20 text-gray-500 hover:text-accent hover:border-accent/40 transition-colors shrink-0"
+            className="font-body text-sm italic w-7 h-7 flex items-center justify-center rounded border border-surface-accent-20 text-gray-500 hover:text-accent hover:border-accent/40 dark:hover:border-surface-accent-20 transition-colors shrink-0"
           >
             I
           </button>
@@ -484,7 +484,7 @@ export function SongForm({
         <button
           type="button"
           onClick={onClose}
-          className="flex-1 py-2.5 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent transition-colors"
+          className="flex-1 py-2.5 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors"
         >
           Cancelar
         </button>

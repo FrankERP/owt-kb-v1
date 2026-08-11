@@ -997,14 +997,14 @@ export default function ServicesPanel() {
               disabled={!publishGate.enabled}
               title={publishGate.reason ?? undefined}
               onClick={() => openPublishPlan(visibleCards)}
-              className="min-h-[44px] rounded-lg bg-surface-accent-solid px-3 font-label text-xs uppercase tracking-widest transition-colors hover:bg-accent-deep/80 disabled:opacity-40">
+              className="min-h-[44px] rounded-lg bg-surface-accent-solid px-3 font-label text-xs uppercase tracking-widest transition-colors hover:bg-accent-deep/80 dark:hover:bg-surface-accent-solid disabled:opacity-40">
               Publicar listos ({counters.readyToPublish})
             </button>
           )}
           <button ref={generatorTriggerRef} onClick={openGenerator}
             disabled={!generateGate.enabled}
             title={generateGate.reason ?? undefined}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-surface-accent-20 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-accent hover:border-accent/30 transition-colors disabled:opacity-40">
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-surface-accent-20 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-accent hover:border-accent/30 dark:hover:border-surface-accent-20 transition-colors disabled:opacity-40">
             📅 Generar mes
           </button>
           <button
@@ -1013,7 +1013,7 @@ export default function ServicesPanel() {
             onClick={() => openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, false, { kind: "toolbar" })}
             disabled={!editTeamGate.enabled}
             title={editTeamGate.reason ?? undefined}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-surface-accent-20 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-accent hover:border-accent/30 transition-colors disabled:opacity-40"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-surface-accent-20 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-accent hover:border-accent/30 dark:hover:border-surface-accent-20 transition-colors disabled:opacity-40"
           >
             Editar mes
           </button>
@@ -1218,7 +1218,7 @@ export default function ServicesPanel() {
           <Modal title="Eliminar servicio" onClose={closeEditModal} status={editError ?? blocked}>
             <p className="font-body text-sm text-gray-400">¿Eliminar el servicio del <span className="text-red-400 font-semibold">{formatDate(editModal.role.date)}</span>? Esta acción no se puede deshacer.</p>
             <div className="flex gap-3">
-              <button onClick={closeEditModal} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent transition-colors">Cancelar</button>
+              <button onClick={closeEditModal} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">Cancelar</button>
               {staleModes.delete ? (
                 <button onClick={() => { closeEditModal(); retryLoad(); }} className="flex-1 py-2 rounded-lg border border-accent/30 font-label text-xs uppercase tracking-widest text-accent hover:bg-accent/10 transition-colors">Recargar</button>
               ) : (
@@ -1462,7 +1462,7 @@ function PublicationFooter({
       <button
         type="button"
         onClick={onClose}
-        className="min-h-[44px] flex-1 rounded-lg border border-surface-accent-30 px-3 font-label text-xs uppercase tracking-widest transition-colors hover:border-accent"
+        className="min-h-[44px] flex-1 rounded-lg border border-surface-accent-30 px-3 font-label text-xs uppercase tracking-widest transition-colors hover:border-accent dark:hover:border-surface-accent-30"
       >
         Cancelar
       </button>

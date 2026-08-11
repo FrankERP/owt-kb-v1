@@ -178,6 +178,35 @@ or an implementer would have silently collapsed two distinct greens. **14 rows, 
 
 **Both diffs are enumerated site-by-site and reviewed. Any third diff is a defect.**
 
+### A third diff that specificity created, found in review and repaired
+
+Collapsing a pair writes an UNPREFIXED token where a `dark:` variant used to sit, and that
+changes the element's specificity, not just its colour.
+
+With `darkMode: "class"`, `dark:bg-X` compiles to `.dark\:bg-X:is(.dark *)` — **(0,2,0)** —
+and Tailwind emits `dark:` utilities **after** `hover:`/`focus:` ones, which are also
+(0,2,0). So a `dark:` base **masked** any bare `hover:`/`focus:` utility on the same
+property: in this dark-forced app that hover style was dead code. Replace the base with an
+unprefixed token at **(0,1,0)** and the hover utility suddenly wins.
+
+**39 sites across 19 files** had that shape — 35 `hover:border`, 5 `focus:border`, 2
+`hover:text`, 1 `hover:bg`. The most visible was `ServicesPanel.tsx:1000`, a primary button
+whose background would have flipped to opaque navy on hover. Four more matched the shape but
+carry a `gray-*` base, so they are Child C's and are unaffected.
+
+**Repaired by adding the `dark:<state>:` counterpart** pointing at the same token as the
+base. That reproduces the masked behaviour exactly — the counterpart compiles to (0,3,0) and
+beats the bare state utility — while **keeping the light-side hover value** for Child D,
+which deleting the now-live utility would have thrown away. Sites that already carried a
+`dark:hover:` were correct all along and were left alone.
+
+**No resting-state gate could have caught this.** Every check this plan specifies — the
+generated counts, the equality harness, token resolution in the browser, the `(variable,
+alpha)` multiset — inspects the resting state. The composed-token layer itself was derived
+from resting-state pair analysis, so the interaction between a `dark:` base and a state
+variant was never in its model. **Child C and Child D must run the same check**: any batch
+that collapses a `dark:` base has to ask what that base was masking.
+
 ## Slicing — and why B is sliceable even though the parent calls it atomic
 
 The parent says B "lands atomically because a half-migrated token layer compiles but renders

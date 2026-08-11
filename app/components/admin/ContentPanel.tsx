@@ -193,7 +193,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
 
       {/* Search */}
       <input
-        className="w-full px-4 py-2.5 rounded-xl border border-surface-accent-20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors"
+        className="w-full px-4 py-2.5 rounded-xl border border-surface-accent-20 bg-transparent font-body text-sm focus:outline-none focus:border-accent dark:focus:border-surface-accent-20 transition-colors"
         placeholder="Buscar canción o artista..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
@@ -311,7 +311,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
             ¿Eliminar <span className="text-red-400 font-semibold">{modal.song.title}</span>? Esta acción no se puede deshacer.
           </p>
           <div className="flex gap-3 pt-1">
-            <button onClick={() => { setModalError(null); setModal(null); }} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent transition-colors">
+            <button onClick={() => { setModalError(null); setModal(null); }} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
               Cancelar
             </button>
             <button onClick={handleDelete} disabled={submitting} className="flex-1 py-2 rounded-lg bg-red-800/60 hover:bg-red-700/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">

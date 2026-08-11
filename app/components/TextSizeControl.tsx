@@ -37,7 +37,7 @@ export default function TextSizeControl() {
               className={`font-label text-xs uppercase tracking-widest px-4 py-2 rounded-full border transition-colors ${
                 active
                   ? "border-accent text-accent bg-accent/10"
-                  : "border-surface-accent-l25-d20 text-gray-500 dark:text-gray-400 hover:border-accent/50"
+                  : "border-surface-accent-l25-d20 text-gray-500 dark:text-gray-400 hover:border-accent/50 dark:hover:border-surface-accent-l25-d20"
               }`}
             >
               {p.label}

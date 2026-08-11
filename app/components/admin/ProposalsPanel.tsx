@@ -259,7 +259,7 @@ function ProposalCard({
               <div className="flex gap-2">
                 <button
                   onClick={() => setRequestingChanges(false)}
-                  className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent transition-colors"
+                  className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors"
                 >
                   Cancelar
                 </button>
@@ -276,7 +276,7 @@ function ProposalCard({
             <div className="flex gap-2">
               <button
                 onClick={() => setRequestingChanges(true)}
-                className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-red-400 hover:text-red-400 transition-colors"
+                className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-red-400 dark:hover:border-surface-accent-30 hover:text-red-400 transition-colors"
               >
                 Solicitar cambios
               </button>
@@ -332,7 +332,7 @@ function ProposalCard({
           ) : (
             <button
               onClick={() => setReopening(true)}
-              className="w-full py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-gray-400 hover:border-accent hover:text-accent transition-colors"
+              className="w-full py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-gray-400 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent transition-colors"
             >
               Reabrir para ajustes
             </button>

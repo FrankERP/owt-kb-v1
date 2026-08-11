@@ -368,7 +368,7 @@ export default function SongSheet() {
               <p className="font-body text-sm text-gray-400">No se pudo cargar la canción.</p>
               <button
                 onClick={closeSheet}
-                className="font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg border border-surface-accent-l30-d25 text-gray-400 hover:text-accent hover:border-accent/40 transition-colors"
+                className="font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg border border-surface-accent-l30-d25 text-gray-400 hover:text-accent hover:border-accent/40 dark:hover:border-surface-accent-l30-d25 transition-colors"
               >
                 Cerrar
               </button>

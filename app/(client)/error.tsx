@@ -49,7 +49,7 @@ export default function Error({
         </button>
         <Link
           href="/"
-          className="font-label text-xs uppercase tracking-widest px-4 py-2.5 rounded-lg border border-surface-accent-l30-d25 text-gray-400 hover:text-accent hover:border-accent/40 transition-colors"
+          className="font-label text-xs uppercase tracking-widest px-4 py-2.5 rounded-lg border border-surface-accent-l30-d25 text-gray-400 hover:text-accent hover:border-accent/40 dark:hover:border-surface-accent-l30-d25 transition-colors"
         >
           Ir al inicio
         </Link>

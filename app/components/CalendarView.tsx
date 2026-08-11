@@ -121,7 +121,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
         <Link
           href={scheduleHref(addMonths(anchorMonth, -WINDOW_MONTHS))}
           aria-label="Meses anteriores"
-          className="px-3 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-gray-400 hover:text-ink-muted hover:border-accent/40 transition-colors"
+          className="px-3 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-gray-400 hover:text-ink-muted hover:border-accent/40 dark:hover:border-surface-accent-30 transition-colors"
         >
           ‹ Anterior
         </Link>
@@ -134,7 +134,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
         <Link
           href={scheduleHref(addMonths(anchorMonth, WINDOW_MONTHS))}
           aria-label="Meses siguientes"
-          className="px-3 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-gray-400 hover:text-ink-muted hover:border-accent/40 transition-colors"
+          className="px-3 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-gray-400 hover:text-ink-muted hover:border-accent/40 dark:hover:border-surface-accent-30 transition-colors"
         >
           Siguiente ›
         </Link>

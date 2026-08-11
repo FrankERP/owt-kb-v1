@@ -730,7 +730,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
             <button
               onClick={() => save("draft")}
               disabled={saving}
-              className="flex-1 py-2.5 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent transition-colors disabled:opacity-50"
+              className="flex-1 py-2.5 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors disabled:opacity-50"
             >
               {saving ? "Guardando…" : "Guardar borrador"}
             </button>
@@ -768,7 +768,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmSubmit(false)}
-                className="flex-1 py-2.5 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent transition-colors"
+                className="flex-1 py-2.5 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors"
               >
                 Cancelar
               </button>

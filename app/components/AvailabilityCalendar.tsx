@@ -206,7 +206,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
             className={`px-3 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
               recurOpen
                 ? "border-accent text-accent"
-                : "border-surface-accent-30 text-gray-500 hover:border-accent hover:text-accent"
+                : "border-surface-accent-30 text-gray-500 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent"
             }`}
           >
             Repetir…
@@ -236,14 +236,14 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
             <select
               value={recurDow}
               onChange={e => setRecurDow(Number(e.target.value))}
-              className="rounded-lg border border-surface-accent-l40-d20 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 focus:outline-none focus:border-accent/50"
+              className="rounded-lg border border-surface-accent-l40-d20 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 focus:outline-none focus:border-accent/50 dark:focus:border-surface-accent-l40-d20"
             >
               {WEEKDAYS.map((w, i) => <option key={i} value={i} className="bg-surface-base">{w}</option>)}
             </select>
             <select
               value={recurInterval}
               onChange={e => setRecurInterval(Number(e.target.value))}
-              className="rounded-lg border border-surface-accent-l40-d20 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 focus:outline-none focus:border-accent/50"
+              className="rounded-lg border border-surface-accent-l40-d20 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 focus:outline-none focus:border-accent/50 dark:focus:border-surface-accent-l40-d20"
             >
               <option value={1} className="bg-surface-base">Cada semana</option>
               <option value={2} className="bg-surface-base">Cada 2 semanas</option>
@@ -432,7 +432,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
                 setSaved(false);
               }}
               onKeyDown={e => { if (e.key === "Enter") setPopover(null); }}
-              className="w-full rounded-lg border border-surface-accent-l50-d15 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 placeholder:text-gray-400 focus:outline-none focus:border-accent/40"
+              className="w-full rounded-lg border border-surface-accent-l50-d15 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 placeholder:text-gray-400 focus:outline-none focus:border-accent/40 dark:focus:border-surface-accent-l50-d15"
             />
 
             {/* Remove date */}
