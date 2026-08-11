@@ -335,14 +335,14 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                   {buildRuns(songs).map((run) => {
                     const renderRow = (entry: SetlistSong, n: number) => (
                       <div className="flex min-w-0 items-start gap-2">
-                        <span className="mt-0.5 w-5 shrink-0 text-sm text-gray-500">{n}.</span>
+                        <span className="mt-0.5 w-5 shrink-0 text-sm text-mono-500">{n}.</span>
                         <div className="min-w-0">
                           <span
                             className={`font-body text-sm font-semibold ${CARD_STYLE.longText}`}
                           >
                             {entry.song.title}
                           </span>
-                          <span className="text-sm text-gray-500"> — {entry.song.author}</span>
+                          <span className="text-sm text-mono-500"> — {entry.song.author}</span>
                           <div className="mt-0.5 flex items-center gap-2">
                             <span
                               className={`font-label text-xs font-semibold ${CARD_ACCENT[role._type]}`}
@@ -352,7 +352,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                             {entry.play_key &&
                               entry.song.key &&
                               entry.play_key !== entry.song.key && (
-                                <span className="rounded border border-gray-700 bg-gray-800/60 px-1.5 py-0.5 font-label text-[11px] leading-tight text-gray-500">
+                                <span className="rounded border border-mono-700 bg-mono-800/60 px-1.5 py-0.5 font-label text-[11px] leading-tight text-mono-500">
                                   orig. {entry.song.key}
                                 </span>
                               )}
@@ -421,7 +421,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                   ([section, arr, lbl]) =>
                     arr.length > 0 && (
                       <div key={section} className="flex min-w-0 flex-wrap items-start gap-2">
-                        <span className="w-12 shrink-0 pt-0.5 font-label text-[10px] uppercase tracking-widest text-gray-600">
+                        <span className="w-12 shrink-0 pt-0.5 font-label text-[10px] uppercase tracking-widest text-mono-600">
                           {lbl}
                         </span>
                         <div className="flex min-w-0 flex-wrap gap-1">
@@ -457,7 +457,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                   ([section, arr, lbl]) =>
                     arr.length > 0 && (
                       <div key={section} className="flex min-w-0 flex-wrap items-start gap-2">
-                        <span className="w-12 shrink-0 pt-0.5 font-label text-[10px] uppercase tracking-widest text-gray-600">
+                        <span className="w-12 shrink-0 pt-0.5 font-label text-[10px] uppercase tracking-widest text-mono-600">
                           {lbl}
                         </span>
                         <div className="flex min-w-0 flex-wrap gap-1">
@@ -496,11 +496,11 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                     ),
                 )}
                 {!hasTeam && (
-                  <p className="font-body text-xs italic text-gray-600">Sin miembros asignados</p>
+                  <p className="font-body text-xs italic text-mono-600">Sin miembros asignados</p>
                 )}
               </div>
             ) : hasTeam ? (
-              <section className={songs.length > 0 ? "border-t border-gray-200 pt-4 dark:border-gray-800" : ""}>
+              <section className={songs.length > 0 ? "border-t border-mono-200 pt-4 dark:border-mono-800" : ""}>
                 <div className="space-y-3">
                   {(role.leads ?? []).length + (role.bgvs ?? []).length + (role.chorus ?? []).length >
                     0 && (
@@ -578,7 +578,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
               </section>
             ) : (
               songs.length === 0 && (
-                <p className="font-body text-xs italic text-gray-600">Sin información todavía.</p>
+                <p className="font-body text-xs italic text-mono-600">Sin información todavía.</p>
               )
             )}
           </div>
@@ -677,7 +677,7 @@ function VocalCol({
   if (members.length === 0) return <div />;
   return (
     <div className="min-w-0">
-      <p className="mb-0.5 font-label text-[11px] uppercase tracking-widest text-gray-400">
+      <p className="mb-0.5 font-label text-[11px] uppercase tracking-widest text-mono-400">
         {label}
       </p>
       <p className={`font-body text-sm leading-snug ${CARD_STYLE.longText}`}>
@@ -761,8 +761,8 @@ function MemberChip({
         isSource
           ? "scale-105 border-accent bg-accent/30 text-accent ring-1 ring-accent/50"
           : onClick
-            ? "cursor-pointer border-accent/20 bg-accent/10 text-gray-400 hover:border-accent/40 hover:bg-accent/20 hover:text-accent"
-            : "border-accent/20 bg-accent/10 text-gray-400"
+            ? "cursor-pointer border-accent/20 bg-accent/10 text-mono-400 hover:border-accent/40 hover:bg-accent/20 hover:text-accent"
+            : "border-accent/20 bg-accent/10 text-mono-400"
       }`}
     >
       {name}

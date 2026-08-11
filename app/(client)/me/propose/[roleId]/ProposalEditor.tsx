@@ -80,7 +80,7 @@ const STATUS_LABEL: Record<ProposalStatus, string> = {
 };
 
 const STATUS_STYLE: Record<ProposalStatus, string> = {
-  draft: "bg-gray-500/15 text-gray-400 border border-gray-500/30",
+  draft: "bg-mono-500/15 text-mono-400 border border-mono-500/30",
   pending: "bg-yellow-500/15 text-yellow-400 border border-yellow-500/30",
   approved: "bg-green-500/15 text-green-400 border border-green-500/30",
   changes_requested: "bg-red-500/15 text-red-400 border border-red-500/30",
@@ -355,7 +355,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
     roleDoc.service_type === "saturday" ? "Sábado"  :
     (roleDoc.service_name ?? "Servicio Especial");
 
-  const inputCls = "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors placeholder:text-gray-600";
+  const inputCls = "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors placeholder:text-mono-600";
 
   return (
     <div className="space-y-8">
@@ -364,7 +364,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
       <div>
         <button
           onClick={() => router.push("/me")}
-          className="flex items-center gap-1.5 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-accent transition-colors mb-5"
+          className="flex items-center gap-1.5 font-label text-xs uppercase tracking-widest text-mono-500 hover:text-accent transition-colors mb-5"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5M12 5l-7 7 7 7" />
@@ -375,7 +375,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="font-display text-2xl md:text-3xl font-bold">Propuesta de Setlist</h1>
-            <p className="font-body text-sm text-gray-400 mt-1">
+            <p className="font-body text-sm text-mono-400 mt-1">
               {serviceLabel} · {capitalize(formatServiceDate(roleDoc.service_date))}
             </p>
           </div>
@@ -424,10 +424,10 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
 
       {/* Song list */}
       <div className="space-y-3">
-        <h2 className="font-label text-xs uppercase tracking-widest text-gray-500">Lista de canciones</h2>
+        <h2 className="font-label text-xs uppercase tracking-widest text-mono-500">Lista de canciones</h2>
 
         {songs.length === 0 && (
-          <div className="flex flex-col items-center py-8 gap-3 text-gray-600">
+          <div className="flex flex-col items-center py-8 gap-3 text-mono-600">
             <MusicIcon />
             <p className="font-body text-sm text-center">
               Agrega canciones usando el buscador abajo.
@@ -461,7 +461,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
           >
             {/* Drag handle (desktop) */}
             {!isApproved && (
-              <span className="text-gray-400 shrink-0 select-none hidden md:inline-flex">
+              <span className="text-mono-400 shrink-0 select-none hidden md:inline-flex">
                 <GripIcon />
               </span>
             )}
@@ -473,7 +473,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
                   type="button"
                   onClick={(e) => { e.stopPropagation(); moveSong(idx, idx - 1); }}
                   disabled={idx === 0}
-                  className="p-1 rounded text-gray-400 hover:text-accent disabled:opacity-20 disabled:cursor-default"
+                  className="p-1 rounded text-mono-400 hover:text-accent disabled:opacity-20 disabled:cursor-default"
                   aria-label="Mover arriba"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -484,7 +484,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
                   type="button"
                   onClick={(e) => { e.stopPropagation(); moveSong(idx, idx + 1); }}
                   disabled={idx === songs.length - 1}
-                  className="p-1 rounded text-gray-400 hover:text-accent disabled:opacity-20 disabled:cursor-default"
+                  className="p-1 rounded text-mono-400 hover:text-accent disabled:opacity-20 disabled:cursor-default"
                   aria-label="Mover abajo"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -495,14 +495,14 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
             )}
 
             {/* Position */}
-            <span className="font-label text-xs text-gray-500 w-5 text-center shrink-0">{idx + 1}</span>
+            <span className="font-label text-xs text-mono-500 w-5 text-center shrink-0">{idx + 1}</span>
 
             {/* Song info */}
             <div className="flex-1 min-w-0">
               <p className="font-body text-sm font-semibold truncate">{song.title}</p>
-              <p className="font-body text-xs text-gray-400 truncate">{song.author}</p>
+              <p className="font-body text-xs text-mono-400 truncate">{song.author}</p>
               {!!song.previous_keys?.length && (
-                <p className="font-body text-xs text-gray-500 mt-0.5">
+                <p className="font-body text-xs text-mono-500 mt-0.5">
                   Tonos anteriores: <span className="text-accent/80">{song.previous_keys.join(" · ")}</span>
                 </p>
               )}
@@ -533,7 +533,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
                           className={`font-label text-[11px] px-1.5 py-1.5 rounded-lg transition-colors ${
                             k === song.play_key
                               ? "bg-accent/20 text-accent"
-                              : "text-gray-400 hover:bg-accent/10 hover:text-accent"
+                              : "text-mono-400 hover:bg-accent/10 hover:text-accent"
                           }`}
                         >
                           {k}
@@ -556,7 +556,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
               <button
                 type="button"
                 onClick={() => removeSong(idx)}
-                className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
+                className="p-1.5 rounded-lg text-mono-500 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
                 title="Quitar"
               >
                 <XIcon />
@@ -575,7 +575,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
                 className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all ${
                   linked
                     ? "border-accent/30 bg-surface-base text-accent/60"
-                    : "border-dashed border-gray-700/40 bg-surface-base text-gray-600/50 hover:border-accent/30 hover:text-accent/50"
+                    : "border-dashed border-mono-700/40 bg-surface-base text-mono-600/50 hover:border-accent/30 hover:text-accent/50"
                 }`}
               >
                 <ChainLinkIcon strokeWidth={linked ? 2.5 : 1.5} />
@@ -609,7 +609,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0">
                 <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
               </svg>
-              <span className="font-label text-xs uppercase tracking-widest text-gray-500">Agregar canción</span>
+              <span className="font-label text-xs uppercase tracking-widest text-mono-500">Agregar canción</span>
             </div>
 
             {showSearch && (
@@ -625,10 +625,10 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
                 </div>
                 <div className="max-h-64 overflow-y-auto">
                   {searching && (
-                    <p className="font-body text-sm text-gray-500 text-center py-4">Buscando…</p>
+                    <p className="font-body text-sm text-mono-500 text-center py-4">Buscando…</p>
                   )}
                   {!searching && searchResults.length === 0 && (
-                    <p className="font-body text-sm text-gray-500 text-center py-4">Sin resultados</p>
+                    <p className="font-body text-sm text-mono-500 text-center py-4">Sin resultados</p>
                   )}
                   {!searching && searchResults.map(song => {
                     const already = songs.some(s => s.songId === song._id);
@@ -643,15 +643,15 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
                       >
                         <div className="flex-1 min-w-0">
                           <p className="font-body text-sm font-semibold truncate">{song.title}</p>
-                          <p className="font-body text-xs text-gray-400 truncate">{song.author}</p>
-                          <p className="font-body text-xs text-gray-500 mt-0.5">
+                          <p className="font-body text-xs text-mono-400 truncate">{song.author}</p>
+                          <p className="font-body text-xs text-mono-500 mt-0.5">
                             {song.previous_keys.length > 0
                               ? <>Tonos anteriores: <span className="text-accent/80">{song.previous_keys.join(" · ")}</span></>
                               : "Sin historial previo"}
                           </p>
                         </div>
-                        <span className="font-label text-xs text-gray-500 shrink-0">{song.key}</span>
-                        {already && <span className="font-label text-[11px] text-gray-500">En lista</span>}
+                        <span className="font-label text-xs text-mono-500 shrink-0">{song.key}</span>
+                        {already && <span className="font-label text-[11px] text-mono-500">En lista</span>}
                       </button>
                     );
                   })}
@@ -665,8 +665,8 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
       {/* Team message */}
       {!isApproved && (
         <div className="space-y-2">
-          <label className="font-label text-xs uppercase tracking-widest text-gray-500">
-            Mensaje para el equipo <span className="normal-case tracking-normal text-gray-600">(opcional)</span>
+          <label className="font-label text-xs uppercase tracking-widest text-mono-500">
+            Mensaje para el equipo <span className="normal-case tracking-normal text-mono-600">(opcional)</span>
           </label>
           <textarea
             className={`${inputCls} resize-none`}
@@ -675,15 +675,15 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
             value={teamNotes}
             onChange={e => setTeamNotes(e.target.value)}
           />
-          <p className="font-body text-xs text-gray-600">Se mostrará al equipo cuando se apruebe la propuesta.</p>
+          <p className="font-body text-xs text-mono-600">Se mostrará al equipo cuando se apruebe la propuesta.</p>
         </div>
       )}
 
       {/* Private review notes */}
       {!isApproved && (
         <div className="space-y-2">
-          <label className="font-label text-xs uppercase tracking-widest text-gray-500">
-            Notas privadas para revisión <span className="normal-case tracking-normal text-gray-600">(opcional)</span>
+          <label className="font-label text-xs uppercase tracking-widest text-mono-500">
+            Notas privadas para revisión <span className="normal-case tracking-normal text-mono-600">(opcional)</span>
           </label>
           <textarea
             className={`${inputCls} resize-none`}
@@ -692,21 +692,21 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
             value={leadNotes}
             onChange={e => setLeadNotes(e.target.value)}
           />
-          <p className="font-body text-xs text-gray-600">Solo las verán los admins que revisan la propuesta.</p>
+          <p className="font-body text-xs text-mono-600">Solo las verán los admins que revisan la propuesta.</p>
         </div>
       )}
 
       {isApproved && teamNotes && (
         <div className="space-y-1">
           <p className="font-label text-xs uppercase tracking-widest text-accent">Mensaje para el equipo</p>
-          <p className="font-body text-sm text-gray-300 whitespace-pre-wrap">{teamNotes}</p>
+          <p className="font-body text-sm text-mono-300 whitespace-pre-wrap">{teamNotes}</p>
         </div>
       )}
 
       {isApproved && leadNotes && (
         <div className="space-y-1">
-          <p className="font-label text-xs uppercase tracking-widest text-gray-500">Tus notas privadas para revisión</p>
-          <p className="font-body text-sm text-gray-300 whitespace-pre-wrap">{leadNotes}</p>
+          <p className="font-label text-xs uppercase tracking-widest text-mono-500">Tus notas privadas para revisión</p>
+          <p className="font-body text-sm text-mono-300 whitespace-pre-wrap">{leadNotes}</p>
         </div>
       )}
 
@@ -752,14 +752,14 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
           <div className="relative z-10 w-full max-w-sm bg-surface-raised-alt border border-accent/20 rounded-2xl shadow-2xl p-6 space-y-5">
             <div className="space-y-1">
               <h3 className="font-display text-lg uppercase tracking-wide">Enviar propuesta</h3>
-              <p className="font-body text-sm text-gray-400">
+              <p className="font-body text-sm text-mono-400">
                 Vas a enviar {songs.length} canción{songs.length !== 1 ? "es" : ""} para {serviceLabel}. El admin recibirá tu propuesta para revisión.
               </p>
             </div>
             <ul className="space-y-1 border border-accent/10 rounded-xl p-3 bg-accent-deep/10">
               {songs.map((s, i) => (
                 <li key={s.songId} className="flex items-center gap-2">
-                  <span className="font-label text-[11px] text-gray-600 w-4 text-right tabular-nums">{i + 1}</span>
+                  <span className="font-label text-[11px] text-mono-600 w-4 text-right tabular-nums">{i + 1}</span>
                   <span className="font-body text-sm truncate flex-1">{s.title}</span>
                   <span className="font-label text-xs text-accent shrink-0">{s.play_key}</span>
                 </li>
@@ -828,7 +828,7 @@ function UserIcon() {
 
 function MusicIcon() {
   return (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-700">
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-mono-700">
       <path d="M9 18V5l12-2v13" />
       <circle cx="6" cy="18" r="3" />
       <circle cx="18" cy="16" r="3" />

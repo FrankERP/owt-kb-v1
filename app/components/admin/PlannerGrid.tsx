@@ -1704,7 +1704,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             />
           ))}
           {openCandidates.length === 0 && (
-            <li className="font-body text-xs italic text-gray-600">Nadie elegible para este puesto.</li>
+            <li className="font-body text-xs italic text-mono-600">Nadie elegible para este puesto.</li>
           )}
         </ul>
       </div>
@@ -1782,7 +1782,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
     >
       {fullScreen ? (
         <div className="flex items-center justify-between gap-3">
-          <p className="font-label text-xs uppercase tracking-widest text-gray-500">
+          <p className="font-label text-xs uppercase tracking-widest text-mono-500">
             {monthLabel ?? "Cuadrícula del mes"}
           </p>
           <button
@@ -1891,7 +1891,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
       {/* Today's honest short-staffing signal, alongside the degradation
           explainer — the solver degrades Coro -> BGV -> 2nd Lead, always
           keeping at least one Lead. */}
-      <p className="font-body text-[11px] text-gray-500">
+      <p className="font-body text-[11px] text-mono-500">
         El líder siempre se asigna; primero queda vacío el coro, luego BGV.
       </p>
       {unfilled.length > 0 && (
@@ -1903,7 +1903,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
       {/* The right column is empty space until a cell is picked, so say what
           fills it rather than leaving the admin to discover the interaction. */}
       {!openCell && (
-        <p className="font-body text-[11px] text-gray-500">
+        <p className="font-body text-[11px] text-mono-500">
           Selecciona una celda para ver los candidatos de ese puesto.
         </p>
       )}
@@ -2075,9 +2075,9 @@ function ColumnHeader({
           and the rest of the admin screens are unchanged. */}
       <div className="flex items-center gap-1.5">
         <span className="font-display text-base leading-none">{day}</span>
-        <span className="font-label text-xs uppercase tracking-widest text-gray-500">{month}</span>
+        <span className="font-label text-xs uppercase tracking-widest text-mono-500">{month}</span>
       </div>
-      <span className="font-label text-xs uppercase tracking-widest text-gray-500">{typeLabel}</span>
+      <span className="font-label text-xs uppercase tracking-widest text-mono-500">{typeLabel}</span>
       {/* E6/E18 — a special is identified by date AND name (`special_role:date:name`),
           and two differently-named specials can share a date. Without the name
           on screen the two columns are indistinguishable, and the header's own
@@ -2091,7 +2091,7 @@ function ColumnHeader({
       {stored && (
         <div className="space-y-1.5 pt-1">
           {readOnly && <p className="font-body text-[10px] text-amber-400">Solo lectura: revisa la integridad del servicio.</p>}
-          <label className="block font-label text-[9px] uppercase tracking-widest text-gray-500">
+          <label className="block font-label text-[9px] uppercase tracking-widest text-mono-500">
             Fecha
             <input
               type="date"
@@ -2103,7 +2103,7 @@ function ColumnHeader({
             />
           </label>
           {column.type === "special_role" && (
-            <label className="block font-label text-[9px] uppercase tracking-widest text-gray-500">
+            <label className="block font-label text-[9px] uppercase tracking-widest text-mono-500">
               Nombre
               <input
                 value={column.serviceName ?? ""}
@@ -2119,7 +2119,7 @@ function ColumnHeader({
           shows it as skipped and refuses the toggle instead of offering an
           un-skip that changes nothing. */}
       {!stored && (
-        <label className="flex items-center gap-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
+        <label className="flex items-center gap-1 font-label text-[10px] uppercase tracking-widest text-mono-500">
           <input
             type="checkbox"
             checked={skipped || blockCopy !== null}
@@ -2145,7 +2145,7 @@ function ColumnHeader({
             {PREFLIGHT_COPY[preflight.state].text}
           </span>
           {preflight.state !== "creatable" && preflight.reasons.length > 0 && (
-            <p className={`font-body text-[10px] text-gray-400 ${CARD_STYLE.longText}`}>
+            <p className={`font-body text-[10px] text-mono-400 ${CARD_STYLE.longText}`}>
               {preflight.reasons.map(describePreflightReason).join(" · ")}
             </p>
           )}
@@ -2231,7 +2231,7 @@ function RowGroup({
             {row.label}
           </span>
           {row.category !== "voz" && (
-            <span className="font-label text-[9px] uppercase tracking-widest text-gray-500">
+            <span className="font-label text-[9px] uppercase tracking-widest text-mono-500">
               asignación manual
             </span>
           )}
@@ -2447,7 +2447,7 @@ function GridCellView({
       <div className="relative">
         <div className="flex flex-wrap gap-1">
           {visibleIds.length === 0 && memberIds.length === 0 && (
-            <span className="font-body text-xs italic text-gray-600">Sin asignar</span>
+            <span className="font-body text-xs italic text-mono-600">Sin asignar</span>
           )}
           {visibleIds.map((id) => {
             // Finding 1: `duplicates` is keyed by member alone across the whole
@@ -2688,7 +2688,7 @@ function CandidateRow({
             </span>
           )}
           {candidate.alreadyAssigned && (
-            <span className="rounded-full border border-gray-500/40 bg-gray-500/10 px-1.5 py-0.5 font-label text-[10px] uppercase tracking-wide text-gray-300">
+            <span className="rounded-full border border-mono-500/40 bg-mono-500/10 px-1.5 py-0.5 font-label text-[10px] uppercase tracking-wide text-mono-300">
               Ya asignado
             </span>
           )}
@@ -2697,7 +2697,7 @@ function CandidateRow({
       <div className="mt-1 flex items-center gap-2">
         <div className="flex gap-0.5" aria-hidden="true">
           {candidate.recent.map((served, i) => (
-            <span key={i} className={`h-1.5 w-3 rounded-sm ${served ? "bg-accent/70" : "bg-gray-700"}`} />
+            <span key={i} className={`h-1.5 w-3 rounded-sm ${served ? "bg-accent/70" : "bg-mono-700"}`} />
           ))}
         </div>
         {/*
@@ -2714,7 +2714,7 @@ function CandidateRow({
           posing as the other's total.
         */}
         <span
-          className="font-label text-[10px] text-gray-500"
+          className="font-label text-[10px] text-mono-500"
           title="Carga que ordena esta lista: el historial reciente más todo lo asignado en esta cuadrícula. No es el total de Participaciones, que cuenta el mes y solo los servicios que se van a crear."
         >
           Carga para ordenar: {candidate.load}

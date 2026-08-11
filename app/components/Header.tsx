@@ -24,7 +24,7 @@ const Header = ({ title = "", tags = false, author = "" }: Props) => {
           <Link href="/tag">#tags</Link>
         </div>
       ) : (
-        <div className="text-md mt-2 text-gray-500">{"\u00A0"}</div>
+        <div className="text-md mt-2 text-mono-500">{"\u00A0"}</div>
       )}
     </header>
   );

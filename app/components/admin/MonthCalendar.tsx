@@ -291,8 +291,8 @@ export default function MonthCalendar({
 
   return (
     <div className="space-y-2">
-      <label className="font-label text-xs uppercase tracking-widest text-gray-500">Fechas</label>
-      <p className="font-body text-xs text-gray-500">
+      <label className="font-label text-xs uppercase tracking-widest text-mono-500">Fechas</label>
+      <p className="font-body text-xs text-mono-500">
         Domingos y sábados se generan por defecto: toca una fecha para quitarla. Toca cualquier otro
         día para crear un servicio especial.
       </p>
@@ -301,7 +301,7 @@ export default function MonthCalendar({
         {WEEKDAY_HEADERS.map((h) => (
           <span
             key={h}
-            className="font-label text-[10px] uppercase tracking-widest text-gray-500 text-center py-1"
+            className="font-label text-[10px] uppercase tracking-widest text-mono-500 text-center py-1"
           >
             {h}
           </span>
@@ -322,7 +322,7 @@ export default function MonthCalendar({
               : "border-yellow-400/50 bg-yellow-400/10 text-yellow-400"
             : special
               ? "border-info-fg/50 bg-info-fg/10 text-info-fg"
-              : "border-accent/15 text-gray-500 hover:border-accent/40 hover:text-ink-muted";
+              : "border-accent/15 text-mono-500 hover:border-accent/40 hover:text-ink-muted";
           return (
             <button
               key={date}
@@ -443,7 +443,7 @@ export default function MonthCalendar({
                     onRemoveSpecial(s.date);
                   }}
                   aria-label={`Quitar servicio especial del ${longDate(s.date)}`}
-                  className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-[10px] uppercase tracking-widest text-gray-400 hover:border-red-400/50 hover:text-red-400 transition-colors"
+                  className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-[10px] uppercase tracking-widest text-mono-400 hover:border-red-400/50 hover:text-red-400 transition-colors"
                 >
                   Quitar
                 </button>

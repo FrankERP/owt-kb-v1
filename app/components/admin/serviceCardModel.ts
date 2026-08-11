@@ -664,8 +664,8 @@ export const TONE_CLASS: Record<ReadinessTone, string> = {
   approved: "border-green-500/40 bg-green-500/10 text-green-400",
   warn: "border-amber-500/40 bg-amber-500/10 text-amber-400",
   error: "border-red-500/50 bg-red-500/10 text-red-300",
-  unknown: "border-gray-500/40 bg-gray-500/10 text-gray-300",
-  neutral: "border-gray-600/40 bg-transparent text-gray-400",
+  unknown: "border-mono-500/40 bg-mono-500/10 text-mono-300",
+  neutral: "border-mono-600/40 bg-transparent text-mono-400",
 };
 
 // ── Blocking issue copy ──────────────────────────────────────────────────────

@@ -13,7 +13,7 @@ import type { PrimaryActionProps } from "./serviceCardModel";
 
 /** Cyan = the actionable default; red for an integrity blocker; grey when disabled. */
 function toneClass(props: PrimaryActionProps): string {
-  if (props.disabled) return "border-gray-600/50 bg-transparent text-gray-500 cursor-not-allowed";
+  if (props.disabled) return "border-mono-600/50 bg-transparent text-mono-500 cursor-not-allowed";
   switch (props.kind) {
     case "review_data":
     case "review_duplicate_roles":

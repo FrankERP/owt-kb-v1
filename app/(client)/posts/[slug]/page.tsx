@@ -348,7 +348,7 @@ const Page = async ({ params }: Params) => {
                   {/* Header row: day + date + key */}
                   <div className="flex items-center justify-between px-5 py-3 bg-surface-accent-wash border-b border-edge-accent-subtle">
                     <div>
-                      <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-0.5">
+                      <p className="font-label text-[11px] uppercase tracking-widest text-mono-500 dark:text-mono-400 mb-0.5">
                         {entry._type === "featuredSongs" ? "Domingo" : "Sábado"}
                       </p>
                       <p className="font-body text-sm md:text-base font-semibold">

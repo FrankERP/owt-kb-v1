@@ -229,12 +229,12 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
           {member.alias?.trim() && (
             <p className="font-body text-xs text-accent/60 truncate">{member.member_name}</p>
           )}
-          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mt-0.5">{member.role}</p>
+          <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mt-0.5">{member.role}</p>
         </div>
         <button
           ref={triggerRef}
           onClick={() => setOpen(true)}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent/20 font-label text-[11px] uppercase tracking-widest text-gray-400 hover:border-accent hover:text-accent transition-colors"
+          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent/20 font-label text-[11px] uppercase tracking-widest text-mono-400 hover:border-accent hover:text-accent transition-colors"
         >
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -264,7 +264,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
             />
             <div className="min-w-0">
               <p className="font-body text-xs text-accent/60 truncate">{displayName}</p>
-              <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">{member.role}</p>
+              <p className="font-label text-[10px] uppercase tracking-widest text-mono-500">{member.role}</p>
             </div>
           </div>
 
@@ -274,10 +274,10 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
           <div className="space-y-8">
           {/* Identity */}
           <section className="space-y-4">
-            <h3 className="font-label text-[11px] uppercase tracking-widest text-gray-500">Identidad</h3>
+            <h3 className="font-label text-[11px] uppercase tracking-widest text-mono-500">Identidad</h3>
             <div className="space-y-3">
               <div className="space-y-1">
-                <label htmlFor={fid("alias")} className="font-label text-xs uppercase tracking-widest text-gray-500">Alias</label>
+                <label htmlFor={fid("alias")} className="font-label text-xs uppercase tracking-widest text-mono-500">Alias</label>
                 <input
                   id={fid("alias")}
                   className={inputCls}
@@ -287,7 +287,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
                 />
               </div>
               <div className="space-y-1">
-                <label htmlFor={fid("email")} className="font-label text-xs uppercase tracking-widest text-gray-500">Email</label>
+                <label htmlFor={fid("email")} className="font-label text-xs uppercase tracking-widest text-mono-500">Email</label>
                 <input
                   id={fid("email")}
                   className={inputCls}
@@ -310,8 +310,8 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
           {/* Password */}
           <section className="space-y-4 border-t border-accent/10 pt-6">
             <div>
-              <h3 className="font-label text-[11px] uppercase tracking-widest text-gray-500">Contraseña</h3>
-              <p className="font-body text-xs text-gray-500 mt-1">
+              <h3 className="font-label text-[11px] uppercase tracking-widest text-mono-500">Contraseña</h3>
+              <p className="font-body text-xs text-mono-500 mt-1">
                 {member.hasPassword
                   ? "Actualiza tu contraseña de acceso por email."
                   : "Establece una contraseña para iniciar sesión con email además de Google."}
@@ -323,16 +323,16 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
             <div className="space-y-3">
               {member.hasPassword && (
                 <div className="space-y-1">
-                  <label htmlFor={fid("current-pw")} className="font-label text-xs uppercase tracking-widest text-gray-500">Contraseña actual</label>
+                  <label htmlFor={fid("current-pw")} className="font-label text-xs uppercase tracking-widest text-mono-500">Contraseña actual</label>
                   <input id={fid("current-pw")} autoComplete="current-password" className={inputCls} type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} placeholder="••••••••" />
                 </div>
               )}
               <div className="space-y-1">
-                <label htmlFor={fid("new-pw")} className="font-label text-xs uppercase tracking-widest text-gray-500">Nueva contraseña</label>
+                <label htmlFor={fid("new-pw")} className="font-label text-xs uppercase tracking-widest text-mono-500">Nueva contraseña</label>
                 <input id={fid("new-pw")} autoComplete="new-password" className={inputCls} type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="Mín. 8 caracteres" />
               </div>
               <div className="space-y-1">
-                <label htmlFor={fid("confirm-pw")} className="font-label text-xs uppercase tracking-widest text-gray-500">Confirmar contraseña</label>
+                <label htmlFor={fid("confirm-pw")} className="font-label text-xs uppercase tracking-widest text-mono-500">Confirmar contraseña</label>
                 <input id={fid("confirm-pw")} autoComplete="new-password" className={inputCls} type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="Repetir contraseña" />
               </div>
             </div>
@@ -348,8 +348,8 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
           {/* Notifications */}
           <section className="space-y-4 border-t border-accent/10 pt-6">
             <div>
-              <h3 className="font-label text-[11px] uppercase tracking-widest text-gray-500">Correos</h3>
-              <p className="font-body text-xs text-gray-500 mt-1">Elige qué avisos quieres recibir por correo.</p>
+              <h3 className="font-label text-[11px] uppercase tracking-widest text-mono-500">Correos</h3>
+              <p className="font-body text-xs text-mono-500 mt-1">Elige qué avisos quieres recibir por correo.</p>
             </div>
             <EmailPrefToggles
               values={emailPrefs}

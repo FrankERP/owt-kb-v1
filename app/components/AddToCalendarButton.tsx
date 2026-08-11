@@ -25,7 +25,7 @@ export default function AddToCalendarButton({ services }: { services: ICSEvent[]
       type="button"
       onClick={download}
       title="Descargar tus servicios como evento de calendario (.ics)"
-      className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-lg border border-surface-accent-30 font-label text-[11px] uppercase tracking-widest text-gray-400 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent transition-colors"
+      className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-lg border border-surface-accent-30 font-label text-[11px] uppercase tracking-widest text-mono-400 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent transition-colors"
     >
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />

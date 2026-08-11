@@ -95,7 +95,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
             <span className="font-display text-4xl text-accent">{tags.length}</span>
             <span className="font-label text-[10px] uppercase tracking-[0.2em] text-ink-dim/55">etiquetas</span>
           </div>
-          <span className="text-gray-700 text-sm">·</span>
+          <span className="text-mono-700 text-sm">·</span>
           <div className="flex items-baseline gap-1.5">
             <span className="font-display text-4xl text-ink">{totalSongs}</span>
             <span className="font-label text-[10px] uppercase tracking-[0.2em] text-ink-dim/55">canciones</span>
@@ -130,7 +130,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
               className="w-36 bg-transparent py-2 pl-8 pr-8 font-label text-sm text-ink placeholder:text-ink-dim/45 focus:outline-none sm:w-48"
             />
             <svg
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-mono-600 pointer-events-none"
               width="12" height="12" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
             >
@@ -142,7 +142,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
                 type="button"
                 onClick={() => setQuery("")}
                 aria-label="Limpiar búsqueda"
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-500 hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 transition-colors"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-mono-500 hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 transition-colors"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -156,7 +156,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
       {/* ── Pinned quick-access (hidden while searching) ── */}
       {!isSearching && (
         <div className="space-y-3">
-          <p className="font-label text-[11px] uppercase tracking-widest text-gray-600">Tipo de canción</p>
+          <p className="font-label text-[11px] uppercase tracking-widest text-mono-600">Tipo de canción</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {pinnedResolved.map(({ slug, label, hint, icon, tag }) => {
               const count = tag?.postCount ?? 0;
@@ -176,11 +176,11 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
                         <h3 className="font-display text-2xl capitalize leading-tight text-ink transition-colors duration-200 group-hover:text-accent">
                           {label}
                         </h3>
-                        <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">
+                        <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">
                           {hint}
                         </p>
                         {tag && (
-                          <p className="font-label text-[11px] text-gray-600">
+                          <p className="font-label text-[11px] text-mono-600">
                             {count} {count === 1 ? "canción" : "canciones"}
                           </p>
                         )}
@@ -200,7 +200,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
       {/* ── All remaining tags ── */}
       {gridTags.length > 0 && (
         <div className="space-y-3">
-          <p className="font-label text-[11px] uppercase tracking-widest text-gray-600">
+          <p className="font-label text-[11px] uppercase tracking-widest text-mono-600">
             {isSearching ? "Resultados" : "Todas las etiquetas"}
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
@@ -216,7 +216,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
                     <h3 className="mb-1 font-display text-sm capitalize leading-snug text-ink transition-colors duration-200 group-hover:text-accent">
                       #{tag.name}
                     </h3>
-                    <p className="font-label text-[11px] uppercase tracking-widest text-gray-600">
+                    <p className="font-label text-[11px] uppercase tracking-widest text-mono-600">
                       {tag.postCount ?? 0}{" "}
                       {(tag.postCount ?? 0) === 1 ? "canción" : "canciones"}
                     </p>
@@ -230,7 +230,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
 
       {/* ── Empty state ── */}
       {gridTags.length === 0 && isSearching && (
-        <div className="flex flex-col items-center gap-3 py-24 text-gray-600">
+        <div className="flex flex-col items-center gap-3 py-24 text-mono-600">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />

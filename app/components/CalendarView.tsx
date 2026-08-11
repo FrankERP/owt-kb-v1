@@ -121,20 +121,20 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
         <Link
           href={scheduleHref(addMonths(anchorMonth, -WINDOW_MONTHS))}
           aria-label="Meses anteriores"
-          className="px-3 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-gray-400 hover:text-ink-muted hover:border-accent/40 dark:hover:border-surface-accent-30 transition-colors"
+          className="px-3 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-mono-400 hover:text-ink-muted hover:border-accent/40 dark:hover:border-surface-accent-30 transition-colors"
         >
           ‹ Anterior
         </Link>
         <div className="text-center min-w-[13rem]">
           <p className="font-display text-base font-bold uppercase">{monthRangeLabel(anchorMonth, WINDOW_MONTHS)}</p>
           {!viewMonth && (
-            <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">Próximos</p>
+            <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">Próximos</p>
           )}
         </div>
         <Link
           href={scheduleHref(addMonths(anchorMonth, WINDOW_MONTHS))}
           aria-label="Meses siguientes"
-          className="px-3 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-gray-400 hover:text-ink-muted hover:border-accent/40 dark:hover:border-surface-accent-30 transition-colors"
+          className="px-3 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-mono-400 hover:text-ink-muted hover:border-accent/40 dark:hover:border-surface-accent-30 transition-colors"
         >
           Siguiente ›
         </Link>
@@ -168,7 +168,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
             className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
               view === "calendar"
                 ? "bg-surface-accent-solid text-ink-muted"
-                : "text-gray-500 hover:text-ink-muted"
+                : "text-mono-500 hover:text-ink-muted"
             }`}
           >
             Calendario
@@ -179,7 +179,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
             className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors border-l border-accent-deep/30 dark:border-accent/20 ${
               view === "list"
                 ? "bg-surface-accent-solid text-ink-muted"
-                : "text-gray-500 hover:text-ink-muted"
+                : "text-mono-500 hover:text-ink-muted"
             }`}
           >
             Lista
@@ -197,21 +197,21 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
           ] as const).map(([color, label]) => (
             <span key={label} className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-[4px] border" style={{ borderColor: themeColour(color, 0.502), background: themeColour(color, 0.2) }} />
-              <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">{label}</span>
+              <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">{label}</span>
             </span>
           ))}
           <span className="flex items-center gap-1.5">
             <span className="relative w-3 h-3 rounded-[4px] border border-accent/50 bg-accent-deep/50">
               <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-accent" />
             </span>
-            <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">Varios servicios</span>
+            <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">Varios servicios</span>
           </span>
         </div>
       )}
 
       {/* Empty state (owns both grid and list) */}
       {isEmpty && (
-        <p className="text-center font-label text-sm text-gray-400 py-20">{emptyMessage}</p>
+        <p className="text-center font-label text-sm text-mono-400 py-20">{emptyMessage}</p>
       )}
 
       {/* Calendar view */}
@@ -249,7 +249,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
                   <div className="flex-1 h-px bg-surface-accent-faint" />
                   <div className="text-center shrink-0">
                     <p className="font-display text-base md:text-lg font-bold uppercase">{label}</p>
-                    <p className="font-label text-[11px] md:text-xs uppercase tracking-widest text-gray-500">{monthYear}</p>
+                    <p className="font-label text-[11px] md:text-xs uppercase tracking-widest text-mono-500">{monthYear}</p>
                   </div>
                   <div className="flex-1 h-px bg-surface-accent-faint" />
                 </div>
@@ -322,7 +322,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
             ))}
             <button
               onClick={dismiss}
-              className="w-full font-label text-xs uppercase tracking-widest text-gray-500 hover:text-gray-300 transition-colors py-2"
+              className="w-full font-label text-xs uppercase tracking-widest text-mono-500 hover:text-mono-300 transition-colors py-2"
             >
               Cerrar
             </button>
@@ -361,7 +361,7 @@ function MonthGrid({
       </h3>
       <div className="grid grid-cols-7 gap-1">
         {DAY_HEADERS.map((h) => (
-          <div key={h} className="font-label text-[11px] uppercase tracking-widest text-gray-500 text-center pb-2">
+          <div key={h} className="font-label text-[11px] uppercase tracking-widest text-mono-500 text-center pb-2">
             {h}
           </div>
         ))}
@@ -395,7 +395,7 @@ function MonthGrid({
               ? "bg-info-surface/50 border border-info-fg/50 text-info-fg cursor-pointer hover:bg-info-surface/80 hover:border-info-fg"
               : "bg-accent-deep/50 border border-accent/50 text-accent cursor-pointer hover:bg-accent-deep/80 hover:border-accent";
           } else {
-            cls += "text-gray-400 dark:text-gray-400 cursor-default";
+            cls += "text-mono-400 dark:text-mono-400 cursor-default";
           }
 
           return (

@@ -41,7 +41,7 @@ function useNotifCount(authed: boolean): number {
 
 function MenuItem({ href, onClick, children }: { href?: string; onClick?: () => void; children: React.ReactNode }) {
   const cls =
-    "w-full text-left flex items-center gap-3 px-4 py-2.5 font-label text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 hover:text-accent hover:bg-accent-deep/10 dark:hover:bg-accent/10 transition-colors";
+    "w-full text-left flex items-center gap-3 px-4 py-2.5 font-label text-xs uppercase tracking-widest text-mono-500 dark:text-mono-400 hover:text-accent hover:bg-accent-deep/10 dark:hover:bg-accent/10 transition-colors";
   if (href) return <Link href={href} className={cls}>{children}</Link>;
   return <button onClick={onClick} className={cls}>{children}</button>;
 }
@@ -81,7 +81,7 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
     return (
       <Link
         href="/auth/signin"
-        className="font-label text-xs uppercase tracking-widest text-gray-500 hover:text-accent transition-colors"
+        className="font-label text-xs uppercase tracking-widest text-mono-500 hover:text-accent transition-colors"
       >
         Iniciar sesión
       </Link>
@@ -139,10 +139,10 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
             {user.image ? (
               <div className="flex items-center gap-2.5 mb-0">
                 <Image src={user.image} alt={user.name ?? ""} width={28} height={28} unoptimized className="rounded-full shrink-0" />
-                <span className="font-label text-xs uppercase tracking-widest text-gray-400 min-w-0 truncate">{firstName}</span>
+                <span className="font-label text-xs uppercase tracking-widest text-mono-400 min-w-0 truncate">{firstName}</span>
               </div>
             ) : (
-              <span className="font-label text-xs uppercase tracking-widest text-gray-400">{firstName}</span>
+              <span className="font-label text-xs uppercase tracking-widest text-mono-400">{firstName}</span>
             )}
           </div>
 

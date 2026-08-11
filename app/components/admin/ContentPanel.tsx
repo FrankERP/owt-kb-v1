@@ -177,7 +177,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
         <div>
           <h1 className="font-display text-2xl uppercase tracking-wide">Canciones</h1>
           {!loading && (
-            <p className="font-label text-xs uppercase tracking-widest text-gray-500 mt-0.5">
+            <p className="font-label text-xs uppercase tracking-widest text-mono-500 mt-0.5">
               {songs.length} {songs.length === 1 ? "canción" : "canciones"}
             </p>
           )}
@@ -216,7 +216,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
       {!loading && !error && (
         <div className="space-y-2">
           {filtered.length === 0 && (
-            <p className="font-body text-sm text-gray-500 text-center py-12">
+            <p className="font-body text-sm text-mono-500 text-center py-12">
               {search ? "Sin resultados." : "No hay canciones todavía."}
             </p>
           )}
@@ -237,10 +237,10 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
                 <p className="font-body text-sm font-semibold truncate">{song.title}</p>
                 <div className="flex items-center gap-2 flex-wrap mt-0.5">
                   {song.author && (
-                    <span className="font-body text-xs text-gray-500 truncate">{song.author}</span>
+                    <span className="font-body text-xs text-mono-500 truncate">{song.author}</span>
                   )}
                   {(song.tags ?? []).map((tag) => (
-                    <span key={tag._id} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-accent/10 text-gray-400 border border-accent/15">
+                    <span key={tag._id} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-accent/10 text-mono-400 border border-accent/15">
                       #{tag.name}
                     </span>
                   ))}
@@ -307,7 +307,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
         <CueDialog open title="Eliminar canción" label="Eliminar canción" mode="sheet" size="sm" onDismiss={() => { setModalError(null); setModal(null); }}>
           <div className="space-y-5 p-6">
           {modalError && <CueDialogStatus tone="error">{modalError}</CueDialogStatus>}
-          <p className="font-body text-sm text-gray-400">
+          <p className="font-body text-sm text-mono-400">
             ¿Eliminar <span className="text-red-400 font-semibold">{modal.song.title}</span>? Esta acción no se puede deshacer.
           </p>
           <div className="flex gap-3 pt-1">
@@ -332,7 +332,7 @@ function ActionBtn({ onClick, title, danger, children }: { onClick: () => void; 
     <button
       onClick={onClick}
       title={title}
-      className={`p-1.5 rounded-lg transition-colors ${danger ? "hover:bg-red-500/20 hover:text-red-400 text-gray-500" : "hover:bg-accent/10 hover:text-accent text-gray-500"}`}
+      className={`p-1.5 rounded-lg transition-colors ${danger ? "hover:bg-red-500/20 hover:text-red-400 text-mono-500" : "hover:bg-accent/10 hover:text-accent text-mono-500"}`}
     >
       {children}
     </button>

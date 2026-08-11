@@ -47,7 +47,7 @@ const page = async ({ params }: Params) => {
         </div>
         <div className="relative mx-auto max-w-7xl px-6 py-10 flex flex-col items-center gap-2 text-center">
           <p className="font-display text-4xl sm:text-5xl text-accent leading-none">{name ?? slug}</p>
-          <p className="font-label text-xs uppercase tracking-widest text-gray-500">
+          <p className="font-label text-xs uppercase tracking-widest text-mono-500">
             {posts.length} {posts.length === 1 ? "canción" : "canciones"}
           </p>
         </div>

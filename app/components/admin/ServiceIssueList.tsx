@@ -44,7 +44,7 @@ export default function ServiceIssueList({
         </li>
       ))}
       {hidden > 0 && (
-        <li className="font-body text-[11px] text-gray-500">
+        <li className="font-body text-[11px] text-mono-500">
           y {hidden} problema{hidden === 1 ? "" : "s"} más
         </li>
       )}

@@ -62,7 +62,7 @@ const SERVICE_LABEL: Record<string, string> = {
 };
 
 const STATUS_STYLE: Record<ProposalStatus, string> = {
-  draft: "bg-gray-500/15 text-gray-400 border border-gray-500/30",
+  draft: "bg-mono-500/15 text-mono-400 border border-mono-500/30",
   pending: "bg-yellow-500/15 text-yellow-400 border border-yellow-500/30",
   approved: "bg-green-500/15 text-green-400 border border-green-500/30",
   changes_requested: "bg-red-500/15 text-red-400 border border-red-500/30",
@@ -142,7 +142,7 @@ function ProposalCard({
     }
   };
 
-  const inputCls = "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors placeholder:text-gray-600";
+  const inputCls = "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors placeholder:text-mono-600";
 
   return (
     <div
@@ -164,7 +164,7 @@ function ProposalCard({
           <p className="font-body text-sm text-accent">
             {proposal.lead_name}
             {coContributors.length > 0 && (
-              <span className="text-gray-400"> · con {coContributors.join(", ")}</span>
+              <span className="text-mono-400"> · con {coContributors.join(", ")}</span>
             )}
           </p>
         </div>
@@ -176,7 +176,7 @@ function ProposalCard({
       {/* Songs */}
       <div className="px-4 py-3 space-y-1.5">
         {proposal.songs.length === 0 && (
-          <p className="font-body text-sm text-gray-500 italic">Sin canciones</p>
+          <p className="font-body text-sm text-mono-500 italic">Sin canciones</p>
         )}
         {proposal.songs.map((song, i) => {
           const nextSong = proposal.songs[i + 1];
@@ -185,11 +185,11 @@ function ProposalCard({
           return (
             <div key={song._key}>
               <div className={`flex items-center gap-3 ${song.medley_tag ? "pl-2 border-l-2 border-accent/40" : ""}`}>
-                <span className="font-label text-xs text-gray-500 w-4 text-right shrink-0">{i + 1}</span>
+                <span className="font-label text-xs text-mono-500 w-4 text-right shrink-0">{i + 1}</span>
                 <div className="flex-1 min-w-0">
                   <p className="font-body text-sm font-semibold truncate">{song.title}</p>
                   {song.author && (
-                    <p className="font-body text-xs text-gray-400 truncate">{song.author}</p>
+                    <p className="font-body text-xs text-mono-400 truncate">{song.author}</p>
                   )}
                 </div>
                 {linkedPrev && (
@@ -210,7 +210,7 @@ function ProposalCard({
         <div className="px-4 pb-3">
           <div className="p-3 rounded-lg border border-accent/20 bg-accent/5">
             <p className="font-label text-[11px] uppercase tracking-widest text-accent mb-1">Mensaje para el equipo</p>
-            <p className="font-body text-sm text-gray-300 whitespace-pre-wrap">{proposal.team_notes}</p>
+            <p className="font-body text-sm text-mono-300 whitespace-pre-wrap">{proposal.team_notes}</p>
           </div>
         </div>
       )}
@@ -218,8 +218,8 @@ function ProposalCard({
       {/* Private lead notes */}
       {proposal.lead_notes && (
         <div className="px-4 pb-3">
-          <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 mb-1">Notas privadas para revisión</p>
-          <p className="font-body text-sm text-gray-300 whitespace-pre-wrap">{proposal.lead_notes}</p>
+          <p className="font-label text-[11px] uppercase tracking-widest text-mono-500 mb-1">Notas privadas para revisión</p>
+          <p className="font-body text-sm text-mono-300 whitespace-pre-wrap">{proposal.lead_notes}</p>
         </div>
       )}
 
@@ -332,7 +332,7 @@ function ProposalCard({
           ) : (
             <button
               onClick={() => setReopening(true)}
-              className="w-full py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-gray-400 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent transition-colors"
+              className="w-full py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-mono-400 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent transition-colors"
             >
               Reabrir para ajustes
             </button>
@@ -530,7 +530,7 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
             className={`relative font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors ${
               filter === id
                 ? "bg-surface-accent-solid text-accent"
-                : "text-gray-500 hover:text-accent"
+                : "text-mono-500 hover:text-accent"
             }`}
           >
             {label}
@@ -587,10 +587,10 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
 
       {!loading && !error && visible.length === 0 && (
         <div className="text-center py-12 space-y-1">
-          <p className="font-body text-sm text-gray-500">
+          <p className="font-body text-sm text-mono-500">
             {filter === "all" ? "No hay propuestas todavía." : `Sin propuestas en esta categoría.`}
           </p>
-          <p className="font-body text-xs text-gray-500/80">
+          <p className="font-body text-xs text-mono-500/80">
             Los líderes proponen setlists desde su perfil; aparecerán aquí para revisión.
           </p>
         </div>

@@ -408,7 +408,7 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">{label}</p>
+        <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">{label}</p>
         <button
           type="button" onClick={onSelectAll}
           className="font-label text-[10px] uppercase tracking-widest text-accent/60 hover:text-accent transition-colors"
@@ -417,7 +417,7 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
         </button>
       </div>
       <input
-        className="w-full px-2 py-1 mb-1 rounded border border-accent/15 bg-transparent font-body text-xs focus:outline-none focus:border-accent placeholder-gray-600"
+        className="w-full px-2 py-1 mb-1 rounded border border-accent/15 bg-transparent font-body text-xs focus:outline-none focus:border-accent placeholder-mono-600"
         placeholder="Buscar..." value={search} onChange={e => onSearch(e.target.value)}
       />
       {/*
@@ -426,7 +426,7 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
         list without a nested scroller.
       */}
       <div className="rounded border border-accent/10 divide-y divide-accent/5">
-        {visible.length === 0 && <p className="px-2 py-1 font-body text-xs text-gray-600 italic">Sin resultados</p>}
+        {visible.length === 0 && <p className="px-2 py-1 font-body text-xs text-mono-600 italic">Sin resultados</p>}
         {visible.map(m => (
           <label key={m._id} className={`flex items-center gap-2 px-2 py-1 cursor-pointer text-xs transition-colors ${config[field].includes(m._id) ? "bg-accent/10" : "hover:bg-accent/5"}`}>
             <input type="checkbox" checked={config[field].includes(m._id)} onChange={() => onToggle(m._id)} className="accent-accent" />
@@ -478,8 +478,8 @@ function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDele
           )}
         </div>
       </div>
-      <button type="button" onClick={onEdit} className="text-gray-600 hover:text-accent transition-colors shrink-0 text-xs leading-none mt-0.5 px-0.5" title="Editar">✎</button>
-      <button type="button" onClick={onDelete} className="text-gray-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none mt-0.5">×</button>
+      <button type="button" onClick={onEdit} className="text-mono-600 hover:text-accent transition-colors shrink-0 text-xs leading-none mt-0.5 px-0.5" title="Editar">✎</button>
+      <button type="button" onClick={onDelete} className="text-mono-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none mt-0.5">×</button>
     </div>
   );
 }
@@ -489,14 +489,14 @@ function ConflictCard({ r, onDelete, onEdit }: { r: ConflictRule; onDelete: () =
     <div className="rounded-lg border border-accent/10 bg-surface-sunken/40 px-3 py-2 flex items-center gap-2">
       <span className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30 shrink-0">≠</span>
       <span className="font-body text-xs flex-1">
-        <span className="text-gray-200">{r.personA}</span>
-        <span className="text-gray-500 mx-1">≠</span>
-        <span className="text-gray-200">{r.personB}</span>
-        <span className="text-gray-500 mx-1">en</span>
+        <span className="text-mono-200">{r.personA}</span>
+        <span className="text-mono-500 mx-1">≠</span>
+        <span className="text-mono-200">{r.personB}</span>
+        <span className="text-mono-500 mx-1">en</span>
         <span className="text-accent/70">{r.pattern}</span>
       </span>
-      <button type="button" onClick={onEdit} className="text-gray-600 hover:text-accent transition-colors shrink-0 text-xs leading-none px-0.5" title="Editar">✎</button>
-      <button type="button" onClick={onDelete} className="text-gray-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none">×</button>
+      <button type="button" onClick={onEdit} className="text-mono-600 hover:text-accent transition-colors shrink-0 text-xs leading-none px-0.5" title="Editar">✎</button>
+      <button type="button" onClick={onDelete} className="text-mono-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none">×</button>
     </div>
   );
 }
@@ -506,13 +506,13 @@ function PresenceCard({ r, onDelete, onEdit }: { r: PresenceRule; onDelete: () =
     <div className="rounded-lg border border-accent/10 bg-surface-sunken/40 px-3 py-2 flex items-center gap-2">
       <span className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/30 shrink-0">≥1</span>
       <span className="font-body text-xs flex-1">
-        <span className="text-gray-200">{r.persons.join(", ")}</span>
-        <span className="text-gray-500 mx-1">en</span>
+        <span className="text-mono-200">{r.persons.join(", ")}</span>
+        <span className="text-mono-500 mx-1">en</span>
         <span className="text-accent/70">{r.pattern}</span>
-        <span className="text-gray-500 ml-1">c/sem</span>
+        <span className="text-mono-500 ml-1">c/sem</span>
       </span>
-      <button type="button" onClick={onEdit} className="text-gray-600 hover:text-accent transition-colors shrink-0 text-xs leading-none px-0.5" title="Editar">✎</button>
-      <button type="button" onClick={onDelete} className="text-gray-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none">×</button>
+      <button type="button" onClick={onEdit} className="text-mono-600 hover:text-accent transition-colors shrink-0 text-xs leading-none px-0.5" title="Editar">✎</button>
+      <button type="button" onClick={onDelete} className="text-mono-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none">×</button>
     </div>
   );
 }
@@ -550,7 +550,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
     <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 space-y-3">
       {/* Person */}
       <div>
-        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Persona</p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Persona</p>
         <select className={rbSel} value={person} onChange={e => setPerson(e.target.value)}>
           {names.map(n => <option key={n} value={n}>{n}</option>)}
         </select>
@@ -558,7 +558,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
 
       {/* Exclusion pattern pills */}
       <div>
-        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1.5">Excluir de</p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1.5">Excluir de</p>
         <div className="flex flex-wrap gap-1.5">
           {EXCL_PATTERNS.map(pat => (
             <button
@@ -566,7 +566,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
               className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full border transition-colors ${
                 excl.includes(pat)
                   ? "bg-red-500/20 text-red-400 border-red-500/40"
-                  : "text-gray-500 border-accent/15 hover:border-red-500/30 hover:text-red-400"
+                  : "text-mono-500 border-accent/15 hover:border-red-500/30 hover:text-red-400"
               }`}
             >
               {PAT_LABEL[pat] ?? pat}
@@ -580,12 +580,12 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
 
       {/* Fairness */}
       <div>
-        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Fairness</p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Fairness</p>
         <div className="flex items-center gap-3 flex-wrap">
           {(["none", "exempt", "slack"] as const).map(f => (
             <label key={f} className="flex items-center gap-1.5 cursor-pointer">
               <input type="radio" name={`fairness-${person}`} value={f} checked={fairness === f} onChange={() => setFairness(f)} className="accent-accent" />
-              <span className="font-body text-xs text-gray-400">
+              <span className="font-body text-xs text-mono-400">
                 {f === "none" ? "Normal" : f === "exempt" ? "Exempt" : "Slack"}
               </span>
             </label>
@@ -603,7 +603,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
 
       {/* Week exclusions */}
       <div>
-        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Semanas excluidas</p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Semanas excluidas</p>
         <div className="space-y-1">
           {weekEx.map(we => (
             <div key={we.id} className="flex flex-wrap gap-1.5 items-center">
@@ -635,7 +635,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
               >
                 {PATTERNS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
-              <button type="button" onClick={() => setWeekEx(ws => ws.filter(x => x.id !== we.id))} className="text-gray-600 hover:text-red-400 text-sm flex-none">×</button>
+              <button type="button" onClick={() => setWeekEx(ws => ws.filter(x => x.id !== we.id))} className="text-mono-600 hover:text-red-400 text-sm flex-none">×</button>
             </div>
           ))}
         </div>
@@ -650,7 +650,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
 
       {/* Caps */}
       <div>
-        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Caps</p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Caps</p>
         <div className="space-y-1">
           {caps.map(cap => (
             // D-defect-1: at full panel width an unconstrained `flex-1` on the
@@ -702,10 +702,10 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
                 className={`font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded flex-none border transition-colors ${
                   cap.relative
                     ? "border-accent/40 bg-accent/10 text-accent"
-                    : "border-accent/15 text-gray-600 hover:text-accent"
+                    : "border-accent/15 text-mono-600 hover:text-accent"
                 }`}
               >sem</button>
-              <button type="button" onClick={() => setCaps(cs => cs.filter(x => x.id !== cap.id))} className="text-gray-600 hover:text-red-400 text-sm flex-none">×</button>
+              <button type="button" onClick={() => setCaps(cs => cs.filter(x => x.id !== cap.id))} className="text-mono-600 hover:text-red-400 text-sm flex-none">×</button>
             </div>
           ))}
         </div>
@@ -720,7 +720,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
 
       {/* Actions */}
       <div className="flex gap-2 pt-1">
-        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-accent/20 text-gray-500 hover:text-accent hover:border-accent transition-colors">
+        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-accent/20 text-mono-500 hover:text-accent hover:border-accent transition-colors">
           Cancelar
         </button>
         <button type="button" onClick={handleAdd} disabled={!canAdd} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors disabled:opacity-40">
@@ -748,20 +748,20 @@ function ConflictForm({ members, onAdd, onCancel, initialValues }: {
     <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3 space-y-2">
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Persona A</p>
+          <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Persona A</p>
           <select className={rbSel} value={personA} onChange={e => setPersonA(e.target.value)}>
             {names.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         </div>
         <div>
-          <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Persona B</p>
+          <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Persona B</p>
           <select className={rbSel} value={personB} onChange={e => setPersonB(e.target.value)}>
             {names.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         </div>
       </div>
       <div>
-        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Patrón — no pueden coincidir en</p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Patrón — no pueden coincidir en</p>
         <select className={rbSel} value={pattern} onChange={e => setPattern(e.target.value)}>
           {PATTERNS.map(p => <option key={p.value} value={p.value}>{p.label} ({p.value})</option>)}
         </select>
@@ -770,7 +770,7 @@ function ConflictForm({ members, onAdd, onCancel, initialValues }: {
         <p className="font-label text-[10px] text-red-400">Selecciona dos personas distintas</p>
       )}
       <div className="flex gap-2 pt-1">
-        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-accent/20 text-gray-500 hover:text-accent hover:border-accent transition-colors">
+        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-accent/20 text-mono-500 hover:text-accent hover:border-accent transition-colors">
           Cancelar
         </button>
         <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: initialValues?.id ?? uid(), personA, personB, pattern })} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 transition-colors disabled:opacity-40">
@@ -795,7 +795,7 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
   return (
     <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-3 space-y-2">
       <div>
-        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Al menos uno de (mín. 2)</p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Al menos uno de (mín. 2)</p>
         {/*
           D17: this list used to be `max-h-28 overflow-y-auto` — the one that
           keyholed all 16 `voz` members. Same fix as `MemberPool` above.
@@ -820,13 +820,13 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
         )}
       </div>
       <div>
-        <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-1">Debe aparecer en</p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Debe aparecer en</p>
         <select className={rbSel} value={pattern} onChange={e => setPattern(e.target.value)}>
           {PATTERNS.map(p => <option key={p.value} value={p.value}>{p.label} ({p.value})</option>)}
         </select>
       </div>
       <div className="flex gap-2 pt-1">
-        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-accent/20 text-gray-500 hover:text-accent hover:border-accent transition-colors">
+        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-accent/20 text-mono-500 hover:text-accent hover:border-accent transition-colors">
           Cancelar
         </button>
         <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: initialValues?.id ?? uid(), persons: selected, pattern })} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest bg-green-500/20 hover:bg-green-500/30 text-green-400 transition-colors disabled:opacity-40">
@@ -891,11 +891,11 @@ function RuleBuilder({ config, onChange, members, source }: {
         switching forms mid-edit would throw away what was typed.
       */}
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-        <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">
+        <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">
           Reglas{total > 0 ? ` (${total})` : ""}
         </p>
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="font-label text-[10px] uppercase tracking-widest text-gray-600">
+          <span className="font-label text-[10px] uppercase tracking-widest text-mono-600">
             Añadir regla
           </span>
           <AddRuleButton
@@ -987,7 +987,7 @@ function RuleBuilder({ config, onChange, members, source }: {
       )}
 
       {total === 0 && !isFormOpen && (
-        <p className="font-body text-xs text-gray-600 italic px-1">Sin reglas configuradas</p>
+        <p className="font-body text-xs text-mono-600 italic px-1">Sin reglas configuradas</p>
       )}
 
       {/*
@@ -1030,26 +1030,26 @@ function RuleBuilder({ config, onChange, members, source }: {
       */}
       {source.status === "ready" ? (
         <>
-          <p className="font-body text-[11px] text-gray-500 px-1 pt-1">
+          <p className="font-body text-[11px] text-mono-500 px-1 pt-1">
             Las reglas se guardan en el <span className="text-accent">servidor</span> y las
             comparten todos los administradores. Los cambios de esta pantalla no valen en otras sesiones hasta que pulses{" "}
-            <span className="text-gray-400">Guardar reglas</span>.
+            <span className="text-mono-400">Guardar reglas</span>.
           </p>
-          <p className="font-body text-[11px] text-gray-500 px-1">
+          <p className="font-body text-[11px] text-mono-500 px-1">
             Se aplican como bloqueo duro los patrones excluidos y los conflictos entre dos personas,
             al editar cualquier servicio de este mes. Las{" "}
-            <span className="text-gray-400">semanas excluidas</span> se verifican con el calendario completo del mes.
+            <span className="text-mono-400">semanas excluidas</span> se verifican con el calendario completo del mes.
           </p>
         </>
       ) : source.status === "absent" ? (
-        <p className="font-body text-[11px] text-gray-500 px-1 pt-1">
+        <p className="font-body text-[11px] text-mono-500 px-1 pt-1">
           Todavía no hay reglas compartidas en el servidor: estas son las de{" "}
           <span className="text-amber-400">ejemplo</span> con las que llega la app y no se pueden
           guardar desde aquí. Los patrones excluidos, los conflictos y las semanas excluidas se
           aplican en esta sesión del editor mensual, pero aún no son reglas compartidas.
         </p>
       ) : (
-        <p className="font-body text-[11px] text-gray-500 px-1 pt-1">
+        <p className="font-body text-[11px] text-mono-500 px-1 pt-1">
           <span className="text-amber-400">
             {source.status === "error"
               ? "No se pudieron cargar las reglas compartidas del servidor."
@@ -1061,9 +1061,9 @@ function RuleBuilder({ config, onChange, members, source }: {
           configuración cargada en esta sesión.
         </p>
       )}
-      <p className="font-body text-[11px] text-gray-500 px-1">
-        Los <span className="text-gray-400">topes</span> y la{" "}
-        <span className="text-gray-400">presencia</span> solo los resuelve el solver en domingos y
+      <p className="font-body text-[11px] text-mono-500 px-1">
+        Los <span className="text-mono-400">topes</span> y la{" "}
+        <span className="text-mono-400">presencia</span> solo los resuelve el solver en domingos y
         sábados: en servicios especiales y al asignar a mano no se verifican.
       </p>
     </div>
@@ -1260,7 +1260,7 @@ function SolverConfigUnavailable({ source, onReload }: {
   return (
     <div className="space-y-3 p-3 rounded-xl border border-accent/20 bg-accent/5">
       <p className="font-label text-[11px] uppercase tracking-widest text-accent">Configuración del Solver</p>
-      <p role={failed ? "alert" : undefined} className={`font-body text-xs ${failed ? "text-red-400" : "text-gray-500"}`}>
+      <p role={failed ? "alert" : undefined} className={`font-body text-xs ${failed ? "text-red-400" : "text-mono-500"}`}>
         {failed ? source.message : "Cargando las reglas compartidas…"}
       </p>
       {failed && (
@@ -1297,7 +1297,7 @@ function SolverConfigReloadNotice({ source, onReload }: {
 }) {
   if (source.status !== "error" && source.status !== "loading") return null;
   if (source.status === "loading") {
-    return <p className="font-body text-xs text-gray-500">Cargando las reglas compartidas…</p>;
+    return <p className="font-body text-xs text-mono-500">Cargando las reglas compartidas…</p>;
   }
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -1396,7 +1396,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
       {/* Solver history indicator */}
       {history.length > 0 && (
         <div>
-          <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 mb-1">
+          <p className="font-label text-[11px] uppercase tracking-widest text-mono-500 mb-1">
             Historial ({history.length})
             <span className="ml-1 text-accent/50 normal-case">— últimas {Math.min(history.length, 3)} ejecuciones usadas</span>
           </p>
@@ -1407,7 +1407,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
                 <button
                   type="button"
                   onClick={() => onRemoveHistory(h.key)}
-                  className="text-gray-600 hover:text-red-400 transition-colors leading-none ml-0.5"
+                  className="text-mono-600 hover:text-red-400 transition-colors leading-none ml-0.5"
                   title="Eliminar del historial"
                 >×</button>
               </span>
@@ -3041,13 +3041,13 @@ export default function MonthGenerator({
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
-          <label className="font-label text-xs uppercase tracking-widest text-gray-500">Mes</label>
+          <label className="font-label text-xs uppercase tracking-widest text-mono-500">Mes</label>
           <select className={selCls} value={month} onChange={e => setMonth(Number(e.target.value))}>
             {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
           </select>
         </div>
         <div className="space-y-1">
-          <label className="font-label text-xs uppercase tracking-widest text-gray-500">Año</label>
+          <label className="font-label text-xs uppercase tracking-widest text-mono-500">Año</label>
           <YearInput className={inCls} value={year} onChange={setYear} />
         </div>
       </div>
@@ -3156,7 +3156,7 @@ export default function MonthGenerator({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-label text-xs uppercase tracking-widest text-gray-500">{MONTHS[month - 1]} {year}</p>
+          <p className="font-label text-xs uppercase tracking-widest text-mono-500">{MONTHS[month - 1]} {year}</p>
           {storedMode ? (
             <p className="font-body text-sm">
               <span className="text-accent font-semibold">{storedColumns.length}</span> servicio{storedColumns.length !== 1 ? "s" : ""}
@@ -3165,14 +3165,14 @@ export default function MonthGenerator({
           ) : (
             <p className="font-body text-sm">
               <span className="text-accent font-semibold">{toCreate.length}</span> por crear
-              {skippedCount > 0 && <span className="text-gray-500"> · {skippedCount} omitido{skippedCount !== 1 ? "s" : ""}</span>}
+              {skippedCount > 0 && <span className="text-mono-500"> · {skippedCount} omitido{skippedCount !== 1 ? "s" : ""}</span>}
               {notCreatable > 0 && (
                 <span className="text-amber-400"> · {notCreatable} no disponible{notCreatable !== 1 ? "s" : ""}</span>
               )}
             </p>
           )}
         </div>
-        <button type="button" onClick={requestBack} disabled={storedTransportActive} className="font-label text-xs uppercase tracking-widest text-gray-500 hover:text-accent transition-colors disabled:opacity-50">
+        <button type="button" onClick={requestBack} disabled={storedTransportActive} className="font-label text-xs uppercase tracking-widest text-mono-500 hover:text-accent transition-colors disabled:opacity-50">
           {storedMode ? "Cerrar" : "← Volver"}
         </button>
       </div>
@@ -3207,7 +3207,7 @@ export default function MonthGenerator({
             </button>
           ) : (
             <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.4fr_auto] md:items-end">
-              <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
+              <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-mono-500">
                 Tipo
                 <select value={createType} disabled={storedMutationLocked} onChange={(event) => setCreateType(event.target.value as ServiceType)} className={selCls}>
                   <option value="sunday_role">Domingo</option>
@@ -3215,12 +3215,12 @@ export default function MonthGenerator({
                   <option value="special_role">Especial</option>
                 </select>
               </label>
-              <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
+              <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-mono-500">
                 Fecha
                 <input type="date" value={createDate} disabled={storedMutationLocked} min={`${monthPrefix}-01`} max={`${monthPrefix}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`} onChange={(event) => setCreateDate(event.target.value)} className={inCls} />
               </label>
               {createType === "special_role" ? (
-                <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
+                <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-mono-500">
                   Nombre
                   <input value={createName} disabled={storedMutationLocked} onChange={(event) => setCreateName(event.target.value)} className={inCls} placeholder="Nombre del servicio" />
                 </label>
@@ -3287,12 +3287,12 @@ export default function MonthGenerator({
         <div className="flex rounded-lg border border-surface-accent-30 overflow-hidden">
           <button type="button" onClick={() => setViewMode("edit")}
             className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
-              viewMode === "edit" ? "bg-surface-accent-solid text-ink-muted" : "text-gray-500 hover:text-ink-muted"}`}>
+              viewMode === "edit" ? "bg-surface-accent-solid text-ink-muted" : "text-mono-500 hover:text-ink-muted"}`}>
             Editar
           </button>
           <button type="button" onClick={() => setViewMode("view")}
             className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors border-l border-accent-deep/30 dark:border-accent/20 ${
-              viewMode === "view" ? "bg-surface-accent-solid text-ink-muted" : "text-gray-500 hover:text-ink-muted"}`}>
+              viewMode === "view" ? "bg-surface-accent-solid text-ink-muted" : "text-mono-500 hover:text-ink-muted"}`}>
             Vista
           </button>
         </div>
@@ -3300,7 +3300,7 @@ export default function MonthGenerator({
 
       {viewMode === "edit" && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">⇄ Intercambiar equipos:</span>
+          <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">⇄ Intercambiar equipos:</span>
           {columns.map(col => (
             <button
               key={col.columnId}
@@ -3311,7 +3311,7 @@ export default function MonthGenerator({
               className={`min-h-[44px] px-2 py-1 rounded-full border text-[10px] font-label uppercase tracking-widest transition-colors ${
                 swapSel === col.columnId
                   ? "border-accent bg-accent/20 text-accent"
-                  : "border-accent/15 text-gray-500 hover:text-accent"
+                  : "border-accent/15 text-mono-500 hover:text-accent"
               }`}
             >
               {fmtDate(col.date)}
@@ -3323,20 +3323,20 @@ export default function MonthGenerator({
 
       {storedMode && (
         <div className="grid gap-2 rounded-lg border border-accent/15 p-3 md:grid-cols-[0.8fr_1fr_1fr_auto] md:items-end">
-          <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
+          <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-mono-500">
             Sección
             <select value={sectionSwapPath} disabled={storedSwapInteractionBlocked} onChange={(event) => setSectionSwapPath(event.target.value as StoredSectionPath)} className={selCls}>
               {STORED_SECTION_OPTIONS.map((option) => <option key={option.path} value={option.path}>{option.label}</option>)}
             </select>
           </label>
-          <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
+          <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-mono-500">
             Primer servicio
             <select value={sectionSwapFirst} disabled={storedSwapInteractionBlocked} onChange={(event) => setSectionSwapFirst(event.target.value)} className={selCls}>
               <option value="">Seleccionar…</option>
               {storedSectionServiceOptions.map((option) => <option key={`a:${option.column.roleId}`} value={option.column.roleId}>{option.label}</option>)}
             </select>
           </label>
-          <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
+          <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-mono-500">
             Segundo servicio
             <select value={sectionSwapSecond} disabled={storedSwapInteractionBlocked} onChange={(event) => setSectionSwapSecond(event.target.value)} className={selCls}>
               <option value="">Seleccionar…</option>
@@ -3379,7 +3379,7 @@ export default function MonthGenerator({
               No disponibles este mes
             </p>
             {Array.from(byPerson.entries()).map(([name, items]) => (
-              <p key={name} className="font-body text-xs text-gray-400">
+              <p key={name} className="font-body text-xs text-mono-400">
                 <span className="text-orange-300 font-semibold">{name}</span>
                 {" — "}
                 {items.map(i => `${i.service} ${new Date(i.date + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })}`).join(", ")}

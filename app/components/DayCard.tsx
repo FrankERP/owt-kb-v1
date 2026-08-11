@@ -143,7 +143,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                   {canEdit && date && (
                     <button
                       onClick={() => setEditSetlist(true)}
-                      className="flex items-center gap-1 font-label text-[11px] uppercase tracking-widest text-gray-500 hover:text-accent transition-colors"
+                      className="flex items-center gap-1 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:text-accent transition-colors"
                     >
                       <PencilIcon />
                       Editar
@@ -162,14 +162,14 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                           onClick={() => openSheet(song._id, song.play_key || undefined)}
                           className="group -mx-2 flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-accent/[0.055]"
                         >
-                          <span className="font-label text-xs text-gray-400 w-4 shrink-0 text-right tabular-nums">{n}</span>
+                          <span className="font-label text-xs text-mono-400 w-4 shrink-0 text-right tabular-nums">{n}</span>
                           <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
                             <span className="truncate font-body text-base font-semibold transition-colors group-hover:text-accent md:text-lg">{song.title}</span>
-                            {song.author && <span className="text-gray-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
+                            {song.author && <span className="text-mono-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
                             {song.play_key && song.key && song.play_key !== song.key && (
-                              <span className="font-label text-[11px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800/50 text-gray-500 leading-tight">orig. {song.key}</span>
+                              <span className="font-label text-[11px] px-1.5 py-0.5 rounded border border-mono-700 bg-mono-800/50 text-mono-500 leading-tight">orig. {song.key}</span>
                             )}
                             <span className={`font-label text-xs font-semibold ${t.accent}`}>{song.play_key || song.key}</span>
                           </div>
@@ -204,14 +204,14 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                             onClick={() => openSheet(song._id, song.play_key || undefined)}
                             className="group -mx-2 flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent/[0.055]"
                           >
-                            <span className="font-label text-xs text-gray-400 w-4 shrink-0 text-right tabular-nums">{n}</span>
+                            <span className="font-label text-xs text-mono-400 w-4 shrink-0 text-right tabular-nums">{n}</span>
                             <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
                               <span className="truncate font-body text-base font-semibold transition-colors group-hover:text-accent md:text-lg">{song.title}</span>
-                              {song.author && <span className="text-gray-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
+                              {song.author && <span className="text-mono-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
                               {song.play_key && song.key && song.play_key !== song.key && (
-                                <span className="font-label text-[11px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800/50 text-gray-500 leading-tight">orig. {song.key}</span>
+                                <span className="font-label text-[11px] px-1.5 py-0.5 rounded border border-mono-700 bg-mono-800/50 text-mono-500 leading-tight">orig. {song.key}</span>
                               )}
                               <span className={`font-label text-xs font-semibold ${t.accent}`}>{song.play_key || song.key}</span>
                             </div>
@@ -308,7 +308,7 @@ function VocalCol({ label, names, highlightName, duplicateNames }: { label: stri
   if (!names.length) return <div />;
   return (
     <div>
-      <p className="font-label text-xs uppercase tracking-widest text-gray-400 mb-0.5">{label}</p>
+      <p className="font-label text-xs uppercase tracking-widest text-mono-400 mb-0.5">{label}</p>
       <p className="font-body text-sm md:text-base lg:text-lg leading-snug">
         {names.map((name, i) => {
           const key  = name.toLowerCase().trim();
@@ -381,7 +381,7 @@ function SectionDivider({ label, accent }: { label: string; accent: string }) {
       <span className={`font-label text-xs md:text-sm lg:text-base ${accent} uppercase tracking-wide shrink-0`}>
         {label}
       </span>
-      <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
+      <div className="flex-1 h-px bg-mono-200 dark:bg-mono-800" />
     </div>
   );
 }
