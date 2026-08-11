@@ -395,7 +395,7 @@ asserting a removed premise is worse than no guard: it is green and wrong.
 
 - Delete the seven `--brand-*` colour declarations from `brand.css` and their seven `brand.*`
   keys from `tailwind.config.ts`.
-- **Gated on the three generated counts in the slicing section**, not on judgement: category 10 = 0; zero category-11 rows referencing a retired COLOUR variable; no category-9 row dispositioned `B` carrying a retired value. Neither category 11 nor category 9 reaches zero outright — 7 of its 9 rows are non-colour radius vars.
+- **Gated on the three generated counts in the slicing section**, not on judgement: category 10 = 0; zero category-11 rows referencing a retired COLOUR variable; no category-9 row dispositioned `B` carrying a retired value. Neither category reaches zero outright: 7 of category 11's 9 rows are non-colour radius vars, and category 9 keeps `layout.tsx`'s exempt `themeColor`.
 - **Land the lint clauses B owns**: bare and bracketed hex; `rgb()`/`rgba()`/`hsl()` **only
   when not followed by `var(`** — `(rgba?|hsla?)\((?!\s*var\()`, or the rule forbids its own
   prescribed fix; colour inside arbitrary values with no `#`; the retired `brand-<colour>`
