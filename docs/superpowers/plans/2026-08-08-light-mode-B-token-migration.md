@@ -88,9 +88,20 @@ So:
 | **B3…Bn** | Migrate call sites in batches by file, densest first | Both old and new spellings work throughout, so every batch is independently revertible |
 | **B-final** | Remove the seven retired `--brand-*` declarations and their `brand.*` Tailwind keys; land the lint clauses B owns; re-point the last A1/A2 guard assertions | **Atomic, and only safe when zero call sites remain.** This is the transition the parent means |
 
-**Each slice merges to `main` on its own green gate.** B-final is gated on a count, not on
-judgement: the inventory must report **zero** rows in **categories 10 and 11**, and no
-remaining category-9 `accentHex`-style literal carrying a retired value.
+**Each slice merges to `main` on its own green gate.** B-final is gated on counts, not on
+judgement — and note that **category 11 can never reach zero**, since 7 of its 9 rows are
+non-colour `--brand-radius-*` that B never touches:
+
+- **category 10 = 0** (no retired `brand-<colour>` utility remains), **and**
+- **zero category-11 rows referencing a retired COLOUR variable** — today exactly two,
+  `AdminPanel.tsx:399` (beam) and `(client)/admin/page.tsx:37` (signal), **and**
+- **no category-9 literal carrying a retired value** — `DayCard.tsx:33`'s `accentHex`.
+
+**"Category 11 = 0" would be unsatisfiable and must not be written.** Category 11 holds **9**
+rows, and **7 are `[var(--brand-radius-panel)]` / `[var(--brand-radius-control)]`** — five in
+`signin/page.tsx`, one more there, one in `DayCard.tsx`. The radius variables are non-colour
+and the vocabulary leaves them untouched, so category 11 is 7 at B-final, permanently.
+Renaming them to satisfy a gate would be unlicensed scope expansion.
 
 ## Ordered changes
 
@@ -157,7 +168,8 @@ than 50 rows.**
 - **Pairs drive composed tokens.** 246 per-element pairs, **166 differing in alpha** — those
   take a composed token. Of the 80 that do not, **12 are palette pairs belonging to Child C**,
   so B's share is **68**, and those may use a base role with an opacity modifier.
-- **Snapshot the `pairs` relation into the handoff before B-final.** It is the only generated
+- **Snapshot the `pairs` relation into the handoff before B-final** — all 246, not just B's
+  234, since C inherits the other 12 and the split one. It is the only generated
   record of which light literal partnered which dark one, and regenerating the inventory batch
   by batch overwrites it — leaving Child D's light design to reconstruct it from git history.
 - **A `dark:` variant is deleted only once the composed token's `:root` value equals that
@@ -218,7 +230,7 @@ asserting a removed premise is worse than no guard: it is green and wrong.
 
 - Delete the seven `--brand-*` colour declarations from `brand.css` and their seven `brand.*`
   keys from `tailwind.config.ts`.
-- **Gated on a generated count: category 10 must report zero rows.** Not on judgement.
+- **Gated on the three generated counts in the slicing section**, not on judgement: category 10 = 0; zero category-11 rows referencing a retired COLOUR variable; no category-9 retired literal. Category 11 itself never reaches zero — 7 of its 9 rows are non-colour radius vars.
 - **Land the lint clauses B owns**: bare and bracketed hex; `rgb()`/`rgba()`/`hsl()` **only
   when not followed by `var(`** — `(rgba?|hsla?)\((?!\s*var\()`, or the rule forbids its own
   prescribed fix; colour inside arbitrary values with no `#`; the retired `brand-<colour>`
@@ -258,6 +270,18 @@ asserting a removed premise is worse than no guard: it is green and wrong.
     `SongFormModal` 67, `PlannerGrid` 59 — for no benefit.
   - **Palette-family clauses are NOT B's** — they land per family with Child C, or `npx
     eslint .` cannot reach 0 errors at this merge.
+  - **The `rgb()`/`rgba()`/`hsl()` clause has the SAME problem and must be deferred with
+    them.** Eight category-5 rows in `app/**` are dispositioned `B` but belong to Child C's
+    families: `ServiceReadinessCard.tsx` `rgba(239,68,68,·)` ×4 (`red-500`) and `DayCard.tsx`
+    `rgba(251,191,36,·)` ×4 (`amber-400`). B cannot migrate them — the vocabulary says "C's
+    family, B must not pre-empt it" — and cannot tokenise them onto existing roles either,
+    since `239 68 68` ≠ `--negative-fg 248 113 113` and `251 191 36` ≠ `--warning-fg
+    245 158 11`; doing so would be a third licensed diff.
+    **Decision: the `rgb()/rgba()/hsl()` clause lands with Child C, not with B-final.** B's
+    own category-5 rows — six black shadows in `brand.css`, one in `tailwind.config.ts` (out of
+    glob), `ParticipationSidebar`'s `rgba(0,191,255,0.08)`, and the four
+    `rgba(61,255,124,·)` of licensed diff 2 — are migrated by B regardless; they simply are not
+    *lint-enforced* until C.
 - **A `var()`-integrity guard cannot see utility references.** `selection:bg-brand-beam/35`
   consumes the `brand.beam` *key*, not a `var()`. **This slice is where that is guarded**,
   because this is the change that removes the key.
@@ -311,9 +335,19 @@ pulled into B1.
 
 ### What B discards, stated plainly
 
-**B deletes the light-side value of all 246 pairs from the tree.** They are the `dark:`
-siblings' partners, and once a site carries a single composed token those literals are gone
-from source.
+**B deletes the light-side value of the 234 pairs it owns** — those with at least one hex
+side. The other **12 have palette classes on both sides** (`text-gray-500 dark:text-gray-400`
+and kin) and belong to Child C, which is the same 12 that make B's non-alpha-differing share
+68 rather than 80.
+
+**One pair is split between B and C, and needs its own treatment.**
+`TextSizeControl.tsx` carries `text-gray-600 dark:text-[#C8D8EB]/70` — the light side is C's
+palette row, the dark side is B's hex row, and `alphaDiffers` is **true**, so it sits inside
+the 166 the composed layer is sized against. B cannot collapse it to one composed token
+without deleting `text-gray-600`, which is not B's to touch. **Treatment: B migrates only the
+dark side, to a token-valued `dark:` variant, and leaves the pair split until C migrates the
+light side and collapses it.** It is one site, but it is the one site B3's delete rule has no
+answer for.
 
 This is intentional and invisible today — `forcedTheme="dark"` means no member ever saw the
 light side — but it is a real loss of information, and it is **the reason B must snapshot the
@@ -323,7 +357,8 @@ from it. Losing it means reconstructing 246 pairings from git history.
 
 **Consequently, B3's rule reads: a `dark:` variant is deleted only once the composed token's
 `:root` value equals that variant's pre-migration computed colour** — never "once the token
-carries both sides", which nothing at B's ending state can do.
+carries both sides", which nothing at B's ending state can do. **And the rule does not apply
+to the split pair above**, where the `dark:` variant survives B as a token-valued variant.
 
 ## Verification
 
@@ -335,7 +370,7 @@ carries both sides", which nothing at B's ending state can do.
 | Existing `brand.css` pins hold | `participationAlongside.test.tsx` green **untouched** | Breaking a documented layout guard while rewriting the file |
 | Every migrated site | Computed-colour equality **in the rendered (dark) theme**, sites not classes | Any diff outside the two licensed sets |
 | Diff 1 is fully enumerated | The beam set covers all four classes: 32 brand.css + 87 cat-10 + 1 cat-11 + `DayCard.tsx:33` with its ~10 consumers | The harness reporting ~11 unlicensed diffs, or `DayCard` left on a literal that then fails B-final's own lint clause |
-| Retired keys are gone | Inventory categories 10 AND 11 report **zero**, and no category-9 literal carries a retired value | Removing keys while call sites remain — the one unsafe transition |
+| Retired keys are gone | Category 10 = 0; zero category-11 rows referencing a retired **colour** variable (7 radius rows remain by design); no category-9 retired literal | Removing keys while call sites remain — the one unsafe transition |
 | Utility references covered | A test that fails if a `brand.*` key is deleted while a `bg-brand-*` usage remains | The failure a `var()`-integrity guard structurally cannot see |
 | Prose survives | No hex, no `rgb(`-without-`var(`, `--tw-prose-body` → ink role, `.prose-sm` still emitted | The `theme.typography` collapse — unstyled lyrics, no signal |
 | Tests move with code | `PlannerGrid.test.tsx` selectors updated in the same commit | `npm test` red at the batch merge |
@@ -350,7 +385,7 @@ carries both sides", which nothing at B's ending state can do.
 - **Tag before B-final.** Slices B1–Bn are individually revertible because both spellings
   work; B-final is the atomic one.
 - **Stop conditions:** the equality harness cannot resolve a site → stop, do not eyeball it.
-  Category 10 is non-zero at B-final → stop, the removal is unsafe. The `(variable, alpha)`
+  Any of B-final's three counts is non-zero → stop, the removal is unsafe. The `(variable, alpha)`
   multiset diverges outside beam lines → stop, `brand.css` has drifted.
 - **Deploy verification** after each merge: confirm the alias moved to a deployment built
   from the pushed commit. A green build is not a deploy.
