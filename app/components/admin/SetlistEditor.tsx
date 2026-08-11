@@ -31,8 +31,8 @@ function RepeatBadge({ lastUsed }: { lastUsed: string }) {
   const weeks = weeksAgo(lastUsed);
   if (weeks > 4) return null;
   const cls = weeks <= 2
-    ? "bg-red-500/20 text-red-400 border-red-500/30"
-    : "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
+    ? "bg-negative-strong/20 text-negative-fg border-negative-strong/30"
+    : "bg-recency-fg/20 text-recency-strong border-recency-fg/30";
   return (
     <span className={`font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${cls}`}>
       {weeks <= 0 ? "esta sem." : `hace ${weeks} sem.`}
@@ -299,14 +299,14 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
   }
 
   if (loading) {
-    return <div className="flex justify-center py-8"><span className="font-label text-xs uppercase tracking-widest text-gray-500 animate-pulse">Cargando...</span></div>;
+    return <div className="flex justify-center py-8"><span className="font-label text-xs uppercase tracking-widest text-mono-500 animate-pulse">Cargando...</span></div>;
   }
 
   if (loadError) {
     return (
       <div className="space-y-4">
         <CueDialogStatus tone="error">{loadError}</CueDialogStatus>
-        <button type="button" onClick={onClose} className="w-full rounded-lg border border-accent/20 py-2 font-label text-xs uppercase tracking-widest text-gray-400 transition-colors hover:border-accent hover:text-accent">
+        <button type="button" onClick={onClose} className="w-full rounded-lg border border-accent/20 py-2 font-label text-xs uppercase tracking-widest text-mono-400 transition-colors hover:border-accent hover:text-accent">
           Cerrar
         </button>
       </div>
@@ -317,11 +317,11 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
     <div className="space-y-4">
       {/* Current setlist */}
       <div>
-        <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 mb-2">
+        <p className="font-label text-[11px] uppercase tracking-widest text-mono-500 mb-2">
           Setlist ({entries.length})
         </p>
         {entries.length === 0 && (
-          <p className="font-body text-xs text-gray-600 italic">Sin canciones todavía</p>
+          <p className="font-body text-xs text-mono-600 italic">Sin canciones todavía</p>
         )}
         <div>
           {entries.map((e, idx) => {
@@ -348,7 +348,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
                       : "border-accent/10 bg-surface-sunken/30"
                   }`}
                 >
-                  <div className="cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 shrink-0 transition-colors" aria-hidden="true">
+                  <div className="cursor-grab active:cursor-grabbing text-mono-600 hover:text-mono-400 shrink-0 transition-colors" aria-hidden="true">
                     <GripIcon />
                   </div>
                   {/* Keyboard-accessible reorder alternative to drag-and-drop */}
@@ -358,22 +358,22 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
                       onClick={() => move(idx, -1)}
                       disabled={idx === 0}
                       aria-label={`Subir ${e.song.title}`}
-                      className="text-gray-600 hover:text-accent disabled:opacity-25 disabled:hover:text-gray-600 leading-none text-[11px] transition-colors"
+                      className="text-mono-600 hover:text-accent disabled:opacity-25 disabled:hover:text-mono-600 leading-none text-[11px] transition-colors"
                     >▲</button>
                     <button
                       type="button"
                       onClick={() => move(idx, 1)}
                       disabled={idx === entries.length - 1}
                       aria-label={`Bajar ${e.song.title}`}
-                      className="text-gray-600 hover:text-accent disabled:opacity-25 disabled:hover:text-gray-600 leading-none text-[11px] transition-colors"
+                      className="text-mono-600 hover:text-accent disabled:opacity-25 disabled:hover:text-mono-600 leading-none text-[11px] transition-colors"
                     >▼</button>
                   </div>
-                  <span className="font-label text-[11px] text-gray-600 shrink-0 w-4 text-center tabular-nums">{idx + 1}</span>
+                  <span className="font-label text-[11px] text-mono-600 shrink-0 w-4 text-center tabular-nums">{idx + 1}</span>
                   <div className="flex-1 min-w-0">
                     <p className="font-body text-xs truncate">{e.song.title}</p>
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                      <span className="font-label text-[10px] text-gray-600">{e.song.author}</span>
-                      {e.song.key && <span className="font-label text-[10px] text-gray-600">· {e.song.key}</span>}
+                      <span className="font-label text-[10px] text-mono-600">{e.song.author}</span>
+                      {e.song.key && <span className="font-label text-[10px] text-mono-600">· {e.song.key}</span>}
                       {lastUsed && <RepeatBadge lastUsed={lastUsed} />}
                     </div>
                   </div>
@@ -383,7 +383,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
                     value={e.play_key}
                     onChange={ev => setEntries(prev => prev.map(x => x.localId === e.localId ? { ...x, play_key: ev.target.value } : x))}
                   />
-                  <button type="button" onClick={() => remove(e.localId)} aria-label={`Quitar ${e.song.title}`} className="text-gray-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none">×</button>
+                  <button type="button" onClick={() => remove(e.localId)} aria-label={`Quitar ${e.song.title}`} className="text-mono-600 hover:text-negative-fg transition-colors shrink-0 text-sm leading-none">×</button>
                 </div>
                 {idx < entries.length - 1 && (
                   <div className="-my-0.5 flex items-center justify-center relative z-10">
@@ -394,7 +394,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
                       className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all ${
                         linked
                           ? "border-accent/30 bg-surface-base text-accent/60"
-                          : "border-dashed border-gray-700/30 bg-surface-base text-gray-700/40 hover:border-accent/30 hover:text-accent/40"
+                          : "border-dashed border-mono-700/30 bg-surface-base text-mono-700/40 hover:border-accent/30 hover:text-accent/40"
                       }`}
                     >
                       <ChainLinkIcon strokeWidth={linked ? 2.5 : 1.5} />
@@ -410,16 +410,16 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
 
       {/* Search & add */}
       <div className="border-t border-accent/10 pt-3 space-y-2">
-        <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">Agregar canción</p>
+        <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">Agregar canción</p>
         <div className="flex gap-2">
           <input
-            className="flex-1 px-3 py-1.5 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors placeholder-gray-600"
+            className="flex-1 px-3 py-1.5 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors placeholder-mono-600"
             placeholder="Buscar por título..."
             value={searchQ}
             onChange={e => setSearchQ(e.target.value)}
           />
           <input
-            className="w-16 px-2 py-1.5 rounded-lg border border-accent/20 bg-transparent font-body text-sm text-center focus:outline-none focus:border-accent transition-colors placeholder-gray-600"
+            className="w-16 px-2 py-1.5 rounded-lg border border-accent/20 bg-transparent font-body text-sm text-center focus:outline-none focus:border-accent transition-colors placeholder-mono-600"
             placeholder="Tono"
             value={addKey}
             onChange={e => setAddKey(e.target.value)}
@@ -435,8 +435,8 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
                   <div className="flex-1 min-w-0">
                     <p className="font-body text-xs truncate">{song.title}</p>
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                      <span className="font-label text-[10px] text-gray-600">{song.author}</span>
-                      {song.key && <span className="font-label text-[10px] text-gray-600">· {song.key}</span>}
+                      <span className="font-label text-[10px] text-mono-600">{song.author}</span>
+                      {song.key && <span className="font-label text-[10px] text-mono-600">· {song.key}</span>}
                       {lastUsed && <RepeatBadge lastUsed={lastUsed} />}
                     </div>
                   </div>
@@ -461,15 +461,15 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
           >
             <span className="font-label text-[11px] uppercase tracking-widest text-accent">+ Crear</span>
             {searchQ.trim()
-              ? <span className="font-body text-xs text-gray-400 truncate">&quot;{searchQ}&quot;</span>
-              : <span className="font-body text-xs text-gray-400">nueva canción</span>}
+              ? <span className="font-body text-xs text-mono-400 truncate">&quot;{searchQ}&quot;</span>
+              : <span className="font-body text-xs text-mono-400">nueva canción</span>}
           </button>
         </div>
       </div>
 
       {/* Footer */}
       {saveError && (
-        <p className="text-red-400 font-label text-xs uppercase tracking-widest text-center -mb-1">{saveError}</p>
+        <p className="text-negative-fg font-label text-xs uppercase tracking-widest text-center -mb-1">{saveError}</p>
       )}
       {/* A 409 keeps the editor (and the admin's edits) open and requires a
           reload: the observed state is only replaced by a fresh read. */}
@@ -477,7 +477,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
         <button
           type="button"
           onClick={() => setReloadToken(t => t + 1)}
-          className="w-full py-2 rounded-lg border border-yellow-500/40 font-label text-xs uppercase tracking-widest text-yellow-300 hover:bg-yellow-500/10 transition-colors"
+          className="w-full py-2 rounded-lg border border-recency-fg/40 font-label text-xs uppercase tracking-widest text-recency-soft hover:bg-recency-fg/10 transition-colors"
         >
           Recargar setlist
         </button>

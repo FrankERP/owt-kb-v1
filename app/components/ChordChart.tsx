@@ -151,7 +151,7 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
               className={`font-label text-xs uppercase tracking-widest px-4 py-1.5 rounded-full border transition-colors ${
                 i === activeIdx
                   ? "border-accent bg-accent/15 text-accent"
-                  : "border-surface-accent-l25-d20 text-gray-500 hover:border-accent/50 dark:hover:border-surface-accent-l25-d20 hover:text-accent"
+                  : "border-surface-accent-l25-d20 text-mono-500 hover:border-accent/50 dark:hover:border-surface-accent-l25-d20 hover:text-accent"
               }`}
             >
               {c.key || `Tonalidad ${i + 1}`}
@@ -183,7 +183,7 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
                         ? "border-accent bg-accent text-surface-sunken font-bold"
                         : isNative
                         ? "border-accent/60 text-accent"
-                        : "border-surface-accent-l25-d15 text-gray-500 dark:text-gray-500 hover:border-accent/50 dark:hover:border-surface-accent-l25-d15 hover:text-accent"
+                        : "border-surface-accent-l25-d15 text-mono-500 dark:text-mono-500 hover:border-accent/50 dark:hover:border-surface-accent-l25-d15 hover:text-accent"
                     }`}
                   >
                     {note}
@@ -220,7 +220,7 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
               aria-checked={showChords}
               onClick={() => setShowChords((v) => !v)}
               className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-                showChords ? "bg-accent" : "bg-gray-300 dark:bg-gray-600"
+                showChords ? "bg-accent" : "bg-mono-300 dark:bg-mono-600"
               }`}
             >
               <span
@@ -229,7 +229,7 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
                 }`}
               />
             </button>
-            <span className="font-label text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 select-none">
+            <span className="font-label text-xs uppercase tracking-widest text-mono-500 dark:text-mono-400 select-none">
               Acordes
             </span>
           </div>

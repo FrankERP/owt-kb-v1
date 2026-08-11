@@ -33,7 +33,7 @@ export default function Error({
 
       <div className="space-y-2">
         <h1 className="font-display text-2xl md:text-3xl font-bold">Algo salió mal</h1>
-        <p className="font-body text-sm text-gray-400 max-w-sm mx-auto">
+        <p className="font-body text-sm text-mono-400 max-w-sm mx-auto">
           No pudimos cargar esta página. Puede ser un problema temporal de conexión —
           intenta de nuevo.
         </p>
@@ -49,7 +49,7 @@ export default function Error({
         </button>
         <Link
           href="/"
-          className="font-label text-xs uppercase tracking-widest px-4 py-2.5 rounded-lg border border-surface-accent-l30-d25 text-gray-400 hover:text-accent hover:border-accent/40 dark:hover:border-surface-accent-l30-d25 transition-colors"
+          className="font-label text-xs uppercase tracking-widest px-4 py-2.5 rounded-lg border border-surface-accent-l30-d25 text-mono-400 hover:text-accent hover:border-accent/40 dark:hover:border-surface-accent-l30-d25 transition-colors"
         >
           Ir al inicio
         </Link>

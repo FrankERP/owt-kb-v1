@@ -17,7 +17,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { build, pairsIn } from "../../../scripts/colour-inventory.mjs";
+import { build, pairsIn, scanText } from "../../../scripts/colour-inventory.mjs";
 import { stripComments } from "../../../scripts/lib/strip-comments.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -221,12 +221,33 @@ describe("colour inventory — the traps that produced wrong counts before", () 
   });
 
   it("captures Tailwind's opacity modifier, which sits OUTSIDE the bracket", () => {
-    // `bg-[#003572]/50` — the alpha is not part of the arbitrary value. Dropping it
-    // makes the composed-token layer un-derivable, because that layer exists ONLY to
-    // express pairs whose two sides differ in alpha.
-    const withAlpha = live.literalRows.filter((r) => (r as { alpha?: string | null }).alpha);
-    expect(withAlpha.length).toBeGreaterThan(0);
-    expect(withAlpha.every((r) => /\/\d{1,3}$/.test(r.value))).toBe(true);
+    // MOVED ONTO A SYNTHETIC SOURCE at Child C, for the same reason recorded above
+    // for the pair assertion — and this is the SECOND time this file has had to.
+    //
+    // It used to filter `live.literalRows` for a captured alpha and assert the count was
+    // > 0. Every alpha-bearing row in the tree was a PALETTE CLASS — 261 of them, all
+    // disposition C — so the count reached zero the moment Child C migrated its last
+    // family, and the assertion failed on correct work while reading as a broken scanner.
+    //
+    // What is worth guarding is the SCANNER. `bg-[#003572]/50` puts the alpha OUTSIDE the
+    // bracket, so a scan that stops at `]` loses it — and the composed-token layer is
+    // derived entirely from pairs whose two sides differ in alpha.
+    const rows = scanText(`const a = "bg-[#003572]/50 border-[#00bfff] text-[#C8D8EB]/70";`);
+
+    const withAlpha = rows.filter((r: { alpha?: string | null }) => r.alpha);
+    expect(withAlpha).toHaveLength(2);
+    expect(withAlpha.map((r: { alpha?: string | null }) => r.alpha).sort()).toEqual(["50", "70"]);
+    expect(withAlpha.every((r: { value: string }) => /\/\d{1,3}$/.test(r.value))).toBe(true);
+
+    // The alpha-free one is captured too, with a null alpha rather than dropped.
+    const noAlpha = rows.filter((r: { alpha?: string | null }) => !r.alpha);
+    expect(noAlpha).toHaveLength(1);
+    expect(noAlpha[0].value).toBe("[#00bfff]");
+
+    // Bracket notation is the same alpha spelled differently, and reading it as ABSENT
+    // reads it as OPAQUE — the defect that shipped three composed tokens at 100% for
+    // sites that render at 3-4%.
+    expect(scanText(`const b = "bg-[#00bfff]/[0.04]";`)[0].alpha).toBe("4");
   });
 
   it("captures ALPHA on both sides of a pair — the composed-token layer's whole reason", () => {

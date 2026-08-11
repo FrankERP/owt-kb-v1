@@ -970,12 +970,12 @@ export default function ServicesPanel() {
           <h1 className="font-display text-2xl uppercase tracking-wide">Servicios</h1>
           {view !== "loading" && (
             <>
-              <p className={`mt-0.5 font-label text-xs uppercase tracking-widest text-gray-500 ${CARD_STYLE.longText}`}>
+              <p className={`mt-0.5 font-label text-xs uppercase tracking-widest text-mono-500 ${CARD_STYLE.longText}`}>
                 {summaryLine}
               </p>
               {/* The global integrity entry: never a clean zero when an inventory failed. */}
               <p className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
-                <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">
+                <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">
                   {INTEGRITY_QUEUE_TITLE}
                 </span>
                 <span
@@ -1004,7 +1004,7 @@ export default function ServicesPanel() {
           <button ref={generatorTriggerRef} onClick={openGenerator}
             disabled={!generateGate.enabled}
             title={generateGate.reason ?? undefined}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-surface-accent-20 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-accent hover:border-accent/30 dark:hover:border-surface-accent-20 transition-colors disabled:opacity-40">
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-surface-accent-20 font-label text-xs uppercase tracking-widest text-mono-500 hover:text-accent hover:border-accent/30 dark:hover:border-surface-accent-20 transition-colors disabled:opacity-40">
             📅 Generar mes
           </button>
           <button
@@ -1013,7 +1013,7 @@ export default function ServicesPanel() {
             onClick={() => openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, false, { kind: "toolbar" })}
             disabled={!editTeamGate.enabled}
             title={editTeamGate.reason ?? undefined}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-surface-accent-20 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-accent hover:border-accent/30 dark:hover:border-surface-accent-20 transition-colors disabled:opacity-40"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-surface-accent-20 font-label text-xs uppercase tracking-widest text-mono-500 hover:text-accent hover:border-accent/30 dark:hover:border-surface-accent-20 transition-colors disabled:opacity-40"
           >
             Editar mes
           </button>
@@ -1030,18 +1030,18 @@ export default function ServicesPanel() {
 
       {/* Source state — names the missing source and offers its retry */}
       {view !== "loading" && unreadySummary && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 flex items-start justify-between gap-3 flex-wrap">
+        <div className="rounded-lg border border-warning-fg/40 bg-warning-fg/10 px-4 py-3 flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <p className="font-label text-xs uppercase tracking-widest text-amber-400">Datos incompletos</p>
-            <p className="font-body text-xs text-gray-300 mt-0.5">{unreadySummary}</p>
+            <p className="font-label text-xs uppercase tracking-widest text-warning-strong">Datos incompletos</p>
+            <p className="font-body text-xs text-mono-300 mt-0.5">{unreadySummary}</p>
             {availabilityUnverified && (
-              <p className="font-body text-xs text-gray-400 mt-0.5">
+              <p className="font-body text-xs text-mono-400 mt-0.5">
                 El equipo y la disponibilidad no se pudieron verificar.
               </p>
             )}
           </div>
           <button type="button" onClick={retryLoad}
-            className="px-3 py-1.5 rounded-lg border border-amber-500/40 font-label text-[11px] uppercase tracking-widest text-amber-300 hover:bg-amber-500/15 transition-colors shrink-0">
+            className="px-3 py-1.5 rounded-lg border border-warning-fg/40 font-label text-[11px] uppercase tracking-widest text-warning-soft hover:bg-warning-fg/15 transition-colors shrink-0">
             Reintentar carga
           </button>
         </div>
@@ -1051,7 +1051,7 @@ export default function ServicesPanel() {
       {canFilterMonths(sourceRecords) && allMonths.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-label text-[11px] uppercase tracking-widest text-gray-600 shrink-0">Mes:</span>
+            <span className="font-label text-[11px] uppercase tracking-widest text-mono-600 shrink-0">Mes:</span>
             <MonthPill label="Próximos" selected={selectedMonths.size === 0} onClick={() => setSelectedMonths(new Set())} />
             {futureMonths.map(ym => (
               <MonthPill key={ym} label={fmtYM(ym)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} />
@@ -1060,7 +1060,7 @@ export default function ServicesPanel() {
               <button
                 type="button"
                 onClick={() => setShowPastMonths(v => !v)}
-                className="font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border border-accent/10 text-gray-600 hover:border-accent/25 hover:text-gray-400 transition-colors flex items-center gap-1"
+                className="font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border border-accent/10 text-mono-600 hover:border-accent/25 hover:text-mono-400 transition-colors flex items-center gap-1"
               >
                 Roles previos
                 <span className={`transition-transform ${showPastMonths ? "rotate-180" : ""}`}>▾</span>
@@ -1079,18 +1079,18 @@ export default function ServicesPanel() {
 
       {/* Availability conflict summary */}
       {view !== "loading" && conflictNotices.length > 0 && (
-        <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3">
-          <p className="font-label text-xs uppercase tracking-widest text-red-400 flex items-center gap-1.5">
+        <div className="rounded-lg border border-negative-strong/50 bg-negative-strong/10 px-4 py-3">
+          <p className="font-label text-xs uppercase tracking-widest text-negative-fg flex items-center gap-1.5">
             ⚠ {conflictNotices.length} conflicto{conflictNotices.length !== 1 ? "s" : ""} de disponibilidad
           </p>
           <ul className="mt-1.5 space-y-0.5">
             {conflictNotices.map((c, i) => (
-              <li key={i} className="font-body text-xs text-gray-300">
-                <span className="text-red-300 font-semibold">{c.name}</span>
+              <li key={i} className="font-body text-xs text-mono-300">
+                <span className="text-negative-muted font-semibold">{c.name}</span>
                 {" · "}{c.label}{" "}
                 {new Date(c.date + "T12:00:00").toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short" })}
                 {c.note && (
-                  <span className="text-gray-500 italic"> — &quot;{c.note}&quot;</span>
+                  <span className="text-mono-500 italic"> — &quot;{c.note}&quot;</span>
                 )}
               </li>
             ))}
@@ -1108,11 +1108,11 @@ export default function ServicesPanel() {
           <div className="rounded-lg border border-accent/30 bg-accent/5 px-4 py-2.5 flex items-center justify-between">
             <div>
               <p className="font-label text-xs uppercase tracking-widest text-accent">Copiar instrumentos</p>
-              <p className="font-body text-xs text-gray-500 mt-0.5">
-                Copiando los instrumentos de <span className="text-gray-300 capitalize">{srcLabel}</span>. Haz clic en «Pegar aquí» en el día destino (reemplaza sus instrumentos).
+              <p className="font-body text-xs text-mono-500 mt-0.5">
+                Copiando los instrumentos de <span className="text-mono-300 capitalize">{srcLabel}</span>. Haz clic en «Pegar aquí» en el día destino (reemplaza sus instrumentos).
               </p>
             </div>
-            <button onClick={exitCopyMode} className="font-label text-[11px] uppercase tracking-widest text-gray-500 hover:text-red-400 transition-colors ml-4 shrink-0">
+            <button onClick={exitCopyMode} className="font-label text-[11px] uppercase tracking-widest text-mono-500 hover:text-negative-fg transition-colors ml-4 shrink-0">
               Cancelar
             </button>
           </div>
@@ -1121,10 +1121,10 @@ export default function ServicesPanel() {
 
       {/* An invalidated copy selection is never pasted: reload first. */}
       {copyMode && staleModes.copy && (
-        <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
-          <p className="font-body text-xs text-red-300">{staleModes.copy.message}</p>
+        <div className="rounded-lg border border-negative-strong/40 bg-negative-strong/10 px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+          <p className="font-body text-xs text-negative-muted">{staleModes.copy.message}</p>
           <button type="button" onClick={() => { exitCopyMode(); retryLoad(); }}
-            className="px-3 py-1.5 rounded-lg border border-red-400/40 font-label text-[11px] uppercase tracking-widest text-red-200 hover:bg-red-500/15 transition-colors shrink-0">
+            className="px-3 py-1.5 rounded-lg border border-negative-fg/40 font-label text-[11px] uppercase tracking-widest text-negative-soft hover:bg-negative-strong/15 transition-colors shrink-0">
             Recargar
           </button>
         </div>
@@ -1135,13 +1135,13 @@ export default function ServicesPanel() {
 
       {/* A roles failure prevents card rendering and shows retry instead */}
       {view === "error" && (
-        <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-6 text-center space-y-3">
-          <p className="font-label text-xs uppercase tracking-widest text-red-400">No se pudieron cargar los servicios</p>
-          <p className="font-body text-sm text-gray-300">
+        <div className="rounded-lg border border-negative-strong/50 bg-negative-strong/10 px-4 py-6 text-center space-y-3">
+          <p className="font-label text-xs uppercase tracking-widest text-negative-fg">No se pudieron cargar los servicios</p>
+          <p className="font-body text-sm text-mono-300">
             No se pueden mostrar los servicios sin esa fuente. Reintenta la carga.
           </p>
           <button type="button" onClick={retryLoad}
-            className="px-4 py-2 rounded-lg border border-red-400/40 font-label text-xs uppercase tracking-widest text-red-200 hover:bg-red-500/15 transition-colors">
+            className="px-4 py-2 rounded-lg border border-negative-fg/40 font-label text-xs uppercase tracking-widest text-negative-soft hover:bg-negative-strong/15 transition-colors">
             Reintentar carga
           </button>
         </div>
@@ -1159,7 +1159,7 @@ export default function ServicesPanel() {
             // Never compute participation from partial membership.
             <aside className="rounded-xl border border-accent/20 bg-surface-ink-l40-d100-base p-3 space-y-2">
               <p className="font-label text-xs uppercase tracking-widest text-accent">Participaciones</p>
-              <p className="font-body text-xs text-gray-400">{participationGate.reason}</p>
+              <p className="font-body text-xs text-mono-400">{participationGate.reason}</p>
               <button type="button" onClick={retryLoad}
                 className="px-3 py-1.5 rounded-lg border border-accent/30 font-label text-[11px] uppercase tracking-widest text-accent hover:bg-accent/10 transition-colors">
                 Reintentar carga
@@ -1168,7 +1168,7 @@ export default function ServicesPanel() {
           )}
           <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">
           {counters.upcoming === 0 && selectedMonths.size === 0 && (
-            <p className="font-body text-sm text-gray-500 text-center py-12">No hay servicios próximos.</p>
+            <p className="font-body text-sm text-mono-500 text-center py-12">No hay servicios próximos.</p>
           )}
           {visibleCards.map(card => (
             <ServiceReadinessCard
@@ -1216,13 +1216,13 @@ export default function ServicesPanel() {
         const blocked = staleModes.delete?.message ?? cardGates.deleteService.reason;
         return (
           <Modal title="Eliminar servicio" onClose={closeEditModal} status={editError ?? blocked}>
-            <p className="font-body text-sm text-gray-400">¿Eliminar el servicio del <span className="text-red-400 font-semibold">{formatDate(editModal.role.date)}</span>? Esta acción no se puede deshacer.</p>
+            <p className="font-body text-sm text-mono-400">¿Eliminar el servicio del <span className="text-negative-fg font-semibold">{formatDate(editModal.role.date)}</span>? Esta acción no se puede deshacer.</p>
             <div className="flex gap-3">
               <button onClick={closeEditModal} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">Cancelar</button>
               {staleModes.delete ? (
                 <button onClick={() => { closeEditModal(); retryLoad(); }} className="flex-1 py-2 rounded-lg border border-accent/30 font-label text-xs uppercase tracking-widest text-accent hover:bg-accent/10 transition-colors">Recargar</button>
               ) : (
-                <button onClick={handleDelete} disabled={submitting || !!blocked} title={blocked ?? undefined} className="flex-1 py-2 rounded-lg bg-red-800/60 hover:bg-red-700/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{submitting ? "Eliminando..." : "Eliminar"}</button>
+                <button onClick={handleDelete} disabled={submitting || !!blocked} title={blocked ?? undefined} className="flex-1 py-2 rounded-lg bg-negative-surface/60 hover:bg-negative-border/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{submitting ? "Eliminando..." : "Eliminar"}</button>
               )}
             </div>
           </Modal>
@@ -1237,7 +1237,7 @@ export default function ServicesPanel() {
           status={publishError}
         >
           <div className={CARD_STYLE.dialog}>
-            <p className="font-body text-sm text-gray-400">
+            <p className="font-body text-sm text-mono-400">
               «Publicar {publishPlan.selected.length}» envía solo los servicios que pasaron toda
               la verificación. Los demás se muestran abajo con su motivo.
             </p>
@@ -1246,13 +1246,13 @@ export default function ServicesPanel() {
                 Se publicarán ({publishPlan.selected.length})
               </p>
               {publishPlan.selected.length === 0 ? (
-                <p className="font-body text-xs italic text-gray-500">
+                <p className="font-body text-xs italic text-mono-500">
                   Ningún borrador visible está listo para publicar.
                 </p>
               ) : (
                 <ul className="mt-1 space-y-0.5">
                   {publishPlan.selected.map(entry => (
-                    <li key={entry.id} className={`font-body text-xs text-gray-300 ${CARD_STYLE.longText}`}>
+                    <li key={entry.id} className={`font-body text-xs text-mono-300 ${CARD_STYLE.longText}`}>
                       {entry.label}
                     </li>
                   ))}
@@ -1261,17 +1261,17 @@ export default function ServicesPanel() {
             </section>
             {publishPlan.overrideAdds.length > 0 && (
               <section>
-                <p className="font-label text-[11px] uppercase tracking-widest text-amber-400">
+                <p className="font-label text-[11px] uppercase tracking-widest text-warning-strong">
                   Solo con «Publicar todos» ({publishPlan.overrideAdds.length})
                 </p>
-                <p className="mt-0.5 font-body text-xs text-gray-500">
+                <p className="mt-0.5 font-body text-xs text-mono-500">
                   Se publican los roles para que cada quien vea el día que le toca. El setlist
                   se puede completar después.
                 </p>
                 <ul className="mt-1 space-y-0.5">
                   {publishPlan.overrideAdds.map(entry => (
-                    <li key={entry.id} className={`font-body text-xs text-gray-400 ${CARD_STYLE.longText}`}>
-                      <span className="text-gray-300">{entry.label}</span> — {entry.text}
+                    <li key={entry.id} className={`font-body text-xs text-mono-400 ${CARD_STYLE.longText}`}>
+                      <span className="text-mono-300">{entry.label}</span> — {entry.text}
                     </li>
                   ))}
                 </ul>
@@ -1279,13 +1279,13 @@ export default function ServicesPanel() {
             )}
             {publishPlan.overrideBlocked.length > 0 && (
               <section>
-                <p className="font-label text-[11px] uppercase tracking-widest text-amber-400">
+                <p className="font-label text-[11px] uppercase tracking-widest text-warning-strong">
                   Se omiten ({publishPlan.overrideBlocked.length})
                 </p>
                 <ul className="mt-1 space-y-0.5">
                   {publishPlan.overrideBlocked.map(entry => (
-                    <li key={entry.id} className={`font-body text-xs text-gray-400 ${CARD_STYLE.longText}`}>
-                      <span className="text-gray-300">{entry.label}</span> — {entry.text}
+                    <li key={entry.id} className={`font-body text-xs text-mono-400 ${CARD_STYLE.longText}`}>
+                      <span className="text-mono-300">{entry.label}</span> — {entry.text}
                     </li>
                   ))}
                 </ul>
@@ -1327,26 +1327,26 @@ export default function ServicesPanel() {
             status={publishError}
           >
             <div className={CARD_STYLE.dialog}>
-              <p className={`font-body text-sm text-gray-400 ${CARD_STYLE.longText}`}>
+              <p className={`font-body text-sm text-mono-400 ${CARD_STYLE.longText}`}>
                 {serviceCardLabel(overrideCard.role)}
               </p>
               {acknowledgement ? (
                 <>
-                  <p className="font-label text-[11px] uppercase tracking-widest text-amber-400">
+                  <p className="font-label text-[11px] uppercase tracking-widest text-warning-strong">
                     Vas a publicar aunque:
                   </p>
                   <ul className="space-y-0.5">
                     {describeAcknowledgedBlockers(acknowledgement.acknowledgedBlockers).map(text => (
-                      <li key={text} className="font-body text-xs text-amber-200/90">• {text}</li>
+                      <li key={text} className="font-body text-xs text-warning-faint/90">• {text}</li>
                     ))}
                   </ul>
-                  <p className="font-body text-xs text-gray-500">
+                  <p className="font-body text-xs text-mono-500">
                     El servidor vuelve a calcular estos puntos y rechaza la publicación si
                     cambiaron.
                   </p>
                 </>
               ) : (
-                <p className="font-body text-xs text-red-300">
+                <p className="font-body text-xs text-negative-muted">
                   Este servicio tiene problemas de integridad: no se puede publicar con una
                   confirmación. Usa «Revisar datos».
                 </p>
@@ -1376,11 +1376,11 @@ export default function ServicesPanel() {
           status={publishError ?? cardGates.unpublish.reason}
         >
           <div className={CARD_STYLE.dialog}>
-            <p className={`font-body text-sm text-gray-400 ${CARD_STYLE.longText}`}>
-              ¿Ocultar <span className="font-semibold text-gray-200">{serviceCardLabel(unpublishCard.role)}</span> del
+            <p className={`font-body text-sm text-mono-400 ${CARD_STYLE.longText}`}>
+              ¿Ocultar <span className="font-semibold text-mono-200">{serviceCardLabel(unpublishCard.role)}</span> del
               equipo? Deja de ser visible para los miembros; no se borra nada.
             </p>
-            <p className="font-body text-xs text-gray-500">
+            <p className="font-body text-xs text-mono-500">
               Ocultar no depende de la verificación de publicación: se puede ocultar un servicio
               con datos incompletos o en conflicto.
             </p>
@@ -1471,7 +1471,7 @@ function PublicationFooter({
           type="button"
           onClick={onVerify}
           disabled={loading}
-          className="min-h-[44px] flex-1 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 font-label text-xs uppercase tracking-widest text-amber-200 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
+          className="min-h-[44px] flex-1 rounded-lg border border-warning-fg/50 bg-warning-fg/10 px-3 font-label text-xs uppercase tracking-widest text-warning-faint transition-colors hover:bg-warning-fg/20 disabled:opacity-50"
         >
           {loading ? "Verificando..." : "Verificar resultado"}
         </button>
@@ -1482,7 +1482,7 @@ function PublicationFooter({
           disabled={loading || disabled}
           className={`min-h-[44px] flex-1 rounded-lg px-3 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${
             danger
-              ? "bg-orange-600/70 hover:bg-orange-600"
+              ? "bg-availability-deep/70 hover:bg-availability-deep"
               : "bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30"
           }`}
         >
@@ -1494,7 +1494,7 @@ function PublicationFooter({
           type="button"
           onClick={secondary.onClick}
           disabled={loading || secondary.disabled}
-          className="min-h-[44px] flex-1 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 font-label text-xs uppercase tracking-widest text-amber-200 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
+          className="min-h-[44px] flex-1 rounded-lg border border-warning-fg/50 bg-warning-fg/10 px-3 font-label text-xs uppercase tracking-widest text-warning-faint transition-colors hover:bg-warning-fg/20 disabled:opacity-50"
         >
           {loading ? "Guardando..." : secondary.label}
         </button>
@@ -1518,8 +1518,8 @@ function MonthPill({ label, selected, onClick, past }: { label: string; selected
         selected
           ? "border-accent/60 bg-accent/15 text-accent"
           : past
-          ? "border-accent/10 text-gray-600 hover:border-accent/30 hover:text-gray-400"
-          : "border-accent/20 text-gray-400 hover:border-accent/40 hover:text-gray-200"
+          ? "border-accent/10 text-mono-600 hover:border-accent/30 hover:text-mono-400"
+          : "border-accent/20 text-mono-400 hover:border-accent/40 hover:text-mono-200"
       }`}
     >
       {label}

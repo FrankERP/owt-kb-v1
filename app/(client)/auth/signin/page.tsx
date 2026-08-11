@@ -77,7 +77,7 @@ function SignInForm() {
 
           {/* Error */}
           {errorMsg && (
-            <p className="mb-4 text-sm text-red-300 bg-red-950/35 border border-red-500/30 rounded-[var(--brand-radius-control)] px-4 py-3">
+            <p className="mb-4 text-sm text-negative-muted bg-negative-surface-deepest/35 border border-negative-strong/30 rounded-[var(--brand-radius-control)] px-4 py-3">
               {errorMsg}
             </p>
           )}

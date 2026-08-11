@@ -66,7 +66,7 @@ export default function BottomNav() {
             )}
             <div className="min-w-0">
               <p className="font-body text-sm font-semibold truncate">{session.user.name}</p>
-              <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 truncate">
+              <p className="font-label text-[11px] uppercase tracking-widest text-mono-500 truncate">
                 {session.user.email}
               </p>
             </div>
@@ -78,7 +78,7 @@ export default function BottomNav() {
               <Link
                 href="/admin"
                 onClick={() => setMoreOpen(false)}
-                className="flex items-center gap-3 px-5 py-4 text-gray-400 hover:text-accent hover:bg-accent/5 transition-colors"
+                className="flex items-center gap-3 px-5 py-4 text-mono-400 hover:text-accent hover:bg-accent/5 transition-colors"
               >
                 <ShieldIcon />
                 <span className="font-label text-xs uppercase tracking-widest">Admin</span>
@@ -86,7 +86,7 @@ export default function BottomNav() {
             )}
             <button
               onClick={() => signOut({ callbackUrl: "/auth/signin" })}
-              className="w-full flex items-center gap-3 px-5 py-4 text-red-400 hover:bg-red-500/10 transition-colors"
+              className="w-full flex items-center gap-3 px-5 py-4 text-negative-fg hover:bg-negative-strong/10 transition-colors"
             >
               <SignOutIcon />
               <span className="font-label text-xs uppercase tracking-widest">Salir</span>
@@ -110,7 +110,7 @@ export default function BottomNav() {
               className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${
                 active
                   ? "text-accent"
-                  : "text-gray-500 hover:text-gray-300"
+                  : "text-mono-500 hover:text-mono-300"
               }`}
             >
               {tab.icon}
@@ -124,7 +124,7 @@ export default function BottomNav() {
             aria-expanded={moreOpen}
             aria-controls="bottom-nav-more"
             className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${
-              moreOpen ? "text-accent" : "text-gray-500 hover:text-gray-300"
+              moreOpen ? "text-accent" : "text-mono-500 hover:text-mono-300"
             }`}
           >
             <MoreIcon />

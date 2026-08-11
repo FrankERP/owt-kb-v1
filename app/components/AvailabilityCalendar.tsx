@@ -194,7 +194,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h3 className="font-display text-lg uppercase tracking-wide">Disponibilidad</h3>
-          <p className="font-label text-xs uppercase tracking-widest text-gray-500 mt-0.5">
+          <p className="font-label text-xs uppercase tracking-widest text-mono-500 mt-0.5">
             Marca los días en que no puedes asistir
           </p>
         </div>
@@ -206,7 +206,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
             className={`px-3 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
               recurOpen
                 ? "border-accent text-accent"
-                : "border-surface-accent-30 text-gray-500 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent"
+                : "border-surface-accent-30 text-mono-500 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent"
             }`}
           >
             Repetir…
@@ -217,7 +217,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
             disabled={saving || !dirty}
             className={`px-4 py-2 rounded-lg font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${
               dirty
-                ? "bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 ring-1 ring-amber-400/50"
+                ? "bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 ring-1 ring-warning-strong/50"
                 : "bg-surface-accent-solid"
             }`}
           >
@@ -236,14 +236,14 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
             <select
               value={recurDow}
               onChange={e => setRecurDow(Number(e.target.value))}
-              className="rounded-lg border border-surface-accent-l40-d20 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 focus:outline-none focus:border-accent/50 dark:focus:border-surface-accent-l40-d20"
+              className="rounded-lg border border-surface-accent-l40-d20 bg-white/5 px-3 py-2 font-body text-sm text-mono-200 focus:outline-none focus:border-accent/50 dark:focus:border-surface-accent-l40-d20"
             >
               {WEEKDAYS.map((w, i) => <option key={i} value={i} className="bg-surface-base">{w}</option>)}
             </select>
             <select
               value={recurInterval}
               onChange={e => setRecurInterval(Number(e.target.value))}
-              className="rounded-lg border border-surface-accent-l40-d20 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 focus:outline-none focus:border-accent/50 dark:focus:border-surface-accent-l40-d20"
+              className="rounded-lg border border-surface-accent-l40-d20 bg-white/5 px-3 py-2 font-body text-sm text-mono-200 focus:outline-none focus:border-accent/50 dark:focus:border-surface-accent-l40-d20"
             >
               <option value={1} className="bg-surface-base">Cada semana</option>
               <option value={2} className="bg-surface-base">Cada 2 semanas</option>
@@ -259,31 +259,31 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
             <button
               type="button"
               onClick={() => applyRecurring(false)}
-              className="px-4 py-2 rounded-lg border border-surface-accent-l40-d20 font-label text-xs uppercase tracking-widest text-gray-400 hover:border-red-500/40 hover:text-red-400 transition-colors"
+              className="px-4 py-2 rounded-lg border border-surface-accent-l40-d20 font-label text-xs uppercase tracking-widest text-mono-400 hover:border-negative-strong/40 hover:text-negative-fg transition-colors"
             >
               Quitar serie
             </button>
           </div>
-          <p className="font-body text-xs text-gray-500">
-            <span className="text-gray-400">Marcar</span> agrega o <span className="text-gray-400">Quitar serie</span> borra ese día durante los próximos 12 meses. Puedes ajustar días sueltos después; recuerda <span className="text-gray-400">Guardar</span>.
+          <p className="font-body text-xs text-mono-500">
+            <span className="text-mono-400">Marcar</span> agrega o <span className="text-mono-400">Quitar serie</span> borra ese día durante los próximos 12 meses. Puedes ajustar días sueltos después; recuerda <span className="text-mono-400">Guardar</span>.
           </p>
         </div>
       )}
 
       {upcomingCount > 0 && (
-        <p className="font-label text-[11px] uppercase tracking-widest text-orange-400">
+        <p className="font-label text-[11px] uppercase tracking-widest text-availability-strong">
           {upcomingCount} fecha{upcomingCount !== 1 ? "s" : ""} marcada{upcomingCount !== 1 ? "s" : ""} como no disponible
         </p>
       )}
 
       {dirty && !saving && (
-        <p className="font-label text-[11px] uppercase tracking-widest text-amber-400">
+        <p className="font-label text-[11px] uppercase tracking-widest text-warning-strong">
           Cambios sin guardar
         </p>
       )}
 
       {saveError && (
-        <p className="font-label text-[11px] uppercase tracking-widest text-red-400">
+        <p className="font-label text-[11px] uppercase tracking-widest text-negative-fg">
           No se pudo guardar — {saveError}
         </p>
       )}
@@ -294,12 +294,12 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
           type="button"
           onClick={() => setPage(p => p - 1)}
           disabled={!canPrev}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent-deep/40 font-label text-[11px] uppercase tracking-widest text-gray-500 hover:border-accent/40 hover:text-accent disabled:opacity-20 disabled:cursor-default transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent-deep/40 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:border-accent/40 hover:text-accent disabled:opacity-20 disabled:cursor-default transition-colors"
         >
           <ChevronLeft /> Anterior
         </button>
 
-        <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">
+        <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">
           {rangeLabel}
         </span>
 
@@ -307,7 +307,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
           type="button"
           onClick={() => setPage(p => p + 1)}
           disabled={!canNext}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent-deep/40 font-label text-[11px] uppercase tracking-widest text-gray-500 hover:border-accent/40 hover:text-accent disabled:opacity-20 disabled:cursor-default transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent-deep/40 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:border-accent/40 hover:text-accent disabled:opacity-20 disabled:cursor-default transition-colors"
         >
           Siguiente <ChevronRight />
         </button>
@@ -324,7 +324,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
               </p>
               <div className="grid grid-cols-7 gap-0.5 mb-1">
                 {DAYS_ES.map(d => (
-                  <div key={d} className="font-label text-[10px] uppercase tracking-widest text-gray-400 text-center py-0.5">
+                  <div key={d} className="font-label text-[10px] uppercase tracking-widest text-mono-400 text-center py-0.5">
                     {d}
                   </div>
                 ))}
@@ -346,17 +346,17 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
                       disabled={isPast}
                       className={`relative rounded text-center font-body text-xs transition-colors min-h-[44px] sm:min-h-0 sm:py-1 sm:pb-2 ${
                         isPast
-                          ? "text-gray-700 cursor-default"
+                          ? "text-mono-700 cursor-default"
                           : isPopoverOpen
-                          ? "bg-orange-500/50 text-orange-200 border border-orange-400 ring-1 ring-orange-400/40"
+                          ? "bg-availability-fg/50 text-availability-faint border border-availability-strong ring-1 ring-availability-strong/40"
                           : unavailable
-                          ? "bg-orange-500/30 text-orange-300 border border-orange-500/50 hover:bg-orange-500/40"
-                          : "text-gray-300 hover:bg-accent/10 hover:text-accent"
+                          ? "bg-availability-fg/30 text-availability-soft border border-availability-fg/50 hover:bg-availability-fg/40"
+                          : "text-mono-300 hover:bg-accent/10 hover:text-accent"
                       }`}
                     >
                       {dayNum}
                       {hasService && (
-                        <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${unavailable ? "bg-orange-400/60" : isPast ? "bg-gray-600" : "bg-accent/70"}`} />
+                        <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${unavailable ? "bg-availability-strong/60" : isPast ? "bg-mono-600" : "bg-accent/70"}`} />
                       )}
                       {hasNote && (
                         <span className="absolute top-0.5 right-0.5 w-1 h-1 rounded-full bg-white/50" />
@@ -394,20 +394,20 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
             onClick={() => setPopover(null)}
           />
           <div
-            className="fixed z-50 w-64 rounded-xl border border-accent/20 bg-surface-base shadow-2xl shadow-black/60 p-4 space-y-3"
+            className="fixed z-50 w-64 rounded-xl border border-accent/20 bg-surface-base shadow-2xl shadow-elevation/60 p-4 space-y-3"
             style={{ top: popover.y, left: popover.x }}
             onClick={e => e.stopPropagation()}
           >
             {/* Date label + close */}
             <div className="flex items-start justify-between gap-2">
-              <p className="font-label text-[11px] uppercase tracking-widest text-orange-400/80 leading-tight capitalize">
+              <p className="font-label text-[11px] uppercase tracking-widest text-availability-strong/80 leading-tight capitalize">
                 {fmtDayLabel(popover.iso)}
               </p>
               <button
                 type="button"
                 onClick={() => setPopover(null)}
                 aria-label="Cerrar"
-                className="text-gray-400 hover:text-gray-300 transition-colors shrink-0 -mt-0.5"
+                className="text-mono-400 hover:text-mono-300 transition-colors shrink-0 -mt-0.5"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -432,14 +432,14 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
                 setSaved(false);
               }}
               onKeyDown={e => { if (e.key === "Enter") setPopover(null); }}
-              className="w-full rounded-lg border border-surface-accent-l50-d15 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 placeholder:text-gray-400 focus:outline-none focus:border-accent/40 dark:focus:border-surface-accent-l50-d15"
+              className="w-full rounded-lg border border-surface-accent-l50-d15 bg-white/5 px-3 py-2 font-body text-sm text-mono-200 placeholder:text-mono-400 focus:outline-none focus:border-accent/40 dark:focus:border-surface-accent-l50-d15"
             />
 
             {/* Remove date */}
             <button
               type="button"
               onClick={() => removeDate(popover.iso)}
-              className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-red-500/20 font-label text-[11px] uppercase tracking-widest text-red-400/70 hover:border-red-500/40 hover:text-red-400 transition-colors"
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-negative-strong/20 font-label text-[11px] uppercase tracking-widest text-negative-fg/70 hover:border-negative-strong/40 hover:text-negative-fg transition-colors"
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />

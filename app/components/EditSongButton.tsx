@@ -220,7 +220,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
           ref={triggerRef}
           type="button"
           onClick={(e) => { e.stopPropagation(); handleOpen(); }}
-          className="flex h-7 w-7 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-accent/10 hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+          className="flex h-7 w-7 items-center justify-center rounded-full text-mono-500 transition-colors hover:bg-accent/10 hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           aria-label={`Editar canción ${post.title}`}
           title="Editar canción"
         >
@@ -280,7 +280,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
                       onClick={() => toggleAuthor(author._id)}
                       aria-pressed={active}
                       className={`rounded-full border px-2.5 py-1 font-label text-[11px] uppercase tracking-widest transition-colors ${
-                        active ? "border-accent bg-accent/15 text-accent" : "border-accent/20 text-gray-500 hover:border-accent/50"
+                        active ? "border-accent bg-accent/15 text-accent" : "border-accent/20 text-mono-500 hover:border-accent/50"
                       }`}
                     >
                       {author.name}
@@ -307,17 +307,17 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
               <div role="toolbar" aria-label="Secciones y formato de letra" className="flex flex-wrap items-center gap-1 rounded-t-lg border border-accent/20 border-b-0 bg-accent/5 px-2 py-1.5">
                 {SECTION_LABELS.map((label) => (
                   <button key={label} type="button" onPointerDown={(e) => e.preventDefault()} onClick={() => insertLabel(label)}
-                    className="whitespace-nowrap rounded border border-accent/15 px-2 py-1 font-label text-[10px] uppercase tracking-widest text-gray-500 transition-colors hover:border-accent/40 hover:text-accent">
+                    className="whitespace-nowrap rounded border border-accent/15 px-2 py-1 font-label text-[10px] uppercase tracking-widest text-mono-500 transition-colors hover:border-accent/40 hover:text-accent">
                     {label}
                   </button>
                 ))}
                 <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-accent/20" />
                 <button type="button" aria-label="Aplicar negrita" onPointerDown={(e) => e.preventDefault()} onClick={() => wrapSelection("**")}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-accent/15 font-body text-sm font-bold text-gray-500 transition-colors hover:border-accent/40 hover:text-accent">
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-accent/15 font-body text-sm font-bold text-mono-500 transition-colors hover:border-accent/40 hover:text-accent">
                   B
                 </button>
                 <button type="button" aria-label="Aplicar cursiva" onPointerDown={(e) => e.preventDefault()} onClick={() => wrapSelection("*")}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-accent/15 font-body text-sm italic text-gray-500 transition-colors hover:border-accent/40 hover:text-accent">
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-accent/15 font-body text-sm italic text-mono-500 transition-colors hover:border-accent/40 hover:text-accent">
                   I
                 </button>
               </div>
@@ -331,7 +331,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
                 placeholder={"# Verso 1\n[Am]Ante Ti [F]Postrado estoy\n\n# Coro\nLínea 1"}
                 spellCheck={false}
               />
-              <p className="mt-1 font-label text-[11px] uppercase tracking-wide text-gray-600"># Sección · [Acorde]palabra · **negrita** · *cursiva*</p>
+              <p className="mt-1 font-label text-[11px] uppercase tracking-wide text-mono-600"># Sección · [Acorde]palabra · **negrita** · *cursiva*</p>
             </div>
 
             <RepeatRows
@@ -403,7 +403,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
                       onClick={() => toggleTag(tag._id)}
                       aria-pressed={active}
                       className={`rounded-full border px-2.5 py-1 font-label text-[11px] uppercase tracking-widest transition-colors ${
-                        active ? "border-accent bg-accent/15 text-accent" : "border-accent/20 text-gray-500 hover:border-accent/50"
+                        active ? "border-accent bg-accent/15 text-accent" : "border-accent/20 text-mono-500 hover:border-accent/50"
                       }`}
                     >
                       #{tag.name}
@@ -481,18 +481,18 @@ function RepeatRows({
         </button>
       </div>
       {rows.length === 0 ? (
-        <p className="font-body text-xs text-gray-600">{empty}</p>
+        <p className="font-body text-xs text-mono-600">{empty}</p>
       ) : (
         <div className="overflow-hidden rounded-lg border border-accent/15">
           <div className="grid grid-cols-[1fr_2fr_2rem] gap-3 border-b border-accent/10 bg-accent/5 px-3 py-1.5">
-            <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">{firstHeader}</span>
-            <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">{secondHeader}</span>
+            <span className="font-label text-[10px] uppercase tracking-widest text-mono-500">{firstHeader}</span>
+            <span className="font-label text-[10px] uppercase tracking-widest text-mono-500">{secondHeader}</span>
           </div>
           {rows.map((row, i) => (
             <div key={row.key} className={`group grid grid-cols-[1fr_2fr_2rem] items-center gap-3 px-3 py-2 transition-colors hover:bg-accent/5 ${i > 0 ? "border-t border-accent/10" : ""}`}>
-              <input aria-label={row.titleLabel} className="min-w-0 bg-transparent font-body text-sm placeholder:text-gray-600 focus:outline-none" value={row.title} onChange={(e) => row.onTitle(e.target.value)} placeholder={firstHeader} />
-              <input aria-label={row.urlLabel} className="min-w-0 bg-transparent font-body text-sm placeholder:text-gray-600 focus:outline-none" value={row.url} onChange={(e) => row.onUrl(e.target.value)} placeholder="https://…" />
-              <button type="button" onClick={row.onRemove} aria-label={row.removeLabel} className="justify-self-center text-base leading-none text-gray-500 opacity-100 transition-colors hover:text-red-400 sm:opacity-0 sm:transition-all sm:group-hover:opacity-100">
+              <input aria-label={row.titleLabel} className="min-w-0 bg-transparent font-body text-sm placeholder:text-mono-600 focus:outline-none" value={row.title} onChange={(e) => row.onTitle(e.target.value)} placeholder={firstHeader} />
+              <input aria-label={row.urlLabel} className="min-w-0 bg-transparent font-body text-sm placeholder:text-mono-600 focus:outline-none" value={row.url} onChange={(e) => row.onUrl(e.target.value)} placeholder="https://…" />
+              <button type="button" onClick={row.onRemove} aria-label={row.removeLabel} className="justify-self-center text-base leading-none text-mono-500 opacity-100 transition-colors hover:text-negative-fg sm:opacity-0 sm:transition-all sm:group-hover:opacity-100">
                 ×
               </button>
             </div>

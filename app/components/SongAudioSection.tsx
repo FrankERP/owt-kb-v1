@@ -51,7 +51,7 @@ export default function SongAudioSection({ tracks, songTitle, songSlug }: Props)
               className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
                 isCurrent
                   ? "border-accent/50 bg-accent/15 text-accent"
-                  : "border-accent-deep/30 hover:border-accent/40 hover:bg-accent/5 text-gray-400 hover:text-accent"
+                  : "border-accent-deep/30 hover:border-accent/40 hover:bg-accent/5 text-mono-400 hover:text-accent"
               }`}
             >
               <PlayIcon playing={isCurrent && player.isPlaying} />
@@ -61,7 +61,7 @@ export default function SongAudioSection({ tracks, songTitle, songSlug }: Props)
               href={track.audioFileURL}
               download={`${songTitle} — ${track.title}.mp3`}
               aria-label={`Descargar ${trackName}`}
-              className="block text-center font-label text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 hover:text-accent dark:hover:text-accent transition-colors"
+              className="block text-center font-label text-xs uppercase tracking-widest text-mono-500 dark:text-mono-400 hover:text-accent dark:hover:text-accent transition-colors"
             >
               Descargar ↓
             </a>

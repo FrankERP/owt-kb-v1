@@ -133,7 +133,7 @@ export default function AvailabilityPanel() {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="font-display text-2xl uppercase tracking-wide">Disponibilidad</h1>
-          <p className="font-label text-xs uppercase tracking-widest text-gray-500 mt-0.5">
+          <p className="font-label text-xs uppercase tracking-widest text-mono-500 mt-0.5">
             {conflicts.length > 0
               ? `${conflicts.length} conflicto${conflicts.length !== 1 ? "s" : ""} detectado${conflicts.length !== 1 ? "s" : ""}`
               : "Sin conflictos en próximos servicios"}
@@ -147,7 +147,7 @@ export default function AvailabilityPanel() {
               className={`px-3 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
                 viewMode === v
                   ? "bg-surface-accent-solid text-accent"
-                  : "text-gray-500 hover:text-accent"
+                  : "text-mono-500 hover:text-accent"
               }`}
             >
               {v === "conflicts" ? "Conflictos" : "Matriz"}
@@ -160,15 +160,15 @@ export default function AvailabilityPanel() {
       {viewMode === "conflicts" && (
         <div className="space-y-4">
           {conflicts.length === 0 ? (
-            <div className="rounded-xl border border-green-500/25 bg-green-500/5 px-5 py-8 text-center">
-              <p className="font-display text-lg uppercase text-green-400">Todo bien</p>
-              <p className="font-body text-sm text-gray-500 mt-1">
+            <div className="rounded-xl border border-positive-deep/25 bg-positive-deep/5 px-5 py-8 text-center">
+              <p className="font-display text-lg uppercase text-positive-strong">Todo bien</p>
+              <p className="font-body text-sm text-mono-500 mt-1">
                 Ningún miembro asignado tiene fechas marcadas como no disponible.
               </p>
             </div>
           ) : (
             <>
-              <p className="font-body text-sm text-gray-500">
+              <p className="font-body text-sm text-mono-500">
                 Los siguientes miembros están asignados a servicios en fechas que marcaron como no disponibles.
                 Puedes ignorarlo o usar el panel de Servicios para reasignarlos.
               </p>
@@ -178,20 +178,20 @@ export default function AvailabilityPanel() {
                   return (
                     <div
                       key={i}
-                      className="flex items-start gap-3 px-4 py-3 rounded-xl border border-red-500/25 bg-red-500/5"
+                      className="flex items-start gap-3 px-4 py-3 rounded-xl border border-negative-strong/25 bg-negative-strong/5"
                     >
-                      <span className="w-2 h-2 rounded-full bg-red-500 shrink-0 mt-1.5" />
+                      <span className="w-2 h-2 rounded-full bg-negative-strong shrink-0 mt-1.5" />
                       <div className="flex-1 min-w-0">
                         <div>
                           <span className="font-body text-sm font-semibold">{dn(member)}</span>
-                          <span className="font-body text-sm text-gray-400"> marcó </span>
-                          <span className="font-label text-xs uppercase tracking-widest text-red-400">
+                          <span className="font-body text-sm text-mono-400"> marcó </span>
+                          <span className="font-label text-xs uppercase tracking-widest text-negative-fg">
                             {fmtDate(role.date)}
                           </span>
-                          <span className="font-body text-sm text-gray-400"> como no disponible</span>
+                          <span className="font-body text-sm text-mono-400"> como no disponible</span>
                         </div>
                         {note && (
-                          <p className="font-body text-xs italic text-gray-500 mt-0.5">&quot;{note}&quot;</p>
+                          <p className="font-body text-xs italic text-mono-500 mt-0.5">&quot;{note}&quot;</p>
                         )}
                       </div>
                       <span className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full shrink-0 mt-0.5 ${SERVICE_COLOR[role._type]}`}>
@@ -207,7 +207,7 @@ export default function AvailabilityPanel() {
           {/* Upcoming unavailabilities (not necessarily conflicting) */}
           {membersWithUnavail.length > 0 && (
             <div className="space-y-3 pt-2">
-              <h2 className="font-label text-xs uppercase tracking-widest text-gray-500">
+              <h2 className="font-label text-xs uppercase tracking-widest text-mono-500">
                 No disponible en próximas fechas
               </h2>
               <div className="space-y-1.5">
@@ -219,9 +219,9 @@ export default function AvailabilityPanel() {
                   const noteMap = new Map((m.unavailabilityNotes ?? []).map(n => [n.date, n.note]));
                   const datesWithNotes = futureDates.filter(d => noteMap.get(d)?.trim());
                   return (
-                    <div key={m._id} className="flex flex-col gap-1.5 px-4 py-2.5 rounded-xl border border-amber-500/20 bg-amber-500/5">
+                    <div key={m._id} className="flex flex-col gap-1.5 px-4 py-2.5 rounded-xl border border-warning-fg/20 bg-warning-fg/5">
                       <div className="flex items-center gap-3">
-                        <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                        <span className="w-2 h-2 rounded-full bg-warning-fg shrink-0" />
                         <span className="font-body text-sm font-semibold min-w-[100px]">{dn(m)}</span>
                         <div className="flex flex-wrap gap-1.5">
                           {futureDates.map(d => {
@@ -232,8 +232,8 @@ export default function AvailabilityPanel() {
                                 key={d}
                                 className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full ${
                                   isConflict
-                                    ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                                    : "bg-amber-500/15 text-amber-400 border border-amber-500/25"
+                                    ? "bg-negative-strong/20 text-negative-fg border border-negative-strong/30"
+                                    : "bg-warning-fg/15 text-warning-strong border border-warning-fg/25"
                                 }`}
                               >
                                 {fmtDate(d)}{note ? " ✎" : ""}
@@ -245,8 +245,8 @@ export default function AvailabilityPanel() {
                       {datesWithNotes.length > 0 && (
                         <div className="pl-5 space-y-0.5">
                           {datesWithNotes.map(d => (
-                            <p key={d} className="font-body text-xs italic text-gray-500 leading-snug">
-                              <span className="not-italic font-label uppercase tracking-widest text-amber-400/80">{fmtDate(d)}:</span>{" "}
+                            <p key={d} className="font-body text-xs italic text-mono-500 leading-snug">
+                              <span className="not-italic font-label uppercase tracking-widest text-warning-strong/80">{fmtDate(d)}:</span>{" "}
                               &quot;{noteMap.get(d)}&quot;
                             </p>
                           ))}
@@ -265,12 +265,12 @@ export default function AvailabilityPanel() {
       {viewMode === "matrix" && (
         <div className="overflow-x-auto -mx-1 px-1">
           {matrixMembers.length === 0 ? (
-            <p className="font-body text-sm text-gray-500 text-center py-12">Sin datos para mostrar.</p>
+            <p className="font-body text-sm text-mono-500 text-center py-12">Sin datos para mostrar.</p>
           ) : (
             <table className="w-full text-left border-separate border-spacing-0">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-10 bg-surface-base pr-3 pb-2 font-label text-[11px] uppercase tracking-widest text-gray-500 min-w-[100px]">
+                  <th className="sticky left-0 z-10 bg-surface-base pr-3 pb-2 font-label text-[11px] uppercase tracking-widest text-mono-500 min-w-[100px]">
                     Miembro
                   </th>
                   {upcoming.map(role => (
@@ -278,7 +278,7 @@ export default function AvailabilityPanel() {
                       <div className={`rounded-md px-1 py-1 font-label text-[10px] uppercase tracking-widest ${SERVICE_COLOR[role._type]}`}>
                         {SERVICE_LABEL[role._type]}
                       </div>
-                      <div className="font-label text-[10px] uppercase tracking-widest text-gray-500 mt-0.5">
+                      <div className="font-label text-[10px] uppercase tracking-widest text-mono-500 mt-0.5">
                         {fmtDate(role.date)}
                       </div>
                     </th>
@@ -311,14 +311,14 @@ export default function AvailabilityPanel() {
           {/* Legend */}
           <div className="flex items-center gap-4 mt-4 flex-wrap">
             {([
-              ["conflict",   "bg-red-500",    "Asignado + No disponible"],
+              ["conflict",   "bg-negative-strong",    "Asignado + No disponible"],
               ["assigned",   "bg-accent/70","Asignado"],
-              ["unavailable","bg-amber-500",   "No disponible (no asignado)"],
-              ["empty",      "bg-gray-700",    "Sin datos"],
+              ["unavailable","bg-warning-fg",   "No disponible (no asignado)"],
+              ["empty",      "bg-mono-700",    "Sin datos"],
             ] as const).map(([, color, label]) => (
               <div key={label} className="flex items-center gap-1.5">
                 <span className={`w-3 h-3 rounded-sm ${color}`} />
-                <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">{label}</span>
+                <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">{label}</span>
               </div>
             ))}
           </div>
@@ -332,8 +332,8 @@ function MatrixCell({ status, note }: { status: CellStatus; note?: string }) {
   if (status === "conflict") {
     const t = note ? `Asignado y no disponible — "${note}"` : "Asignado y no disponible";
     return (
-      <span title={t} className="inline-flex items-center justify-center w-6 h-6 rounded-sm bg-red-500/20 border border-red-500/50">
-        <span className="text-red-400 font-bold text-xs leading-none">!</span>
+      <span title={t} className="inline-flex items-center justify-center w-6 h-6 rounded-sm bg-negative-strong/20 border border-negative-strong/50">
+        <span className="text-negative-fg font-bold text-xs leading-none">!</span>
       </span>
     );
   }
@@ -347,10 +347,10 @@ function MatrixCell({ status, note }: { status: CellStatus; note?: string }) {
   if (status === "unavailable") {
     const t = note ? `No disponible — "${note}"` : "Marcó no disponible";
     return (
-      <span title={t} className="inline-flex items-center justify-center w-6 h-6 rounded-sm bg-amber-500/15 border border-amber-500/30">
-        <span className="text-amber-400 text-xs leading-none">×</span>
+      <span title={t} className="inline-flex items-center justify-center w-6 h-6 rounded-sm bg-warning-fg/15 border border-warning-fg/30">
+        <span className="text-warning-strong text-xs leading-none">×</span>
       </span>
     );
   }
-  return <span className="inline-block w-6 h-6 rounded-sm bg-gray-800/30 border border-gray-700/30" />;
+  return <span className="inline-block w-6 h-6 rounded-sm bg-mono-800/30 border border-mono-700/30" />;
 }

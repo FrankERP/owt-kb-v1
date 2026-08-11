@@ -62,10 +62,10 @@ const SERVICE_LABEL: Record<string, string> = {
 };
 
 const STATUS_STYLE: Record<ProposalStatus, string> = {
-  draft: "bg-gray-500/15 text-gray-400 border border-gray-500/30",
-  pending: "bg-yellow-500/15 text-yellow-400 border border-yellow-500/30",
-  approved: "bg-green-500/15 text-green-400 border border-green-500/30",
-  changes_requested: "bg-red-500/15 text-red-400 border border-red-500/30",
+  draft: "bg-mono-500/15 text-mono-400 border border-mono-500/30",
+  pending: "bg-recency-fg/15 text-recency-strong border border-recency-fg/30",
+  approved: "bg-positive-deep/15 text-positive-strong border border-positive-deep/30",
+  changes_requested: "bg-negative-strong/15 text-negative-fg border border-negative-strong/30",
 };
 
 const STATUS_LABEL: Record<ProposalStatus, string> = {
@@ -142,7 +142,7 @@ function ProposalCard({
     }
   };
 
-  const inputCls = "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors placeholder:text-gray-600";
+  const inputCls = "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors placeholder:text-mono-600";
 
   return (
     <div
@@ -164,7 +164,7 @@ function ProposalCard({
           <p className="font-body text-sm text-accent">
             {proposal.lead_name}
             {coContributors.length > 0 && (
-              <span className="text-gray-400"> · con {coContributors.join(", ")}</span>
+              <span className="text-mono-400"> · con {coContributors.join(", ")}</span>
             )}
           </p>
         </div>
@@ -176,7 +176,7 @@ function ProposalCard({
       {/* Songs */}
       <div className="px-4 py-3 space-y-1.5">
         {proposal.songs.length === 0 && (
-          <p className="font-body text-sm text-gray-500 italic">Sin canciones</p>
+          <p className="font-body text-sm text-mono-500 italic">Sin canciones</p>
         )}
         {proposal.songs.map((song, i) => {
           const nextSong = proposal.songs[i + 1];
@@ -185,11 +185,11 @@ function ProposalCard({
           return (
             <div key={song._key}>
               <div className={`flex items-center gap-3 ${song.medley_tag ? "pl-2 border-l-2 border-accent/40" : ""}`}>
-                <span className="font-label text-xs text-gray-500 w-4 text-right shrink-0">{i + 1}</span>
+                <span className="font-label text-xs text-mono-500 w-4 text-right shrink-0">{i + 1}</span>
                 <div className="flex-1 min-w-0">
                   <p className="font-body text-sm font-semibold truncate">{song.title}</p>
                   {song.author && (
-                    <p className="font-body text-xs text-gray-400 truncate">{song.author}</p>
+                    <p className="font-body text-xs text-mono-400 truncate">{song.author}</p>
                   )}
                 </div>
                 {linkedPrev && (
@@ -210,7 +210,7 @@ function ProposalCard({
         <div className="px-4 pb-3">
           <div className="p-3 rounded-lg border border-accent/20 bg-accent/5">
             <p className="font-label text-[11px] uppercase tracking-widest text-accent mb-1">Mensaje para el equipo</p>
-            <p className="font-body text-sm text-gray-300 whitespace-pre-wrap">{proposal.team_notes}</p>
+            <p className="font-body text-sm text-mono-300 whitespace-pre-wrap">{proposal.team_notes}</p>
           </div>
         </div>
       )}
@@ -218,25 +218,25 @@ function ProposalCard({
       {/* Private lead notes */}
       {proposal.lead_notes && (
         <div className="px-4 pb-3">
-          <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 mb-1">Notas privadas para revisión</p>
-          <p className="font-body text-sm text-gray-300 whitespace-pre-wrap">{proposal.lead_notes}</p>
+          <p className="font-label text-[11px] uppercase tracking-widest text-mono-500 mb-1">Notas privadas para revisión</p>
+          <p className="font-body text-sm text-mono-300 whitespace-pre-wrap">{proposal.lead_notes}</p>
         </div>
       )}
 
       {/* Previous admin notes (when showing changes_requested) */}
       {proposal.status === "changes_requested" && proposal.admin_notes && !requestingChanges && (
         <div className="px-4 pb-3">
-          <p className="font-label text-[11px] uppercase tracking-widest text-red-400 mb-1">Tus comentarios anteriores</p>
-          <p className="font-body text-sm text-red-300 whitespace-pre-wrap">{proposal.admin_notes}</p>
+          <p className="font-label text-[11px] uppercase tracking-widest text-negative-fg mb-1">Tus comentarios anteriores</p>
+          <p className="font-body text-sm text-negative-muted whitespace-pre-wrap">{proposal.admin_notes}</p>
         </div>
       )}
 
       {/* Stale-review banner (409). The card keeps exactly what was reviewed. */}
       {conflict && (
         <div className="px-4 pb-3">
-          <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-3 py-2">
-            <p className="font-label text-[11px] uppercase tracking-widest text-yellow-400">Propuesta actualizada</p>
-            <p className="font-body text-sm text-yellow-200/90">
+          <div className="rounded-lg border border-recency-fg/40 bg-recency-fg/10 px-3 py-2">
+            <p className="font-label text-[11px] uppercase tracking-widest text-recency-strong">Propuesta actualizada</p>
+            <p className="font-body text-sm text-recency-faint/90">
               Cambió mientras la revisabas. Recarga las propuestas y vuelve a revisar.
             </p>
           </div>
@@ -266,7 +266,7 @@ function ProposalCard({
                 <button
                   onClick={handleRequestChanges}
                   disabled={submitting || conflict || !adminNotes.trim()}
-                  className="flex-1 py-2 rounded-lg bg-red-800/60 hover:bg-red-700/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+                  className="flex-1 py-2 rounded-lg bg-negative-surface/60 hover:bg-negative-border/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
                 >
                   {submitting ? "Enviando…" : "Solicitar cambios"}
                 </button>
@@ -276,7 +276,7 @@ function ProposalCard({
             <div className="flex gap-2">
               <button
                 onClick={() => setRequestingChanges(true)}
-                className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-red-400 dark:hover:border-surface-accent-30 hover:text-red-400 transition-colors"
+                className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-negative-fg dark:hover:border-surface-accent-30 hover:text-negative-fg transition-colors"
               >
                 Solicitar cambios
               </button>
@@ -294,11 +294,11 @@ function ProposalCard({
 
       {proposal.status === "approved" && (
         <div className="px-4 pb-4 space-y-3">
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-green-500/20 bg-green-500/5">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-400 shrink-0">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-positive-deep/20 bg-positive-deep/5">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-positive-strong shrink-0">
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
             </svg>
-            <p className="font-label text-[11px] uppercase tracking-widest text-green-400">Setlist publicado</p>
+            <p className="font-label text-[11px] uppercase tracking-widest text-positive-strong">Setlist publicado</p>
           </div>
 
           {/* Re-open for revision. Sends the shared proposal back to
@@ -332,7 +332,7 @@ function ProposalCard({
           ) : (
             <button
               onClick={() => setReopening(true)}
-              className="w-full py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-gray-400 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent transition-colors"
+              className="w-full py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-mono-400 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent transition-colors"
             >
               Reabrir para ajustes
             </button>
@@ -530,12 +530,12 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
             className={`relative font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors ${
               filter === id
                 ? "bg-surface-accent-solid text-accent"
-                : "text-gray-500 hover:text-accent"
+                : "text-mono-500 hover:text-accent"
             }`}
           >
             {label}
             {id === "pending" && pendingCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-yellow-500 text-black font-bold text-[10px] flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-recency-fg text-black font-bold text-[10px] flex items-center justify-center">
                 {pendingCount}
               </span>
             )}
@@ -547,7 +547,7 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
       {handoffNotice && (
         <p
           role="status"
-          className="rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 font-body text-sm text-yellow-200/90 [overflow-wrap:anywhere]"
+          className="rounded-xl border border-recency-fg/40 bg-recency-fg/10 px-4 py-3 font-body text-sm text-recency-faint/90 [overflow-wrap:anywhere]"
         >
           {handoffNotice}
         </p>
@@ -557,16 +557,16 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
       {conflictKey && highlightIds.length > 0 && (
         <div
           role="status"
-          className="min-w-0 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3"
+          className="min-w-0 rounded-xl border border-negative-strong/40 bg-negative-strong/10 px-4 py-3"
         >
-          <p className="font-label text-[11px] uppercase tracking-widest text-red-400">
+          <p className="font-label text-[11px] uppercase tracking-widest text-negative-fg">
             Propuestas en conflicto
           </p>
-          <p className="font-body text-sm text-red-200/90 [overflow-wrap:anywhere]">
+          <p className="font-body text-sm text-negative-soft/90 [overflow-wrap:anywhere]">
             Este servicio tiene más de una propuesta válida ({highlightIds.length}). Resuélvelo antes
             de publicar.
           </p>
-          <p className="mt-1 font-mono text-[11px] text-red-200/70 [overflow-wrap:anywhere]">
+          <p className="mt-1 font-mono text-[11px] text-negative-soft/70 [overflow-wrap:anywhere]">
             {conflictKey} · {highlightIds.join(" · ")}
           </p>
         </div>
@@ -582,15 +582,15 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
       )}
 
       {error && (
-        <p className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-xl px-4 py-3">{error}</p>
+        <p className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-xl px-4 py-3">{error}</p>
       )}
 
       {!loading && !error && visible.length === 0 && (
         <div className="text-center py-12 space-y-1">
-          <p className="font-body text-sm text-gray-500">
+          <p className="font-body text-sm text-mono-500">
             {filter === "all" ? "No hay propuestas todavía." : `Sin propuestas en esta categoría.`}
           </p>
-          <p className="font-body text-xs text-gray-500/80">
+          <p className="font-body text-xs text-mono-500/80">
             Los líderes proponen setlists desde su perfil; aparecerán aquí para revisión.
           </p>
         </div>
@@ -615,7 +615,7 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
         <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl border font-label text-xs uppercase tracking-widest shadow-xl ${
           toast.ok
             ? "bg-surface-raised-alt border-accent/30"
-            : "bg-red-900/80 border-red-500/30"
+            : "bg-negative-surface-deep/80 border-negative-strong/30"
         }`}>
           {toast.msg}
         </div>

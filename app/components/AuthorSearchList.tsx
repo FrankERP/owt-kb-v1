@@ -31,12 +31,12 @@ export default function AuthorSearchList({ authors, totalSongs }: { authors: Aut
         <div className="flex items-baseline gap-4 flex-1">
           <div className="flex items-baseline gap-1.5">
             <span className="font-display text-3xl text-accent">{authors.length}</span>
-            <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">artistas</span>
+            <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">artistas</span>
           </div>
-          <span className="text-gray-700 text-sm">·</span>
+          <span className="text-mono-700 text-sm">·</span>
           <div className="flex items-baseline gap-1.5">
             <span className="font-display text-3xl text-accent">{totalSongs}</span>
-            <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">canciones</span>
+            <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">canciones</span>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -44,20 +44,20 @@ export default function AuthorSearchList({ authors, totalSongs }: { authors: Aut
             {(["popular", "alpha"] as SortMode[]).map((mode, i) => (
               <button key={mode} onClick={() => setSort(mode)}
                 aria-pressed={sort === mode}
-                className={`px-3 py-1.5 font-label text-[11px] uppercase tracking-widest transition-colors duration-150 ${i > 0 ? "border-l border-surface-accent-20" : ""} ${sort === mode ? "bg-accent/15 text-accent" : "text-gray-500 hover:text-gray-300 hover:bg-accent/5"}`}>
+                className={`px-3 py-1.5 font-label text-[11px] uppercase tracking-widest transition-colors duration-150 ${i > 0 ? "border-l border-surface-accent-20" : ""} ${sort === mode ? "bg-accent/15 text-accent" : "text-mono-500 hover:text-mono-300 hover:bg-accent/5"}`}>
                 {mode === "popular" ? "Popular" : "A–Z"}
               </button>
             ))}
           </div>
           <div className="relative">
             <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar..."
-              className="font-label pl-3 pr-8 py-1.5 rounded-lg border border-surface-accent-20 bg-transparent focus:outline-none focus:border-accent dark:focus:border-surface-accent-20 text-sm placeholder:text-gray-600 transition-colors w-36 sm:w-48" />
+              className="font-label pl-3 pr-8 py-1.5 rounded-lg border border-surface-accent-20 bg-transparent focus:outline-none focus:border-accent dark:focus:border-surface-accent-20 text-sm placeholder:text-mono-600 transition-colors w-36 sm:w-48" />
             {query && (
               <button
                 type="button"
                 onClick={() => setQuery("")}
                 aria-label="Limpiar búsqueda"
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-500 hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 transition-colors"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-mono-500 hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 transition-colors"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -76,7 +76,7 @@ export default function AuthorSearchList({ authors, totalSongs }: { authors: Aut
                 <h3 className="font-display text-sm mb-1 group-hover:text-accent transition-colors duration-200 leading-snug">
                   {a.name}
                 </h3>
-                <p className="font-label text-[11px] uppercase tracking-widest text-gray-600">
+                <p className="font-label text-[11px] uppercase tracking-widest text-mono-600">
                   {a.postCount ?? 0} {(a.postCount ?? 0) === 1 ? "canción" : "canciones"}
                 </p>
               </div>
@@ -84,7 +84,7 @@ export default function AuthorSearchList({ authors, totalSongs }: { authors: Aut
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-3 py-24 text-gray-600">
+        <div className="flex flex-col items-center gap-3 py-24 text-mono-600">
           <p className="font-label text-sm uppercase tracking-widest">No se encontraron artistas</p>
         </div>
       )}

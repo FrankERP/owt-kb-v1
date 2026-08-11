@@ -103,17 +103,58 @@ export default defineConfig([
             "Opacity modifier on a composed token. Layer-2 tokens already carry their " +
             "alpha — use a Layer-1 role with a modifier instead.",
         },
-        // NOT HERE, and deliberately: the rgb()/rgba()/hsl() clause.
+        // ---- Landed by Child C ------------------------------------------------
         //
-        // Eight category-5 rows in app/** are dispositioned B but belong to Child C's
-        // families — ServiceReadinessCard's rgba(239,68,68,·) x4 (red-500) and DayCard's
-        // rgba(251,191,36,·) x4 (amber-400). B must not pre-empt C's families, and cannot
-        // tokenise them onto existing roles either, since 239 68 68 is not --negative-fg
-        // and 251 191 36 is not --warning-fg. Landing the clause now would mean this
-        // config cannot reach 0 errors. It lands with Child C.
-        //
-        // Also not here: the palette-family clauses (gray-500 and kin). Same reason —
-        // they land per family with C.
+        // Both clause families below were deferred by Child B, which recorded here that
+        // it could not land them: eight category-5 rows were dispositioned B but belonged
+        // to C's families, so the config could not have reached 0 errors. C3 and C4
+        // migrated exactly those, and both clauses became satisfiable.
+        {
+          // rgb()/rgba()/hsl() LITERALS. The negative lookahead is what keeps this rule
+          // from forbidding its own fix — `rgb(var(--accent-rgb) / 0.2)` is the correct
+          // form and must pass.
+          //
+          // NO `\b` ANCHOR, and that is load-bearing rather than stylistic. Tailwind
+          // writes spaces as underscores inside an arbitrary value, so a shadow reads
+          // `shadow-[0_0_0_1px_rgb(…)]` — `_` is a word character, so `\b(rgba?)\(`
+          // asserts a boundary that is not there and the rule silently misses it. The
+          // inventory's own category 6 carried exactly that bug from A1 until Child C's
+          // review found it.
+          selector: "Literal[value=/(rgba?|hsla?)\\((?!\\s*var\\()/]",
+          message:
+            "Colour function literal: use themeColour() from app/utils/themeColour.ts, " +
+            "or rgb(var(--role-rgb) / a) directly.",
+        },
+        {
+          selector: "TemplateElement[value.raw=/(rgba?|hsla?)\\((?!\\s*var\\()/]",
+          message:
+            "Colour function literal in a template: use themeColour() from " +
+            "app/utils/themeColour.ts.",
+        },
+        {
+          // The raw palette families. All 901 rows migrated across C2-C8; this is what
+          // stops them coming back.
+          //
+          // `mono` is deliberately NOT in this list and cannot be: it is C's own gray
+          // scale. That is also why the scale is not called `neutral`, `slate`, `zinc`
+          // or `stone` — each is a Tailwind family, and naming the scale after one would
+          // make this clause ban the tokens it exists to enforce.
+          selector:
+            "Literal[value=/\\b(bg|text|border|ring-offset|ring|divide|from|via|to|fill|stroke|placeholder|shadow|outline|decoration|caret|accent)-(gray|red|yellow|green|amber|orange|purple|blue|slate|zinc|neutral|stone|emerald|teal|cyan|sky|indigo|violet|fuchsia|pink|rose|lime)-[0-9]{2,3}\\b/]",
+          message:
+            "Raw Tailwind palette class. Use a role token: mono-* for greys, and " +
+            "negative/warning/recency/positive/availability/badge-* for the rest " +
+            "(see brand.css).",
+        },
+        {
+          selector:
+            "TemplateElement[value.raw=/\\b(bg|text|border|ring-offset|ring|divide|from|via|to|fill|stroke|placeholder|shadow|outline|decoration|caret|accent)-(gray|red|yellow|green|amber|orange|purple|blue|slate|zinc|neutral|stone|emerald|teal|cyan|sky|indigo|violet|fuchsia|pink|rose|lime)-[0-9]{2,3}\\b/]",
+          message: "Raw Tailwind palette class in a template — use a role token.",
+        },
+        // STILL NOT HERE: any clause for `white`/`black`. Child C left 45 such rows
+        // literal on purpose — they are contrast anchors, not palette entries — and a
+        // family clause keyed on `-\d{2,3}` cannot match a keyword anyway. Adding an
+        // allowlist for them would guard against a rule that does not exist.
       ],
     },
   },

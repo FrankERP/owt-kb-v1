@@ -115,7 +115,7 @@ export function Modal({
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-edge-accent-subtle shrink-0">
           <h2 className="font-display text-lg uppercase tracking-wide">{title}</h2>
-          <button onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-accent transition-colors text-xl leading-none">×</button>
+          <button onClick={onClose} aria-label="Cerrar" className="text-mono-400 hover:text-accent transition-colors text-xl leading-none">×</button>
         </div>
         <div className="overflow-y-auto overflow-x-hidden p-6 space-y-5 flex-1">{children}</div>
       </div>
@@ -241,13 +241,13 @@ export function SongForm({
     <form onSubmit={(e) => { e.preventDefault(); onSubmit(form); }} className="space-y-5">
       {/* Title */}
       <div className="space-y-1">
-        <label htmlFor={fid("title")} className="font-label text-xs uppercase tracking-widest text-gray-500">Título *</label>
+        <label htmlFor={fid("title")} className="font-label text-xs uppercase tracking-widest text-mono-500">Título *</label>
         <input id={fid("title")} className={inputCls} value={form.title} onChange={set("title")} required placeholder="Nombre de la canción" />
       </div>
 
       {/* Artista (multi-select) */}
       <div className="space-y-2">
-        <label htmlFor={fid("artist")} className="font-label text-xs uppercase tracking-widest text-gray-500">Artista</label>
+        <label htmlFor={fid("artist")} className="font-label text-xs uppercase tracking-widest text-mono-500">Artista</label>
         <input
           id={fid("artist")}
           className={inputCls}
@@ -264,7 +264,7 @@ export function SongForm({
                 return (
                   <div key={author._id} className="flex items-center gap-3 px-3 py-2 hover:bg-accent/5 transition-colors">
                     <button type="button" onClick={() => toggleAuthor(author._id)} className="flex-1 flex items-center gap-2 text-left">
-                      <span className={`font-label text-[11px] uppercase tracking-widest ${active ? "text-accent" : "text-gray-400"}`}>
+                      <span className={`font-label text-[11px] uppercase tracking-widest ${active ? "text-accent" : "text-mono-400"}`}>
                         {author.name}
                       </span>
                     </button>
@@ -282,7 +282,7 @@ export function SongForm({
                 <span className="font-label text-[11px] uppercase tracking-widest text-accent">
                   {creatingAuthor ? "Creando..." : "+ Crear"}
                 </span>
-                <span className="font-body text-xs text-gray-400 truncate">&quot;{authorSearch}&quot;</span>
+                <span className="font-body text-xs text-mono-400 truncate">&quot;{authorSearch}&quot;</span>
               </button>
             </div>
           </div>
@@ -298,7 +298,7 @@ export function SongForm({
                   className={`font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
                     active
                       ? "border-accent bg-accent/15 text-accent"
-                      : "border-accent/20 text-gray-500 hover:border-accent/50"
+                      : "border-accent/20 text-mono-500 hover:border-accent/50"
                   }`}
                 >
                   {author.name}
@@ -312,22 +312,22 @@ export function SongForm({
       {/* Key + BPM + Time Sig */}
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1">
-          <label htmlFor={fid("key")} className="font-label text-xs uppercase tracking-widest text-gray-500">Tonalidad</label>
+          <label htmlFor={fid("key")} className="font-label text-xs uppercase tracking-widest text-mono-500">Tonalidad</label>
           <input id={fid("key")} className={inputCls} value={form.key} onChange={set("key")} placeholder="Ej: C, Am" />
         </div>
         <div className="space-y-1">
-          <label htmlFor={fid("bpm")} className="font-label text-xs uppercase tracking-widest text-gray-500">BPM</label>
+          <label htmlFor={fid("bpm")} className="font-label text-xs uppercase tracking-widest text-mono-500">BPM</label>
           <input id={fid("bpm")} className={inputCls} type="number" value={form.bpm} onChange={set("bpm")} placeholder="120" />
         </div>
         <div className="space-y-1">
-          <label htmlFor={fid("timesig")} className="font-label text-xs uppercase tracking-widest text-gray-500">Comp.</label>
+          <label htmlFor={fid("timesig")} className="font-label text-xs uppercase tracking-widest text-mono-500">Comp.</label>
           <input id={fid("timesig")} className={inputCls} value={form.timeSig} onChange={set("timeSig")} placeholder="4/4" />
         </div>
       </div>
 
       {/* Lyrics */}
       <div className="space-y-0">
-        <label htmlFor={fid("lyrics")} className="font-label text-xs uppercase tracking-widest text-gray-500 block mb-1">Letra</label>
+        <label htmlFor={fid("lyrics")} className="font-label text-xs uppercase tracking-widest text-mono-500 block mb-1">Letra</label>
         <div className="flex items-center gap-1 flex-wrap px-2 py-1.5 rounded-t-lg border border-accent/20 border-b-0 bg-accent/5">
           {SECTION_LABELS.map((label) => (
             <button
@@ -335,7 +335,7 @@ export function SongForm({
               type="button"
               onPointerDown={(e) => e.preventDefault()}
               onClick={() => insertLabel(label)}
-              className="font-label text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-surface-accent-20 text-gray-500 hover:text-accent hover:border-accent/40 dark:hover:border-surface-accent-20 transition-colors whitespace-nowrap"
+              className="font-label text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-surface-accent-20 text-mono-500 hover:text-accent hover:border-accent/40 dark:hover:border-surface-accent-20 transition-colors whitespace-nowrap"
             >
               {label}
             </button>
@@ -346,7 +346,7 @@ export function SongForm({
             onPointerDown={(e) => e.preventDefault()}
             onClick={() => wrapSelection("**")}
             title="Negrita — seleccionar texto y pulsar"
-            className="font-body text-sm font-bold w-7 h-7 flex items-center justify-center rounded border border-surface-accent-20 text-gray-500 hover:text-accent hover:border-accent/40 dark:hover:border-surface-accent-20 transition-colors shrink-0"
+            className="font-body text-sm font-bold w-7 h-7 flex items-center justify-center rounded border border-surface-accent-20 text-mono-500 hover:text-accent hover:border-accent/40 dark:hover:border-surface-accent-20 transition-colors shrink-0"
           >
             B
           </button>
@@ -355,7 +355,7 @@ export function SongForm({
             onPointerDown={(e) => e.preventDefault()}
             onClick={() => wrapSelection("*")}
             title="Cursiva — seleccionar texto y pulsar"
-            className="font-body text-sm italic w-7 h-7 flex items-center justify-center rounded border border-surface-accent-20 text-gray-500 hover:text-accent hover:border-accent/40 dark:hover:border-surface-accent-20 transition-colors shrink-0"
+            className="font-body text-sm italic w-7 h-7 flex items-center justify-center rounded border border-surface-accent-20 text-mono-500 hover:text-accent hover:border-accent/40 dark:hover:border-surface-accent-20 transition-colors shrink-0"
           >
             I
           </button>
@@ -370,7 +370,7 @@ export function SongForm({
           placeholder={"# Verso 1\n[Am]Ante Ti [F]Postrado estoy\n[C]aquí me rindo\n\n# Coro\nLínea 1\nLínea 2"}
           spellCheck={false}
         />
-        <p className="font-label text-[11px] text-gray-600 uppercase tracking-wide mt-1">
+        <p className="font-label text-[11px] text-mono-600 uppercase tracking-wide mt-1">
           # Sección · [Acorde]palabra · **negrita** · *cursiva*
         </p>
       </div>
@@ -378,7 +378,7 @@ export function SongForm({
       {/* Reference Links */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="font-label text-xs uppercase tracking-widest text-gray-500">Links de referencia</label>
+          <label className="font-label text-xs uppercase tracking-widest text-mono-500">Links de referencia</label>
           <button
             type="button"
             onClick={addRefLink}
@@ -388,7 +388,7 @@ export function SongForm({
           </button>
         </div>
         {form.referenceLinks.length === 0 && (
-          <p className="font-body text-xs text-gray-600">Sin links todavía.</p>
+          <p className="font-body text-xs text-mono-600">Sin links todavía.</p>
         )}
         {form.referenceLinks.map((link, i) => (
           <div key={i} className="grid grid-cols-[7rem_1fr_auto] gap-2 items-center">
@@ -408,7 +408,7 @@ export function SongForm({
             <button
               type="button"
               onClick={() => removeRefLink(i)}
-              className="text-gray-500 hover:text-red-400 transition-colors text-lg leading-none"
+              className="text-mono-500 hover:text-negative-fg transition-colors text-lg leading-none"
             >
               ×
             </button>
@@ -418,7 +418,7 @@ export function SongForm({
 
       {/* Tags */}
       <div className="space-y-2">
-        <label className="font-label text-xs uppercase tracking-widest text-gray-500">Tags</label>
+        <label className="font-label text-xs uppercase tracking-widest text-mono-500">Tags</label>
         <input
           className={inputCls}
           value={tagSearch}
@@ -434,7 +434,7 @@ export function SongForm({
                 return (
                   <div key={tag._id} className="flex items-center gap-3 px-3 py-2 hover:bg-accent/5 transition-colors">
                     <button type="button" onClick={() => toggleTag(tag._id)} className="flex-1 flex items-center gap-2 text-left">
-                      <span className={`font-label text-[11px] uppercase tracking-widest ${active ? "text-accent" : "text-gray-400"}`}>
+                      <span className={`font-label text-[11px] uppercase tracking-widest ${active ? "text-accent" : "text-mono-400"}`}>
                         #{tag.name}
                       </span>
                     </button>
@@ -452,7 +452,7 @@ export function SongForm({
                 <span className="font-label text-[11px] uppercase tracking-widest text-accent">
                   {creatingTag ? "Creando..." : "+ Crear"}
                 </span>
-                <span className="font-body text-xs text-gray-400 truncate">&quot;{tagSearch}&quot;</span>
+                <span className="font-body text-xs text-mono-400 truncate">&quot;{tagSearch}&quot;</span>
               </button>
             </div>
           </div>
@@ -468,7 +468,7 @@ export function SongForm({
                   className={`font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
                     active
                       ? "border-accent bg-accent/15 text-accent"
-                      : "border-accent/20 text-gray-500 hover:border-accent/50"
+                      : "border-accent/20 text-mono-500 hover:border-accent/50"
                   }`}
                 >
                   #{tag.name}
