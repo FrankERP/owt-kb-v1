@@ -205,7 +205,7 @@ discover it mid-codemod:
 | **4** | `DayCard.tsx` — `rgba(251,191,36,·)` at .10/.35/.6/.65, i.e. `amber-400` | **C's family**, same |
 | **4** | `DayCard.tsx` — `rgba(61,255,124,·)` at .10/.3/.5/.8, i.e. the second green `#3dff7c` | **B** — these follow the `#3dff7c` → `--positive-fg` normalisation above, so they are part of licensed diff 2 and must be enumerated with it |
 | **7** | `rgb(0 0 0 / α)` shadows in `brand.css` (six rows), plus `rgba(0, 0, 0, 0.1)` at `tailwind.config.ts:38` (one row) | **B** — an `--elevation` role, or recorded as intentionally literal. Note `tailwind.config.ts:38` is outside the `app/**` glob and reachable only as a named out-of-glob input |
-| **4** | `stroke="white"` ×2 and `fill="white"` ×2 — SVG presentation attributes | **C** — `white`/`black` is staged last. They take `currentColor` or a role, not a literal |
+| **4** | `stroke="white"` ×2 (`AdminPanel.tsx:135`, `ProfilePanel.tsx:50`) and `fill="white"` ×2 (`icons.tsx:112`, `:157`) — SVG presentation attributes | **B**, corrected. An earlier revision of this row said C, but **all four rows are dispositioned `B` in the inventory**, which is the authority. The two in `icons.tsx` go with that file when B deletes it; the two live ones take a `stroke-*` utility on the appropriate role — **not** `rgb(var(…))` in the attribute, which is silently dropped |
 
 **"The mapping table is the inventory" is true of dispositions, not of tokens.** The
 inventory says *which child owns a row*; this document says *what a row becomes*, and for the

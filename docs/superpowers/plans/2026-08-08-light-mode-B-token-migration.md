@@ -12,7 +12,11 @@ No secrets, credentials or personal data appear here. Colour literals are design
 
 ## Status and contract
 
-- **Document status:** Draft — not reviewed, not approved, not authorization to implement.
+- **Document status: APPROVED** — round 9, digest `407f2e34…`, commit `9eedbe3`, one fresh
+  cold verdict on byte-identical text as Standard tier requires. Nine valid rounds; the
+  ledger is in [`…-B-token-migration-review-log.md`](2026-08-08-light-mode-B-token-migration-review-log.md).
+  **Plan approval authorizes implementation of this plan only.** Each slice still runs its own
+  code review and the documented test gates before it merges.
 - **Requirement source:** [parent scope spec](../specs/2026-08-07-light-mode-member-first-scope.md),
   approved at `3a927bd8…` with disclosed post-approval corrections.
 - **Inputs, all shipped and on `main`:**
@@ -317,7 +321,7 @@ than 50 rows.**
   is a light accent in most of its 243 sites and a dark-native surface where it has no
   `dark:` sibling.
 - **Category 2 (`bare-hex`) has a home, and it is B.** Four rows, all dispositioned `B`:
-  `CalendarView.tsx:192–194`'s three legend literals and `ServiceReadinessCard.tsx:723`'s
+  `CalendarView.tsx:193–195`'s three legend literals and `ServiceReadinessCard.tsx:723`'s
   `#f87171`. The prose elsewhere walks categories 1, 5, 9, 10, 11 and 12; category 2 is small
   enough to have been skipped, but a reader reconciling B's row accounting against the
   inventory would find a category with no owner. The hex lint clause covers all four, and
