@@ -11,6 +11,11 @@ const config: Config = {
 	theme: {
 		extend: {
 			colors: {
+				// The seven retired keys. They stay until B-final, so both spellings
+				// work while call sites migrate in batches. Removing one while a call
+				// site still uses it is the single unsafe transition in Child B:
+				// `bg-brand-beam` with no `brand.beam` key compiles to NOTHING and the
+				// element loses its colour silently.
 				brand: {
 					blackout: "rgb(var(--brand-blackout) / <alpha-value>)",
 					console: "rgb(var(--brand-console) / <alpha-value>)",
@@ -20,6 +25,60 @@ const config: Config = {
 					frost: "rgb(var(--brand-frost) / <alpha-value>)",
 					steel: "rgb(var(--brand-steel) / <alpha-value>)",
 				},
+
+				// Child B, Layer 1 — the 18 base roles. Alpha-capable: each is a
+				// triplet, so `bg-accent/20` works. `theme.extend.colors` is ADDITIVE,
+				// which is the whole reason B is sliceable at all.
+				"accent": "rgb(var(--accent-rgb) / <alpha-value>)",
+				"accent-deep": "rgb(var(--accent-deep-rgb) / <alpha-value>)",
+
+				"ink": "rgb(var(--ink-rgb) / <alpha-value>)",
+				"ink-muted": "rgb(var(--ink-muted-rgb) / <alpha-value>)",
+				"ink-dim": "rgb(var(--ink-dim-rgb) / <alpha-value>)",
+
+				"surface-base": "rgb(var(--surface-base-rgb) / <alpha-value>)",
+				"surface-raised": "rgb(var(--surface-raised-rgb) / <alpha-value>)",
+				"surface-raised-alt": "rgb(var(--surface-raised-alt-rgb) / <alpha-value>)",
+				"surface-console": "rgb(var(--surface-console-rgb) / <alpha-value>)",
+				"surface-sunken": "rgb(var(--surface-sunken-rgb) / <alpha-value>)",
+
+				"warning-fg": "rgb(var(--warning-fg-rgb) / <alpha-value>)",
+				"warning-surface": "rgb(var(--warning-surface-rgb) / <alpha-value>)",
+				"warning-border": "rgb(var(--warning-border-rgb) / <alpha-value>)",
+
+				"info-fg": "rgb(var(--info-fg-rgb) / <alpha-value>)",
+				"info-surface": "rgb(var(--info-surface-rgb) / <alpha-value>)",
+				"info-border": "rgb(var(--info-border-rgb) / <alpha-value>)",
+
+				"positive-fg": "rgb(var(--positive-fg-rgb) / <alpha-value>)",
+				"negative-fg": "rgb(var(--negative-fg-rgb) / <alpha-value>)",
+
+				// Child B, Layer 2 — the 23 composed tokens. These bake their own alpha
+				// and are therefore NOT alpha-capable: no `<alpha-value>`, and an
+				// opacity modifier on one is a bug that B-final's lint clause bans.
+				"surface-accent-solid": "var(--surface-accent-solid)",
+				"surface-accent-30": "var(--surface-accent-30)",
+				"surface-accent-hover": "var(--surface-accent-hover)",
+				"edge-accent-subtle": "var(--edge-accent-subtle)",
+				"surface-accent-20": "var(--surface-accent-20)",
+				"surface-accent-faint": "var(--surface-accent-faint)",
+				"surface-accent-wash": "var(--surface-accent-wash)",
+				"surface-accent-l20-d60-sunken": "var(--surface-accent-l20-d60-sunken)",
+				"surface-accent-l100-d10": "var(--surface-accent-l100-d10)",
+				"surface-accent-l40-d20": "var(--surface-accent-l40-d20)",
+				"surface-accent-l30-d25": "var(--surface-accent-l30-d25)",
+				"surface-accent-l10-d100": "var(--surface-accent-l10-d100)",
+				"surface-ink-l60-d50": "var(--surface-ink-l60-d50)",
+				"surface-ink-l40-d100-base": "var(--surface-ink-l40-d100-base)",
+				"surface-accent-l25-d20": "var(--surface-accent-l25-d20)",
+				"surface-accent-l25-d15": "var(--surface-accent-l25-d15)",
+				"surface-ink-l70-d50": "var(--surface-ink-l70-d50)",
+				"surface-accent-l15-d100": "var(--surface-accent-l15-d100)",
+				"surface-accent-l100-d15": "var(--surface-accent-l100-d15)",
+				"surface-ink-l50-d35": "var(--surface-ink-l50-d35)",
+				"surface-accent-l5-d100": "var(--surface-accent-l5-d100)",
+				"surface-accent-l50-d40": "var(--surface-accent-l50-d40)",
+				"surface-accent-l50-d15": "var(--surface-accent-l50-d15)",
 			},
 			fontFamily: {
 				display: ["var(--font-display)", "sans-serif"],
