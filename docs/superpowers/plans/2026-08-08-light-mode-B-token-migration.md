@@ -29,9 +29,33 @@ No secrets, credentials or personal data appear here. Colour literals are design
 ## The TWO licensed diffs, and nothing else
 
 **1. `--brand-beam` `18 200 244` (`#12C8F4`) → `--accent` `0 191 255` (`#00bfff`)** — parent
-D6. **32** `brand.css` occurrences (29 alpha-bearing, plus three alpha-free at `:120`,
-`:182`, `:219`) and **87** utility usages, including `.brand-atmosphere`'s body wash, every
-glow, and `selection:bg-brand-beam/35` on both root layouts.
+D6. Four site classes, and the enumeration is closed only because all four are listed:
+
+| Where | Count | Note |
+|---|---:|---|
+| `brand.css` occurrences | **32** | 29 alpha-bearing plus three alpha-free at `:120`, `:182`, `:219`; includes `.brand-atmosphere`'s wash and every glow |
+| Utility usages (**category 10**) | **87** | including `selection:bg-brand-beam/35` on both root layouts |
+| **Category 11** — `AdminPanel.tsx:399` | **1** | `shadow-[inset_0_0_0_1px_rgb(var(--brand-beam)/0.15)]`. Beam rows partition `{10: 87, 11: 1, 12: 1}`, so "87 utilities" is exactly the category-10 set and **does not** contain this one |
+| **Bare hex** — `DayCard.tsx:33` | **1 declaration, ~10 rendered consumers** | `accentHex: "#12c8f4"` — beam's exact value spelled as a literal. See below |
+
+**`DayCard.tsx:33` is the one that would have been missed, and it is member-facing.**
+`accentHex` is the Sunday theme's accent, consumed as **inline style** at `:127`, `:186`,
+`:191`, `:196`, as a component prop at `:141`, `:190`, and threaded through `Row` at `:245`,
+`:254`, `:336`. Every one of those changes colour.
+
+**It also cannot be tokenised the way the rest can, and this is a real constraint on the
+batch:** the consumers build **8-digit hex at runtime** — `` `${t.accentHex}35` ``,
+`` `${t.accentHex}0d` ``, `` `${t.accentHex}55` `` — and a `rgb(var(--accent-rgb) / …)` token
+**cannot be string-concatenated with an alpha suffix**. `DayCard`'s theme objects must either
+keep a resolvable colour and gain an alpha-aware helper, or move to
+`color-mix()`/`rgb(var(--accent-rgb) / <n>)` expressions built per site. **The same pattern
+applies to the sibling themes** — `accentHex: "#f59e0b"` (`:43`) and `"#a78bfa"` (`:53`) — so
+this is a `DayCard`-wide design decision, not a find-and-replace. **Settle it before batching
+`DayCard`, and record the choice.**
+
+**This also collapses a pre-existing drift:** `serviceCardModel.ts` and `CalendarView.tsx`
+already spell the same Sunday accent `#00bfff`, while `DayCard.tsx:33` spells it `#12c8f4`.
+After diff 1 they agree.
 
 **2. `#3dff7c` `61 255 124` → `--positive-fg` `55 245 138`** — **6 rows**, all in
 `DayCard.tsx`: two bracketed `[#3dff7c]` and four `rgba(61,255,124,·)` at .10/.3/.5/.8. Two
@@ -154,16 +178,18 @@ than 50 rows.**
      `dark:prose-invert` goes with `(client)/posts/[slug]/page.tsx:326`.
   **Decision: migrate the gallery with B, and update `themeGallery.test.ts`'s assertions in
   the same commit.** Do NOT add it to `ignores` — that would leave live code on retired keys.
-- **Test files move with the code they assert.** They are lint-exempt but not migration-exempt:
-  the codemod's file set is intersected with `app/**/__tests__/**`, and colliding assertions
-  are updated in the same commit. Known collisions include `PlannerGrid.test.tsx`'s
+- **Test files move with the code they assert — and the automated mechanism does not exist.**
+  An earlier revision said "the codemod's file set is intersected with `app/**/__tests__/**`".
+  **That intersection is empty**: the inventory excludes `__tests__`, so it holds zero rows
+  and can drive nothing. Colliding assertions are found and updated **manually**, per batch,
+  with `npm test` as the backstop. Known collisions include `PlannerGrid.test.tsx`'s
   `bg-[#00bfff]/70` and `border-[#00bfff] bg-[#00bfff]/10` selectors.
 - **Verification per batch:** computed-colour equality per site (below), plus the inventory
   regenerated and its guard green.
 
 ### B-guards — re-point the A1/A2 assertions B's own success invalidates
 
-**B breaks four shipped guard assertions by succeeding.** None is a colour literal a codemod
+**B breaks FIVE shipped guard assertions by succeeding.** None is a colour literal a codemod
 rewrites, so "the codemod's file set is intersected with `__tests__`" cannot produce them —
 and that intersection is in any case **empty**, since the inventory excludes `__tests__`.
 Each must be re-pointed deliberately, in the slice that invalidates it:
@@ -174,6 +200,7 @@ Each must be re-pointed deliberately, in the slice that invalidates it:
 | `colourInventory.test.ts:172–178` — `AdminPanel.tsx` has category-11 `var(--brand-beam)` rows | That row is B's to migrate | Re-point to a synthetic source, or delete with the reason recorded |
 | `brandCss.test.ts:116–117` — `AdminPanel.tsx` references `--brand-beam`; `(client)/admin/page.tsx` references `--brand-signal` | Both are B rows | Re-point to whichever colour `var()` references remain, or synthetic |
 | `brandCss.test.ts:145` — `(client)/layout.tsx` contains `selection:bg-brand-beam` | A B row | Re-point to the successor utility |
+| `themeGallery.test.ts:83` — the gallery `<body>` carries `bg-brand-blackout` | B migrates the gallery layout (see B3) | Re-point to the successor utility, in the same commit as the gallery batch |
 
 **This slice lands with the batch that invalidates each assertion, never after.** A guard left
 asserting a removed premise is worse than no guard: it is green and wrong.
@@ -197,9 +224,15 @@ asserting a removed premise is worse than no guard: it is green and wrong.
     name `#010b17` in comments — while an AST rule does not. `no-restricted-syntax` with
     `Literal`/`TemplateElement` selectors is AST-based and therefore does not fire on
     comments; state that explicitly rather than leaving it implied.
-  - **`ignores`** must carry `app/components/admin/**` (Child C's families still live there),
-    `app/utils/emailShell.ts`, `app/**/__tests__/**`, the Google mark, and
-    `(client)/layout.tsx`'s static `themeColor`.
+  - **`ignores`** must carry `app/utils/emailShell.ts` (9 rows), `app/**/__tests__/**`, the
+    Google mark at `signin/page.tsx` (4 rows), and `(client)/layout.tsx`'s static `themeColor`
+    (1 row). **Verified: that set matches the non-B hex rows exactly.**
+  - **`app/components/admin/**` must NOT be ignored.** An earlier revision listed it on the
+    grounds that "Child C's families still live there" — **but C's 946 rows contain zero hex
+    or `rgb()` values** (verified), so B's hex/`rgb(`/`brand-<colour>` clauses cannot fire on
+    a palette class like `gray-500` anyway. Ignoring the tree would switch B's own clause off
+    across the densest part of its own surface — `MonthGenerator` 148, `AdminPanel` 76,
+    `SongFormModal` 67, `PlannerGrid` 59 — for no benefit.
   - **Palette-family clauses are NOT B's** — they land per family with Child C, or `npx
     eslint .` cannot reach 0 errors at this merge.
 - **A `var()`-integrity guard cannot see utility references.** `selection:bg-brand-beam/35`
@@ -252,12 +285,13 @@ Screenshots cannot vouch for 1,628 sites across stateful panels on live data. Th
 | B1 changes nothing visually | Equality harness with an empty migration set | An "additive" slice that was not |
 | `brand.css` bodies preserved | `(variable, alpha)` multiset unchanged **per occurrence**, beam lines excepted | A `*-rgb` slip on one of the four alpha-free occurrences, including the body wash's own base colour |
 | Existing `brand.css` pins hold | `participationAlongside.test.tsx` green **untouched** | Breaking a documented layout guard while rewriting the file |
-| Every migrated site | Computed-colour equality, sites not classes | Any diff outside the licensed one |
+| Every migrated site | Computed-colour equality, sites not classes | Any diff outside the two licensed sets |
+| Diff 1 is fully enumerated | The beam set covers all four classes: 32 brand.css + 87 cat-10 + 1 cat-11 + `DayCard.tsx:33` with its ~10 consumers | The harness reporting ~11 unlicensed diffs, or `DayCard` left on a literal that then fails B-final|s own lint clause |
 | Retired keys are gone | Inventory category 10 reports **zero** | Removing keys while call sites remain — the one unsafe transition |
 | Utility references covered | A test that fails if a `brand.*` key is deleted while a `bg-brand-*` usage remains | The failure a `var()`-integrity guard structurally cannot see |
 | Prose survives | No hex, no `rgb(`-without-`var(`, `--tw-prose-body` → ink role, `.prose-sm` still emitted | The `theme.typography` collapse — unstyled lyrics, no signal |
 | Tests move with code | `PlannerGrid.test.tsx` selectors updated in the same commit | `npm test` red at the batch merge |
-| A1/A2 guards re-pointed | The four enumerated assertions updated in the slice that invalidates each | A green guard asserting a premise B removed — worse than no guard |
+| A1/A2 guards re-pointed | The FIVE enumerated assertions updated in the slice that invalidates each | A green guard asserting a premise B removed — worse than no guard |
 | Gallery migrated, not ignored | `themeGallery.test.ts` asserts the successor utilities; no `app/(gallery)` entry in `ignores` | Live code left on retired keys, with a green guard describing a dead class |
 | Done-gate | `tsc`, `npm test`, `eslint .` = 0 errors, per slice | — |
 
