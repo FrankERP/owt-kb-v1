@@ -59,8 +59,8 @@ there. It is wrong: the pattern is 24 occurrences across four files.** Generated
 | File | Occurrences | Source of the hex | Crosses a file boundary? |
 |---|---:|---|---|
 | `DayCard.tsx` | **11** (`:127` ×2, `:186` ×4, `:191`, `:196`, `:344`, `:353`, `:355`) | local `accentHex` on the three theme objects (`:33`, `:43`, `:53`) | **yes** — `:141` passes `t.accentHex` into `PracticePlaylistButton` |
-| `ServiceReadinessCard.tsx` | **9** (`:375` ×4, `:382`, `:393`, `:716`, `:722`, `:726`) | `CARD_ACCENT_HEX` imported from `serviceCardModel.ts:213` | **yes** — the constant lives in a different file |
-| `CalendarView.tsx` | **2** (`:198`) | a local literal tuple at `:192–194` (**category 2**, bare hex) | no — self-contained on one line |
+| `ServiceReadinessCard.tsx` | **9** (`:375` ×4, `:382`, `:393`, `:716`, `:722`, `:726`) | `CARD_ACCENT_HEX` imported from `serviceCardModel.ts:215–217` | **yes** — the constant lives in a different file |
+| `CalendarView.tsx` | **2** (`:198`) | a local literal tuple at `:193–195` (**category 2**, bare hex) | no — self-contained on one line |
 | `PracticePlaylistButton.tsx` | **2** (`:133`) | the `accent: string` prop (`:11`) | **yes** — receiver of `DayCard`'s value |
 
 So there are **three concatenation contracts**, not one: `DayCard → PracticePlaylistButton.accent`,
@@ -116,11 +116,11 @@ substitution at the two `ChainLinkIcon` sites. Record the choice before the batc
 `DayCard.tsx` · `PracticePlaylistButton.tsx` · `ServiceReadinessCard.tsx` ·
 `serviceCardModel.ts` · `ChainLinkIcon.tsx`
 
-`serviceCardModel.ts` is the declaring end of contract 2 — `CARD_ACCENT_HEX` at `:214–217`,
+`serviceCardModel.ts` is the declaring end of contract 2 — `CARD_ACCENT_HEX` at `:215–217`,
 three category-9 rows (`#00bfff`, `#f59e0b`, `#a78bfa`) that B-final's hex clause forces to
 change — so it must move with its consumer. `ChainLinkIcon.tsx` is the presentation-attribute
 carrier. **`CalendarView.tsx` is correctly independent**: its literals are declared and
-consumed on adjacent lines (`:192–198`) and cross no boundary.
+consumed on adjacent lines (`:193–198`) and cross no boundary.
 
 **This unit overrides the densest-first batching rule.** The open-questions default is "one
 slice per file for the 12 files >50 rows, grouped slices below that", which would put
@@ -205,11 +205,69 @@ Renaming them to satisfy a gate would be unlicensed scope expansion.
 - **The vocabulary does not cover 29 of B's rows, and B must decide each before batching.**
   The roles describe the category-1 bracketed-hex surface; B's disposition also carries a
   six-hue **categorical** map (`ParticipationSidebar.tsx:6`), 8 `rgba()` belonging to Child C's
-  `red`/`amber` families, 4 `rgba(61,255,124,·)` that follow licensed diff 2, **7** black shadow
-  literals (six in `brand.css`, one at `tailwind.config.ts:38`), and 4 `white` SVG attributes
-  that are C's. The vocabulary's "Literals in Child B's
-  set with NO role here" table assigns each with its count. **B adds at most a `--chart-1…6`
-  scale and an `--elevation` role; it does not pre-empt C's families.**
+  `red`/`amber` families, 4 `rgba(61,255,124,·)` that follow licensed diff 2, and **7** black
+  shadow literals (six in `brand.css`, one at `tailwind.config.ts:38`). The vocabulary's
+  "Literals in Child B's set with NO role here" table assigns each with its count. **B adds at
+  most a `--chart-1…6` scale and an `--elevation` role; it does not pre-empt C's families.**
+
+### Every category B owns, closed by construction
+
+Three consecutive review rounds found the same defect: a carrier this plan had declared
+closed but had not followed — first `${hex}AA` concatenation beyond `DayCard`, then SVG
+presentation attributes, then a category with no owner. **Prose enumeration is what keeps
+failing.** So the closure is now a generated partition of B's own rows, and the rule is that
+**every category with a `B` row appears here or the plan is incomplete**:
+
+| Cat | Name | B rows | Files | Mechanism |
+|---:|---|---:|---:|---|
+| **1** | `arbitrary-class` | **1,264** | 47 | The main surface. Bracketed hex in a Tailwind utility → base role or composed token |
+| **2** | `bare-hex` | **4** | 2 | `CalendarView.tsx:193–195` legend tuple (inside the 24-site concatenation set), `ServiceReadinessCard.tsx:723` `#f87171` → `--negative-fg` |
+| **4** | `colour-keyword` | **2** | 1 | `CalendarView.tsx:409`, `:412` `bg-current`. **No-ops** — `current` is `currentColor`, which inherits and needs no token |
+| **5** | `inline-style` | **20** | 5 | `rgb()`/`rgba()` in a `style` prop. 8 are C's `red-500`/`amber-400` and are migrated but **not** lint-enforced until C |
+| **8** | `svg-attribute` | **97** | 29 | **85 are `currentColor`** — no-ops, they inherit. **12 are real work:** 8 hex + 4 `white`. See below |
+| **9** | `object-literal` | **12** | 3 | Hex in a config/theme object. Exactly one carries a retired value (`DayCard.tsx:33`) |
+| **10** | `retired-utility` | **213** | 20 | `bg-brand-*` etc. → the renamed key. 87 are beam |
+| **11** | `arbitrary-var` | **9** | 4 | `[var(--brand-…)]` inside a bracket. **Only 2 are colour**; 7 are `--brand-radius-*` B never touches |
+| **12** | `token-triplet` | **7** | 1 | The seven retired declarations in `brand.css` itself |
+
+**Category 8's 12 non-`currentColor` rows are the ones the attribute finding above applies
+to, and they were previously unowned.** All 8 hex rows are in **`app/components/icons.tsx`**:
+
+| Row | Value | Was going to become |
+|---|---|---|
+| `:25`, `:31`, `:96`, `:103` | `fill="#00bfff"` | `--accent` — **the accent's own value, at four attribute sites** |
+| `:70`, `:141`, `:148` | `fill="#003572"` | `--surface-raised` |
+| `:64` | `fill="#002249"` | `--surface-sunken` |
+
+**`icons.tsx` is dead code.** Its four exports — `SunIcon`, `MoonIcon`, `HomeIconLight`,
+`HomeIconDark` — have **zero importers and zero references anywhere in `app/**`** (verified by
+name, not just by module path); it has not been touched since the repository's initial commit.
+Its 10 rows are the whole file's colour surface.
+
+**Disposition: B deletes `app/components/icons.tsx`, and records why.** The alternative —
+migrating it — cannot use the mechanism its own input prescribes. **The vocabulary is wrong
+here and B corrects it:** `…-A1-token-vocabulary.md:98–101` says the file "migrates to
+`currentColor` or `rgb(var(--surface-sunken-rgb))`", and the second half is exactly what the
+attribute finding above proves is **silently dropped**. `currentColor` alone cannot rescue
+them either — `MoonIcon` carries `#002249` and `#003572` on sibling paths of one SVG, and
+`HomeIconDark` carries `#00bfff` and `#003572` — **one inherited colour cannot serve two
+fills.** The only working migration is Tailwind's `fill-*`/`stroke-*` utilities, which emit
+real CSS properties where `var()` does substitute. Spending that on a file nothing renders is
+not justified; deleting it removes 10 rows, 8 of them hex, from B's surface.
+
+**If the deletion is rejected**, the fallback is `fill-*` utilities — **not** `currentColor`,
+and **not** `rgb(var(…))` in the attribute — and `icons.tsx` then joins the accent unit for
+its four `#00bfff` rows.
+
+**The 4 `white` SVG attributes are B's, not C's.** `AdminPanel.tsx:135`, `ProfilePanel.tsx:50`
+(`stroke="white"`) and `icons.tsx:112`, `:157` (`fill="white"`) are all dispositioned `B` in
+the inventory. An earlier revision of this section assigned them to C, which would have left
+two of them behind after B and inside a file B deletes. B migrates the two live ones to a
+`stroke-*` utility on the appropriate role; the two in `icons.tsx` go with the file.
+
+**This table is the closure test.** If a future round finds a B row whose category is absent
+here, the enumeration failed again and the fix is to regenerate the table, not to add another
+paragraph.
 - **`tailwind.config.ts`** gains a key per base role as
   `rgb(var(--x-rgb) / <alpha-value>)`, and a key per composed token. **The seven `brand.*`
   keys stay for now.**

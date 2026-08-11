@@ -96,9 +96,15 @@ collapse onto `--surface-sunken`, **14 rows**: `#001830` (6, all in `MonthGenera
 within a few units of each other per channel and no design intent distinguishes them.
 
 **One of the 14 is not a class.** `icons.tsx` carries `fill="#002249"` — a category-8 SVG
-attribute, so it migrates to `currentColor` or `rgb(var(--surface-sunken-rgb))` rather than to
-a utility. An earlier revision counted only category-1 rows and reported 13; the collapse is
-14, and Child B's diff list must enumerate all of them.
+presentation attribute, not a utility. An earlier revision of this line prescribed
+`currentColor` **or `rgb(var(--surface-sunken-rgb))`**. **The second option is wrong and Child
+B's plan corrects it:** `var()` is not substituted inside SVG presentation attributes, so that
+form is silently dropped. `currentColor` is also unavailable here, because `MoonIcon` carries
+two different fills on sibling paths of one SVG. The working mechanisms are Tailwind's
+`fill-*`/`stroke-*` utilities — which emit real CSS properties — or deletion of the file,
+which is what B chose: `icons.tsx` has no importers. An earlier revision counted only
+category-1 rows and reported 13; the collapse is 14, and Child B's diff list enumerates all
+of them.
 
 ### Semantic states — three slots each
 
