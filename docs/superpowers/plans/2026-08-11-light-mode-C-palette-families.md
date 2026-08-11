@@ -12,7 +12,13 @@ No secrets, credentials or personal data appear here. Colour literals are design
 
 ## Status and contract
 
-- **Document status:** Draft — not reviewed, not approved, not authorization to implement.
+- **Document status: APPROVED** — round 6, digest `2e7150bd…`, commit `b3f0d36`. One fresh
+  cold verdict on byte-identical text, as Standard tier requires. Six rounds; the ledger is in
+  [`…-C-palette-families-review-log.md`](2026-08-11-light-mode-C-palette-families-review-log.md).
+  The approving reviewer **simulated C1 and C2 against a scratchpad copy of the tree** and
+  reproduced all four C1 key movements, C2's `901 → 426` / `948 → 473` gate, and
+  `pairs`-stays-12. **Plan approval authorizes implementation of this plan only** — each slice
+  still runs its own code review and the documented gates before it merges.
 - **Requirement source:** [parent scope spec](../specs/2026-08-07-light-mode-member-first-scope.md),
   approved at `3a927bd8…`; row C of its §11 table.
 - **Inputs, all shipped and on `main`:**
@@ -271,6 +277,12 @@ would have been invisible to the artifact this programme treats as authoritative
 today are the 18 composed tokens, whose values are `rgb(var(…))` rather than bare triplets,
 so they still fail the value clause. `byCategory[12]` stayed at 30 across the change.
 
+**The codemod must not run over `app/utils/__tests__/colourInventory.test.ts`.** Its synthetic
+fixture at `:75` contains `text-gray-500` deliberately, to prove the scanner still detects a
+palette class. A blanket rename would rewrite it to `text-mono-500` and quietly gut the guard —
+and **nothing mechanical would catch it**, because eslint already ignores that tree. This is a
+file-set constraint on C2's codemod, not a reading note.
+
 **Every slice regenerates and commits the inventory fixture.** `colourInventory.test.ts`
 compares a live `build()` against the committed
 `app/utils/__tests__/__fixtures__/colour-inventory.json` — rows, summary, compositing *and*
@@ -387,7 +399,14 @@ coverage. The 45 rows are recorded in `brand.css` and enforced by nothing, delib
   spread across all eight families. A migrated `bg-mono-500/10` matches **no category at all**
   (verified with a probe: 0 rows), category 4 never captures the `/NN` modifier, and C1's new
   category-12 rows carry no alpha. So the count reaches **0 at C8** and `npm test` goes red.
-  **Budget it in C8** and move it onto a synthetic source, exactly as `:232` did.
+  **Budget it in C8** and move it onto a synthetic source, exactly as `:232` did — **and budget
+  the helper that makes that possible.** `scripts/colour-inventory.mjs` exports only `build()`
+  (whole-tree) and `pairsIn()`. Neither scans arbitrary text into `literalRows` carrying
+  `alpha`, and `pairsIn()` exercises a **different** alpha path (`COLOURED`'s group 4) from the
+  one `scanFile()` uses (`value.match`), so re-expressing the proof through `pairsIn()` would
+  guard the wrong code. **C8 must export a text-scanning helper first.** Named here because
+  the alternative — an implementer finding no API and weakening the assertion instead — is
+  exactly what this bullet exists to prevent.
 
   The other nine survive, and two survive narrowly enough to record:
   `:151` (`serviceCardModel.ts` rows > 0) holds only because one of that file's 21 rows is
@@ -435,6 +454,19 @@ single `warning-*`, on usage evidence rather than colour distance. The spec assi
 producing analysis to Child A and A never produced it; the analysis is in this document, and
 the parent's bounded default — "separate roles per family until the analysis proves collapse
 is safe" — is what this plan implements.
+
+## Two things Child D inherits from C, flagged rather than left to discover
+
+- **`--positive-*` is an oddly shaped family after C6.** `--positive-fg` is `55 245 138`,
+  which is neither `green-400` nor `green-500` — Child B derived it from `--brand-signal`, not
+  from Tailwind. So `positive-soft`/`strong`/`deep` sit on the Tailwind green scale while
+  `positive-fg` sits off it. Δ0 and harmless in C, which changes no value; but D designs light
+  counterparts per family and will find this one incoherent unless warned.
+- **45 `white`/`black` rows are not themeable, by design.** That includes 16 `bg-white` and 12
+  `text-white`. The reasoning is sound — they are contrast anchors, not palette entries — but
+  it is a real narrowing of "the whole app surface", and **D should re-examine it rather than
+  silently inherit it.** A `text-white` on a badge whose fill becomes light in Child D stops
+  meaning "maximum contrast" and starts meaning "invisible".
 
 ## What this plan does NOT do
 
