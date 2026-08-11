@@ -662,7 +662,7 @@ export type ReadinessTone = "ok" | "approved" | "warn" | "error" | "unknown" | "
 export const TONE_CLASS: Record<ReadinessTone, string> = {
   ok: "border-accent/40 bg-accent/10 text-accent",
   approved: "border-green-500/40 bg-green-500/10 text-green-400",
-  warn: "border-amber-500/40 bg-amber-500/10 text-amber-400",
+  warn: "border-warning-fg/40 bg-warning-fg/10 text-warning-strong",
   error: "border-negative-strong/50 bg-negative-strong/10 text-negative-muted",
   unknown: "border-mono-500/40 bg-mono-500/10 text-mono-300",
   neutral: "border-mono-600/40 bg-transparent text-mono-400",

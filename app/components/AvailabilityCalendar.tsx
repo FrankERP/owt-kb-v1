@@ -217,7 +217,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
             disabled={saving || !dirty}
             className={`px-4 py-2 rounded-lg font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${
               dirty
-                ? "bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 ring-1 ring-amber-400/50"
+                ? "bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 ring-1 ring-warning-strong/50"
                 : "bg-surface-accent-solid"
             }`}
           >
@@ -277,7 +277,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
       )}
 
       {dirty && !saving && (
-        <p className="font-label text-[11px] uppercase tracking-widest text-amber-400">
+        <p className="font-label text-[11px] uppercase tracking-widest text-warning-strong">
           Cambios sin guardar
         </p>
       )}

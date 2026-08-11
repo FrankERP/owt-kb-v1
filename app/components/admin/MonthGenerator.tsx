@@ -1044,13 +1044,13 @@ function RuleBuilder({ config, onChange, members, source }: {
       ) : source.status === "absent" ? (
         <p className="font-body text-[11px] text-mono-500 px-1 pt-1">
           Todavía no hay reglas compartidas en el servidor: estas son las de{" "}
-          <span className="text-amber-400">ejemplo</span> con las que llega la app y no se pueden
+          <span className="text-warning-strong">ejemplo</span> con las que llega la app y no se pueden
           guardar desde aquí. Los patrones excluidos, los conflictos y las semanas excluidas se
           aplican en esta sesión del editor mensual, pero aún no son reglas compartidas.
         </p>
       ) : (
         <p className="font-body text-[11px] text-mono-500 px-1 pt-1">
-          <span className="text-amber-400">
+          <span className="text-warning-strong">
             {source.status === "error"
               ? "No se pudieron cargar las reglas compartidas del servidor."
               : "Se están cargando las reglas compartidas del servidor."}
@@ -3124,7 +3124,7 @@ export default function MonthGenerator({
       )}
 
       {gateBlocked && (
-        <p className="font-body text-xs text-amber-400 bg-amber-500/10 rounded-lg px-3 py-2">{gateBlocked}</p>
+        <p className="font-body text-xs text-warning-strong bg-warning-fg/10 rounded-lg px-3 py-2">{gateBlocked}</p>
       )}
 
       <div className="flex gap-3">
@@ -3160,14 +3160,14 @@ export default function MonthGenerator({
           {storedMode ? (
             <p className="font-body text-sm">
               <span className="text-accent font-semibold">{storedColumns.length}</span> servicio{storedColumns.length !== 1 ? "s" : ""}
-              {dirtyStoredColumns.length + invalidStoredColumns.length > 0 && <span className="text-amber-300"> · {dirtyStoredColumns.length + invalidStoredColumns.length} con cambios</span>}
+              {dirtyStoredColumns.length + invalidStoredColumns.length > 0 && <span className="text-warning-soft"> · {dirtyStoredColumns.length + invalidStoredColumns.length} con cambios</span>}
             </p>
           ) : (
             <p className="font-body text-sm">
               <span className="text-accent font-semibold">{toCreate.length}</span> por crear
               {skippedCount > 0 && <span className="text-mono-500"> · {skippedCount} omitido{skippedCount !== 1 ? "s" : ""}</span>}
               {notCreatable > 0 && (
-                <span className="text-amber-400"> · {notCreatable} no disponible{notCreatable !== 1 ? "s" : ""}</span>
+                <span className="text-warning-strong"> · {notCreatable} no disponible{notCreatable !== 1 ? "s" : ""}</span>
               )}
             </p>
           )}
@@ -3178,15 +3178,15 @@ export default function MonthGenerator({
       </div>
 
       {storedMode && (!storedSource || !storedInventory.coherent) && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5">
-          <p className="font-body text-sm text-amber-200">No se puede editar este mes hasta verificar todos los servicios.</p>
-          <p className="mt-1 font-body text-xs text-amber-300/80">
+        <div className="rounded-lg border border-warning-fg/30 bg-warning-fg/10 px-3 py-2.5">
+          <p className="font-body text-sm text-warning-faint">No se puede editar este mes hasta verificar todos los servicios.</p>
+          <p className="mt-1 font-body text-xs text-warning-soft/80">
             {storedSource?.rolesStatus === "error" || storedSource?.integrityStatus === "error"
               ? "Falló una fuente de datos. Reintenta la carga."
               : storedInventory.reasons.join(", ") || "Cargando datos…"}
           </p>
           {storedSource && (
-            <button type="button" onClick={() => void storedSource.reload()} className="mt-2 min-h-[44px] rounded-lg border border-amber-300/30 px-3 font-label text-xs uppercase tracking-widest">
+            <button type="button" onClick={() => void storedSource.reload()} className="mt-2 min-h-[44px] rounded-lg border border-warning-soft/30 px-3 font-label text-xs uppercase tracking-widest">
               Reintentar
             </button>
           )}
@@ -3244,7 +3244,7 @@ export default function MonthGenerator({
       )}
 
       {storedMode && storedEditBlocked && (
-        <p className="rounded-lg bg-amber-500/10 px-3 py-2 font-body text-xs text-amber-300">{storedEditBlocked}</p>
+        <p className="rounded-lg bg-warning-fg/10 px-3 py-2 font-body text-xs text-warning-soft">{storedEditBlocked}</p>
       )}
 
       {/*
@@ -3261,8 +3261,8 @@ export default function MonthGenerator({
         questions or discarding different things.
       */}
       {pendingDiscard && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 space-y-2">
-          <p className="font-body text-xs text-amber-300">
+        <div className="rounded-lg border border-warning-fg/30 bg-warning-fg/10 px-3 py-2.5 space-y-2">
+          <p className="font-body text-xs text-warning-soft">
             {storedMode
               ? `Cerrar descarta ${dirtyStoredColumns.length + invalidStoredColumns.length} servicio${dirtyStoredColumns.length + invalidStoredColumns.length !== 1 ? "s" : ""} con cambios o resultado pendiente. ¿Continuar?`
               : `${pendingDiscard === "back" ? "Volver a configuración" : "Cerrar"} descarta ${assignmentCount} asignación${assignmentCount !== 1 ? "es" : ""} en este mes. ¿Continuar?`}
@@ -3502,7 +3502,7 @@ export default function MonthGenerator({
       {/* In "edit" mode `PlannerGrid` already surfaces this via `autoState.disabledReason`
           next to Auto — showing it again here would duplicate the same text. */}
       {gateBlocked && viewMode === "view" && (
-        <p className="font-body text-xs text-amber-400 bg-amber-500/10 rounded-lg px-3 py-2">{gateBlocked}</p>
+        <p className="font-body text-xs text-warning-strong bg-warning-fg/10 rounded-lg px-3 py-2">{gateBlocked}</p>
       )}
 
       {(pushError || saveNotice) && (

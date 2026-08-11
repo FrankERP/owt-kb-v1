@@ -1030,9 +1030,9 @@ export default function ServicesPanel() {
 
       {/* Source state — names the missing source and offers its retry */}
       {view !== "loading" && unreadySummary && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 flex items-start justify-between gap-3 flex-wrap">
+        <div className="rounded-lg border border-warning-fg/40 bg-warning-fg/10 px-4 py-3 flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <p className="font-label text-xs uppercase tracking-widest text-amber-400">Datos incompletos</p>
+            <p className="font-label text-xs uppercase tracking-widest text-warning-strong">Datos incompletos</p>
             <p className="font-body text-xs text-mono-300 mt-0.5">{unreadySummary}</p>
             {availabilityUnverified && (
               <p className="font-body text-xs text-mono-400 mt-0.5">
@@ -1041,7 +1041,7 @@ export default function ServicesPanel() {
             )}
           </div>
           <button type="button" onClick={retryLoad}
-            className="px-3 py-1.5 rounded-lg border border-amber-500/40 font-label text-[11px] uppercase tracking-widest text-amber-300 hover:bg-amber-500/15 transition-colors shrink-0">
+            className="px-3 py-1.5 rounded-lg border border-warning-fg/40 font-label text-[11px] uppercase tracking-widest text-warning-soft hover:bg-warning-fg/15 transition-colors shrink-0">
             Reintentar carga
           </button>
         </div>
@@ -1261,7 +1261,7 @@ export default function ServicesPanel() {
             </section>
             {publishPlan.overrideAdds.length > 0 && (
               <section>
-                <p className="font-label text-[11px] uppercase tracking-widest text-amber-400">
+                <p className="font-label text-[11px] uppercase tracking-widest text-warning-strong">
                   Solo con «Publicar todos» ({publishPlan.overrideAdds.length})
                 </p>
                 <p className="mt-0.5 font-body text-xs text-mono-500">
@@ -1279,7 +1279,7 @@ export default function ServicesPanel() {
             )}
             {publishPlan.overrideBlocked.length > 0 && (
               <section>
-                <p className="font-label text-[11px] uppercase tracking-widest text-amber-400">
+                <p className="font-label text-[11px] uppercase tracking-widest text-warning-strong">
                   Se omiten ({publishPlan.overrideBlocked.length})
                 </p>
                 <ul className="mt-1 space-y-0.5">
@@ -1332,12 +1332,12 @@ export default function ServicesPanel() {
               </p>
               {acknowledgement ? (
                 <>
-                  <p className="font-label text-[11px] uppercase tracking-widest text-amber-400">
+                  <p className="font-label text-[11px] uppercase tracking-widest text-warning-strong">
                     Vas a publicar aunque:
                   </p>
                   <ul className="space-y-0.5">
                     {describeAcknowledgedBlockers(acknowledgement.acknowledgedBlockers).map(text => (
-                      <li key={text} className="font-body text-xs text-amber-200/90">• {text}</li>
+                      <li key={text} className="font-body text-xs text-warning-faint/90">• {text}</li>
                     ))}
                   </ul>
                   <p className="font-body text-xs text-mono-500">
@@ -1471,7 +1471,7 @@ function PublicationFooter({
           type="button"
           onClick={onVerify}
           disabled={loading}
-          className="min-h-[44px] flex-1 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 font-label text-xs uppercase tracking-widest text-amber-200 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
+          className="min-h-[44px] flex-1 rounded-lg border border-warning-fg/50 bg-warning-fg/10 px-3 font-label text-xs uppercase tracking-widest text-warning-faint transition-colors hover:bg-warning-fg/20 disabled:opacity-50"
         >
           {loading ? "Verificando..." : "Verificar resultado"}
         </button>
@@ -1494,7 +1494,7 @@ function PublicationFooter({
           type="button"
           onClick={secondary.onClick}
           disabled={loading || secondary.disabled}
-          className="min-h-[44px] flex-1 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 font-label text-xs uppercase tracking-widest text-amber-200 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
+          className="min-h-[44px] flex-1 rounded-lg border border-warning-fg/50 bg-warning-fg/10 px-3 font-label text-xs uppercase tracking-widest text-warning-faint transition-colors hover:bg-warning-fg/20 disabled:opacity-50"
         >
           {loading ? "Guardando..." : secondary.label}
         </button>

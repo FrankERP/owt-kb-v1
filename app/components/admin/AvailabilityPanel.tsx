@@ -219,9 +219,9 @@ export default function AvailabilityPanel() {
                   const noteMap = new Map((m.unavailabilityNotes ?? []).map(n => [n.date, n.note]));
                   const datesWithNotes = futureDates.filter(d => noteMap.get(d)?.trim());
                   return (
-                    <div key={m._id} className="flex flex-col gap-1.5 px-4 py-2.5 rounded-xl border border-amber-500/20 bg-amber-500/5">
+                    <div key={m._id} className="flex flex-col gap-1.5 px-4 py-2.5 rounded-xl border border-warning-fg/20 bg-warning-fg/5">
                       <div className="flex items-center gap-3">
-                        <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                        <span className="w-2 h-2 rounded-full bg-warning-fg shrink-0" />
                         <span className="font-body text-sm font-semibold min-w-[100px]">{dn(m)}</span>
                         <div className="flex flex-wrap gap-1.5">
                           {futureDates.map(d => {
@@ -233,7 +233,7 @@ export default function AvailabilityPanel() {
                                 className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full ${
                                   isConflict
                                     ? "bg-negative-strong/20 text-negative-fg border border-negative-strong/30"
-                                    : "bg-amber-500/15 text-amber-400 border border-amber-500/25"
+                                    : "bg-warning-fg/15 text-warning-strong border border-warning-fg/25"
                                 }`}
                               >
                                 {fmtDate(d)}{note ? " ✎" : ""}
@@ -246,7 +246,7 @@ export default function AvailabilityPanel() {
                         <div className="pl-5 space-y-0.5">
                           {datesWithNotes.map(d => (
                             <p key={d} className="font-body text-xs italic text-mono-500 leading-snug">
-                              <span className="not-italic font-label uppercase tracking-widest text-amber-400/80">{fmtDate(d)}:</span>{" "}
+                              <span className="not-italic font-label uppercase tracking-widest text-warning-strong/80">{fmtDate(d)}:</span>{" "}
                               &quot;{noteMap.get(d)}&quot;
                             </p>
                           ))}
@@ -313,7 +313,7 @@ export default function AvailabilityPanel() {
             {([
               ["conflict",   "bg-negative-strong",    "Asignado + No disponible"],
               ["assigned",   "bg-accent/70","Asignado"],
-              ["unavailable","bg-amber-500",   "No disponible (no asignado)"],
+              ["unavailable","bg-warning-fg",   "No disponible (no asignado)"],
               ["empty",      "bg-mono-700",    "Sin datos"],
             ] as const).map(([, color, label]) => (
               <div key={label} className="flex items-center gap-1.5">
@@ -347,8 +347,8 @@ function MatrixCell({ status, note }: { status: CellStatus; note?: string }) {
   if (status === "unavailable") {
     const t = note ? `No disponible — "${note}"` : "Marcó no disponible";
     return (
-      <span title={t} className="inline-flex items-center justify-center w-6 h-6 rounded-sm bg-amber-500/15 border border-amber-500/30">
-        <span className="text-amber-400 text-xs leading-none">×</span>
+      <span title={t} className="inline-flex items-center justify-center w-6 h-6 rounded-sm bg-warning-fg/15 border border-warning-fg/30">
+        <span className="text-warning-strong text-xs leading-none">×</span>
       </span>
     );
   }

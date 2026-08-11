@@ -319,8 +319,8 @@ function VocalCol({ label, names, highlightName, duplicateNames }: { label: stri
               {i > 0 && ", "}
               {isDup ? (
                 <span
-                  className="font-semibold text-amber-400 whitespace-nowrap"
-                  style={{ textShadow: "0 0 10px rgba(251,191,36,0.65)" }}
+                  className="font-semibold text-warning-strong whitespace-nowrap"
+                  style={{ textShadow: "0 0 10px rgb(var(--warning-strong-rgb) / 0.65)" }}
                 >⚠&nbsp;{name}</span>
               ) : isMe ? (
                 <span
@@ -345,10 +345,10 @@ function Row({ label, value, accentVar, highlightName, isDuplicate }: { label: s
       className="inline-flex items-stretch rounded-lg"
       style={{
         border: isDuplicate
-          ? "1px solid rgba(251,191,36,0.6)"
+          ? "1px solid rgb(var(--warning-strong-rgb) / 0.6)"
           : isMe ? "1px solid rgb(var(--positive-fg-rgb) / 0.5)" : `1px solid ${themeColour(accentVar, 0.251)}`,
         boxShadow: isDuplicate
-          ? "0 0 10px rgba(251,191,36,0.35)"
+          ? "0 0 10px rgb(var(--warning-strong-rgb) / 0.35)"
           : isMe ? "0 0 10px rgb(var(--positive-fg-rgb) / 0.3)" : undefined,
       }}
     >
@@ -364,9 +364,9 @@ function Row({ label, value, accentVar, highlightName, isDuplicate }: { label: s
       </span>
       <span
         className={`font-body text-sm md:text-base px-3 py-1.5 flex flex-1 items-center justify-center gap-1 leading-tight ${
-          isDuplicate ? "font-semibold text-amber-400" : isMe ? "font-semibold text-positive-fg" : ""
+          isDuplicate ? "font-semibold text-warning-strong" : isMe ? "font-semibold text-positive-fg" : ""
         }`}
-        style={isDuplicate ? { background: "rgba(251,191,36,0.10)" } : isMe ? { background: "rgb(var(--positive-fg-rgb) / 0.10)" } : undefined}
+        style={isDuplicate ? { background: "rgb(var(--warning-strong-rgb) / 0.10)" } : isMe ? { background: "rgb(var(--positive-fg-rgb) / 0.10)" } : undefined}
       >
         {isDuplicate && <span>⚠</span>}
         {value}

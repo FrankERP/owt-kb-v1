@@ -22,7 +22,7 @@ function toneClass(props: PrimaryActionProps): string {
     case "resolve_conflict":
       return "border-negative-strong/50 bg-negative-strong/10 text-negative-soft hover:bg-negative-strong/20";
     case "retry_load":
-      return "border-amber-500/50 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20";
+      return "border-warning-fg/50 bg-warning-fg/10 text-warning-faint hover:bg-warning-fg/20";
     case "publish":
       return "border-green-500/50 bg-green-500/10 text-green-300 hover:bg-green-500/20";
     default:
@@ -52,7 +52,7 @@ export default function ServicePrimaryAction({
         {action.label}
       </button>
       {action.reason && (
-        <p className={`font-body text-[11px] text-amber-400/90 ${CARD_STYLE.longText}`}>
+        <p className={`font-body text-[11px] text-warning-strong/90 ${CARD_STYLE.longText}`}>
           {action.reason}
         </p>
       )}

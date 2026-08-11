@@ -1638,7 +1638,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
           role="status"
           aria-live="polite"
           data-drag-notice={dragNotice?.tone}
-          className={`font-body text-xs ${dragNotice?.tone === "refusal" ? "text-negative-fg" : "text-amber-400"}`}
+          className={`font-body text-xs ${dragNotice?.tone === "refusal" ? "text-negative-fg" : "text-warning-strong"}`}
         >
           {dragNotice?.message ?? ""}
         </p>
@@ -1826,14 +1826,14 @@ export default function PlannerGrid(props: PlannerGridProps) {
           ⛶ Pantalla completa
         </button>
         {mode === "create" && autoState.disabledReason && (
-          <p className="font-body text-xs text-amber-400">{autoState.disabledReason}</p>
+          <p className="font-body text-xs text-warning-strong">{autoState.disabledReason}</p>
         )}
         {mode === "create" && autoState.error && <p className="font-body text-xs text-negative-fg">{autoState.error}</p>}
       </div>
 
       {mode === "create" && confirmingAuto && (
-        <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
-          <p className="font-body text-xs text-amber-300">
+        <div className="space-y-2 rounded-lg border border-warning-fg/30 bg-warning-fg/10 px-3 py-2">
+          <p className="font-body text-xs text-warning-soft">
             Esto reemplazará toda asignación de voz (Lead, BGV, Coro) que el solver pueda resolver en
             este mes. Las asignaciones manuales de instrumentos y FOH no se tocan.
             {unaddressableDates.length > 0 &&
@@ -1845,7 +1845,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
               here rather than on the button because this is where the admin is
               told what Auto is about to do. */}
           {hasSpecialColumn && (
-            <p className="font-body text-xs text-amber-300">
+            <p className="font-body text-xs text-warning-soft">
               Los servicios especiales no pasan por el solver: se completan aquí mismo, solo Lead y
               BGV, respetando las reglas duras (nunca juntan a quienes una regla separa) y
               equilibrando la carga. Lo ya asignado a mano se conserva; si no queda nadie elegible,
@@ -1872,7 +1872,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
       )}
 
       {diagnostics && (
-        <div className="flex flex-wrap gap-2 font-label text-[11px] uppercase tracking-widest text-amber-400">
+        <div className="flex flex-wrap gap-2 font-label text-[11px] uppercase tracking-widest text-warning-strong">
           {diagnostics.fairness_relaxed && <span>Equidad relajada</span>}
           {diagnostics.sun_lead_fairness_relaxed && <span>Equidad de líderes de domingo relajada</span>}
           {diagnostics.sun_bgv_fairness_relaxed && <span>Equidad de BGV de domingo relajada</span>}
@@ -1895,7 +1895,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
         El líder siempre se asigna; primero queda vacío el coro, luego BGV.
       </p>
       {unfilled.length > 0 && (
-        <p className="font-body text-xs text-amber-400">
+        <p className="font-body text-xs text-warning-strong">
           Lugares sin cubrir (faltó gente): {unfilled.length}
         </p>
       )}
@@ -1948,7 +1948,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
               <button
                 type="button"
                 onClick={forcePendingMove}
-                className="min-h-[44px] flex-1 rounded-lg border border-amber-500/40 px-3 font-label text-xs uppercase tracking-widest text-amber-400 hover:bg-amber-500/10"
+                className="min-h-[44px] flex-1 rounded-lg border border-warning-fg/40 px-3 font-label text-xs uppercase tracking-widest text-warning-strong hover:bg-warning-fg/10"
               >
                 Mover de todos modos
               </button>
@@ -2090,7 +2090,7 @@ function ColumnHeader({
       )}
       {stored && (
         <div className="space-y-1.5 pt-1">
-          {readOnly && <p className="font-body text-[10px] text-amber-400">Solo lectura: revisa la integridad del servicio.</p>}
+          {readOnly && <p className="font-body text-[10px] text-warning-strong">Solo lectura: revisa la integridad del servicio.</p>}
           <label className="block font-label text-[9px] uppercase tracking-widest text-mono-500">
             Fecha
             <input
@@ -2131,7 +2131,7 @@ function ColumnHeader({
         </label>
       )}
       {!stored && blockCopy && (
-        <p className={`font-body text-[10px] text-amber-400 ${CARD_STYLE.longText}`}>{blockCopy}</p>
+        <p className={`font-body text-[10px] text-warning-strong ${CARD_STYLE.longText}`}>{blockCopy}</p>
       )}
       {/* Suppressed while blocked: the preflight's special branch is name-blind,
           so its badge would read "Se puede crear" right beside the reason this
@@ -2406,7 +2406,7 @@ function GridCellView({
       data-column-id={column.columnId}
       data-active={active ? "true" : undefined}
       className={`relative min-h-[44px] ${minWClass} rounded-lg border px-2 py-1.5 transition-colors ${
-        overflow ? "border-amber-500/40 bg-amber-500/5" : "border-accent/15 hover:border-accent/40"
+        overflow ? "border-warning-fg/40 bg-warning-fg/5" : "border-accent/15 hover:border-accent/40"
       } ${mutationLocked ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${active ? "ring-2 ring-accent ring-offset-2 ring-offset-surface-base" : ""} ${
         isDropTarget ? "border-accent bg-accent/10" : ""
       }`}
@@ -2555,7 +2555,7 @@ function GridCellView({
               className={`rounded-full border px-1.5 py-0.5 font-label text-xs ${
                 hiddenHasDuplicate || hiddenHasViolation
                   ? "border-negative-strong/50 bg-negative-strong/10 text-negative-fg"
-                  : "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                  : "border-warning-fg/40 bg-warning-fg/10 text-warning-strong"
               }`}
             >
               +{hiddenCount}
@@ -2567,7 +2567,7 @@ function GridCellView({
             still accepts" — an amber border alone carries no words, so make
             the warning legible as Spanish text, not just a color. */}
         {overflow && (
-          <p className="font-label text-[9px] uppercase tracking-widest text-amber-400">
+          <p className="font-label text-[9px] uppercase tracking-widest text-warning-strong">
             Por encima del objetivo — se acepta de todos modos
           </p>
         )}
@@ -2584,12 +2584,12 @@ function GridCellView({
             E13 stops re-flagging it; this is what keeps it VISIBLE rather than
             silent, and it names the rule that was set aside. */}
         {overridden.map((x) => (
-          <p key={x.id} className={`font-body text-[9px] text-amber-400 ${CARD_STYLE.longText}`}>
+          <p key={x.id} className={`font-body text-[9px] text-warning-strong ${CARD_STYLE.longText}`}>
             Regla anulada — {memberName(x.id)}: {x.v.reason}
           </p>
         ))}
         {unfilled && (
-          <p className="font-label text-[9px] uppercase tracking-widest text-amber-400">Sin cubrir</p>
+          <p className="font-label text-[9px] uppercase tracking-widest text-warning-strong">Sin cubrir</p>
         )}
         {onCopy && memberIds.length > 0 && (
           <button
@@ -2683,7 +2683,7 @@ function CandidateRow({
         <span className={`font-body text-sm ${CARD_STYLE.longText}`}>{candidate.name}</span>
         <div className="flex shrink-0 items-center gap-1.5">
           {!candidate.available && (
-            <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 font-label text-[10px] uppercase tracking-wide text-amber-400">
+            <span className="rounded-full border border-warning-fg/40 bg-warning-fg/10 px-1.5 py-0.5 font-label text-[10px] uppercase tracking-wide text-warning-strong">
               No disp.
             </span>
           )}
@@ -2746,7 +2746,7 @@ function CandidateRow({
             if (!mutationLocked) onOverride(candidate.id);
           }}
           disabled={mutationLocked}
-          className="mt-1.5 min-h-[44px] w-full rounded-lg border border-amber-500/40 px-2 font-label text-[10px] uppercase tracking-widest text-amber-400 hover:bg-amber-500/10"
+          className="mt-1.5 min-h-[44px] w-full rounded-lg border border-warning-fg/40 px-2 font-label text-[10px] uppercase tracking-widest text-warning-strong hover:bg-warning-fg/10"
         >
           Asignar de todos modos
         </button>

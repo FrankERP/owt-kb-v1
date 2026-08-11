@@ -355,7 +355,7 @@ export default function MonthCalendar({
               )}
               {existing && (
                 <span
-                  className="font-label text-[8px] uppercase tracking-widest text-amber-400 leading-none"
+                  className="font-label text-[8px] uppercase tracking-widest text-warning-strong leading-none"
                   aria-label={`Ya existe un servicio el ${longDate(date)}`}
                 >
                   ya existe
@@ -453,7 +453,7 @@ export default function MonthCalendar({
       )}
 
       {notice && (
-        <p role="status" className="font-body text-xs text-amber-400 bg-amber-500/10 rounded-lg px-3 py-2">
+        <p role="status" className="font-body text-xs text-warning-strong bg-warning-fg/10 rounded-lg px-3 py-2">
           {notice}
         </p>
       )}

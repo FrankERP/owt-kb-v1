@@ -833,7 +833,7 @@ function MenuItem({
       </button>
       {disabled && gate?.reason && (
         // `role="none"` so this explanatory line is not read as a menu item.
-        <p role="none" className={`px-3 pb-1.5 font-body text-[11px] text-amber-400/80 ${CARD_STYLE.longText}`}>
+        <p role="none" className={`px-3 pb-1.5 font-body text-[11px] text-warning-strong/80 ${CARD_STYLE.longText}`}>
           {gate.reason}
         </p>
       )}
