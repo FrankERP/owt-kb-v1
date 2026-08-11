@@ -397,6 +397,26 @@ function pairsFor(files) {
 // Disposition for literal rows
 // ---------------------------------------------------------------------------
 
+/**
+ * The 18 Layer-1 role triplets Child B adds in slice B1. Anchored and explicit:
+ * a loose /^--(accent|ink|surface|...)/ would also swallow a future role nobody
+ * meant to exempt, and the point of this list is that adding a role is a visible
+ * decision. The seven retired `--brand-*` are deliberately NOT here — they stay
+ * dispositioned `B` because B-final removes them.
+ */
+const TOKEN_LAYER_ROLES = new RegExp(
+  "^--(?:" +
+    [
+      "accent", "accent-deep",
+      "ink", "ink-muted", "ink-dim",
+      "surface-base", "surface-raised", "surface-raised-alt", "surface-console", "surface-sunken",
+      "warning-fg", "warning-surface", "warning-border",
+      "info-fg", "info-surface", "info-border",
+      "positive-fg", "negative-fg",
+    ].join("|") +
+    ")-rgb:",
+);
+
 function disposition(row) {
   const fileExempt = EXEMPT_FILES.get(row.file);
   if (fileExempt) return { disposition: "exempt", reason: fileExempt };
@@ -409,6 +429,17 @@ function disposition(row) {
   // Category 4 keywords that are already theme-agnostic are kept, not migrated.
   if (row.category === 4 && /transparent|currentColor/i.test(row.value)) {
     return { disposition: "keep", reason: "Already theme-agnostic" };
+  }
+  // Child B's own token layer is the DESTINATION, not a migration target.
+  //
+  // B1 adds the 18 base-role triplets to `brand.css`, and the category-12 scan
+  // sees them exactly as it sees the seven retired `--brand-*` ones. Left alone
+  // they would be dispositioned `B`, which inflates B's own row count by 18 and
+  // makes the B-final gate incoherent — category 12 is supposed to drain to zero
+  // as the seven retired declarations are removed, and it cannot drain past the
+  // roles that replace them.
+  if (row.category === 12 && TOKEN_LAYER_ROLES.test(row.value)) {
+    return { disposition: "keep", reason: "Child B's token layer — the destination vocabulary" };
   }
   // Child C owns raw palette families and white/black; Child B owns everything else.
   if (row.category === 3 || (row.category === 4 && /-(white|black)\b/.test(row.value))) {
