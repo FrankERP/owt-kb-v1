@@ -5,7 +5,13 @@
 > "bring light mode back." — Child B of the approved parent scope spec.
 
 This is the largest child: **1,628 literal rows across 65 files**, plus 22 `brand.css` rule
-bodies and the typography theme. It ships **dark-only** and, apart from **two** licensed
+bodies and the typography theme.
+
+**Progress.** B1 (token layer) and B2 (`brand.css` bodies) are merged. B3 migrated the
+five-file accent unit: **129 rows — 92 value-identical, 16 inside the two licensed diffs,
+21 discarded light halves** — leaving **1,499**. The pair relation is captured at
+[`light-mode-pairs-snapshot.json`](../artifacts/light-mode-pairs-snapshot.json), taken at
+B1's merge before any batch consumed it. It ships **dark-only** and, apart from **two** licensed
 normalisations, the app must render **identically** afterwards.
 
 No secrets, credentials or personal data appear here. Colour literals are design values.
@@ -311,7 +317,7 @@ paragraph.
 
 ### B3…Bn — the call sites
 
-**1,628 rows across 65 files**, driven by the inventory, batched by file with the densest
+**1,628 rows across 65 files** (**1,499** remaining after B3), driven by the inventory, batched by file with the densest
 first: `MonthGenerator` 148 · `ProposalEditor` 82 · `AdminPanel` 76 · `SongFormModal` 67 ·
 `EditSongButton` 63 · `PlannerGrid` 59 · `DayCard` 59 · `SongSheet` 57. **12 files carry more
 than 50 rows.**
@@ -523,7 +529,10 @@ answer for.
 
 This is intentional and invisible today — `forcedTheme="dark"` means no member ever saw the
 light side — but it is a real loss of information, and it is **the reason B must snapshot the
-`pairs` relation into the handoff before B-final**. That snapshot becomes the *only* surviving
+`pairs` relation into the handoff**. **Done, and earlier than planned** —
+`docs/superpowers/artifacts/light-mode-pairs-snapshot.json`, all 246 pairs captured at B1's
+merge. Waiting for B-final was the wrong schedule: B3 alone removed 21, so every batch in
+between was raising the reconstruction cost of a record that only exists to be complete. That snapshot becomes the *only* surviving
 record of which light literal partnered which dark one, and Child D designs the light theme
 from it. Losing it means reconstructing 246 pairings from git history.
 
@@ -546,7 +555,7 @@ to the split pair above**, where the `dark:` variant survives B as a token-value
 | Utility references covered | A test that fails if a `brand.*` key is deleted while a `bg-brand-*` usage remains | The failure a `var()`-integrity guard structurally cannot see |
 | Prose survives | No hex, no `rgb(`-without-`var(`, `--tw-prose-body` → ink role, `.prose-sm` still emitted | The `theme.typography` collapse — unstyled lyrics, no signal |
 | Tests move with code | `PlannerGrid.test.tsx` selectors updated in the same commit | `npm test` red at the batch merge |
-| Pairs snapshotted before B-final | The `pairs` relation committed to the handoff | Child D losing the only record of which light literal partnered which dark one |
+| Pairs snapshotted | **Done at B3** — all 246 in `docs/superpowers/artifacts/light-mode-pairs-snapshot.json`, captured from B1's merge before any batch consumed them | Child D losing the only record of which light literal partnered which dark one |
 | A1/A2 guards re-pointed | The FIVE enumerated assertions updated in the slice that invalidates each | A green guard asserting a premise B removed — worse than no guard |
 | Gallery migrated, not ignored | `themeGallery.test.ts` asserts the successor utilities; no `app/(gallery)` entry in `ignores` | Live code left on retired keys, with a green guard describing a dead class |
 | Done-gate | `tsc`, `npm test`, `eslint .` = 0 errors, per slice | — |
@@ -586,7 +595,7 @@ to the split pair above**, where the `dark:` variant survives B as a token-value
 |---|---|---|
 | Does the 17-combination tail get its own tokens, or collapse? | **No** | Own token each; collapse only with the site count recorded, as Child C is held to |
 | Batch size for B3…Bn | **No** | One slice per file for the 12 files >50 rows; grouped slices below that |
-| How runtime `${hex}AA` concatenation survives tokenisation — **24 occurrences across `DayCard.tsx`, `ServiceReadinessCard.tsx`, `CalendarView.tsx` and `PracticePlaylistButton.tsx`**, with three cross-file contracts | **No, but it gates the FIRST batch touching any of the four**, which is why they move as one batch | Give each accent an alpha-aware helper returning a COMPLETE `rgb(var(--x-rgb) / <n>)` string — never a fragment a caller can append to — and replace all 24 concatenations at the call site. Settle and record before that batch lands. See the licensed-diff section for the per-file table |
+| How runtime `${hex}AA` concatenation survives tokenisation — **24 occurrences across `DayCard.tsx`, `ServiceReadinessCard.tsx`, `CalendarView.tsx` and `PracticePlaylistButton.tsx`**, with three cross-file contracts | **No, but it gates the FIRST batch touching any file in the five-file unit**, which is why THOSE move together. `CalendarView` is NOT in the unit — its two concatenations read from a literal tuple three lines above them and cross no file boundary, so it batches on its own. It must still use the same helper: a second one invented later is how the fragment-returning version comes back | Give each accent an alpha-aware helper returning a COMPLETE `rgb(var(--x-rgb) / <n>)` string — never a fragment a caller can append to — and replace all 24 concatenations at the call site. Settle and record before that batch lands. See the licensed-diff section for the per-file table |
 
 **No blocking open questions.** Two items above gate a specific batch rather than the plan:
 the `DayCard` `accentHex` decision, and the harness's prove-on-one-file step.
