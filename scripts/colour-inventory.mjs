@@ -172,7 +172,15 @@ const CATEGORIES = [
   { id: 10, name: "retired-brand-colour-key", syntax: new RegExp(`\\b(?:${COLOUR_UTILITIES}|selection:bg|selection:text)-brand-(?:blackout|console|deck|beam|signal|frost|steel)(?:\\/\\d{1,3})?\\b`, "gi") },
   { id: 3, name: "raw-palette-class", syntax: new RegExp(`\\b(?:${COLOUR_UTILITIES})-(?:${PALETTE_FAMILIES})-\\d{2,3}(?:\\/\\d{1,3})?\\b`, "gi") },
   { id: 4, name: "colour-keyword", syntax: new RegExp(`\\b(?:${COLOUR_UTILITIES})-(?:white|black|transparent|current)\\b|\\bcurrentColor\\b|\\btransparent\\b`, "g") },
-  { id: 1, name: "bracketed-hex", syntax: /\[#[0-9a-f]{3,8}\](?:\/\d{1,3})?/gi },
+  // The opacity modifier accepts BOTH spellings: `/50` and `/[0.04]`. Matching only the
+  // first drops the bracket form out of `value`, so `normaliseAlpha` below has nothing
+  // to work with and the row records NO alpha — which reads as fully opaque.
+  //
+  // Third instance of this exact family. B4 fixed the PAIR extractor's copy of this
+  // alternation and did not fix category 1's; C's guard, rewritten onto a synthetic
+  // source, is what surfaced the remainder. 15 usages in this tree spell alpha in
+  // brackets.
+  { id: 1, name: "bracketed-hex", syntax: /\[#[0-9a-f]{3,8}\](?:\/(?:\d{1,3}|\[[0-9.]+\]))?/gi },
   { id: 2, name: "bare-hex", syntax: /#[0-9a-f]{3,8}\b/gi },
 ];
 
@@ -220,11 +228,37 @@ function classifyLocation(src, index) {
   return null;
 }
 
+/**
+ * Scan ARBITRARY TEXT into literal rows — the same path `scanFile` uses, exposed so a
+ * guard can prove the scanner's behaviour against a synthetic source instead of against
+ * the tree's current contents.
+ *
+ * This exists because of a defect class the light-mode programme hit three times: an
+ * assertion that counts a population in the live tree marches to ZERO as a migration
+ * SUCCEEDS, and then reads as a broken scanner. `colourInventory.test.ts` documents one
+ * such fix already; Child C drained a second (every alpha-bearing row was a palette
+ * class, so `withAlpha > 0` failed the moment the last family migrated).
+ *
+ * `pairsIn()` is NOT a substitute: it exercises a different alpha path (`COLOURED`'s
+ * own group) from the one `scanFile` uses (`value.match`), so a proof written through
+ * it would guard the wrong code.
+ *
+ * @param {string} text  source to scan
+ * @param {string} [rel] a pretend path — only its extension matters, for CSS-vs-JS
+ */
+export function scanText(text, rel = "synthetic.tsx") {
+  return scanSource(stripComments(text, { syntax: syntaxFor(rel) }), rel, rel.endsWith(".css"));
+}
+
 function scanFile(rel) {
   const abs = path.join(REPO_ROOT, rel);
   const raw = readFileSync(abs, "utf8");
   const src = stripComments(raw, { syntax: syntaxFor(rel) });
   const isCss = rel.endsWith(".css");
+  return scanSource(src, rel, isCss);
+}
+
+function scanSource(src, rel, isCss) {
   const rows = [];
   const claimed = []; // [start, end) spans already assigned, so nothing double-counts
 
