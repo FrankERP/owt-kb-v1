@@ -76,8 +76,8 @@ const ROLES: { value: OWTRole; label: string }[] = [
 
 const ROLE_BADGE: Record<OWTRole, string> = {
   "super-admin":    "bg-accent/15 text-accent border border-accent/30",
-  "admin":          "bg-blue-500/15 text-blue-400 border border-blue-500/30",
-  "content-editor": "bg-purple-500/15 text-purple-400 border border-purple-500/30",
+  "admin":          "bg-badge-azure-deep/15 text-badge-azure-fg border border-badge-azure-deep/30",
+  "content-editor": "bg-badge-violet-deep/15 text-badge-violet-fg border border-badge-violet-deep/30",
   "member":         "bg-mono-500/15 text-mono-400 border border-mono-500/30",
 };
 

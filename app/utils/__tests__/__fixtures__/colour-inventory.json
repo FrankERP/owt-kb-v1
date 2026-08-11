@@ -8,11 +8,10 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 303,
+    "literalRows": 280,
     "filesScanned": 211,
     "filesWithColour": 45,
     "byCategory": {
-      "3": 23,
       "4": 110,
       "8": 89,
       "9": 10,
@@ -23,7 +22,7 @@
       "B": 116,
       "exempt": 26,
       "keep": 171,
-      "C": 70,
+      "C": 47,
       "D": 15
     },
     "compositingClasses": 17,
@@ -1441,30 +1440,6 @@
     },
     {
       "file": "app/components/admin/ActivityPanel.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "bg-blue-500/15",
-      "alpha": "15",
-      "utility": "bg",
-      "carrier": null,
-      "line": 84,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/ActivityPanel.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "border-blue-500/30",
-      "alpha": "30",
-      "utility": "border",
-      "carrier": null,
-      "line": 84,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/ActivityPanel.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
       "value": "stroke=\"currentColor\"",
@@ -1476,18 +1451,6 @@
       "reason": null
     },
     {
-      "file": "app/components/admin/ActivityPanel.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "text-blue-400",
-      "alpha": null,
-      "utility": "text",
-      "carrier": null,
-      "line": 84,
-      "disposition": "C",
-      "reason": null
-    },
-    {
       "file": "app/components/admin/AdminPanel.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
@@ -1496,30 +1459,6 @@
       "utility": "bg",
       "carrier": null,
       "line": 128,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/AdminPanel.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "bg-blue-500/15",
-      "alpha": "15",
-      "utility": "bg",
-      "carrier": null,
-      "line": 79,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/AdminPanel.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "bg-purple-500/15",
-      "alpha": "15",
-      "utility": "bg",
-      "carrier": null,
-      "line": 80,
       "disposition": "C",
       "reason": null
     },
@@ -1546,30 +1485,6 @@
       "line": 774,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/AdminPanel.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "border-blue-500/30",
-      "alpha": "30",
-      "utility": "border",
-      "carrier": null,
-      "line": 79,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/AdminPanel.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "border-purple-500/30",
-      "alpha": "30",
-      "utility": "border",
-      "carrier": null,
-      "line": 80,
-      "disposition": "C",
-      "reason": null
     },
     {
       "file": "app/components/admin/AdminPanel.tsx",
@@ -1669,30 +1584,6 @@
     },
     {
       "file": "app/components/admin/AdminPanel.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "text-blue-400",
-      "alpha": null,
-      "utility": "text",
-      "carrier": null,
-      "line": 79,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/AdminPanel.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "text-purple-400",
-      "alpha": null,
-      "utility": "text",
-      "carrier": null,
-      "line": 80,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/AdminPanel.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
       "value": "text-white",
@@ -1777,54 +1668,6 @@
     },
     {
       "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "bg-blue-500/15",
-      "alpha": "15",
-      "utility": "bg",
-      "carrier": null,
-      "line": 465,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "bg-purple-500/15",
-      "alpha": "15",
-      "utility": "bg",
-      "carrier": null,
-      "line": 490,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "bg-purple-500/20",
-      "alpha": "20",
-      "utility": "bg",
-      "carrier": null,
-      "line": 776,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "bg-purple-500/5",
-      "alpha": "5",
-      "utility": "bg",
-      "carrier": null,
-      "line": 748,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
       "value": "bg-transparent",
@@ -1861,54 +1704,6 @@
     },
     {
       "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "border-blue-500/30",
-      "alpha": "30",
-      "utility": "border",
-      "carrier": null,
-      "line": 465,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "border-purple-500/20",
-      "alpha": "20",
-      "utility": "border",
-      "carrier": null,
-      "line": 748,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "border-purple-500/30",
-      "alpha": "30",
-      "utility": "border",
-      "carrier": null,
-      "line": 490,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "border-purple-500/40",
-      "alpha": "40",
-      "utility": "border",
-      "carrier": null,
-      "line": 911,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
       "value": "bg-transparent",
@@ -1930,78 +1725,6 @@
       "line": 1237,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "bg-purple-500/10",
-      "alpha": "10",
-      "utility": "hover:bg",
-      "carrier": null,
-      "line": 911,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "bg-purple-500/30",
-      "alpha": "30",
-      "utility": "hover:bg",
-      "carrier": null,
-      "line": 776,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "text-blue-400",
-      "alpha": null,
-      "utility": "text",
-      "carrier": null,
-      "line": 465,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "text-purple-400",
-      "alpha": null,
-      "utility": "text",
-      "carrier": null,
-      "line": 490,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "text-purple-400",
-      "alpha": null,
-      "utility": "text",
-      "carrier": null,
-      "line": 776,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 3,
-      "categoryName": "raw-palette-class",
-      "value": "text-purple-400",
-      "alpha": null,
-      "utility": "text",
-      "carrier": null,
-      "line": 911,
-      "disposition": "C",
-      "reason": null
     },
     {
       "file": "app/components/admin/ParticipationSidebar.tsx",

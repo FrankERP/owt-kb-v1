@@ -81,7 +81,7 @@ function ProviderBadge({ provider }: { provider: string }) {
   const colors: Record<string, string> = {
     google:      "bg-negative-strong/15 text-negative-fg border-negative-strong/30",
     credentials: "bg-positive-deep/15 text-positive-strong border-positive-deep/30",
-    azure:       "bg-blue-500/15 text-blue-400 border-blue-500/30",
+    azure:       "bg-badge-azure-deep/15 text-badge-azure-fg border-badge-azure-deep/30",
   };
   return (
     <span className={`font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${colors[provider] ?? "bg-mono-500/15 text-mono-400 border-mono-500/30"}`}>

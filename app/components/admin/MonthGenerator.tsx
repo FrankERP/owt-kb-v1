@@ -462,7 +462,7 @@ function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDele
             </span>
           ))}
           {r.caps.map(cap => (
-            <span key={cap.id} className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30">
+            <span key={cap.id} className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-badge-azure-deep/15 text-badge-azure-fg border border-badge-azure-deep/30">
               {cap.pattern} {cap.op} {cap.relative ? `sem−${cap.relOffset}` : cap.value}
             </span>
           ))}
@@ -487,7 +487,7 @@ function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDele
 function ConflictCard({ r, onDelete, onEdit }: { r: ConflictRule; onDelete: () => void; onEdit: () => void }) {
   return (
     <div className="rounded-lg border border-accent/10 bg-surface-sunken/40 px-3 py-2 flex items-center gap-2">
-      <span className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30 shrink-0">≠</span>
+      <span className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-badge-violet-deep/15 text-badge-violet-fg border border-badge-violet-deep/30 shrink-0">≠</span>
       <span className="font-body text-xs flex-1">
         <span className="text-mono-200">{r.personA}</span>
         <span className="text-mono-500 mx-1">≠</span>
@@ -745,7 +745,7 @@ function ConflictForm({ members, onAdd, onCancel, initialValues }: {
   const canAdd = personA && personB && personA !== personB;
 
   return (
-    <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3 space-y-2">
+    <div className="rounded-lg border border-badge-violet-deep/20 bg-badge-violet-deep/5 p-3 space-y-2">
       <div className="grid grid-cols-2 gap-2">
         <div>
           <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Persona A</p>
@@ -773,7 +773,7 @@ function ConflictForm({ members, onAdd, onCancel, initialValues }: {
         <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-accent/20 text-mono-500 hover:text-accent hover:border-accent transition-colors">
           Cancelar
         </button>
-        <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: initialValues?.id ?? uid(), personA, personB, pattern })} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 transition-colors disabled:opacity-40">
+        <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: initialValues?.id ?? uid(), personA, personB, pattern })} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest bg-badge-violet-deep/20 hover:bg-badge-violet-deep/30 text-badge-violet-fg transition-colors disabled:opacity-40">
           {initialValues ? "Guardar cambios" : "Agregar conflicto"}
         </button>
       </div>
@@ -908,7 +908,7 @@ function RuleBuilder({ config, onChange, members, source }: {
           <AddRuleButton
             label="≠ Conflicto"
             title="Impedir que dos personas coincidan en el mismo patrón"
-            tone="border-purple-500/40 text-purple-400 hover:bg-purple-500/10"
+            tone="border-badge-violet-deep/40 text-badge-violet-fg hover:bg-badge-violet-deep/10"
             disabled={isFormOpen}
             onClick={() => setAdding("conflict")}
           />
