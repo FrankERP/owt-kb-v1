@@ -484,6 +484,10 @@ const TOKEN_LAYER_ROLES = new RegExp(
       // Added in B4: the shadow black and the six categorical hues.
       "elevation",
       "chart-lead", "chart-bgv", "chart-coro", "chart-especial", "chart-instr", "chart-foh",
+      // Child C's 34 palette-family roles. Without these the category-12 scan
+      // dispositions them to B, and C1 — a slice that migrates nothing — would move
+      // byDisposition.B from 124 to 158.
+      "mono-200", "mono-300", "mono-400", "mono-500", "mono-600", "mono-700", "mono-800", "negative-faint", "negative-soft", "negative-muted", "negative-strong", "negative-border", "negative-surface", "negative-surface-deep", "negative-surface-deepest", "warning-faint", "warning-soft", "warning-strong", "recency-faint", "recency-soft", "recency-strong", "recency-fg", "positive-soft", "positive-strong", "positive-deep", "availability-faint", "availability-soft", "availability-strong", "availability-fg", "availability-deep", "badge-violet-fg", "badge-violet-deep", "badge-azure-fg", "badge-azure-deep",
     ].join("|") +
     ")-rgb:",
 );

@@ -54,6 +54,16 @@ const BASE_ROLES = [
   // B4 additions — the vocabulary's "no role here" table, decided.
   "elevation",
   "chart-lead", "chart-bgv", "chart-coro", "chart-especial", "chart-instr", "chart-foh",
+  // Child C — the palette families. The stray-key assertion below fails without these.
+  "mono-200", "mono-300", "mono-400", "mono-500",
+  "mono-600", "mono-700", "mono-800", "negative-faint",
+  "negative-soft", "negative-muted", "negative-strong", "negative-border",
+  "negative-surface", "negative-surface-deep", "negative-surface-deepest", "warning-faint",
+  "warning-soft", "warning-strong", "recency-faint", "recency-soft",
+  "recency-strong", "recency-fg", "positive-soft", "positive-strong",
+  "positive-deep", "availability-faint", "availability-soft", "availability-strong",
+  "availability-fg", "availability-deep", "badge-violet-fg", "badge-violet-deep",
+  "badge-azure-fg", "badge-azure-deep",
 ] as const;
 
 /** The 23 Layer-2 composed tokens. Stored as `--<name>`, alpha already baked in. */
