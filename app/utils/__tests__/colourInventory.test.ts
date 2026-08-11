@@ -169,12 +169,21 @@ describe("colour inventory — the traps that produced wrong counts before", () 
     expect(live.literalRows.filter((r) => r.category === 12).length).toBeGreaterThan(0);
   });
 
-  it("routes `var(--brand-*)` arbitrary values to the rename category, not a literal swap", () => {
-    const admin = live.literalRows.filter(
-      (r) => r.file === "app/components/admin/AdminPanel.tsx" && /var\(--brand-beam\)/.test(r.value),
-    );
-    expect(admin.length).toBeGreaterThan(0);
-    expect(admin.every((r) => r.category === 11)).toBe(true);
+  it("routes a `var()` inside an arbitrary value to category 11, not a literal swap", () => {
+    // Category 11 is the only category that routes a site to a VARIABLE RENAME rather
+    // than a literal swap, so misfiling one sends it to the wrong migration.
+    //
+    // This used to assert against `AdminPanel.tsx`'s `var(--brand-beam)` shadow. Child B
+    // renamed that to `--accent-rgb`, so the old filter now matches nothing and the
+    // assertion would report a scanner regression when the scanner is fine. The
+    // surviving category-11 rows are the `--brand-radius-*` ones the vocabulary
+    // deliberately leaves alone — which is also why the B-final gate can never demand
+    // this category reach zero.
+    const cat11 = live.literalRows.filter((r) => r.category === 11);
+    expect(cat11.length).toBeGreaterThan(0);
+    expect(cat11.every((r) => /\[.*var\(--[a-z-]+\).*\]/.test(r.value))).toBe(true);
+    // The colour ones are gone; the non-colour ones are not B's to touch.
+    expect(cat11.every((r) => /--brand-radius-/.test(r.value))).toBe(true);
   });
 
   it("excludes the theme gallery — it is a verification surface, not product colour", () => {

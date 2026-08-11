@@ -132,7 +132,7 @@ function Avatar({
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
           ) : (
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" className="stroke-white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
               <circle cx="12" cy="13" r="4" />
             </svg>
@@ -396,7 +396,7 @@ function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) =>
               onClick={() => onChange(id)}
               className={`font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${
                 active === id
-                  ? "bg-accent/15 text-accent shadow-[inset_0_0_0_1px_rgb(var(--brand-beam)/0.15)]"
+                  ? "bg-accent/15 text-accent shadow-[inset_0_0_0_1px_rgb(var(--accent-rgb)/0.15)]"
                   : "text-ink-dim/60 hover:bg-accent/[0.04] hover:text-ink"
               }`}
             >

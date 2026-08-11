@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MONTH_NAMES_ES, addMonths, monthRangeLabel, scheduleHref, windowMonths, WINDOW_MONTHS } from "../utils/scheduleMonths";
 import CueDialog from "./ui/CueDialog";
+import { themeColour } from "@/app/utils/themeColour";
 
 export type ActiveDay = {
   day: string; // "Sábado" | "Domingo" | any special service name
@@ -190,12 +191,12 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
       {!isEmpty && view === "calendar" && (
         <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mb-8">
           {([
-            ["#00bfff", "Domingo"],
-            ["#f59e0b", "Sábado"],
-            ["#a78bfa", "Especial"],
+            ["--accent-rgb", "Domingo"],
+            ["--warning-fg-rgb", "Sábado"],
+            ["--info-fg-rgb", "Especial"],
           ] as const).map(([color, label]) => (
             <span key={label} className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-[4px] border" style={{ borderColor: `${color}80`, background: `${color}33` }} />
+              <span className="w-3 h-3 rounded-[4px] border" style={{ borderColor: themeColour(color, 0.502), background: themeColour(color, 0.2) }} />
               <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">{label}</span>
             </span>
           ))}

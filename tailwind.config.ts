@@ -115,7 +115,7 @@ const config: Config = {
 				x: "x mandatory",
 			},
       boxShadow: {
-        bottom: "0px 6px 4px -4px rgba(0, 0, 0, 0.1)",
+        bottom: "0px 6px 4px -4px rgb(var(--elevation-rgb) / 0.1)",
       },
 			scrollSnapAlign: {
 				start: "start",

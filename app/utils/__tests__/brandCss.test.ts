@@ -108,13 +108,19 @@ describe("brand.css — (a) every colour var() referenced is declared", () => {
   });
 
   it("sees references OUTSIDE the token files — a file-scoped set cannot", () => {
-    // These two are the only live colour `var(--brand-*)` references in the app, and
-    // both name variables Child B retires. A guard that reads only brand.css and
-    // tailwind.config.ts stays green while Child B's rename silently drops them.
+    // The POINT is the SCOPE, not the variable names: colour custom properties are
+    // referenced from component files, so a guard that reads only brand.css and
+    // tailwind.config.ts would stay green while a rename silently dropped them.
+    //
+    // These two sites used to name `--brand-beam` and `--brand-signal` and were the
+    // proof that a file-scoped set is insufficient. Child B renamed them — which is
+    // exactly the event this assertion existed to survive — so it now names what they
+    // became. It goes red if either site stops referencing a property, or if the scan
+    // narrows back to the token files.
     const admin = read("app/components/admin/AdminPanel.tsx");
     const adminPage = read("app/(client)/admin/page.tsx");
-    expect(referencedProperties(admin)).toContain("--brand-beam");
-    expect(referencedProperties(adminPage)).toContain("--brand-signal");
+    expect(referencedProperties(admin)).toContain("--accent-rgb");
+    expect(referencedProperties(adminPage)).toContain("--positive-fg-rgb");
   });
 
   it("FIRES on an undeclared colour reference (synthetic — the fire-proof)", () => {
