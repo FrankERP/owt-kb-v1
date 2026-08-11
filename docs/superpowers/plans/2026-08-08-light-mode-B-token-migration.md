@@ -44,7 +44,7 @@ D6. Four site classes, and the enumeration is closed only because all four are l
 `:254`, `:336`. Every one of those changes colour.
 
 **It also cannot be tokenised the way the rest can, and this is a real constraint — not on
-the `DayCard` batch, but on four files at once.** The consumers build **8-digit hex at
+the `DayCard` batch, but on a five-file unit.** The consumers build **8-digit hex at
 runtime** — `` `${t.accentHex}35` ``, `` `${t.accentHex}0d` ``, `` `${t.accentHex}55` `` —
 and a `rgb(var(--accent-rgb) / …)` token **cannot be string-concatenated with an alpha
 suffix**. Concatenating anyway yields `rgb(var(--accent-rgb) / 0.2)55`, which is not a valid
@@ -63,30 +63,80 @@ there. It is wrong: the pattern is 24 occurrences across four files.** Generated
 | `CalendarView.tsx` | **2** (`:198`) | a local literal tuple at `:192–194` (**category 2**, bare hex) | no — self-contained on one line |
 | `PracticePlaylistButton.tsx` | **2** (`:133`) | the `accent: string` prop (`:11`) | **yes** — receiver of `DayCard`'s value |
 
-So there are **three contracts**, not one: `DayCard → PracticePlaylistButton.accent`,
+So there are **three concatenation contracts**, not one: `DayCard → PracticePlaylistButton.accent`,
 `serviceCardModel.CARD_ACCENT_HEX → ServiceReadinessCard`, and `CalendarView`'s
 self-contained literals. **A batch that migrates either end of the first two without the
 other ships a dropped declaration.** `PracticePlaylistButton` is consumed **only** by
 `DayCard` (verified: no other importer in `app/**`), so that pair is a two-file unit, not a
 fan-out — but it is still two files.
 
+### The accent has a second escape route, and it is not a CSS declaration
+
+Concatenation is one way the accent leaves a stylesheet. The other is an **SVG presentation
+attribute**, and the fix for the first breaks the second.
+
+`ChainLinkIcon.tsx:13` renders `stroke={color}` — an attribute, not a declaration — and two
+call sites feed it the raw accent:
+
+| Call site | Passes | Effect under the concatenation fix |
+|---|---|---|
+| `DayCard.tsx:190` | `color={t.accentHex}` | `stroke="rgb(var(--accent-rgb) / 0.65)"` |
+| `ServiceReadinessCard.tsx:379` | `color={hex}` | `stroke="rgb(var(--accent-rgb) / 0.7)"` |
+
+**`var()` is not substituted inside SVG presentation attributes** in Chromium or WebKit — the
+attribute is parsed as a CSS value but custom-property substitution does not apply there — so
+the stroke silently falls back and the medley chain icon loses its colour. That is the same
+silent-drop class this section exists to prevent, on a member-facing element, and by this
+plan's own admission outside the equality harness. **The repo has no counter-example:**
+`grep` for `var(--` inside any `fill=`/`stroke=`/`stopColor=` in `app/**/*.tsx` returns
+nothing, so there is no working precedent to lean on.
+
+**The fix already exists inside the component.** `ChainLinkIcon`'s `color` prop defaults to
+`currentColor`, and **two of its four call sites already rely on that default** —
+`SetlistEditor.tsx:400` and `ProposalEditor.tsx:581`/`:591` pass no colour at all. So the two
+accent-passing sites drop the prop and set `color` on the wrapping element with a token
+utility; `currentColor` resolves through the cascade and needs no substitution inside the
+attribute. **Verify in a browser at the gallery fixture before the batch lands** — this is
+precisely the case a static resolver cannot judge.
+
 Not affected, and worth stating so nobody widens the fix: `SectionDivider`'s `accent` prop
 (`DayCard.tsx:373`) and `CARD_ACCENT_MUTED` carry **className strings** (`text-[#00bfff]/70`),
-never concatenated — they migrate as ordinary category-1 rows.
+never concatenated and never an attribute — they migrate as ordinary category-1 rows.
 
-**Resolution.** The decision is a prerequisite of the **first batch touching any of the four
-files**, not of the `DayCard` batch, and the four move together as one batch. Default: give
-each accent an alpha-aware helper returning a complete `rgb(var(--x-rgb) / <n>)` string, and
-replace every one of the 24 concatenations at the call site — the helper must never return a
-fragment a caller can append to. Record the choice before the batch lands.
+### Resolution, and the batch unit it forces
 
-**Equality-harness coverage of these 24 sites is not assumed.** The harness resolves
-*computed* colour, and these values are composed at render time from a template literal; the
-plan does not establish that its static resolver can follow them. They are therefore an
-**enumerated, manually reviewed set** with their own before/after list — the 24 rows above,
-each with its rendered `rgba()` before and after — checked in the theme gallery at the
-`DayCard`, `ServiceReadinessCard` and `CalendarView` fixtures rather than trusted to the
-primary gate.
+The decision is a prerequisite of the **first batch touching any file in the unit**, not of
+the `DayCard` batch. Default: give each accent an alpha-aware helper returning a **complete**
+`rgb(var(--x-rgb) / <n>)` string and replace all 24 concatenations at the call site — the
+helper must never return a fragment a caller can append to — plus the `currentColor`
+substitution at the two `ChainLinkIcon` sites. Record the choice before the batch lands.
+
+**The unit is five files, not four:**
+
+`DayCard.tsx` · `PracticePlaylistButton.tsx` · `ServiceReadinessCard.tsx` ·
+`serviceCardModel.ts` · `ChainLinkIcon.tsx`
+
+`serviceCardModel.ts` is the declaring end of contract 2 — `CARD_ACCENT_HEX` at `:214–217`,
+three category-9 rows (`#00bfff`, `#f59e0b`, `#a78bfa`) that B-final's hex clause forces to
+change — so it must move with its consumer. `ChainLinkIcon.tsx` is the presentation-attribute
+carrier. **`CalendarView.tsx` is correctly independent**: its literals are declared and
+consumed on adjacent lines (`:192–198`) and cross no boundary.
+
+**This unit overrides the densest-first batching rule.** The open-questions default is "one
+slice per file for the 12 files >50 rows, grouped slices below that", which would put
+`DayCard` (59 rows) in a slice of its own, `ServiceReadinessCard` (42) and `serviceCardModel`
+(36) in a grouped slice, and `PracticePlaylistButton` and `ChainLinkIcon` somewhere else
+again — splitting every contract above. **The two rules cannot both hold, and this one wins:**
+the five files land in one slice regardless of density, and that slice is the only exception
+to the per-file rule.
+
+**Equality-harness coverage of these sites is not assumed.** The harness resolves *computed*
+colour; these values are composed at render time from a template literal, or leave CSS
+entirely through an attribute, and the plan does not establish that its static resolver can
+follow either. They are therefore an **enumerated, manually reviewed set** with their own
+before/after list — the 24 concatenations plus the 2 attribute sites, each with its rendered
+`rgba()` before and after — checked in the theme gallery at the `DayCard`,
+`ServiceReadinessCard` and `CalendarView` fixtures rather than trusted to the primary gate.
 
 **This also collapses a pre-existing drift:** `serviceCardModel.ts` and `CalendarView.tsx`
 already spell the same Sunday accent `#00bfff`, while `DayCard.tsx:33` spells it `#12c8f4`.
@@ -118,7 +168,7 @@ So:
 
 | Slice | Content | Why it is safe alone |
 |---|---|---|
-| **B1** | Add the token layer: 18 base roles in `brand.css` `:root`, their Tailwind keys, the 24 composed tokens. **Remove nothing.** | Purely additive. Old `--brand-*` and `brand.*` keys still exist and still work. Renders identically |
+| **B1** | Add the token layer: 18 base roles in `brand.css` `:root`, their Tailwind keys, and **23** composed tokens. **Remove nothing.** | Purely additive. Old `--brand-*` and `brand.*` keys still exist and still work. Renders identically |
 | **B2** | Rewrite the 22 colour-bearing `brand.css` rule bodies onto the new variables | Same computed values except beam→accent. `brand.css`'s own guards cover it |
 | **B3…Bn** | Migrate call sites in batches by file, densest first | Both old and new spellings work throughout, so every batch is independently revertible |
 | **B-final** | Remove the seven retired `--brand-*` declarations and their `brand.*` Tailwind keys; land the lint clauses B owns; re-point the last A1/A2 guard assertions | **Atomic, and only safe when zero call sites remain.** This is the transition the parent means |
@@ -130,8 +180,10 @@ non-colour `--brand-radius-*` that B never touches:
 - **category 10 = 0** (no retired `brand-<colour>` utility remains), **and**
 - **zero category-11 rows referencing a retired COLOUR variable** — today exactly two,
   `AdminPanel.tsx:399` (beam) and `(client)/admin/page.tsx:37` (signal), **and**
-- **no category-9 row DISPOSITIONED `B` carrying a retired value** — `DayCard.tsx:33`'s
-  `accentHex` and its siblings. **The disposition scope is load-bearing**, exactly as it is
+- **no category-9 row DISPOSITIONED `B` carrying a retired value** — of the 12 category-9
+  `B` rows, **exactly one** qualifies: `DayCard.tsx:33`'s `accentHex: "#12c8f4"`, beam's
+  value. Its siblings `:43` `#f59e0b` and `:53` `#a78bfa` are `--warning-fg` and `--info-fg`,
+  **not retired**, and an implementer hunting a retired value in them will not find one. **The disposition scope is load-bearing**, exactly as it is
   for category 11: `(client)/layout.tsx:42`'s `themeColor: "#010b17"` is a permanent
   category-9 literal spelling retired `--brand-blackout`'s exact value `1 11 23`, and it is
   dispositioned `exempt`. An unscoped "no category-9 retired literal" would never reach zero.
@@ -212,6 +264,14 @@ than 50 rows.**
   enough to have been skipped, but a reader reconciling B's row accounting against the
   inventory would find a category with no owner. The hex lint clause covers all four, and
   three of them are inside the 24-site concatenation set above.
+- **23 composed tokens, not 24 — and the missing one is deliberate.** The 166
+  alpha-differing pairs collapse to exactly **24** distinct `(light/α → dark/α)`
+  combinations. Seven occur once; the largest is `[#003572] → [#00bfff]/20` at 36 sites.
+  **The 24th is `gray-600 → [#C8D8EB]/70`, the split `TextSizeControl` pair, occurring
+  once** — and B is instructed not to collapse it, because its light side is a palette class
+  Child C owns. Building a token for it would produce one B never uses and whose light half
+  B has no authority to fill. So B1 adds **23**, and the 24th arrives with C when it collapses
+  the pair.
 - **Pairs drive composed tokens.** 246 per-element pairs, **166 differing in alpha** — those
   take a composed token. Of the 80 that do not, **12 are palette pairs belonging to Child C**,
   so B's share is **68**, and those may use a base role with an opacity modifier.
@@ -293,8 +353,9 @@ asserting a removed premise is worse than no guard: it is green and wrong.
     `Literal`/`TemplateElement` selectors is AST-based and therefore does not fire on
     comments; state that explicitly rather than leaving it implied.
   - **Exemption granularity is per entry, and getting it wrong disables the clause on B's own
-    rows.** `ignores` is file-granular; two of the four exemptions are row-granular, and the
-    files carrying them are mostly B's:
+    rows.** `ignores` is file-granular; **two of the four confirmed exemptions are
+    row-granular** — and a conditional fifth would make three — and the files carrying them
+    are mostly B's:
 
     | Exemption | Rows in that file | Mechanism |
     |---|---|---|
@@ -302,6 +363,7 @@ asserting a removed premise is worse than no guard: it is green and wrong.
     | `app/**/__tests__/**` | outside the inventory glob | Whole-file `ignores` — legitimate |
     | Google mark, `signin/page.tsx` | 4 exempt, but **36 dispositioned `B`** | **Row-level.** Inline `eslint-disable-next-line` with the reason, or a rule-option value allowlist keyed file + value, the way `scripts/colour-inventory.mjs`'s `EXEMPT_VALUES` already does it |
     | `themeColor`, `(client)/layout.tsx` | 1 exempt, but **4 dispositioned `B`** | **Row-level**, same |
+    | *Conditional* — `ParticipationSidebar.tsx:6` | 6 would be exempt, of **19 dispositioned `B`** | **Row-level**, and **only if** B takes the vocabulary's "record it exempt" option for the six categorical hues instead of the `--chart-1…6` default. Listed here so the choice does not silently create a fifth row-granular exemption after the clause is written |
 
     **A whole-file ignore on `(client)/layout.tsx` would defeat this slice's stated purpose.**
     One of its four `B` rows is `selection:bg-brand-beam/35` — the utility reference
@@ -453,7 +515,7 @@ to the split pair above**, where the `dark:` variant survives B as a token-value
 | Assumption | Impact if false | Validation |
 |---|---|---|
 | Both spellings coexist through B1–Bn | The slicing is unsound and B must be atomic | B1's equality run. If Tailwind rejects the additive config, fall back to atomic and say so |
-| The 24 composed combinations cover 165 of the 166 alpha-differing pairs — the split `TextSizeControl` pair takes none, staying split until C | Some sites have no correct token | Generated; the 17-combination tail is where collapse decisions get recorded |
+| The 166 alpha-differing pairs collapse to **24** distinct `(light/α → dark/α)` combinations, and B builds **23** of them, covering 165 pairs | Some sites have no correct token | Generated; the 17-combination tail is where collapse decisions get recorded |
 | Computed-colour equality is decidable per site statically | The primary gate is unbuildable | **Prove on one file before batching.** If it cannot be built, stop and re-plan — do not substitute screenshots |
 
 ## Open questions
