@@ -78,6 +78,9 @@ purpose; useful because every number is computed and every judgment is cited.
   work from the window. (Live log today: 4 entries lack `cycle`, 12 lack `platform`,
   4 carry `outcome:"success"`, 12 use `Z` timestamps — all counted.)
 - Only unparseable lines are skipped, with a visible count, never repaired.
+- No artifact-publishing mechanism (e.g. Codex) → the committed copy IS the report.
+- Timezone for bucketing comes from the host repo's worklog convention doc, not a
+  hardcoded zone.
 
 ## Non-goals
 
