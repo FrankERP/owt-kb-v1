@@ -26,7 +26,7 @@ export default function SectionNav({ sections }: { sections: Section[] }) {
   }, [sections]);
 
   return (
-    <div className="sticky top-14 lg:top-20 z-40 bg-[#C8D8EB]/90 dark:bg-[#010b17]/90 backdrop-blur-sm border-b border-[#003572]/15 dark:border-[#00bfff]/10">
+    <div className="sticky top-14 lg:top-20 z-40 bg-surface-base/90 backdrop-blur-sm border-b border-edge-accent-subtle">
       <div className="max-w-7xl mx-auto px-6 flex gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {sections.map((s) => (
           <a
@@ -35,8 +35,8 @@ export default function SectionNav({ sections }: { sections: Section[] }) {
             aria-current={active === s.id ? "location" : undefined}
             className={`font-label text-xs uppercase tracking-widest px-4 py-3 border-b-2 transition-colors whitespace-nowrap shrink-0 ${
               active === s.id
-                ? "border-[#00bfff] text-[#00bfff]"
-                : "border-transparent text-gray-500 dark:text-gray-400 hover:text-[#00bfff] dark:hover:text-[#00bfff]"
+                ? "border-accent text-accent"
+                : "border-transparent text-gray-500 dark:text-gray-400 hover:text-accent dark:hover:text-accent"
             }`}
           >
             {s.label}

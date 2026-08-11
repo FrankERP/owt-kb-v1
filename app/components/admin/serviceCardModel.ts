@@ -178,43 +178,56 @@ export const SERVICE_LABEL: Record<ServiceType, string> = {
 export const SERVICE_BADGE: Record<ServiceType, string> = {
   sunday_role: "bg-orange-500/15 text-orange-400 border border-orange-500/30",
   saturday_role: "bg-yellow-500/15 text-yellow-400 border border-yellow-400/30",
-  special_role: "bg-[#a78bfa]/15 text-[#a78bfa] border border-[#a78bfa]/30",
+  special_role: "bg-info-fg/15 text-info-fg border border-info-fg/30",
 };
 
 export const CARD_HEADER: Record<ServiceType, string> = {
-  sunday_role: "bg-[#003572] dark:bg-[#001f3f] border-[#002249] dark:border-[#00bfff]",
-  saturday_role: "bg-[#78350f] dark:bg-[#1c0800] border-[#92400e] dark:border-[#f59e0b]",
-  special_role: "bg-[#4c1d95] dark:bg-[#1e0a3c] border-[#5b21b6] dark:border-[#a78bfa]",
+  sunday_role: "bg-surface-sunken border-accent",
+  saturday_role: "bg-warning-surface-deep border-warning-fg",
+  special_role: "bg-info-surface-deep border-info-fg",
 };
 
 export const CARD_BORDER: Record<ServiceType, string> = {
-  sunday_role: "border-[#003572] dark:border-[#00bfff]",
-  saturday_role: "border-[#78350f] dark:border-[#f59e0b]",
-  special_role: "border-[#4c1d95] dark:border-[#a78bfa]",
+  sunday_role: "border-accent",
+  saturday_role: "border-warning-fg",
+  special_role: "border-info-fg",
 };
 
 export const CARD_ACCENT: Record<ServiceType, string> = {
-  sunday_role: "text-[#00bfff]",
-  saturday_role: "text-[#f59e0b]",
-  special_role: "text-[#a78bfa]",
+  sunday_role: "text-accent",
+  saturday_role: "text-warning-fg",
+  special_role: "text-info-fg",
 };
 
 export const CARD_ACCENT_MUTED: Record<ServiceType, string> = {
-  sunday_role: "text-[#00bfff]/70",
-  saturday_role: "text-[#f59e0b]/70",
-  special_role: "text-[#a78bfa]/70",
+  sunday_role: "text-accent/70",
+  saturday_role: "text-warning-fg/70",
+  special_role: "text-info-fg/70",
 };
 
 export const CARD_DIVIDER: Record<ServiceType, string> = {
-  sunday_role: "bg-[#00bfff]/20",
-  saturday_role: "bg-[#f59e0b]/20",
-  special_role: "bg-[#a78bfa]/20",
+  sunday_role: "bg-accent/20",
+  saturday_role: "bg-warning-fg/20",
+  special_role: "bg-info-fg/20",
 };
 
-export const CARD_ACCENT_HEX: Record<ServiceType, string> = {
-  sunday_role: "#00bfff",
-  saturday_role: "#f59e0b",
-  special_role: "#a78bfa",
+/**
+ * The accent as a TOKEN NAME, not a colour.
+ *
+ * This was `CARD_ACCENT_HEX`, three bare hex strings that consumers turned into
+ * colours by concatenating a two-digit alpha: `` `${hex}55` ``. A token cannot be
+ * appended to — `rgb(var(--accent-rgb) / 0.2)55` is not a valid <color> and the
+ * browser drops the whole declaration — so consumers now pass these to
+ * `themeColour()`, which always returns a finished colour.
+ *
+ * Exported from here and consumed in `ServiceReadinessCard`, so the two files
+ * migrate together: whichever moved second would have been handing the other a
+ * value it could no longer use.
+ */
+export const CARD_ACCENT_VAR: Record<ServiceType, string> = {
+  sunday_role: "--accent-rgb",
+  saturday_role: "--warning-fg-rgb",
+  special_role: "--info-fg-rgb",
 };
 
 export const SECTION_LABEL: Record<string, string> = {
@@ -647,7 +660,7 @@ export type ReadinessTone = "ok" | "approved" | "warn" | "error" | "unknown" | "
 
 /** Dark-mode-only tone classes. Purple is never a readiness tone. */
 export const TONE_CLASS: Record<ReadinessTone, string> = {
-  ok: "border-[#00bfff]/40 bg-[#00bfff]/10 text-[#00bfff]",
+  ok: "border-accent/40 bg-accent/10 text-accent",
   approved: "border-green-500/40 bg-green-500/10 text-green-400",
   warn: "border-amber-500/40 bg-amber-500/10 text-amber-400",
   error: "border-red-500/50 bg-red-500/10 text-red-300",

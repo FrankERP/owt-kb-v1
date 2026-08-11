@@ -997,14 +997,14 @@ export default function ServicesPanel() {
               disabled={!publishGate.enabled}
               title={publishGate.reason ?? undefined}
               onClick={() => openPublishPlan(visibleCards)}
-              className="min-h-[44px] rounded-lg bg-[#003572] px-3 font-label text-xs uppercase tracking-widest transition-colors hover:bg-[#003572]/80 disabled:opacity-40 dark:bg-[#00bfff]/20">
+              className="min-h-[44px] rounded-lg bg-surface-accent-solid px-3 font-label text-xs uppercase tracking-widest transition-colors hover:bg-accent-deep/80 dark:hover:bg-surface-accent-solid disabled:opacity-40">
               Publicar listos ({counters.readyToPublish})
             </button>
           )}
           <button ref={generatorTriggerRef} onClick={openGenerator}
             disabled={!generateGate.enabled}
             title={generateGate.reason ?? undefined}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#003572]/20 dark:border-[#00bfff]/15 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff]/30 transition-colors disabled:opacity-40">
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-surface-accent-20 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-accent hover:border-accent/30 dark:hover:border-surface-accent-20 transition-colors disabled:opacity-40">
             📅 Generar mes
           </button>
           <button
@@ -1013,7 +1013,7 @@ export default function ServicesPanel() {
             onClick={() => openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, false, { kind: "toolbar" })}
             disabled={!editTeamGate.enabled}
             title={editTeamGate.reason ?? undefined}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#003572]/20 dark:border-[#00bfff]/15 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff]/30 transition-colors disabled:opacity-40"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-surface-accent-20 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-accent hover:border-accent/30 dark:hover:border-surface-accent-20 transition-colors disabled:opacity-40"
           >
             Editar mes
           </button>
@@ -1021,7 +1021,7 @@ export default function ServicesPanel() {
             <button ref={newServiceTriggerRef} onClick={() => openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, true, { kind: "new" })}
               disabled={!createGate.enabled}
               title={createGate.reason ?? undefined}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-40">
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-40">
               <span className="text-base leading-none">+</span> Nuevo
             </button>
           )}
@@ -1060,7 +1060,7 @@ export default function ServicesPanel() {
               <button
                 type="button"
                 onClick={() => setShowPastMonths(v => !v)}
-                className="font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border border-[#00bfff]/10 text-gray-600 hover:border-[#00bfff]/25 hover:text-gray-400 transition-colors flex items-center gap-1"
+                className="font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border border-accent/10 text-gray-600 hover:border-accent/25 hover:text-gray-400 transition-colors flex items-center gap-1"
               >
                 Roles previos
                 <span className={`transition-transform ${showPastMonths ? "rotate-180" : ""}`}>▾</span>
@@ -1105,9 +1105,9 @@ export default function ServicesPanel() {
           ? new Date(src.date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })
           : "";
         return (
-          <div className="rounded-lg border border-[#00bfff]/30 bg-[#00bfff]/5 px-4 py-2.5 flex items-center justify-between">
+          <div className="rounded-lg border border-accent/30 bg-accent/5 px-4 py-2.5 flex items-center justify-between">
             <div>
-              <p className="font-label text-xs uppercase tracking-widest text-[#00bfff]">Copiar instrumentos</p>
+              <p className="font-label text-xs uppercase tracking-widest text-accent">Copiar instrumentos</p>
               <p className="font-body text-xs text-gray-500 mt-0.5">
                 Copiando los instrumentos de <span className="text-gray-300 capitalize">{srcLabel}</span>. Haz clic en «Pegar aquí» en el día destino (reemplaza sus instrumentos).
               </p>
@@ -1131,7 +1131,7 @@ export default function ServicesPanel() {
       )}
 
       {/* Loading */}
-      {view === "loading" && <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-20 rounded-xl bg-[#003572]/10 dark:bg-[#00bfff]/5 animate-pulse" />)}</div>}
+      {view === "loading" && <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-20 rounded-xl bg-surface-accent-wash animate-pulse" />)}</div>}
 
       {/* A roles failure prevents card rendering and shows retry instead */}
       {view === "error" && (
@@ -1157,11 +1157,11 @@ export default function ServicesPanel() {
             />
           ) : (
             // Never compute participation from partial membership.
-            <aside className="rounded-xl border border-[#00bfff]/20 bg-[#C8D8EB]/40 dark:bg-[#010b17] p-3 space-y-2">
-              <p className="font-label text-xs uppercase tracking-widest text-[#003572] dark:text-[#00bfff]">Participaciones</p>
+            <aside className="rounded-xl border border-accent/20 bg-surface-ink-l40-d100-base p-3 space-y-2">
+              <p className="font-label text-xs uppercase tracking-widest text-accent">Participaciones</p>
               <p className="font-body text-xs text-gray-400">{participationGate.reason}</p>
               <button type="button" onClick={retryLoad}
-                className="px-3 py-1.5 rounded-lg border border-[#00bfff]/30 font-label text-[11px] uppercase tracking-widest text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors">
+                className="px-3 py-1.5 rounded-lg border border-accent/30 font-label text-[11px] uppercase tracking-widest text-accent hover:bg-accent/10 transition-colors">
                 Reintentar carga
               </button>
             </aside>
@@ -1204,7 +1204,7 @@ export default function ServicesPanel() {
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-[#003572] dark:bg-[#0a1929] border border-[#00bfff]/30 font-label text-xs uppercase tracking-widest shadow-xl whitespace-nowrap">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-surface-raised-alt border border-accent/30 font-label text-xs uppercase tracking-widest shadow-xl whitespace-nowrap">
           {toast}
         </div>
       )}
@@ -1218,9 +1218,9 @@ export default function ServicesPanel() {
           <Modal title="Eliminar servicio" onClose={closeEditModal} status={editError ?? blocked}>
             <p className="font-body text-sm text-gray-400">¿Eliminar el servicio del <span className="text-red-400 font-semibold">{formatDate(editModal.role.date)}</span>? Esta acción no se puede deshacer.</p>
             <div className="flex gap-3">
-              <button onClick={closeEditModal} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">Cancelar</button>
+              <button onClick={closeEditModal} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">Cancelar</button>
               {staleModes.delete ? (
-                <button onClick={() => { closeEditModal(); retryLoad(); }} className="flex-1 py-2 rounded-lg border border-[#00bfff]/30 font-label text-xs uppercase tracking-widest text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors">Recargar</button>
+                <button onClick={() => { closeEditModal(); retryLoad(); }} className="flex-1 py-2 rounded-lg border border-accent/30 font-label text-xs uppercase tracking-widest text-accent hover:bg-accent/10 transition-colors">Recargar</button>
               ) : (
                 <button onClick={handleDelete} disabled={submitting || !!blocked} title={blocked ?? undefined} className="flex-1 py-2 rounded-lg bg-red-800/60 hover:bg-red-700/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{submitting ? "Eliminando..." : "Eliminar"}</button>
               )}
@@ -1242,7 +1242,7 @@ export default function ServicesPanel() {
               la verificación. Los demás se muestran abajo con su motivo.
             </p>
             <section>
-              <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">
+              <p className="font-label text-[11px] uppercase tracking-widest text-accent">
                 Se publicarán ({publishPlan.selected.length})
               </p>
               {publishPlan.selected.length === 0 ? (
@@ -1462,7 +1462,7 @@ function PublicationFooter({
       <button
         type="button"
         onClick={onClose}
-        className="min-h-[44px] flex-1 rounded-lg border border-[#003572]/30 px-3 font-label text-xs uppercase tracking-widest transition-colors hover:border-[#00bfff] dark:border-[#00bfff]/20"
+        className="min-h-[44px] flex-1 rounded-lg border border-surface-accent-30 px-3 font-label text-xs uppercase tracking-widest transition-colors hover:border-accent dark:hover:border-surface-accent-30"
       >
         Cancelar
       </button>
@@ -1483,7 +1483,7 @@ function PublicationFooter({
           className={`min-h-[44px] flex-1 rounded-lg px-3 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${
             danger
               ? "bg-orange-600/70 hover:bg-orange-600"
-              : "bg-[#003572] hover:bg-[#003572]/80 dark:bg-[#00bfff]/20 dark:hover:bg-[#00bfff]/30"
+              : "bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30"
           }`}
         >
           {loading ? "Guardando..." : confirmLabel}
@@ -1516,10 +1516,10 @@ function MonthPill({ label, selected, onClick, past }: { label: string; selected
       onClick={onClick}
       className={`font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
         selected
-          ? "border-[#00bfff]/60 bg-[#00bfff]/15 text-[#00bfff]"
+          ? "border-accent/60 bg-accent/15 text-accent"
           : past
-          ? "border-[#00bfff]/10 text-gray-600 hover:border-[#00bfff]/30 hover:text-gray-400"
-          : "border-[#00bfff]/20 text-gray-400 hover:border-[#00bfff]/40 hover:text-gray-200"
+          ? "border-accent/10 text-gray-600 hover:border-accent/30 hover:text-gray-400"
+          : "border-accent/20 text-gray-400 hover:border-accent/40 hover:text-gray-200"
       }`}
     >
       {label}

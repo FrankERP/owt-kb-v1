@@ -19,7 +19,7 @@ export default function NotAMemberPage() {
         <button
           type="button"
           onClick={() => signOut({ callbackUrl: "/auth/signin" })}
-          className="inline-block font-label text-xs uppercase tracking-widest px-4 py-2.5 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00bfff]/60"
+          className="inline-block font-label text-xs uppercase tracking-widest px-4 py-2.5 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           Cerrar sesión e intentar con otra cuenta
         </button>

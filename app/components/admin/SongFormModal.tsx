@@ -42,10 +42,10 @@ export const SECTION_LABELS = ["Intro", "Verso", "Pre-Coro", "Coro", "Puente", "
 export const CHORD_MARKER_RE = /\[[^\]]+\]/;
 
 export const inputCls =
-  "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
+  "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors";
 
 export const selectCls =
-  "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-[#010b17] dark:bg-[#010b17] font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
+  "w-full px-3 py-2 rounded-lg border border-accent/20 bg-surface-base font-body text-sm focus:outline-none focus:border-accent transition-colors";
 
 export function blankForm(): FormState {
   return { title: "", key: "", bpm: "", timeSig: "", lyrics: "", referenceLinks: [], tagIds: [], authorIds: [] };
@@ -111,11 +111,11 @@ export function Modal({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="relative z-10 w-full max-w-2xl bg-[#C8D8EB] dark:bg-[#0a1929] border border-[#003572]/20 dark:border-[#00bfff]/20 rounded-xl shadow-2xl flex flex-col max-h-[calc(100vh-2rem)] focus:outline-none"
+        className="relative z-10 w-full max-w-2xl bg-surface-raised-alt border border-accent/20 rounded-xl shadow-2xl flex flex-col max-h-[calc(100vh-2rem)] focus:outline-none"
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#003572]/15 dark:border-[#00bfff]/10 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-edge-accent-subtle shrink-0">
           <h2 className="font-display text-lg uppercase tracking-wide">{title}</h2>
-          <button onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-[#00bfff] transition-colors text-xl leading-none">×</button>
+          <button onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-accent transition-colors text-xl leading-none">×</button>
         </div>
         <div className="overflow-y-auto overflow-x-hidden p-6 space-y-5 flex-1">{children}</div>
       </div>
@@ -256,30 +256,30 @@ export function SongForm({
           placeholder="Filtrar o crear artista..."
         />
         {authorSearch.trim() ? (
-          <div className="rounded-lg border border-[#00bfff]/20 divide-y divide-[#00bfff]/10 max-h-48 overflow-y-auto">
+          <div className="rounded-lg border border-accent/20 divide-y divide-accent/10 max-h-48 overflow-y-auto">
             {localAuthors
               .filter((a) => a.name.toLowerCase().includes(authorSearch.toLowerCase()))
               .map((author) => {
                 const active = form.authorIds.includes(author._id);
                 return (
-                  <div key={author._id} className="flex items-center gap-3 px-3 py-2 hover:bg-[#00bfff]/5 transition-colors">
+                  <div key={author._id} className="flex items-center gap-3 px-3 py-2 hover:bg-accent/5 transition-colors">
                     <button type="button" onClick={() => toggleAuthor(author._id)} className="flex-1 flex items-center gap-2 text-left">
-                      <span className={`font-label text-[11px] uppercase tracking-widest ${active ? "text-[#00bfff]" : "text-gray-400"}`}>
+                      <span className={`font-label text-[11px] uppercase tracking-widest ${active ? "text-accent" : "text-gray-400"}`}>
                         {author.name}
                       </span>
                     </button>
-                    {active && <span className="font-label text-[10px] text-[#00bfff] shrink-0">✓</span>}
+                    {active && <span className="font-label text-[10px] text-accent shrink-0">✓</span>}
                   </div>
                 );
               })}
-            <div className="hover:bg-[#00bfff]/5 transition-colors">
+            <div className="hover:bg-accent/5 transition-colors">
               <button
                 type="button"
                 onClick={handleCreateAuthor}
                 disabled={creatingAuthor}
                 className="w-full flex items-center gap-3 px-3 py-2.5 text-left disabled:opacity-50"
               >
-                <span className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">
+                <span className="font-label text-[11px] uppercase tracking-widest text-accent">
                   {creatingAuthor ? "Creando..." : "+ Crear"}
                 </span>
                 <span className="font-body text-xs text-gray-400 truncate">&quot;{authorSearch}&quot;</span>
@@ -297,8 +297,8 @@ export function SongForm({
                   onClick={() => toggleAuthor(author._id)}
                   className={`font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
                     active
-                      ? "border-[#00bfff] bg-[#00bfff]/15 text-[#00bfff]"
-                      : "border-[#00bfff]/20 text-gray-500 hover:border-[#00bfff]/50"
+                      ? "border-accent bg-accent/15 text-accent"
+                      : "border-accent/20 text-gray-500 hover:border-accent/50"
                   }`}
                 >
                   {author.name}
@@ -328,25 +328,25 @@ export function SongForm({
       {/* Lyrics */}
       <div className="space-y-0">
         <label htmlFor={fid("lyrics")} className="font-label text-xs uppercase tracking-widest text-gray-500 block mb-1">Letra</label>
-        <div className="flex items-center gap-1 flex-wrap px-2 py-1.5 rounded-t-lg border border-[#00bfff]/20 border-b-0 bg-[#003572]/5 dark:bg-[#00bfff]/5">
+        <div className="flex items-center gap-1 flex-wrap px-2 py-1.5 rounded-t-lg border border-accent/20 border-b-0 bg-accent/5">
           {SECTION_LABELS.map((label) => (
             <button
               key={label}
               type="button"
               onPointerDown={(e) => e.preventDefault()}
               onClick={() => insertLabel(label)}
-              className="font-label text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-[#003572]/20 dark:border-[#00bfff]/15 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff]/40 transition-colors whitespace-nowrap"
+              className="font-label text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-surface-accent-20 text-gray-500 hover:text-accent hover:border-accent/40 dark:hover:border-surface-accent-20 transition-colors whitespace-nowrap"
             >
               {label}
             </button>
           ))}
-          <div className="w-px h-4 bg-[#003572]/20 dark:bg-[#00bfff]/20 mx-0.5 shrink-0" />
+          <div className="w-px h-4 bg-accent/20 mx-0.5 shrink-0" />
           <button
             type="button"
             onPointerDown={(e) => e.preventDefault()}
             onClick={() => wrapSelection("**")}
             title="Negrita — seleccionar texto y pulsar"
-            className="font-body text-sm font-bold w-7 h-7 flex items-center justify-center rounded border border-[#003572]/20 dark:border-[#00bfff]/15 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff]/40 transition-colors shrink-0"
+            className="font-body text-sm font-bold w-7 h-7 flex items-center justify-center rounded border border-surface-accent-20 text-gray-500 hover:text-accent hover:border-accent/40 dark:hover:border-surface-accent-20 transition-colors shrink-0"
           >
             B
           </button>
@@ -355,7 +355,7 @@ export function SongForm({
             onPointerDown={(e) => e.preventDefault()}
             onClick={() => wrapSelection("*")}
             title="Cursiva — seleccionar texto y pulsar"
-            className="font-body text-sm italic w-7 h-7 flex items-center justify-center rounded border border-[#003572]/20 dark:border-[#00bfff]/15 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff]/40 transition-colors shrink-0"
+            className="font-body text-sm italic w-7 h-7 flex items-center justify-center rounded border border-surface-accent-20 text-gray-500 hover:text-accent hover:border-accent/40 dark:hover:border-surface-accent-20 transition-colors shrink-0"
           >
             I
           </button>
@@ -363,7 +363,7 @@ export function SongForm({
         <textarea
           id={fid("lyrics")}
           ref={lyricsRef}
-          className="w-full px-3 py-2 rounded-b-lg border border-[#00bfff]/20 bg-transparent font-mono text-xs leading-relaxed resize-none focus:outline-none focus:border-[#00bfff] transition-colors"
+          className="w-full px-3 py-2 rounded-b-lg border border-accent/20 bg-transparent font-mono text-xs leading-relaxed resize-none focus:outline-none focus:border-accent transition-colors"
           rows={14}
           value={form.lyrics}
           onChange={set("lyrics")}
@@ -382,7 +382,7 @@ export function SongForm({
           <button
             type="button"
             onClick={addRefLink}
-            className="font-label text-[11px] uppercase tracking-widest text-[#00bfff] hover:text-[#00bfff]/70 transition-colors"
+            className="font-label text-[11px] uppercase tracking-widest text-accent hover:text-accent/70 transition-colors"
           >
             + Agregar
           </button>
@@ -426,30 +426,30 @@ export function SongForm({
           placeholder="Filtrar o crear tag..."
         />
         {tagSearch.trim() ? (
-          <div className="rounded-lg border border-[#00bfff]/20 divide-y divide-[#00bfff]/10 max-h-48 overflow-y-auto">
+          <div className="rounded-lg border border-accent/20 divide-y divide-accent/10 max-h-48 overflow-y-auto">
             {localTags
               .filter((t) => t.name.toLowerCase().includes(tagSearch.toLowerCase()))
               .map((tag) => {
                 const active = form.tagIds.includes(tag._id);
                 return (
-                  <div key={tag._id} className="flex items-center gap-3 px-3 py-2 hover:bg-[#00bfff]/5 transition-colors">
+                  <div key={tag._id} className="flex items-center gap-3 px-3 py-2 hover:bg-accent/5 transition-colors">
                     <button type="button" onClick={() => toggleTag(tag._id)} className="flex-1 flex items-center gap-2 text-left">
-                      <span className={`font-label text-[11px] uppercase tracking-widest ${active ? "text-[#00bfff]" : "text-gray-400"}`}>
+                      <span className={`font-label text-[11px] uppercase tracking-widest ${active ? "text-accent" : "text-gray-400"}`}>
                         #{tag.name}
                       </span>
                     </button>
-                    {active && <span className="font-label text-[10px] text-[#00bfff] shrink-0">✓</span>}
+                    {active && <span className="font-label text-[10px] text-accent shrink-0">✓</span>}
                   </div>
                 );
               })}
-            <div className="hover:bg-[#00bfff]/5 transition-colors">
+            <div className="hover:bg-accent/5 transition-colors">
               <button
                 type="button"
                 onClick={handleCreateTag}
                 disabled={creatingTag}
                 className="w-full flex items-center gap-3 px-3 py-2.5 text-left disabled:opacity-50"
               >
-                <span className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">
+                <span className="font-label text-[11px] uppercase tracking-widest text-accent">
                   {creatingTag ? "Creando..." : "+ Crear"}
                 </span>
                 <span className="font-body text-xs text-gray-400 truncate">&quot;{tagSearch}&quot;</span>
@@ -467,8 +467,8 @@ export function SongForm({
                   onClick={() => toggleTag(tag._id)}
                   className={`font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
                     active
-                      ? "border-[#00bfff] bg-[#00bfff]/15 text-[#00bfff]"
-                      : "border-[#00bfff]/20 text-gray-500 hover:border-[#00bfff]/50"
+                      ? "border-accent bg-accent/15 text-accent"
+                      : "border-accent/20 text-gray-500 hover:border-accent/50"
                   }`}
                 >
                   #{tag.name}
@@ -480,18 +480,18 @@ export function SongForm({
       </div>
 
       {/* Actions */}
-      <div className="flex gap-3 pt-1 border-t border-[#003572]/15 dark:border-[#00bfff]/10">
+      <div className="flex gap-3 pt-1 border-t border-edge-accent-subtle">
         <button
           type="button"
           onClick={onClose}
-          className="flex-1 py-2.5 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors"
+          className="flex-1 py-2.5 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors"
         >
           Cancelar
         </button>
         <button
           type="submit"
           disabled={loading}
-          className="flex-1 py-2.5 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+          className="flex-1 py-2.5 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
         >
           {loading ? "Guardando..." : "Guardar"}
         </button>

@@ -80,7 +80,11 @@ describe("theme gallery — the root layout contract", () => {
     // UA canvas, and step 4's "lightest rendered brand-atmosphere point in dark" — the
     // AA gate's own input — is not observable at all.
     expect(layout).toMatch(/<body className="[^"]*brand-atmosphere[^"]*"/);
-    expect(layout).toMatch(/<body className="[^"]*bg-brand-blackout[^"]*"/);
+    // Re-pointed at B-final. The gallery sits OUTSIDE the colour inventory — it is a
+    // verification surface, not product colour — so its two retired utilities were never
+    // B rows and no generated count would have caught them. Only a grep for remaining
+    // USES did, which is why B-final runs one in addition to its three gates.
+    expect(layout).toMatch(/<body className="[^"]*bg-surface-base[^"]*"/);
   });
 
   it("imports the (client) globals, not the (admin) ones", () => {

@@ -2,8 +2,19 @@
 "use client";
 import { useMemo, useState } from "react";
 import { computeParticipation, type ParticipantRole, type MemberParticipation } from "@/app/utils/computeParticipation";
+import { themeColour } from "@/app/utils/themeColour";
 
-const COLORS = { lead: "#378ADD", bgv: "#1D9E75", coro: "#7F77DD", especial: "#D9534F", instr: "#BA7517", foh: "#888780" };
+// Six CATEGORICAL hues, keyed by seat. These are consumed as inline `background:`
+// values, so they must be COMPLETE colours — a bare triplet would need wrapping and
+// `rgb(rgb(...))` is invalid and silently dropped.
+const COLORS = {
+  lead:      themeColour("--chart-lead-rgb"),
+  bgv:       themeColour("--chart-bgv-rgb"),
+  coro:      themeColour("--chart-coro-rgb"),
+  especial:  themeColour("--chart-especial-rgb"),
+  instr:     themeColour("--chart-instr-rgb"),
+  foh:       themeColour("--chart-foh-rgb"),
+};
 type View = "voces" | "instrumentos";
 
 export function ParticipationSidebar({ roles, monthLabel }: { roles: ParticipantRole[]; monthLabel: string }) {
@@ -28,7 +39,7 @@ export function ParticipationSidebar({ roles, monthLabel }: { roles: Participant
     : [["Instr", COLORS.instr], ["FOH", COLORS.foh]];
 
   return (
-    <aside className="rounded-xl border border-[#00bfff]/20 bg-[#C8D8EB]/40 dark:bg-[#010b17] p-3 lg:sticky lg:top-4 self-start">
+    <aside className="rounded-xl border border-accent/20 bg-surface-ink-l40-d100-base p-3 lg:sticky lg:top-4 self-start">
       {/*
         The header is a COLUMN, and the select is `w-full`. Both are load-bearing
         for the gutter placement, not styling.
@@ -52,17 +63,17 @@ export function ParticipationSidebar({ roles, monthLabel }: { roles: Participant
         iPad and in the Capacitor wrap, where this is a touch target.
       */}
       <div data-rail-header className="mb-1">
-        <p className="font-label text-xs uppercase tracking-widest text-[#003572] dark:text-[#00bfff]">Participaciones</p>
+        <p className="font-label text-xs uppercase tracking-widest text-accent">Participaciones</p>
         <p className="text-xs text-gray-500">{monthLabel}</p>
         <select value={view} onChange={e => setView(e.target.value as View)}
           aria-label="Ver participaciones por"
-          className="mt-2 w-full min-h-[44px] text-xs bg-transparent border border-[#00bfff]/20 rounded-lg px-2 py-1">
+          className="mt-2 w-full min-h-[44px] text-xs bg-transparent border border-accent/20 rounded-lg px-2 py-1">
           <option value="voces">Voces</option>
           <option value="instrumentos">Instrumentos</option>
         </select>
       </div>
 
-      <div className="flex flex-wrap gap-x-3 gap-y-1 py-2 border-b border-[#00bfff]/15 mb-1">
+      <div className="flex flex-wrap gap-x-3 gap-y-1 py-2 border-b border-accent/15 mb-1">
         {legend.map(([l, c]) => (
           <span key={l} className="text-xs text-gray-500 inline-flex items-center gap-1">
             <span style={{ width: 9, height: 9, borderRadius: 2, background: c, display: "inline-block" }} />{l}
@@ -91,21 +102,21 @@ function Row({ r, max, view }: { r: MemberParticipation; max: number; view: View
     ? <span style={{ display: "inline-block", height: 8, width: Math.round(n * u), background: c }} /> : null;
 
   return (
-    <div className="flex items-center gap-2.5 py-1.5 border-b border-[#00bfff]/10">
+    <div className="flex items-center gap-2.5 py-1.5 border-b border-accent/10">
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-medium text-[#003572] dark:text-[#C8D8EB] truncate">{r.name}</div>
+        <div className="text-[13px] font-medium text-ink-muted truncate">{r.name}</div>
         <div className="text-xs text-gray-500">
           {view === "voces"
             ? <>Líder {r.sunLead}·{r.satLead}  ·  BGV {r.sunBGV}·{r.satBGV}  ·  Coro {r.coro}  ·  Especial {r.especial}</>
             : <>Instrumentos {r.instrWeeks} sem  ·  FOH {r.fohWeeks} sem</>}
         </div>
-        <div className="mt-1 rounded overflow-hidden flex" style={{ width: 150, background: "rgba(0,191,255,0.08)" }}>
+        <div className="mt-1 rounded overflow-hidden flex" style={{ width: 150, background: themeColour("--accent-rgb", 0.08) }}>
           {view === "voces"
             ? <>{seg(r.sunLead + r.satLead, COLORS.lead)}{seg(r.sunBGV + r.satBGV, COLORS.bgv)}{seg(r.coro, COLORS.coro)}{seg(r.especial, COLORS.especial)}</>
             : <>{seg(r.instrWeeks, COLORS.instr)}{seg(r.fohWeeks, COLORS.foh)}</>}
         </div>
       </div>
-      <div className="text-xl font-medium text-[#003572] dark:text-[#C8D8EB] min-w-[24px] text-right">{value}</div>
+      <div className="text-xl font-medium text-ink-muted min-w-[24px] text-right">{value}</div>
     </div>
   );
 }

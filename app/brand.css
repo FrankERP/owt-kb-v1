@@ -1,16 +1,166 @@
 :root {
   color-scheme: dark;
-  --brand-blackout: 1 11 23;
-  --brand-console: 7 22 36;
-  --brand-deck: 13 34 52;
-  --brand-beam: 18 200 244;
-  --brand-signal: 55 245 138;
-  --brand-frost: 215 231 246;
-  --brand-steel: 127 148 168;
+  /* The four non-colour --brand-* SURVIVE B. They are outside the codemod, outside
+     the lint rule and outside the vocabulary, and they are the reason the B-final gate
+     could never demand category 11 reach zero — 7 of its 9 rows are these. */
   --brand-radius-panel: 16px;
   --brand-radius-control: 10px;
   --brand-duration-fast: 150ms;
   --brand-duration-reveal: 210ms;
+
+  /* ---- Child B, Layer 1: the 18 base roles -------------------------------
+     Stored as bare RGB triplets so Tailwind can apply <alpha-value>. The seven
+     --brand-* above stay until B-final; this slice REMOVES NOTHING, so both
+     spellings work and every batch below is independently revertible.
+
+     Values come from the vocabulary
+     (docs/superpowers/plans/2026-08-08-light-mode-A1-token-vocabulary.md).
+     Two are licensed value changes, not renames: --accent is 0 191 255, NOT
+     --brand-beam's 18 200 244; --positive-fg takes --brand-signal's 55 245 138,
+     NOT the second green #3dff7c. Every other role is value-identical to what
+     it replaces. Any third diff is a defect. */
+  --accent-rgb: 0 191 255;
+  --accent-deep-rgb: 0 53 114;
+
+  --ink-rgb: 215 231 246;
+  --ink-muted-rgb: 200 216 235;
+  --ink-dim-rgb: 127 148 168;
+
+  --surface-base-rgb: 1 11 23;
+  --surface-raised-rgb: 13 34 52;
+  --surface-raised-alt-rgb: 10 25 41;
+  --surface-console-rgb: 7 22 36;
+  --surface-sunken-rgb: 0 31 63;
+
+  --warning-fg-rgb: 245 158 11;
+  --warning-surface-rgb: 120 53 15;
+  --warning-border-rgb: 146 64 14;
+
+  --info-fg-rgb: 167 139 250;
+  --info-surface-rgb: 76 29 149;
+  --info-border-rgb: 91 33 182;
+
+  --positive-fg-rgb: 55 245 138;
+  --negative-fg-rgb: 248 113 113;
+
+  /* ---- Five roles the vocabulary did not name, added in B3 ---------------
+     Found by sweeping ALL 1,628 B rows for hex values with no role, rather than
+     discovering them one batch at a time — the same closure-by-construction rule
+     the plan's category partition follows. 28 distinct hex values appear in B's
+     rows; 15 had a role, 6 are ParticipationSidebar's categorical hues (a
+     --chart-1..6 scale, its own batch), one (#002249) is only ever a light side
+     and never renders, and these five render with nothing to migrate onto.
+
+     The two "deep" surfaces are the DARK halves of pairs whose light halves the
+     vocabulary already named. `bg-[#78350f] dark:bg-[#1c0800]` renders #1c0800
+     today, so --warning-surface (120 53 15, the LIGHT value) is not what that
+     site needs. The vocabulary wrote both values into one slot as "· deep"; they
+     are two slots. */
+  --warning-surface-deep-rgb: 28 8 0;   /* #1c0800 — dark half of the warning header pair */
+  --info-surface-deep-rgb: 30 10 60;    /* #1e0a3c — dark half of the info header pair    */
+
+  /* The three overlay navies are DRIFT, preserved rather than corrected.
+     Three components spell a floating menu's background three different ways:
+     PracticePlaylistButton #00162e, ServiceReadinessCard #03101f, ProposalEditor
+     #020f1c. No design intent distinguishes them.
+
+     The A1 vocabulary licensed collapsing five near-identical navies onto
+     --surface-sunken (0 31 63). Five of those rows render at FULL opacity, where
+     the collapse lightens them by +15 to +35 on the blue channel — plainly visible
+     on a dark menu panel — and the B plan admits exactly two licensed diffs and
+     calls any third a defect. So B preserves each value and takes the extra roles.
+     Unifying these three is a design decision; it is not a migration decision, and
+     B declines to smuggle it in as one.
+
+     The sixth navy, #001830, is NOT here: its six rows render at 30-50% alpha,
+     where the shift is ~+5 effective, and it collapses onto --surface-sunken in
+     the MonthGenerator/SetlistEditor batch with its count recorded there. */
+  --surface-overlay-rgb: 0 22 46;         /* #00162e — 2 rows */
+  --surface-overlay-deep-rgb: 3 16 31;    /* #03101f — 1 row  */
+  --surface-overlay-deepest-rgb: 2 15 28; /* #020f1c — 2 rows */
+
+  /* ---- The last two groups the vocabulary named but left undefined -------
+     Both appear in its "Literals in Child B's set with NO role here" table,
+     which assigns them to B and says B must decide each explicitly rather than
+     discover it mid-codemod. These are those decisions. */
+
+  /* Shadows. Seven rows of `rgb(var(--elevation-rgb) / a)` — six here, one at
+     tailwind.config.ts:38 as `rgba(0, 0, 0, 0.1)`, which is outside `app/**` and
+     reachable only as a named out-of-glob input. The vocabulary offered "an
+     --elevation role, or recorded as intentionally literal"; a role wins, because
+     a light theme wants its shadows warmer and weaker than pure black, and a
+     literal gives Child D nothing to change. */
+  --elevation-rgb: 0 0 0;
+
+  /* Six CATEGORICAL hues (ParticipationSidebar), chosen to be distinguishable
+     from one another rather than to express a state — so no semantic role fits,
+     and the vocabulary correctly said a semantic set is the wrong shape. Named
+     after what they encode instead of --chart-1..6: the map is keyed by seat, and
+     a number would make a reordering silently repaint the legend. */
+  --chart-lead-rgb: 55 138 221;      /* #378ADD */
+  --chart-bgv-rgb: 29 158 117;       /* #1D9E75 */
+  --chart-coro-rgb: 127 119 221;     /* #7F77DD */
+  --chart-especial-rgb: 217 83 79;   /* #D9534F */
+  --chart-instr-rgb: 186 117 23;     /* #BA7517 */
+  --chart-foh-rgb: 136 135 128;      /* #888780 */
+
+  /* ---- Child B, Layer 2: 23 composed tokens ------------------------------
+     These exist because 166 of the 246 per-element light/dark pairs differ in
+     ALPHA, not only in hue, and a theme-invariant opacity modifier cannot say
+     "opaque navy in light, 20% cyan in dark". Each token bakes its own alpha,
+     so it is a COMPLETE colour, not a triplet — an opacity modifier on one is a
+     bug, and B-final's lint clause bans it.
+
+     The 166 pairs collapse to 24 distinct (light/a -> dark/a) combinations. B
+     builds 23 of them, covering 165 sites. The 24th is gray-600 -> [#C8D8EB]/70
+     at TextSizeControl: its light side is a palette class Child C owns, so B
+     leaves that pair split and C collapses it later.
+
+     THE APP IS DARK-ONLY TODAY, so each token carries only its dark value. The
+     light halves in the comments are the sole thing standing between Child D
+     and re-deriving them; the generated `pairs` snapshot in the inventory is
+     their machine-readable record.
+
+     The first seven are the vocabulary's named combinations and cover 136 of
+     the 165. The remaining sixteen appear 1-3 times each, have no established
+     semantics, and are named systematically as l<light>-d<dark> rather than
+     given invented ones — the plan requires each to be enumerated rather than
+     silently collapsed onto a neighbour.
+
+     THREE OF THESE WERE WRONG WHEN B1 SHIPPED, and the cause is worth keeping.
+     Tailwind spells an opacity modifier two ways: `/50` and `/[0.04]`. A1's
+     inventory matched only the first, so the fifteen bracket-spelled usages in
+     this tree were recorded as having NO alpha — which reads as fully opaque.
+     Five of them are the dark half of a pair, so l10-d100, l15-d100 and l5-d100
+     were built claiming those combinations end at 100% when the sites render at
+     3-4%. Migrating onto them would have turned faint skeleton washes into solid
+     accent fills on the loading states of /me, /posts/[slug] and two admin
+     panels. The scanner now normalises both spellings to a percentage, and the
+     three tokens are renamed to the alpha they actually carry. */
+  --surface-accent-solid:  rgb(var(--accent-rgb) / 0.20);   /* light: accent-deep @100% - 36 sites */
+  --surface-accent-30:     rgb(var(--accent-rgb) / 0.20);   /* light: accent-deep @30%  - 28 sites */
+  --surface-accent-hover:  rgb(var(--accent-rgb) / 0.30);   /* light: accent-deep @80%  - 24 sites */
+  --edge-accent-subtle:    rgb(var(--accent-rgb) / 0.10);   /* light: accent-deep @15%  - 20 sites */
+  --surface-accent-20:     rgb(var(--accent-rgb) / 0.15);   /* light: accent-deep @20%  - 13 sites */
+  --surface-accent-faint:  rgb(var(--accent-rgb) / 0.10);   /* light: accent-deep @20%  -  8 sites */
+  --surface-accent-wash:   rgb(var(--accent-rgb) / 0.05);   /* light: accent-deep @10%  -  7 sites */
+
+  --surface-accent-l20-d60-sunken: rgb(var(--surface-sunken-rgb) / 0.60); /* light: accent-deep @20%  - 3 */
+  --surface-accent-l100-d10:       rgb(var(--accent-rgb) / 0.10);         /* light: accent-deep @100% - 3 */
+  --surface-accent-l40-d20:        rgb(var(--accent-rgb) / 0.20);         /* light: accent-deep @40%  - 3 */
+  --surface-accent-l30-d25:        rgb(var(--accent-rgb) / 0.25);         /* light: accent-deep @30%  - 2 */
+  --surface-accent-l10-d4:       rgb(var(--accent-rgb) / 0.04);                /* light: accent-deep @10%  - 2 */
+  --surface-ink-l60-d50:           rgb(var(--ink-muted-rgb) / 0.50);      /* light: ink-muted @60%    - 2 */
+  --surface-ink-l40-d100-base:     rgb(var(--surface-base-rgb));          /* light: ink-muted @40%    - 2 */
+  --surface-accent-l25-d20:        rgb(var(--accent-rgb) / 0.20);         /* light: accent-deep @25%  - 2 */
+  --surface-accent-l25-d15:        rgb(var(--accent-rgb) / 0.15);         /* light: accent-deep @25%  - 2 */
+  --surface-ink-l70-d50:           rgb(var(--ink-muted-rgb) / 0.50);      /* light: ink-muted @70%    - 2 */
+  --surface-accent-l15-d4:       rgb(var(--accent-rgb) / 0.04);                /* light: accent-deep @15%  - 1 */
+  --surface-accent-l100-d15:       rgb(var(--accent-rgb) / 0.15);         /* light: accent-deep @100% - 1 */
+  --surface-ink-l50-d35:           rgb(var(--ink-muted-rgb) / 0.35);      /* light: ink-muted @50%    - 1 */
+  --surface-accent-l5-d3:        rgb(var(--accent-rgb) / 0.03);                /* light: accent-deep @5%   - 1 */
+  --surface-accent-l50-d40:        rgb(var(--accent-rgb) / 0.40);         /* light: accent-deep @50%  - 1 */
+  --surface-accent-l50-d15:        rgb(var(--accent-rgb) / 0.15);         /* light: accent-deep @50%  - 1 */
 }
 
 /* Light branch. `:root` above hardcodes `color-scheme: dark`, which is masked in the
@@ -28,14 +178,14 @@
 }
 
 .brand-atmosphere {
-  background-color: rgb(var(--brand-blackout));
+  background-color: rgb(var(--surface-base-rgb));
   background-image:
-    radial-gradient(ellipse 54rem 40rem at 8% 26%, rgb(var(--brand-beam) / 0.11), transparent 70%),
-    radial-gradient(circle at 78% -10%, rgb(var(--brand-beam) / 0.2), transparent 38rem),
-    radial-gradient(ellipse 62rem 44rem at 56% 110%, rgb(var(--brand-beam) / 0.095), transparent 72%),
-    linear-gradient(122deg, transparent 0 45%, rgb(var(--brand-beam) / 0.035) 45.15%, rgb(var(--brand-beam) / 0.075) 56%, rgb(var(--brand-beam) / 0.025) 68%, transparent 77%),
-    linear-gradient(64deg, transparent 0 67%, rgb(var(--brand-beam) / 0.04) 75%, transparent 88%),
-    linear-gradient(180deg, rgb(var(--brand-deck) / 0.24), rgb(var(--brand-blackout) / 0.08) 52%, rgb(var(--brand-console) / 0.32));
+    radial-gradient(ellipse 54rem 40rem at 8% 26%, rgb(var(--accent-rgb) / 0.11), transparent 70%),
+    radial-gradient(circle at 78% -10%, rgb(var(--accent-rgb) / 0.2), transparent 38rem),
+    radial-gradient(ellipse 62rem 44rem at 56% 110%, rgb(var(--accent-rgb) / 0.095), transparent 72%),
+    linear-gradient(122deg, transparent 0 45%, rgb(var(--accent-rgb) / 0.035) 45.15%, rgb(var(--accent-rgb) / 0.075) 56%, rgb(var(--accent-rgb) / 0.025) 68%, transparent 77%),
+    linear-gradient(64deg, transparent 0 67%, rgb(var(--accent-rgb) / 0.04) 75%, transparent 88%),
+    linear-gradient(180deg, rgb(var(--surface-raised-rgb) / 0.24), rgb(var(--surface-base-rgb) / 0.08) 52%, rgb(var(--surface-console-rgb) / 0.32));
   background-repeat: no-repeat;
 }
 
@@ -56,9 +206,9 @@
   width: 100dvw;
   content: "";
   pointer-events: none;
-  border-bottom: 1px solid rgb(var(--brand-beam) / 0.15);
-  background: rgb(var(--brand-blackout) / 0.86);
-  box-shadow: 0 10px 40px rgb(var(--brand-blackout) / 0.28);
+  border-bottom: 1px solid rgb(var(--accent-rgb) / 0.15);
+  background: rgb(var(--surface-base-rgb) / 0.86);
+  box-shadow: 0 10px 40px rgb(var(--surface-base-rgb) / 0.28);
   backdrop-filter: blur(12px);
   transform: translateX(-50%);
 }
@@ -78,7 +228,7 @@
   height: 3px;
   content: "";
   pointer-events: none;
-  background: linear-gradient(90deg, transparent, rgb(var(--brand-beam) / 0.9));
+  background: linear-gradient(90deg, transparent, rgb(var(--accent-rgb) / 0.9));
   clip-path: polygon(28% 0, 100% 0, 100% 100%, 0 100%);
 }
 
@@ -95,7 +245,7 @@
   content: "";
   pointer-events: none;
   opacity: 0;
-  background: linear-gradient(118deg, transparent 6%, rgb(var(--brand-beam) / 0.13) 48%, transparent 82%);
+  background: linear-gradient(118deg, transparent 6%, rgb(var(--accent-rgb) / 0.13) 48%, transparent 82%);
   filter: blur(2px);
   transform: translate3d(1rem, -0.5rem, 0);
   animation: brand-beam-reveal var(--brand-duration-reveal) ease-out forwards;
@@ -103,8 +253,8 @@
 
 .brand-lockup-mark {
   box-shadow:
-    inset 0 0 0 1px rgb(var(--brand-frost) / 0.12),
-    0 0 24px rgb(var(--brand-beam) / 0.1);
+    inset 0 0 0 1px rgb(var(--ink-rgb) / 0.12),
+    0 0 24px rgb(var(--accent-rgb) / 0.1);
 }
 
 .brand-section-heading {
@@ -117,20 +267,20 @@
   inset: 0.18rem auto 0.18rem 0;
   width: 2px;
   content: "";
-  background: linear-gradient(180deg, rgb(var(--brand-beam)), rgb(var(--brand-beam) / 0.08));
-  box-shadow: 0 0 16px rgb(var(--brand-beam) / 0.38);
+  background: linear-gradient(180deg, rgb(var(--accent-rgb)), rgb(var(--accent-rgb) / 0.08));
+  box-shadow: 0 0 16px rgb(var(--accent-rgb) / 0.38);
 }
 
 .brand-surface {
   position: relative;
   isolation: isolate;
-  border: 1px solid rgb(var(--brand-steel) / 0.14);
+  border: 1px solid rgb(var(--ink-dim-rgb) / 0.14);
   background:
-    linear-gradient(145deg, rgb(var(--brand-deck) / 0.68), rgb(var(--brand-console) / 0.82) 44%, rgb(var(--brand-blackout) / 0.76)),
-    rgb(var(--brand-console) / 0.72);
+    linear-gradient(145deg, rgb(var(--surface-raised-rgb) / 0.68), rgb(var(--surface-console-rgb) / 0.82) 44%, rgb(var(--surface-base-rgb) / 0.76)),
+    rgb(var(--surface-console-rgb) / 0.72);
   box-shadow:
-    inset 0 1px 0 rgb(var(--brand-frost) / 0.035),
-    0 18px 55px rgb(0 0 0 / 0.2);
+    inset 0 1px 0 rgb(var(--ink-rgb) / 0.035),
+    0 18px 55px rgb(var(--elevation-rgb) / 0.2);
 }
 
 .brand-surface::after {
@@ -140,7 +290,7 @@
   height: 1px;
   content: "";
   pointer-events: none;
-  background: linear-gradient(90deg, transparent, rgb(var(--brand-frost) / 0.13), transparent);
+  background: linear-gradient(90deg, transparent, rgb(var(--ink-rgb) / 0.13), transparent);
 }
 
 .brand-surface-interactive {
@@ -152,11 +302,11 @@
 }
 
 .brand-surface-interactive:hover {
-  border-color: rgb(var(--brand-beam) / 0.4);
+  border-color: rgb(var(--accent-rgb) / 0.4);
   box-shadow:
-    inset 0 1px 0 rgb(var(--brand-frost) / 0.055),
-    0 18px 46px rgb(0 0 0 / 0.28),
-    0 0 26px rgb(var(--brand-beam) / 0.075);
+    inset 0 1px 0 rgb(var(--ink-rgb) / 0.055),
+    0 18px 46px rgb(var(--elevation-rgb) / 0.28),
+    0 0 26px rgb(var(--accent-rgb) / 0.075);
   transform: translateY(-2px);
 }
 
@@ -164,12 +314,12 @@
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border: 1px solid rgb(var(--brand-steel) / 0.14);
+  border: 1px solid rgb(var(--ink-dim-rgb) / 0.14);
   border-radius: 14px;
   background:
-    linear-gradient(135deg, rgb(var(--brand-deck) / 0.52), transparent 58%),
-    rgb(var(--brand-console) / 0.6);
-  box-shadow: inset 0 1px 0 rgb(var(--brand-frost) / 0.035);
+    linear-gradient(135deg, rgb(var(--surface-raised-rgb) / 0.52), transparent 58%),
+    rgb(var(--surface-console-rgb) / 0.6);
+  box-shadow: inset 0 1px 0 rgb(var(--ink-rgb) / 0.035);
 }
 
 .brand-library-module::before {
@@ -179,7 +329,7 @@
   content: "";
   pointer-events: none;
   opacity: 0.42;
-  background: linear-gradient(180deg, transparent 6%, rgb(var(--brand-beam)) 44%, transparent 94%);
+  background: linear-gradient(180deg, transparent 6%, rgb(var(--accent-rgb)) 44%, transparent 94%);
   transition: opacity var(--brand-duration-fast) ease, width var(--brand-duration-fast) ease;
 }
 
@@ -187,25 +337,25 @@
 .brand-library-module:focus-visible::before {
   width: 3px;
   opacity: 1;
-  box-shadow: 0 0 18px rgb(var(--brand-beam) / 0.65);
+  box-shadow: 0 0 18px rgb(var(--accent-rgb) / 0.65);
 }
 
 .brand-search-console {
   position: relative;
-  border: 1px solid rgb(var(--brand-steel) / 0.16);
+  border: 1px solid rgb(var(--ink-dim-rgb) / 0.16);
   border-radius: 12px;
-  background: rgb(var(--brand-blackout) / 0.64);
+  background: rgb(var(--surface-base-rgb) / 0.64);
   box-shadow:
-    inset 0 1px 0 rgb(var(--brand-frost) / 0.04),
-    0 12px 32px rgb(0 0 0 / 0.16);
+    inset 0 1px 0 rgb(var(--ink-rgb) / 0.04),
+    0 12px 32px rgb(var(--elevation-rgb) / 0.16);
 }
 
 .brand-search-console:focus-within {
-  border-color: rgb(var(--brand-beam) / 0.55);
+  border-color: rgb(var(--accent-rgb) / 0.55);
   box-shadow:
-    inset 0 1px 0 rgb(var(--brand-frost) / 0.06),
-    0 0 0 3px rgb(var(--brand-beam) / 0.08),
-    0 14px 36px rgb(0 0 0 / 0.2);
+    inset 0 1px 0 rgb(var(--ink-rgb) / 0.06),
+    0 0 0 3px rgb(var(--accent-rgb) / 0.08),
+    0 14px 36px rgb(var(--elevation-rgb) / 0.2);
 }
 
 .brand-key-dial {
@@ -214,23 +364,23 @@
   height: 2.4rem;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgb(var(--brand-beam) / 0.32);
+  border: 1px solid rgb(var(--accent-rgb) / 0.32);
   border-radius: 9px;
-  color: rgb(var(--brand-beam));
-  background: rgb(var(--brand-blackout) / 0.62);
+  color: rgb(var(--accent-rgb));
+  background: rgb(var(--surface-base-rgb) / 0.62);
   box-shadow:
-    inset 0 0 12px rgb(var(--brand-beam) / 0.07),
-    0 0 18px rgb(var(--brand-beam) / 0.055);
+    inset 0 0 12px rgb(var(--accent-rgb) / 0.07),
+    0 0 18px rgb(var(--accent-rgb) / 0.055);
 }
 
 .brand-song-hero {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border-bottom: 1px solid rgb(var(--brand-beam) / 0.18);
+  border-bottom: 1px solid rgb(var(--accent-rgb) / 0.18);
   background:
-    radial-gradient(circle at 50% 110%, rgb(var(--brand-beam) / 0.13), transparent 42%),
-    linear-gradient(150deg, rgb(var(--brand-deck) / 0.88), rgb(var(--brand-blackout) / 0.94) 60%);
+    radial-gradient(circle at 50% 110%, rgb(var(--accent-rgb) / 0.13), transparent 42%),
+    linear-gradient(150deg, rgb(var(--surface-raised-rgb) / 0.88), rgb(var(--surface-base-rgb) / 0.94) 60%);
 }
 
 .brand-song-hero::before {
@@ -241,7 +391,7 @@
   content: "";
   pointer-events: none;
   opacity: 0.55;
-  background: linear-gradient(110deg, transparent, rgb(var(--brand-beam) / 0.11), transparent 70%);
+  background: linear-gradient(110deg, transparent, rgb(var(--accent-rgb) / 0.11), transparent 70%);
   transform: rotate(12deg);
 }
 
@@ -249,15 +399,15 @@
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border: 1px solid rgb(var(--brand-beam) / 0.14);
+  border: 1px solid rgb(var(--accent-rgb) / 0.14);
   border-radius: 18px;
   padding: clamp(1rem, 2.5vw, 1.75rem);
   background:
-    linear-gradient(160deg, rgb(var(--brand-deck) / 0.52), transparent 38%),
-    rgb(var(--brand-blackout) / 0.56);
+    linear-gradient(160deg, rgb(var(--surface-raised-rgb) / 0.52), transparent 38%),
+    rgb(var(--surface-base-rgb) / 0.56);
   box-shadow:
-    inset 0 1px 0 rgb(var(--brand-frost) / 0.035),
-    0 24px 70px rgb(0 0 0 / 0.24);
+    inset 0 1px 0 rgb(var(--ink-rgb) / 0.035),
+    0 24px 70px rgb(var(--elevation-rgb) / 0.24);
 }
 
 .brand-admin-shell::before {
@@ -268,7 +418,7 @@
   height: 22rem;
   content: "";
   pointer-events: none;
-  background: radial-gradient(circle, rgb(var(--brand-beam) / 0.09), transparent 68%);
+  background: radial-gradient(circle, rgb(var(--accent-rgb) / 0.09), transparent 68%);
 }
 
 /*
@@ -338,9 +488,9 @@
 }
 
 .brand-admin-tabs {
-  border: 1px solid rgb(var(--brand-steel) / 0.14);
-  background: rgb(var(--brand-console) / 0.5);
-  box-shadow: inset 0 1px 0 rgb(var(--brand-frost) / 0.035);
+  border: 1px solid rgb(var(--ink-dim-rgb) / 0.14);
+  background: rgb(var(--surface-console-rgb) / 0.5);
+  box-shadow: inset 0 1px 0 rgb(var(--ink-rgb) / 0.035);
 }
 
 .brand-admin-workspace {
@@ -348,17 +498,17 @@
 }
 
 .brand-member-row {
-  border: 1px solid rgb(var(--brand-steel) / 0.12);
-  background: linear-gradient(90deg, rgb(var(--brand-deck) / 0.42), rgb(var(--brand-console) / 0.34));
-  box-shadow: inset 2px 0 0 rgb(var(--brand-beam) / 0.18);
+  border: 1px solid rgb(var(--ink-dim-rgb) / 0.12);
+  background: linear-gradient(90deg, rgb(var(--surface-raised-rgb) / 0.42), rgb(var(--surface-console-rgb) / 0.34));
+  box-shadow: inset 2px 0 0 rgb(var(--accent-rgb) / 0.18);
 }
 
 .brand-member-row:hover {
-  border-color: rgb(var(--brand-beam) / 0.28);
-  background: linear-gradient(90deg, rgb(var(--brand-deck) / 0.62), rgb(var(--brand-console) / 0.44));
+  border-color: rgb(var(--accent-rgb) / 0.28);
+  background: linear-gradient(90deg, rgb(var(--surface-raised-rgb) / 0.62), rgb(var(--surface-console-rgb) / 0.44));
   box-shadow:
-    inset 2px 0 0 rgb(var(--brand-beam) / 0.72),
-    0 8px 30px rgb(0 0 0 / 0.14);
+    inset 2px 0 0 rgb(var(--accent-rgb) / 0.72),
+    0 8px 30px rgb(var(--elevation-rgb) / 0.14);
 }
 
 @keyframes brand-beam-reveal {

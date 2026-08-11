@@ -449,7 +449,7 @@ describe("PlannerGrid — ranking (D12)", () => {
     const { container } = render(<PlannerGrid {...baseProps({ columns, savedWindow })} />);
     fireEvent.click(cellFor(container, "coro", "2026-08-23"));
     const liuRow = candidateLi("Liu");
-    const servedMarks = liuRow.querySelectorAll('span[class*="bg-[#00bfff]/70"]');
+    const servedMarks = liuRow.querySelectorAll('span[class*="bg-accent/70"]');
     expect(servedMarks.length).toBeGreaterThan(0);
   });
 });
@@ -503,7 +503,7 @@ describe("PlannerGrid — candidate order frozen while the picker is open", () =
     expect(after).toEqual(before);
     // Ana's OWN row state still updates live — she now reads as selected.
     const anaRow = candidateLi("Ana");
-    expect(anaRow.className).toContain("border-[#00bfff] bg-[#00bfff]/10");
+    expect(anaRow.className).toContain("border-accent bg-accent/10");
   });
 
   it("reopening the picker (a fresh cell) recomputes the order from scratch", () => {

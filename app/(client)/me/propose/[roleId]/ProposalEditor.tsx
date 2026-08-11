@@ -355,7 +355,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
     roleDoc.service_type === "saturday" ? "Sábado"  :
     (roleDoc.service_name ?? "Servicio Especial");
 
-  const inputCls = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors placeholder:text-gray-600";
+  const inputCls = "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors placeholder:text-gray-600";
 
   return (
     <div className="space-y-8">
@@ -364,7 +364,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
       <div>
         <button
           onClick={() => router.push("/me")}
-          className="flex items-center gap-1.5 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] transition-colors mb-5"
+          className="flex items-center gap-1.5 font-label text-xs uppercase tracking-widest text-gray-500 hover:text-accent transition-colors mb-5"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5M12 5l-7 7 7 7" />
@@ -387,9 +387,9 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
 
       {/* Shared-proposal contributors — this is ONE setlist all leads co-edit */}
       {otherContributors.length > 0 && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-[#00bfff]/5">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-accent/20 bg-accent/5">
           <UserIcon />
-          <p className="font-body text-xs text-[#00bfff]">
+          <p className="font-body text-xs text-accent">
             Propuesta compartida · editada también por {otherContributors.join(", ")}
           </p>
         </div>
@@ -451,12 +451,12 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
             onDragEnd={onDragEnd}
             className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${idx > 0 ? "mt-1.5" : ""} ${
               dragOverIdx === idx && draggingIdx !== idx
-                ? "border-[#00bfff]/60 bg-[#00bfff]/10 scale-[1.01]"
+                ? "border-accent/60 bg-accent/10 scale-[1.01]"
                 : draggingIdx === idx
                 ? "opacity-30"
                 : inMedley
-                ? "border-[#00bfff]/30 bg-[#00bfff]/[0.07]"
-                : "border-[#003572]/15 dark:border-[#00bfff]/10 bg-[#003572]/5 dark:bg-[#00bfff]/5"
+                ? "border-accent/30 bg-accent/[0.07]"
+                : "border-edge-accent-subtle bg-accent/5"
             } ${!isApproved ? "cursor-grab active:cursor-grabbing" : ""}`}
           >
             {/* Drag handle (desktop) */}
@@ -473,7 +473,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
                   type="button"
                   onClick={(e) => { e.stopPropagation(); moveSong(idx, idx - 1); }}
                   disabled={idx === 0}
-                  className="p-1 rounded text-gray-400 hover:text-[#00bfff] disabled:opacity-20 disabled:cursor-default"
+                  className="p-1 rounded text-gray-400 hover:text-accent disabled:opacity-20 disabled:cursor-default"
                   aria-label="Mover arriba"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -484,7 +484,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
                   type="button"
                   onClick={(e) => { e.stopPropagation(); moveSong(idx, idx + 1); }}
                   disabled={idx === songs.length - 1}
-                  className="p-1 rounded text-gray-400 hover:text-[#00bfff] disabled:opacity-20 disabled:cursor-default"
+                  className="p-1 rounded text-gray-400 hover:text-accent disabled:opacity-20 disabled:cursor-default"
                   aria-label="Mover abajo"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -503,7 +503,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
               <p className="font-body text-xs text-gray-400 truncate">{song.author}</p>
               {!!song.previous_keys?.length && (
                 <p className="font-body text-xs text-gray-500 mt-0.5">
-                  Tonos anteriores: <span className="text-[#00bfff]/80">{song.previous_keys.join(" · ")}</span>
+                  Tonos anteriores: <span className="text-accent/80">{song.previous_keys.join(" · ")}</span>
                 </p>
               )}
             </div>
@@ -518,12 +518,12 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setKeyPickerIdx(keyPickerIdx === idx ? null : idx); }}
                   onMouseDown={e => e.stopPropagation()}
-                  className="font-label text-xs px-2.5 py-1 rounded-lg border border-[#00bfff]/20 hover:border-[#00bfff]/50 text-[#00bfff] transition-colors min-w-[2.75rem] text-center"
+                  className="font-label text-xs px-2.5 py-1 rounded-lg border border-accent/20 hover:border-accent/50 text-accent transition-colors min-w-[2.75rem] text-center"
                 >
                   {song.play_key}
                 </button>
                 {keyPickerIdx === idx && (
-                  <div className="absolute right-0 top-full mt-1.5 z-30 bg-[#020f1c] border border-[#00bfff]/20 rounded-xl shadow-2xl p-2.5 min-w-[9rem]">
+                  <div className="absolute right-0 top-full mt-1.5 z-30 bg-surface-overlay-deepest border border-accent/20 rounded-xl shadow-2xl p-2.5 min-w-[9rem]">
                     <div className="grid grid-cols-4 gap-1">
                       {KEY_OPTIONS.map(k => (
                         <button
@@ -532,8 +532,8 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
                           onClick={() => setPlayKey(idx, k)}
                           className={`font-label text-[11px] px-1.5 py-1.5 rounded-lg transition-colors ${
                             k === song.play_key
-                              ? "bg-[#00bfff]/20 text-[#00bfff]"
-                              : "text-gray-400 hover:bg-[#00bfff]/10 hover:text-[#00bfff]"
+                              ? "bg-accent/20 text-accent"
+                              : "text-gray-400 hover:bg-accent/10 hover:text-accent"
                           }`}
                         >
                           {k}
@@ -546,7 +546,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
             )}
 
             {isApproved && (
-              <span className="font-label text-xs px-2 py-0.5 rounded-full border border-[#00bfff]/20 text-[#00bfff] shrink-0">
+              <span className="font-label text-xs px-2 py-0.5 rounded-full border border-accent/20 text-accent shrink-0">
                 {song.play_key}
               </span>
             )}
@@ -574,8 +574,8 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
                 aria-label={linked ? "Desagrupar medley" : "Agrupar en medley"}
                 className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all ${
                   linked
-                    ? "border-[#00bfff]/30 bg-[#010b17] text-[#00bfff]/60"
-                    : "border-dashed border-gray-700/40 bg-[#010b17] text-gray-600/50 hover:border-[#00bfff]/30 hover:text-[#00bfff]/50"
+                    ? "border-accent/30 bg-surface-base text-accent/60"
+                    : "border-dashed border-gray-700/40 bg-surface-base text-gray-600/50 hover:border-accent/30 hover:text-accent/50"
                 }`}
               >
                 <ChainLinkIcon strokeWidth={linked ? 2.5 : 1.5} />
@@ -587,7 +587,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
           {/* Static medley indicator when approved (read-only) */}
           {idx < songs.length - 1 && isApproved && linked && (
             <div className="-my-0.5 flex items-center justify-center relative z-10">
-              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full border border-[#00bfff]/30 bg-[#010b17] text-[#00bfff]/60">
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full border border-accent/30 bg-surface-base text-accent/60">
                 <ChainLinkIcon strokeWidth={2.5} />
                 <span className="font-label text-[10px] uppercase tracking-widest ml-0.5">medley</span>
               </span>
@@ -603,18 +603,18 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
         {!isApproved && (
           <div ref={searchRef} className="relative">
             <div
-              className="flex items-center gap-2 px-4 py-3 rounded-xl border border-dashed border-[#00bfff]/25 hover:border-[#00bfff]/50 transition-colors cursor-pointer"
+              className="flex items-center gap-2 px-4 py-3 rounded-xl border border-dashed border-accent/25 hover:border-accent/50 transition-colors cursor-pointer"
               onClick={() => { setShowSearch(true); setKeyPickerIdx(null); }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#00bfff] shrink-0">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0">
                 <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
               </svg>
               <span className="font-label text-xs uppercase tracking-widest text-gray-500">Agregar canción</span>
             </div>
 
             {showSearch && (
-              <div className="absolute top-full left-0 right-0 mt-1 z-20 rounded-xl border border-[#00bfff]/20 bg-[#020f1c] shadow-2xl overflow-hidden">
-                <div className="p-2 border-b border-[#00bfff]/10">
+              <div className="absolute top-full left-0 right-0 mt-1 z-20 rounded-xl border border-accent/20 bg-surface-overlay-deepest shadow-2xl overflow-hidden">
+                <div className="p-2 border-b border-accent/10">
                   <input
                     autoFocus
                     className={inputCls}
@@ -638,7 +638,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
                         onClick={() => !already && addSong(song)}
                         disabled={already}
                         className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-                          already ? "opacity-40 cursor-not-allowed" : "hover:bg-[#00bfff]/5"
+                          already ? "opacity-40 cursor-not-allowed" : "hover:bg-accent/5"
                         }`}
                       >
                         <div className="flex-1 min-w-0">
@@ -646,7 +646,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
                           <p className="font-body text-xs text-gray-400 truncate">{song.author}</p>
                           <p className="font-body text-xs text-gray-500 mt-0.5">
                             {song.previous_keys.length > 0
-                              ? <>Tonos anteriores: <span className="text-[#00bfff]/80">{song.previous_keys.join(" · ")}</span></>
+                              ? <>Tonos anteriores: <span className="text-accent/80">{song.previous_keys.join(" · ")}</span></>
                               : "Sin historial previo"}
                           </p>
                         </div>
@@ -698,7 +698,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
 
       {isApproved && teamNotes && (
         <div className="space-y-1">
-          <p className="font-label text-xs uppercase tracking-widest text-[#00bfff]">Mensaje para el equipo</p>
+          <p className="font-label text-xs uppercase tracking-widest text-accent">Mensaje para el equipo</p>
           <p className="font-body text-sm text-gray-300 whitespace-pre-wrap">{teamNotes}</p>
         </div>
       )}
@@ -725,19 +725,19 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
 
       {/* Sticky action bar */}
       {!isApproved && (
-        <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-[#C8D8EB]/95 dark:bg-[#010b17]/95 backdrop-blur-sm border-t border-[#003572]/20 dark:border-[#00bfff]/10 z-10">
+        <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-surface-base/95 backdrop-blur-sm border-t border-surface-accent-faint z-10">
           <div className="flex gap-3">
             <button
               onClick={() => save("draft")}
               disabled={saving}
-              className="flex-1 py-2.5 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors disabled:opacity-50"
+              className="flex-1 py-2.5 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors disabled:opacity-50"
             >
               {saving ? "Guardando…" : "Guardar borrador"}
             </button>
             <button
               onClick={() => setConfirmSubmit(true)}
               disabled={saving || songs.length === 0}
-              className="flex-1 py-2.5 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+              className="flex-1 py-2.5 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
             >
               {saving ? "Enviando…" : "Enviar propuesta"}
             </button>
@@ -749,33 +749,33 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
       {confirmSubmit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setConfirmSubmit(false)} />
-          <div className="relative z-10 w-full max-w-sm bg-[#0a1929] border border-[#00bfff]/20 rounded-2xl shadow-2xl p-6 space-y-5">
+          <div className="relative z-10 w-full max-w-sm bg-surface-raised-alt border border-accent/20 rounded-2xl shadow-2xl p-6 space-y-5">
             <div className="space-y-1">
               <h3 className="font-display text-lg uppercase tracking-wide">Enviar propuesta</h3>
               <p className="font-body text-sm text-gray-400">
                 Vas a enviar {songs.length} canción{songs.length !== 1 ? "es" : ""} para {serviceLabel}. El admin recibirá tu propuesta para revisión.
               </p>
             </div>
-            <ul className="space-y-1 border border-[#00bfff]/10 rounded-xl p-3 bg-[#003572]/10">
+            <ul className="space-y-1 border border-accent/10 rounded-xl p-3 bg-accent-deep/10">
               {songs.map((s, i) => (
                 <li key={s.songId} className="flex items-center gap-2">
                   <span className="font-label text-[11px] text-gray-600 w-4 text-right tabular-nums">{i + 1}</span>
                   <span className="font-body text-sm truncate flex-1">{s.title}</span>
-                  <span className="font-label text-xs text-[#00bfff] shrink-0">{s.play_key}</span>
+                  <span className="font-label text-xs text-accent shrink-0">{s.play_key}</span>
                 </li>
               ))}
             </ul>
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmSubmit(false)}
-                className="flex-1 py-2.5 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors"
+                className="flex-1 py-2.5 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={() => { setConfirmSubmit(false); save("pending"); }}
                 disabled={saving}
-                className="flex-1 py-2.5 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+                className="flex-1 py-2.5 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
               >
                 Confirmar
               </button>
@@ -788,7 +788,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
       {toast && (
         <div className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl border font-label text-xs uppercase tracking-widest shadow-xl ${
           toast.ok
-            ? "bg-[#003572] dark:bg-[#0a1929] border-[#00bfff]/30"
+            ? "bg-surface-raised-alt border-accent/30"
             : "bg-red-900/80 border-red-500/30"
         }`}>
           {toast.msg}
@@ -819,7 +819,7 @@ function XIcon() {
 
 function UserIcon() {
   return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#00bfff]/60">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent/60">
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
       <circle cx="12" cy="7" r="4" />
     </svg>

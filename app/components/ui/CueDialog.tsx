@@ -250,7 +250,7 @@ export default function CueDialog({
         aria-labelledby={title ? titleId : undefined}
         aria-label={!title ? label : undefined}
         tabIndex={-1}
-        className={`brand-facet-panel brand-surface relative z-10 flex w-full ${sizeClass} flex-col overflow-hidden border-brand-beam/25 shadow-2xl focus:outline-none ${
+        className={`brand-facet-panel brand-surface relative z-10 flex w-full ${sizeClass} flex-col overflow-hidden border-accent/25 shadow-2xl focus:outline-none ${
           mode === "sheet"
             ? "mt-auto max-h-[92svh] rounded-t-2xl sm:mt-0 sm:max-h-[min(86svh,52rem)] sm:rounded-2xl"
             : "max-h-[min(92svh,54rem)] rounded-2xl"
@@ -258,21 +258,21 @@ export default function CueDialog({
       >
         {mode === "sheet" && (
           <div className="flex justify-center pb-1 pt-3 sm:hidden">
-            <span className="h-1.5 w-12 rounded-full bg-brand-beam/25" />
+            <span className="h-1.5 w-12 rounded-full bg-accent/25" />
           </div>
         )}
         {title && (
-          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-brand-beam/10 bg-brand-deck/35 px-5 py-5 sm:px-6">
+          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-accent/10 bg-surface-raised/35 px-5 py-5 sm:px-6">
             <div className="min-w-0">
-              <p className="mb-1 font-label text-[10px] uppercase tracking-[0.24em] text-brand-beam/70">Cue</p>
-              <h2 id={titleId} className="font-display text-2xl leading-tight text-brand-frost">
+              <p className="mb-1 font-label text-[10px] uppercase tracking-[0.24em] text-accent/70">Cue</p>
+              <h2 id={titleId} className="font-display text-2xl leading-tight text-ink">
                 {title}
               </h2>
             </div>
             <button
               type="button"
               onClick={() => onDismiss("escape")}
-              className="rounded-lg p-2 text-brand-steel transition-colors hover:bg-white/5 hover:text-brand-frost focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-beam/60"
+              className="rounded-lg p-2 text-ink-dim transition-colors hover:bg-white/5 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               aria-label={label ? `Cerrar ${label}` : "Cerrar diálogo"}
             >
               <CloseIcon />

@@ -33,7 +33,7 @@ const STATUS_LABEL: Record<ProposalStatus, string> = {
 };
 
 const STATUS_STYLE: Record<ProposalStatus, string> = {
-  draft: "border-[#003572]/30 dark:border-[#00bfff]/20 text-gray-400 hover:border-[#00bfff] hover:text-[#00bfff]",
+  draft: "border-surface-accent-30 text-gray-400 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent",
   pending: "border-yellow-500/40 text-yellow-400 hover:border-yellow-400",
   approved: "border-green-500/40 text-green-400 cursor-default",
   changes_requested: "border-red-500/40 text-red-400 hover:border-red-300",
@@ -282,7 +282,7 @@ export default async function MePage() {
   function contributorHint(hint: string) {
     if (!hint) return null;
     return (
-      <p className="mt-2 flex items-center gap-1.5 font-body text-xs text-[#00bfff]/80">
+      <p className="mt-2 flex items-center gap-1.5 font-body text-xs text-accent/80">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
         </svg>
@@ -301,7 +301,7 @@ export default async function MePage() {
       return (
         <Link
           href={`/me/propose/${doc._id}`}
-          className="mt-3 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest text-gray-500 hover:border-[#00bfff] hover:text-[#00bfff] transition-colors"
+          className="mt-3 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed border-surface-accent-30 font-label text-xs uppercase tracking-widest text-gray-500 hover:border-accent dark:hover:border-dashed hover:text-accent transition-colors"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />

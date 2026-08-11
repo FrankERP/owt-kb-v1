@@ -318,11 +318,11 @@ export default function MonthCalendar({
           const existing = existingByDate.get(date);
           const tone = selected
             ? dow === 0
-              ? "border-[#00bfff]/50 bg-[#00bfff]/10 text-[#00bfff]"
+              ? "border-accent/50 bg-accent/10 text-accent"
               : "border-yellow-400/50 bg-yellow-400/10 text-yellow-400"
             : special
-              ? "border-[#a78bfa]/50 bg-[#a78bfa]/10 text-[#a78bfa]"
-              : "border-[#00bfff]/15 text-gray-500 hover:border-[#00bfff]/40 hover:text-[#C8D8EB]";
+              ? "border-info-fg/50 bg-info-fg/10 text-info-fg"
+              : "border-accent/15 text-gray-500 hover:border-accent/40 hover:text-ink-muted";
           return (
             <button
               key={date}
@@ -369,14 +369,14 @@ export default function MonthCalendar({
       <button
         type="button"
         onClick={() => openComposer(openDate ?? firstFreeDate)}
-        className="min-h-[44px] w-full rounded-lg border border-[#a78bfa]/30 px-3 font-label text-[11px] uppercase tracking-widest text-[#a78bfa] hover:bg-[#a78bfa]/10 transition-colors"
+        className="min-h-[44px] w-full rounded-lg border border-info-fg/30 px-3 font-label text-[11px] uppercase tracking-widest text-info-fg hover:bg-info-fg/10 transition-colors"
       >
         + Servicio especial
       </button>
 
       {openDate && (
-        <div className="space-y-2 rounded-lg border border-[#a78bfa]/30 bg-[#a78bfa]/5 px-3 py-2.5">
-          <p className="font-label text-[11px] uppercase tracking-widest text-[#a78bfa]">
+        <div className="space-y-2 rounded-lg border border-info-fg/30 bg-info-fg/5 px-3 py-2.5">
+          <p className="font-label text-[11px] uppercase tracking-widest text-info-fg">
             Nuevo servicio especial
           </p>
           <select
@@ -386,7 +386,7 @@ export default function MonthCalendar({
               setNotice(null);
               setComposerDate(e.target.value);
             }}
-            className="min-h-[44px] w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-[#0a1929] font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors"
+            className="min-h-[44px] w-full px-3 py-2 rounded-lg border border-accent/20 bg-surface-raised-alt font-body text-sm focus:outline-none focus:border-accent transition-colors"
           >
             {days.map((d) => (
               <option key={d} value={d}>
@@ -399,13 +399,13 @@ export default function MonthCalendar({
             placeholder="Nombre (p. ej. Bautizos)"
             value={draftName}
             onChange={(e) => setDraftName(e.target.value)}
-            className="min-h-[44px] w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors"
+            className="min-h-[44px] w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors"
           />
           <div className="flex gap-2">
             <button
               type="button"
               onClick={submitSpecial}
-              className="min-h-[44px] flex-1 rounded-lg bg-[#a78bfa]/20 px-3 font-label text-[11px] uppercase tracking-widest text-[#a78bfa]"
+              className="min-h-[44px] flex-1 rounded-lg bg-info-fg/20 px-3 font-label text-[11px] uppercase tracking-widest text-info-fg"
             >
               Agregar
             </button>
@@ -416,7 +416,7 @@ export default function MonthCalendar({
                 setDraftName("");
                 setNotice(null);
               }}
-              className="min-h-[44px] flex-1 rounded-lg border border-[#00bfff]/20 px-3 font-label text-[11px] uppercase tracking-widest"
+              className="min-h-[44px] flex-1 rounded-lg border border-accent/20 px-3 font-label text-[11px] uppercase tracking-widest"
             >
               Cancelar
             </button>
@@ -431,10 +431,10 @@ export default function MonthCalendar({
             .map((s) => (
               <li
                 key={s.date}
-                className="flex items-center justify-between gap-2 rounded-lg border border-[#a78bfa]/25 px-3 py-1.5"
+                className="flex items-center justify-between gap-2 rounded-lg border border-info-fg/25 px-3 py-1.5"
               >
-                <span className="font-body text-xs text-[#C8D8EB]">
-                  <span className="text-[#a78bfa]">{s.name}</span> — {longDate(s.date)}
+                <span className="font-body text-xs text-ink-muted">
+                  <span className="text-info-fg">{s.name}</span> — {longDate(s.date)}
                 </span>
                 <button
                   type="button"
@@ -443,7 +443,7 @@ export default function MonthCalendar({
                     onRemoveSpecial(s.date);
                   }}
                   aria-label={`Quitar servicio especial del ${longDate(s.date)}`}
-                  className="min-h-[44px] rounded-lg border border-[#00bfff]/20 px-3 font-label text-[10px] uppercase tracking-widest text-gray-400 hover:border-red-400/50 hover:text-red-400 transition-colors"
+                  className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-[10px] uppercase tracking-widest text-gray-400 hover:border-red-400/50 hover:text-red-400 transition-colors"
                 >
                   Quitar
                 </button>

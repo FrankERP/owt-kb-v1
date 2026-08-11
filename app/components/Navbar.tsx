@@ -28,10 +28,10 @@ const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Pro
             className="brand-lockup-mark h-12 w-12 rounded-[14px] lg:h-16 lg:w-16 lg:rounded-[18px]"
           />
           <div className="hidden leading-none sm:block">
-            <p className="font-display text-base sm:text-lg lg:text-2xl uppercase tracking-[0.12em] text-brand-frost">
+            <p className="font-display text-base sm:text-lg lg:text-2xl uppercase tracking-[0.12em] text-ink">
               Backstage
             </p>
-            <p className="mt-1 hidden font-label text-[10px] uppercase tracking-[0.22em] text-brand-steel sm:block lg:text-[11px]">
+            <p className="mt-1 hidden font-label text-[10px] uppercase tracking-[0.22em] text-ink-dim sm:block lg:text-[11px]">
               Oasis Worship Team
             </p>
           </div>
@@ -39,11 +39,11 @@ const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Pro
 
         {/* Centered title */}
         <div className="pointer-events-none absolute left-1/2 top-1/2 flex w-1/3 min-w-0 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center overflow-hidden">
-          <p className="font-display text-sm sm:text-lg lg:text-xl uppercase tracking-[0.1em] text-brand-frost truncate w-full text-center">
+          <p className="font-display text-sm sm:text-lg lg:text-xl uppercase tracking-[0.1em] text-ink truncate w-full text-center">
             {title}
           </p>
           {author && (
-            <p className="font-label text-[10px] lg:text-[11px] text-brand-steel uppercase tracking-widest truncate w-full text-center">
+            <p className="font-label text-[10px] lg:text-[11px] text-ink-dim uppercase tracking-widest truncate w-full text-center">
               {author}
             </p>
           )}

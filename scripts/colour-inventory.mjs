@@ -106,7 +106,33 @@ const EXEMPT_VALUES = new Map([
 // ---------------------------------------------------------------------------
 
 const PALETTE_FAMILIES = "gray|red|yellow|green|amber|orange|purple|blue|slate|zinc|neutral|stone|emerald|teal|cyan|sky|indigo|violet|fuchsia|pink|rose|lime";
-const COLOUR_UTILITIES = "bg|text|border|ring|divide|from|via|to|fill|stroke|placeholder|shadow|outline|decoration|caret|accent";
+// `ring-offset` must precede `ring`, or the alternation matches `ring` first and
+// leaves `-offset-[#010b17]` stranded — which is how five `ring-offset` rows came
+// to carry no utility and slip past a codemod keyed on the utility.
+const COLOUR_UTILITIES = "bg|text|border|ring-offset|ring|divide|from|via|to|fill|stroke|placeholder|shadow|outline|decoration|caret|accent";
+
+/**
+ * Tailwind writes an opacity modifier two ways: `/50` (a percentage) and `/[0.04]`
+ * (an arbitrary fraction). Both mean alpha, and a scan that understands only the
+ * first records the second as ABSENT — which reads as fully opaque.
+ *
+ * That is not hypothetical. Fifteen usages in this tree spell alpha in brackets, and
+ * five of them are the dark half of a light/dark pair. With those read as opaque, the
+ * composed-token layer was built claiming three combinations ended at 100% when the
+ * sites render at 3-4%, and migrating onto those tokens would have turned faint
+ * skeleton washes into solid accent fills.
+ *
+ * Returns a percentage STRING so both spellings compare equal: `/[0.04]` -> "4".
+ */
+function normaliseAlpha(raw) {
+  if (!raw) return null;
+  const v = raw.replace(/^\//, "");
+  if (v.startsWith("[")) {
+    const n = parseFloat(v.slice(1, -1));
+    return Number.isFinite(n) ? String(+(n * 100).toFixed(4)) : null;
+  }
+  return v;
+}
 
 /** Category 13 is handled separately — it emits three row kinds, not literals. */
 const CATEGORIES = [
@@ -215,7 +241,7 @@ function scanFile(rel) {
         // so it must be captured separately or the composed-token layer has no input:
         // ~14 composed tokens exist precisely because a pair's two sides differ in
         // ALPHA, not in colour.
-        alpha: (value.match(/\/(\d{1,3})$/) ?? [null, null])[1],
+        alpha: normaliseAlpha((value.match(/(\/(?:\d{1,3}|\[[0-9.]+\]))$/) ?? [null, null])[1]),
         utility: normaliseUtility(src, start),
         carrier: id === 8 ? m[1] : null,
         line: lineOf(src, start), // informational only — see the artifact header
@@ -325,41 +351,121 @@ function scanCompositingClasses(files) {
 // token without its partner; and A2's AA-gate step.
 // ---------------------------------------------------------------------------
 
-function pairsFor(rows) {
-  const byFileUtility = new Map();
-  for (const r of rows) {
-    if (!r.utility) continue;
-    const bare = r.utility.replace(/(^|:)dark:/, "$1").replace(/^dark:/, "");
-    const k = `${r.file}|${bare}`;
-    if (!byFileUtility.has(k)) byFileUtility.set(k, { light: [], dark: [] });
-    (r.utility.startsWith("dark:") ? byFileUtility.get(k).dark : byFileUtility.get(k).light)
-      .push({ value: r.value, alpha: r.alpha ?? null });
-  }
+/**
+ * PER-ELEMENT pairs — the input Child B needs to map a literal to a composed token.
+ *
+ * A pair is `X-[c]` and `dark:X-[c2]` on the SAME element, i.e. inside one class-string
+ * region. An earlier revision grouped by file + utility, which collapsed every `bg-` use
+ * in a file into a single "pair" carrying 21 values per side — a usable signal that most
+ * pairs differ in alpha, but useless for mapping, because it cannot say WHICH light value
+ * partners WHICH dark one.
+ *
+ * The composed-token layer exists precisely because a theme-invariant opacity modifier
+ * cannot express "opaque navy in light, 20% cyan in dark" — so the mapping needs the
+ * partner, not a bag of values.
+ */
+// A class-string region: the contents of a quoted string or template literal that
+// contains at least one `dark:` variant. Scanning regions rather than whole files is
+// what makes the pairing per-element.
+const REGION = /(["'`])((?:[^"'`\\]|\\.)*?dark:(?:[^"'`\\]|\\.)*?)\1/g;
+
+// ONE list, shared with COLOUR_UTILITIES above — an earlier revision kept a second
+// copy here and the two drifted, so `ring-offset` was in neither and five rows carried
+// no utility at all.
+const COLOURED = new RegExp(
+  `(?:^|\\s)((?:[a-z-]+:)*)(${COLOUR_UTILITIES})-(\\[[^\\]]+\\]|[a-z]+-\\d{2,3}|white|black|transparent|brand-[a-z]+)(\\/(?:\\d{1,3}|\\[[0-9.]+\\]))?`,
+  "g",
+);
+
+/**
+ * Extract the pair relation from ONE source text. Exported so a guard can exercise the
+ * scanner against a synthetic source instead of the live tree — which matters because
+ * Child B consumes pairs as it succeeds, so any assertion about the tree's pair COUNT
+ * marches to zero by working correctly.
+ */
+export function pairsIn(text, file = "<synthetic>") {
   const pairs = [];
-  for (const [k, v] of [...byFileUtility].sort()) {
-    if (!v.light.length || !v.dark.length) continue;
-    const [file, utility] = k.split("|");
-    const byValue = (a, b) => a.value.localeCompare(b.value);
-    const light = [...v.light].sort(byValue);
-    const dark = [...v.dark].sort(byValue);
-    const alphaSet = (xs) => JSON.stringify([...new Set(xs.map((x) => x.alpha ?? "100"))].sort());
-    pairs.push({
-      file,
-      utility,
-      light,
-      dark,
-      // The single most load-bearing fact about a pair: does it differ in alpha?
-      // If so it needs a COMPOSED token — a theme-invariant opacity modifier cannot
-      // express "opaque navy in light, 20% cyan in dark".
-      alphaDiffers: alphaSet(light) !== alphaSet(dark),
-    });
+  REGION.lastIndex = 0;
+  for (const region of text.matchAll(REGION)) {
+    const body = region[2];
+    const light = new Map();
+    const dark = new Map();
+    COLOURED.lastIndex = 0;
+    let m;
+    while ((m = COLOURED.exec(body))) {
+      const variants = (m[1] ?? "").split(":").filter(Boolean);
+      const isDark = variants.includes("dark");
+      const chain = variants.filter((v) => v !== "dark");
+      const key = [...chain, m[2]].join(":");
+      (isDark ? dark : light).set(key, { value: m[3], alpha: normaliseAlpha(m[4]) });
+    }
+    for (const [key, l] of light) {
+      const d = dark.get(key);
+      if (!d) continue;
+      pairs.push({
+        file,
+        utility: key,
+        light: l.value,
+        lightAlpha: l.alpha,
+        dark: d.value,
+        darkAlpha: d.alpha,
+        alphaDiffers: (l.alpha ?? "100") !== (d.alpha ?? "100"),
+      });
+    }
   }
+  return pairs;
+}
+
+function pairsFor(files) {
+  const pairs = [];
+  for (const rel of files) {
+    const src = stripComments(readFileSync(path.join(REPO_ROOT, rel), "utf8"), {
+      syntax: syntaxFor(rel),
+    });
+    // ONE implementation, shared with the guard. The duplicate that used to live here
+    // is how the utility list drifted in the first place.
+    pairs.push(...pairsIn(src, rel));
+  }
+  pairs.sort(
+    (a, b) =>
+      a.file.localeCompare(b.file) ||
+      a.utility.localeCompare(b.utility) ||
+      a.light.localeCompare(b.light) ||
+      a.dark.localeCompare(b.dark),
+  );
   return pairs;
 }
 
 // ---------------------------------------------------------------------------
 // Disposition for literal rows
 // ---------------------------------------------------------------------------
+
+/**
+ * The 18 Layer-1 role triplets Child B adds in slice B1. Anchored and explicit:
+ * a loose /^--(accent|ink|surface|...)/ would also swallow a future role nobody
+ * meant to exempt, and the point of this list is that adding a role is a visible
+ * decision. The seven retired `--brand-*` are deliberately NOT here — they stay
+ * dispositioned `B` because B-final removes them.
+ */
+const TOKEN_LAYER_ROLES = new RegExp(
+  "^--(?:" +
+    [
+      "accent", "accent-deep",
+      "ink", "ink-muted", "ink-dim",
+      "surface-base", "surface-raised", "surface-raised-alt", "surface-console", "surface-sunken",
+      "warning-fg", "warning-surface", "warning-border",
+      "info-fg", "info-surface", "info-border",
+      "positive-fg", "negative-fg",
+      // Added in slice B3: two "deep" surfaces the vocabulary folded into one slot,
+      // and three overlay navies B preserves rather than collapsing.
+      "warning-surface-deep", "info-surface-deep",
+      "surface-overlay", "surface-overlay-deep", "surface-overlay-deepest",
+      // Added in B4: the shadow black and the six categorical hues.
+      "elevation",
+      "chart-lead", "chart-bgv", "chart-coro", "chart-especial", "chart-instr", "chart-foh",
+    ].join("|") +
+    ")-rgb:",
+);
 
 function disposition(row) {
   const fileExempt = EXEMPT_FILES.get(row.file);
@@ -373,6 +479,17 @@ function disposition(row) {
   // Category 4 keywords that are already theme-agnostic are kept, not migrated.
   if (row.category === 4 && /transparent|currentColor/i.test(row.value)) {
     return { disposition: "keep", reason: "Already theme-agnostic" };
+  }
+  // Child B's own token layer is the DESTINATION, not a migration target.
+  //
+  // B1 adds the 18 base-role triplets to `brand.css`, and the category-12 scan
+  // sees them exactly as it sees the seven retired `--brand-*` ones. Left alone
+  // they would be dispositioned `B`, which inflates B's own row count by 18 and
+  // makes the B-final gate incoherent — category 12 is supposed to drain to zero
+  // as the seven retired declarations are removed, and it cannot drain past the
+  // roles that replace them.
+  if (row.category === 12 && TOKEN_LAYER_ROLES.test(row.value)) {
+    return { disposition: "keep", reason: "Child B's token layer — the destination vocabulary" };
   }
   // Child C owns raw palette families and white/black; Child B owns everything else.
   if (row.category === 3 || (row.category === 4 && /-(white|black)\b/.test(row.value))) {
@@ -404,7 +521,7 @@ function build() {
   );
 
   const compositing = scanCompositingClasses(files);
-  const pairs = pairsFor(literalRows);
+  const pairs = pairsFor(files);
 
   // The compared summary block — INSIDE the assertion, not a human-only header.
   // No key can express these totals, so they are stated and compared directly.

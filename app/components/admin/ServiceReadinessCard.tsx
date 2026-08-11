@@ -33,7 +33,7 @@ import ServiceIssueList from "./ServiceIssueList";
 import ServicePrimaryAction from "./ServicePrimaryAction";
 import {
   CARD_ACCENT,
-  CARD_ACCENT_HEX,
+  CARD_ACCENT_VAR,
   CARD_ACCENT_MUTED,
   CARD_BORDER,
   CARD_DIVIDER,
@@ -54,6 +54,7 @@ import {
   type SwapSource,
 } from "./serviceCardModel";
 import type { ServiceSourceStates } from "./serviceReadiness";
+import { themeColour } from "@/app/utils/themeColour";
 
 /**
  * One control's current availability, derived from the five individual source
@@ -178,7 +179,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
             */}
             <div className="flex min-w-0 items-start justify-between gap-2">
               <h3
-                className={`font-display text-xl font-bold uppercase text-[#C8D8EB] md:text-2xl ${CARD_STYLE.longText}`}
+                className={`font-display text-xl font-bold uppercase text-ink-muted md:text-2xl ${CARD_STYLE.longText}`}
               >
                 {identity.title}
               </h3>
@@ -193,7 +194,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                   className={`${CARD_STYLE.menuTrigger} shrink-0 rounded-lg px-2.5 font-label text-xs transition-colors disabled:opacity-40 ${
                     isCardSelected
                       ? "border border-white/40 bg-white/20 text-white"
-                      : "border border-transparent text-[#C8D8EB]/70 hover:bg-white/15 hover:text-white"
+                      : "border border-transparent text-ink-muted/70 hover:bg-white/15 hover:text-white"
                   }`}
                 >
                   ⇄ Equipo
@@ -209,7 +210,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                     onClick={props.onCopyPick}
                     disabled={!gates.copyInstruments.enabled}
                     title={gates.copyInstruments.reason ?? "Copiar los instrumentos del origen a este día"}
-                    className={`${CARD_STYLE.menuTrigger} shrink-0 rounded-lg border border-[#00bfff]/40 px-2.5 font-label text-xs text-[#C8D8EB]/70 transition-colors hover:bg-[#00bfff]/25 hover:text-white disabled:opacity-40`}
+                    className={`${CARD_STYLE.menuTrigger} shrink-0 rounded-lg border border-accent/40 px-2.5 font-label text-xs text-ink-muted/70 transition-colors hover:bg-accent/25 hover:text-white disabled:opacity-40`}
                   >
                     Pegar aquí
                   </button>
@@ -236,7 +237,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                     aria-expanded={menuOpen}
                     aria-label="Más acciones"
                     title="Más acciones"
-                    className={`${CARD_STYLE.menuTrigger} flex items-center justify-center rounded-lg text-[#C8D8EB]/70 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00bfff]`}
+                    className={`${CARD_STYLE.menuTrigger} flex items-center justify-center rounded-lg text-ink-muted/70 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`}
                   >
                     <KebabIcon />
                   </button>
@@ -245,7 +246,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                       <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
                       <div
                         role="menu"
-                        className={`absolute right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-[#00bfff]/25 bg-[#03101f] py-1 shadow-xl shadow-black/50 ${CARD_STYLE.menu}`}
+                        className={`absolute right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-accent/25 bg-surface-overlay-deep py-1 shadow-xl shadow-black/50 ${CARD_STYLE.menu}`}
                       >
                         {instrPills.length > 0 && (
                           <MenuItem
@@ -270,7 +271,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                             else props.onUnpublish();
                           }}
                         />
-                        <div className="my-1 border-t border-[#00bfff]/15" />
+                        <div className="my-1 border-t border-accent/15" />
                         <MenuItem
                           icon={<TrashIcon />}
                           label="Eliminar servicio"
@@ -288,7 +289,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
               )}
             </div>
 
-            <p className="font-label text-xs capitalize text-[#C8D8EB]/60">{identity.dateText}</p>
+            <p className="font-label text-xs capitalize text-ink-muted/60">{identity.dateText}</p>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               <span
                 className={`rounded-full px-2 py-0.5 font-label text-[11px] uppercase tracking-widest ${SERVICE_BADGE[role._type]}`}
@@ -302,7 +303,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                 className="!py-0.5"
               />
               {identity.relative && (
-                <span className="font-label text-[11px] uppercase tracking-widest text-[#C8D8EB]/60">
+                <span className="font-label text-[11px] uppercase tracking-widest text-ink-muted/60">
                   {identity.relative}
                 </span>
               )}
@@ -365,21 +366,22 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                       return <li key={song.song._id}>{renderRow(song, n)}</li>;
                     }
 
-                    const hex = CARD_ACCENT_HEX[role._type];
+                    const accentVar = CARD_ACCENT_VAR[role._type];
                     return (
                       <li key={run.songs[0].song.song._id + "_m"} className="relative pl-3.5">
                         <span
                           aria-hidden
                           className="absolute bottom-1 left-0.5 top-5 w-[2px] rounded-full"
                           style={{
-                            background: `linear-gradient(to bottom, ${hex}00, ${hex}55 12%, ${hex}55 88%, ${hex}00)`,
+                            background: `linear-gradient(to bottom, ${themeColour(accentVar, 0)}, ${themeColour(accentVar, 0.3333)} 12%, ${themeColour(accentVar, 0.3333)} 88%, ${themeColour(accentVar, 0)})`,
                           }}
                         />
-                        <div className="mb-1 flex items-center gap-1">
-                          <ChainLinkIcon color={hex} opacity={0.7} />
+                        {/* `color` on the wrapper — see DayCard: a token in `stroke=` is dropped. */}
+                        <div className="mb-1 flex items-center gap-1" style={{ color: themeColour(accentVar) }}>
+                          <ChainLinkIcon opacity={0.7} />
                           <span
                             className="font-label text-[10px] uppercase tracking-[0.18em]"
-                            style={{ color: `${hex}99` }}
+                            style={{ color: `${themeColour(accentVar, 0.6)}` }}
                           >
                             Medley
                           </span>
@@ -390,7 +392,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                               {si > 0 && (
                                 <span
                                   className="-my-0.5 block w-5 text-center font-label text-[11px] leading-none"
-                                  style={{ color: `${hex}70` }}
+                                  style={{ color: `${themeColour(accentVar, 0.4392)}` }}
                                 >
                                   +
                                 </span>
@@ -543,7 +545,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                             key={i}
                             label={p.label}
                             value={dn(p.person)}
-                            accentHex={CARD_ACCENT_HEX[role._type]}
+                            accentVar={CARD_ACCENT_VAR[role._type]}
                             isConflict={highlightConflict && conflictIds.has(p.person._id)}
                             conflictNote={conflictNotes.get(p.person._id)}
                           />
@@ -564,7 +566,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                             key={i}
                             label={p.label}
                             value={dn(p.person)}
-                            accentHex={CARD_ACCENT_HEX[role._type]}
+                            accentVar={CARD_ACCENT_VAR[role._type]}
                             isConflict={highlightConflict && conflictIds.has(p.person._id)}
                             conflictNote={conflictNotes.get(p.person._id)}
                           />
@@ -603,7 +605,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
         card.isPast && !modeActive
           ? `${CARD_BORDER[role._type]} opacity-50 shadow-md`
           : isCardSelected || (copyMode && isCopySource)
-            ? `${CARD_BORDER[role._type]} ring-2 ring-[#00bfff]/40 shadow-md`
+            ? `${CARD_BORDER[role._type]} ring-2 ring-accent/40 shadow-md`
             : highlightConflict
               ? "border-2 border-red-500 shadow-lg shadow-red-500/30 ring-2 ring-red-500/40"
               : `${CARD_BORDER[role._type]} shadow-md`
@@ -699,13 +701,13 @@ function VocalCol({
 function TeamRow({
   label,
   value,
-  accentHex,
+  accentVar,
   isConflict,
   conflictNote,
 }: {
   label: string;
   value: string;
-  accentHex: string;
+  accentVar: string;
   isConflict?: boolean;
   conflictNote?: string;
 }) {
@@ -713,17 +715,17 @@ function TeamRow({
     <div
       className="flex min-w-0 items-stretch overflow-hidden rounded-lg"
       style={{
-        border: isConflict ? "1px solid rgba(239,68,68,0.7)" : `1px solid ${accentHex}40`,
+        border: isConflict ? "1px solid rgba(239,68,68,0.7)" : `1px solid ${themeColour(accentVar, 0.251)}`,
       }}
     >
       <span
         className="flex min-w-[3.5rem] shrink-0 items-center justify-center rounded-l-[7px] px-2.5 font-label text-xs uppercase tracking-wide"
         style={{
-          background: isConflict ? "rgba(239,68,68,0.18)" : `${accentHex}18`,
-          color: isConflict ? "#f87171" : accentHex,
+          background: isConflict ? "rgba(239,68,68,0.18)" : `${themeColour(accentVar, 0.0941)}`,
+          color: isConflict ? themeColour("--negative-fg-rgb") : themeColour(accentVar),
           borderRight: isConflict
             ? "1px solid rgba(239,68,68,0.45)"
-            : `1px solid ${accentHex}30`,
+            : `1px solid ${themeColour(accentVar, 0.1882)}`,
         }}
       >
         {label}
@@ -757,10 +759,10 @@ function MemberChip({
       onClick={onClick}
       className={`rounded-full border px-2 py-0.5 font-label text-[11px] uppercase tracking-widest transition-all ${
         isSource
-          ? "scale-105 border-[#00bfff] bg-[#00bfff]/30 text-[#00bfff] ring-1 ring-[#00bfff]/50"
+          ? "scale-105 border-accent bg-accent/30 text-accent ring-1 ring-accent/50"
           : onClick
-            ? "cursor-pointer border-[#003572]/20 bg-[#003572]/10 text-gray-400 hover:border-[#00bfff]/40 hover:bg-[#00bfff]/20 hover:text-[#00bfff] dark:border-[#00bfff]/20 dark:bg-[#00bfff]/10"
-            : "border-[#003572]/20 bg-[#003572]/10 text-gray-400 dark:border-[#00bfff]/20 dark:bg-[#00bfff]/10"
+            ? "cursor-pointer border-accent/20 bg-accent/10 text-gray-400 hover:border-accent/40 hover:bg-accent/20 hover:text-accent"
+            : "border-accent/20 bg-accent/10 text-gray-400"
       }`}
     >
       {name}
@@ -793,7 +795,7 @@ function IconAction({
       disabled={disabled}
       aria-label={label}
       title={disabled ? (gate.reason ?? label) : label}
-      className={`${CARD_STYLE.menuTrigger} flex items-center justify-center rounded-lg text-[#C8D8EB]/70 transition-colors hover:bg-white/15 hover:text-white disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00bfff]`}
+      className={`${CARD_STYLE.menuTrigger} flex items-center justify-center rounded-lg text-ink-muted/70 transition-colors hover:bg-white/15 hover:text-white disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`}
     >
       {icon}
     </button>
@@ -823,7 +825,7 @@ function MenuItem({
         disabled={disabled}
         title={disabled ? (gate?.reason ?? undefined) : undefined}
         className={`flex min-h-[44px] w-full min-w-0 items-center gap-2.5 px-3 text-left text-sm transition-colors disabled:opacity-40 ${
-          danger ? "text-red-300 hover:bg-red-500/15" : "text-[#C8D8EB] hover:bg-white/10"
+          danger ? "text-red-300 hover:bg-red-500/15" : "text-ink-muted hover:bg-white/10"
         }`}
       >
         <span className="shrink-0 opacity-80">{icon}</span>

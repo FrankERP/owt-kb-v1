@@ -88,17 +88,17 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
     <div className="mx-auto max-w-7xl space-y-12 px-6 pb-20 pt-12">
 
       {/* ── Stats + Controls ── */}
-      <div className="flex flex-col gap-5 border-b border-brand-steel/10 pb-7 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-5 border-b border-ink-dim/10 pb-7 sm:flex-row sm:items-center">
         {/* Stats */}
         <div className="flex items-baseline gap-4 flex-1">
           <div className="flex items-baseline gap-1.5">
-            <span className="font-display text-4xl text-brand-beam">{tags.length}</span>
-            <span className="font-label text-[10px] uppercase tracking-[0.2em] text-brand-steel/55">etiquetas</span>
+            <span className="font-display text-4xl text-accent">{tags.length}</span>
+            <span className="font-label text-[10px] uppercase tracking-[0.2em] text-ink-dim/55">etiquetas</span>
           </div>
           <span className="text-gray-700 text-sm">·</span>
           <div className="flex items-baseline gap-1.5">
-            <span className="font-display text-4xl text-brand-frost">{totalSongs}</span>
-            <span className="font-label text-[10px] uppercase tracking-[0.2em] text-brand-steel/55">canciones</span>
+            <span className="font-display text-4xl text-ink">{totalSongs}</span>
+            <span className="font-label text-[10px] uppercase tracking-[0.2em] text-ink-dim/55">canciones</span>
           </div>
         </div>
 
@@ -111,10 +111,10 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
                 onClick={() => setSort(mode)}
                 aria-pressed={sort === mode}
                 className={`px-3 py-1.5 font-label text-[11px] uppercase tracking-widest transition-colors duration-150
-                  ${i > 0 ? "border-l border-[#003572]/20 dark:border-[#00bfff]/15" : ""}
+                  ${i > 0 ? "border-l border-surface-accent-20" : ""}
                   ${sort === mode
-                    ? "bg-brand-beam/15 text-brand-beam"
-                    : "text-brand-steel/60 hover:bg-brand-beam/5 hover:text-brand-frost"
+                    ? "bg-accent/15 text-accent"
+                    : "text-ink-dim/60 hover:bg-accent/5 hover:text-ink"
                   }`}
               >
                 {mode === "popular" ? "Popular" : "A–Z"}
@@ -127,7 +127,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar..."
-              className="w-36 bg-transparent py-2 pl-8 pr-8 font-label text-sm text-brand-frost placeholder:text-brand-steel/45 focus:outline-none sm:w-48"
+              className="w-36 bg-transparent py-2 pl-8 pr-8 font-label text-sm text-ink placeholder:text-ink-dim/45 focus:outline-none sm:w-48"
             />
             <svg
               className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none"
@@ -142,7 +142,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
                 type="button"
                 onClick={() => setQuery("")}
                 aria-label="Limpiar búsqueda"
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-500 hover:text-[#00bfff] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00bfff]/50 transition-colors"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-500 hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 transition-colors"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -165,15 +165,15 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
                 <Link key={slug} href={`/tag/${slug}`}>
                     <div className="brand-facet-panel brand-surface brand-surface-interactive group relative cursor-pointer overflow-hidden rounded-2xl p-6">
                     {/* Ambient glow */}
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-[#00bfff]/[0.05] to-transparent pointer-events-none rounded-xl" />
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-accent/[0.05] to-transparent pointer-events-none rounded-xl" />
                     {/* Progress bar */}
                     <div
-                      className="absolute bottom-0 left-0 h-[2px] bg-gradient-to-r from-[#00bfff] to-[#003572] transition-all duration-500 group-hover:h-[3px]"
+                      className="absolute bottom-0 left-0 h-[2px] bg-gradient-to-r from-accent to-accent-deep transition-all duration-500 group-hover:h-[3px]"
                       style={{ width: `${Math.max(pct, 12)}%` }}
                     />
                     <div className="relative flex items-start justify-between gap-3">
                       <div className="space-y-1.5">
-                        <h3 className="font-display text-2xl capitalize leading-tight text-brand-frost transition-colors duration-200 group-hover:text-brand-beam">
+                        <h3 className="font-display text-2xl capitalize leading-tight text-ink transition-colors duration-200 group-hover:text-accent">
                           {label}
                         </h3>
                         <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">
@@ -185,7 +185,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
                           </p>
                         )}
                       </div>
-                      <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-brand-beam/15 bg-brand-beam/[0.055] text-brand-beam/50 transition-colors duration-200 group-hover:border-brand-beam/30 group-hover:text-brand-beam">
+                      <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-accent/15 bg-accent/[0.055] text-accent/50 transition-colors duration-200 group-hover:border-accent/30 group-hover:text-accent">
                         {icon}
                       </span>
                     </div>
@@ -210,10 +210,10 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
                 <Link key={tag._id} href={`/tag/${tag.slug.current}`}>
                   <div className="brand-library-module brand-surface-interactive group relative cursor-pointer overflow-hidden p-4">
                     <div
-                      className="absolute bottom-0 left-0 h-[2px] bg-gradient-to-r from-[#00bfff]/50 to-[#003572]/30 group-hover:from-[#00bfff]/80 transition-colors duration-200"
+                      className="absolute bottom-0 left-0 h-[2px] bg-gradient-to-r from-accent/50 to-accent-deep/30 group-hover:from-accent/80 transition-colors duration-200"
                       style={{ width: `${Math.max(pct, 8)}%` }}
                     />
-                    <h3 className="mb-1 font-display text-sm capitalize leading-snug text-brand-frost transition-colors duration-200 group-hover:text-brand-beam">
+                    <h3 className="mb-1 font-display text-sm capitalize leading-snug text-ink transition-colors duration-200 group-hover:text-accent">
                       #{tag.name}
                     </h3>
                     <p className="font-label text-[11px] uppercase tracking-widest text-gray-600">

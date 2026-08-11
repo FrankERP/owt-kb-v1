@@ -34,9 +34,9 @@ const SERVICE_LABEL: Record<string, string> = {
   sunday_role: "Dom", saturday_role: "Sáb", special_role: "Esp",
 };
 const SERVICE_COLOR: Record<string, string> = {
-  sunday_role:   "bg-[#003572] dark:bg-[#001f3f] text-[#C8D8EB]",
-  saturday_role: "bg-[#78350f] dark:bg-[#1c0800] text-[#C8D8EB]",
-  special_role:  "bg-[#4c1d95] dark:bg-[#1e0a3c] text-[#C8D8EB]",
+  sunday_role:   "bg-surface-sunken text-ink-muted",
+  saturday_role: "bg-warning-surface-deep text-ink-muted",
+  special_role:  "bg-info-surface-deep text-ink-muted",
 };
 
 const dn = (m: { member_name: string; alias?: string }) => m.alias?.trim() || m.member_name;
@@ -120,7 +120,7 @@ export default function AvailabilityPanel() {
     return (
       <div className="space-y-3">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-16 rounded-xl bg-[#003572]/10 dark:bg-[#00bfff]/5 animate-pulse" />
+          <div key={i} className="h-16 rounded-xl bg-surface-accent-wash animate-pulse" />
         ))}
       </div>
     );
@@ -139,15 +139,15 @@ export default function AvailabilityPanel() {
               : "Sin conflictos en próximos servicios"}
           </p>
         </div>
-        <div className="flex rounded-lg border border-[#00bfff]/20 overflow-hidden shrink-0">
+        <div className="flex rounded-lg border border-accent/20 overflow-hidden shrink-0">
           {(["conflicts", "matrix"] as const).map(v => (
             <button
               key={v}
               onClick={() => setViewMode(v)}
               className={`px-3 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
                 viewMode === v
-                  ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#00bfff]"
-                  : "text-gray-500 hover:text-[#00bfff]"
+                  ? "bg-surface-accent-solid text-accent"
+                  : "text-gray-500 hover:text-accent"
               }`}
             >
               {v === "conflicts" ? "Conflictos" : "Matriz"}
@@ -270,7 +270,7 @@ export default function AvailabilityPanel() {
             <table className="w-full text-left border-separate border-spacing-0">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-10 bg-[#C8D8EB] dark:bg-[#010b17] pr-3 pb-2 font-label text-[11px] uppercase tracking-widest text-gray-500 min-w-[100px]">
+                  <th className="sticky left-0 z-10 bg-surface-base pr-3 pb-2 font-label text-[11px] uppercase tracking-widest text-gray-500 min-w-[100px]">
                     Miembro
                   </th>
                   {upcoming.map(role => (
@@ -287,8 +287,8 @@ export default function AvailabilityPanel() {
               </thead>
               <tbody>
                 {matrixMembers.map(member => (
-                  <tr key={member._id} className="border-t border-[#003572]/10 dark:border-[#00bfff]/10">
-                    <td className="sticky left-0 z-10 bg-[#C8D8EB] dark:bg-[#010b17] pr-3 py-1.5 font-body text-sm">
+                  <tr key={member._id} className="border-t border-accent/10">
+                    <td className="sticky left-0 z-10 bg-surface-base pr-3 py-1.5 font-body text-sm">
                       {dn(member)}
                     </td>
                     {upcoming.map(role => {
@@ -312,7 +312,7 @@ export default function AvailabilityPanel() {
           <div className="flex items-center gap-4 mt-4 flex-wrap">
             {([
               ["conflict",   "bg-red-500",    "Asignado + No disponible"],
-              ["assigned",   "bg-[#00bfff]/70","Asignado"],
+              ["assigned",   "bg-accent/70","Asignado"],
               ["unavailable","bg-amber-500",   "No disponible (no asignado)"],
               ["empty",      "bg-gray-700",    "Sin datos"],
             ] as const).map(([, color, label]) => (
@@ -339,8 +339,8 @@ function MatrixCell({ status, note }: { status: CellStatus; note?: string }) {
   }
   if (status === "assigned") {
     return (
-      <span title="Asignado" className="inline-flex items-center justify-center w-6 h-6 rounded-sm bg-[#00bfff]/15 border border-[#00bfff]/30">
-        <span className="text-[#00bfff] text-xs leading-none">✓</span>
+      <span title="Asignado" className="inline-flex items-center justify-center w-6 h-6 rounded-sm bg-accent/15 border border-accent/30">
+        <span className="text-accent text-xs leading-none">✓</span>
       </span>
     );
   }

@@ -41,7 +41,7 @@ export default function AudioPlayer() {
 
   return (
     <div
-      className="fixed bottom-0 inset-x-0 z-40 bg-[#0a1929]/95 backdrop-blur-md border-t border-[#00bfff]/20 shadow-lg"
+      className="fixed bottom-0 inset-x-0 z-40 bg-surface-raised-alt/95 backdrop-blur-md border-t border-accent/20 shadow-lg"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <AudioTransport
