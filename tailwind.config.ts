@@ -11,21 +11,6 @@ const config: Config = {
 	theme: {
 		extend: {
 			colors: {
-				// The seven retired keys. They stay until B-final, so both spellings
-				// work while call sites migrate in batches. Removing one while a call
-				// site still uses it is the single unsafe transition in Child B:
-				// `bg-brand-beam` with no `brand.beam` key compiles to NOTHING and the
-				// element loses its colour silently.
-				brand: {
-					blackout: "rgb(var(--brand-blackout) / <alpha-value>)",
-					console: "rgb(var(--brand-console) / <alpha-value>)",
-					deck: "rgb(var(--brand-deck) / <alpha-value>)",
-					beam: "rgb(var(--brand-beam) / <alpha-value>)",
-					signal: "rgb(var(--brand-signal) / <alpha-value>)",
-					frost: "rgb(var(--brand-frost) / <alpha-value>)",
-					steel: "rgb(var(--brand-steel) / <alpha-value>)",
-				},
-
 				// Child B, Layer 1 — the 18 base roles. Alpha-capable: each is a
 				// triplet, so `bg-accent/20` works. `theme.extend.colors` is ADDITIVE,
 				// which is the whole reason B is sliceable at all.

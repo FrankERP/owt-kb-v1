@@ -1,12 +1,8 @@
 :root {
   color-scheme: dark;
-  --brand-blackout: 1 11 23;
-  --brand-console: 7 22 36;
-  --brand-deck: 13 34 52;
-  --brand-beam: 18 200 244;
-  --brand-signal: 55 245 138;
-  --brand-frost: 215 231 246;
-  --brand-steel: 127 148 168;
+  /* The four non-colour --brand-* SURVIVE B. They are outside the codemod, outside
+     the lint rule and outside the vocabulary, and they are the reason the B-final gate
+     could never demand category 11 reach zero — 7 of its 9 rows are these. */
   --brand-radius-panel: 16px;
   --brand-radius-control: 10px;
   --brand-duration-fast: 150ms;

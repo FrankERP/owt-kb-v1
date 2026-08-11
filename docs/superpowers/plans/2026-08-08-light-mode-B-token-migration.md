@@ -7,11 +7,24 @@
 This is the largest child: **1,628 literal rows across 65 files**, plus 22 `brand.css` rule
 bodies and the typography theme.
 
-**Progress.** B1 (token layer) and B2 (`brand.css` bodies) are merged. B3 migrated the
-five-file accent unit: **129 rows — 92 value-identical, 16 inside the two licensed diffs,
-21 discarded light halves** — leaving **1,499**. The pair relation is captured at
+**Status: COMPLETE.** All slices merged — B1 (token layer), B2 (`brand.css` bodies),
+B3 (the five-file accent unit), B4 (the bulk call-site migration and the special cases),
+and B-final (removal + lint clauses).
+
+**30 roles** and **23 composed tokens** now carry the app's colour. The seven retired
+`--brand-*` colour declarations and their Tailwind keys are gone; the four non-colour
+`--brand-*` (radius ×2, duration ×2) survive by design.
+
+**102 rows keep a `B` disposition and every one is expected residue:** 85 `currentColor`
+SVG attributes and 2 `bg-current` keywords, which are already theme-agnostic and need no
+token; 8 `rgba()` rows in Child C's `red-500`/`amber-400` families, migrated by B but not
+lint-enforced until C; and the 7 `--brand-radius-*` arbitrary values the vocabulary leaves
+alone — which is why the B-final gate could never demand category 11 reach zero.
+
+The pair relation is captured at
 [`light-mode-pairs-snapshot.json`](../artifacts/light-mode-pairs-snapshot.json), taken at
-B1's merge before any batch consumed it. It ships **dark-only** and, apart from **two** licensed
+B1's merge before any batch consumed it — Child D's only record of which light literal
+partnered which dark one. It ships **dark-only** and, apart from **two** licensed
 normalisations, the app must render **identically** afterwards.
 
 No secrets, credentials or personal data appear here. Colour literals are design values.

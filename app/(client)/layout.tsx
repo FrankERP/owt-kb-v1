@@ -39,6 +39,11 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  // Static viewport themeColor — the browser chrome colour, read before any CSS is
+  // parsed, so it cannot be a token. Child E makes it theme-responsive under parent
+  // invariant 17. Row-level: three of this file's other rows are Child B's own, one of
+  // them the `selection:` utility that motivated the var()-integrity guard.
+  // eslint-disable-next-line no-restricted-syntax -- pre-CSS viewport colour, see ADR/parent invariant 17
   themeColor: "#010b17",
 };
 
