@@ -306,6 +306,10 @@ coverage. The 45 rows are recorded in `brand.css` and enforced by nothing, delib
   C4**; `PlannerGrid.test.tsx:582` and `:604` assert `.border-red-500\/50` has length 0 and go
   **vacuously true at C3** — a dead guard that still passes, which is worse than a failing one.
   Budget all three in their slices and re-point rather than delete.
+  `colourInventory.test.ts:75`/`:78` also name palette spellings, but those are the scanner's
+  own synthetic fixtures — they exist to prove detection still works, and `gray` remains a
+  Tailwind family regardless of what C migrates, so they are correct unchanged. Named here so
+  a future reader does not re-derive it.
 - **The gallery is unmeasured but linted.** `app/(gallery)` is excluded from the inventory
   (`EXCLUDED_TREES`) yet sits inside the eslint block's `files: ["app/**/*.{ts,tsx}"]` with no
   ignore. It carries **0 palette classes and 0 `rgb()` literals** as of `fbedd70`, so
