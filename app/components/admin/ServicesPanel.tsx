@@ -1482,7 +1482,7 @@ function PublicationFooter({
           disabled={loading || disabled}
           className={`min-h-[44px] flex-1 rounded-lg px-3 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${
             danger
-              ? "bg-orange-600/70 hover:bg-orange-600"
+              ? "bg-availability-deep/70 hover:bg-availability-deep"
               : "bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30"
           }`}
         >

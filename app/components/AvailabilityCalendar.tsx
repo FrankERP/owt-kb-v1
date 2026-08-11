@@ -271,7 +271,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
       )}
 
       {upcomingCount > 0 && (
-        <p className="font-label text-[11px] uppercase tracking-widest text-orange-400">
+        <p className="font-label text-[11px] uppercase tracking-widest text-availability-strong">
           {upcomingCount} fecha{upcomingCount !== 1 ? "s" : ""} marcada{upcomingCount !== 1 ? "s" : ""} como no disponible
         </p>
       )}
@@ -348,15 +348,15 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
                         isPast
                           ? "text-mono-700 cursor-default"
                           : isPopoverOpen
-                          ? "bg-orange-500/50 text-orange-200 border border-orange-400 ring-1 ring-orange-400/40"
+                          ? "bg-availability-fg/50 text-availability-faint border border-availability-strong ring-1 ring-availability-strong/40"
                           : unavailable
-                          ? "bg-orange-500/30 text-orange-300 border border-orange-500/50 hover:bg-orange-500/40"
+                          ? "bg-availability-fg/30 text-availability-soft border border-availability-fg/50 hover:bg-availability-fg/40"
                           : "text-mono-300 hover:bg-accent/10 hover:text-accent"
                       }`}
                     >
                       {dayNum}
                       {hasService && (
-                        <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${unavailable ? "bg-orange-400/60" : isPast ? "bg-mono-600" : "bg-accent/70"}`} />
+                        <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${unavailable ? "bg-availability-strong/60" : isPast ? "bg-mono-600" : "bg-accent/70"}`} />
                       )}
                       {hasNote && (
                         <span className="absolute top-0.5 right-0.5 w-1 h-1 rounded-full bg-white/50" />
@@ -400,7 +400,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
           >
             {/* Date label + close */}
             <div className="flex items-start justify-between gap-2">
-              <p className="font-label text-[11px] uppercase tracking-widest text-orange-400/80 leading-tight capitalize">
+              <p className="font-label text-[11px] uppercase tracking-widest text-availability-strong/80 leading-tight capitalize">
                 {fmtDayLabel(popover.iso)}
               </p>
               <button

@@ -176,7 +176,7 @@ export const SERVICE_LABEL: Record<ServiceType, string> = {
 };
 
 export const SERVICE_BADGE: Record<ServiceType, string> = {
-  sunday_role: "bg-orange-500/15 text-orange-400 border border-orange-500/30",
+  sunday_role: "bg-availability-fg/15 text-availability-strong border border-availability-fg/30",
   saturday_role: "bg-recency-fg/15 text-recency-strong border border-recency-strong/30",
   special_role: "bg-info-fg/15 text-info-fg border border-info-fg/30",
 };

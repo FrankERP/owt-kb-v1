@@ -457,7 +457,7 @@ function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDele
             </span>
           ))}
           {r.weekExclusions.map(we => (
-            <span key={we.id} className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/30">
+            <span key={we.id} className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-availability-fg/15 text-availability-strong border border-availability-fg/30">
               sem.{we.week} {we.pattern}
             </span>
           ))}
@@ -3374,13 +3374,13 @@ export default function MonthGenerator({
           byPerson.get(n.name)!.push({ date: n.date, service: n.service });
         }
         return (
-          <div className="rounded-lg border border-orange-500/25 bg-orange-500/10 px-3 py-2.5 space-y-1.5">
-            <p className="font-label text-[11px] uppercase tracking-widest text-orange-400">
+          <div className="rounded-lg border border-availability-fg/25 bg-availability-fg/10 px-3 py-2.5 space-y-1.5">
+            <p className="font-label text-[11px] uppercase tracking-widest text-availability-strong">
               No disponibles este mes
             </p>
             {Array.from(byPerson.entries()).map(([name, items]) => (
               <p key={name} className="font-body text-xs text-mono-400">
-                <span className="text-orange-300 font-semibold">{name}</span>
+                <span className="text-availability-soft font-semibold">{name}</span>
                 {" — "}
                 {items.map(i => `${i.service} ${new Date(i.date + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })}`).join(", ")}
               </p>
