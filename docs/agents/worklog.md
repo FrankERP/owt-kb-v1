@@ -28,6 +28,8 @@ the agents actually did their jobs.
 | `outcome` | yes | agent trailer | `ok` \| `findings` \| `approved` \| `changes_required` \| `failed` \| `no_result` |
 | `summary` | yes | agent trailer | One line: what came back |
 | `artifacts` | no | coordinator | Paths, commits, or docs the dispatch touched or produced |
+| `tokens` | no | coordinator | `subagent_tokens` from the dispatch result's usage block, when available |
+| `duration_ms` | no | coordinator | `duration_ms` from the same usage block (added 2026-08-11; earlier entries lack both) |
 
 ## Who writes it
 
@@ -41,7 +43,9 @@ physically cannot write files — so agents *report* their entry and the coordin
 (`skeptical-reviewer` places its trailer *after* the mandatory verdict block, since
 its contract requires the verdict structure to close the review body.)
 
-The coordinator stamps `ts`, `cycle`, `platform`, and `artifacts`, then appends.
+The coordinator stamps `ts`, `cycle`, `platform`, and `artifacts` — plus `tokens`
+and `duration_ms` from the dispatch result's usage block when the platform reports
+them — then appends.
 
 Two entries agents cannot report for themselves, and the coordinator must write:
 
