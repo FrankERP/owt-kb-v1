@@ -75,7 +75,7 @@ const ROLES: { value: OWTRole; label: string }[] = [
 ];
 
 const ROLE_BADGE: Record<OWTRole, string> = {
-  "super-admin":    "bg-[#00bfff]/15 text-[#00bfff] border border-[#00bfff]/30",
+  "super-admin":    "bg-accent/15 text-accent border border-accent/30",
   "admin":          "bg-blue-500/15 text-blue-400 border border-blue-500/30",
   "content-editor": "bg-purple-500/15 text-purple-400 border border-purple-500/30",
   "member":         "bg-gray-500/15 text-gray-400 border border-gray-500/30",
@@ -93,7 +93,7 @@ const inputCls =
   "brand-search-console w-full px-3 py-2.5 bg-transparent font-body text-sm focus:outline-none transition-colors";
 
 const selectCls =
-  "brand-search-console w-full px-3 py-2.5 bg-[#010b17] font-body text-sm focus:outline-none transition-colors";
+  "brand-search-console w-full px-3 py-2.5 bg-surface-base font-body text-sm focus:outline-none transition-colors";
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 function Avatar({
@@ -120,8 +120,8 @@ function Avatar({
         // eslint-disable-next-line @next/next/no-img-element
         <img src={photoUrl} alt={name} className="w-full h-full object-cover" />
       ) : (
-        <div className="w-full h-full bg-[#003572] dark:bg-[#00bfff]/10 flex items-center justify-center">
-          <span className="font-label text-xs text-[#00bfff]">{initials}</span>
+        <div className="w-full h-full bg-surface-accent-l100-d10 flex items-center justify-center">
+          <span className="font-label text-xs text-accent">{initials}</span>
         </div>
       )}
       {onClick && (
@@ -284,8 +284,8 @@ export function MemberForm({
                 onClick={() => toggleType(value)}
                 className={`flex-1 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
                   active
-                    ? "border-[#00bfff] bg-[#00bfff]/15 text-[#00bfff]"
-                    : "border-[#00bfff]/20 text-gray-500 hover:border-[#00bfff]/50"
+                    ? "border-accent bg-accent/15 text-accent"
+                    : "border-accent/20 text-gray-500 hover:border-accent/50"
                 }`}
               >
                 {label}
@@ -309,10 +309,10 @@ export function MemberForm({
         </div>
       )}
       <div className="flex gap-3 pt-1">
-        <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
+        <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent transition-colors">
           Cancelar
         </button>
-        <button type="submit" disabled={loading} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+        <button type="submit" disabled={loading} className="flex-1 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
           {loading ? "Guardando..." : "Guardar"}
         </button>
       </div>
@@ -347,7 +347,7 @@ function PasswordForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <p className="font-body text-sm text-gray-400">
-        Establecer contraseña para <span className="text-[#00bfff]">{member.member_name}</span>
+        Establecer contraseña para <span className="text-accent">{member.member_name}</span>
       </p>
       {err && <p className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">{err}</p>}
       <div className="space-y-1">
@@ -359,10 +359,10 @@ function PasswordForm({
         <input className={inputCls} type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required placeholder="Repetir contraseña" />
       </div>
       <div className="flex gap-3 pt-1">
-        <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
+        <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent transition-colors">
           Cancelar
         </button>
-        <button type="submit" disabled={loading} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+        <button type="submit" disabled={loading} className="flex-1 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
           {loading ? "Guardando..." : "Establecer"}
         </button>
       </div>
@@ -396,8 +396,8 @@ function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) =>
               onClick={() => onChange(id)}
               className={`font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${
                 active === id
-                  ? "bg-brand-beam/15 text-brand-beam shadow-[inset_0_0_0_1px_rgb(var(--brand-beam)/0.15)]"
-                  : "text-brand-steel/60 hover:bg-brand-beam/[0.04] hover:text-brand-frost"
+                  ? "bg-accent/15 text-accent shadow-[inset_0_0_0_1px_rgb(var(--brand-beam)/0.15)]"
+                  : "text-ink-dim/60 hover:bg-accent/[0.04] hover:text-ink"
               }`}
             >
               {label}
@@ -406,7 +406,7 @@ function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) =>
         </div>
       </div>
       {/* Scroll-fade hint (mobile, where tabs overflow) */}
-      <div className="md:hidden pointer-events-none absolute top-0 right-0 bottom-1 w-8 bg-gradient-to-l from-[#C8D8EB] dark:from-[#010b17] to-transparent" />
+      <div className="md:hidden pointer-events-none absolute top-0 right-0 bottom-1 w-8 bg-gradient-to-l from-surface-base to-transparent" />
     </div>
   );
 }
@@ -695,7 +695,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
         </div>
         <button
           onClick={() => openModal({ type: "add" })}
-          className="flex items-center gap-2 rounded-lg border border-brand-beam/30 bg-brand-beam/15 px-4 py-2.5 font-label text-xs uppercase tracking-widest text-brand-beam transition-colors hover:bg-brand-beam/25"
+          className="flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/15 px-4 py-2.5 font-label text-xs uppercase tracking-widest text-accent transition-colors hover:bg-accent/25"
         >
           <span className="text-base leading-none">+</span>
           Agregar
@@ -714,8 +714,8 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
                 onClick={() => { setFilterKey(k); setFilterValue(""); }}
                 className={`px-3 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
                   filterKey === k
-                    ? "bg-brand-beam/15 text-brand-beam"
-                    : "text-brand-steel/60 hover:text-brand-beam"
+                    ? "bg-accent/15 text-accent"
+                    : "text-ink-dim/60 hover:text-accent"
                 }`}
               >
                 {k === "type" ? "Tipo" : "Rol"}
@@ -727,7 +727,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
           <select
             value={filterValue}
             onChange={(e) => setFilterValue(e.target.value)}
-            className="brand-search-console min-w-[120px] flex-1 bg-[#010b17] px-3 py-2 font-body text-sm text-brand-frost/80 focus:outline-none"
+            className="brand-search-console min-w-[120px] flex-1 bg-surface-base px-3 py-2 font-body text-sm text-ink/80 focus:outline-none"
           >
             <option value="">{filterKey === "type" ? "Todos los tipos" : "Todos los roles"}</option>
             {filterKey === "type"
@@ -751,8 +751,8 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
                 onClick={() => setSortDir(d)}
                 className={`px-3 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
                   sortDir === d
-                    ? "bg-brand-beam/15 text-brand-beam"
-                    : "text-brand-steel/60 hover:text-brand-beam"
+                    ? "bg-accent/15 text-accent"
+                    : "text-ink-dim/60 hover:text-accent"
                 }`}
               >
                 {d === "asc" ? "A→Z" : "Z→A"}
@@ -771,7 +771,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
           <input
-            className="w-full bg-transparent py-2.5 pl-9 pr-8 font-body text-sm placeholder:text-brand-steel/40 focus:outline-none"
+            className="w-full bg-transparent py-2.5 pl-9 pr-8 font-body text-sm placeholder:text-ink-dim/40 focus:outline-none"
             placeholder="Buscar por nombre, alias o email…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -779,7 +779,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
           {query && (
             <button
               onClick={() => setQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-[#00bfff] transition-colors text-lg leading-none"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-accent transition-colors text-lg leading-none"
             >
               ×
             </button>
@@ -791,7 +791,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
       {loading && (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-16 rounded-xl bg-[#003572]/10 dark:bg-[#00bfff]/5 animate-pulse" />
+            <div key={i} className="h-16 rounded-xl bg-surface-accent-wash animate-pulse" />
           ))}
         </div>
       )}
@@ -831,13 +831,13 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
                     : <p className="font-body text-sm font-semibold truncate">{m.member_name}</p>
                   }
                   {m.alias?.trim() && (
-                    <span className="font-body text-sm text-[#00bfff]/60 truncate">{m.member_name}</span>
+                    <span className="font-body text-sm text-accent/60 truncate">{m.member_name}</span>
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                  <p className="font-body text-sm text-[#C8D8EB]/50 dark:text-[#C8D8EB]/35 truncate">{m.email}</p>
+                  <p className="font-body text-sm text-surface-ink-l50-d35 truncate">{m.email}</p>
                   {(m.memberType ?? []).map(t => (
-                    <span key={t} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-400 border border-[#003572]/15 dark:border-[#00bfff]/15">
+                    <span key={t} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-accent/10 text-gray-400 border border-accent/15">
                       {TYPE_LABEL[t] ?? t}
                     </span>
                   ))}
@@ -896,7 +896,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-[#003572] dark:bg-[#0a1929] border border-[#00bfff]/30 font-label text-xs uppercase tracking-widest shadow-xl">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-surface-raised-alt border border-accent/30 font-label text-xs uppercase tracking-widest shadow-xl">
           {toast}
         </div>
       )}
@@ -926,7 +926,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
             ¿Eliminar a <span className="text-red-400 font-semibold">{modal.member.member_name}</span>? Esta acción no se puede deshacer.
           </p>
           <div className="flex gap-3 pt-1">
-            <button onClick={closeModal} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
+            <button onClick={closeModal} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent transition-colors">
               Cancelar
             </button>
             <button onClick={handleDelete} disabled={submitting} className="flex-1 py-2 rounded-lg bg-red-800/60 hover:bg-red-700/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
@@ -945,7 +945,7 @@ function ActionBtn({ onClick, title, danger, children }: { onClick: () => void; 
     <button
       onClick={onClick}
       title={title}
-      className={`p-1.5 rounded-lg transition-colors ${danger ? "hover:bg-red-500/20 hover:text-red-400 text-gray-500" : "hover:bg-[#00bfff]/10 hover:text-[#00bfff] text-gray-500"}`}
+      className={`p-1.5 rounded-lg transition-colors ${danger ? "hover:bg-red-500/20 hover:text-red-400 text-gray-500" : "hover:bg-accent/10 hover:text-accent text-gray-500"}`}
     >
       {children}
     </button>

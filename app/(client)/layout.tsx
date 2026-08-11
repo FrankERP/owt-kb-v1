@@ -57,8 +57,8 @@ export default function RootLayout({
         className={`
           brand-atmosphere font-body
           min-h-screen
-          bg-brand-blackout text-brand-frost
-          selection:bg-brand-beam/35 selection:text-brand-frost
+          bg-surface-base text-ink
+          selection:bg-accent/35 selection:text-ink
         `}
       >
         <Provider>

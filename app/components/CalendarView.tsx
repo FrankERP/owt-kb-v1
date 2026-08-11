@@ -120,7 +120,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
         <Link
           href={scheduleHref(addMonths(anchorMonth, -WINDOW_MONTHS))}
           aria-label="Meses anteriores"
-          className="px-3 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest text-gray-400 hover:text-[#C8D8EB] hover:border-[#00bfff]/40 transition-colors"
+          className="px-3 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-gray-400 hover:text-ink-muted hover:border-accent/40 transition-colors"
         >
           ‹ Anterior
         </Link>
@@ -133,7 +133,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
         <Link
           href={scheduleHref(addMonths(anchorMonth, WINDOW_MONTHS))}
           aria-label="Meses siguientes"
-          className="px-3 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest text-gray-400 hover:text-[#C8D8EB] hover:border-[#00bfff]/40 transition-colors"
+          className="px-3 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-gray-400 hover:text-ink-muted hover:border-accent/40 transition-colors"
         >
           Siguiente ›
         </Link>
@@ -145,13 +145,13 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
             type="month"
             value={anchorMonth}
             onChange={(e) => { if (e.target.value) router.push(scheduleHref(e.target.value)); }}
-            className="bg-transparent border border-[#003572]/30 dark:border-[#00bfff]/20 rounded-lg px-3 py-1.5 font-label text-xs text-[#C8D8EB] [color-scheme:dark]"
+            className="bg-transparent border border-surface-accent-30 rounded-lg px-3 py-1.5 font-label text-xs text-ink-muted [color-scheme:dark]"
           />
         </label>
         {viewMonth && (
           <Link
             href="/schedule"
-            className="px-4 py-1.5 rounded-lg border border-[#00bfff]/40 font-label text-xs uppercase tracking-widest text-[#00bfff] hover:bg-[#003572]/40 transition-colors"
+            className="px-4 py-1.5 rounded-lg border border-accent/40 font-label text-xs uppercase tracking-widest text-accent hover:bg-accent-deep/40 transition-colors"
           >
             Hoy
           </Link>
@@ -160,14 +160,14 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
 
       {/* View toggle */}
       <div className="flex justify-center mb-8">
-        <div className="flex rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 overflow-hidden">
+        <div className="flex rounded-lg border border-surface-accent-30 overflow-hidden">
           <button
             onClick={() => setView("calendar")}
             aria-pressed={view === "calendar"}
             className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
               view === "calendar"
-                ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#C8D8EB]"
-                : "text-gray-500 hover:text-[#C8D8EB]"
+                ? "bg-surface-accent-solid text-ink-muted"
+                : "text-gray-500 hover:text-ink-muted"
             }`}
           >
             Calendario
@@ -175,10 +175,10 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
           <button
             onClick={() => setView("list")}
             aria-pressed={view === "list"}
-            className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors border-l border-[#003572]/30 dark:border-[#00bfff]/20 ${
+            className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors border-l border-accent-deep/30 dark:border-accent/20 ${
               view === "list"
-                ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#C8D8EB]"
-                : "text-gray-500 hover:text-[#C8D8EB]"
+                ? "bg-surface-accent-solid text-ink-muted"
+                : "text-gray-500 hover:text-ink-muted"
             }`}
           >
             Lista
@@ -200,8 +200,8 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
             </span>
           ))}
           <span className="flex items-center gap-1.5">
-            <span className="relative w-3 h-3 rounded-[4px] border border-[#00bfff]/50 bg-[#003572]/50">
-              <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-[#00bfff]" />
+            <span className="relative w-3 h-3 rounded-[4px] border border-accent/50 bg-accent-deep/50">
+              <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-accent" />
             </span>
             <span className="font-label text-[11px] uppercase tracking-widest text-gray-500">Varios servicios</span>
           </span>
@@ -245,12 +245,12 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
             return (
               <div key={sundayKey}>
                 <div className="flex items-center gap-4 mb-6">
-                  <div className="flex-1 h-px bg-[#003572]/20 dark:bg-[#00bfff]/10" />
+                  <div className="flex-1 h-px bg-surface-accent-faint" />
                   <div className="text-center shrink-0">
                     <p className="font-display text-base md:text-lg font-bold uppercase">{label}</p>
                     <p className="font-label text-[11px] md:text-xs uppercase tracking-widest text-gray-500">{monthYear}</p>
                   </div>
-                  <div className="flex-1 h-px bg-[#003572]/20 dark:bg-[#00bfff]/10" />
+                  <div className="flex-1 h-px bg-surface-accent-faint" />
                 </div>
 
                 <div className={`grid grid-cols-1 gap-6 ${totalCards > 1 ? "md:grid-cols-2" : "max-w-xl mx-auto"}`}>
@@ -384,15 +384,15 @@ function MonthGrid({
           let cls = "aspect-square flex flex-col items-center justify-center rounded-lg text-sm font-label transition-colors relative ";
 
           if (isSelected) {
-            cls += colorKey === "sat" ? "bg-[#f59e0b] text-black font-bold"
-                 : colorKey === "sun" ? "bg-[#00bfff] text-black font-bold"
-                 : "bg-[#a78bfa] text-black font-bold";
+            cls += colorKey === "sat" ? "bg-warning-fg text-black font-bold"
+                 : colorKey === "sun" ? "bg-accent text-black font-bold"
+                 : "bg-info-fg text-black font-bold";
           } else if (hasActive) {
             cls += colorKey === "sat"
-              ? "bg-[#78350f]/50 border border-[#f59e0b]/50 text-[#f59e0b] cursor-pointer hover:bg-[#78350f]/80 hover:border-[#f59e0b]"
+              ? "bg-warning-surface/50 border border-warning-fg/50 text-warning-fg cursor-pointer hover:bg-warning-surface/80 hover:border-warning-fg"
               : colorKey === "special"
-              ? "bg-[#4c1d95]/50 border border-[#a78bfa]/50 text-[#a78bfa] cursor-pointer hover:bg-[#4c1d95]/80 hover:border-[#a78bfa]"
-              : "bg-[#003572]/50 border border-[#00bfff]/50 text-[#00bfff] cursor-pointer hover:bg-[#003572]/80 hover:border-[#00bfff]";
+              ? "bg-info-surface/50 border border-info-fg/50 text-info-fg cursor-pointer hover:bg-info-surface/80 hover:border-info-fg"
+              : "bg-accent-deep/50 border border-accent/50 text-accent cursor-pointer hover:bg-accent-deep/80 hover:border-accent";
           } else {
             cls += "text-gray-400 dark:text-gray-400 cursor-default";
           }

@@ -4,9 +4,9 @@ type CueDialogStatusTone = "error" | "pending" | "info" | "success";
 
 const toneClasses: Record<CueDialogStatusTone, string> = {
   error: "border-red-400/35 bg-red-500/10 text-red-100",
-  pending: "border-brand-beam/30 bg-brand-beam/10 text-brand-frost",
-  info: "border-brand-steel/25 bg-brand-steel/10 text-brand-frost",
-  success: "border-brand-signal/35 bg-brand-signal/10 text-brand-frost",
+  pending: "border-accent/30 bg-accent/10 text-ink",
+  info: "border-ink-dim/25 bg-ink-dim/10 text-ink",
+  success: "border-positive-fg/35 bg-positive-fg/10 text-ink",
 };
 
 export default function CueDialogStatus({

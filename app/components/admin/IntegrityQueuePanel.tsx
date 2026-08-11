@@ -201,7 +201,7 @@ export default function IntegrityQueuePanel({
   return (
     <section
       aria-labelledby="integrity-queue-title"
-      className="min-w-0 rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10"
+      className="min-w-0 rounded-xl border border-edge-accent-subtle"
     >
       <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4">
         <button
@@ -209,7 +209,7 @@ export default function IntegrityQueuePanel({
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           aria-controls="integrity-queue-body"
-          className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2 rounded-lg px-1 text-left transition-colors hover:text-[#00bfff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00bfff]"
+          className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2 rounded-lg px-1 text-left transition-colors hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           <span
             aria-hidden="true"
@@ -237,7 +237,7 @@ export default function IntegrityQueuePanel({
         <button
           type="button"
           onClick={loadAll}
-          className="min-h-[44px] shrink-0 rounded-lg border border-[#003572]/30 px-3 font-label text-[11px] uppercase tracking-widest text-gray-400 transition-colors hover:border-[#00bfff] hover:text-[#00bfff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00bfff] dark:border-[#00bfff]/20"
+          className="min-h-[44px] shrink-0 rounded-lg border border-surface-accent-30 px-3 font-label text-[11px] uppercase tracking-widest text-gray-400 transition-colors hover:border-accent hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           Recargar
         </button>
@@ -263,7 +263,7 @@ export default function IntegrityQueuePanel({
       {notice && (
         <p
           role="status"
-          className="mx-3 mb-2 rounded-lg border border-[#00bfff]/25 bg-[#00bfff]/5 px-3 py-2 font-body text-xs text-[#00bfff] sm:mx-4"
+          className="mx-3 mb-2 rounded-lg border border-accent/25 bg-accent/5 px-3 py-2 font-body text-xs text-accent sm:mx-4"
         >
           {notice}
         </p>
@@ -315,10 +315,10 @@ function QueueEntry({
     <li
       ref={register}
       tabIndex={-1}
-      className={`min-w-0 rounded-lg border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00bfff] ${
+      className={`min-w-0 rounded-lg border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
         focused
-          ? "border-[#00bfff] bg-[#00bfff]/10"
-          : "border-[#003572]/15 bg-[#003572]/5 dark:border-[#00bfff]/10 dark:bg-[#00bfff]/[0.03]"
+          ? "border-accent bg-accent/10"
+          : "border-edge-accent-subtle bg-surface-accent-l5-d3"
       }`}
     >
       <button
@@ -326,7 +326,7 @@ function QueueEntry({
         onClick={onToggle}
         aria-expanded={expanded}
         aria-controls={bodyId}
-        className="flex min-h-[44px] w-full min-w-0 flex-col items-start gap-0.5 px-3 py-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00bfff]"
+        className="flex min-h-[44px] w-full min-w-0 flex-col items-start gap-0.5 px-3 py-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         <span className="font-body text-sm font-semibold [overflow-wrap:anywhere]">
           {INTEGRITY_KIND_LABEL[entry.kind]}
@@ -347,7 +347,7 @@ function QueueEntry({
         {entry.relatedIds.length > 0 && (
           <Row label="Ids relacionados" value={entry.relatedIds.join(" · ")} mono />
         )}
-        <p className="rounded-lg border border-[#00bfff]/20 bg-[#00bfff]/5 px-2.5 py-2 font-body text-xs text-[#00bfff]/90 [overflow-wrap:anywhere]">
+        <p className="rounded-lg border border-accent/20 bg-accent/5 px-2.5 py-2 font-body text-xs text-accent/90 [overflow-wrap:anywhere]">
           {INTEGRITY_ACTION_COPY[entry.action]}
         </p>
       </div>

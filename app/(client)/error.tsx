@@ -24,7 +24,7 @@ export default function Error({
       <svg
         width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-        className="text-[#00bfff]/70" aria-hidden
+        className="text-accent/70" aria-hidden
       >
         <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
         <line x1="12" y1="9" x2="12" y2="13" />
@@ -43,13 +43,13 @@ export default function Error({
         <button
           type="button"
           onClick={reset}
-          className="font-label text-xs uppercase tracking-widest px-4 py-2.5 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00bfff]/60"
+          className="font-label text-xs uppercase tracking-widest px-4 py-2.5 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           Reintentar
         </button>
         <Link
           href="/"
-          className="font-label text-xs uppercase tracking-widest px-4 py-2.5 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/25 text-gray-400 hover:text-[#00bfff] hover:border-[#00bfff]/40 transition-colors"
+          className="font-label text-xs uppercase tracking-widest px-4 py-2.5 rounded-lg border border-surface-accent-l30-d25 text-gray-400 hover:text-accent hover:border-accent/40 transition-colors"
         >
           Ir al inicio
         </Link>

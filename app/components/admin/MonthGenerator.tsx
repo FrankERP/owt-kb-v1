@@ -411,13 +411,13 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
         <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">{label}</p>
         <button
           type="button" onClick={onSelectAll}
-          className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/60 hover:text-[#00bfff] transition-colors"
+          className="font-label text-[10px] uppercase tracking-widest text-accent/60 hover:text-accent transition-colors"
         >
           {allSelected ? "Ninguno" : "Todos"}
         </button>
       </div>
       <input
-        className="w-full px-2 py-1 mb-1 rounded border border-[#00bfff]/15 bg-transparent font-body text-xs focus:outline-none focus:border-[#00bfff] placeholder-gray-600"
+        className="w-full px-2 py-1 mb-1 rounded border border-accent/15 bg-transparent font-body text-xs focus:outline-none focus:border-accent placeholder-gray-600"
         placeholder="Buscar..." value={search} onChange={e => onSearch(e.target.value)}
       />
       {/*
@@ -425,17 +425,17 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
         to 10 members. The full-width panel D10 buys has room for the whole
         list without a nested scroller.
       */}
-      <div className="rounded border border-[#00bfff]/10 divide-y divide-[#00bfff]/5">
+      <div className="rounded border border-accent/10 divide-y divide-accent/5">
         {visible.length === 0 && <p className="px-2 py-1 font-body text-xs text-gray-600 italic">Sin resultados</p>}
         {visible.map(m => (
-          <label key={m._id} className={`flex items-center gap-2 px-2 py-1 cursor-pointer text-xs transition-colors ${config[field].includes(m._id) ? "bg-[#00bfff]/10" : "hover:bg-[#00bfff]/5"}`}>
-            <input type="checkbox" checked={config[field].includes(m._id)} onChange={() => onToggle(m._id)} className="accent-[#00bfff]" />
+          <label key={m._id} className={`flex items-center gap-2 px-2 py-1 cursor-pointer text-xs transition-colors ${config[field].includes(m._id) ? "bg-accent/10" : "hover:bg-accent/5"}`}>
+            <input type="checkbox" checked={config[field].includes(m._id)} onChange={() => onToggle(m._id)} className="accent-accent" />
             <span className="font-body">{dn(m)}</span>
           </label>
         ))}
       </div>
       {config[field].length > 0 && (
-        <p className="font-label text-[10px] uppercase tracking-widest text-[#00bfff] mt-0.5">
+        <p className="font-label text-[10px] uppercase tracking-widest text-accent mt-0.5">
           {config[field].length} seleccionado{config[field].length !== 1 ? "s" : ""}
         </p>
       )}
@@ -447,9 +447,9 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
 
 function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDelete: () => void; onEdit: () => void }) {
   return (
-    <div className="rounded-lg border border-[#00bfff]/10 bg-[#001830]/40 px-3 py-2 flex items-start gap-2">
+    <div className="rounded-lg border border-accent/10 bg-surface-sunken/40 px-3 py-2 flex items-start gap-2">
       <div className="flex-1 min-w-0 space-y-1">
-        <span className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]/80 font-semibold">{r.person}</span>
+        <span className="font-label text-[11px] uppercase tracking-widest text-accent/80 font-semibold">{r.person}</span>
         <div className="flex flex-wrap gap-1">
           {r.excludedPatterns.map(p => (
             <span key={p} className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30">
@@ -478,7 +478,7 @@ function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDele
           )}
         </div>
       </div>
-      <button type="button" onClick={onEdit} className="text-gray-600 hover:text-[#00bfff] transition-colors shrink-0 text-xs leading-none mt-0.5 px-0.5" title="Editar">✎</button>
+      <button type="button" onClick={onEdit} className="text-gray-600 hover:text-accent transition-colors shrink-0 text-xs leading-none mt-0.5 px-0.5" title="Editar">✎</button>
       <button type="button" onClick={onDelete} className="text-gray-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none mt-0.5">×</button>
     </div>
   );
@@ -486,16 +486,16 @@ function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDele
 
 function ConflictCard({ r, onDelete, onEdit }: { r: ConflictRule; onDelete: () => void; onEdit: () => void }) {
   return (
-    <div className="rounded-lg border border-[#00bfff]/10 bg-[#001830]/40 px-3 py-2 flex items-center gap-2">
+    <div className="rounded-lg border border-accent/10 bg-surface-sunken/40 px-3 py-2 flex items-center gap-2">
       <span className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30 shrink-0">≠</span>
       <span className="font-body text-xs flex-1">
         <span className="text-gray-200">{r.personA}</span>
         <span className="text-gray-500 mx-1">≠</span>
         <span className="text-gray-200">{r.personB}</span>
         <span className="text-gray-500 mx-1">en</span>
-        <span className="text-[#00bfff]/70">{r.pattern}</span>
+        <span className="text-accent/70">{r.pattern}</span>
       </span>
-      <button type="button" onClick={onEdit} className="text-gray-600 hover:text-[#00bfff] transition-colors shrink-0 text-xs leading-none px-0.5" title="Editar">✎</button>
+      <button type="button" onClick={onEdit} className="text-gray-600 hover:text-accent transition-colors shrink-0 text-xs leading-none px-0.5" title="Editar">✎</button>
       <button type="button" onClick={onDelete} className="text-gray-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none">×</button>
     </div>
   );
@@ -503,15 +503,15 @@ function ConflictCard({ r, onDelete, onEdit }: { r: ConflictRule; onDelete: () =
 
 function PresenceCard({ r, onDelete, onEdit }: { r: PresenceRule; onDelete: () => void; onEdit: () => void }) {
   return (
-    <div className="rounded-lg border border-[#00bfff]/10 bg-[#001830]/40 px-3 py-2 flex items-center gap-2">
+    <div className="rounded-lg border border-accent/10 bg-surface-sunken/40 px-3 py-2 flex items-center gap-2">
       <span className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/30 shrink-0">≥1</span>
       <span className="font-body text-xs flex-1">
         <span className="text-gray-200">{r.persons.join(", ")}</span>
         <span className="text-gray-500 mx-1">en</span>
-        <span className="text-[#00bfff]/70">{r.pattern}</span>
+        <span className="text-accent/70">{r.pattern}</span>
         <span className="text-gray-500 ml-1">c/sem</span>
       </span>
-      <button type="button" onClick={onEdit} className="text-gray-600 hover:text-[#00bfff] transition-colors shrink-0 text-xs leading-none px-0.5" title="Editar">✎</button>
+      <button type="button" onClick={onEdit} className="text-gray-600 hover:text-accent transition-colors shrink-0 text-xs leading-none px-0.5" title="Editar">✎</button>
       <button type="button" onClick={onDelete} className="text-gray-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none">×</button>
     </div>
   );
@@ -519,8 +519,8 @@ function PresenceCard({ r, onDelete, onEdit }: { r: PresenceRule; onDelete: () =
 
 // ─── Rule builder — add forms ─────────────────────────────────────────────────
 
-const rbSel = "px-2 py-1 rounded border border-[#00bfff]/15 bg-[#0a1929] font-body text-xs focus:outline-none focus:border-[#00bfff] w-full";
-const rbIn  = "px-2 py-1 rounded border border-[#00bfff]/15 bg-transparent font-body text-xs focus:outline-none focus:border-[#00bfff]";
+const rbSel = "px-2 py-1 rounded border border-accent/15 bg-surface-raised-alt font-body text-xs focus:outline-none focus:border-accent w-full";
+const rbIn  = "px-2 py-1 rounded border border-accent/15 bg-transparent font-body text-xs focus:outline-none focus:border-accent";
 
 function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
   members: MemberOption[];
@@ -566,7 +566,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
               className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full border transition-colors ${
                 excl.includes(pat)
                   ? "bg-red-500/20 text-red-400 border-red-500/40"
-                  : "text-gray-500 border-[#00bfff]/15 hover:border-red-500/30 hover:text-red-400"
+                  : "text-gray-500 border-accent/15 hover:border-red-500/30 hover:text-red-400"
               }`}
             >
               {PAT_LABEL[pat] ?? pat}
@@ -584,7 +584,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
         <div className="flex items-center gap-3 flex-wrap">
           {(["none", "exempt", "slack"] as const).map(f => (
             <label key={f} className="flex items-center gap-1.5 cursor-pointer">
-              <input type="radio" name={`fairness-${person}`} value={f} checked={fairness === f} onChange={() => setFairness(f)} className="accent-[#00bfff]" />
+              <input type="radio" name={`fairness-${person}`} value={f} checked={fairness === f} onChange={() => setFairness(f)} className="accent-accent" />
               <span className="font-body text-xs text-gray-400">
                 {f === "none" ? "Normal" : f === "exempt" ? "Exempt" : "Slack"}
               </span>
@@ -642,7 +642,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
         <button
           type="button"
           onClick={() => setWeekEx(ws => [...ws, { id: uid(), week: 1, pattern: "*.*" }])}
-          className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/60 hover:text-[#00bfff] transition-colors mt-1"
+          className="font-label text-[10px] uppercase tracking-widest text-accent/60 hover:text-accent transition-colors mt-1"
         >
           + Semana
         </button>
@@ -679,7 +679,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
               </select>
               {cap.relative ? (
                 <div className="flex items-center gap-0.5 flex-none">
-                  <span className="font-label text-[10px] text-[#00bfff]/70">sem−</span>
+                  <span className="font-label text-[10px] text-accent/70">sem−</span>
                   <input
                     type="number" min={0} max={4}
                     className={`${rbIn} w-8 text-center`}
@@ -701,8 +701,8 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
                 onClick={() => setCaps(cs => cs.map(x => x.id === cap.id ? { ...x, relative: !x.relative } : x))}
                 className={`font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded flex-none border transition-colors ${
                   cap.relative
-                    ? "border-[#00bfff]/40 bg-[#00bfff]/10 text-[#00bfff]"
-                    : "border-[#00bfff]/15 text-gray-600 hover:text-[#00bfff]"
+                    ? "border-accent/40 bg-accent/10 text-accent"
+                    : "border-accent/15 text-gray-600 hover:text-accent"
                 }`}
               >sem</button>
               <button type="button" onClick={() => setCaps(cs => cs.filter(x => x.id !== cap.id))} className="text-gray-600 hover:text-red-400 text-sm flex-none">×</button>
@@ -712,7 +712,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
         <button
           type="button"
           onClick={() => setCaps(cs => [...cs, { id: uid(), pattern: "Sun.*", op: "<=", value: 2, relative: false, relOffset: 2 }])}
-          className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/60 hover:text-[#00bfff] transition-colors mt-1"
+          className="font-label text-[10px] uppercase tracking-widest text-accent/60 hover:text-accent transition-colors mt-1"
         >
           + Cap
         </button>
@@ -720,7 +720,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
 
       {/* Actions */}
       <div className="flex gap-2 pt-1">
-        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-[#00bfff]/20 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff] transition-colors">
+        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-accent/20 text-gray-500 hover:text-accent hover:border-accent transition-colors">
           Cancelar
         </button>
         <button type="button" onClick={handleAdd} disabled={!canAdd} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors disabled:opacity-40">
@@ -770,7 +770,7 @@ function ConflictForm({ members, onAdd, onCancel, initialValues }: {
         <p className="font-label text-[10px] text-red-400">Selecciona dos personas distintas</p>
       )}
       <div className="flex gap-2 pt-1">
-        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-[#00bfff]/20 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff] transition-colors">
+        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-accent/20 text-gray-500 hover:text-accent hover:border-accent transition-colors">
           Cancelar
         </button>
         <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: initialValues?.id ?? uid(), personA, personB, pattern })} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 transition-colors disabled:opacity-40">
@@ -800,14 +800,14 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
           D17: this list used to be `max-h-28 overflow-y-auto` — the one that
           keyholed all 16 `voz` members. Same fix as `MemberPool` above.
         */}
-        <div className="rounded border border-[#00bfff]/10 divide-y divide-[#00bfff]/5">
+        <div className="rounded border border-accent/10 divide-y divide-accent/5">
           {members.map(m => {
             const name    = dn(m);
             const checked = selected.includes(name);
             return (
-              <label key={m._id} className={`flex items-center gap-2 px-2 py-1 cursor-pointer text-xs transition-colors ${checked ? "bg-[#00bfff]/10" : "hover:bg-[#00bfff]/5"}`}>
+              <label key={m._id} className={`flex items-center gap-2 px-2 py-1 cursor-pointer text-xs transition-colors ${checked ? "bg-accent/10" : "hover:bg-accent/5"}`}>
                 <input
-                  type="checkbox" checked={checked} className="accent-[#00bfff]"
+                  type="checkbox" checked={checked} className="accent-accent"
                   onChange={() => setSelected(s => checked ? s.filter(p => p !== name) : [...s, name])}
                 />
                 <span className="font-body">{name}</span>
@@ -826,7 +826,7 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
         </select>
       </div>
       <div className="flex gap-2 pt-1">
-        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-[#00bfff]/20 text-gray-500 hover:text-[#00bfff] hover:border-[#00bfff] transition-colors">
+        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-accent/20 text-gray-500 hover:text-accent hover:border-accent transition-colors">
           Cancelar
         </button>
         <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: initialValues?.id ?? uid(), persons: selected, pattern })} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest bg-green-500/20 hover:bg-green-500/30 text-green-400 transition-colors disabled:opacity-40">
@@ -1031,7 +1031,7 @@ function RuleBuilder({ config, onChange, members, source }: {
       {source.status === "ready" ? (
         <>
           <p className="font-body text-[11px] text-gray-500 px-1 pt-1">
-            Las reglas se guardan en el <span className="text-[#00bfff]">servidor</span> y las
+            Las reglas se guardan en el <span className="text-accent">servidor</span> y las
             comparten todos los administradores. Los cambios de esta pantalla no valen en otras sesiones hasta que pulses{" "}
             <span className="text-gray-400">Guardar reglas</span>.
           </p>
@@ -1208,7 +1208,7 @@ function SolverConfigSaveBar({ config, rules }: {
         <button
           type="button"
           onClick={rules.reload}
-          className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-[#00bfff]/30 text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors"
+          className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
         >
           Recargar reglas
         </button>
@@ -1234,7 +1234,7 @@ function SolverConfigSaveBar({ config, rules }: {
                   ? "Guardar estas reglas para todos los administradores"
                   : undefined
         }
-        className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-[#00bfff]/40 text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+        className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-accent/40 text-accent hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
       >
         {saving ? "Guardando…" : dirty ? "Guardar reglas" : "Guardado"}
       </button>
@@ -1258,8 +1258,8 @@ function SolverConfigUnavailable({ source, onReload }: {
 }) {
   const failed = source.status === "error";
   return (
-    <div className="space-y-3 p-3 rounded-xl border border-[#00bfff]/20 bg-[#00bfff]/5">
-      <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">Configuración del Solver</p>
+    <div className="space-y-3 p-3 rounded-xl border border-accent/20 bg-accent/5">
+      <p className="font-label text-[11px] uppercase tracking-widest text-accent">Configuración del Solver</p>
       <p role={failed ? "alert" : undefined} className={`font-body text-xs ${failed ? "text-red-400" : "text-gray-500"}`}>
         {failed ? source.message : "Cargando las reglas compartidas…"}
       </p>
@@ -1267,7 +1267,7 @@ function SolverConfigUnavailable({ source, onReload }: {
         <button
           type="button"
           onClick={onReload}
-          className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-[#00bfff]/30 text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors"
+          className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
         >
           Reintentar
         </button>
@@ -1307,7 +1307,7 @@ function SolverConfigReloadNotice({ source, onReload }: {
       <button
         type="button"
         onClick={onReload}
-        className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-[#00bfff]/30 text-[#00bfff] hover:bg-[#00bfff]/10 transition-colors"
+        className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
       >
         Reintentar
       </button>
@@ -1346,8 +1346,8 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
   };
 
   return (
-    <div className="space-y-3 p-3 rounded-xl border border-[#00bfff]/20 bg-[#00bfff]/5">
-      <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">Configuración del Solver</p>
+    <div className="space-y-3 p-3 rounded-xl border border-accent/20 bg-accent/5">
+      <p className="font-label text-[11px] uppercase tracking-widest text-accent">Configuración del Solver</p>
 
       <SolverConfigReloadNotice source={rules.source} onReload={rules.reload} />
 
@@ -1398,11 +1398,11 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         <div>
           <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 mb-1">
             Historial ({history.length})
-            <span className="ml-1 text-[#00bfff]/50 normal-case">— últimas {Math.min(history.length, 3)} ejecuciones usadas</span>
+            <span className="ml-1 text-accent/50 normal-case">— últimas {Math.min(history.length, 3)} ejecuciones usadas</span>
           </p>
           <div className="flex flex-wrap gap-1.5">
             {[...history].reverse().map(h => (
-              <span key={h.key} className="flex items-center gap-1 font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full border border-[#00bfff]/20 bg-[#00bfff]/5 text-[#00bfff]/70">
+              <span key={h.key} className="flex items-center gap-1 font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full border border-accent/20 bg-accent/5 text-accent/70">
                 {MONTHS[h.month - 1].slice(0, 3)} {h.year}
                 <button
                   type="button"
@@ -1732,8 +1732,8 @@ export default function MonthGenerator({
     });
   }
 
-  const inCls  = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
-  const selCls = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-[#0a1929] font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
+  const inCls  = "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors";
+  const selCls = "w-full px-3 py-2 rounded-lg border border-accent/20 bg-surface-raised-alt font-body text-sm focus:outline-none focus:border-accent transition-colors";
 
   // Unconditional (D9/E21): the solve always addresses the full month's
   // Sundays — only RENDERING/CREATION is gated by `columns` below.
@@ -3128,7 +3128,7 @@ export default function MonthGenerator({
       )}
 
       <div className="flex gap-3">
-        <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
+        <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent transition-colors">
           Cancelar
         </button>
         {/*
@@ -3143,7 +3143,7 @@ export default function MonthGenerator({
           onClick={handlePreview}
           disabled={columns.length === 0 || !!gateBlocked || !!rulesBlocked}
           title={gateBlocked ?? rulesBlocked ?? undefined}
-          className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+          className="flex-1 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
         >
           Previsualizar →
         </button>
@@ -3159,12 +3159,12 @@ export default function MonthGenerator({
           <p className="font-label text-xs uppercase tracking-widest text-gray-500">{MONTHS[month - 1]} {year}</p>
           {storedMode ? (
             <p className="font-body text-sm">
-              <span className="text-[#00bfff] font-semibold">{storedColumns.length}</span> servicio{storedColumns.length !== 1 ? "s" : ""}
+              <span className="text-accent font-semibold">{storedColumns.length}</span> servicio{storedColumns.length !== 1 ? "s" : ""}
               {dirtyStoredColumns.length + invalidStoredColumns.length > 0 && <span className="text-amber-300"> · {dirtyStoredColumns.length + invalidStoredColumns.length} con cambios</span>}
             </p>
           ) : (
             <p className="font-body text-sm">
-              <span className="text-[#00bfff] font-semibold">{toCreate.length}</span> por crear
+              <span className="text-accent font-semibold">{toCreate.length}</span> por crear
               {skippedCount > 0 && <span className="text-gray-500"> · {skippedCount} omitido{skippedCount !== 1 ? "s" : ""}</span>}
               {notCreatable > 0 && (
                 <span className="text-amber-400"> · {notCreatable} no disponible{notCreatable !== 1 ? "s" : ""}</span>
@@ -3172,7 +3172,7 @@ export default function MonthGenerator({
             </p>
           )}
         </div>
-        <button type="button" onClick={requestBack} disabled={storedTransportActive} className="font-label text-xs uppercase tracking-widest text-gray-500 hover:text-[#00bfff] transition-colors disabled:opacity-50">
+        <button type="button" onClick={requestBack} disabled={storedTransportActive} className="font-label text-xs uppercase tracking-widest text-gray-500 hover:text-accent transition-colors disabled:opacity-50">
           {storedMode ? "Cerrar" : "← Volver"}
         </button>
       </div>
@@ -3194,14 +3194,14 @@ export default function MonthGenerator({
       )}
 
       {storedMode && storedInventory.coherent && (
-        <div className="rounded-lg border border-[#00bfff]/15 bg-[#00bfff]/5 px-3 py-3">
+        <div className="rounded-lg border border-accent/15 bg-accent/5 px-3 py-3">
           {!composerOpen ? (
             <button
               type="button"
               onClick={() => setComposerOpen(true)}
               disabled={storedMutationLocked || storedHasUnresolvedWork || !!storedCreateBlocked}
               title={storedCreateBlocked ?? undefined}
-              className="min-h-[44px] rounded-lg border border-[#00bfff]/25 px-4 font-label text-xs uppercase tracking-widest text-[#00bfff] disabled:opacity-50"
+              className="min-h-[44px] rounded-lg border border-accent/25 px-4 font-label text-xs uppercase tracking-widest text-accent disabled:opacity-50"
             >
               + Nuevo servicio
             </button>
@@ -3226,14 +3226,14 @@ export default function MonthGenerator({
                 </label>
               ) : <div />}
               <div className="flex gap-2">
-                <button type="button" onClick={() => void handleCreateOne()} disabled={creatingOne || (storedMutationLocked && createAttemptStatus !== "unknown") || storedWriteUnresolved || createAttemptStatus === "committedUnverified" || !!storedCreateBlocked} title={storedCreateBlocked ?? undefined} className="min-h-[44px] rounded-lg bg-[#003572] px-4 font-label text-xs uppercase tracking-widest dark:bg-[#00bfff]/20 disabled:opacity-50">
+                <button type="button" onClick={() => void handleCreateOne()} disabled={creatingOne || (storedMutationLocked && createAttemptStatus !== "unknown") || storedWriteUnresolved || createAttemptStatus === "committedUnverified" || !!storedCreateBlocked} title={storedCreateBlocked ?? undefined} className="min-h-[44px] rounded-lg bg-surface-accent-solid px-4 font-label text-xs uppercase tracking-widest disabled:opacity-50">
                   {creatingOne ? "Creando…" : createAttemptStatus === "unknown" ? "Reintentar misma solicitud" : createAttemptStatus === "committedUnverified" ? "Verificando…" : "Crear vacío"}
                 </button>
-                <button type="button" onClick={() => setComposerOpen(false)} disabled={creatingOne || createAttemptStatus !== null} className="min-h-[44px] rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50">
+                <button type="button" onClick={() => setComposerOpen(false)} disabled={creatingOne || createAttemptStatus !== null} className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50">
                   Cancelar
                 </button>
                 {createAttemptStatus && (
-                  <button type="button" onClick={() => void storedSource?.reload()} className="min-h-[44px] rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest text-[#00bfff]">
+                  <button type="button" onClick={() => void storedSource?.reload()} className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest text-accent">
                     Recargar
                   </button>
                 )}
@@ -3272,11 +3272,11 @@ export default function MonthGenerator({
               type="button"
               onClick={confirmPendingDiscard}
               disabled={storedTransportActive}
-              className="min-h-[44px] rounded-lg bg-[#003572] px-3 font-label text-xs uppercase tracking-widest dark:bg-[#00bfff]/20 disabled:opacity-50"
+              className="min-h-[44px] rounded-lg bg-surface-accent-solid px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50"
             >
               {!storedMode && pendingDiscard === "back" ? "Volver de todos modos" : "Cerrar de todos modos"}
             </button>
-            <button type="button" onClick={() => setPendingDiscard(null)} className="min-h-[44px] rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest">
+            <button type="button" onClick={() => setPendingDiscard(null)} className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest">
               Cancelar
             </button>
           </div>
@@ -3284,15 +3284,15 @@ export default function MonthGenerator({
       )}
 
       {!storedMode && <div className="flex justify-center">
-        <div className="flex rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 overflow-hidden">
+        <div className="flex rounded-lg border border-surface-accent-30 overflow-hidden">
           <button type="button" onClick={() => setViewMode("edit")}
             className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
-              viewMode === "edit" ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#C8D8EB]" : "text-gray-500 hover:text-[#C8D8EB]"}`}>
+              viewMode === "edit" ? "bg-surface-accent-solid text-ink-muted" : "text-gray-500 hover:text-ink-muted"}`}>
             Editar
           </button>
           <button type="button" onClick={() => setViewMode("view")}
-            className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors border-l border-[#003572]/30 dark:border-[#00bfff]/20 ${
-              viewMode === "view" ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#C8D8EB]" : "text-gray-500 hover:text-[#C8D8EB]"}`}>
+            className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors border-l border-accent-deep/30 dark:border-accent/20 ${
+              viewMode === "view" ? "bg-surface-accent-solid text-ink-muted" : "text-gray-500 hover:text-ink-muted"}`}>
             Vista
           </button>
         </div>
@@ -3310,19 +3310,19 @@ export default function MonthGenerator({
               disabled={storedMode && storedSwapInteractionBlocked}
               className={`min-h-[44px] px-2 py-1 rounded-full border text-[10px] font-label uppercase tracking-widest transition-colors ${
                 swapSel === col.columnId
-                  ? "border-[#00bfff] bg-[#00bfff]/20 text-[#00bfff]"
-                  : "border-[#00bfff]/15 text-gray-500 hover:text-[#00bfff]"
+                  ? "border-accent bg-accent/20 text-accent"
+                  : "border-accent/15 text-gray-500 hover:text-accent"
               }`}
             >
               {fmtDate(col.date)}
             </button>
           ))}
-          {swapSel && <span className="font-label text-[11px] uppercase tracking-widest text-[#00bfff] animate-pulse">Selecciona otra columna ⇄</span>}
+          {swapSel && <span className="font-label text-[11px] uppercase tracking-widest text-accent animate-pulse">Selecciona otra columna ⇄</span>}
         </div>
       )}
 
       {storedMode && (
-        <div className="grid gap-2 rounded-lg border border-[#00bfff]/15 p-3 md:grid-cols-[0.8fr_1fr_1fr_auto] md:items-end">
+        <div className="grid gap-2 rounded-lg border border-accent/15 p-3 md:grid-cols-[0.8fr_1fr_1fr_auto] md:items-end">
           <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-gray-500">
             Sección
             <select value={sectionSwapPath} disabled={storedSwapInteractionBlocked} onChange={(event) => setSectionSwapPath(event.target.value as StoredSectionPath)} className={selCls}>
@@ -3348,7 +3348,7 @@ export default function MonthGenerator({
             onClick={() => void handleSectionSwap()}
             disabled={storedSwapInteractionBlocked || !sectionSwapFirst || !sectionSwapSecond || sectionSwapFirst === sectionSwapSecond || sectionSwapTopologyInvalid}
             title={sectionSwapTopologyInvalid ? "Coro no está disponible en servicios de sábado." : undefined}
-            className="min-h-[44px] rounded-lg border border-[#00bfff]/25 px-4 font-label text-xs uppercase tracking-widest text-[#00bfff] disabled:opacity-50"
+            className="min-h-[44px] rounded-lg border border-accent/25 px-4 font-label text-xs uppercase tracking-widest text-accent disabled:opacity-50"
           >
             Intercambiar sección
           </button>
@@ -3356,10 +3356,10 @@ export default function MonthGenerator({
       )}
 
       {swapToast && (
-        <div className="flex items-center justify-center gap-2 rounded-lg bg-[#00bfff]/10 px-3 py-1.5">
-          <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff] text-center">{swapToast}</p>
+        <div className="flex items-center justify-center gap-2 rounded-lg bg-accent/10 px-3 py-1.5">
+          <p className="font-label text-[11px] uppercase tracking-widest text-accent text-center">{swapToast}</p>
           {storedMode && swapVerificationPending && storedSource && (
-            <button type="button" onClick={() => void storedSource.reload()} className="min-h-[44px] rounded-lg border border-[#00bfff]/25 px-3 font-label text-[10px] uppercase tracking-widest text-[#00bfff]">
+            <button type="button" onClick={() => void storedSource.reload()} className="min-h-[44px] rounded-lg border border-accent/25 px-3 font-label text-[10px] uppercase tracking-widest text-accent">
               Recargar y verificar
             </button>
           )}
@@ -3506,7 +3506,7 @@ export default function MonthGenerator({
       )}
 
       {(pushError || saveNotice) && (
-        <p className={`font-label text-xs uppercase tracking-widest text-center rounded-lg py-1.5 ${pushError ? "bg-red-500/10 text-red-400" : "bg-[#00bfff]/10 text-[#00bfff]"}`}>
+        <p className={`font-label text-xs uppercase tracking-widest text-center rounded-lg py-1.5 ${pushError ? "bg-red-500/10 text-red-400" : "bg-accent/10 text-accent"}`}>
           {pushError ?? saveNotice}
         </p>
       )}
@@ -3518,7 +3518,7 @@ export default function MonthGenerator({
 
       {storedMode ? (
         <div className="flex gap-3">
-          <button type="button" onClick={requestBack} disabled={storedTransportActive} className="flex-1 min-h-[44px] rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors disabled:opacity-50">
+          <button type="button" onClick={requestBack} disabled={storedTransportActive} className="flex-1 min-h-[44px] rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent transition-colors disabled:opacity-50">
             Cerrar
           </button>
           <button
@@ -3526,20 +3526,20 @@ export default function MonthGenerator({
             onClick={() => void handleStoredSave()}
             disabled={storedMutationLocked || dirtyStoredColumns.length === 0 || invalidStoredColumns.length > 0 || !storedInventory.coherent || !!storedSaveBlocked}
             title={storedSaveBlocked ?? undefined}
-            className="flex-1 min-h-[44px] rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+            className="flex-1 min-h-[44px] rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
           >
             {savingStored ? "Guardando…" : `Guardar ${dirtyStoredColumns.length} servicio${dirtyStoredColumns.length !== 1 ? "s" : ""}`}
           </button>
         </div>
       ) : (
         <div className="flex gap-3">
-          <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
+          <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent transition-colors">
             Cancelar
           </button>
-          <button type="button" onClick={() => handleConfirm(false)} disabled={pushing || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+          <button type="button" onClick={() => handleConfirm(false)} disabled={pushing || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
             {pushing ? "Creando..." : `Crear ${toCreate.length} borrador${toCreate.length !== 1 ? "es" : ""}`}
           </button>
-          <button type="button" onClick={() => handleConfirm(true)} disabled={pushing || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+          <button type="button" onClick={() => handleConfirm(true)} disabled={pushing || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
             Crear y publicar
           </button>
         </div>

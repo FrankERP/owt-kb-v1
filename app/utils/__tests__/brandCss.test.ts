@@ -142,8 +142,14 @@ describe("brand.css — (a) every colour var() referenced is declared", () => {
   // belongs to Child B, which is the change that removes the key.
   it("records that utility references are out of scope, and where they are covered", () => {
     const client = read("app/(client)/layout.tsx");
-    expect(client).toContain("selection:bg-brand-beam");
-    expect(referencedProperties(client)).not.toContain("--brand-beam");
+    // Re-pointed by Child B: the utility is now `selection:bg-accent`. The POINT of
+    // this assertion is unchanged and is not about the spelling — a utility class
+    // references its custom property through Tailwind's config, never directly, so
+    // it can never appear in this file's `var()` references. That is why the
+    // reference-integrity scan above cannot see utility usage, and why the category-10
+    // count in the inventory is what covers it instead.
+    expect(client).toContain("selection:bg-accent");
+    expect(referencedProperties(client)).not.toContain("--accent-rgb");
   });
 });
 

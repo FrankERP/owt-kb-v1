@@ -78,14 +78,14 @@ export default function SongSearchList({ posts }: Props) {
     <div className="mx-auto max-w-7xl px-6">
       <div className="mb-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="brand-section-heading">
-          <p className="font-label text-[10px] uppercase tracking-[0.22em] text-brand-beam/75">Índice musical</p>
-          <p className="mt-1 font-body text-sm text-brand-steel/65">
+          <p className="font-label text-[10px] uppercase tracking-[0.22em] text-accent/75">Índice musical</p>
+          <p className="mt-1 font-body text-sm text-ink-dim/65">
             {query.trim() ? `${filtered.length} resultados` : `${posts.length} canciones disponibles`}
           </p>
         </div>
         <div className="brand-search-console relative w-full sm:max-w-md">
           <svg
-            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-beam/55"
+            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-accent/55"
             width="15" height="15" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
           >
@@ -97,14 +97,14 @@ export default function SongSearchList({ posts }: Props) {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar por título, autor o tonalidad..."
             aria-label="Buscar canciones"
-            className="w-full bg-transparent py-3 pl-10 pr-10 font-label text-sm text-brand-frost placeholder:text-brand-steel/45 focus:outline-none"
+            className="w-full bg-transparent py-3 pl-10 pr-10 font-label text-sm text-ink placeholder:text-ink-dim/45 focus:outline-none"
           />
           {query && (
             <button
               type="button"
               onClick={() => setQuery("")}
               aria-label="Limpiar búsqueda"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-brand-steel/60 transition-colors hover:text-brand-beam focus:outline-none focus:ring-2 focus:ring-brand-beam/50"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-ink-dim/60 transition-colors hover:text-accent focus:outline-none focus:ring-2 focus:ring-accent/50"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />

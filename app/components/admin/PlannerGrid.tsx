@@ -1496,7 +1496,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
   // of which row you are in is the failure mode a narrower grid actually has.
   // Sticky needs an OPAQUE background or the chips scroll through it; `#010b17`
   // is `--brand-blackout`, the same value `ParticipationSidebar` paints itself.
-  const stickyLabel = "sticky left-0 z-10 bg-[#010b17]";
+  const stickyLabel = "sticky left-0 z-10 bg-surface-base";
 
   const gridBlock = (
     <div className={fullScreen ? undefined : "overflow-x-auto"}>
@@ -1599,7 +1599,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             aria-live="polite"
             data-pick-banner
             data-pick-active={pickedMove ? "true" : undefined}
-            className="font-body text-xs text-[#00bfff]"
+            className="font-body text-xs text-accent"
           >
             {/*
               The second sentence tracks what is actually possible. A pick can
@@ -1620,7 +1620,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             <button
               type="button"
               onClick={() => setPickedMove(null)}
-              className="min-h-[44px] rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest text-[#C8D8EB]/70 hover:border-[#00bfff]"
+              className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest text-ink-muted/70 hover:border-accent"
             >
               Cancelar el movimiento
             </button>
@@ -1664,16 +1664,16 @@ export default function PlannerGrid(props: PlannerGridProps) {
         role="region"
         aria-label={`Candidatos para ${openRow.label} — ${openColumn.date}`}
         data-candidate-picker
-        className={`${CARD_STYLE.dialog} self-start rounded-xl border border-[#00bfff]/15 p-3 focus:outline-none xl:sticky xl:top-4 xl:order-3 xl:w-[240px] xl:shrink-0`}
+        className={`${CARD_STYLE.dialog} self-start rounded-xl border border-accent/15 p-3 focus:outline-none xl:sticky xl:top-4 xl:order-3 xl:w-[240px] xl:shrink-0`}
       >
         <div className="mb-2 flex items-start justify-between gap-2">
-          <span className="font-label text-xs uppercase tracking-widest text-[#C8D8EB]/70">
+          <span className="font-label text-xs uppercase tracking-widest text-ink-muted/70">
             Candidatos para {openRow.label} — {openColumn.date}
           </span>
           <button
             type="button"
             onClick={closePicker}
-            className="min-h-[44px] min-w-[44px] shrink-0 font-label text-xs uppercase tracking-widest text-[#C8D8EB]/60 hover:text-white"
+            className="min-h-[44px] min-w-[44px] shrink-0 font-label text-xs uppercase tracking-widest text-ink-muted/60 hover:text-white"
           >
             Cerrar
           </button>
@@ -1766,7 +1766,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             // repo's existing spelling, and an inline `max(…, env(…))` is a
             // value jsdom's CSS parser drops on the floor, so nothing could pin
             // it.
-            "fixed inset-0 z-50 flex flex-col gap-3 overflow-auto bg-[#010b17] focus:outline-none pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"
+            "fixed inset-0 z-50 flex flex-col gap-3 overflow-auto bg-surface-base focus:outline-none pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"
           : "planner-wide space-y-4"
       }
       {...(fullScreen
@@ -1788,7 +1788,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
           <button
             type="button"
             onClick={() => setFullScreen(false)}
-            className="min-h-[44px] rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest hover:border-[#00bfff]"
+            className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest hover:border-accent"
           >
             Salir de pantalla completa (Esc)
           </button>
@@ -1802,7 +1802,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             type="button"
             onClick={handleAutoClick}
             disabled={!!autoState.disabledReason || autoState.pending}
-            className="min-h-[44px] rounded-lg bg-[#003572] px-4 font-label text-xs uppercase tracking-widest transition-colors hover:bg-[#003572]/80 disabled:opacity-50 dark:bg-[#00bfff]/20 dark:hover:bg-[#00bfff]/30"
+            className="min-h-[44px] rounded-lg bg-surface-accent-solid px-4 font-label text-xs uppercase tracking-widest transition-colors hover:bg-accent-deep/80 disabled:opacity-50 dark:hover:bg-accent/30"
           >
             {autoState.pending ? "Calculando..." : "🤖 Auto-asignar con Solver"}
           </button>
@@ -1821,7 +1821,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
           // this is a different DOM node by then — see the effect above.
           data-planner-fullscreen
           onClick={() => setFullScreen(true)}
-          className="min-h-[44px] rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest text-[#C8D8EB]/70 transition-colors hover:border-[#00bfff]"
+          className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest text-ink-muted/70 transition-colors hover:border-accent"
         >
           ⛶ Pantalla completa
         </button>
@@ -1856,14 +1856,14 @@ export default function PlannerGrid(props: PlannerGridProps) {
             <button
               type="button"
               onClick={confirmAuto}
-              className="min-h-[44px] rounded-lg bg-[#003572] px-3 font-label text-xs uppercase tracking-widest dark:bg-[#00bfff]/20"
+              className="min-h-[44px] rounded-lg bg-surface-accent-solid px-3 font-label text-xs uppercase tracking-widest"
             >
               Confirmar
             </button>
             <button
               type="button"
               onClick={() => setConfirmingAuto(false)}
-              className="min-h-[44px] rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest"
+              className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest"
             >
               Cancelar
             </button>
@@ -1934,13 +1934,13 @@ export default function PlannerGrid(props: PlannerGridProps) {
           onDismiss={desistPendingMove}
         >
           <div className="space-y-4 p-6">
-            <p className="font-body text-sm text-[#C8D8EB]">
+            <p className="font-body text-sm text-ink-muted">
               Una regla no permite mover a {pendingMove.memberName} aquí:
             </p>
             <p data-prompt-reason className="font-body text-sm text-red-400">
               {pendingMove.reason}
             </p>
-            <p className="font-body text-xs text-[#C8D8EB]/70">
+            <p className="font-body text-xs text-ink-muted/70">
               Si aplicas el movimiento de todos modos, la regla queda anulada solo para esta casilla
               y se marca ahí para que siga a la vista.
             </p>
@@ -1955,7 +1955,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
               <button
                 type="button"
                 onClick={desistPendingMove}
-                className="min-h-[44px] flex-1 rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest hover:border-[#00bfff]"
+                className="min-h-[44px] flex-1 rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest hover:border-accent"
               >
                 Desistir
               </button>
@@ -2084,7 +2084,7 @@ function ColumnHeader({
           "ya existe un servicio especial con este nombre" copy points at a name
           the admin cannot see. Weekend columns carry no `serviceName` at all. */}
       {column.serviceName && (
-        <span className={`block font-body text-[11px] text-[#C8D8EB]/80 ${CARD_STYLE.longText}`}>
+        <span className={`block font-body text-[11px] text-ink-muted/80 ${CARD_STYLE.longText}`}>
           {column.serviceName}
         </span>
       )}
@@ -2099,7 +2099,7 @@ function ColumnHeader({
               disabled={readOnly || mutationLocked || !!storedDateBlockedReason}
               title={storedDateBlockedReason ?? undefined}
               onChange={(event) => onStoredHeaderChange?.(column.columnId, { date: event.target.value })}
-              className="mt-1 w-full rounded border border-[#00bfff]/15 bg-transparent px-1.5 py-1 font-body text-[11px] text-[#C8D8EB]"
+              className="mt-1 w-full rounded border border-accent/15 bg-transparent px-1.5 py-1 font-body text-[11px] text-ink-muted"
             />
           </label>
           {column.type === "special_role" && (
@@ -2109,7 +2109,7 @@ function ColumnHeader({
                 value={column.serviceName ?? ""}
                 disabled={readOnly || mutationLocked}
                 onChange={(event) => onStoredHeaderChange?.(column.columnId, { serviceName: event.target.value })}
-                className="mt-1 w-full rounded border border-[#00bfff]/15 bg-transparent px-1.5 py-1 font-body text-[11px] normal-case tracking-normal text-[#C8D8EB]"
+                className="mt-1 w-full rounded border border-accent/15 bg-transparent px-1.5 py-1 font-body text-[11px] normal-case tracking-normal text-ink-muted"
               />
             </label>
           )}
@@ -2227,7 +2227,7 @@ function RowGroup({
               `minmax(176px, max-content)` and the label already wraps
               (`break-words`), so a wider word grows the track instead of
               spilling into the first cell (D-defect-2). */}
-          <span className="font-label text-sm uppercase tracking-widest text-[#C8D8EB]/70 break-words">
+          <span className="font-label text-sm uppercase tracking-widest text-ink-muted/70 break-words">
             {row.label}
           </span>
           {row.category !== "voz" && (
@@ -2406,9 +2406,9 @@ function GridCellView({
       data-column-id={column.columnId}
       data-active={active ? "true" : undefined}
       className={`relative min-h-[44px] ${minWClass} rounded-lg border px-2 py-1.5 transition-colors ${
-        overflow ? "border-amber-500/40 bg-amber-500/5" : "border-[#00bfff]/15 hover:border-[#00bfff]/40"
-      } ${mutationLocked ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${active ? "ring-2 ring-[#00bfff] ring-offset-2 ring-offset-[#010b17]" : ""} ${
-        isDropTarget ? "border-[#00bfff] bg-[#00bfff]/10" : ""
+        overflow ? "border-amber-500/40 bg-amber-500/5" : "border-accent/15 hover:border-accent/40"
+      } ${mutationLocked ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${active ? "ring-2 ring-accent ring-offset-2 ring-offset-surface-base" : ""} ${
+        isDropTarget ? "border-accent bg-accent/10" : ""
       }`}
     >
       {/*
@@ -2525,12 +2525,12 @@ function GridCellView({
                 // Legibility pass — the member chip is the thing the admin
                 // actually reads across the whole month, and `text-[10px]` was
                 // the smallest type on the surface. One step up, to `text-xs`.
-                className={`rounded-full border px-1.5 py-0.5 font-label text-xs text-[#C8D8EB] ${CARD_STYLE.longText} ${
+                className={`rounded-full border px-1.5 py-0.5 font-label text-xs text-ink-muted ${CARD_STYLE.longText} ${
                   isDuplicate || ruleBroken
                     ? "border-red-500/50 bg-red-500/10"
-                    : "border-[#00bfff]/25 bg-[#00bfff]/10"
+                    : "border-accent/25 bg-accent/10"
                 } ${drag.enabled ? "cursor-grab" : "cursor-not-allowed"} ${dragging ? "opacity-30" : ""} ${
-                  marked ? "ring-2 ring-[#00bfff]" : ""
+                  marked ? "ring-2 ring-accent" : ""
                 }`}
               >
                 {memberName(id)}
@@ -2599,7 +2599,7 @@ function GridCellView({
               if (!mutationLocked) onCopy();
             }}
             disabled={mutationLocked}
-            className="mt-1 font-label text-[9px] uppercase tracking-widest text-[#C8D8EB]/40 hover:text-[#C8D8EB]/70"
+            className="mt-1 font-label text-[9px] uppercase tracking-widest text-ink-muted/40 hover:text-ink-muted/70"
           >
             Copiar a todo el mes
           </button>
@@ -2675,8 +2675,8 @@ function CandidateRow({
         blocked
           ? "cursor-not-allowed border-red-500/20 bg-red-500/5 opacity-60"
           : selected
-            ? "cursor-pointer border-[#00bfff] bg-[#00bfff]/10"
-            : "cursor-pointer border-[#00bfff]/15 hover:border-[#00bfff]/40"
+            ? "cursor-pointer border-accent bg-accent/10"
+            : "cursor-pointer border-accent/15 hover:border-accent/40"
       }`}
     >
       <div className="flex min-w-0 items-center justify-between gap-2">
@@ -2697,7 +2697,7 @@ function CandidateRow({
       <div className="mt-1 flex items-center gap-2">
         <div className="flex gap-0.5" aria-hidden="true">
           {candidate.recent.map((served, i) => (
-            <span key={i} className={`h-1.5 w-3 rounded-sm ${served ? "bg-[#00bfff]/70" : "bg-gray-700"}`} />
+            <span key={i} className={`h-1.5 w-3 rounded-sm ${served ? "bg-accent/70" : "bg-gray-700"}`} />
           ))}
         </div>
         {/*
@@ -2784,8 +2784,8 @@ function CandidateRow({
           disabled={mutationLocked}
           className={`mt-1.5 min-h-[44px] w-full rounded-lg border px-2 font-label text-[10px] uppercase tracking-widest disabled:opacity-50 ${
             picked
-              ? "border-[#00bfff] bg-[#00bfff]/10 text-[#00bfff]"
-              : "border-[#00bfff]/25 text-[#C8D8EB]/70 hover:border-[#00bfff]"
+              ? "border-accent bg-accent/10 text-accent"
+              : "border-accent/25 text-ink-muted/70 hover:border-accent"
           }`}
         >
           {picked ? "Cancelar el movimiento" : "Marcar para mover"}
@@ -2827,12 +2827,12 @@ function AddRowForm({
             if (error) setError(null);
           }}
           placeholder={placeholder}
-          className="min-h-[44px] flex-1 rounded-lg border border-[#00bfff]/20 bg-transparent px-3 py-2 font-body text-xs focus:border-[#00bfff] focus:outline-none"
+          className="min-h-[44px] flex-1 rounded-lg border border-accent/20 bg-transparent px-3 py-2 font-body text-xs focus:border-accent focus:outline-none"
         />
         <button
           type="submit"
           disabled={disabled}
-          className="shrink-0 rounded-lg border border-[#00bfff]/20 px-3 font-label text-xs uppercase tracking-widest text-[#C8D8EB]/70 hover:border-[#00bfff]"
+          className="shrink-0 rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest text-ink-muted/70 hover:border-accent"
         >
           Añadir
         </button>

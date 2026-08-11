@@ -34,43 +34,43 @@ const PostComponent = React.memo(({ post }: Props) => {
       role="button"
       tabIndex={0}
       aria-label={`Ver ${post.title}`}
-      className="brand-library-module brand-surface-interactive group relative flex cursor-pointer flex-col gap-4 p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-beam/60 lg:p-5"
+      className="brand-library-module brand-surface-interactive group relative flex cursor-pointer flex-col gap-4 p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 lg:p-5"
     >
       <div className="flex items-start gap-3">
         <span className="brand-key-dial shrink-0 font-display text-sm uppercase">
           {post.key || "—"}
         </span>
         <div className="min-w-0 flex-1 pt-0.5">
-          <p className="mb-1 font-label text-[10px] uppercase tracking-[0.2em] text-brand-steel/55">
+          <p className="mb-1 font-label text-[10px] uppercase tracking-[0.2em] text-ink-dim/55">
             Repertorio
           </p>
-          <h2 className="line-clamp-2 font-display text-base font-semibold leading-snug text-brand-frost transition-colors group-hover:text-brand-beam lg:text-lg">
+          <h2 className="line-clamp-2 font-display text-base font-semibold leading-snug text-ink transition-colors group-hover:text-accent lg:text-lg">
             {post.title}
           </h2>
           {post.author && (
-            <p className="mt-1 truncate font-body text-sm text-brand-steel/70">
+            <p className="mt-1 truncate font-body text-sm text-ink-dim/70">
               {post.author}
             </p>
           )}
         </div>
-        <span className={`pointer-events-none mt-1 flex shrink-0 items-center gap-1 font-label text-[10px] uppercase tracking-widest transition-colors ${fresh ? "text-brand-beam" : "text-brand-steel/40 group-hover:text-brand-beam/80"}`}>
+        <span className={`pointer-events-none mt-1 flex shrink-0 items-center gap-1 font-label text-[10px] uppercase tracking-widest transition-colors ${fresh ? "text-accent" : "text-ink-dim/40 group-hover:text-accent/80"}`}>
           {fresh ? "Nuevo" : <><EyeIcon /> Ver</>}
         </span>
       </div>
 
       {(post.bpm || post.timeSig) && (
-        <div className="flex items-center gap-3 border-t border-brand-steel/10 pt-3 font-label text-[11px] uppercase tracking-widest text-brand-steel/55">
+        <div className="flex items-center gap-3 border-t border-ink-dim/10 pt-3 font-label text-[11px] uppercase tracking-widest text-ink-dim/55">
           {post.bpm && <span>{post.bpm} BPM</span>}
-          {post.bpm && post.timeSig && <span className="h-3 w-px bg-brand-steel/15" />}
+          {post.bpm && post.timeSig && <span className="h-3 w-px bg-ink-dim/15" />}
           {post.timeSig && <span>{post.timeSig}</span>}
         </div>
       )}
 
       {/* Tags */}
       {post.tags?.length > 0 && (
-        <div className={`flex flex-wrap gap-1.5 ${post.bpm || post.timeSig ? "" : "border-t border-brand-steel/10 pt-3"}`}>
+        <div className={`flex flex-wrap gap-1.5 ${post.bpm || post.timeSig ? "" : "border-t border-ink-dim/10 pt-3"}`}>
           {post.tags.map((tag) => (
-            <span key={tag._id} className="rounded-md border border-brand-steel/10 bg-brand-blackout/30 px-2 py-1 font-label text-[10px] lowercase text-brand-steel/60 transition-colors group-hover:border-brand-beam/15 group-hover:text-brand-steel/85">
+            <span key={tag._id} className="rounded-md border border-ink-dim/10 bg-surface-base/30 px-2 py-1 font-label text-[10px] lowercase text-ink-dim/60 transition-colors group-hover:border-accent/15 group-hover:text-ink-dim/85">
               #{tag.name}
             </span>
           ))}

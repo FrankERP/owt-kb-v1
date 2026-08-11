@@ -17,7 +17,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { build } from "../../../scripts/colour-inventory.mjs";
+import { build, pairsIn } from "../../../scripts/colour-inventory.mjs";
 import { stripComments } from "../../../scripts/lib/strip-comments.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -220,10 +220,37 @@ describe("colour inventory — the traps that produced wrong counts before", () 
     expect(withAlpha.every((r) => /\/\d{1,3}$/.test(r.value))).toBe(true);
   });
 
-  it("most light/dark pairs differ in ALPHA — the composed-token layer's whole reason", () => {
-    // A theme-invariant opacity modifier cannot express "opaque navy in light, 20%
-    // cyan in dark". If this ever drops to zero, alpha capture has regressed.
-    expect(live.summary.pairsDifferingInAlpha).toBeGreaterThan(0);
-    expect(live.summary.pairsDifferingInAlpha).toBeGreaterThan(live.summary.pairs / 2);
+  it("captures ALPHA on both sides of a pair — the composed-token layer's whole reason", () => {
+    // MOVED ONTO A SYNTHETIC SOURCE, as the B plan required before this batch.
+    //
+    // This used to assert `pairsDifferingInAlpha > pairs / 2` against the live tree,
+    // and it was a correct reading of the tree only until Child B started consuming
+    // pairs. B deletes the light half of every pair it migrates, so the count marches
+    // to zero BY SUCCEEDING — and the old comment read "if this ever drops to zero,
+    // alpha capture has regressed", which would have diagnosed a completed migration
+    // as a broken scanner.
+    //
+    // What is worth guarding is the SCANNER, not the tree's current contents. A
+    // theme-invariant opacity modifier cannot express "opaque navy in light, 20% cyan
+    // in dark", so a pair whose two sides differ in alpha must be detected as such.
+    const src = `
+      const a = "bg-[#003572] dark:bg-[#00bfff]/20";
+      const b = "bg-[#003572]/30 dark:bg-[#00bfff]/30";
+      const c = "bg-[#003572]/10 dark:bg-[#00bfff]/[0.04]";
+    `;
+    const pairs = pairsIn(src) as {
+      light: string; lightAlpha: string | null;
+      dark: string; darkAlpha: string | null;
+      alphaDiffers: boolean;
+    }[];
+    expect(pairs).toHaveLength(3);
+    expect(pairs.filter((p) => p.alphaDiffers)).toHaveLength(2);
+
+    // `/[0.04]` and `/4` are the same alpha spelled two ways, and reading the bracket
+    // form as ABSENT reads it as OPAQUE. That defect shipped: three composed tokens
+    // were built at 100% for sites that render at 3-4%.
+    const bracket = pairs.find((p) => p.light === "[#003572]" && p.lightAlpha === "10");
+    expect(bracket?.darkAlpha).toBe("4");
+    expect(bracket?.alphaDiffers).toBe(true);
   });
 });

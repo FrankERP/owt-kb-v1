@@ -51,6 +51,9 @@ const BASE_ROLES = [
   // B3 additions — see brand.css for why each exists.
   "warning-surface-deep", "info-surface-deep",
   "surface-overlay", "surface-overlay-deep", "surface-overlay-deepest",
+  // B4 additions — the vocabulary's "no role here" table, decided.
+  "elevation",
+  "chart-lead", "chart-bgv", "chart-coro", "chart-especial", "chart-instr", "chart-foh",
 ] as const;
 
 /** The 23 Layer-2 composed tokens. Stored as `--<name>`, alpha already baked in. */
@@ -58,10 +61,10 @@ const COMPOSED = [
   "surface-accent-solid", "surface-accent-30", "surface-accent-hover", "edge-accent-subtle",
   "surface-accent-20", "surface-accent-faint", "surface-accent-wash",
   "surface-accent-l20-d60-sunken", "surface-accent-l100-d10", "surface-accent-l40-d20",
-  "surface-accent-l30-d25", "surface-accent-l10-d100", "surface-ink-l60-d50",
+  "surface-accent-l30-d25", "surface-accent-l10-d4", "surface-ink-l60-d50",
   "surface-ink-l40-d100-base", "surface-accent-l25-d20", "surface-accent-l25-d15",
-  "surface-ink-l70-d50", "surface-accent-l15-d100", "surface-accent-l100-d15",
-  "surface-ink-l50-d35", "surface-accent-l5-d100", "surface-accent-l50-d40",
+  "surface-ink-l70-d50", "surface-accent-l15-d4", "surface-accent-l100-d15",
+  "surface-ink-l50-d35", "surface-accent-l5-d3", "surface-accent-l50-d40",
   "surface-accent-l50-d15",
 ] as const;
 

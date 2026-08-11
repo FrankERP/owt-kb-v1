@@ -205,8 +205,8 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
             aria-expanded={recurOpen}
             className={`px-3 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
               recurOpen
-                ? "border-[#00bfff] text-[#00bfff]"
-                : "border-[#003572]/30 dark:border-[#00bfff]/20 text-gray-500 hover:border-[#00bfff] hover:text-[#00bfff]"
+                ? "border-accent text-accent"
+                : "border-surface-accent-30 text-gray-500 hover:border-accent hover:text-accent"
             }`}
           >
             Repetir…
@@ -217,8 +217,8 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
             disabled={saving || !dirty}
             className={`px-4 py-2 rounded-lg font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${
               dirty
-                ? "bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 ring-1 ring-amber-400/50"
-                : "bg-[#003572] dark:bg-[#00bfff]/20"
+                ? "bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 ring-1 ring-amber-400/50"
+                : "bg-surface-accent-solid"
             }`}
           >
             {saving ? "Guardando..." : saved ? "Guardado ✓" : dirty ? "Guardar •" : "Guardar"}
@@ -228,38 +228,38 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
 
       {/* Recurring pattern */}
       {recurOpen && (
-        <div className="rounded-xl border border-[#00bfff]/20 bg-[#00bfff]/[0.04] p-4 space-y-3">
-          <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]/70">
+        <div className="rounded-xl border border-accent/20 bg-accent/[0.04] p-4 space-y-3">
+          <p className="font-label text-[11px] uppercase tracking-widest text-accent/70">
             Marcar un día recurrente como no disponible
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={recurDow}
               onChange={e => setRecurDow(Number(e.target.value))}
-              className="rounded-lg border border-[#003572]/40 dark:border-[#00bfff]/20 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 focus:outline-none focus:border-[#00bfff]/50"
+              className="rounded-lg border border-surface-accent-l40-d20 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 focus:outline-none focus:border-accent/50"
             >
-              {WEEKDAYS.map((w, i) => <option key={i} value={i} className="bg-[#010b17]">{w}</option>)}
+              {WEEKDAYS.map((w, i) => <option key={i} value={i} className="bg-surface-base">{w}</option>)}
             </select>
             <select
               value={recurInterval}
               onChange={e => setRecurInterval(Number(e.target.value))}
-              className="rounded-lg border border-[#003572]/40 dark:border-[#00bfff]/20 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 focus:outline-none focus:border-[#00bfff]/50"
+              className="rounded-lg border border-surface-accent-l40-d20 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 focus:outline-none focus:border-accent/50"
             >
-              <option value={1} className="bg-[#010b17]">Cada semana</option>
-              <option value={2} className="bg-[#010b17]">Cada 2 semanas</option>
-              <option value={4} className="bg-[#010b17]">Cada 4 semanas</option>
+              <option value={1} className="bg-surface-base">Cada semana</option>
+              <option value={2} className="bg-surface-base">Cada 2 semanas</option>
+              <option value={4} className="bg-surface-base">Cada 4 semanas</option>
             </select>
             <button
               type="button"
               onClick={() => applyRecurring(true)}
-              className="px-4 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors"
+              className="px-4 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors"
             >
               Marcar
             </button>
             <button
               type="button"
               onClick={() => applyRecurring(false)}
-              className="px-4 py-2 rounded-lg border border-[#003572]/40 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest text-gray-400 hover:border-red-500/40 hover:text-red-400 transition-colors"
+              className="px-4 py-2 rounded-lg border border-surface-accent-l40-d20 font-label text-xs uppercase tracking-widest text-gray-400 hover:border-red-500/40 hover:text-red-400 transition-colors"
             >
               Quitar serie
             </button>
@@ -294,7 +294,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
           type="button"
           onClick={() => setPage(p => p - 1)}
           disabled={!canPrev}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#003572]/40 font-label text-[11px] uppercase tracking-widest text-gray-500 hover:border-[#00bfff]/40 hover:text-[#00bfff] disabled:opacity-20 disabled:cursor-default transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent-deep/40 font-label text-[11px] uppercase tracking-widest text-gray-500 hover:border-accent/40 hover:text-accent disabled:opacity-20 disabled:cursor-default transition-colors"
         >
           <ChevronLeft /> Anterior
         </button>
@@ -307,7 +307,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
           type="button"
           onClick={() => setPage(p => p + 1)}
           disabled={!canNext}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#003572]/40 font-label text-[11px] uppercase tracking-widest text-gray-500 hover:border-[#00bfff]/40 hover:text-[#00bfff] disabled:opacity-20 disabled:cursor-default transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent-deep/40 font-label text-[11px] uppercase tracking-widest text-gray-500 hover:border-accent/40 hover:text-accent disabled:opacity-20 disabled:cursor-default transition-colors"
         >
           Siguiente <ChevronRight />
         </button>
@@ -318,8 +318,8 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
         {visibleMonths.map(({ year, month }) => {
           const cells = buildCalendar(year, month);
           return (
-            <div key={`${year}-${month}`} className="rounded-xl border border-[#00bfff]/15 bg-[#00bfff]/[0.04] p-3">
-              <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]/70 mb-2 text-center">
+            <div key={`${year}-${month}`} className="rounded-xl border border-accent/15 bg-accent/[0.04] p-3">
+              <p className="font-label text-[11px] uppercase tracking-widest text-accent/70 mb-2 text-center">
                 {MONTHS_ES[month - 1]} {year}
               </p>
               <div className="grid grid-cols-7 gap-0.5 mb-1">
@@ -351,12 +351,12 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
                           ? "bg-orange-500/50 text-orange-200 border border-orange-400 ring-1 ring-orange-400/40"
                           : unavailable
                           ? "bg-orange-500/30 text-orange-300 border border-orange-500/50 hover:bg-orange-500/40"
-                          : "text-gray-300 hover:bg-[#00bfff]/10 hover:text-[#00bfff]"
+                          : "text-gray-300 hover:bg-accent/10 hover:text-accent"
                       }`}
                     >
                       {dayNum}
                       {hasService && (
-                        <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${unavailable ? "bg-orange-400/60" : isPast ? "bg-gray-600" : "bg-[#00bfff]/70"}`} />
+                        <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${unavailable ? "bg-orange-400/60" : isPast ? "bg-gray-600" : "bg-accent/70"}`} />
                       )}
                       {hasNote && (
                         <span className="absolute top-0.5 right-0.5 w-1 h-1 rounded-full bg-white/50" />
@@ -378,7 +378,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
             type="button"
             onClick={() => setPage(i)}
             className={`w-1.5 h-1.5 rounded-full transition-colors ${
-              i === page ? "bg-[#00bfff]" : "bg-[#003572]/50 hover:bg-[#003572]"
+              i === page ? "bg-accent" : "bg-accent-deep/50 hover:bg-accent-deep"
             }`}
             aria-label={`Página ${i + 1}`}
           />
@@ -394,7 +394,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
             onClick={() => setPopover(null)}
           />
           <div
-            className="fixed z-50 w-64 rounded-xl border border-[#00bfff]/20 bg-[#010b17] shadow-2xl shadow-black/60 p-4 space-y-3"
+            className="fixed z-50 w-64 rounded-xl border border-accent/20 bg-surface-base shadow-2xl shadow-black/60 p-4 space-y-3"
             style={{ top: popover.y, left: popover.x }}
             onClick={e => e.stopPropagation()}
           >
@@ -432,7 +432,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
                 setSaved(false);
               }}
               onKeyDown={e => { if (e.key === "Enter") setPopover(null); }}
-              className="w-full rounded-lg border border-[#003572]/50 dark:border-[#00bfff]/15 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 placeholder:text-gray-400 focus:outline-none focus:border-[#00bfff]/40"
+              className="w-full rounded-lg border border-surface-accent-l50-d15 bg-white/5 px-3 py-2 font-body text-sm text-gray-200 placeholder:text-gray-400 focus:outline-none focus:border-accent/40"
             />
 
             {/* Remove date */}

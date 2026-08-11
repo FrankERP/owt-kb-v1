@@ -61,18 +61,18 @@ function SignInForm() {
             priority
             className="brand-lockup-mark h-[88px] w-[88px] rounded-[24px]"
           />
-          <h1 className="mt-5 font-display text-3xl uppercase tracking-[0.16em] text-brand-frost">
+          <h1 className="mt-5 font-display text-3xl uppercase tracking-[0.16em] text-ink">
             Backstage
           </h1>
-          <p className="mt-1 font-label text-[11px] uppercase tracking-[0.24em] text-brand-steel">
+          <p className="mt-1 font-label text-[11px] uppercase tracking-[0.24em] text-ink-dim">
             Oasis Worship Team
           </p>
         </div>
 
-        <section className="brand-facet-panel rounded-[var(--brand-radius-panel)] border border-brand-steel/20 bg-brand-console/75 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.28)] backdrop-blur-sm sm:p-6">
+        <section className="brand-facet-panel rounded-[var(--brand-radius-panel)] border border-ink-dim/20 bg-surface-console/75 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.28)] backdrop-blur-sm sm:p-6">
           <div className="mb-5">
-            <h2 className="font-label text-[11px] uppercase tracking-[0.22em] text-brand-beam">Acceso del equipo</h2>
-            <p className="mt-1 font-body text-sm text-brand-steel">Inicia sesión para ver tus servicios y canciones.</p>
+            <h2 className="font-label text-[11px] uppercase tracking-[0.22em] text-accent">Acceso del equipo</h2>
+            <p className="mt-1 font-body text-sm text-ink-dim">Inicia sesión para ver tus servicios y canciones.</p>
           </div>
 
           {/* Error */}
@@ -87,7 +87,7 @@ function SignInForm() {
             <button
               onClick={handleGoogle}
               disabled={loading}
-              className="w-full min-h-11 flex items-center justify-center gap-3 px-4 py-3 rounded-[var(--brand-radius-control)] border border-brand-beam/35 bg-brand-beam/[0.06] hover:bg-brand-beam/10 transition-colors font-label text-xs uppercase tracking-widest disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-beam/70"
+              className="w-full min-h-11 flex items-center justify-center gap-3 px-4 py-3 rounded-[var(--brand-radius-control)] border border-accent/35 bg-accent/[0.06] hover:bg-accent/10 transition-colors font-label text-xs uppercase tracking-widest disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
             >
               <GoogleIcon />
               Continuar con Google
@@ -96,9 +96,9 @@ function SignInForm() {
 
           {/* Divider */}
           <div className="my-5 flex items-center gap-3">
-            <div className="flex-1 h-px bg-brand-steel/20" />
-            <span className="font-label text-[11px] uppercase tracking-widest text-brand-steel">o</span>
-            <div className="flex-1 h-px bg-brand-steel/20" />
+            <div className="flex-1 h-px bg-ink-dim/20" />
+            <span className="font-label text-[11px] uppercase tracking-widest text-ink-dim">o</span>
+            <div className="flex-1 h-px bg-ink-dim/20" />
           </div>
 
           {/* Credentials */}
@@ -111,7 +111,7 @@ function SignInForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full min-h-11 px-4 py-3 rounded-[var(--brand-radius-control)] border border-brand-steel/25 bg-brand-blackout/35 font-body text-sm text-brand-frost placeholder:text-brand-steel/70 focus:outline-none focus:border-brand-beam focus:ring-1 focus:ring-brand-beam/40 transition-colors"
+              className="w-full min-h-11 px-4 py-3 rounded-[var(--brand-radius-control)] border border-ink-dim/25 bg-surface-base/35 font-body text-sm text-ink placeholder:text-ink-dim/70 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 transition-colors"
             />
             <input
               type="password"
@@ -121,16 +121,16 @@ function SignInForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full min-h-11 px-4 py-3 rounded-[var(--brand-radius-control)] border border-brand-steel/25 bg-brand-blackout/35 font-body text-sm text-brand-frost placeholder:text-brand-steel/70 focus:outline-none focus:border-brand-beam focus:ring-1 focus:ring-brand-beam/40 transition-colors"
+              className="w-full min-h-11 px-4 py-3 rounded-[var(--brand-radius-control)] border border-ink-dim/25 bg-surface-base/35 font-body text-sm text-ink placeholder:text-ink-dim/70 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 transition-colors"
             />
             <button
               type="submit"
               disabled={loading}
-              className="w-full min-h-11 py-3 rounded-[var(--brand-radius-control)] bg-brand-beam/20 hover:bg-brand-beam/30 border border-brand-beam/30 transition-colors font-label text-xs uppercase tracking-widest disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-beam/70"
+              className="w-full min-h-11 py-3 rounded-[var(--brand-radius-control)] bg-accent/20 hover:bg-accent/30 border border-accent/30 transition-colors font-label text-xs uppercase tracking-widest disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
             >
               {loading ? "Iniciando..." : "Iniciar sesión"}
             </button>
-            <p className="font-body text-xs text-brand-steel text-center pt-1">
+            <p className="font-body text-xs text-ink-dim text-center pt-1">
               ¿Olvidaste tu contraseña? Pídele a un administrador que la restablezca.
             </p>
           </form>

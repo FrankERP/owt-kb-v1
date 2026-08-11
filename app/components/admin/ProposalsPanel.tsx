@@ -142,26 +142,26 @@ function ProposalCard({
     }
   };
 
-  const inputCls = "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors placeholder:text-gray-600";
+  const inputCls = "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors placeholder:text-gray-600";
 
   return (
     <div
       ref={register}
       tabIndex={-1}
       aria-current={highlighted ? "true" : undefined}
-      className={`min-w-0 rounded-xl border bg-[#003572]/5 dark:bg-[#00bfff]/5 overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00bfff] ${
+      className={`min-w-0 rounded-xl border bg-accent-deep/5 dark:bg-accent/5 overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
         highlighted
-          ? "border-[#00bfff] shadow-[0_0_0_1px_rgb(0_191_255/0.45)]"
-          : "border-[#003572]/15 dark:border-[#00bfff]/10"
+          ? "border-accent shadow-[0_0_0_1px_rgb(0_191_255/0.45)]"
+          : "border-edge-accent-subtle"
       }`}
     >
       {/* Card header */}
-      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[#003572]/10 dark:border-[#00bfff]/10">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-accent/10">
         <div>
           <p className="font-display text-base font-semibold">
             {SERVICE_LABEL[proposal.service_type]} · {capitalize(formatDate(proposal.service_date))}
           </p>
-          <p className="font-body text-sm text-[#00bfff]">
+          <p className="font-body text-sm text-accent">
             {proposal.lead_name}
             {coContributors.length > 0 && (
               <span className="text-gray-400"> · con {coContributors.join(", ")}</span>
@@ -184,7 +184,7 @@ function ProposalCard({
           const linkedPrev = i > 0 && !!song.medley_tag && proposal.songs[i - 1].medley_tag === song.medley_tag;
           return (
             <div key={song._key}>
-              <div className={`flex items-center gap-3 ${song.medley_tag ? "pl-2 border-l-2 border-[#00bfff]/40" : ""}`}>
+              <div className={`flex items-center gap-3 ${song.medley_tag ? "pl-2 border-l-2 border-accent/40" : ""}`}>
                 <span className="font-label text-xs text-gray-500 w-4 text-right shrink-0">{i + 1}</span>
                 <div className="flex-1 min-w-0">
                   <p className="font-body text-sm font-semibold truncate">{song.title}</p>
@@ -193,9 +193,9 @@ function ProposalCard({
                   )}
                 </div>
                 {linkedPrev && (
-                  <span className="font-label text-[10px] uppercase tracking-widest text-[#00bfff]/60 shrink-0">medley</span>
+                  <span className="font-label text-[10px] uppercase tracking-widest text-accent/60 shrink-0">medley</span>
                 )}
-                <span className="font-label text-xs px-2 py-0.5 rounded-full border border-[#00bfff]/20 text-[#00bfff] shrink-0">
+                <span className="font-label text-xs px-2 py-0.5 rounded-full border border-accent/20 text-accent shrink-0">
                   {song.play_key}
                 </span>
               </div>
@@ -208,8 +208,8 @@ function ProposalCard({
       {/* Team message */}
       {proposal.team_notes && (
         <div className="px-4 pb-3">
-          <div className="p-3 rounded-lg border border-[#00bfff]/20 bg-[#00bfff]/5">
-            <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff] mb-1">Mensaje para el equipo</p>
+          <div className="p-3 rounded-lg border border-accent/20 bg-accent/5">
+            <p className="font-label text-[11px] uppercase tracking-widest text-accent mb-1">Mensaje para el equipo</p>
             <p className="font-body text-sm text-gray-300 whitespace-pre-wrap">{proposal.team_notes}</p>
           </div>
         </div>
@@ -259,7 +259,7 @@ function ProposalCard({
               <div className="flex gap-2">
                 <button
                   onClick={() => setRequestingChanges(false)}
-                  className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors"
+                  className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent transition-colors"
                 >
                   Cancelar
                 </button>
@@ -276,14 +276,14 @@ function ProposalCard({
             <div className="flex gap-2">
               <button
                 onClick={() => setRequestingChanges(true)}
-                className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-red-400 hover:text-red-400 transition-colors"
+                className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-red-400 hover:text-red-400 transition-colors"
               >
                 Solicitar cambios
               </button>
               <button
                 onClick={handleApprove}
                 disabled={submitting || conflict || proposal.songs.length === 0}
-                className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+                className="flex-1 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
               >
                 {submitting ? "Aprobando…" : "Aprobar"}
               </button>
@@ -316,14 +316,14 @@ function ProposalCard({
               <div className="flex gap-2">
                 <button
                   onClick={() => setReopening(false)}
-                  className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors"
+                  className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleReopen}
                   disabled={submitting || conflict}
-                  className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+                  className="flex-1 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
                 >
                   {submitting ? "Reabriendo…" : "Reabrir"}
                 </button>
@@ -332,7 +332,7 @@ function ProposalCard({
           ) : (
             <button
               onClick={() => setReopening(true)}
-              className="w-full py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest text-gray-400 hover:border-[#00bfff] hover:text-[#00bfff] transition-colors"
+              className="w-full py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-gray-400 hover:border-accent hover:text-accent transition-colors"
             >
               Reabrir para ajustes
             </button>
@@ -514,7 +514,7 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
   return (
     <div className="space-y-6">
       {/* Filter tabs */}
-      <div className="flex flex-wrap gap-1 p-1 rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 w-fit">
+      <div className="flex flex-wrap gap-1 p-1 rounded-xl border border-edge-accent-subtle w-fit">
         {FILTER_TABS.map(({ id, label }) => (
           <button
             key={id}
@@ -529,8 +529,8 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
             }}
             className={`relative font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors ${
               filter === id
-                ? "bg-[#003572] dark:bg-[#00bfff]/20 text-[#C8D8EB] dark:text-[#00bfff]"
-                : "text-gray-500 hover:text-[#00bfff]"
+                ? "bg-surface-accent-solid text-accent"
+                : "text-gray-500 hover:text-accent"
             }`}
           >
             {label}
@@ -576,7 +576,7 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
       {loading && (
         <div className="space-y-4">
           {[1, 2].map(i => (
-            <div key={i} className="h-40 rounded-xl bg-[#003572]/10 dark:bg-[#00bfff]/5 animate-pulse" />
+            <div key={i} className="h-40 rounded-xl bg-surface-accent-wash animate-pulse" />
           ))}
         </div>
       )}
@@ -614,7 +614,7 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
       {toast && (
         <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl border font-label text-xs uppercase tracking-widest shadow-xl ${
           toast.ok
-            ? "bg-[#003572] dark:bg-[#0a1929] border-[#00bfff]/30"
+            ? "bg-surface-raised-alt border-accent/30"
             : "bg-red-900/80 border-red-500/30"
         }`}>
           {toast.msg}

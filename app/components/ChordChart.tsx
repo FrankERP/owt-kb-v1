@@ -150,8 +150,8 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
               aria-pressed={i === activeIdx}
               className={`font-label text-xs uppercase tracking-widest px-4 py-1.5 rounded-full border transition-colors ${
                 i === activeIdx
-                  ? "border-[#00bfff] bg-[#00bfff]/15 text-[#00bfff]"
-                  : "border-[#003572]/25 dark:border-[#00bfff]/20 text-gray-500 hover:border-[#00bfff]/50 hover:text-[#00bfff]"
+                  ? "border-accent bg-accent/15 text-accent"
+                  : "border-surface-accent-l25-d20 text-gray-500 hover:border-accent/50 hover:text-accent"
               }`}
             >
               {c.key || `Tonalidad ${i + 1}`}
@@ -180,15 +180,15 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
                     aria-pressed={isActive}
                     className={`relative font-label text-xs uppercase tracking-wide px-2.5 py-1 rounded border transition-colors min-w-[2rem] text-center ${
                       isActive
-                        ? "border-[#00bfff] bg-[#00bfff] text-[#001f3f] font-bold"
+                        ? "border-accent bg-accent text-surface-sunken font-bold"
                         : isNative
-                        ? "border-[#00bfff]/60 text-[#00bfff]"
-                        : "border-[#003572]/25 dark:border-[#00bfff]/15 text-gray-500 dark:text-gray-500 hover:border-[#00bfff]/50 hover:text-[#00bfff]"
+                        ? "border-accent/60 text-accent"
+                        : "border-surface-accent-l25-d15 text-gray-500 dark:text-gray-500 hover:border-accent/50 hover:text-accent"
                     }`}
                   >
                     {note}
                     {isNativeNote && !isActive && (
-                      <span aria-hidden className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#00bfff]" />
+                      <span aria-hidden className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-accent" />
                     )}
                   </button>
                 );
@@ -200,7 +200,7 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
           {capo && (
             <div className="flex items-center gap-2">
               <span
-                className="inline-flex items-center gap-1.5 font-label text-xs uppercase tracking-wide px-2.5 py-1 rounded-full border border-[#00bfff]/30 text-[#00bfff]/90"
+                className="inline-flex items-center gap-1.5 font-label text-xs uppercase tracking-wide px-2.5 py-1 rounded-full border border-accent/30 text-accent/90"
                 title="Posición de capo para tocar con acordes abiertos en la tonalidad seleccionada"
               >
                 <CapoIcon />
@@ -220,7 +220,7 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
               aria-checked={showChords}
               onClick={() => setShowChords((v) => !v)}
               className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-                showChords ? "bg-[#00bfff]" : "bg-gray-300 dark:bg-gray-600"
+                showChords ? "bg-accent" : "bg-gray-300 dark:bg-gray-600"
               }`}
             >
               <span
@@ -238,21 +238,21 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
 
       {/* Single key badge for non-ChordPro chart */}
       {!isChordPro && charts.length === 1 && current.key && (
-        <span className="font-label text-xs uppercase tracking-widest px-3 py-1.5 rounded-full border border-[#00bfff]/40 text-[#00bfff] inline-block">
+        <span className="font-label text-xs uppercase tracking-widest px-3 py-1.5 rounded-full border border-accent/40 text-accent inline-block">
           {current.key}
         </span>
       )}
 
       {/* Content */}
       {isChordPro ? (
-        <div className="rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 bg-[#003572]/5 dark:bg-[#00bfff]/5 px-5 py-5 overflow-x-auto">
+        <div className="rounded-xl border border-edge-accent-subtle bg-accent/5 px-5 py-5 overflow-x-auto">
           {current.content.split("\n").map((line, li) => {
             // Section header: # Estribillo
             if (line.startsWith("# ")) {
               return (
                 <p
                   key={li}
-                  className="font-label text-xs uppercase tracking-widest text-[#00bfff]/70 mt-5 mb-1 first:mt-0"
+                  className="font-label text-xs uppercase tracking-widest text-accent/70 mt-5 mb-1 first:mt-0"
                 >
                   {line.slice(2)}
                 </p>
@@ -284,7 +284,7 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
               <div key={li} className={`flex flex-wrap leading-none ${allLyricsEmpty ? "mb-0" : "mb-1"}`}>
                 {segments.map((seg, si) => (
                   <span key={si} className="inline-block align-top">
-                    <span className="block font-mono font-semibold text-[#00bfff] text-sm leading-tight whitespace-nowrap">
+                    <span className="block font-mono font-semibold text-accent text-sm leading-tight whitespace-nowrap">
                       {seg.chord !== undefined
                         ? transposeChord(seg.chord, semitones)
                         : " "}
@@ -301,7 +301,7 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
           })}
         </div>
       ) : (
-        <pre className="font-mono text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 bg-[#003572]/5 dark:bg-[#00bfff]/5 px-5 py-5 overflow-x-auto">
+        <pre className="font-mono text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words rounded-xl border border-edge-accent-subtle bg-accent/5 px-5 py-5 overflow-x-auto">
           {current.content}
         </pre>
       )}

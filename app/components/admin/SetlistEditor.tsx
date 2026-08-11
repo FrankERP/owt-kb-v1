@@ -306,7 +306,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
     return (
       <div className="space-y-4">
         <CueDialogStatus tone="error">{loadError}</CueDialogStatus>
-        <button type="button" onClick={onClose} className="w-full rounded-lg border border-[#00bfff]/20 py-2 font-label text-xs uppercase tracking-widest text-gray-400 transition-colors hover:border-[#00bfff] hover:text-[#00bfff]">
+        <button type="button" onClick={onClose} className="w-full rounded-lg border border-accent/20 py-2 font-label text-xs uppercase tracking-widest text-gray-400 transition-colors hover:border-accent hover:text-accent">
           Cerrar
         </button>
       </div>
@@ -340,12 +340,12 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
                   onDragEnd={() => { dragSrc.current = null; setDraggingIdx(null); setDragOverIdx(null); }}
                   className={`flex items-center gap-2 rounded-lg border px-3 py-2 select-none transition-all ${idx > 0 ? "mt-1.5" : ""} ${
                     isDragging
-                      ? "opacity-30 border-[#00bfff]/10 bg-[#001830]/30"
+                      ? "opacity-30 border-accent/10 bg-surface-sunken/30"
                       : dragOverIdx === idx
-                      ? "border-[#00bfff]/50 bg-[#00bfff]/5"
+                      ? "border-accent/50 bg-accent/5"
                       : e.medley_tag
-                      ? "border-[#00bfff]/25 bg-[#001830]/50"
-                      : "border-[#00bfff]/10 bg-[#001830]/30"
+                      ? "border-accent/25 bg-surface-sunken/50"
+                      : "border-accent/10 bg-surface-sunken/30"
                   }`}
                 >
                   <div className="cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 shrink-0 transition-colors" aria-hidden="true">
@@ -358,14 +358,14 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
                       onClick={() => move(idx, -1)}
                       disabled={idx === 0}
                       aria-label={`Subir ${e.song.title}`}
-                      className="text-gray-600 hover:text-[#00bfff] disabled:opacity-25 disabled:hover:text-gray-600 leading-none text-[11px] transition-colors"
+                      className="text-gray-600 hover:text-accent disabled:opacity-25 disabled:hover:text-gray-600 leading-none text-[11px] transition-colors"
                     >▲</button>
                     <button
                       type="button"
                       onClick={() => move(idx, 1)}
                       disabled={idx === entries.length - 1}
                       aria-label={`Bajar ${e.song.title}`}
-                      className="text-gray-600 hover:text-[#00bfff] disabled:opacity-25 disabled:hover:text-gray-600 leading-none text-[11px] transition-colors"
+                      className="text-gray-600 hover:text-accent disabled:opacity-25 disabled:hover:text-gray-600 leading-none text-[11px] transition-colors"
                     >▼</button>
                   </div>
                   <span className="font-label text-[11px] text-gray-600 shrink-0 w-4 text-center tabular-nums">{idx + 1}</span>
@@ -378,7 +378,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
                     </div>
                   </div>
                   <input
-                    className="w-14 px-1.5 py-1 rounded border border-[#00bfff]/15 bg-transparent font-body text-xs text-center focus:outline-none focus:border-[#00bfff]"
+                    className="w-14 px-1.5 py-1 rounded border border-accent/15 bg-transparent font-body text-xs text-center focus:outline-none focus:border-accent"
                     placeholder="Tono"
                     value={e.play_key}
                     onChange={ev => setEntries(prev => prev.map(x => x.localId === e.localId ? { ...x, play_key: ev.target.value } : x))}
@@ -393,8 +393,8 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
                       title={linked ? "Desagrupar medley" : "Agrupar en medley"}
                       className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all ${
                         linked
-                          ? "border-[#00bfff]/30 bg-[#010b17] text-[#00bfff]/60"
-                          : "border-dashed border-gray-700/30 bg-[#010b17] text-gray-700/40 hover:border-[#00bfff]/30 hover:text-[#00bfff]/40"
+                          ? "border-accent/30 bg-surface-base text-accent/60"
+                          : "border-dashed border-gray-700/30 bg-surface-base text-gray-700/40 hover:border-accent/30 hover:text-accent/40"
                       }`}
                     >
                       <ChainLinkIcon strokeWidth={linked ? 2.5 : 1.5} />
@@ -409,29 +409,29 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
       </div>
 
       {/* Search & add */}
-      <div className="border-t border-[#00bfff]/10 pt-3 space-y-2">
+      <div className="border-t border-accent/10 pt-3 space-y-2">
         <p className="font-label text-[11px] uppercase tracking-widest text-gray-500">Agregar canción</p>
         <div className="flex gap-2">
           <input
-            className="flex-1 px-3 py-1.5 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors placeholder-gray-600"
+            className="flex-1 px-3 py-1.5 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors placeholder-gray-600"
             placeholder="Buscar por título..."
             value={searchQ}
             onChange={e => setSearchQ(e.target.value)}
           />
           <input
-            className="w-16 px-2 py-1.5 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm text-center focus:outline-none focus:border-[#00bfff] transition-colors placeholder-gray-600"
+            className="w-16 px-2 py-1.5 rounded-lg border border-accent/20 bg-transparent font-body text-sm text-center focus:outline-none focus:border-accent transition-colors placeholder-gray-600"
             placeholder="Tono"
             value={addKey}
             onChange={e => setAddKey(e.target.value)}
           />
         </div>
         {searchResults.length > 0 && (
-          <div className="rounded-lg border border-[#00bfff]/20 divide-y divide-[#00bfff]/10 max-h-48 overflow-y-auto">
+          <div className="rounded-lg border border-accent/20 divide-y divide-accent/10 max-h-48 overflow-y-auto">
             {searchResults.map(song => {
               const lastUsed = recentSongs[song._id];
               const alreadyAdded = entries.some(e => e.song._id === song._id);
               return (
-                <div key={song._id} className="flex items-center gap-3 px-3 py-2 hover:bg-[#00bfff]/5 transition-colors">
+                <div key={song._id} className="flex items-center gap-3 px-3 py-2 hover:bg-accent/5 transition-colors">
                   <div className="flex-1 min-w-0">
                     <p className="font-body text-xs truncate">{song.title}</p>
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -444,7 +444,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
                     type="button"
                     disabled={alreadyAdded}
                     onClick={() => addSong(song)}
-                    className="font-label text-[10px] uppercase tracking-widest px-2 py-1 rounded-full border border-[#00bfff]/30 text-[#00bfff]/70 hover:text-[#00bfff] hover:border-[#00bfff] disabled:opacity-30 disabled:cursor-default transition-colors shrink-0"
+                    className="font-label text-[10px] uppercase tracking-widest px-2 py-1 rounded-full border border-accent/30 text-accent/70 hover:text-accent hover:border-accent disabled:opacity-30 disabled:cursor-default transition-colors shrink-0"
                   >
                     {alreadyAdded ? "Ya está" : "+ Añadir"}
                   </button>
@@ -453,13 +453,13 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
             })}
           </div>
         )}
-        <div className="rounded-lg border border-[#00bfff]/20">
+        <div className="rounded-lg border border-accent/20">
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-[#00bfff]/5 transition-colors text-left"
+            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent/5 transition-colors text-left"
           >
-            <span className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]">+ Crear</span>
+            <span className="font-label text-[11px] uppercase tracking-widest text-accent">+ Crear</span>
             {searchQ.trim()
               ? <span className="font-body text-xs text-gray-400 truncate">&quot;{searchQ}&quot;</span>
               : <span className="font-body text-xs text-gray-400">nueva canción</span>}
@@ -482,11 +482,11 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
           Recargar setlist
         </button>
       )}
-      <div className="flex gap-3 sticky bottom-0 bg-[#C8D8EB] dark:bg-[#0a1929] py-2">
-        <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
+      <div className="flex gap-3 sticky bottom-0 bg-surface-raised-alt py-2">
+        <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent transition-colors">
           Cancelar
         </button>
-        <button type="button" onClick={save} disabled={saving || saveConflict || !observed} className="flex-1 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+        <button type="button" onClick={save} disabled={saving || saveConflict || !observed} className="flex-1 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
           {saving ? "Guardando..." : "Guardar setlist"}
         </button>
       </div>

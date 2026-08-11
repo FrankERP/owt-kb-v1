@@ -18,17 +18,17 @@ const bodyComponents = {
       <p className="font-body text-base leading-relaxed">{children}</p>
     ),
     h1: ({ children }: any) => (
-      <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]/70 mt-4 mb-0.5 first:mt-0">
+      <p className="font-label text-[11px] uppercase tracking-widest text-accent/70 mt-4 mb-0.5 first:mt-0">
         {children}
       </p>
     ),
     h2: ({ children }: any) => (
-      <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]/70 mt-4 mb-0.5 first:mt-0">
+      <p className="font-label text-[11px] uppercase tracking-widest text-accent/70 mt-4 mb-0.5 first:mt-0">
         {children}
       </p>
     ),
     h3: ({ children }: any) => (
-      <p className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]/70 mt-4 mb-0.5 first:mt-0">
+      <p className="font-label text-[11px] uppercase tracking-widest text-accent/70 mt-4 mb-0.5 first:mt-0">
         {children}
       </p>
     ),
@@ -119,17 +119,17 @@ export default function SongSheet() {
       >
 
         {/* Header */}
-        <div className="flex shrink-0 items-start justify-between border-b border-brand-beam/10 bg-brand-deck/35 px-5 py-5">
+        <div className="flex shrink-0 items-start justify-between border-b border-accent/10 bg-surface-raised/35 px-5 py-5">
           <div className="flex-1 min-w-0 pr-3">
             {sheetLoading ? (
               <div className="space-y-2">
-                <div className="h-5 w-3/4 rounded bg-[#003572]/30 animate-pulse" />
-                <div className="h-4 w-1/2 rounded bg-[#003572]/20 animate-pulse" />
+                <div className="h-5 w-3/4 rounded bg-accent-deep/30 animate-pulse" />
+                <div className="h-4 w-1/2 rounded bg-accent-deep/20 animate-pulse" />
               </div>
             ) : sheet ? (
               <>
-                <p className="mb-1 font-label text-[10px] uppercase tracking-[0.22em] text-brand-beam/70">Canción</p>
-                <h2 className="font-display text-3xl leading-snug text-brand-frost">{sheet.title}</h2>
+                <p className="mb-1 font-label text-[10px] uppercase tracking-[0.22em] text-accent/70">Canción</p>
+                <h2 className="font-display text-3xl leading-snug text-ink">{sheet.title}</h2>
                 {sheet.author && (
                   <p className="font-body text-sm text-gray-400 mt-0.5">{sheet.author}</p>
                 )}
@@ -154,7 +154,7 @@ export default function SongSheet() {
           {sheetLoading ? (
             <div className="space-y-3">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-4 rounded bg-[#003572]/20 animate-pulse" style={{ width: `${70 + (i % 3) * 10}%` }} />
+                <div key={i} className="h-4 rounded bg-accent-deep/20 animate-pulse" style={{ width: `${70 + (i % 3) * 10}%` }} />
               ))}
             </div>
           ) : sheet ? (
@@ -167,12 +167,12 @@ export default function SongSheet() {
                   </span>
                 )}
                 {sheet.bpm && (
-                  <span className="font-label text-sm px-3 py-1 rounded-full border border-[#C8D8EB]/15 text-[#C8D8EB]/50">
+                  <span className="font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/50">
                     {sheet.bpm} BPM
                   </span>
                 )}
                 {sheet.timeSig && (
-                  <span className="font-label text-sm px-3 py-1 rounded-full border border-[#C8D8EB]/15 text-[#C8D8EB]/50">
+                  <span className="font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/50">
                     {sheet.timeSig}
                   </span>
                 )}
@@ -215,12 +215,12 @@ export default function SongSheet() {
                         aria-label={`${isCurrent && player.isPlaying ? "Pausar" : "Reproducir"} ${track.title}`}
                         className={`brand-library-module w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${
                           isCurrent
-                            ? "border-[#00bfff]/50 bg-[#00bfff]/10"
-                            : "border-[#003572]/30 hover:border-[#00bfff]/30 hover:bg-[#00bfff]/5"
+                            ? "border-accent/50 bg-accent/10"
+                            : "border-accent-deep/30 hover:border-accent/30 hover:bg-accent/5"
                         }`}
                       >
                         <span className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
-                          isCurrent ? "bg-[#00bfff] text-[#010b17]" : "bg-[#003572]/30 text-[#00bfff]"
+                          isCurrent ? "bg-accent text-surface-base" : "bg-accent-deep/30 text-accent"
                         }`}>
                           {isCurrent && player.isPlaying ? <PauseIcon /> : <PlayIcon />}
                         </span>
@@ -238,7 +238,7 @@ export default function SongSheet() {
 
               {sheetTrack && (
                 <div
-                  className="sticky bottom-0 -mx-5 border-t border-brand-beam/10 bg-brand-blackout/95 backdrop-blur-md"
+                  className="sticky bottom-0 -mx-5 border-t border-accent/10 bg-surface-base/95 backdrop-blur-md"
                   style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
                 >
                   <AudioTransport
@@ -266,7 +266,7 @@ export default function SongSheet() {
                       rel="noopener noreferrer"
                       className="brand-library-module brand-surface-interactive flex items-center gap-3 px-4 py-3"
                     >
-                      <span className="w-7 h-7 rounded-full bg-[#003572]/30 text-[#00bfff] flex items-center justify-center shrink-0">
+                      <span className="w-7 h-7 rounded-full bg-accent-deep/30 text-accent flex items-center justify-center shrink-0">
                         <PDFIcon />
                       </span>
                       <span className="font-body text-sm flex-1">
@@ -293,8 +293,8 @@ export default function SongSheet() {
                             type="button"
                             onClick={() => hasSet && setOpenSetIdx(i)}
                             disabled={!hasSet}
-                            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border border-[#003572]/30 bg-[#00bfff]/[0.03] text-left transition-colors ${
-                              hasSet ? "hover:border-[#00bfff]/40 hover:bg-[#00bfff]/[0.07] cursor-pointer" : "cursor-default"
+                            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border border-accent-deep/30 bg-accent/[0.03] text-left transition-colors ${
+                              hasSet ? "hover:border-accent/40 hover:bg-accent/[0.07] cursor-pointer" : "cursor-default"
                             }`}
                             title={hasSet ? "Ver el set completo" : undefined}
                           >
@@ -317,10 +317,10 @@ export default function SongSheet() {
                                       <img
                                         src={lead.photo}
                                         alt=""
-                                        className="w-5 h-5 rounded-full object-cover border border-[#00bfff]/25 shrink-0"
+                                        className="w-5 h-5 rounded-full object-cover border border-accent/25 shrink-0"
                                       />
                                     ) : (
-                                      <span className="w-5 h-5 rounded-full bg-[#003572]/50 text-[#00bfff] flex items-center justify-center text-[10px] font-semibold shrink-0">
+                                      <span className="w-5 h-5 rounded-full bg-accent-deep/50 text-accent flex items-center justify-center text-[10px] font-semibold shrink-0">
                                         {(lead.name ?? "?").charAt(0).toUpperCase()}
                                       </span>
                                     )}
@@ -337,7 +337,7 @@ export default function SongSheet() {
                             </div>
 
                             {/* Key played */}
-                            <span className="font-label text-xs px-2.5 py-1 rounded-full border border-[#00bfff]/40 text-[#00bfff] shrink-0">
+                            <span className="font-label text-xs px-2.5 py-1 rounded-full border border-accent/40 text-accent shrink-0">
                               {entry.play_key || sheet!.key || "—"}
                             </span>
 
@@ -355,7 +355,7 @@ export default function SongSheet() {
               <Link
                 href={`/posts/${sheet.slug}`}
                 onClick={closeSheet}
-                className="brand-search-console flex w-full items-center justify-center gap-2 py-3 font-label text-xs uppercase tracking-widest text-brand-steel/70 transition-colors hover:border-brand-beam/35 hover:text-brand-beam"
+                className="brand-search-console flex w-full items-center justify-center gap-2 py-3 font-label text-xs uppercase tracking-widest text-ink-dim/70 transition-colors hover:border-accent/35 hover:text-accent"
               >
                 Ver página completa ↗
               </Link>
@@ -368,7 +368,7 @@ export default function SongSheet() {
               <p className="font-body text-sm text-gray-400">No se pudo cargar la canción.</p>
               <button
                 onClick={closeSheet}
-                className="font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/25 text-gray-400 hover:text-[#00bfff] hover:border-[#00bfff]/40 transition-colors"
+                className="font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg border border-surface-accent-l30-d25 text-gray-400 hover:text-accent hover:border-accent/40 transition-colors"
               >
                 Cerrar
               </button>
@@ -410,7 +410,7 @@ function SetlistPopover({
     <CueDialog open title="Set completo" label="Set completo" size="sm" fallbackFocusRef={fallbackFocusRef} onDismiss={onClose}>
       <div>
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#00bfff]/10 bg-[#00bfff]/[0.04]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-accent/10 bg-accent/[0.04]">
           <div>
             <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mb-0.5">
               {entry._type === "featuredSongs" ? "Domingo" : "Sábado"} · Set completo
@@ -439,17 +439,17 @@ function SetlistPopover({
                   onClick={() => !isCurrent && onPick(song.id, song.play_key)}
                   disabled={isCurrent}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                    isCurrent ? "bg-[#00bfff]/[0.06] cursor-default" : "hover:bg-[#00bfff]/[0.06]"
+                    isCurrent ? "bg-accent/[0.06] cursor-default" : "hover:bg-accent/[0.06]"
                   }`}
                 >
-                  <span className={`font-label text-[11px] w-4 shrink-0 ${isCurrent ? "text-[#00bfff]" : "text-gray-600"}`}>
+                  <span className={`font-label text-[11px] w-4 shrink-0 ${isCurrent ? "text-accent" : "text-gray-600"}`}>
                     {i + 1}
                   </span>
-                  <span className={`font-body text-sm flex-1 truncate ${isCurrent ? "text-[#00bfff] font-semibold" : "text-gray-200"}`}>
+                  <span className={`font-body text-sm flex-1 truncate ${isCurrent ? "text-accent font-semibold" : "text-gray-200"}`}>
                     {song.title ?? "—"}
                   </span>
                   {song.play_key && (
-                    <span className="font-label text-xs px-2 py-0.5 rounded-full border border-[#00bfff]/30 text-[#00bfff]/80 shrink-0">
+                    <span className="font-label text-xs px-2 py-0.5 rounded-full border border-accent/30 text-accent/80 shrink-0">
                       {song.play_key}
                     </span>
                   )}

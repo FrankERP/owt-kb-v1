@@ -71,8 +71,8 @@ function formatDateTime(iso: string) {
 function Avatar({ name }: { name: string }) {
   const initials = name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
   return (
-    <div className="w-9 h-9 rounded-full bg-[#003572] dark:bg-[#00bfff]/10 flex items-center justify-center shrink-0">
-      <span className="font-label text-xs text-[#00bfff]">{initials}</span>
+    <div className="w-9 h-9 rounded-full bg-surface-accent-l100-d10 flex items-center justify-center shrink-0">
+      <span className="font-label text-xs text-accent">{initials}</span>
     </div>
   );
 }
@@ -112,7 +112,7 @@ export default function ActivityPanel() {
     return (
       <div className="space-y-3">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-16 rounded-xl bg-[#003572]/10 dark:bg-[#00bfff]/5 animate-pulse" />
+          <div key={i} className="h-16 rounded-xl bg-surface-accent-wash animate-pulse" />
         ))}
       </div>
     );
@@ -131,7 +131,7 @@ export default function ActivityPanel() {
           { label: "Activos este mes",     value: activeThisMonth, dot: "bg-yellow-500" },
           { label: "Sin actividad",        value: neverActive,     dot: "bg-gray-600"   },
         ].map((stat) => (
-          <div key={stat.label} className="rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 bg-[#003572]/5 dark:bg-[#00bfff]/5 px-4 py-3 text-center">
+          <div key={stat.label} className="rounded-xl border border-edge-accent-subtle bg-accent/5 px-4 py-3 text-center">
             <div className="flex items-center justify-center gap-1.5 mb-1">
               <span className={`w-2 h-2 rounded-full shrink-0 ${stat.dot}`} />
               <p className="font-display text-2xl leading-none">{stat.value}</p>
@@ -146,10 +146,10 @@ export default function ActivityPanel() {
         {activity.map((m) => {
           const status = activityStatus(m.lastActive);
           return (
-            <div key={m._id} className="rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 overflow-hidden">
+            <div key={m._id} className="rounded-xl border border-edge-accent-subtle overflow-hidden">
               <button
                 onClick={() => setExpanded(expanded === m._id ? null : m._id)}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#003572]/5 dark:hover:bg-[#00bfff]/5 transition-colors text-left"
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-accent-deep/5 dark:hover:bg-accent/5 transition-colors text-left"
               >
                 <Avatar name={m.member_name} />
 
@@ -157,7 +157,7 @@ export default function ActivityPanel() {
                   <div className="flex items-baseline gap-2 flex-wrap">
                     <span className="font-body text-sm font-semibold">{m.member_name}</span>
                     {m.alias?.trim() && (
-                      <span className="font-label text-[11px] uppercase tracking-widest text-[#00bfff]/60">&ldquo;{m.alias}&rdquo;</span>
+                      <span className="font-label text-[11px] uppercase tracking-widest text-accent/60">&ldquo;{m.alias}&rdquo;</span>
                     )}
                   </div>
                   <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 mt-0.5">
@@ -189,7 +189,7 @@ export default function ActivityPanel() {
 
               {/* Expanded detail */}
               {expanded === m._id && (
-                <div className="border-t border-[#003572]/10 dark:border-[#00bfff]/10 px-4 py-3 space-y-3 bg-[#003572]/[0.04] dark:bg-[#00bfff]/[0.04]">
+                <div className="border-t border-accent/10 px-4 py-3 space-y-3 bg-accent/[0.04]">
                   {/* Last seen vs last login */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
