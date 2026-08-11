@@ -198,12 +198,12 @@ discover it mid-codemod:
 | **4** | `ServiceReadinessCard.tsx:716–736` — `rgba(239,68,68,·)` at .10/.18/.45/.7, i.e. `red-500` | **C's family.** B must not pre-empt it |
 | **4** | `DayCard.tsx` — `rgba(251,191,36,·)` at .10/.35/.6/.65, i.e. `amber-400` | **C's family**, same |
 | **4** | `DayCard.tsx` — `rgba(61,255,124,·)` at .10/.3/.5/.8, i.e. the second green `#3dff7c` | **B** — these follow the `#3dff7c` → `--positive-fg` normalisation above, so they are part of licensed diff 2 and must be enumerated with it |
-| **6** | `rgb(0 0 0 / α)` shadows in `brand.css` at .14/.16/.2/.2/.24/.28, plus `rgba(0, 0, 0, 0.1)` at `tailwind.config.ts:38` | **B** — an `--elevation` role, or recorded as intentionally literal. Note `tailwind.config.ts:38` is outside the `app/**` glob and reachable only as a named out-of-glob input |
+| **7** | `rgb(0 0 0 / α)` shadows in `brand.css` (six rows), plus `rgba(0, 0, 0, 0.1)` at `tailwind.config.ts:38` (one row) | **B** — an `--elevation` role, or recorded as intentionally literal. Note `tailwind.config.ts:38` is outside the `app/**` glob and reachable only as a named out-of-glob input |
 | **4** | `stroke="white"` ×2 and `fill="white"` ×2 — SVG presentation attributes | **C** — `white`/`black` is staged last. They take `currentColor` or a role, not a literal |
 
 **"The mapping table is the inventory" is true of dispositions, not of tokens.** The
 inventory says *which child owns a row*; this document says *what a row becomes*, and for the
-**28 rows** above it currently says nothing.
+**29 rows** above it currently says nothing.
 
 ## What this vocabulary does NOT decide
 

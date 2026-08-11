@@ -97,11 +97,12 @@ judgement: the inventory must report **zero** rows in category 10.
 
 - **`app/brand.css` `:root`** gains the **18** base-role triplets from the vocabulary, each
   `--x-rgb`. The seven `--brand-*` colour variables stay for now.
-- **The vocabulary does not cover 28 of B's rows, and B must decide each before batching.**
+- **The vocabulary does not cover 29 of B's rows, and B must decide each before batching.**
   The roles describe the category-1 bracketed-hex surface; B's disposition also carries a
   six-hue **categorical** map (`ParticipationSidebar.tsx:6`), 8 `rgba()` belonging to Child C's
-  `red`/`amber` families, 4 `rgba(61,255,124,·)` that follow licensed diff 2, 6 black shadow
-  literals, and 4 `white` SVG attributes that are C's. The vocabulary's "Literals in Child B's
+  `red`/`amber` families, 4 `rgba(61,255,124,·)` that follow licensed diff 2, **7** black shadow
+  literals (six in `brand.css`, one at `tailwind.config.ts:38`), and 4 `white` SVG attributes
+  that are C's. The vocabulary's "Literals in Child B's
   set with NO role here" table assigns each with its count. **B adds at most a `--chart-1…6`
   scale and an `--elevation` role; it does not pre-empt C's families.**
 - **`tailwind.config.ts`** gains a key per base role as
@@ -160,8 +161,8 @@ than 50 rows.**
   by batch overwrites it — leaving Child D's light design to reconstruct it from git history.
 - **`dark:` variants are deleted only once the composed token carries both sides**, never
   before. Deleting one early flips the dark side from 20% to 100%.
-- **Non-JSX sites are in scope**: `serviceCardModel.ts` (**36** of its 57 rows are B's; the
-  other 20 are C's palette classes) consumed by 8 `.tsx` components and 3 `.ts` modules, and
+- **Non-JSX sites are in scope**: `serviceCardModel.ts` (**36** of its 57 rows are B's; 20 are
+  C's palette classes and 1 is `keep`) consumed by 8 `.tsx` components and 3 `.ts` modules, and
   `(admin)/layout.tsx`.
 - **The theme gallery is IN B's set, and the inventory cannot see it.** A2 excluded
   `app/(gallery)` from the inventory deliberately — it is a verification surface, not product
@@ -178,6 +179,12 @@ than 50 rows.**
      `dark:prose-invert` goes with `(client)/posts/[slug]/page.tsx:326`.
   **Decision: migrate the gallery with B, and update `themeGallery.test.ts`'s assertions in
   the same commit.** Do NOT add it to `ignores` — that would leave live code on retired keys.
+- **Two test files carry `#12C8F4` and neither is a `DayCard` assertion.**
+  `PracticePlaylistButton.test.tsx` passes `accent="#12C8F4"` at four call sites — an input
+  value, so nothing goes red — and `emailTemplateGallery.test.ts` carries three inside the
+  deliberately-light email templates, which are exempt. **Both will read as unmigrated
+  survivors to whoever greps for `12c8f4` after B**, so name them in the batch notes even
+  though neither blocks.
 - **Test files move with the code they assert — and the automated mechanism does not exist.**
   An earlier revision said "the codemod's file set is intersected with `app/**/__tests__/**`".
   **That intersection is empty**: the inventory excludes `__tests__`, so it holds zero rows
@@ -224,10 +231,24 @@ asserting a removed premise is worse than no guard: it is green and wrong.
     name `#010b17` in comments — while an AST rule does not. `no-restricted-syntax` with
     `Literal`/`TemplateElement` selectors is AST-based and therefore does not fire on
     comments; state that explicitly rather than leaving it implied.
-  - **`ignores`** must carry `app/utils/emailShell.ts` (9 rows), `app/**/__tests__/**`, the
-    Google mark at `signin/page.tsx` (4 rows), and `(client)/layout.tsx`'s static `themeColor`
-    (1 row). **Verified: that set matches the non-B hex rows exactly.**
-  - **`app/components/admin/**` must NOT be ignored.** An earlier revision listed it on the
+  - **Exemption granularity is per entry, and getting it wrong disables the clause on B's own
+    rows.** `ignores` is file-granular; two of the four exemptions are row-granular, and the
+    files carrying them are mostly B's:
+
+    | Exemption | Rows in that file | Mechanism |
+    |---|---|---|
+    | `app/utils/emailShell.ts` | **9 of 9 exempt** | Whole-file `ignores` — legitimate |
+    | `app/**/__tests__/**` | outside the inventory glob | Whole-file `ignores` — legitimate |
+    | Google mark, `signin/page.tsx` | 4 exempt, but **36 dispositioned `B`** | **Row-level.** Inline `eslint-disable-next-line` with the reason, or a rule-option value allowlist keyed file + value, the way `scripts/colour-inventory.mjs`'s `EXEMPT_VALUES` already does it |
+    | `themeColor`, `(client)/layout.tsx` | 1 exempt, but **4 dispositioned `B`** | **Row-level**, same |
+
+    **A whole-file ignore on `(client)/layout.tsx` would defeat this slice's stated purpose.**
+    One of its four `B` rows is `selection:bg-brand-beam/35` — the utility reference
+    `brandCss.test.ts` records as the thing a `var()`-integrity guard structurally cannot see,
+    with B-final named as where it finally gets guarded. Ignoring the file makes that guard
+    inert on the file that motivated it. The same objection this plan raises against ignoring
+    `app/components/admin/**` applies here, and more sharply.
+  - **`app/components/admin/**` must NOT be ignored either.** An earlier revision listed it on the
     grounds that "Child C's families still live there" — **but C's 946 rows contain zero hex
     or `rgb()` values** (verified), so B's hex/`rgb(`/`brand-<colour>` clauses cannot fire on
     a palette class like `gray-500` anyway. Ignoring the tree would switch B's own clause off
