@@ -37,6 +37,24 @@ reviewable.** B shipped two licensed value changes and had to enumerate every af
 That is a decision, not an accident — recorded here with its alternative, because it is the
 single largest choice in this plan:
 
+**The scale is called `mono`, and the name is load-bearing.** `neutral` was the obvious
+choice and is unusable: it is one of Tailwind's own 22 families, and
+`scripts/colour-inventory.mjs:108` lists it in `PALETTE_FAMILIES`. A `text-neutral-500`
+would be re-scanned as a category-3 palette class and dispositioned back to `C`, so the
+primary gate below could never reach its target — C2 would migrate 475 rows and the count
+would not move. The same collision would make the palette-family lint clause ban C's own
+tokens. `slate`, `zinc` and `stone` fail identically. `mono` is not a Tailwind family.
+
+Proven rather than reasoned, by running the real scanner over a probe file:
+
+```
+text-neutral-500  ->  cat3, disposition C      <- would never drain
+bg-neutral-800    ->  cat3, disposition C
+text-gray-500     ->  cat3, disposition C      (the control)
+text-mono-500     ->  not found                <- clean
+bg-mono-800       ->  not found
+```
+
 > The obvious-looking migration is to collapse the palette onto the semantic roles that
 > already exist: `gray-500 → --ink-dim`, `yellow-500 → --warning-fg`, and so on. It was
 > measured and rejected. `gray-500` alone is **243 rows** and sits **distance 56** from
@@ -58,13 +76,13 @@ contract.
 
 | Palette class | Rows | Hex | Triplet | Role | Note |
 |---|---:|---|---|---|---|
-| `gray-200` | 12 | `#e5e7eb` | `229 231 235` | `--neutral-200-rgb` | new |
-| `gray-300` | 25 | `#d1d5db` | `209 213 219` | `--neutral-300-rgb` | new |
-| `gray-400` | 96 | `#9ca3af` | `156 163 175` | `--neutral-400-rgb` | new |
-| `gray-500` | **243** | `#6b7280` | `107 114 128` | `--neutral-500-rgb` | new — the densest row in C |
-| `gray-600` | 79 | `#4b5563` | `75 85 99` | `--neutral-600-rgb` | new |
-| `gray-700` | 14 | `#374151` | `55 65 81` | `--neutral-700-rgb` | new |
-| `gray-800` | 6 | `#1f2937` | `31 41 55` | `--neutral-800-rgb` | new |
+| `gray-200` | 12 | `#e5e7eb` | `229 231 235` | `--mono-200-rgb` | new |
+| `gray-300` | 25 | `#d1d5db` | `209 213 219` | `--mono-300-rgb` | new |
+| `gray-400` | 96 | `#9ca3af` | `156 163 175` | `--mono-400-rgb` | new |
+| `gray-500` | **243** | `#6b7280` | `107 114 128` | `--mono-500-rgb` | new — the densest row in C |
+| `gray-600` | 79 | `#4b5563` | `75 85 99` | `--mono-600-rgb` | new |
+| `gray-700` | 14 | `#374151` | `55 65 81` | `--mono-700-rgb` | new |
+| `gray-800` | 6 | `#1f2937` | `31 41 55` | `--mono-800-rgb` | new |
 | `red-100` | 1 | `#fee2e2` | `254 226 226` | `--negative-faint-rgb` | new |
 | `red-200` | 6 | `#fecaca` | `254 202 202` | `--negative-soft-rgb` | new |
 | `red-300` | 10 | `#fca5a5` | `252 165 165` | `--negative-muted-rgb` | new |
@@ -106,7 +124,7 @@ colour written two ways. 120 of C's rows are therefore a pure rename onto an exi
 
 ### Why the names are what they are — and where the evidence runs out
 
-`neutral`, `negative` and `warning` are **evidence-backed**: gray is a scale, red is used for
+`mono`, `negative` and `warning` are **evidence-backed**: gray is a scale, red is used for
 conflicts and errors, amber for warnings (`ImpersonationBanner.tsx:22`,
 `ServicesPanel.tsx:1033`).
 
@@ -144,17 +162,26 @@ should attack.
 **These do NOT become roles, and that is the decision.** `white` and `black` are theme
 *anchors*, not palette entries: `text-white` on a coloured badge means "maximum contrast
 against this fill", and that stays true in a light theme. Tokenising them onto
-`--neutral-*` would make them themeable and thereby wrong.
+`--mono-*` would make them themeable and thereby wrong.
 
-**Two exceptions, both already identified by Child B:**
+**One exception:** `shadow-black` ×2 → `--elevation`, the role Child B created for exactly
+this (`0 0 0`). Δ0.
 
-- `shadow-black` ×2 → `--elevation`, the role B created for exactly this (`0 0 0`). Δ0.
-- `stroke-white` ×2 (`AdminPanel.tsx:135`, `ProfilePanel.tsx:50`) — B moved these out of the
-  SVG presentation attribute into a `stroke-white` utility and left the value alone.
-  **C leaves them alone too.** They are white because they sit on `bg-black/50` overlays.
+`stroke-white` ×2 (`AdminPanel.tsx:135`, `ProfilePanel.tsx:50`) is **not** an exception. B
+moved those out of the SVG presentation attribute into a `stroke-white` utility and left the
+value alone; C leaves them alone too, for the same reason as every other `white` here — they
+sit on a `bg-black/50` overlay and mean "maximum contrast".
 
-The remaining 43 stay literal, and **C adds a lint exemption saying so**, rather than leaving
-a future reader to wonder whether they were missed.
+**So 2 rows move and 45 stay literal.** An earlier revision of this plan said both: it called
+`stroke-white` an exception in this paragraph while the prose kept it literal, then counted 4
+rows moving in slice C9 and set the primary gate at 43. An implementer targeting 43 with only
+2 rows moving would have chased a phantom pair. **The gate is 948 → 45 and C9 moves 2.**
+
+**No lint rule covers the 45, and that is stated rather than implied.** A family clause keyed
+on `-\d{2,3}` cannot match `bg-white` or `bg-black`, so there is nothing for them to be
+exempt *from*. Making them provably deliberate would need a keyword clause plus an allowlist;
+C does not add one, and records the reason in `brand.css` beside `--elevation` instead. Child
+C leaves `white`/`black` enforcement to whoever decides they need it.
 
 ## Slicing — per family, as the parent requires
 
@@ -164,16 +191,24 @@ that made B sliceable.
 
 | Slice | Content | Rows | Why it is safe alone |
 |---|---|---:|---|
-| **C1** | Add all 34 roles to `brand.css` and `tailwind.config.ts`. **Remove nothing, migrate nothing.** | 0 | Purely additive. Renders identically |
-| **C2** | `gray` → `--neutral-*` | 475 | Largest slice, but one family; revert restores `gray-*` |
+| **C1** | Add all 34 roles to `brand.css` and `tailwind.config.ts`, **and extend `TOKEN_LAYER_ROLES` in `scripts/colour-inventory.mjs` with all 34 names.** Remove nothing, migrate nothing | 0 | Purely additive. Renders identically — but see the note below: without the third step it is *not* count-neutral |
+| **C2** | `gray` → `--mono-*` | 475 | Largest slice, but one family; revert restores `gray-*` |
 | **C3** | `red` → `--negative-*` | 192 | Includes B's 4 deferred `rgba(239,68,68,·)` rows |
 | **C4** | `amber` → `--warning-*` | 91 | Includes B's 4 deferred `rgba(251,191,36,·)` rows |
 | **C5** | `yellow` → `--recency-*` | 50 | |
 | **C6** | `green` → `--positive-*` | 47 | |
 | **C7** | `orange` → `--availability-*` | 23 | |
 | **C8** | `purple` + `blue` → `--badge-*` | 23 | Two tiny families, one slice |
-| **C9** | `white`/`black` — the 4 rows that move, the exemption for the 43 that do not | 4 | |
+| **C9** | `white`/`black` — the **2** `shadow-black` rows that move to `--elevation`; the other **45** stay literal with their reason recorded | 2 | |
 | **C-final** | Land the deferred lint clauses; re-point any remaining guard | 0 | Gated on a generated count |
+
+**C1 has a third step that is easy to miss and breaks a shipped gate if missed.**
+`TOKEN_LAYER_ROLES` (`scripts/colour-inventory.mjs`) enumerates Child B's 30 roles **by
+name**, and category 12 dispositions any `--*-rgb` declaration *not* on that list to `B`.
+Today `byCategory[12]` is 30, all `keep`. Adding 34 declarations without extending the list
+sends all 34 to disposition `B`, so `byDisposition.B` jumps from 102 to 136 on a slice whose
+entire claim is that it changes nothing. **Expected after C1: `byCategory[12]` = 64, all
+`keep`; `byDisposition.B` unchanged at 102.**
 
 **Each slice merges to `main` on its own green gate**, with a code review, exactly as B's did.
 
@@ -198,17 +233,32 @@ B deferred two clause families here, and its reasoning is the prerequisite:
    Lands per family as each slice completes, or all at C-final; either is acceptable, but
    **a family's clause must not land before its slice**, or `eslint .` cannot reach 0 errors.
 
+**The obstacle set was 8 rows and is now exactly 8 — but only because the scanner was wrong
+and has been fixed.** Review round 1 found two `rgb()` literals that no child had migrated and
+that the inventory did not contain: `signin/page.tsx:72`'s `rgba(0,0,0,0.28)` and
+`ProposalsPanel.tsx:154`'s `rgb(0_191_255/0.45)`. The cause was category 6's regex anchoring
+with `\b(?:rgba?|hsla?)\(` — and Tailwind writes spaces as underscores inside an arbitrary
+value, so `_rgb(` has no word boundary and the match failed silently. **This is the same trap
+B's plan documented as a requirement on the lint rule; nobody checked the scanner carrying
+that category had it too.** Both rows were dispositioned `B`, both were Δ0 (`0 0 0` is
+`--elevation`, `0 191 255` is `--accent`), and both were migrated at `2965d3e` along with the
+regex fix. Category 6 now reports zero. **C's clause therefore has 8 obstacles, not 10, and
+the number is now trustworthy** — it was not when this plan was first drafted.
+
 Both go in the existing `files: ["app/**/*.{ts,tsx}"]` block C inherits from B, with the same
 AST-based `no-restricted-syntax` selectors — **not source-text rules**, which fire on colours
 named in comments.
 
-**The `white`/`black` exemption belongs here too**, scoped to the 43 rows that stay literal.
-`ignores` is file-granular and these rows sit in files full of C's own rows, so this must be a
-rule-option allowlist or inline disables — the same trap B documented for `signin/page.tsx`.
+**There is no `white`/`black` exemption, because there is nothing to exempt them from.** An
+earlier revision of this plan called for one "scoped to the 43 rows that stay literal", which
+was wrong twice over: the count is 45, and a family clause keyed on `-\d{2,3}` cannot match
+`bg-white` in the first place. Had C written that exemption it would have been an allowlist
+guarding against a rule that does not exist — the kind of dead apparatus that reads as
+coverage. The 45 rows are recorded in `brand.css` and enforced by nothing, deliberately.
 
 ## Verification
 
-- **Primary gate — the inventory.** `disposition === "C"` must fall from 948 to **43** (the
+- **Primary gate — the inventory.** `disposition === "C"` must fall from 948 to **45** (the
   `white`/`black` rows that stay literal). Generated, not counted by hand.
 - **Zero-diff gate.** For every migrated row, the role's triplet must equal the palette
   value's triplet. This is checkable **statically and exhaustively** — `tailwindcss/colors`
@@ -220,6 +270,12 @@ rule-option allowlist or inline disables — the same trap B documented for `sig
 - **A new guard**, extending `tokenLayer.test.ts`: every role in the table exists as both a
   custom property and a Tailwind key; no key is silently shadowed; every composed token is
   still alpha-free.
+- **Three test assertions sit outside the inventory and must move with their slices.**
+  `__tests__` is excluded from the scan by design, so C's row counts cannot see them:
+  `plannerGridDrag.test.tsx:194` asserts `toContain("border-amber-500/40")` and **will fail at
+  C4**; `PlannerGrid.test.tsx:582` and `:604` assert `.border-red-500\/50` has length 0 and go
+  **vacuously true at C3** — a dead guard that still passes, which is worse than a failing one.
+  Budget all three in their slices and re-point rather than delete.
 - **Browser**: the theme gallery's `dark` route before and after each slice.
 - `npx tsc --noEmit`, `npm test`, `npx eslint .` at **0 errors**, per slice.
 
@@ -231,7 +287,7 @@ rule-option allowlist or inline disables — the same trap B documented for `sig
 | A palette class is left behind and the lint clause makes `eslint .` un-green | B hit exactly this shape twice | The clause lands per family, never before its slice |
 | `gray` is 50% of C in one slice | A bad C2 is a big revert | C2 is the only slice with 12 light/dark pairs; it gets its own review and its own merge point |
 | Names encode meanings C has not proven | `recency`, `availability`, `badge-*` rest on 2–4 call sites each | **Open question C-Q1.** Values are Δ0 regardless, so a renaming later is mechanical and safe |
-| `white`/`black` left literal looks like an oversight | 43 rows with no token | The lint exemption is part of C9 and carries the reason inline |
+| `white`/`black` left literal looks like an oversight | 45 rows with no token | C9 records the reason in `brand.css` beside `--elevation`. **No lint rule covers them**, because a family clause keyed on `-\d{2,3}` cannot match a keyword — stated rather than implied |
 
 ## Open questions
 
