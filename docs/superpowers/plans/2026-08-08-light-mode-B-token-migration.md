@@ -43,15 +43,50 @@ D6. Four site classes, and the enumeration is closed only because all four are l
 `:191`, `:196`, as a component prop at `:141`, `:190`, and threaded through `Row` at `:245`,
 `:254`, `:336`. Every one of those changes colour.
 
-**It also cannot be tokenised the way the rest can, and this is a real constraint on the
-batch:** the consumers build **8-digit hex at runtime** — `` `${t.accentHex}35` ``,
-`` `${t.accentHex}0d` ``, `` `${t.accentHex}55` `` — and a `rgb(var(--accent-rgb) / …)` token
-**cannot be string-concatenated with an alpha suffix**. `DayCard`'s theme objects must either
-keep a resolvable colour and gain an alpha-aware helper, or move to
-`color-mix()`/`rgb(var(--accent-rgb) / <n>)` expressions built per site. **The same pattern
-applies to the sibling themes** — `accentHex: "#f59e0b"` (`:43`) and `"#a78bfa"` (`:53`) — so
-this is a `DayCard`-wide design decision, not a find-and-replace. **Settle it before batching
-`DayCard`, and record the choice.**
+**It also cannot be tokenised the way the rest can, and this is a real constraint — not on
+the `DayCard` batch, but on four files at once.** The consumers build **8-digit hex at
+runtime** — `` `${t.accentHex}35` ``, `` `${t.accentHex}0d` ``, `` `${t.accentHex}55` `` —
+and a `rgb(var(--accent-rgb) / …)` token **cannot be string-concatenated with an alpha
+suffix**. Concatenating anyway yields `rgb(var(--accent-rgb) / 0.2)55`, which is not a valid
+`<color>`, so the browser **drops the whole declaration silently** — the same failure mode
+this plan warns about for `brand.css`, reproduced at inline-style sites, several of them
+member-facing.
+
+**An earlier revision filed this as a `DayCard`-wide decision and closed the enumeration
+there. It is wrong: the pattern is 24 occurrences across four files.** Generated with
+`grep -rnoE '\$\{[A-Za-z_][A-Za-z0-9_.]*\}[0-9A-Fa-f]{2}\b' app`:
+
+| File | Occurrences | Source of the hex | Crosses a file boundary? |
+|---|---:|---|---|
+| `DayCard.tsx` | **11** (`:127` ×2, `:186` ×4, `:191`, `:196`, `:344`, `:353`, `:355`) | local `accentHex` on the three theme objects (`:33`, `:43`, `:53`) | **yes** — `:141` passes `t.accentHex` into `PracticePlaylistButton` |
+| `ServiceReadinessCard.tsx` | **9** (`:375` ×4, `:382`, `:393`, `:716`, `:722`, `:726`) | `CARD_ACCENT_HEX` imported from `serviceCardModel.ts:213` | **yes** — the constant lives in a different file |
+| `CalendarView.tsx` | **2** (`:198`) | a local literal tuple at `:192–194` (**category 2**, bare hex) | no — self-contained on one line |
+| `PracticePlaylistButton.tsx` | **2** (`:133`) | the `accent: string` prop (`:11`) | **yes** — receiver of `DayCard`'s value |
+
+So there are **three contracts**, not one: `DayCard → PracticePlaylistButton.accent`,
+`serviceCardModel.CARD_ACCENT_HEX → ServiceReadinessCard`, and `CalendarView`'s
+self-contained literals. **A batch that migrates either end of the first two without the
+other ships a dropped declaration.** `PracticePlaylistButton` is consumed **only** by
+`DayCard` (verified: no other importer in `app/**`), so that pair is a two-file unit, not a
+fan-out — but it is still two files.
+
+Not affected, and worth stating so nobody widens the fix: `SectionDivider`'s `accent` prop
+(`DayCard.tsx:373`) and `CARD_ACCENT_MUTED` carry **className strings** (`text-[#00bfff]/70`),
+never concatenated — they migrate as ordinary category-1 rows.
+
+**Resolution.** The decision is a prerequisite of the **first batch touching any of the four
+files**, not of the `DayCard` batch, and the four move together as one batch. Default: give
+each accent an alpha-aware helper returning a complete `rgb(var(--x-rgb) / <n>)` string, and
+replace every one of the 24 concatenations at the call site — the helper must never return a
+fragment a caller can append to. Record the choice before the batch lands.
+
+**Equality-harness coverage of these 24 sites is not assumed.** The harness resolves
+*computed* colour, and these values are composed at render time from a template literal; the
+plan does not establish that its static resolver can follow them. They are therefore an
+**enumerated, manually reviewed set** with their own before/after list — the 24 rows above,
+each with its rendered `rgba()` before and after — checked in the theme gallery at the
+`DayCard`, `ServiceReadinessCard` and `CalendarView` fixtures rather than trusted to the
+primary gate.
 
 **This also collapses a pre-existing drift:** `serviceCardModel.ts` and `CalendarView.tsx`
 already spell the same Sunday accent `#00bfff`, while `DayCard.tsx:33` spells it `#12c8f4`.
@@ -95,7 +130,13 @@ non-colour `--brand-radius-*` that B never touches:
 - **category 10 = 0** (no retired `brand-<colour>` utility remains), **and**
 - **zero category-11 rows referencing a retired COLOUR variable** — today exactly two,
   `AdminPanel.tsx:399` (beam) and `(client)/admin/page.tsx:37` (signal), **and**
-- **no category-9 literal carrying a retired value** — `DayCard.tsx:33`'s `accentHex`.
+- **no category-9 row DISPOSITIONED `B` carrying a retired value** — `DayCard.tsx:33`'s
+  `accentHex` and its siblings. **The disposition scope is load-bearing**, exactly as it is
+  for category 11: `(client)/layout.tsx:42`'s `themeColor: "#010b17"` is a permanent
+  category-9 literal spelling retired `--brand-blackout`'s exact value `1 11 23`, and it is
+  dispositioned `exempt`. An unscoped "no category-9 retired literal" would never reach zero.
+  The inventory header already prescribes the rule — "each child consumes the rows
+  dispositioned to it" — and every count in this plan obeys it.
 
 **"Category 11 = 0" would be unsatisfiable and must not be written.** Category 11 holds **9**
 rows, and **7 are `[var(--brand-radius-panel)]` / `[var(--brand-radius-control)]`** — five in
@@ -165,6 +206,12 @@ than 50 rows.**
   keyed by (literal × utility × pairing context). A literal alone is insufficient: `#003572`
   is a light accent in most of its 243 sites and a dark-native surface where it has no
   `dark:` sibling.
+- **Category 2 (`bare-hex`) has a home, and it is B.** Four rows, all dispositioned `B`:
+  `CalendarView.tsx:192–194`'s three legend literals and `ServiceReadinessCard.tsx:723`'s
+  `#f87171`. The prose elsewhere walks categories 1, 5, 9, 10, 11 and 12; category 2 is small
+  enough to have been skipped, but a reader reconciling B's row accounting against the
+  inventory would find a category with no owner. The hex lint clause covers all four, and
+  three of them are inside the 24-site concatenation set above.
 - **Pairs drive composed tokens.** 246 per-element pairs, **166 differing in alpha** — those
   take a composed token. Of the 80 that do not, **12 are palette pairs belonging to Child C**,
   so B's share is **68**, and those may use a base role with an opacity modifier.
@@ -230,7 +277,7 @@ asserting a removed premise is worse than no guard: it is green and wrong.
 
 - Delete the seven `--brand-*` colour declarations from `brand.css` and their seven `brand.*`
   keys from `tailwind.config.ts`.
-- **Gated on the three generated counts in the slicing section**, not on judgement: category 10 = 0; zero category-11 rows referencing a retired COLOUR variable; no category-9 retired literal. Category 11 itself never reaches zero — 7 of its 9 rows are non-colour radius vars.
+- **Gated on the three generated counts in the slicing section**, not on judgement: category 10 = 0; zero category-11 rows referencing a retired COLOUR variable; no category-9 row dispositioned `B` carrying a retired value. Neither category 11 nor category 9 reaches zero outright — 7 of its 9 rows are non-colour radius vars.
 - **Land the lint clauses B owns**: bare and bracketed hex; `rgb()`/`rgba()`/`hsl()` **only
   when not followed by `var(`** — `(rgba?|hsla?)\((?!\s*var\()`, or the rule forbids its own
   prescribed fix; colour inside arbitrary values with no `#`; the retired `brand-<colour>`
@@ -335,8 +382,9 @@ pulled into B1.
 
 ### What B discards, stated plainly
 
-**B deletes the light-side value of the 234 pairs it owns** — those with at least one hex
-side. The other **12 have palette classes on both sides** (`text-gray-500 dark:text-gray-400`
+**B owns the 234 pairs with at least one hex side, and deletes the light-side value of 233
+of them.** The exception is the split pair below, whose light side is a palette class C
+owns and which therefore survives B. The other **12 have palette classes on both sides** (`text-gray-500 dark:text-gray-400`
 and kin) and belong to Child C, which is the same 12 that make B's non-alpha-differing share
 68 rather than 80.
 
@@ -369,8 +417,8 @@ to the split pair above**, where the `dark:` variant survives B as a token-value
 | `brand.css` bodies preserved | `(variable, alpha)` multiset unchanged **per occurrence**, beam lines excepted | A `*-rgb` slip on one of the four alpha-free occurrences, including the body wash's own base colour |
 | Existing `brand.css` pins hold | `participationAlongside.test.tsx` green **untouched** | Breaking a documented layout guard while rewriting the file |
 | Every migrated site | Computed-colour equality **in the rendered (dark) theme**, sites not classes | Any diff outside the two licensed sets |
-| Diff 1 is fully enumerated | The beam set covers all four classes: 32 brand.css + 87 cat-10 + 1 cat-11 + `DayCard.tsx:33` with its ~10 consumers | The harness reporting ~11 unlicensed diffs, or `DayCard` left on a literal that then fails B-final's own lint clause |
-| Retired keys are gone | Category 10 = 0; zero category-11 rows referencing a retired **colour** variable (7 radius rows remain by design); no category-9 retired literal | Removing keys while call sites remain — the one unsafe transition |
+| Diff 1 is fully enumerated | The beam set covers all four classes: 32 brand.css + 87 cat-10 + 1 cat-11 + `DayCard.tsx:33` with its 11 same-file consumers and the `PracticePlaylistButton` prop | The harness reporting ~11 unlicensed diffs, or `DayCard` left on a literal that then fails B-final's own lint clause |
+| Retired keys are gone | Category 10 = 0; zero category-11 rows referencing a retired **colour** variable (7 radius rows remain by design); no category-9 row dispositioned `B` carrying a retired value (`layout.tsx`'s exempt `themeColor` remains) | Removing keys while call sites remain — the one unsafe transition |
 | Utility references covered | A test that fails if a `brand.*` key is deleted while a `bg-brand-*` usage remains | The failure a `var()`-integrity guard structurally cannot see |
 | Prose survives | No hex, no `rgb(`-without-`var(`, `--tw-prose-body` → ink role, `.prose-sm` still emitted | The `theme.typography` collapse — unstyled lyrics, no signal |
 | Tests move with code | `PlannerGrid.test.tsx` selectors updated in the same commit | `npm test` red at the batch merge |
@@ -405,7 +453,7 @@ to the split pair above**, where the `dark:` variant survives B as a token-value
 | Assumption | Impact if false | Validation |
 |---|---|---|
 | Both spellings coexist through B1–Bn | The slicing is unsound and B must be atomic | B1's equality run. If Tailwind rejects the additive config, fall back to atomic and say so |
-| The 24 composed combinations cover every alpha-differing pair | Some sites have no correct token | Generated; the 17-combination tail is where collapse decisions get recorded |
+| The 24 composed combinations cover 165 of the 166 alpha-differing pairs — the split `TextSizeControl` pair takes none, staying split until C | Some sites have no correct token | Generated; the 17-combination tail is where collapse decisions get recorded |
 | Computed-colour equality is decidable per site statically | The primary gate is unbuildable | **Prove on one file before batching.** If it cannot be built, stop and re-plan — do not substitute screenshots |
 
 ## Open questions
@@ -414,7 +462,7 @@ to the split pair above**, where the `dark:` variant survives B as a token-value
 |---|---|---|
 | Does the 17-combination tail get its own tokens, or collapse? | **No** | Own token each; collapse only with the site count recorded, as Child C is held to |
 | Batch size for B3…Bn | **No** | One slice per file for the 12 files >50 rows; grouped slices below that |
-| How `DayCard`'s three `accentHex` theme objects survive tokenisation, given `` `${t.accentHex}35` `` builds 8-digit hex at runtime | **No, but it gates the `DayCard` batch** | Give each theme an alpha-aware helper that returns `rgb(var(--x-rgb) / <n>)`, replacing the concatenation at all ~10 consumers. Settle and record before batching `DayCard` |
+| How runtime `${hex}AA` concatenation survives tokenisation — **24 occurrences across `DayCard.tsx`, `ServiceReadinessCard.tsx`, `CalendarView.tsx` and `PracticePlaylistButton.tsx`**, with three cross-file contracts | **No, but it gates the FIRST batch touching any of the four**, which is why they move as one batch | Give each accent an alpha-aware helper returning a COMPLETE `rgb(var(--x-rgb) / <n>)` string — never a fragment a caller can append to — and replace all 24 concatenations at the call site. Settle and record before that batch lands. See the licensed-diff section for the per-file table |
 
 **No blocking open questions.** Two items above gate a specific batch rather than the plan:
 the `DayCard` `accentHex` decision, and the harness's prove-on-one-file step.
