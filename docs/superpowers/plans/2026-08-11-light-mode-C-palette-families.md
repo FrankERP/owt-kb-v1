@@ -225,6 +225,13 @@ C1 adds declarations only inside `:root` — but its filter is
 body. If that happens, the fix is to scope the filter, **never to bump the 69** — `CLAUDE.md`
 names raising a pinned constant to keep a guard green as the one forbidden move.
 
+**A third way C1 can fail its own gate, clean today but worth naming.** `tokenLayer.test.ts`
+also runs a `silentlyShadowed` check — a key `P-rest` where `P` is a utility prefix and `rest`
+is also a key resolves to the wrong thing. All 34 proposed names were checked against
+`UTILITY_PREFIXES`; none begins with a prefix followed by `-`, so C1 is clean. It is listed
+because it is a third name-sensitive guard, and the first two were each found only after a
+review round.
+
 **Registry 1 — `TOKEN_LAYER_ROLES`, and why it is easy to miss.**
 `TOKEN_LAYER_ROLES` (`scripts/colour-inventory.mjs`) enumerates Child B's 30 roles **by
 name**, and category 12 dispositions any `--*-rgb` declaration *not* on that list to `B`.
@@ -365,6 +372,29 @@ coverage. The 45 rows are recorded in `brand.css` and enforced by nothing, delib
 - **A new guard**, extending `tokenLayer.test.ts`: every role in the table exists as both a
   custom property and a Tailwind key; no key is silently shadowed; every composed token is
   still alpha-free.
+- **C's success drains live-tree counts to zero, and that is the defect class to watch.**
+  This is the general rule; the specific assertions below are instances of it.
+  `colourInventory.test.ts` holds **ten** `toBeGreaterThan(0)` assertions against the live
+  tree. C migrates every palette class out of the tree, so any of them counting a
+  palette-derived population marches to zero **by C succeeding** — and reads as a broken
+  scanner. That file already documents at `:232` having fixed one such assertion once, by
+  moving it onto a synthetic source. **Do not weaken an assertion to make it pass, and do not
+  delete it. Move the proof onto a synthetic source, so it tests the scanner rather than the
+  tree's current contents.**
+
+  **Audited: exactly one of the ten drains.** `colourInventory.test.ts:228`
+  (`withAlpha.length > 0`) — **all 261 alpha-bearing rows are category 3, disposition `C`**,
+  spread across all eight families. A migrated `bg-mono-500/10` matches **no category at all**
+  (verified with a probe: 0 rows), category 4 never captures the `/NN` modifier, and C1's new
+  category-12 rows carry no alpha. So the count reaches **0 at C8** and `npm test` goes red.
+  **Budget it in C8** and move it onto a synthetic source, exactly as `:232` did.
+
+  The other nine survive, and two survive narrowly enough to record:
+  `:151` (`serviceCardModel.ts` rows > 0) holds only because one of that file's 21 rows is
+  `bg-transparent`, dispositioned `keep` — the other 20 are C's. A later child that tokenises
+  `bg-transparent` takes that assertion down with it.
+  `:204`/`:213` (pairs > 0) hold at 12 because C renames both halves rather than removing them.
+
 - **Three test assertions sit outside the inventory and must move with their slices.**
   `__tests__` is excluded from the scan by design, so C's row counts cannot see them:
   `plannerGridDrag.test.tsx:194` asserts `toContain("border-amber-500/40")` and **will fail at
