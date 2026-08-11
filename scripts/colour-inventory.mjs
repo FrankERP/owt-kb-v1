@@ -142,9 +142,10 @@ const CATEGORIES = [
   // seven roles covering 475 rows would have been invisible to the artifact this file's own
   // header calls authoritative.
   //
-  // Count-neutral when widened: the only digit-bearing custom properties today are the 18
-  // composed tokens, whose values are `rgb(var(…))` rather than a bare triplet, so they
-  // still fail the value clause. Verified before the change.
+  // Count-neutral when widened: every digit-bearing custom property today is a composed
+  // token — 18 of the 23 carry digits — and their values are `rgb(var(…))` rather than a
+  // bare triplet, so they still fail the value clause. Verified before the change, and
+  // `byCategory[12]` stayed at 30 across it.
   { id: 12, name: "css-custom-property-triplet", syntax: /--([a-z0-9-]+):\s*(\d{1,3}\s+\d{1,3}\s+\d{1,3})\s*;/gi, cssOnly: true },
   { id: 11, name: "arbitrary-value-var-brand", syntax: /\[[^\]]*\bvar\(--brand-[a-z-]+\)[^\]]*\]/gi },
   { id: 9, name: "runtime-colour-map", syntax: null }, // resolved by location, below

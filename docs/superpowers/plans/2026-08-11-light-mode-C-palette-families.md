@@ -191,10 +191,10 @@ that made B sliceable.
 
 | Slice | Content | Rows | Why it is safe alone |
 |---|---|---:|---|
-| **C1** | Add all 34 roles to `brand.css` and `tailwind.config.ts`, **and extend `TOKEN_LAYER_ROLES` in `scripts/colour-inventory.mjs` with all 34 names.** Remove nothing, migrate nothing | 0 | Purely additive. Renders identically — but see the note below: without the third step it is *not* count-neutral |
+| **C1** | Add all 34 roles to **four** places: `brand.css`, `tailwind.config.ts`, `TOKEN_LAYER_ROLES` in `scripts/colour-inventory.mjs`, and `BASE_ROLES` in `app/utils/__tests__/tokenLayer.test.ts`. Remove nothing, migrate nothing | 0 | Purely additive at runtime — but see below: miss either registry and the slice fails its own gate |
 | **C2** | `gray` → `--mono-*` | 475 | Largest slice, but one family; revert restores `gray-*` |
-| **C3** | `red` → `--negative-*` | 192 | Includes B's 4 deferred `rgba(239,68,68,·)` rows |
-| **C4** | `amber` → `--warning-*` | 91 | Includes B's 4 deferred `rgba(251,191,36,·)` rows |
+| **C3** | `red` → `--negative-*` | 192 (+4) | **196 edits.** The 192 are C's palette rows; the 4 are B's deferred `rgba(239,68,68,·)`, which are disposition `B` and so outside the 948 |
+| **C4** | `amber` → `--warning-*` | 91 (+4) | **95 edits.** Same shape: 4 deferred `rgba(251,191,36,·)` rows are B's disposition, not C's |
 | **C5** | `yellow` → `--recency-*` | 50 | |
 | **C6** | `green` → `--positive-*` | 47 | |
 | **C7** | `orange` → `--availability-*` | 23 | |
@@ -202,7 +202,30 @@ that made B sliceable.
 | **C9** | `white`/`black` — the **2** `shadow-black` rows that move to `--elevation`; the other **45** stay literal with their reason recorded | 2 | |
 | **C-final** | Land the deferred lint clauses; re-point any remaining guard | 0 | Gated on a generated count |
 
-**C1 has a third step that is easy to miss and breaks a shipped gate if missed.**
+**C1 touches TWO shipped registries keyed by name, and missing either breaks a gate on the
+slice whose whole claim is that nothing changes.** An earlier revision of this plan devoted a
+paragraph to the first and did not know about the second.
+
+**Registry 2 — `BASE_ROLES` in `app/utils/__tests__/tokenLayer.test.ts`.**
+`tokenLayer.test.ts:145` computes `stray = [...KEYS.keys()].filter(k => !managed.has(k))` over
+every top-level key in `theme.extend.colors` and asserts it is empty, where `managed` is
+`BASE_ROLES ∪ COMPOSED`. C1 adds 34 Tailwind keys; **all 34 become `stray` and `npm test`
+fails.** Its key-capture regex is `^\s*"?([a-z][a-z0-9-]*)"?:`, so digit-bearing names like
+`mono-200` are captured and counted. That guard was written in B1 precisely so a new key
+cannot be added without being declared — it is working as designed, and C1 must declare.
+
+**The "new guard" listed under Verification therefore lands at C1, not C-final.** C-final's
+"re-point any remaining guard" must not be read as licence to defer this.
+
+**One pin to leave alone.** `tokenLayer.test.ts:297` asserts `all.length === 69` over rule-body
+occurrences. It is safe today because `ruleBodies()` slices from after the `.light` block while
+C1 adds declarations only inside `:root` — but its filter is
+`^--(accent|ink|surface|warning|info|positive|negative)`, which **will** match C's new
+`--negative-*`, `--warning-*` and `--positive-*` roles the moment one is referenced from a rule
+body. If that happens, the fix is to scope the filter, **never to bump the 69** — `CLAUDE.md`
+names raising a pinned constant to keep a guard green as the one forbidden move.
+
+**Registry 1 — `TOKEN_LAYER_ROLES`, and why it is easy to miss.**
 `TOKEN_LAYER_ROLES` (`scripts/colour-inventory.mjs`) enumerates Child B's 30 roles **by
 name**, and category 12 dispositions any `--*-rgb` declaration *not* on that list to `B`.
 Today `byCategory[12]` is 30, all `keep`. Adding 34 declarations without extending the list
@@ -273,6 +296,12 @@ Both go in the existing `files: ["app/**/*.{ts,tsx}"]` block C inherits from B, 
 AST-based `no-restricted-syntax` selectors — **not source-text rules**, which fire on colours
 named in comments.
 
+**Each clause needs BOTH selector forms**, `Literal[value=…]` **and**
+`TemplateElement[value.raw=…]`, exactly as every one of B's five clauses is paired
+(`eslint.config.mjs`). A single `Literal` selector lets an `rgba()` or a `gray-500` written
+inside a template literal walk straight past the clause that C-final is gated on — and this
+codebase builds class strings in template literals constantly.
+
 **There is no `white`/`black` exemption, because there is nothing to exempt them from.** An
 earlier revision of this plan called for one "scoped to the 43 rows that stay literal", which
 was wrong twice over: the count is 45, and a family clause keyed on `-\d{2,3}` cannot match
@@ -282,12 +311,17 @@ coverage. The 45 rows are recorded in `brand.css` and enforced by nothing, delib
 
 ## Verification
 
-- **`summary.pairs` and `lightCounterpartClasses` move at C2, and that is expected.** All 12
-  surviving pairs are `gray`, so collapsing them takes `pairs` to **0**. The guard compares the
-  whole artifact, so it regenerates regardless — but naming the fields here keeps C2's diff
-  review honest, rather than leaving a reviewer to wonder whether a drop to zero is success or
-  a scanner regression. It is success: B hit the same shape and had to move that assertion onto
-  a synthetic source for exactly this reason.
+- **`summary.pairs` reaches 0 at C2, and the reason matters more than the number.** C2 does
+  **not** collapse those pairs — it **renames both halves**:
+  `text-gray-500 dark:text-gray-400` becomes `text-mono-500 dark:text-mono-400`. The `dark:`
+  variant survives. `pairs` reaches 0 only because `pairsFor()` keys on `PALETTE_FAMILIES`,
+  and `mono` is deliberately not one, so the relation stops seeing rows it no longer owns.
+  **This is also why B5's specificity defect cannot arise in C.** B unmasked dead
+  `hover:`/`focus:` styles by replacing a `dark:` base with an unprefixed token at lower
+  specificity. C removes no base and changes no specificity, so nothing is unmasked.
+  An earlier revision of this plan said C2 "collapses" the pairs and inherited B's risk;
+  read as an instruction, "collapse" licenses exactly the repaint the zero-diff contract
+  forbids.
 - **Primary gate — the inventory.** `disposition === "C"` must fall from 948 to **45** (the
   `white`/`black` rows that stay literal). Generated, not counted by hand.
 - **Zero-diff gate.** For every migrated row, the role's triplet must equal the palette
