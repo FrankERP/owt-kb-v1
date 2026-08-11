@@ -89,7 +89,8 @@ So:
 | **B-final** | Remove the seven retired `--brand-*` declarations and their `brand.*` Tailwind keys; land the lint clauses B owns; re-point the last A1/A2 guard assertions | **Atomic, and only safe when zero call sites remain.** This is the transition the parent means |
 
 **Each slice merges to `main` on its own green gate.** B-final is gated on a count, not on
-judgement: the inventory must report **zero** rows in category 10.
+judgement: the inventory must report **zero** rows in **categories 10 and 11**, and no
+remaining category-9 `accentHex`-style literal carrying a retired value.
 
 ## Ordered changes
 
@@ -159,8 +160,9 @@ than 50 rows.**
 - **Snapshot the `pairs` relation into the handoff before B-final.** It is the only generated
   record of which light literal partnered which dark one, and regenerating the inventory batch
   by batch overwrites it — leaving Child D's light design to reconstruct it from git history.
-- **`dark:` variants are deleted only once the composed token carries both sides**, never
-  before. Deleting one early flips the dark side from 20% to 100%.
+- **A `dark:` variant is deleted only once the composed token's `:root` value equals that
+  variant's pre-migration computed colour** — see the harness section. Deleting one early
+  flips the dark side from 20% to 100%.
 - **Non-JSX sites are in scope**: `serviceCardModel.ts` (**36** of its 57 rows are B's; 20 are
   C's palette classes and 1 is `keep`) consumed by 8 `.tsx` components and 3 `.ts` modules, and
   `(admin)/layout.tsx`.
@@ -282,21 +284,46 @@ asserting a removed premise is worse than no guard: it is green and wrong.
 Screenshots cannot vouch for 1,628 sites across stateful panels on live data. The gate is
 **equality by construction**, verified mechanically.
 
-- A script resolves every migrated site's **computed colour** before and after, through a
-  custom-property resolver over `:root` (**not** `:root`/`.dark` — naming an empty class set
-  is how this gate silently passes).
+**The gate is ONE-SIDED, and the reason matters more than the mechanism.**
+
+At B's ending state a composed token has exactly **one** value. `brand.css` has no `.dark`
+block — `:root` holds the dark values and `.light` carries only `color-scheme`, and Child D
+adds the light values. So `:root` must hold the **dark-side** value to preserve what renders.
+
+Pre-migration, `bg-[#003572] dark:bg-[#00bfff]/20` resolves two ways. Post-migration the
+element carries one token resolving one way. **A two-sided equality gate is therefore
+unsatisfiable on all 166 alpha-differing pairs** — not hard, impossible. And declaring the
+light side in `.light` to satisfy it would self-activate the theme-parity guard
+(`brandCss.test.ts` is dormant only while `.light` declares zero custom properties), which
+then demands a `.light` counterpart for all 18 `:root` colour roles — Child D's entire job,
+pulled into B1.
+
+**So the gate is: every migrated site's computed colour in the rendered theme is unchanged.**
+
+- A resolver over `:root` computes each site before and after. `<html class="dark">` always
+  renders today (`Provider.tsx:16` sets `forcedTheme="dark"`), so the pre-migration reference
+  is the **dark** side of every pair.
 - It compares **sites, not classes**: a codemod that maps every class correctly but drops one
   from a `className` would otherwise pass.
 - **Every site must resolve identically, except the enumerated sites of the two licensed
   diffs**, which are listed explicitly and reviewed.
-- **What "the same site" means across a `dark:` pair must be settled first.** Before migration
-  a paired element carries two declarations (`bg-[#003572] dark:bg-[#00bfff]/20`); after it
-  carries one composed token. The comparison is therefore **per (site, theme)**: resolve the
-  element's colour with the `dark` class present and again without it, and require both to
-  match their pre-migration counterparts. A resolver over `:root` alone cannot express the
-  dark side at all — **this is the first thing the prove-on-one-file step must settle, and if
-  it cannot be settled the harness is not buildable and B stops.**
 - It runs per batch and is committed, so a later batch cannot silently regress an earlier one.
+
+### What B discards, stated plainly
+
+**B deletes the light-side value of all 246 pairs from the tree.** They are the `dark:`
+siblings' partners, and once a site carries a single composed token those literals are gone
+from source.
+
+This is intentional and invisible today — `forcedTheme="dark"` means no member ever saw the
+light side — but it is a real loss of information, and it is **the reason B must snapshot the
+`pairs` relation into the handoff before B-final**. That snapshot becomes the *only* surviving
+record of which light literal partnered which dark one, and Child D designs the light theme
+from it. Losing it means reconstructing 246 pairings from git history.
+
+**Consequently, B3's rule reads: a `dark:` variant is deleted only once the composed token's
+`:root` value equals that variant's pre-migration computed colour** — never "once the token
+carries both sides", which nothing at B's ending state can do.
 
 ## Verification
 
@@ -306,12 +333,13 @@ Screenshots cannot vouch for 1,628 sites across stateful panels on live data. Th
 | B1 changes nothing visually | Equality harness with an empty migration set | An "additive" slice that was not |
 | `brand.css` bodies preserved | `(variable, alpha)` multiset unchanged **per occurrence**, beam lines excepted | A `*-rgb` slip on one of the four alpha-free occurrences, including the body wash's own base colour |
 | Existing `brand.css` pins hold | `participationAlongside.test.tsx` green **untouched** | Breaking a documented layout guard while rewriting the file |
-| Every migrated site | Computed-colour equality, sites not classes | Any diff outside the two licensed sets |
-| Diff 1 is fully enumerated | The beam set covers all four classes: 32 brand.css + 87 cat-10 + 1 cat-11 + `DayCard.tsx:33` with its ~10 consumers | The harness reporting ~11 unlicensed diffs, or `DayCard` left on a literal that then fails B-final|s own lint clause |
-| Retired keys are gone | Inventory category 10 reports **zero** | Removing keys while call sites remain — the one unsafe transition |
+| Every migrated site | Computed-colour equality **in the rendered (dark) theme**, sites not classes | Any diff outside the two licensed sets |
+| Diff 1 is fully enumerated | The beam set covers all four classes: 32 brand.css + 87 cat-10 + 1 cat-11 + `DayCard.tsx:33` with its ~10 consumers | The harness reporting ~11 unlicensed diffs, or `DayCard` left on a literal that then fails B-final's own lint clause |
+| Retired keys are gone | Inventory categories 10 AND 11 report **zero**, and no category-9 literal carries a retired value | Removing keys while call sites remain — the one unsafe transition |
 | Utility references covered | A test that fails if a `brand.*` key is deleted while a `bg-brand-*` usage remains | The failure a `var()`-integrity guard structurally cannot see |
 | Prose survives | No hex, no `rgb(`-without-`var(`, `--tw-prose-body` → ink role, `.prose-sm` still emitted | The `theme.typography` collapse — unstyled lyrics, no signal |
 | Tests move with code | `PlannerGrid.test.tsx` selectors updated in the same commit | `npm test` red at the batch merge |
+| Pairs snapshotted before B-final | The `pairs` relation committed to the handoff | Child D losing the only record of which light literal partnered which dark one |
 | A1/A2 guards re-pointed | The FIVE enumerated assertions updated in the slice that invalidates each | A green guard asserting a premise B removed — worse than no guard |
 | Gallery migrated, not ignored | `themeGallery.test.ts` asserts the successor utilities; no `app/(gallery)` entry in `ignores` | Live code left on retired keys, with a green guard describing a dead class |
 | Done-gate | `tsc`, `npm test`, `eslint .` = 0 errors, per slice | — |
@@ -351,8 +379,16 @@ Screenshots cannot vouch for 1,628 sites across stateful panels on live data. Th
 |---|---|---|
 | Does the 17-combination tail get its own tokens, or collapse? | **No** | Own token each; collapse only with the site count recorded, as Child C is held to |
 | Batch size for B3…Bn | **No** | One slice per file for the 12 files >50 rows; grouped slices below that |
+| How `DayCard`'s three `accentHex` theme objects survive tokenisation, given `` `${t.accentHex}35` `` builds 8-digit hex at runtime | **No, but it gates the `DayCard` batch** | Give each theme an alpha-aware helper that returns `rgb(var(--x-rgb) / <n>)`, replacing the concatenation at all ~10 consumers. Settle and record before batching `DayCard` |
 
-**No blocking open questions.**
+**No blocking open questions.** Two items above gate a specific batch rather than the plan:
+the `DayCard` `accentHex` decision, and the harness's prove-on-one-file step.
+
+**One bookkeeping note:** B1 adds 18 base-role triplets to `brand.css :root`, and the
+inventory's `disposition()` defaults anything unmatched to `B` — so B's own token layer
+regenerates as ~18 fresh category-12 rows dispositioned `B`. Harmless to every gate, but the
+headline row count grows during B, and a later reader should not misread the inventory listing
+B's own tokens as B's migration target.
 
 ## Handoff
 
