@@ -40,7 +40,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const BRAND_CSS = readFileSync(path.join(REPO_ROOT, "app/brand.css"), "utf8");
 const TW_CONFIG = readFileSync(path.join(REPO_ROOT, "tailwind.config.ts"), "utf8");
 
-/** The 18 Layer-1 roles, from the A1 vocabulary. Stored as `--<role>-rgb` triplets. */
+/** The Layer-1 roles: 18 from the A1 vocabulary (B1) plus 5 added in B3. Triplets. */
 const BASE_ROLES = [
   "accent", "accent-deep",
   "ink", "ink-muted", "ink-dim",
@@ -48,6 +48,9 @@ const BASE_ROLES = [
   "warning-fg", "warning-surface", "warning-border",
   "info-fg", "info-surface", "info-border",
   "positive-fg", "negative-fg",
+  // B3 additions — see brand.css for why each exists.
+  "warning-surface-deep", "info-surface-deep",
+  "surface-overlay", "surface-overlay-deep", "surface-overlay-deepest",
 ] as const;
 
 /** The 23 Layer-2 composed tokens. Stored as `--<name>`, alpha already baked in. */

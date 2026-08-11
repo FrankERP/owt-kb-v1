@@ -32,7 +32,7 @@ describe("PracticePlaylistButton", () => {
     window.addEventListener("keydown", outerEscape);
 
     const { getByRole, queryByText } = render(
-      <PracticePlaylistButton songIds={["song-1"]} accent="#12C8F4" />,
+      <PracticePlaylistButton songIds={["song-1"]} accentVar="--accent-rgb" />,
     );
 
     const trigger = getByRole("button", { name: /Practicar/i });
@@ -58,7 +58,7 @@ describe("PracticePlaylistButton", () => {
     vi.stubGlobal("fetch", fetch);
 
     const { getByRole } = render(
-      <PracticePlaylistButton songIds={["song-1", "song-2"]} accent="#12C8F4" />,
+      <PracticePlaylistButton songIds={["song-1", "song-2"]} accentVar="--accent-rgb" />,
     );
 
     fireEvent.click(getByRole("button", { name: /Practicar/i }));
@@ -93,7 +93,7 @@ describe("PracticePlaylistButton", () => {
     vi.stubGlobal("fetch", fetch);
 
     const { getByRole } = render(
-      <PracticePlaylistButton songIds={["song-1"]} accent="#12C8F4" />,
+      <PracticePlaylistButton songIds={["song-1"]} accentVar="--accent-rgb" />,
     );
 
     const trigger = getByRole("button", { name: /Practicar/i });
@@ -115,7 +115,7 @@ describe("PracticePlaylistButton", () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, json: async () => ({}) })));
 
     const { getByRole, findByRole } = render(
-      <PracticePlaylistButton songIds={["song-1"]} accent="#12C8F4" />,
+      <PracticePlaylistButton songIds={["song-1"]} accentVar="--accent-rgb" />,
     );
 
     fireEvent.click(getByRole("button", { name: /Practicar/i }));

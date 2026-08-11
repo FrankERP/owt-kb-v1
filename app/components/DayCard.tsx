@@ -9,6 +9,7 @@ import { usePlayer } from "@/app/context/PlayerContext";
 import { useSession } from "next-auth/react";
 import { SetlistEditor } from "./admin/SetlistEditor";
 import CueDialog from "./ui/CueDialog";
+import { themeColour } from "@/app/utils/themeColour";
 
 export interface DayCardProps {
   day: string;
@@ -24,33 +25,33 @@ export interface DayCardProps {
 }
 
 const SUNDAY_THEME = {
-  border:       "border-brand-beam/45",
-  shadow:       "shadow-brand-beam/10",
-  headerBg:     "bg-brand-deck/80",
-  headerBorder: "border-brand-beam/25",
-  accent:       "text-brand-beam",
-  accentMuted:  "text-brand-beam/70",
-  accentHex:    "#12c8f4",
+  border:       "border-accent/45",
+  shadow:       "shadow-accent/10",
+  headerBg:     "bg-surface-raised/80",
+  headerBorder: "border-accent/25",
+  accent:       "text-accent",
+  accentMuted:  "text-accent/70",
+  accentVar:    "--accent-rgb",
 };
 
 const SATURDAY_THEME = {
-  border:       "border-[#78350f] dark:border-[#f59e0b]",
-  shadow:       "shadow-[#f59e0b]/20",
-  headerBg:     "bg-[#78350f] dark:bg-[#1c0800]",
-  headerBorder: "border-[#92400e] dark:border-[#f59e0b]",
-  accent:       "text-[#f59e0b]",
-  accentMuted:  "text-[#f59e0b]/70",
-  accentHex:    "#f59e0b",
+  border:       "border-warning-fg",
+  shadow:       "shadow-warning-fg/20",
+  headerBg:     "bg-warning-surface-deep",
+  headerBorder: "border-warning-fg",
+  accent:       "text-warning-fg",
+  accentMuted:  "text-warning-fg/70",
+  accentVar:    "--warning-fg-rgb",
 };
 
 const SPECIAL_THEME = {
-  border:       "border-[#4c1d95] dark:border-[#a78bfa]",
-  shadow:       "shadow-[#a78bfa]/20",
-  headerBg:     "bg-[#4c1d95] dark:bg-[#1e0a3c]",
-  headerBorder: "border-[#5b21b6] dark:border-[#a78bfa]",
-  accent:       "text-[#a78bfa]",
-  accentMuted:  "text-[#a78bfa]/70",
-  accentHex:    "#a78bfa",
+  border:       "border-info-fg",
+  shadow:       "shadow-info-fg/20",
+  headerBg:     "bg-info-surface-deep",
+  headerBorder: "border-info-fg",
+  accent:       "text-info-fg",
+  accentMuted:  "text-info-fg/70",
+  accentVar:    "--info-fg-rgb",
 };
 
 export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs, chorus, roleId, isNext }: DayCardProps) {
@@ -96,11 +97,11 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <p className={`mb-1 font-label text-[10px] uppercase tracking-[0.24em] ${t.accentMuted}`}>Servicio</p>
-              <h3 className="font-display text-2xl font-bold uppercase leading-none text-brand-frost md:text-3xl lg:text-4xl">
+              <h3 className="font-display text-2xl font-bold uppercase leading-none text-ink md:text-3xl lg:text-4xl">
                 {day}
               </h3>
               {date && (
-                <p className="mt-2 truncate font-body text-xs capitalize text-brand-frost/55 md:text-sm">
+                <p className="mt-2 truncate font-body text-xs capitalize text-ink/55 md:text-sm">
                   {new Date(date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-ES", {
                     weekday: "long", year: "numeric", month: "long", day: "numeric",
                   })}
@@ -109,12 +110,12 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
             </div>
             <div className="flex shrink-0 flex-col items-end gap-2">
               {date && (
-                <span className="rounded-lg border border-brand-frost/10 bg-brand-blackout/35 px-3 py-2 text-center font-label text-[11px] uppercase tracking-[0.15em] text-brand-frost/70 shadow-inner">
+                <span className="rounded-lg border border-ink/10 bg-surface-base/35 px-3 py-2 text-center font-label text-[11px] uppercase tracking-[0.15em] text-ink/70 shadow-inner">
                   {shortDate}
                 </span>
               )}
               {isNext && (
-                <span className="rounded-full border border-brand-signal/35 bg-brand-signal/10 px-2.5 py-1 font-label text-[10px] uppercase tracking-widest text-brand-signal">
+                <span className="rounded-full border border-positive-fg/35 bg-positive-fg/10 px-2.5 py-1 font-label text-[10px] uppercase tracking-widest text-positive-fg">
                   Próximo
                 </span>
               )}
@@ -124,9 +125,9 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
 
         <div className="space-y-5 p-5 md:p-6">
           {setlist?.team_notes && (
-            <section className="rounded-lg border px-4 py-3" style={{ borderColor: `${t.accentHex}35`, background: `${t.accentHex}0d` }}>
+            <section className="rounded-lg border px-4 py-3" style={{ borderColor: `${themeColour(t.accentVar, 0.2078)}`, background: `${themeColour(t.accentVar, 0.051)}` }}>
               <p className={`font-label text-[11px] uppercase tracking-widest ${t.accentMuted} mb-1`}>Mensaje para el equipo</p>
-              <p className="font-body text-sm text-[#C8D8EB]/90 whitespace-pre-wrap">{setlist.team_notes}</p>
+              <p className="font-body text-sm text-ink-muted/90 whitespace-pre-wrap">{setlist.team_notes}</p>
             </section>
           )}
 
@@ -134,15 +135,15 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
           {hasSetlist && (
             <section>
               <div className="flex items-center justify-between mb-2">
-                <h4 className="font-label text-xs md:text-sm lg:text-base uppercase tracking-widest text-[#C8D8EB]/70 dark:text-[#C8D8EB]/50">
+                <h4 className="font-label text-xs md:text-sm lg:text-base uppercase tracking-widest text-surface-ink-l70-d50">
                   Setlist
                 </h4>
                 <div className="flex items-center gap-3">
-                  <PracticePlaylistButton songIds={setlist!.songs.map(s => s._id)} accent={t.accentHex} />
+                  <PracticePlaylistButton songIds={setlist!.songs.map(s => s._id)} accentVar={t.accentVar} />
                   {canEdit && date && (
                     <button
                       onClick={() => setEditSetlist(true)}
-                      className="flex items-center gap-1 font-label text-[11px] uppercase tracking-widest text-gray-500 hover:text-[#00bfff] transition-colors"
+                      className="flex items-center gap-1 font-label text-[11px] uppercase tracking-widest text-gray-500 hover:text-accent transition-colors"
                     >
                       <PencilIcon />
                       Editar
@@ -150,7 +151,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                   )}
                 </div>
               </div>
-              <ol className="divide-y divide-brand-steel/[0.06]">
+              <ol className="divide-y divide-ink-dim/[0.06]">
                 {runs.map((run) => {
                   // Single-song medley groups render as plain singles
                   if (run.kind === "single" || (run.kind === "medley" && run.songs.length === 1)) {
@@ -159,11 +160,11 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                       <li key={song._id}>
                         <button
                           onClick={() => openSheet(song._id, song.play_key || undefined)}
-                          className="group -mx-2 flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-brand-beam/[0.055]"
+                          className="group -mx-2 flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-accent/[0.055]"
                         >
                           <span className="font-label text-xs text-gray-400 w-4 shrink-0 text-right tabular-nums">{n}</span>
                           <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
-                            <span className="truncate font-body text-base font-semibold transition-colors group-hover:text-brand-beam md:text-lg">{song.title}</span>
+                            <span className="truncate font-body text-base font-semibold transition-colors group-hover:text-accent md:text-lg">{song.title}</span>
                             {song.author && <span className="text-gray-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
@@ -183,25 +184,29 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                       <span
                         aria-hidden
                         className="absolute left-1 top-6 bottom-2 w-[2px] rounded-full"
-                        style={{ background: `linear-gradient(to bottom, ${t.accentHex}00, ${t.accentHex}55 12%, ${t.accentHex}55 88%, ${t.accentHex}00)` }}
+                        style={{ background: `linear-gradient(to bottom, ${themeColour(t.accentVar, 0)}, ${themeColour(t.accentVar, 0.3333)} 12%, ${themeColour(t.accentVar, 0.3333)} 88%, ${themeColour(t.accentVar, 0)})` }}
                       />
                       {/* MEDLEY label */}
-                      <div className="flex items-center gap-1 pl-2 -ml-2 mb-0.5">
-                        <ChainLinkIcon color={t.accentHex} opacity={0.65} />
-                        <span className="font-label text-[10px] uppercase tracking-[0.18em]" style={{ color: `${t.accentHex}99` }}>Medley</span>
+                      {/* `color` on the wrapper, not on the icon: ChainLinkIcon strokes with
+                          `currentColor` by default, and `var()` is NOT substituted inside an SVG
+                          presentation attribute — a token passed as `color` would be dropped
+                          silently. The sibling span sets its own colour, so it is unaffected. */}
+                      <div className="flex items-center gap-1 pl-2 -ml-2 mb-0.5" style={{ color: themeColour(t.accentVar) }}>
+                        <ChainLinkIcon opacity={0.65} />
+                        <span className="font-label text-[10px] uppercase tracking-[0.18em]" style={{ color: `${themeColour(t.accentVar, 0.6)}` }}>Medley</span>
                       </div>
                       {run.songs.map(({ song, n }, si) => (
                         <div key={song._id}>
                           {si > 0 && (
-                            <span className="block w-4 text-center font-label text-[11px] leading-none -my-0.5" style={{ color: `${t.accentHex}70` }}>+</span>
+                            <span className="block w-4 text-center font-label text-[11px] leading-none -my-0.5" style={{ color: `${themeColour(t.accentVar, 0.4392)}` }}>+</span>
                           )}
                           <button
                             onClick={() => openSheet(song._id, song.play_key || undefined)}
-                            className="group -mx-2 flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-brand-beam/[0.055]"
+                            className="group -mx-2 flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent/[0.055]"
                           >
                             <span className="font-label text-xs text-gray-400 w-4 shrink-0 text-right tabular-nums">{n}</span>
                             <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
-                              <span className="truncate font-body text-base font-semibold transition-colors group-hover:text-brand-beam md:text-lg">{song.title}</span>
+                              <span className="truncate font-body text-base font-semibold transition-colors group-hover:text-accent md:text-lg">{song.title}</span>
                               {song.author && <span className="text-gray-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
@@ -222,8 +227,8 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
 
           {/* Team */}
           {hasRole && (
-            <section className={hasSetlist ? "border-t border-brand-steel/12 pt-5" : ""}>
-              <h4 className="font-label text-xs md:text-sm lg:text-base uppercase tracking-widest text-[#C8D8EB]/70 dark:text-[#C8D8EB]/50 mb-3">
+            <section className={hasSetlist ? "border-t border-ink-dim/12 pt-5" : ""}>
+              <h4 className="font-label text-xs md:text-sm lg:text-base uppercase tracking-widest text-surface-ink-l70-d50 mb-3">
                 Equipo
               </h4>
 
@@ -242,7 +247,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                 <div>
                   <SectionDivider label="Instrumentos" accent={t.accentMuted} />
                   <div className="flex flex-wrap gap-x-3 gap-y-2">
-                    {instruments.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} accentHex={t.accentHex} highlightName={myName} isDuplicate={instrDups.has(s.person.toLowerCase().trim())} />)}
+                    {instruments.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} accentVar={t.accentVar} highlightName={myName} isDuplicate={instrDups.has(s.person.toLowerCase().trim())} />)}
                   </div>
                 </div>
               )}
@@ -251,7 +256,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                 <div>
                   <SectionDivider label="Front of House" accent={t.accentMuted} />
                   <div className="flex flex-wrap gap-x-3 gap-y-2">
-                    {fohTeam.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} accentHex={t.accentHex} highlightName={myName} isDuplicate={fohDups.has(s.person.toLowerCase().trim())} />)}
+                    {fohTeam.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} accentVar={t.accentVar} highlightName={myName} isDuplicate={fohDups.has(s.person.toLowerCase().trim())} />)}
                   </div>
                 </div>
               )}
@@ -319,8 +324,8 @@ function VocalCol({ label, names, highlightName, duplicateNames }: { label: stri
                 >⚠&nbsp;{name}</span>
               ) : isMe ? (
                 <span
-                  className="font-semibold text-[#3dff7c] whitespace-nowrap"
-                  style={{ textShadow: "0 0 10px rgba(61,255,124,0.8)" }}
+                  className="font-semibold text-positive-fg whitespace-nowrap"
+                  style={{ textShadow: "0 0 10px rgb(var(--positive-fg-rgb) / 0.8)" }}
                 >{name}</span>
               ) : (
                 <span className="whitespace-nowrap">{name}</span>
@@ -333,7 +338,7 @@ function VocalCol({ label, names, highlightName, duplicateNames }: { label: stri
   );
 }
 
-function Row({ label, value, accentHex, highlightName, isDuplicate }: { label: string; value: string; accentHex: string; highlightName?: string; isDuplicate?: boolean }) {
+function Row({ label, value, accentVar, highlightName, isDuplicate }: { label: string; value: string; accentVar: string; highlightName?: string; isDuplicate?: boolean }) {
   const isMe = !isDuplicate && !!highlightName && value.toLowerCase().trim() === highlightName;
   return (
     <div
@@ -341,27 +346,27 @@ function Row({ label, value, accentHex, highlightName, isDuplicate }: { label: s
       style={{
         border: isDuplicate
           ? "1px solid rgba(251,191,36,0.6)"
-          : isMe ? "1px solid rgba(61,255,124,0.5)" : `1px solid ${accentHex}40`,
+          : isMe ? "1px solid rgb(var(--positive-fg-rgb) / 0.5)" : `1px solid ${themeColour(accentVar, 0.251)}`,
         boxShadow: isDuplicate
           ? "0 0 10px rgba(251,191,36,0.35)"
-          : isMe ? "0 0 10px rgba(61,255,124,0.3)" : undefined,
+          : isMe ? "0 0 10px rgb(var(--positive-fg-rgb) / 0.3)" : undefined,
       }}
     >
       <span
         className="font-label text-xs uppercase tracking-wide px-2.5 flex items-center shrink-0 rounded-l-[7px]"
         style={{
-          background: `${accentHex}18`,
-          color: accentHex,
-          borderRight: `1px solid ${accentHex}30`,
+          background: `${themeColour(accentVar, 0.0941)}`,
+          color: themeColour(accentVar),
+          borderRight: `1px solid ${themeColour(accentVar, 0.1882)}`,
         }}
       >
         {label}
       </span>
       <span
         className={`font-body text-sm md:text-base px-3 py-1.5 flex flex-1 items-center justify-center gap-1 leading-tight ${
-          isDuplicate ? "font-semibold text-amber-400" : isMe ? "font-semibold text-[#3dff7c]" : ""
+          isDuplicate ? "font-semibold text-amber-400" : isMe ? "font-semibold text-positive-fg" : ""
         }`}
-        style={isDuplicate ? { background: "rgba(251,191,36,0.10)" } : isMe ? { background: "rgba(61,255,124,0.10)" } : undefined}
+        style={isDuplicate ? { background: "rgba(251,191,36,0.10)" } : isMe ? { background: "rgb(var(--positive-fg-rgb) / 0.10)" } : undefined}
       >
         {isDuplicate && <span>⚠</span>}
         {value}

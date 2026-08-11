@@ -47,6 +47,42 @@
   --positive-fg-rgb: 55 245 138;
   --negative-fg-rgb: 248 113 113;
 
+  /* ---- Five roles the vocabulary did not name, added in B3 ---------------
+     Found by sweeping ALL 1,628 B rows for hex values with no role, rather than
+     discovering them one batch at a time — the same closure-by-construction rule
+     the plan's category partition follows. 28 distinct hex values appear in B's
+     rows; 15 had a role, 6 are ParticipationSidebar's categorical hues (a
+     --chart-1..6 scale, its own batch), one (#002249) is only ever a light side
+     and never renders, and these five render with nothing to migrate onto.
+
+     The two "deep" surfaces are the DARK halves of pairs whose light halves the
+     vocabulary already named. `bg-[#78350f] dark:bg-[#1c0800]` renders #1c0800
+     today, so --warning-surface (120 53 15, the LIGHT value) is not what that
+     site needs. The vocabulary wrote both values into one slot as "· deep"; they
+     are two slots. */
+  --warning-surface-deep-rgb: 28 8 0;   /* #1c0800 — dark half of the warning header pair */
+  --info-surface-deep-rgb: 30 10 60;    /* #1e0a3c — dark half of the info header pair    */
+
+  /* The three overlay navies are DRIFT, preserved rather than corrected.
+     Three components spell a floating menu's background three different ways:
+     PracticePlaylistButton #00162e, ServiceReadinessCard #03101f, ProposalEditor
+     #020f1c. No design intent distinguishes them.
+
+     The A1 vocabulary licensed collapsing five near-identical navies onto
+     --surface-sunken (0 31 63). Five of those rows render at FULL opacity, where
+     the collapse lightens them by +15 to +35 on the blue channel — plainly visible
+     on a dark menu panel — and the B plan admits exactly two licensed diffs and
+     calls any third a defect. So B preserves each value and takes the extra roles.
+     Unifying these three is a design decision; it is not a migration decision, and
+     B declines to smuggle it in as one.
+
+     The sixth navy, #001830, is NOT here: its six rows render at 30-50% alpha,
+     where the shift is ~+5 effective, and it collapses onto --surface-sunken in
+     the MonthGenerator/SetlistEditor batch with its count recorded there. */
+  --surface-overlay-rgb: 0 22 46;         /* #00162e — 2 rows */
+  --surface-overlay-deep-rgb: 3 16 31;    /* #03101f — 1 row  */
+  --surface-overlay-deepest-rgb: 2 15 28; /* #020f1c — 2 rows */
+
   /* ---- Child B, Layer 2: 23 composed tokens ------------------------------
      These exist because 166 of the 246 per-element light/dark pairs differ in
      ALPHA, not only in hue, and a theme-invariant opacity modifier cannot say
