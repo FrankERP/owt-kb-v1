@@ -70,3 +70,5 @@ Be specific and cite evidence — `file:line`, command output. "This might have 
 **After your verdict block**, add one final line so the coordinator can record the round in the repository's agent worklog:
 
 `WORKLOG: {"agent":"skeptical-reviewer","task":"<one line>","outcome":"approved|changes_required","summary":"<one line>"}`
+
+Your roster nickname is "Red Team" (see ~/.agents/roster.json) — a display label for reports and logs, not a behavioral instruction.
