@@ -236,8 +236,15 @@ sends all 34 to disposition `B`, on a slice whose entire claim is that it change
 | Key | Before C1 | After C1 |
 |---|---:|---:|
 | `summary.byCategory["12"]` | 30 | **64** |
+| `summary.byDisposition.keep` | 137 | **171** |
+| `summary.literalRows` | 1155 | **1189** |
 | `summary.byDisposition.B` | **124** | **124** (unchanged) |
 | category-12 rows dispositioned `keep` | 30 | **64** |
+
+**Four keys move, not two.** An earlier revision named only the first and last, which would
+have sent an implementer hunting a regression in `literalRows` and `keep` that is simply the
+34 new declarations being counted — the same failure the 124-vs-102 paragraph below exists to
+prevent.
 
 **`byDisposition.B` is 124, not 102.** An earlier revision of this plan said 102, which is
 the count of *literal* rows with disposition `B`; the summary key folds in the 22
@@ -256,6 +263,13 @@ would have been invisible to the artifact this programme treats as authoritative
 `2965d3e`'s successor, verified count-neutral first: the only digit-bearing custom properties
 today are the 18 composed tokens, whose values are `rgb(var(…))` rather than bare triplets,
 so they still fail the value clause. `byCategory[12]` stayed at 30 across the change.
+
+**Every slice regenerates and commits the inventory fixture.** `colourInventory.test.ts`
+compares a live `build()` against the committed
+`app/utils/__tests__/__fixtures__/colour-inventory.json` — rows, summary, compositing *and*
+pairs — so a slice that migrates rows without running `node scripts/colour-inventory.mjs` and
+committing the result fails `npm test`. This is part of every slice's definition of done, C1
+included.
 
 **Each slice merges to `main` on its own green gate**, with a code review, exactly as B's did.
 
@@ -311,17 +325,34 @@ coverage. The 45 rows are recorded in `brand.css` and enforced by nothing, delib
 
 ## Verification
 
-- **`summary.pairs` reaches 0 at C2, and the reason matters more than the number.** C2 does
-  **not** collapse those pairs — it **renames both halves**:
-  `text-gray-500 dark:text-gray-400` becomes `text-mono-500 dark:text-mono-400`. The `dark:`
-  variant survives. `pairs` reaches 0 only because `pairsFor()` keys on `PALETTE_FAMILIES`,
-  and `mono` is deliberately not one, so the relation stops seeing rows it no longer owns.
-  **This is also why B5's specificity defect cannot arise in C.** B unmasked dead
-  `hover:`/`focus:` styles by replacing a `dark:` base with an unprefixed token at lower
-  specificity. C removes no base and changes no specificity, so nothing is unmasked.
-  An earlier revision of this plan said C2 "collapses" the pairs and inherited B's risk;
-  read as an instruction, "collapse" licenses exactly the repaint the zero-diff contract
-  forbids.
+- **`summary.pairs` STAYS AT 12 through C2 — it must not be driven to zero.** C2 **renames
+  both halves**: `text-gray-500 dark:text-gray-400` becomes `text-mono-500 dark:text-mono-400`,
+  and the `dark:` variant survives. The pair relation still sees it, because `pairsIn()`'s
+  value class is the family-agnostic `[a-z]+-\d{2,3}` — **not** `PALETTE_FAMILIES`. Verified
+  against the shipped scanner:
+
+  ```
+  pairsIn('text-gray-500 dark:text-gray-400')  ->  light gray-500, dark gray-400
+  pairsIn('text-mono-500 dark:text-mono-400')  ->  light mono-500, dark mono-400
+  ```
+
+  **Two earlier revisions of this plan got this wrong in opposite directions** — first
+  claiming C2 "collapses" the pairs, then claiming `pairs` drains to 0 "because `pairsFor()`
+  keys on `PALETTE_FAMILIES`". It does not, and the second error is the more dangerous: an
+  implementer holding C2 to a gate of 0 would either declare the largest slice failed, or
+  "fix" `pairsIn()` to scope on the family list — and that fix strands two live-tree
+  assertions, `colourInventory.test.ts:204` and `:213`, both `toBeGreaterThan(0)`, turning
+  `npm test` red from C2 onward. That file already records at `:232` why one such
+  count-marching-to-zero assertion was moved to a synthetic source; these two were left live
+  and C must not break them.
+
+  **C2's actual gate:** `byCategory["3"]` falls 901 → **426**, and `byDisposition.C` falls
+  948 → **473**. `summary.pairs` unchanged at 12.
+
+  **B5's specificity defect cannot arise in C, and the reason survives all of the above.** B
+  unmasked dead `hover:`/`focus:` styles by replacing a `dark:` base with an unprefixed token
+  at lower specificity. **C removes no base and changes no specificity** — every `dark:`
+  variant is renamed in place.
 - **Primary gate — the inventory.** `disposition === "C"` must fall from 948 to **45** (the
   `white`/`black` rows that stay literal). Generated, not counted by hand.
 - **Zero-diff gate.** For every migrated row, the role's triplet must equal the palette
