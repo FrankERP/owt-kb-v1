@@ -8,11 +8,11 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 280,
+    "literalRows": 278,
     "filesScanned": 211,
     "filesWithColour": 45,
     "byCategory": {
-      "4": 110,
+      "4": 108,
       "8": 89,
       "9": 10,
       "11": 7,
@@ -22,7 +22,7 @@
       "B": 116,
       "exempt": 26,
       "keep": 171,
-      "C": 47,
+      "C": 45,
       "D": 15
     },
     "compositingClasses": 17,
@@ -2090,18 +2090,6 @@
       "file": "app/components/admin/ServiceReadinessCard.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
-      "value": "shadow-black",
-      "alpha": null,
-      "utility": "shadow",
-      "carrier": null,
-      "line": 249,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/ServiceReadinessCard.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
       "value": "text-white",
       "alpha": null,
       "utility": "text",
@@ -2372,18 +2360,6 @@
       "carrier": "stroke",
       "line": 466,
       "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/AvailabilityCalendar.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "shadow-black",
-      "alpha": null,
-      "utility": "shadow",
-      "carrier": null,
-      "line": 397,
-      "disposition": "C",
       "reason": null
     },
     {

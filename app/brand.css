@@ -92,6 +92,27 @@
      literal gives Child D nothing to change. */
   --elevation-rgb: 0 0 0;
 
+  /* WHITE AND BLACK ARE NOT ROLES, and Child C decided that deliberately.
+     45 rows keep `bg-white`, `text-white`, `bg-black`, `text-black`,
+     `border-white`, `border-black` and `stroke-white` as literals.
+
+     They are theme ANCHORS, not palette entries. `text-white` on a coloured badge
+     means "maximum contrast against this fill", and that stays true in a light
+     theme — tokenising it onto a role would make it themeable and therefore wrong.
+
+     Only the two `shadow-black/NN` rows moved, to --elevation, because a shadow IS
+     a themed thing: a light theme wants its shadows warmer and weaker than pure
+     black, and a literal gives Child D nothing to change.
+
+     NO LINT RULE COVERS THE 45. A palette-family clause keys on `-\d{2,3}` and
+     cannot match a keyword, so there is nothing for them to be exempt from — an
+     earlier draft of C promised an exemption that would have guarded against a rule
+     that does not exist. Recorded here instead, which is the honest mechanism.
+
+     CHILD D SHOULD RE-EXAMINE THIS RATHER THAN INHERIT IT. It is a real narrowing
+     of "the whole app surface": a `text-white` sitting on a badge whose fill becomes
+     light in D stops meaning "maximum contrast" and starts meaning "invisible". */
+
   /* Six CATEGORICAL hues (ParticipationSidebar), chosen to be distinguishable
      from one another rather than to express a state — so no semantic role fits,
      and the vocabulary correctly said a semantic set is the wrong shape. Named

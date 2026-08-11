@@ -394,7 +394,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
             onClick={() => setPopover(null)}
           />
           <div
-            className="fixed z-50 w-64 rounded-xl border border-accent/20 bg-surface-base shadow-2xl shadow-black/60 p-4 space-y-3"
+            className="fixed z-50 w-64 rounded-xl border border-accent/20 bg-surface-base shadow-2xl shadow-elevation/60 p-4 space-y-3"
             style={{ top: popover.y, left: popover.x }}
             onClick={e => e.stopPropagation()}
           >

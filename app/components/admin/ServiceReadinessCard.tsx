@@ -246,7 +246,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                       <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
                       <div
                         role="menu"
-                        className={`absolute right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-accent/25 bg-surface-overlay-deep py-1 shadow-xl shadow-black/50 ${CARD_STYLE.menu}`}
+                        className={`absolute right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-accent/25 bg-surface-overlay-deep py-1 shadow-xl shadow-elevation/50 ${CARD_STYLE.menu}`}
                       >
                         {instrPills.length > 0 && (
                           <MenuItem
