@@ -32,7 +32,7 @@ export default function AudioTransport({
     <div className="max-w-7xl mx-auto flex items-center gap-3 px-4 py-3">
       <button
         onClick={onToggle}
-        className="w-11 h-11 rounded-full bg-[#00bfff]/15 border border-[#00bfff]/40 flex items-center justify-center text-[#00bfff] shrink-0 hover:bg-[#00bfff]/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00bfff]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a1929] active:scale-95 transition-all"
+        className="w-11 h-11 rounded-full bg-accent/15 border border-accent/40 flex items-center justify-center text-accent shrink-0 hover:bg-accent/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised-alt active:scale-95 transition-all"
         aria-label={isPlaying ? `Pausar ${track.songTitle} — ${track.title}` : `Reproducir ${track.songTitle} — ${track.title}`}
       >
         {isPlaying ? <PauseIcon /> : <PlayIcon />}
@@ -43,7 +43,7 @@ export default function AudioTransport({
           <span className="truncate font-body text-xs font-semibold">{track.songTitle}</span>
           <span className="max-w-[8rem] shrink-0 truncate font-label text-[11px] uppercase tracking-widest text-gray-500">{track.title}</span>
           {track.tone && (
-            <span className="shrink-0 font-label text-[11px] text-[#00bfff]/60">{track.tone}</span>
+            <span className="shrink-0 font-label text-[11px] text-accent/60">{track.tone}</span>
           )}
         </div>
 
@@ -59,7 +59,7 @@ export default function AudioTransport({
             aria-valuemax={Math.round(duration)}
             aria-valuenow={Math.round(currentTime)}
             aria-valuetext={fmtTime(currentTime)}
-            className="group relative h-1.5 flex-1 cursor-pointer rounded-full bg-[#003572]/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00bfff]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a1929]"
+            className="group relative h-1.5 flex-1 cursor-pointer rounded-full bg-accent-deep/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised-alt"
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
               onSeek((e.clientX - rect.left) / rect.width);
@@ -78,7 +78,7 @@ export default function AudioTransport({
             }}
           >
             <div
-              className="h-full rounded-full bg-[#00bfff] transition-[width] duration-100 group-hover:bg-[#00bfff]/80"
+              className="h-full rounded-full bg-accent transition-[width] duration-100 group-hover:bg-accent/80"
               style={{ width: `${progress * 100}%` }}
             />
             <div className="absolute inset-y-0 -bottom-1 -top-1 left-0 right-0 opacity-0 group-hover:opacity-100" style={{ cursor: "pointer" }} />

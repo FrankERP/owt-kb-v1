@@ -35,14 +35,14 @@ export default function SongAudioSection({ tracks, songTitle, songSlug }: Props)
             key={i}
             className={`rounded-xl border p-5 space-y-4 transition-colors ${
               isCurrent
-                ? "border-[#00bfff]/50 bg-[#00bfff]/5"
-                : "border-[#003572]/25 dark:border-[#00bfff]/15"
+                ? "border-accent/50 bg-accent/5"
+                : "border-surface-accent-l25-d15"
             }`}
           >
             <div>
               <p className="font-display text-base font-semibold leading-snug">{track.title}</p>
               {track.tone && (
-                <p className="font-label text-xs text-[#00bfff] uppercase tracking-wide mt-1">{track.tone}</p>
+                <p className="font-label text-xs text-accent uppercase tracking-wide mt-1">{track.tone}</p>
               )}
             </div>
             <button
@@ -50,8 +50,8 @@ export default function SongAudioSection({ tracks, songTitle, songSlug }: Props)
               aria-label={`${isCurrent && player.isPlaying ? "Pausar" : "Reproducir"} ${trackName}`}
               className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
                 isCurrent
-                  ? "border-[#00bfff]/50 bg-[#00bfff]/15 text-[#00bfff]"
-                  : "border-[#003572]/30 hover:border-[#00bfff]/40 hover:bg-[#00bfff]/5 text-gray-400 hover:text-[#00bfff]"
+                  ? "border-accent/50 bg-accent/15 text-accent"
+                  : "border-accent-deep/30 hover:border-accent/40 hover:bg-accent/5 text-gray-400 hover:text-accent"
               }`}
             >
               <PlayIcon playing={isCurrent && player.isPlaying} />
@@ -61,7 +61,7 @@ export default function SongAudioSection({ tracks, songTitle, songSlug }: Props)
               href={track.audioFileURL}
               download={`${songTitle} — ${track.title}.mp3`}
               aria-label={`Descargar ${trackName}`}
-              className="block text-center font-label text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 hover:text-[#00bfff] dark:hover:text-[#00bfff] transition-colors"
+              className="block text-center font-label text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 hover:text-accent dark:hover:text-accent transition-colors"
             >
               Descargar ↓
             </a>

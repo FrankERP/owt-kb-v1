@@ -106,7 +106,33 @@ const EXEMPT_VALUES = new Map([
 // ---------------------------------------------------------------------------
 
 const PALETTE_FAMILIES = "gray|red|yellow|green|amber|orange|purple|blue|slate|zinc|neutral|stone|emerald|teal|cyan|sky|indigo|violet|fuchsia|pink|rose|lime";
-const COLOUR_UTILITIES = "bg|text|border|ring|divide|from|via|to|fill|stroke|placeholder|shadow|outline|decoration|caret|accent";
+// `ring-offset` must precede `ring`, or the alternation matches `ring` first and
+// leaves `-offset-[#010b17]` stranded — which is how five `ring-offset` rows came
+// to carry no utility and slip past a codemod keyed on the utility.
+const COLOUR_UTILITIES = "bg|text|border|ring-offset|ring|divide|from|via|to|fill|stroke|placeholder|shadow|outline|decoration|caret|accent";
+
+/**
+ * Tailwind writes an opacity modifier two ways: `/50` (a percentage) and `/[0.04]`
+ * (an arbitrary fraction). Both mean alpha, and a scan that understands only the
+ * first records the second as ABSENT — which reads as fully opaque.
+ *
+ * That is not hypothetical. Fifteen usages in this tree spell alpha in brackets, and
+ * five of them are the dark half of a light/dark pair. With those read as opaque, the
+ * composed-token layer was built claiming three combinations ended at 100% when the
+ * sites render at 3-4%, and migrating onto those tokens would have turned faint
+ * skeleton washes into solid accent fills.
+ *
+ * Returns a percentage STRING so both spellings compare equal: `/[0.04]` -> "4".
+ */
+function normaliseAlpha(raw) {
+  if (!raw) return null;
+  const v = raw.replace(/^\//, "");
+  if (v.startsWith("[")) {
+    const n = parseFloat(v.slice(1, -1));
+    return Number.isFinite(n) ? String(+(n * 100).toFixed(4)) : null;
+  }
+  return v;
+}
 
 /** Category 13 is handled separately — it emits three row kinds, not literals. */
 const CATEGORIES = [
@@ -215,7 +241,7 @@ function scanFile(rel) {
         // so it must be captured separately or the composed-token layer has no input:
         // ~14 composed tokens exist precisely because a pair's two sides differ in
         // ALPHA, not in colour.
-        alpha: (value.match(/\/(\d{1,3})$/) ?? [null, null])[1],
+        alpha: normaliseAlpha((value.match(/(\/(?:\d{1,3}|\[[0-9.]+\]))$/) ?? [null, null])[1]),
         utility: normaliseUtility(src, start),
         carrier: id === 8 ? m[1] : null,
         line: lineOf(src, start), // informational only — see the artifact header
@@ -338,50 +364,67 @@ function scanCompositingClasses(files) {
  * cannot express "opaque navy in light, 20% cyan in dark" — so the mapping needs the
  * partner, not a bag of values.
  */
+// A class-string region: the contents of a quoted string or template literal that
+// contains at least one `dark:` variant. Scanning regions rather than whole files is
+// what makes the pairing per-element.
+const REGION = /(["'`])((?:[^"'`\\]|\\.)*?dark:(?:[^"'`\\]|\\.)*?)\1/g;
+
+// ONE list, shared with COLOUR_UTILITIES above — an earlier revision kept a second
+// copy here and the two drifted, so `ring-offset` was in neither and five rows carried
+// no utility at all.
+const COLOURED = new RegExp(
+  `(?:^|\\s)((?:[a-z-]+:)*)(${COLOUR_UTILITIES})-(\\[[^\\]]+\\]|[a-z]+-\\d{2,3}|white|black|transparent|brand-[a-z]+)(\\/(?:\\d{1,3}|\\[[0-9.]+\\]))?`,
+  "g",
+);
+
+/**
+ * Extract the pair relation from ONE source text. Exported so a guard can exercise the
+ * scanner against a synthetic source instead of the live tree — which matters because
+ * Child B consumes pairs as it succeeds, so any assertion about the tree's pair COUNT
+ * marches to zero by working correctly.
+ */
+export function pairsIn(text, file = "<synthetic>") {
+  const pairs = [];
+  REGION.lastIndex = 0;
+  for (const region of text.matchAll(REGION)) {
+    const body = region[2];
+    const light = new Map();
+    const dark = new Map();
+    COLOURED.lastIndex = 0;
+    let m;
+    while ((m = COLOURED.exec(body))) {
+      const variants = (m[1] ?? "").split(":").filter(Boolean);
+      const isDark = variants.includes("dark");
+      const chain = variants.filter((v) => v !== "dark");
+      const key = [...chain, m[2]].join(":");
+      (isDark ? dark : light).set(key, { value: m[3], alpha: normaliseAlpha(m[4]) });
+    }
+    for (const [key, l] of light) {
+      const d = dark.get(key);
+      if (!d) continue;
+      pairs.push({
+        file,
+        utility: key,
+        light: l.value,
+        lightAlpha: l.alpha,
+        dark: d.value,
+        darkAlpha: d.alpha,
+        alphaDiffers: (l.alpha ?? "100") !== (d.alpha ?? "100"),
+      });
+    }
+  }
+  return pairs;
+}
+
 function pairsFor(files) {
   const pairs = [];
-  // A class-string region: the contents of a quoted string or template literal that
-  // contains at least one `dark:` variant. Scanning regions rather than whole files is
-  // what makes the pairing per-element.
-  const REGION = /(["'`])((?:[^"'`\\]|\\.)*?dark:(?:[^"'`\\]|\\.)*?)\1/g;
-  const COLOURED = /(?:^|\s)((?:[a-z-]+:)*)(bg|text|border|ring|divide|from|via|to|fill|stroke|placeholder|shadow|outline|decoration|caret|accent)-(\[[^\]]+\]|[a-z]+-\d{2,3}|white|black|transparent|brand-[a-z]+)(\/\d{1,3})?/g;
-
   for (const rel of files) {
     const src = stripComments(readFileSync(path.join(REPO_ROOT, rel), "utf8"), {
       syntax: syntaxFor(rel),
     });
-    for (const region of src.matchAll(REGION)) {
-      const text = region[2];
-      const light = new Map();
-      const dark = new Map();
-      COLOURED.lastIndex = 0;
-      let m;
-      while ((m = COLOURED.exec(text))) {
-        const variants = (m[1] ?? "").split(":").filter(Boolean);
-        const isDark = variants.includes("dark");
-        // The variant chain WITHOUT `dark:` is the pairing key: `hover:dark:bg` and
-        // `hover:bg` are two sides of one pair; `hover:bg` and `bg` are not.
-        const chain = variants.filter((v) => v !== "dark");
-        const key = [...chain, m[2]].join(":");
-        const entry = { value: m[3], alpha: m[4] ? m[4].slice(1) : null };
-        (isDark ? dark : light).set(key, entry);
-      }
-      for (const [key, l] of light) {
-        const d = dark.get(key);
-        if (!d) continue;
-        pairs.push({
-          file: rel,
-          utility: key,
-          light: l.value,
-          lightAlpha: l.alpha,
-          dark: d.value,
-          darkAlpha: d.alpha,
-          // The load-bearing fact: differing alpha means this site CANNOT use a base role
-          // with an opacity modifier and needs a composed, alpha-baked token.
-          alphaDiffers: (l.alpha ?? "100") !== (d.alpha ?? "100"),
-        });
-      }
-    }
+    // ONE implementation, shared with the guard. The duplicate that used to live here
+    // is how the utility list drifted in the first place.
+    pairs.push(...pairsIn(src, rel));
   }
   pairs.sort(
     (a, b) =>
@@ -417,6 +460,9 @@ const TOKEN_LAYER_ROLES = new RegExp(
       // and three overlay navies B preserves rather than collapsing.
       "warning-surface-deep", "info-surface-deep",
       "surface-overlay", "surface-overlay-deep", "surface-overlay-deepest",
+      // Added in B4: the shadow black and the six categorical hues.
+      "elevation",
+      "chart-lead", "chart-bgv", "chart-coro", "chart-especial", "chart-instr", "chart-foh",
     ].join("|") +
     ")-rgb:",
 );

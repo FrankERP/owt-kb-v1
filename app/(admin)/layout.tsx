@@ -39,7 +39,7 @@ export default function RootLayout({
 			className={`${displayFont.variable} ${bodyFont.variable} ${labelFont.variable}`}
 		>
 			<body
-				className="brand-atmosphere min-h-screen bg-brand-blackout font-body text-brand-frost selection:bg-brand-beam/35"
+				className="brand-atmosphere min-h-screen bg-surface-base font-body text-ink selection:bg-accent/35"
 			>
 				<Provider>
 					<div className="pt-2">

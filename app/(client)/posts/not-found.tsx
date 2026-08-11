@@ -8,7 +8,7 @@ export default function SongNotFound() {
       <svg
         width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-        className="text-[#00bfff]/70" aria-hidden
+        className="text-accent/70" aria-hidden
       >
         <circle cx="11" cy="11" r="8" />
         <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -24,7 +24,7 @@ export default function SongNotFound() {
 
       <Link
         href="/"
-        className="font-label text-xs uppercase tracking-widest px-4 py-2.5 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00bfff]/60"
+        className="font-label text-xs uppercase tracking-widest px-4 py-2.5 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
         Ver todas las canciones
       </Link>

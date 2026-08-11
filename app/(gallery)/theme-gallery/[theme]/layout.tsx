@@ -76,7 +76,7 @@ export default async function ThemeGalleryLayout({
         Matches both real root layouts EXCEPT `selection:*`, which is a text-selection
         affordance no baseline exercises.
       */}
-      <body className="brand-atmosphere font-body min-h-screen bg-brand-blackout text-brand-frost">
+      <body className="brand-atmosphere font-body min-h-screen bg-surface-base text-ink">
         {children}
       </body>
     </html>

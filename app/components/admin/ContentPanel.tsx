@@ -184,7 +184,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
         </div>
         <button
           onClick={() => { setModalError(null); setModal({ type: "add" }); }}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors"
         >
           <span className="text-base leading-none">+</span>
           Agregar
@@ -193,7 +193,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
 
       {/* Search */}
       <input
-        className="w-full px-4 py-2.5 rounded-xl border border-[#003572]/20 dark:border-[#00bfff]/15 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors"
+        className="w-full px-4 py-2.5 rounded-xl border border-surface-accent-20 bg-transparent font-body text-sm focus:outline-none focus:border-accent dark:focus:border-surface-accent-20 transition-colors"
         placeholder="Buscar canción o artista..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
@@ -203,7 +203,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
       {loading && (
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-16 rounded-xl bg-[#003572]/10 dark:bg-[#00bfff]/5 animate-pulse" />
+            <div key={i} className="h-16 rounded-xl bg-surface-accent-wash animate-pulse" />
           ))}
         </div>
       )}
@@ -223,11 +223,11 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
           {filtered.map((song) => (
             <div
               key={song._id}
-              className="flex items-center gap-4 px-4 py-3 rounded-xl border border-[#003572]/15 dark:border-[#00bfff]/10 bg-[#003572]/5 dark:bg-[#00bfff]/5 hover:border-[#003572]/30 dark:hover:border-[#00bfff]/20 transition-colors group"
+              className="flex items-center gap-4 px-4 py-3 rounded-xl border border-edge-accent-subtle bg-accent/5 hover:border-accent-deep/30 dark:hover:border-accent/20 transition-colors group"
             >
               {/* Icon */}
-              <div className="w-9 h-9 rounded-lg bg-[#003572]/20 dark:bg-[#00bfff]/10 flex items-center justify-center shrink-0">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="text-[#00bfff]">
+              <div className="w-9 h-9 rounded-lg bg-surface-accent-faint flex items-center justify-center shrink-0">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
                   <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
                 </svg>
               </div>
@@ -240,7 +240,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
                     <span className="font-body text-xs text-gray-500 truncate">{song.author}</span>
                   )}
                   {(song.tags ?? []).map((tag) => (
-                    <span key={tag._id} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-[#003572]/10 dark:bg-[#00bfff]/10 text-gray-400 border border-[#003572]/15 dark:border-[#00bfff]/15">
+                    <span key={tag._id} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-accent/10 text-gray-400 border border-accent/15">
                       #{tag.name}
                     </span>
                   ))}
@@ -249,7 +249,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
 
               {/* Key badge */}
               {song.key && (
-                <span className="font-label text-xs px-2.5 py-1 rounded-full border border-[#00bfff]/40 text-[#00bfff] shrink-0 hidden sm:inline">
+                <span className="font-label text-xs px-2.5 py-1 rounded-full border border-accent/40 text-accent shrink-0 hidden sm:inline">
                   {song.key}
                 </span>
               )}
@@ -272,7 +272,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-[#003572] dark:bg-[#0a1929] border border-[#00bfff]/30 font-label text-xs uppercase tracking-widest shadow-xl">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-surface-raised-alt border border-accent/30 font-label text-xs uppercase tracking-widest shadow-xl">
           {toast}
         </div>
       )}
@@ -311,7 +311,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
             ¿Eliminar <span className="text-red-400 font-semibold">{modal.song.title}</span>? Esta acción no se puede deshacer.
           </p>
           <div className="flex gap-3 pt-1">
-            <button onClick={() => { setModalError(null); setModal(null); }} className="flex-1 py-2 rounded-lg border border-[#003572]/30 dark:border-[#00bfff]/20 font-label text-xs uppercase tracking-widest hover:border-[#00bfff] transition-colors">
+            <button onClick={() => { setModalError(null); setModal(null); }} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
               Cancelar
             </button>
             <button onClick={handleDelete} disabled={submitting} className="flex-1 py-2 rounded-lg bg-red-800/60 hover:bg-red-700/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
@@ -332,7 +332,7 @@ function ActionBtn({ onClick, title, danger, children }: { onClick: () => void; 
     <button
       onClick={onClick}
       title={title}
-      className={`p-1.5 rounded-lg transition-colors ${danger ? "hover:bg-red-500/20 hover:text-red-400 text-gray-500" : "hover:bg-[#00bfff]/10 hover:text-[#00bfff] text-gray-500"}`}
+      className={`p-1.5 rounded-lg transition-colors ${danger ? "hover:bg-red-500/20 hover:text-red-400 text-gray-500" : "hover:bg-accent/10 hover:text-accent text-gray-500"}`}
     >
       {children}
     </button>

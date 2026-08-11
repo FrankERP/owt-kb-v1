@@ -20,7 +20,7 @@ export default function TextSizeControl() {
   }
 
   return (
-    <section className="rounded-2xl border border-[#003572]/20 dark:border-[#00bfff]/15 p-5">
+    <section className="rounded-2xl border border-surface-accent-20 p-5">
       <h3 className="font-display text-lg font-bold mb-1">Tamaño de texto</h3>
       <p className="font-body text-sm text-gray-500 dark:text-gray-400 mb-4">
         &quot;Automático&quot; sigue el ajuste de tu dispositivo. Elige un tamaño fijo para anularlo.
@@ -36,8 +36,8 @@ export default function TextSizeControl() {
               aria-pressed={active}
               className={`font-label text-xs uppercase tracking-widest px-4 py-2 rounded-full border transition-colors ${
                 active
-                  ? "border-[#00bfff] text-[#00bfff] bg-[#00bfff]/10"
-                  : "border-[#003572]/25 dark:border-[#00bfff]/20 text-gray-500 dark:text-gray-400 hover:border-[#00bfff]/50"
+                  ? "border-accent text-accent bg-accent/10"
+                  : "border-surface-accent-l25-d20 text-gray-500 dark:text-gray-400 hover:border-accent/50 dark:hover:border-surface-accent-l25-d20"
               }`}
             >
               {p.label}
@@ -45,7 +45,7 @@ export default function TextSizeControl() {
           );
         })}
       </div>
-      <p className="font-body text-base mt-4 text-gray-600 dark:text-[#C8D8EB]/70">
+      <p className="font-body text-base mt-4 text-gray-600 dark:text-ink-muted/70">
         Texto de ejemplo — así se verá el contenido de la app.
       </p>
     </section>

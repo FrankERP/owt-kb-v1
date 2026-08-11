@@ -128,8 +128,8 @@ export async function generateStaticParams() {
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="brand-section-heading mb-8 border-b border-brand-steel/10 pb-4">
-      <h2 className="font-display text-2xl font-semibold text-brand-frost md:text-3xl">
+    <div className="brand-section-heading mb-8 border-b border-ink-dim/10 pb-4">
+      <h2 className="font-display text-2xl font-semibold text-ink md:text-3xl">
         {children}
       </h2>
     </div>
@@ -180,7 +180,7 @@ const Page = async ({ params }: Params) => {
             <div className="mb-6 flex flex-wrap justify-center gap-2">
               {post.tags.map((tag) => (
                 <Link key={tag._id} href={`/tag/${tag.slug.current}`}>
-                  <span className="rounded-md border border-brand-beam/15 bg-brand-beam/[0.055] px-2.5 py-1.5 font-label text-[10px] lowercase tracking-wider text-brand-beam/70 transition-colors hover:border-brand-beam/35 hover:text-brand-beam">
+                  <span className="rounded-md border border-accent/15 bg-accent/[0.055] px-2.5 py-1.5 font-label text-[10px] lowercase tracking-wider text-accent/70 transition-colors hover:border-accent/35 hover:text-accent">
                     #{tag.name}
                   </span>
                 </Link>
@@ -188,23 +188,23 @@ const Page = async ({ params }: Params) => {
             </div>
           )}
 
-          <h1 className="max-w-4xl text-balance break-words font-display text-3xl font-semibold leading-[0.98] text-brand-frost sm:text-5xl lg:text-6xl">
+          <h1 className="max-w-4xl text-balance break-words font-display text-3xl font-semibold leading-[0.98] text-ink sm:text-5xl lg:text-6xl">
             {post?.title}
           </h1>
 
           {post?.authors && post.authors.length > 0 ? (
             <div className="mb-9 mt-4 flex flex-wrap justify-center gap-x-2 gap-y-1">
               {post.authors.map((a, i) => (
-                <span key={a._id} className="font-body text-lg text-[#C8D8EB]/60">
-                  <Link href={`/author/${a.slug.current}`} className="hover:text-[#00bfff] transition-colors">
+                <span key={a._id} className="font-body text-lg text-ink-muted/60">
+                  <Link href={`/author/${a.slug.current}`} className="hover:text-accent transition-colors">
                     {a.name}
                   </Link>
-                  {i < post.authors!.length - 1 && <span className="text-[#C8D8EB]/30">,</span>}
+                  {i < post.authors!.length - 1 && <span className="text-ink-muted/30">,</span>}
                 </span>
               ))}
             </div>
           ) : post?.author ? (
-            <p className="mb-9 mt-4 font-body text-lg text-brand-steel/70">{post.author}</p>
+            <p className="mb-9 mt-4 font-body text-lg text-ink-dim/70">{post.author}</p>
           ) : null}
 
           <div className="flex flex-wrap justify-center gap-2.5">
@@ -214,12 +214,12 @@ const Page = async ({ params }: Params) => {
               </span>
             )}
             {post?.bpm && (
-              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[11px] uppercase tracking-widest text-brand-steel/70">
+              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[11px] uppercase tracking-widest text-ink-dim/70">
                 {post.bpm} BPM
               </span>
             )}
             {post?.timeSig && (
-              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[11px] uppercase tracking-widest text-brand-steel/70">
+              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[11px] uppercase tracking-widest text-ink-dim/70">
                 {post.timeSig}
               </span>
             )}
@@ -268,7 +268,7 @@ const Page = async ({ params }: Params) => {
                     />
                   </div>
                   {tutorial.title && (
-                    <div className="px-4 py-3 border-t border-[#003572]/15 dark:border-[#00bfff]/10">
+                    <div className="px-4 py-3 border-t border-edge-accent-subtle">
                       <p className="font-display text-sm font-semibold leading-snug">
                         {tutorial.title}
                       </p>
@@ -289,12 +289,12 @@ const Page = async ({ params }: Params) => {
                 <a href={post.musicalReferenceUrl || post.referenceLinks![0].url}
                   target="_blank" rel="noopener noreferrer"
                   className="brand-library-module brand-surface-interactive group flex items-center gap-4 p-4">
-                  <span className="flex items-center justify-center w-11 h-11 rounded-full bg-[#00bfff]/12 text-[#00bfff] shrink-0">
+                  <span className="flex items-center justify-center w-11 h-11 rounded-full bg-accent/12 text-accent shrink-0">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg>
                   </span>
                   <span className="flex-1">
-                    <span className="block font-display text-sm font-semibold group-hover:text-[#00bfff] transition-colors">Referencia musical</span>
-                    <span className="block font-body text-xs text-[#C8D8EB]/60 dark:text-[#C8D8EB]/50">Para ensayar — músicos</span>
+                    <span className="block font-display text-sm font-semibold group-hover:text-accent transition-colors">Referencia musical</span>
+                    <span className="block font-body text-xs text-surface-ink-l60-d50">Para ensayar — músicos</span>
                   </span>
                 </a>
               )}
@@ -302,12 +302,12 @@ const Page = async ({ params }: Params) => {
                 <a href={post.lyricsVideoUrl}
                   target="_blank" rel="noopener noreferrer"
                   className="brand-library-module brand-surface-interactive group flex items-center gap-4 p-4">
-                  <span className="flex items-center justify-center w-11 h-11 rounded-full bg-[#00bfff]/12 text-[#00bfff] shrink-0">
+                  <span className="flex items-center justify-center w-11 h-11 rounded-full bg-accent/12 text-accent shrink-0">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="22" /></svg>
                   </span>
                   <span className="flex-1">
-                    <span className="block font-display text-sm font-semibold group-hover:text-[#00bfff] transition-colors">Versión con letra</span>
-                    <span className="block font-body text-xs text-[#C8D8EB]/60 dark:text-[#C8D8EB]/50">Letra en español</span>
+                    <span className="block font-display text-sm font-semibold group-hover:text-accent transition-colors">Versión con letra</span>
+                    <span className="block font-body text-xs text-surface-ink-l60-d50">Letra en español</span>
                   </span>
                 </a>
               )}
@@ -346,7 +346,7 @@ const Page = async ({ params }: Params) => {
                   className="brand-surface overflow-hidden rounded-2xl"
                 >
                   {/* Header row: day + date + key */}
-                  <div className="flex items-center justify-between px-5 py-3 bg-[#003572]/10 dark:bg-[#00bfff]/5 border-b border-[#003572]/15 dark:border-[#00bfff]/10">
+                  <div className="flex items-center justify-between px-5 py-3 bg-surface-accent-wash border-b border-edge-accent-subtle">
                     <div>
                       <p className="font-label text-[11px] uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-0.5">
                         {entry._type === "featuredSongs" ? "Domingo" : "Sábado"}
@@ -360,7 +360,7 @@ const Page = async ({ params }: Params) => {
                       </p>
                     </div>
                     {entry.play_key && (
-                      <span className="font-label text-sm px-3 py-1 rounded-full border border-[#00bfff]/40 text-[#00bfff] shrink-0">
+                      <span className="font-label text-sm px-3 py-1 rounded-full border border-accent/40 text-accent shrink-0">
                         {entry.play_key}
                       </span>
                     )}
@@ -373,12 +373,12 @@ const Page = async ({ params }: Params) => {
                         <li key={j} className="flex items-center justify-between gap-4">
                           <Link
                             href={`/posts/${song.slug.current}`}
-                            className="font-body text-sm md:text-base hover:text-[#00bfff] transition-colors truncate"
+                            className="font-body text-sm md:text-base hover:text-accent transition-colors truncate"
                           >
                             {song.title}
                           </Link>
                           {song.play_key && (
-                            <span className="font-label text-xs text-[#00bfff]/70 shrink-0">
+                            <span className="font-label text-xs text-accent/70 shrink-0">
                               {song.play_key}
                             </span>
                           )}

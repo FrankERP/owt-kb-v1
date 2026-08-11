@@ -26,7 +26,7 @@ function toneClass(props: PrimaryActionProps): string {
     case "publish":
       return "border-green-500/50 bg-green-500/10 text-green-300 hover:bg-green-500/20";
     default:
-      return "border-[#00bfff]/50 bg-[#00bfff]/10 text-[#00bfff] hover:bg-[#00bfff]/20";
+      return "border-accent/50 bg-accent/10 text-accent hover:bg-accent/20";
   }
 }
 
@@ -47,7 +47,7 @@ export default function ServicePrimaryAction({
         data-action-kind={action.kind}
         data-action-rule={action.rule}
         data-action-route={action.route}
-        className={`${CARD_STYLE.primaryAction} rounded-lg border px-3 font-label text-xs uppercase tracking-widest transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00bfff] ${toneClass(action)}`}
+        className={`${CARD_STYLE.primaryAction} rounded-lg border px-3 font-label text-xs uppercase tracking-widest transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${toneClass(action)}`}
       >
         {action.label}
       </button>

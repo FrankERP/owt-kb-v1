@@ -17,7 +17,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { build } from "../../../scripts/colour-inventory.mjs";
+import { build, pairsIn } from "../../../scripts/colour-inventory.mjs";
 import { stripComments } from "../../../scripts/lib/strip-comments.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -169,12 +169,21 @@ describe("colour inventory — the traps that produced wrong counts before", () 
     expect(live.literalRows.filter((r) => r.category === 12).length).toBeGreaterThan(0);
   });
 
-  it("routes `var(--brand-*)` arbitrary values to the rename category, not a literal swap", () => {
-    const admin = live.literalRows.filter(
-      (r) => r.file === "app/components/admin/AdminPanel.tsx" && /var\(--brand-beam\)/.test(r.value),
-    );
-    expect(admin.length).toBeGreaterThan(0);
-    expect(admin.every((r) => r.category === 11)).toBe(true);
+  it("routes a `var()` inside an arbitrary value to category 11, not a literal swap", () => {
+    // Category 11 is the only category that routes a site to a VARIABLE RENAME rather
+    // than a literal swap, so misfiling one sends it to the wrong migration.
+    //
+    // This used to assert against `AdminPanel.tsx`'s `var(--brand-beam)` shadow. Child B
+    // renamed that to `--accent-rgb`, so the old filter now matches nothing and the
+    // assertion would report a scanner regression when the scanner is fine. The
+    // surviving category-11 rows are the `--brand-radius-*` ones the vocabulary
+    // deliberately leaves alone — which is also why the B-final gate can never demand
+    // this category reach zero.
+    const cat11 = live.literalRows.filter((r) => r.category === 11);
+    expect(cat11.length).toBeGreaterThan(0);
+    expect(cat11.every((r) => /\[.*var\(--[a-z-]+\).*\]/.test(r.value))).toBe(true);
+    // The colour ones are gone; the non-colour ones are not B's to touch.
+    expect(cat11.every((r) => /--brand-radius-/.test(r.value))).toBe(true);
   });
 
   it("excludes the theme gallery — it is a verification surface, not product colour", () => {
@@ -220,10 +229,37 @@ describe("colour inventory — the traps that produced wrong counts before", () 
     expect(withAlpha.every((r) => /\/\d{1,3}$/.test(r.value))).toBe(true);
   });
 
-  it("most light/dark pairs differ in ALPHA — the composed-token layer's whole reason", () => {
-    // A theme-invariant opacity modifier cannot express "opaque navy in light, 20%
-    // cyan in dark". If this ever drops to zero, alpha capture has regressed.
-    expect(live.summary.pairsDifferingInAlpha).toBeGreaterThan(0);
-    expect(live.summary.pairsDifferingInAlpha).toBeGreaterThan(live.summary.pairs / 2);
+  it("captures ALPHA on both sides of a pair — the composed-token layer's whole reason", () => {
+    // MOVED ONTO A SYNTHETIC SOURCE, as the B plan required before this batch.
+    //
+    // This used to assert `pairsDifferingInAlpha > pairs / 2` against the live tree,
+    // and it was a correct reading of the tree only until Child B started consuming
+    // pairs. B deletes the light half of every pair it migrates, so the count marches
+    // to zero BY SUCCEEDING — and the old comment read "if this ever drops to zero,
+    // alpha capture has regressed", which would have diagnosed a completed migration
+    // as a broken scanner.
+    //
+    // What is worth guarding is the SCANNER, not the tree's current contents. A
+    // theme-invariant opacity modifier cannot express "opaque navy in light, 20% cyan
+    // in dark", so a pair whose two sides differ in alpha must be detected as such.
+    const src = `
+      const a = "bg-[#003572] dark:bg-[#00bfff]/20";
+      const b = "bg-[#003572]/30 dark:bg-[#00bfff]/30";
+      const c = "bg-[#003572]/10 dark:bg-[#00bfff]/[0.04]";
+    `;
+    const pairs = pairsIn(src) as {
+      light: string; lightAlpha: string | null;
+      dark: string; darkAlpha: string | null;
+      alphaDiffers: boolean;
+    }[];
+    expect(pairs).toHaveLength(3);
+    expect(pairs.filter((p) => p.alphaDiffers)).toHaveLength(2);
+
+    // `/[0.04]` and `/4` are the same alpha spelled two ways, and reading the bracket
+    // form as ABSENT reads it as OPAQUE. That defect shipped: three composed tokens
+    // were built at 100% for sites that render at 3-4%.
+    const bracket = pairs.find((p) => p.light === "[#003572]" && p.lightAlpha === "10");
+    expect(bracket?.darkAlpha).toBe("4");
+    expect(bracket?.alphaDiffers).toBe(true);
   });
 });

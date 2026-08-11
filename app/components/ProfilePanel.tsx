@@ -17,7 +17,7 @@ interface MemberProfile {
 }
 
 const inputCls =
-  "w-full px-3 py-2 rounded-lg border border-[#00bfff]/20 bg-transparent font-body text-sm focus:outline-none focus:border-[#00bfff] transition-colors";
+  "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors";
 
 function Avatar({
   name, photoUrl, size = "md", onClick, uploading,
@@ -35,8 +35,8 @@ function Avatar({
         // eslint-disable-next-line @next/next/no-img-element
         <img src={photoUrl} alt={name} className="w-full h-full object-cover" />
       ) : (
-        <div className="w-full h-full bg-[#003572] dark:bg-[#00bfff]/10 flex items-center justify-center">
-          <span className={`font-display ${textSize} text-[#00bfff]`}>{initials}</span>
+        <div className="w-full h-full bg-surface-accent-l100-d10 flex items-center justify-center">
+          <span className={`font-display ${textSize} text-accent`}>{initials}</span>
         </div>
       )}
       {onClick && (
@@ -47,7 +47,7 @@ function Avatar({
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
           ) : (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="stroke-white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
               <circle cx="12" cy="13" r="4" />
             </svg>
@@ -60,7 +60,7 @@ function Avatar({
   if (onClick) {
     return (
       <button type="button" onClick={onClick} title="Cambiar foto"
-        className={`relative ${dim} rounded-full overflow-hidden shrink-0 group/av cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00bfff]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#010b17]`}>
+        className={`relative ${dim} rounded-full overflow-hidden shrink-0 group/av cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base`}>
         {inner}
       </button>
     );
@@ -222,19 +222,19 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
   return (
     <>
       {/* ── Compact profile card ─────────────────────────────────────────── */}
-      <div className="flex items-center gap-4 px-5 py-4 rounded-2xl border border-[#003572]/15 dark:border-[#00bfff]/10 bg-[#003572]/5 dark:bg-[#00bfff]/5">
+      <div className="flex items-center gap-4 px-5 py-4 rounded-2xl border border-edge-accent-subtle bg-accent/5">
         <Avatar name={displayName} photoUrl={member.photoUrl} size="sm" />
         <div className="flex-1 min-w-0">
           <p className="font-display text-base leading-tight truncate">{displayName}</p>
           {member.alias?.trim() && (
-            <p className="font-body text-xs text-[#00bfff]/60 truncate">{member.member_name}</p>
+            <p className="font-body text-xs text-accent/60 truncate">{member.member_name}</p>
           )}
           <p className="font-label text-[10px] uppercase tracking-widest text-gray-500 mt-0.5">{member.role}</p>
         </div>
         <button
           ref={triggerRef}
           onClick={() => setOpen(true)}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#00bfff]/20 font-label text-[11px] uppercase tracking-widest text-gray-400 hover:border-[#00bfff] hover:text-[#00bfff] transition-colors"
+          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent/20 font-label text-[11px] uppercase tracking-widest text-gray-400 hover:border-accent hover:text-accent transition-colors"
         >
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -263,7 +263,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
               uploading={uploadingPhoto}
             />
             <div className="min-w-0">
-              <p className="font-body text-xs text-[#00bfff]/60 truncate">{displayName}</p>
+              <p className="font-body text-xs text-accent/60 truncate">{displayName}</p>
               <p className="font-label text-[10px] uppercase tracking-widest text-gray-500">{member.role}</p>
             </div>
           </div>
@@ -301,14 +301,14 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
             <button
               onClick={handleSaveProfile}
               disabled={savingProfile}
-              className="w-full py-2.5 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+              className="w-full py-2.5 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
             >
               {savingProfile ? "Guardando…" : "Guardar cambios"}
             </button>
           </section>
 
           {/* Password */}
-          <section className="space-y-4 border-t border-[#003572]/10 dark:border-[#00bfff]/10 pt-6">
+          <section className="space-y-4 border-t border-accent/10 pt-6">
             <div>
               <h3 className="font-label text-[11px] uppercase tracking-widest text-gray-500">Contraseña</h3>
               <p className="font-body text-xs text-gray-500 mt-1">
@@ -339,14 +339,14 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
             <button
               onClick={handleSavePassword}
               disabled={savingPw || !newPw}
-              className="w-full py-2.5 rounded-lg bg-[#003572] dark:bg-[#00bfff]/20 hover:bg-[#003572]/80 dark:hover:bg-[#00bfff]/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+              className="w-full py-2.5 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
             >
               {savingPw ? "Guardando…" : member.hasPassword ? "Actualizar contraseña" : "Establecer contraseña"}
             </button>
           </section>
 
           {/* Notifications */}
-          <section className="space-y-4 border-t border-[#003572]/10 dark:border-[#00bfff]/10 pt-6">
+          <section className="space-y-4 border-t border-accent/10 pt-6">
             <div>
               <h3 className="font-label text-[11px] uppercase tracking-widest text-gray-500">Correos</h3>
               <p className="font-body text-xs text-gray-500 mt-1">Elige qué avisos quieres recibir por correo.</p>
@@ -366,7 +366,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
       {toast && (
         <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-xl border font-label text-xs uppercase tracking-widest shadow-xl ${
           toast.ok
-            ? "bg-[#003572] dark:bg-[#0a1929] border-[#00bfff]/30"
+            ? "bg-surface-raised-alt border-accent/30"
             : "bg-red-900/80 border-red-700"
         }`}>
           {toast.msg}

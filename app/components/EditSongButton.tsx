@@ -32,7 +32,7 @@ const CHORD_MARKER_RE = /\[[^\]]+\]/;
 const SECTION_LABELS = ["Intro", "Verso", "Pre-Coro", "Coro", "Puente", "Outro"];
 
 const inputCls =
-  "w-full rounded-lg border border-brand-beam/20 bg-transparent px-3 py-2 font-body text-sm text-brand-frost transition-colors placeholder:text-brand-steel/45 focus:border-brand-beam focus:outline-none";
+  "w-full rounded-lg border border-accent/20 bg-transparent px-3 py-2 font-body text-sm text-ink transition-colors placeholder:text-ink-dim/45 focus:border-accent focus:outline-none";
 
 function postToForm(post: Post): FormState {
   return {
@@ -220,7 +220,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
           ref={triggerRef}
           type="button"
           onClick={(e) => { e.stopPropagation(); handleOpen(); }}
-          className="flex h-7 w-7 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-[#00bfff]/10 hover:text-[#00bfff] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-beam/60"
+          className="flex h-7 w-7 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-accent/10 hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           aria-label={`Editar canción ${post.title}`}
           title="Editar canción"
         >
@@ -231,7 +231,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
           ref={triggerRef}
           type="button"
           onClick={handleOpen}
-          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full border border-[#00bfff]/30 bg-[#003572] px-4 py-2.5 font-label text-xs uppercase tracking-widest shadow-lg transition-colors hover:bg-[#003572]/80 dark:bg-[#00bfff]/20 dark:hover:bg-[#00bfff]/30"
+          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full border border-accent/30 bg-surface-accent-solid px-4 py-2.5 font-label text-xs uppercase tracking-widest shadow-lg transition-colors hover:bg-accent-deep/80 dark:hover:bg-accent/30"
           aria-label={`Editar canción ${post.title}`}
         >
           <PencilIcon />
@@ -258,11 +258,11 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
 
             <div role="group" aria-labelledby={`${fieldId}-authors-label`} className="space-y-2">
               <div className="flex items-center justify-between gap-3">
-                <label id={`${fieldId}-authors-label`} htmlFor={`${fieldId}-author-search`} className="font-label text-xs uppercase tracking-widest text-brand-steel">
+                <label id={`${fieldId}-authors-label`} htmlFor={`${fieldId}-author-search`} className="font-label text-xs uppercase tracking-widest text-ink-dim">
                   Artistas
                 </label>
                 {authorState === "error" && (
-                  <button type="button" onClick={loadAuthors} className="font-label text-[11px] uppercase tracking-widest text-brand-beam">
+                  <button type="button" onClick={loadAuthors} className="font-label text-[11px] uppercase tracking-widest text-accent">
                     Reintentar
                   </button>
                 )}
@@ -280,7 +280,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
                       onClick={() => toggleAuthor(author._id)}
                       aria-pressed={active}
                       className={`rounded-full border px-2.5 py-1 font-label text-[11px] uppercase tracking-widest transition-colors ${
-                        active ? "border-[#00bfff] bg-[#00bfff]/15 text-[#00bfff]" : "border-[#00bfff]/20 text-gray-500 hover:border-[#00bfff]/50"
+                        active ? "border-accent bg-accent/15 text-accent" : "border-accent/20 text-gray-500 hover:border-accent/50"
                       }`}
                     >
                       {author.name}
@@ -303,28 +303,28 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
             </div>
 
             <div className="space-y-0">
-              <label htmlFor={`${fieldId}-lyrics`} className="mb-1 block font-label text-xs uppercase tracking-widest text-brand-steel">Letra</label>
-              <div role="toolbar" aria-label="Secciones y formato de letra" className="flex flex-wrap items-center gap-1 rounded-t-lg border border-[#00bfff]/20 border-b-0 bg-[#00bfff]/5 px-2 py-1.5">
+              <label htmlFor={`${fieldId}-lyrics`} className="mb-1 block font-label text-xs uppercase tracking-widest text-ink-dim">Letra</label>
+              <div role="toolbar" aria-label="Secciones y formato de letra" className="flex flex-wrap items-center gap-1 rounded-t-lg border border-accent/20 border-b-0 bg-accent/5 px-2 py-1.5">
                 {SECTION_LABELS.map((label) => (
                   <button key={label} type="button" onPointerDown={(e) => e.preventDefault()} onClick={() => insertLabel(label)}
-                    className="whitespace-nowrap rounded border border-[#00bfff]/15 px-2 py-1 font-label text-[10px] uppercase tracking-widest text-gray-500 transition-colors hover:border-[#00bfff]/40 hover:text-[#00bfff]">
+                    className="whitespace-nowrap rounded border border-accent/15 px-2 py-1 font-label text-[10px] uppercase tracking-widest text-gray-500 transition-colors hover:border-accent/40 hover:text-accent">
                     {label}
                   </button>
                 ))}
-                <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-[#00bfff]/20" />
+                <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-accent/20" />
                 <button type="button" aria-label="Aplicar negrita" onPointerDown={(e) => e.preventDefault()} onClick={() => wrapSelection("**")}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-[#00bfff]/15 font-body text-sm font-bold text-gray-500 transition-colors hover:border-[#00bfff]/40 hover:text-[#00bfff]">
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-accent/15 font-body text-sm font-bold text-gray-500 transition-colors hover:border-accent/40 hover:text-accent">
                   B
                 </button>
                 <button type="button" aria-label="Aplicar cursiva" onPointerDown={(e) => e.preventDefault()} onClick={() => wrapSelection("*")}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-[#00bfff]/15 font-body text-sm italic text-gray-500 transition-colors hover:border-[#00bfff]/40 hover:text-[#00bfff]">
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-accent/15 font-body text-sm italic text-gray-500 transition-colors hover:border-accent/40 hover:text-accent">
                   I
                 </button>
               </div>
               <textarea
                 id={`${fieldId}-lyrics`}
                 ref={lyricsRef}
-                className="w-full resize-none rounded-b-lg border border-[#00bfff]/20 bg-transparent px-3 py-2 font-mono text-xs leading-relaxed text-brand-frost transition-colors placeholder:text-brand-steel/45 focus:border-[#00bfff] focus:outline-none"
+                className="w-full resize-none rounded-b-lg border border-accent/20 bg-transparent px-3 py-2 font-mono text-xs leading-relaxed text-ink transition-colors placeholder:text-ink-dim/45 focus:border-accent focus:outline-none"
                 rows={14}
                 value={form.lyrics}
                 onChange={set("lyrics")}
@@ -381,11 +381,11 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
 
             <div role="group" aria-labelledby={`${fieldId}-tags-label`} className="space-y-2">
               <div className="flex items-center justify-between gap-3">
-                <label id={`${fieldId}-tags-label`} htmlFor={`${fieldId}-tag-search`} className="font-label text-xs uppercase tracking-widest text-brand-steel">
+                <label id={`${fieldId}-tags-label`} htmlFor={`${fieldId}-tag-search`} className="font-label text-xs uppercase tracking-widest text-ink-dim">
                   Tags
                 </label>
                 {tagState === "error" && (
-                  <button type="button" onClick={loadTags} className="font-label text-[11px] uppercase tracking-widest text-brand-beam">
+                  <button type="button" onClick={loadTags} className="font-label text-[11px] uppercase tracking-widest text-accent">
                     Reintentar
                   </button>
                 )}
@@ -403,7 +403,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
                       onClick={() => toggleTag(tag._id)}
                       aria-pressed={active}
                       className={`rounded-full border px-2.5 py-1 font-label text-[11px] uppercase tracking-widest transition-colors ${
-                        active ? "border-[#00bfff] bg-[#00bfff]/15 text-[#00bfff]" : "border-[#00bfff]/20 text-gray-500 hover:border-[#00bfff]/50"
+                        active ? "border-accent bg-accent/15 text-accent" : "border-accent/20 text-gray-500 hover:border-accent/50"
                       }`}
                     >
                       #{tag.name}
@@ -414,11 +414,11 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
             </div>
           </div>
 
-          <div className="flex shrink-0 gap-3 border-t border-[#00bfff]/10 bg-brand-blackout/35 px-5 py-4 sm:px-6">
-            <button type="button" onClick={() => setOpen(false)} className="flex-1 rounded-lg border border-[#00bfff]/20 py-2.5 font-label text-xs uppercase tracking-widest transition-colors hover:border-[#00bfff]">
+          <div className="flex shrink-0 gap-3 border-t border-accent/10 bg-surface-base/35 px-5 py-4 sm:px-6">
+            <button type="button" onClick={() => setOpen(false)} className="flex-1 rounded-lg border border-accent/20 py-2.5 font-label text-xs uppercase tracking-widest transition-colors hover:border-accent">
               Cancelar
             </button>
-            <button type="submit" disabled={saving} className="flex-1 rounded-lg border border-[#00bfff]/35 bg-[#00bfff]/20 py-2.5 font-label text-xs uppercase tracking-widest text-brand-frost transition-colors hover:bg-[#00bfff]/30 disabled:opacity-50">
+            <button type="submit" disabled={saving} className="flex-1 rounded-lg border border-accent/35 bg-accent/20 py-2.5 font-label text-xs uppercase tracking-widest text-ink transition-colors hover:bg-accent/30 disabled:opacity-50">
               {saving ? "Guardando…" : "Guardar"}
             </button>
           </div>
@@ -426,7 +426,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
       </CueDialog>
 
       {toast && (
-        <div className="fixed bottom-6 left-1/2 z-[95] -translate-x-1/2 whitespace-nowrap rounded-xl border border-[#00bfff]/30 bg-[#0a1929] px-5 py-3 font-label text-xs uppercase tracking-widest shadow-xl">
+        <div className="fixed bottom-6 left-1/2 z-[95] -translate-x-1/2 whitespace-nowrap rounded-xl border border-accent/30 bg-surface-raised-alt px-5 py-3 font-label text-xs uppercase tracking-widest shadow-xl">
           {toast}
         </div>
       )}
@@ -437,7 +437,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
 function Field({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <label htmlFor={id} className="font-label text-xs uppercase tracking-widest text-brand-steel">
+      <label htmlFor={id} className="font-label text-xs uppercase tracking-widest text-ink-dim">
         {label}
       </label>
       {children}
@@ -475,21 +475,21 @@ function RepeatRows({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <p className="font-label text-xs uppercase tracking-widest text-brand-steel">{title}</p>
-        <button type="button" onClick={onAdd} className="font-label text-[11px] uppercase tracking-widest text-[#00bfff] transition-colors hover:text-[#00bfff]/70">
+        <p className="font-label text-xs uppercase tracking-widest text-ink-dim">{title}</p>
+        <button type="button" onClick={onAdd} className="font-label text-[11px] uppercase tracking-widest text-accent transition-colors hover:text-accent/70">
           {addLabel}
         </button>
       </div>
       {rows.length === 0 ? (
         <p className="font-body text-xs text-gray-600">{empty}</p>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-[#00bfff]/15">
-          <div className="grid grid-cols-[1fr_2fr_2rem] gap-3 border-b border-[#00bfff]/10 bg-[#00bfff]/5 px-3 py-1.5">
+        <div className="overflow-hidden rounded-lg border border-accent/15">
+          <div className="grid grid-cols-[1fr_2fr_2rem] gap-3 border-b border-accent/10 bg-accent/5 px-3 py-1.5">
             <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">{firstHeader}</span>
             <span className="font-label text-[10px] uppercase tracking-widest text-gray-500">{secondHeader}</span>
           </div>
           {rows.map((row, i) => (
-            <div key={row.key} className={`group grid grid-cols-[1fr_2fr_2rem] items-center gap-3 px-3 py-2 transition-colors hover:bg-[#00bfff]/5 ${i > 0 ? "border-t border-[#00bfff]/10" : ""}`}>
+            <div key={row.key} className={`group grid grid-cols-[1fr_2fr_2rem] items-center gap-3 px-3 py-2 transition-colors hover:bg-accent/5 ${i > 0 ? "border-t border-accent/10" : ""}`}>
               <input aria-label={row.titleLabel} className="min-w-0 bg-transparent font-body text-sm placeholder:text-gray-600 focus:outline-none" value={row.title} onChange={(e) => row.onTitle(e.target.value)} placeholder={firstHeader} />
               <input aria-label={row.urlLabel} className="min-w-0 bg-transparent font-body text-sm placeholder:text-gray-600 focus:outline-none" value={row.url} onChange={(e) => row.onUrl(e.target.value)} placeholder="https://…" />
               <button type="button" onClick={row.onRemove} aria-label={row.removeLabel} className="justify-self-center text-base leading-none text-gray-500 opacity-100 transition-colors hover:text-red-400 sm:opacity-0 sm:transition-all sm:group-hover:opacity-100">

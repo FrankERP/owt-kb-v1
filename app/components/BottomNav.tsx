@@ -46,9 +46,9 @@ export default function BottomNav() {
           moreOpen ? "translate-y-0 opacity-100 pointer-events-auto" : "translate-y-4 opacity-0 pointer-events-none"
         }`}
       >
-        <div className="mx-3 bg-[#0a1929] border border-[#00bfff]/20 rounded-2xl overflow-hidden shadow-2xl">
+        <div className="mx-3 bg-surface-raised-alt border border-accent/20 rounded-2xl overflow-hidden shadow-2xl">
           {/* User info */}
-          <div className="flex items-center gap-3 px-5 py-4 border-b border-[#00bfff]/10">
+          <div className="flex items-center gap-3 px-5 py-4 border-b border-accent/10">
             {session.user.image ? (
               <Image
                 src={session.user.image}
@@ -58,8 +58,8 @@ export default function BottomNav() {
                 className="rounded-full shrink-0"
               />
             ) : (
-              <div className="w-10 h-10 rounded-full bg-[#003572] flex items-center justify-center shrink-0">
-                <span className="font-label text-sm text-[#00bfff]">
+              <div className="w-10 h-10 rounded-full bg-accent-deep flex items-center justify-center shrink-0">
+                <span className="font-label text-sm text-accent">
                   {session.user.name?.slice(0, 2).toUpperCase()}
                 </span>
               </div>
@@ -73,12 +73,12 @@ export default function BottomNav() {
           </div>
 
           {/* Actions */}
-          <div className="divide-y divide-[#00bfff]/10">
+          <div className="divide-y divide-accent/10">
             {isAdmin && (
               <Link
                 href="/admin"
                 onClick={() => setMoreOpen(false)}
-                className="flex items-center gap-3 px-5 py-4 text-gray-400 hover:text-[#00bfff] hover:bg-[#00bfff]/5 transition-colors"
+                className="flex items-center gap-3 px-5 py-4 text-gray-400 hover:text-accent hover:bg-accent/5 transition-colors"
               >
                 <ShieldIcon />
                 <span className="font-label text-xs uppercase tracking-widest">Admin</span>
@@ -96,7 +96,7 @@ export default function BottomNav() {
       </div>
 
       {/* Bottom bar */}
-      <nav aria-label="Navegación principal" className="fixed bottom-0 inset-x-0 z-50 lg:hidden bg-[#010b17]/90 backdrop-blur-sm border-t border-[#00bfff]/15"
+      <nav aria-label="Navegación principal" className="fixed bottom-0 inset-x-0 z-50 lg:hidden bg-surface-base/90 backdrop-blur-sm border-t border-accent/15"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
         <div className="flex items-stretch h-16 max-w-7xl mx-auto">
           {tabs.map(tab => {
@@ -109,7 +109,7 @@ export default function BottomNav() {
               aria-current={active ? "page" : undefined}
               className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${
                 active
-                  ? "text-[#00bfff]"
+                  ? "text-accent"
                   : "text-gray-500 hover:text-gray-300"
               }`}
             >
@@ -124,7 +124,7 @@ export default function BottomNav() {
             aria-expanded={moreOpen}
             aria-controls="bottom-nav-more"
             className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${
-              moreOpen ? "text-[#00bfff]" : "text-gray-500 hover:text-gray-300"
+              moreOpen ? "text-accent" : "text-gray-500 hover:text-gray-300"
             }`}
           >
             <MoreIcon />
