@@ -36,7 +36,7 @@ const STATUS_STYLE: Record<ProposalStatus, string> = {
   draft: "border-surface-accent-30 text-mono-400 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent",
   pending: "border-yellow-500/40 text-yellow-400 hover:border-yellow-400",
   approved: "border-green-500/40 text-green-400 cursor-default",
-  changes_requested: "border-red-500/40 text-red-400 hover:border-red-300",
+  changes_requested: "border-negative-strong/40 text-negative-fg hover:border-negative-muted",
 };
 
 export default async function MePage() {

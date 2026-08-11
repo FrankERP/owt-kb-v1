@@ -452,7 +452,7 @@ function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDele
         <span className="font-label text-[11px] uppercase tracking-widest text-accent/80 font-semibold">{r.person}</span>
         <div className="flex flex-wrap gap-1">
           {r.excludedPatterns.map(p => (
-            <span key={p} className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30">
+            <span key={p} className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-negative-strong/15 text-negative-fg border border-negative-strong/30">
               !{p}
             </span>
           ))}
@@ -479,7 +479,7 @@ function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDele
         </div>
       </div>
       <button type="button" onClick={onEdit} className="text-mono-600 hover:text-accent transition-colors shrink-0 text-xs leading-none mt-0.5 px-0.5" title="Editar">✎</button>
-      <button type="button" onClick={onDelete} className="text-mono-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none mt-0.5">×</button>
+      <button type="button" onClick={onDelete} className="text-mono-600 hover:text-negative-fg transition-colors shrink-0 text-sm leading-none mt-0.5">×</button>
     </div>
   );
 }
@@ -496,7 +496,7 @@ function ConflictCard({ r, onDelete, onEdit }: { r: ConflictRule; onDelete: () =
         <span className="text-accent/70">{r.pattern}</span>
       </span>
       <button type="button" onClick={onEdit} className="text-mono-600 hover:text-accent transition-colors shrink-0 text-xs leading-none px-0.5" title="Editar">✎</button>
-      <button type="button" onClick={onDelete} className="text-mono-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none">×</button>
+      <button type="button" onClick={onDelete} className="text-mono-600 hover:text-negative-fg transition-colors shrink-0 text-sm leading-none">×</button>
     </div>
   );
 }
@@ -512,7 +512,7 @@ function PresenceCard({ r, onDelete, onEdit }: { r: PresenceRule; onDelete: () =
         <span className="text-mono-500 ml-1">c/sem</span>
       </span>
       <button type="button" onClick={onEdit} className="text-mono-600 hover:text-accent transition-colors shrink-0 text-xs leading-none px-0.5" title="Editar">✎</button>
-      <button type="button" onClick={onDelete} className="text-mono-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none">×</button>
+      <button type="button" onClick={onDelete} className="text-mono-600 hover:text-negative-fg transition-colors shrink-0 text-sm leading-none">×</button>
     </div>
   );
 }
@@ -547,7 +547,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
   };
 
   return (
-    <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 space-y-3">
+    <div className="rounded-lg border border-negative-strong/20 bg-negative-strong/5 p-3 space-y-3">
       {/* Person */}
       <div>
         <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Persona</p>
@@ -565,8 +565,8 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
               key={pat} type="button" onClick={() => toggleExcl(pat)}
               className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full border transition-colors ${
                 excl.includes(pat)
-                  ? "bg-red-500/20 text-red-400 border-red-500/40"
-                  : "text-mono-500 border-accent/15 hover:border-red-500/30 hover:text-red-400"
+                  ? "bg-negative-strong/20 text-negative-fg border-negative-strong/40"
+                  : "text-mono-500 border-accent/15 hover:border-negative-strong/30 hover:text-negative-fg"
               }`}
             >
               {PAT_LABEL[pat] ?? pat}
@@ -574,7 +574,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
           ))}
         </div>
         {excl.length > 0 && (
-          <p className="font-label text-[10px] text-red-400/70 mt-1">{excl.join(" · ")}</p>
+          <p className="font-label text-[10px] text-negative-fg/70 mt-1">{excl.join(" · ")}</p>
         )}
       </div>
 
@@ -635,7 +635,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
               >
                 {PATTERNS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
-              <button type="button" onClick={() => setWeekEx(ws => ws.filter(x => x.id !== we.id))} className="text-mono-600 hover:text-red-400 text-sm flex-none">×</button>
+              <button type="button" onClick={() => setWeekEx(ws => ws.filter(x => x.id !== we.id))} className="text-mono-600 hover:text-negative-fg text-sm flex-none">×</button>
             </div>
           ))}
         </div>
@@ -705,7 +705,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
                     : "border-accent/15 text-mono-600 hover:text-accent"
                 }`}
               >sem</button>
-              <button type="button" onClick={() => setCaps(cs => cs.filter(x => x.id !== cap.id))} className="text-mono-600 hover:text-red-400 text-sm flex-none">×</button>
+              <button type="button" onClick={() => setCaps(cs => cs.filter(x => x.id !== cap.id))} className="text-mono-600 hover:text-negative-fg text-sm flex-none">×</button>
             </div>
           ))}
         </div>
@@ -723,7 +723,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
         <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-accent/20 text-mono-500 hover:text-accent hover:border-accent transition-colors">
           Cancelar
         </button>
-        <button type="button" onClick={handleAdd} disabled={!canAdd} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors disabled:opacity-40">
+        <button type="button" onClick={handleAdd} disabled={!canAdd} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest bg-negative-strong/20 hover:bg-negative-strong/30 text-negative-fg transition-colors disabled:opacity-40">
           {initialValues ? "Guardar cambios" : "Agregar restricción"}
         </button>
       </div>
@@ -767,7 +767,7 @@ function ConflictForm({ members, onAdd, onCancel, initialValues }: {
         </select>
       </div>
       {personA === personB && personA && (
-        <p className="font-label text-[10px] text-red-400">Selecciona dos personas distintas</p>
+        <p className="font-label text-[10px] text-negative-fg">Selecciona dos personas distintas</p>
       )}
       <div className="flex gap-2 pt-1">
         <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-accent/20 text-mono-500 hover:text-accent hover:border-accent transition-colors">
@@ -901,7 +901,7 @@ function RuleBuilder({ config, onChange, members, source }: {
           <AddRuleButton
             label="+ Persona"
             title="Restringir a una persona: patrones excluidos, semanas, topes y equidad"
-            tone="border-red-500/40 text-red-400 hover:bg-red-500/10"
+            tone="border-negative-strong/40 text-negative-fg hover:bg-negative-strong/10"
             disabled={isFormOpen}
             onClick={() => setAdding("restriction")}
           />
@@ -1200,7 +1200,7 @@ function SolverConfigSaveBar({ config, rules }: {
   return (
     <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
       {error && (
-        <p role="alert" className="font-body text-[11px] text-red-400 mr-auto">
+        <p role="alert" className="font-body text-[11px] text-negative-fg mr-auto">
           {error.message}
         </p>
       )}
@@ -1260,7 +1260,7 @@ function SolverConfigUnavailable({ source, onReload }: {
   return (
     <div className="space-y-3 p-3 rounded-xl border border-accent/20 bg-accent/5">
       <p className="font-label text-[11px] uppercase tracking-widest text-accent">Configuración del Solver</p>
-      <p role={failed ? "alert" : undefined} className={`font-body text-xs ${failed ? "text-red-400" : "text-mono-500"}`}>
+      <p role={failed ? "alert" : undefined} className={`font-body text-xs ${failed ? "text-negative-fg" : "text-mono-500"}`}>
         {failed ? source.message : "Cargando las reglas compartidas…"}
       </p>
       {failed && (
@@ -1301,7 +1301,7 @@ function SolverConfigReloadNotice({ source, onReload }: {
   }
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <p role="alert" className="font-body text-xs text-red-400 mr-auto">
+      <p role="alert" className="font-body text-xs text-negative-fg mr-auto">
         {source.message}
       </p>
       <button
@@ -1407,7 +1407,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
                 <button
                   type="button"
                   onClick={() => onRemoveHistory(h.key)}
-                  className="text-mono-600 hover:text-red-400 transition-colors leading-none ml-0.5"
+                  className="text-mono-600 hover:text-negative-fg transition-colors leading-none ml-0.5"
                   title="Eliminar del historial"
                 >×</button>
               </span>
@@ -3506,12 +3506,12 @@ export default function MonthGenerator({
       )}
 
       {(pushError || saveNotice) && (
-        <p className={`font-label text-xs uppercase tracking-widest text-center rounded-lg py-1.5 ${pushError ? "bg-red-500/10 text-red-400" : "bg-accent/10 text-accent"}`}>
+        <p className={`font-label text-xs uppercase tracking-widest text-center rounded-lg py-1.5 ${pushError ? "bg-negative-strong/10 text-negative-fg" : "bg-accent/10 text-accent"}`}>
           {pushError ?? saveNotice}
         </p>
       )}
       {storedMode && invalidStoredColumns.length > 0 && (
-        <p className="rounded-lg bg-red-500/10 px-3 py-2 font-body text-xs text-red-300">
+        <p className="rounded-lg bg-negative-strong/10 px-3 py-2 font-body text-xs text-negative-muted">
           Corrige los datos inválidos antes de guardar: {invalidStoredColumns.map((column) => column.date).join(", ")}.
         </p>
       )}

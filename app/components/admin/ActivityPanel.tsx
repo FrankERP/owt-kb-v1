@@ -48,7 +48,7 @@ function activityStatus(lastActive: string | null): { color: string; label: stri
   if (days === null)  return { color: "bg-mono-700",      label: "Sin actividad" };
   if (days <= 7)      return { color: "bg-green-500",     label: "Activo" };
   if (days <= 30)     return { color: "bg-yellow-500",    label: "Reciente" };
-  return               { color: "bg-red-500/70",          label: "Inactivo" };
+  return               { color: "bg-negative-strong/70",          label: "Inactivo" };
 }
 
 function formatDate(iso: string) {
@@ -79,7 +79,7 @@ function Avatar({ name }: { name: string }) {
 
 function ProviderBadge({ provider }: { provider: string }) {
   const colors: Record<string, string> = {
-    google:      "bg-red-500/15 text-red-400 border-red-500/30",
+    google:      "bg-negative-strong/15 text-negative-fg border-negative-strong/30",
     credentials: "bg-green-500/15 text-green-400 border-green-500/30",
     azure:       "bg-blue-500/15 text-blue-400 border-blue-500/30",
   };
@@ -119,7 +119,7 @@ export default function ActivityPanel() {
   }
 
   if (error) {
-    return <p className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-xl px-4 py-3">{error}</p>;
+    return <p className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-xl px-4 py-3">{error}</p>;
   }
 
   return (

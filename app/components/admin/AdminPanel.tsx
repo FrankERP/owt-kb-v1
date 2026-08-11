@@ -349,7 +349,7 @@ function PasswordForm({
       <p className="font-body text-sm text-mono-400">
         Establecer contraseña para <span className="text-accent">{member.member_name}</span>
       </p>
-      {err && <p className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">{err}</p>}
+      {err && <p className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-lg px-3 py-2">{err}</p>}
       <div className="space-y-1">
         <label className="font-label text-xs uppercase tracking-widest text-mono-500">Nueva contraseña</label>
         <input className={inputCls} type="password" value={pw} onChange={(e) => setPw(e.target.value)} required minLength={8} placeholder="Mínimo 8 caracteres" />
@@ -797,7 +797,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
       )}
 
       {error && (
-        <p className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-xl px-4 py-3">{error}</p>
+        <p className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-xl px-4 py-3">{error}</p>
       )}
 
       {/* Members list */}
@@ -923,13 +923,13 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
       {modal?.type === "delete" && (
         <Modal title="Eliminar miembro" onClose={closeModal} status={modalError}>
           <p className="font-body text-sm text-mono-400">
-            ¿Eliminar a <span className="text-red-400 font-semibold">{modal.member.member_name}</span>? Esta acción no se puede deshacer.
+            ¿Eliminar a <span className="text-negative-fg font-semibold">{modal.member.member_name}</span>? Esta acción no se puede deshacer.
           </p>
           <div className="flex gap-3 pt-1">
             <button onClick={closeModal} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
               Cancelar
             </button>
-            <button onClick={handleDelete} disabled={submitting} className="flex-1 py-2 rounded-lg bg-red-800/60 hover:bg-red-700/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+            <button onClick={handleDelete} disabled={submitting} className="flex-1 py-2 rounded-lg bg-negative-surface/60 hover:bg-negative-border/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
               {submitting ? "Eliminando..." : "Eliminar"}
             </button>
           </div>
@@ -945,7 +945,7 @@ function ActionBtn({ onClick, title, danger, children }: { onClick: () => void; 
     <button
       onClick={onClick}
       title={title}
-      className={`p-1.5 rounded-lg transition-colors ${danger ? "hover:bg-red-500/20 hover:text-red-400 text-mono-500" : "hover:bg-accent/10 hover:text-accent text-mono-500"}`}
+      className={`p-1.5 rounded-lg transition-colors ${danger ? "hover:bg-negative-strong/20 hover:text-negative-fg text-mono-500" : "hover:bg-accent/10 hover:text-accent text-mono-500"}`}
     >
       {children}
     </button>

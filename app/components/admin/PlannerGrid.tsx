@@ -1638,7 +1638,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
           role="status"
           aria-live="polite"
           data-drag-notice={dragNotice?.tone}
-          className={`font-body text-xs ${dragNotice?.tone === "refusal" ? "text-red-400" : "text-amber-400"}`}
+          className={`font-body text-xs ${dragNotice?.tone === "refusal" ? "text-negative-fg" : "text-amber-400"}`}
         >
           {dragNotice?.message ?? ""}
         </p>
@@ -1828,7 +1828,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
         {mode === "create" && autoState.disabledReason && (
           <p className="font-body text-xs text-amber-400">{autoState.disabledReason}</p>
         )}
-        {mode === "create" && autoState.error && <p className="font-body text-xs text-red-400">{autoState.error}</p>}
+        {mode === "create" && autoState.error && <p className="font-body text-xs text-negative-fg">{autoState.error}</p>}
       </div>
 
       {mode === "create" && confirmingAuto && (
@@ -1883,7 +1883,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
       )}
 
       {unresolvedNames.length > 0 && (
-        <p className="font-body text-xs text-red-400">
+        <p className="font-body text-xs text-negative-fg">
           Nombres no reconocidos: {unresolvedNames.join(", ")}
         </p>
       )}
@@ -1937,7 +1937,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             <p className="font-body text-sm text-ink-muted">
               Una regla no permite mover a {pendingMove.memberName} aquí:
             </p>
-            <p data-prompt-reason className="font-body text-sm text-red-400">
+            <p data-prompt-reason className="font-body text-sm text-negative-fg">
               {pendingMove.reason}
             </p>
             <p className="font-body text-xs text-ink-muted/70">
@@ -2152,7 +2152,7 @@ function ColumnHeader({
         </div>
       )}
       {!stored && unaddressable && (
-        <p className="font-label text-[10px] uppercase tracking-widest text-red-400">
+        <p className="font-label text-[10px] uppercase tracking-widest text-negative-fg">
           Fuera del alcance de Auto
         </p>
       )}
@@ -2241,13 +2241,13 @@ function RowGroup({
               onClick={onRemove}
               disabled={mutationLocked}
               aria-label={`Eliminar fila ${row.label}`}
-              className="font-label text-[10px] uppercase tracking-widest text-red-400/70 hover:text-red-400"
+              className="font-label text-[10px] uppercase tracking-widest text-negative-fg/70 hover:text-negative-fg"
             >
               Eliminar
             </button>
           )}
         </div>
-        {removeError && <p className="font-body text-[11px] text-red-400">{removeError}</p>}
+        {removeError && <p className="font-body text-[11px] text-negative-fg">{removeError}</p>}
       </div>
       {columns.map((column) => {
         if (!rowAppliesTo(row, column)) {
@@ -2527,7 +2527,7 @@ function GridCellView({
                 // the smallest type on the surface. One step up, to `text-xs`.
                 className={`rounded-full border px-1.5 py-0.5 font-label text-xs text-ink-muted ${CARD_STYLE.longText} ${
                   isDuplicate || ruleBroken
-                    ? "border-red-500/50 bg-red-500/10"
+                    ? "border-negative-strong/50 bg-negative-strong/10"
                     : "border-accent/25 bg-accent/10"
                 } ${drag.enabled ? "cursor-grab" : "cursor-not-allowed"} ${dragging ? "opacity-30" : ""} ${
                   marked ? "ring-2 ring-accent" : ""
@@ -2554,7 +2554,7 @@ function GridCellView({
               // Sized with the member chips it stands in for.
               className={`rounded-full border px-1.5 py-0.5 font-label text-xs ${
                 hiddenHasDuplicate || hiddenHasViolation
-                  ? "border-red-500/50 bg-red-500/10 text-red-400"
+                  ? "border-negative-strong/50 bg-negative-strong/10 text-negative-fg"
                   : "border-amber-500/40 bg-amber-500/10 text-amber-400"
               }`}
             >
@@ -2576,7 +2576,7 @@ function GridCellView({
             the fix (open the cell, toggle them off) is only obvious once they do.
             `evaluate`'s self-exemption is what keeps that toggle-off possible. */}
         {flagged.map((x) => (
-          <p key={x.id} className={`font-body text-[9px] text-red-400 ${CARD_STYLE.longText}`}>
+          <p key={x.id} className={`font-body text-[9px] text-negative-fg ${CARD_STYLE.longText}`}>
             ⚠ {memberName(x.id)}: {x.v.reason}
           </p>
         ))}
@@ -2673,7 +2673,7 @@ function CandidateRow({
       }}
       className={`min-h-[44px] min-w-0 rounded-lg border px-3 py-2 transition-colors ${
         blocked
-          ? "cursor-not-allowed border-red-500/20 bg-red-500/5 opacity-60"
+          ? "cursor-not-allowed border-negative-strong/20 bg-negative-strong/5 opacity-60"
           : selected
             ? "cursor-pointer border-accent bg-accent/10"
             : "cursor-pointer border-accent/15 hover:border-accent/40"
@@ -2721,10 +2721,10 @@ function CandidateRow({
         </span>
       </div>
       {candidate.blockedReason && (
-        <p className="mt-1 font-body text-[11px] text-red-400">{candidate.blockedReason}</p>
+        <p className="mt-1 font-body text-[11px] text-negative-fg">{candidate.blockedReason}</p>
       )}
       {candidate.ruleBlockedReason && (
-        <p className="mt-1 font-body text-[11px] text-red-400">{candidate.ruleBlockedReason}</p>
+        <p className="mt-1 font-body text-[11px] text-negative-fg">{candidate.ruleBlockedReason}</p>
       )}
       {/*
         P10 — the override, as a SEPARATE, secondary action.
@@ -2837,7 +2837,7 @@ function AddRowForm({
           Añadir
         </button>
       </div>
-      {error && <p className="font-body text-[11px] text-red-400">{error}</p>}
+      {error && <p className="font-body text-[11px] text-negative-fg">{error}</p>}
     </form>
   );
 }

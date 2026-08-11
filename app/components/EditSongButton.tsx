@@ -492,7 +492,7 @@ function RepeatRows({
             <div key={row.key} className={`group grid grid-cols-[1fr_2fr_2rem] items-center gap-3 px-3 py-2 transition-colors hover:bg-accent/5 ${i > 0 ? "border-t border-accent/10" : ""}`}>
               <input aria-label={row.titleLabel} className="min-w-0 bg-transparent font-body text-sm placeholder:text-mono-600 focus:outline-none" value={row.title} onChange={(e) => row.onTitle(e.target.value)} placeholder={firstHeader} />
               <input aria-label={row.urlLabel} className="min-w-0 bg-transparent font-body text-sm placeholder:text-mono-600 focus:outline-none" value={row.url} onChange={(e) => row.onUrl(e.target.value)} placeholder="https://…" />
-              <button type="button" onClick={row.onRemove} aria-label={row.removeLabel} className="justify-self-center text-base leading-none text-mono-500 opacity-100 transition-colors hover:text-red-400 sm:opacity-0 sm:transition-all sm:group-hover:opacity-100">
+              <button type="button" onClick={row.onRemove} aria-label={row.removeLabel} className="justify-self-center text-base leading-none text-mono-500 opacity-100 transition-colors hover:text-negative-fg sm:opacity-0 sm:transition-all sm:group-hover:opacity-100">
                 ×
               </button>
             </div>

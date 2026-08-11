@@ -408,7 +408,7 @@ export function SongForm({
             <button
               type="button"
               onClick={() => removeRefLink(i)}
-              className="text-mono-500 hover:text-red-400 transition-colors text-lg leading-none"
+              className="text-mono-500 hover:text-negative-fg transition-colors text-lg leading-none"
             >
               ×
             </button>

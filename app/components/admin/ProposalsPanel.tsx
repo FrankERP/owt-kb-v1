@@ -65,7 +65,7 @@ const STATUS_STYLE: Record<ProposalStatus, string> = {
   draft: "bg-mono-500/15 text-mono-400 border border-mono-500/30",
   pending: "bg-yellow-500/15 text-yellow-400 border border-yellow-500/30",
   approved: "bg-green-500/15 text-green-400 border border-green-500/30",
-  changes_requested: "bg-red-500/15 text-red-400 border border-red-500/30",
+  changes_requested: "bg-negative-strong/15 text-negative-fg border border-negative-strong/30",
 };
 
 const STATUS_LABEL: Record<ProposalStatus, string> = {
@@ -226,8 +226,8 @@ function ProposalCard({
       {/* Previous admin notes (when showing changes_requested) */}
       {proposal.status === "changes_requested" && proposal.admin_notes && !requestingChanges && (
         <div className="px-4 pb-3">
-          <p className="font-label text-[11px] uppercase tracking-widest text-red-400 mb-1">Tus comentarios anteriores</p>
-          <p className="font-body text-sm text-red-300 whitespace-pre-wrap">{proposal.admin_notes}</p>
+          <p className="font-label text-[11px] uppercase tracking-widest text-negative-fg mb-1">Tus comentarios anteriores</p>
+          <p className="font-body text-sm text-negative-muted whitespace-pre-wrap">{proposal.admin_notes}</p>
         </div>
       )}
 
@@ -266,7 +266,7 @@ function ProposalCard({
                 <button
                   onClick={handleRequestChanges}
                   disabled={submitting || conflict || !adminNotes.trim()}
-                  className="flex-1 py-2 rounded-lg bg-red-800/60 hover:bg-red-700/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+                  className="flex-1 py-2 rounded-lg bg-negative-surface/60 hover:bg-negative-border/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
                 >
                   {submitting ? "Enviando…" : "Solicitar cambios"}
                 </button>
@@ -276,7 +276,7 @@ function ProposalCard({
             <div className="flex gap-2">
               <button
                 onClick={() => setRequestingChanges(true)}
-                className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-red-400 dark:hover:border-surface-accent-30 hover:text-red-400 transition-colors"
+                className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-negative-fg dark:hover:border-surface-accent-30 hover:text-negative-fg transition-colors"
               >
                 Solicitar cambios
               </button>
@@ -557,16 +557,16 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
       {conflictKey && highlightIds.length > 0 && (
         <div
           role="status"
-          className="min-w-0 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3"
+          className="min-w-0 rounded-xl border border-negative-strong/40 bg-negative-strong/10 px-4 py-3"
         >
-          <p className="font-label text-[11px] uppercase tracking-widest text-red-400">
+          <p className="font-label text-[11px] uppercase tracking-widest text-negative-fg">
             Propuestas en conflicto
           </p>
-          <p className="font-body text-sm text-red-200/90 [overflow-wrap:anywhere]">
+          <p className="font-body text-sm text-negative-soft/90 [overflow-wrap:anywhere]">
             Este servicio tiene más de una propuesta válida ({highlightIds.length}). Resuélvelo antes
             de publicar.
           </p>
-          <p className="mt-1 font-mono text-[11px] text-red-200/70 [overflow-wrap:anywhere]">
+          <p className="mt-1 font-mono text-[11px] text-negative-soft/70 [overflow-wrap:anywhere]">
             {conflictKey} · {highlightIds.join(" · ")}
           </p>
         </div>
@@ -582,7 +582,7 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
       )}
 
       {error && (
-        <p className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-xl px-4 py-3">{error}</p>
+        <p className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-xl px-4 py-3">{error}</p>
       )}
 
       {!loading && !error && visible.length === 0 && (
@@ -615,7 +615,7 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
         <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl border font-label text-xs uppercase tracking-widest shadow-xl ${
           toast.ok
             ? "bg-surface-raised-alt border-accent/30"
-            : "bg-red-900/80 border-red-500/30"
+            : "bg-negative-surface-deep/80 border-negative-strong/30"
         }`}>
           {toast.msg}
         </div>

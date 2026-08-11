@@ -1079,14 +1079,14 @@ export default function ServicesPanel() {
 
       {/* Availability conflict summary */}
       {view !== "loading" && conflictNotices.length > 0 && (
-        <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3">
-          <p className="font-label text-xs uppercase tracking-widest text-red-400 flex items-center gap-1.5">
+        <div className="rounded-lg border border-negative-strong/50 bg-negative-strong/10 px-4 py-3">
+          <p className="font-label text-xs uppercase tracking-widest text-negative-fg flex items-center gap-1.5">
             ⚠ {conflictNotices.length} conflicto{conflictNotices.length !== 1 ? "s" : ""} de disponibilidad
           </p>
           <ul className="mt-1.5 space-y-0.5">
             {conflictNotices.map((c, i) => (
               <li key={i} className="font-body text-xs text-mono-300">
-                <span className="text-red-300 font-semibold">{c.name}</span>
+                <span className="text-negative-muted font-semibold">{c.name}</span>
                 {" · "}{c.label}{" "}
                 {new Date(c.date + "T12:00:00").toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short" })}
                 {c.note && (
@@ -1112,7 +1112,7 @@ export default function ServicesPanel() {
                 Copiando los instrumentos de <span className="text-mono-300 capitalize">{srcLabel}</span>. Haz clic en «Pegar aquí» en el día destino (reemplaza sus instrumentos).
               </p>
             </div>
-            <button onClick={exitCopyMode} className="font-label text-[11px] uppercase tracking-widest text-mono-500 hover:text-red-400 transition-colors ml-4 shrink-0">
+            <button onClick={exitCopyMode} className="font-label text-[11px] uppercase tracking-widest text-mono-500 hover:text-negative-fg transition-colors ml-4 shrink-0">
               Cancelar
             </button>
           </div>
@@ -1121,10 +1121,10 @@ export default function ServicesPanel() {
 
       {/* An invalidated copy selection is never pasted: reload first. */}
       {copyMode && staleModes.copy && (
-        <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
-          <p className="font-body text-xs text-red-300">{staleModes.copy.message}</p>
+        <div className="rounded-lg border border-negative-strong/40 bg-negative-strong/10 px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+          <p className="font-body text-xs text-negative-muted">{staleModes.copy.message}</p>
           <button type="button" onClick={() => { exitCopyMode(); retryLoad(); }}
-            className="px-3 py-1.5 rounded-lg border border-red-400/40 font-label text-[11px] uppercase tracking-widest text-red-200 hover:bg-red-500/15 transition-colors shrink-0">
+            className="px-3 py-1.5 rounded-lg border border-negative-fg/40 font-label text-[11px] uppercase tracking-widest text-negative-soft hover:bg-negative-strong/15 transition-colors shrink-0">
             Recargar
           </button>
         </div>
@@ -1135,13 +1135,13 @@ export default function ServicesPanel() {
 
       {/* A roles failure prevents card rendering and shows retry instead */}
       {view === "error" && (
-        <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-6 text-center space-y-3">
-          <p className="font-label text-xs uppercase tracking-widest text-red-400">No se pudieron cargar los servicios</p>
+        <div className="rounded-lg border border-negative-strong/50 bg-negative-strong/10 px-4 py-6 text-center space-y-3">
+          <p className="font-label text-xs uppercase tracking-widest text-negative-fg">No se pudieron cargar los servicios</p>
           <p className="font-body text-sm text-mono-300">
             No se pueden mostrar los servicios sin esa fuente. Reintenta la carga.
           </p>
           <button type="button" onClick={retryLoad}
-            className="px-4 py-2 rounded-lg border border-red-400/40 font-label text-xs uppercase tracking-widest text-red-200 hover:bg-red-500/15 transition-colors">
+            className="px-4 py-2 rounded-lg border border-negative-fg/40 font-label text-xs uppercase tracking-widest text-negative-soft hover:bg-negative-strong/15 transition-colors">
             Reintentar carga
           </button>
         </div>
@@ -1216,13 +1216,13 @@ export default function ServicesPanel() {
         const blocked = staleModes.delete?.message ?? cardGates.deleteService.reason;
         return (
           <Modal title="Eliminar servicio" onClose={closeEditModal} status={editError ?? blocked}>
-            <p className="font-body text-sm text-mono-400">¿Eliminar el servicio del <span className="text-red-400 font-semibold">{formatDate(editModal.role.date)}</span>? Esta acción no se puede deshacer.</p>
+            <p className="font-body text-sm text-mono-400">¿Eliminar el servicio del <span className="text-negative-fg font-semibold">{formatDate(editModal.role.date)}</span>? Esta acción no se puede deshacer.</p>
             <div className="flex gap-3">
               <button onClick={closeEditModal} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">Cancelar</button>
               {staleModes.delete ? (
                 <button onClick={() => { closeEditModal(); retryLoad(); }} className="flex-1 py-2 rounded-lg border border-accent/30 font-label text-xs uppercase tracking-widest text-accent hover:bg-accent/10 transition-colors">Recargar</button>
               ) : (
-                <button onClick={handleDelete} disabled={submitting || !!blocked} title={blocked ?? undefined} className="flex-1 py-2 rounded-lg bg-red-800/60 hover:bg-red-700/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{submitting ? "Eliminando..." : "Eliminar"}</button>
+                <button onClick={handleDelete} disabled={submitting || !!blocked} title={blocked ?? undefined} className="flex-1 py-2 rounded-lg bg-negative-surface/60 hover:bg-negative-border/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{submitting ? "Eliminando..." : "Eliminar"}</button>
               )}
             </div>
           </Modal>
@@ -1346,7 +1346,7 @@ export default function ServicesPanel() {
                   </p>
                 </>
               ) : (
-                <p className="font-body text-xs text-red-300">
+                <p className="font-body text-xs text-negative-muted">
                   Este servicio tiene problemas de integridad: no se puede publicar con una
                   confirmación. Usa «Revisar datos».
                 </p>

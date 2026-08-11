@@ -83,7 +83,7 @@ const STATUS_STYLE: Record<ProposalStatus, string> = {
   draft: "bg-mono-500/15 text-mono-400 border border-mono-500/30",
   pending: "bg-yellow-500/15 text-yellow-400 border border-yellow-500/30",
   approved: "bg-green-500/15 text-green-400 border border-green-500/30",
-  changes_requested: "bg-red-500/15 text-red-400 border border-red-500/30",
+  changes_requested: "bg-negative-strong/15 text-negative-fg border border-negative-strong/30",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -416,9 +416,9 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
 
       {/* Admin notes banner (changes requested) */}
       {status === "changes_requested" && proposal?.admin_notes && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 space-y-1">
-          <p className="font-label text-xs uppercase tracking-widest text-red-400">Comentarios del admin</p>
-          <p className="font-body text-sm text-red-300 whitespace-pre-wrap">{proposal.admin_notes}</p>
+        <div className="rounded-xl border border-negative-strong/30 bg-negative-strong/10 p-4 space-y-1">
+          <p className="font-label text-xs uppercase tracking-widest text-negative-fg">Comentarios del admin</p>
+          <p className="font-body text-sm text-negative-muted whitespace-pre-wrap">{proposal.admin_notes}</p>
         </div>
       )}
 
@@ -556,7 +556,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
               <button
                 type="button"
                 onClick={() => removeSong(idx)}
-                className="p-1.5 rounded-lg text-mono-500 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
+                className="p-1.5 rounded-lg text-mono-500 hover:text-negative-fg hover:bg-negative-strong/10 transition-colors shrink-0"
                 title="Quitar"
               >
                 <XIcon />
@@ -789,7 +789,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
         <div className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl border font-label text-xs uppercase tracking-widest shadow-xl ${
           toast.ok
             ? "bg-surface-raised-alt border-accent/30"
-            : "bg-red-900/80 border-red-500/30"
+            : "bg-negative-surface-deep/80 border-negative-strong/30"
         }`}>
           {toast.msg}
         </div>

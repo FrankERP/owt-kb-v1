@@ -178,14 +178,14 @@ export default function AvailabilityPanel() {
                   return (
                     <div
                       key={i}
-                      className="flex items-start gap-3 px-4 py-3 rounded-xl border border-red-500/25 bg-red-500/5"
+                      className="flex items-start gap-3 px-4 py-3 rounded-xl border border-negative-strong/25 bg-negative-strong/5"
                     >
-                      <span className="w-2 h-2 rounded-full bg-red-500 shrink-0 mt-1.5" />
+                      <span className="w-2 h-2 rounded-full bg-negative-strong shrink-0 mt-1.5" />
                       <div className="flex-1 min-w-0">
                         <div>
                           <span className="font-body text-sm font-semibold">{dn(member)}</span>
                           <span className="font-body text-sm text-mono-400"> marcó </span>
-                          <span className="font-label text-xs uppercase tracking-widest text-red-400">
+                          <span className="font-label text-xs uppercase tracking-widest text-negative-fg">
                             {fmtDate(role.date)}
                           </span>
                           <span className="font-body text-sm text-mono-400"> como no disponible</span>
@@ -232,7 +232,7 @@ export default function AvailabilityPanel() {
                                 key={d}
                                 className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full ${
                                   isConflict
-                                    ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                                    ? "bg-negative-strong/20 text-negative-fg border border-negative-strong/30"
                                     : "bg-amber-500/15 text-amber-400 border border-amber-500/25"
                                 }`}
                               >
@@ -311,7 +311,7 @@ export default function AvailabilityPanel() {
           {/* Legend */}
           <div className="flex items-center gap-4 mt-4 flex-wrap">
             {([
-              ["conflict",   "bg-red-500",    "Asignado + No disponible"],
+              ["conflict",   "bg-negative-strong",    "Asignado + No disponible"],
               ["assigned",   "bg-accent/70","Asignado"],
               ["unavailable","bg-amber-500",   "No disponible (no asignado)"],
               ["empty",      "bg-mono-700",    "Sin datos"],
@@ -332,8 +332,8 @@ function MatrixCell({ status, note }: { status: CellStatus; note?: string }) {
   if (status === "conflict") {
     const t = note ? `Asignado y no disponible — "${note}"` : "Asignado y no disponible";
     return (
-      <span title={t} className="inline-flex items-center justify-center w-6 h-6 rounded-sm bg-red-500/20 border border-red-500/50">
-        <span className="text-red-400 font-bold text-xs leading-none">!</span>
+      <span title={t} className="inline-flex items-center justify-center w-6 h-6 rounded-sm bg-negative-strong/20 border border-negative-strong/50">
+        <span className="text-negative-fg font-bold text-xs leading-none">!</span>
       </span>
     );
   }

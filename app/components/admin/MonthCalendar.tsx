@@ -443,7 +443,7 @@ export default function MonthCalendar({
                     onRemoveSpecial(s.date);
                   }}
                   aria-label={`Quitar servicio especial del ${longDate(s.date)}`}
-                  className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-[10px] uppercase tracking-widest text-mono-400 hover:border-red-400/50 hover:text-red-400 transition-colors"
+                  className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-[10px] uppercase tracking-widest text-mono-400 hover:border-negative-fg/50 hover:text-negative-fg transition-colors"
                 >
                   Quitar
                 </button>

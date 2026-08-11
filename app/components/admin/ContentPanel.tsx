@@ -209,7 +209,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
       )}
 
       {error && (
-        <p className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-xl px-4 py-3">{error}</p>
+        <p className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-xl px-4 py-3">{error}</p>
       )}
 
       {/* Song list */}
@@ -308,13 +308,13 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
           <div className="space-y-5 p-6">
           {modalError && <CueDialogStatus tone="error">{modalError}</CueDialogStatus>}
           <p className="font-body text-sm text-mono-400">
-            ¿Eliminar <span className="text-red-400 font-semibold">{modal.song.title}</span>? Esta acción no se puede deshacer.
+            ¿Eliminar <span className="text-negative-fg font-semibold">{modal.song.title}</span>? Esta acción no se puede deshacer.
           </p>
           <div className="flex gap-3 pt-1">
             <button onClick={() => { setModalError(null); setModal(null); }} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
               Cancelar
             </button>
-            <button onClick={handleDelete} disabled={submitting} className="flex-1 py-2 rounded-lg bg-red-800/60 hover:bg-red-700/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+            <button onClick={handleDelete} disabled={submitting} className="flex-1 py-2 rounded-lg bg-negative-surface/60 hover:bg-negative-border/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
               {submitting ? "Eliminando..." : "Eliminar"}
             </button>
           </div>
@@ -332,7 +332,7 @@ function ActionBtn({ onClick, title, danger, children }: { onClick: () => void; 
     <button
       onClick={onClick}
       title={title}
-      className={`p-1.5 rounded-lg transition-colors ${danger ? "hover:bg-red-500/20 hover:text-red-400 text-mono-500" : "hover:bg-accent/10 hover:text-accent text-mono-500"}`}
+      className={`p-1.5 rounded-lg transition-colors ${danger ? "hover:bg-negative-strong/20 hover:text-negative-fg text-mono-500" : "hover:bg-accent/10 hover:text-accent text-mono-500"}`}
     >
       {children}
     </button>

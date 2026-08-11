@@ -196,7 +196,7 @@ export default function IntegrityQueuePanel({
       ? "border-green-500/25 text-green-400"
       : tone === "unknown"
         ? "border-yellow-500/30 text-yellow-400"
-        : "border-red-500/30 text-red-400";
+        : "border-negative-strong/30 text-negative-fg";
 
   return (
     <section

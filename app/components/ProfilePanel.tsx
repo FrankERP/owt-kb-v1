@@ -318,7 +318,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
               </p>
             </div>
             {pwError && (
-              <p className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">{pwError}</p>
+              <p className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-lg px-3 py-2">{pwError}</p>
             )}
             <div className="space-y-3">
               {member.hasPassword && (
@@ -367,7 +367,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
         <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-xl border font-label text-xs uppercase tracking-widest shadow-xl ${
           toast.ok
             ? "bg-surface-raised-alt border-accent/30"
-            : "bg-red-900/80 border-red-700"
+            : "bg-negative-surface-deep/80 border-negative-border"
         }`}>
           {toast.msg}
         </div>

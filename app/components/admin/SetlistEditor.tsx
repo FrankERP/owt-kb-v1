@@ -31,7 +31,7 @@ function RepeatBadge({ lastUsed }: { lastUsed: string }) {
   const weeks = weeksAgo(lastUsed);
   if (weeks > 4) return null;
   const cls = weeks <= 2
-    ? "bg-red-500/20 text-red-400 border-red-500/30"
+    ? "bg-negative-strong/20 text-negative-fg border-negative-strong/30"
     : "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
   return (
     <span className={`font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${cls}`}>
@@ -383,7 +383,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
                     value={e.play_key}
                     onChange={ev => setEntries(prev => prev.map(x => x.localId === e.localId ? { ...x, play_key: ev.target.value } : x))}
                   />
-                  <button type="button" onClick={() => remove(e.localId)} aria-label={`Quitar ${e.song.title}`} className="text-mono-600 hover:text-red-400 transition-colors shrink-0 text-sm leading-none">×</button>
+                  <button type="button" onClick={() => remove(e.localId)} aria-label={`Quitar ${e.song.title}`} className="text-mono-600 hover:text-negative-fg transition-colors shrink-0 text-sm leading-none">×</button>
                 </div>
                 {idx < entries.length - 1 && (
                   <div className="-my-0.5 flex items-center justify-center relative z-10">
@@ -469,7 +469,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
 
       {/* Footer */}
       {saveError && (
-        <p className="text-red-400 font-label text-xs uppercase tracking-widest text-center -mb-1">{saveError}</p>
+        <p className="text-negative-fg font-label text-xs uppercase tracking-widest text-center -mb-1">{saveError}</p>
       )}
       {/* A 409 keeps the editor (and the admin's edits) open and requires a
           reload: the observed state is only replaced by a fresh read. */}

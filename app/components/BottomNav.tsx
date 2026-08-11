@@ -86,7 +86,7 @@ export default function BottomNav() {
             )}
             <button
               onClick={() => signOut({ callbackUrl: "/auth/signin" })}
-              className="w-full flex items-center gap-3 px-5 py-4 text-red-400 hover:bg-red-500/10 transition-colors"
+              className="w-full flex items-center gap-3 px-5 py-4 text-negative-fg hover:bg-negative-strong/10 transition-colors"
             >
               <SignOutIcon />
               <span className="font-label text-xs uppercase tracking-widest">Salir</span>

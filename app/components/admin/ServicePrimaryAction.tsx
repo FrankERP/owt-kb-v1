@@ -18,9 +18,9 @@ function toneClass(props: PrimaryActionProps): string {
     case "review_data":
     case "review_duplicate_roles":
     case "review_setlist_data":
-      return "border-red-500/50 bg-red-500/10 text-red-200 hover:bg-red-500/20";
+      return "border-negative-strong/50 bg-negative-strong/10 text-negative-soft hover:bg-negative-strong/20";
     case "resolve_conflict":
-      return "border-red-500/50 bg-red-500/10 text-red-200 hover:bg-red-500/20";
+      return "border-negative-strong/50 bg-negative-strong/10 text-negative-soft hover:bg-negative-strong/20";
     case "retry_load":
       return "border-amber-500/50 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20";
     case "publish":

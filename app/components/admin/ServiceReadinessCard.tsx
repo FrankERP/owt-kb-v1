@@ -607,7 +607,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
           : isCardSelected || (copyMode && isCopySource)
             ? `${CARD_BORDER[role._type]} ring-2 ring-accent/40 shadow-md`
             : highlightConflict
-              ? "border-2 border-red-500 shadow-lg shadow-red-500/30 ring-2 ring-red-500/40"
+              ? "border-2 border-negative-strong shadow-lg shadow-negative-strong/30 ring-2 ring-negative-strong/40"
               : `${CARD_BORDER[role._type]} shadow-md`
       }`}
     >
@@ -685,7 +685,7 @@ function VocalCol({
           <span key={m._key ?? m._id}>
             {i > 0 && ", "}
             {conflictIds.has(m._id) ? (
-              <span title={notes.get(m._id)} className="font-semibold text-red-400">
+              <span title={notes.get(m._id)} className="font-semibold text-negative-fg">
                 ⚠&nbsp;{dn(m)}
               </span>
             ) : (
@@ -715,16 +715,16 @@ function TeamRow({
     <div
       className="flex min-w-0 items-stretch overflow-hidden rounded-lg"
       style={{
-        border: isConflict ? "1px solid rgba(239,68,68,0.7)" : `1px solid ${themeColour(accentVar, 0.251)}`,
+        border: isConflict ? "1px solid rgb(var(--negative-strong-rgb) / 0.7)" : `1px solid ${themeColour(accentVar, 0.251)}`,
       }}
     >
       <span
         className="flex min-w-[3.5rem] shrink-0 items-center justify-center rounded-l-[7px] px-2.5 font-label text-xs uppercase tracking-wide"
         style={{
-          background: isConflict ? "rgba(239,68,68,0.18)" : `${themeColour(accentVar, 0.0941)}`,
+          background: isConflict ? "rgb(var(--negative-strong-rgb) / 0.18)" : `${themeColour(accentVar, 0.0941)}`,
           color: isConflict ? themeColour("--negative-fg-rgb") : themeColour(accentVar),
           borderRight: isConflict
-            ? "1px solid rgba(239,68,68,0.45)"
+            ? "1px solid rgb(var(--negative-strong-rgb) / 0.45)"
             : `1px solid ${themeColour(accentVar, 0.1882)}`,
         }}
       >
@@ -733,9 +733,9 @@ function TeamRow({
       <span
         title={isConflict && conflictNote ? conflictNote : undefined}
         className={`flex min-w-[3.5rem] items-center justify-center gap-1 px-3 py-1.5 font-body text-sm leading-tight ${CARD_STYLE.longText} ${
-          isConflict ? "font-semibold text-red-400" : ""
+          isConflict ? "font-semibold text-negative-fg" : ""
         }`}
-        style={isConflict ? { background: "rgba(239,68,68,0.10)" } : undefined}
+        style={isConflict ? { background: "rgb(var(--negative-strong-rgb) / 0.10)" } : undefined}
       >
         {isConflict && <span aria-hidden="true">⚠</span>}
         {value}
@@ -825,7 +825,7 @@ function MenuItem({
         disabled={disabled}
         title={disabled ? (gate?.reason ?? undefined) : undefined}
         className={`flex min-h-[44px] w-full min-w-0 items-center gap-2.5 px-3 text-left text-sm transition-colors disabled:opacity-40 ${
-          danger ? "text-red-300 hover:bg-red-500/15" : "text-ink-muted hover:bg-white/10"
+          danger ? "text-negative-muted hover:bg-negative-strong/15" : "text-ink-muted hover:bg-white/10"
         }`}
       >
         <span className="shrink-0 opacity-80">{icon}</span>
