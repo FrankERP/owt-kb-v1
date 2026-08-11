@@ -151,7 +151,7 @@ function ProposalCard({
       aria-current={highlighted ? "true" : undefined}
       className={`min-w-0 rounded-xl border bg-accent-deep/5 dark:bg-accent/5 overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
         highlighted
-          ? "border-accent shadow-[0_0_0_1px_rgb(0_191_255/0.45)]"
+          ? "border-accent shadow-[0_0_0_1px_rgb(var(--accent-rgb)/0.45)]"
           : "border-edge-accent-subtle"
       }`}
     >

@@ -143,7 +143,18 @@ const CATEGORIES = [
   // it inflates the surface Child B is sized against.
   { id: 8, name: "svg-attribute", syntax: /\b(fill|stroke|stop-color|flood-color|lighting-color)=["'](#[0-9a-f]{3,8}|rgba?\([^)]*\)|hsla?\([^)]*\)|currentColor|white|black)["']/gi },
   { id: 7, name: "inline-style", syntax: null }, // resolved by location, below
-  { id: 6, name: "arbitrary-value-colour-no-hash", syntax: /\[[^\]]*\b(?:rgba?|hsla?)\([^\]]*\][^\]]*\]|\[[^\]]*\b(?:rgba?|hsla?)\([^)]*\)[^\]]*\]/gi },
+  // NO `\b` ANCHOR, and this is not a style preference.
+  //
+  // Tailwind writes spaces as UNDERSCORES inside an arbitrary value, so a shadow reads
+  // `shadow-[0_0_0_1px_rgb(0_191_255/0.45)]`. `_` is a word character, so `\b(?:rgba?)\(`
+  // asserts a boundary that is not there and the match fails silently.
+  //
+  // Child B's plan documented this trap — for the LINT RULE it prescribed — and nobody
+  // checked whether the SCANNER had the same bug. It did, from A1 onwards, and it hid two
+  // real rows from every child: `ProposalsPanel.tsx:154` (accent) and
+  // `signin/page.tsx:72` (a black shadow). Both are inside `shadow-[…]`, both follow an
+  // underscore.
+  { id: 6, name: "arbitrary-value-colour-no-hash", syntax: /\[[^\]]*(?:rgba?|hsla?)\((?!\s*var\()[^\]]*\]/gi },
   // Category 5 EXCLUDES rgb( immediately followed by var( — matching the lint rule
   // the parent's §9 prescribes. Without it, tailwind.config.ts's seven
   // `rgb(var(--brand-*) / <alpha-value>)` key values would land here instead of 10.

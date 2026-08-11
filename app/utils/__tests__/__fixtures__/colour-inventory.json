@@ -152,7 +152,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 158,
+      "line": 163,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },
@@ -164,7 +164,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 157,
+      "line": 162,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },
@@ -176,7 +176,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 160,
+      "line": 165,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },
@@ -188,7 +188,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 159,
+      "line": 164,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },
@@ -272,7 +272,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 42,
+      "line": 47,
       "disposition": "exempt",
       "reason": "Static viewport themeColor. Child E makes it theme-responsive under parent invariant 17."
     },
