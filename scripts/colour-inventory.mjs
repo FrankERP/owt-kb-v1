@@ -124,11 +124,32 @@ const COLOUR_UTILITIES = "bg|text|border|ring-offset|ring|divide|from|via|to|fil
  *
  * Returns a percentage STRING so both spellings compare equal: `/[0.04]` -> "4".
  */
+/**
+ * Tailwind's opacity modifier, in every spelling it accepts: `/50`, `/[0.04]`,
+ * `/[.04]`, `/[4%]`.
+ *
+ * DEFINED ONCE ON PURPOSE. Four categories can carry a modifier and each used to
+ * spell this alternation itself; they drifted, and the audit found three of the four
+ * wrong in different ways — category 3 lacked the bracket form, category 4 had no
+ * alternation at all, category 1 lacked the percent form. A shared constant is the
+ * only version of this that cannot drift again.
+ */
+const ALPHA_MOD = "(?:\\/(?:\\d{1,3}|\\[[0-9.]+%?\\]))?";
+
+/** The modifier as a TAIL matcher, for pulling the alpha back out of a matched value. */
+const ALPHA_TAIL = new RegExp(`(${ALPHA_MOD.replace(/^\(\?:/, "").replace(/\)\?$/, "")})$`);
+
 function normaliseAlpha(raw) {
   if (!raw) return null;
   const v = raw.replace(/^\//, "");
   if (v.startsWith("[")) {
-    const n = parseFloat(v.slice(1, -1));
+    // `[4%]` is already a percentage; `[0.04]` is a fraction and needs scaling.
+    const inner = v.slice(1, -1);
+    if (inner.endsWith("%")) {
+      const pct = parseFloat(inner);
+      return Number.isFinite(pct) ? String(+pct.toFixed(4)) : null;
+    }
+    const n = parseFloat(inner);
     return Number.isFinite(n) ? String(+(n * 100).toFixed(4)) : null;
   }
   return v;
@@ -147,11 +168,18 @@ const CATEGORIES = [
   // bare triplet, so they still fail the value clause. Verified before the change, and
   // `byCategory[12]` stayed at 30 across it.
   { id: 12, name: "css-custom-property-triplet", syntax: /--([a-z0-9-]+):\s*(\d{1,3}\s+\d{1,3}\s+\d{1,3})\s*;/gi, cssOnly: true },
-  { id: 11, name: "arbitrary-value-var-brand", syntax: /\[[^\]]*\bvar\(--brand-[a-z-]+\)[^\]]*\]/gi },
+  // No `\b` (underscores again), and `[a-z0-9-]` because a variable name may carry
+  // digits — the same two mistakes categories 5/6 and 12 each made separately.
+  { id: 11, name: "arbitrary-value-var-brand", syntax: /\[[^\]]*var\(--brand-[a-z0-9-]+\)[^\]]*\]/gi },
   { id: 9, name: "runtime-colour-map", syntax: null }, // resolved by location, below
   // Only COLOUR-shaped values. `fill="none"` is not a colour decision, and counting
   // it inflates the surface Child B is sized against.
-  { id: 8, name: "svg-attribute", syntax: /\b(fill|stroke|stop-color|flood-color|lighting-color)=["'](#[0-9a-f]{3,8}|rgba?\([^)]*\)|hsla?\([^)]*\)|currentColor|white|black)["']/gi },
+  // React spells SVG presentation attributes in camelCase — `stopColor`, not
+  // `stop-color` — so the kebab forms alone never match in a .tsx file. Without the
+  // camelCase spellings a `stopColor="#fff"` falls through to category 2 (bare hex),
+  // which routes it to the wrong migration: an attribute needs `currentColor`, not a
+  // token, because `var()` is not substituted there.
+  { id: 8, name: "svg-attribute", syntax: /\b(fill|stroke|stop-color|stopColor|flood-color|floodColor|lighting-color|lightingColor)=["'](#[0-9a-f]{3,8}|rgba?\([^)]*\)|hsla?\([^)]*\)|currentColor|white|black)["']/gi },
   { id: 7, name: "inline-style", syntax: null }, // resolved by location, below
   // NO `\b` ANCHOR, and this is not a style preference.
   //
@@ -168,10 +196,17 @@ const CATEGORIES = [
   // Category 5 EXCLUDES rgb( immediately followed by var( — matching the lint rule
   // the parent's §9 prescribes. Without it, tailwind.config.ts's seven
   // `rgb(var(--brand-*) / <alpha-value>)` key values would land here instead of 10.
-  { id: 5, name: "rgb-hsl-literal", syntax: /\b(?:rgba?|hsla?)\((?!\s*var\()[^)]*\)/gi },
-  { id: 10, name: "retired-brand-colour-key", syntax: new RegExp(`\\b(?:${COLOUR_UTILITIES}|selection:bg|selection:text)-brand-(?:blackout|console|deck|beam|signal|frost|steel)(?:\\/\\d{1,3})?\\b`, "gi") },
-  { id: 3, name: "raw-palette-class", syntax: new RegExp(`\\b(?:${COLOUR_UTILITIES})-(?:${PALETTE_FAMILIES})-\\d{2,3}(?:\\/\\d{1,3})?\\b`, "gi") },
-  { id: 4, name: "colour-keyword", syntax: new RegExp(`\\b(?:${COLOUR_UTILITIES})-(?:white|black|transparent|current)\\b|\\bcurrentColor\\b|\\btransparent\\b`, "g") },
+  // NO `\b`, for the reason category 6 documents: `_` is a word character, so an
+  // arbitrary value like `shadow-[0_2px_rgb(…)]` has no boundary before `rgb`.
+  { id: 5, name: "rgb-hsl-literal", syntax: /(?:rgba?|hsla?)\((?!\s*var\()[^)]*\)/gi },
+  { id: 10, name: "retired-brand-colour-key", syntax: new RegExp(`\\b(?:${COLOUR_UTILITIES}|selection:bg|selection:text)-brand-(?:blackout|console|deck|beam|signal|frost|steel)${ALPHA_MOD}`, "gi") },
+  { id: 3, name: "raw-palette-class", syntax: new RegExp(`\\b(?:${COLOUR_UTILITIES})-(?:${PALETTE_FAMILIES})-\\d{2,3}${ALPHA_MOD}`, "gi") },
+  // The keyword categories carry modifiers too, and this one had NO alternation at
+  // all — so `bg-white/5` and `bg-white` were recorded as the same row with a null
+  // alpha. 26 live rows were affected, and the consequence lands on Child D: a 5%
+  // white wash and an opaque white fill are different design elements, and one of
+  // them is invisible on a light background.
+  { id: 4, name: "colour-keyword", syntax: new RegExp(`\\b(?:${COLOUR_UTILITIES})-(?:white|black|transparent|current)${ALPHA_MOD}(?![a-z0-9-])|\\bcurrentColor\\b|\\btransparent\\b`, "g") },
   // The opacity modifier accepts BOTH spellings: `/50` and `/[0.04]`. Matching only the
   // first drops the bracket form out of `value`, so `normaliseAlpha` below has nothing
   // to work with and the row records NO alpha — which reads as fully opaque.
@@ -180,7 +215,7 @@ const CATEGORIES = [
   // alternation and did not fix category 1's; C's guard, rewritten onto a synthetic
   // source, is what surfaced the remainder. 15 usages in this tree spell alpha in
   // brackets.
-  { id: 1, name: "bracketed-hex", syntax: /\[#[0-9a-f]{3,8}\](?:\/(?:\d{1,3}|\[[0-9.]+\]))?/gi },
+  { id: 1, name: "bracketed-hex", syntax: new RegExp(`\\[#[0-9a-f]{3,8}\\]${ALPHA_MOD}`, "gi") },
   { id: 2, name: "bare-hex", syntax: /#[0-9a-f]{3,8}\b/gi },
 ];
 
@@ -296,7 +331,9 @@ function scanSource(src, rel, isCss) {
         // so it must be captured separately or the composed-token layer has no input:
         // ~14 composed tokens exist precisely because a pair's two sides differ in
         // ALPHA, not in colour.
-        alpha: normaliseAlpha((value.match(/(\/(?:\d{1,3}|\[[0-9.]+\]))$/) ?? [null, null])[1]),
+        // Built from ALPHA_MOD so it cannot drift from the category patterns — this
+        // was a third private copy of the alternation and lacked the percent form.
+        alpha: normaliseAlpha((value.match(ALPHA_TAIL) ?? [null, null])[1]),
         utility: normaliseUtility(src, start),
         carrier: id === 8 ? m[1] : null,
         line: lineOf(src, start), // informational only — see the artifact header

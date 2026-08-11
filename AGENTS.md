@@ -14,6 +14,19 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
 ## Conventions
 - Work on a branch, **merge to `main` periodically** (don't commit routine work
   straight to `main`). **Direct push, no PRs.**
+- **PUSH ORDER IS `preview` FIRST, THEN `main`. Always, without being asked.**
+  `main` auto-deploys to **production** — `owt-backstage.vercel.app`, the app the
+  team uses. So `git push origin main` *is* a production release, not a checkpoint.
+  Pushing it before dev has seen the change means the team gets it first and dev
+  becomes the rehearsal you already skipped. The order is:
+
+      feature branch → main (local merge, gates green)
+      → merge main into preview, push preview, VERIFY the dev alias moved
+      → only then push main
+
+  The verify step is not optional and a green build does not satisfy it — confirm
+  `dev-owt-backstage.vercel.app` is in the deployment's `alias` array and that its
+  `githubCommitSha` is the commit you pushed.
 - Conventional commits (`fix(scope): …`), body explains the *why*.
 - **Never** add AI/Claude attribution or `Co-Authored-By` trailers.
 - **Keep documentation current in the same delivery.** Implementation, behavior,
@@ -38,11 +51,21 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   and verify the resulting project ID before continuing.
 - Never use automatic `--yes` linking through `vercel`, `vercel deploy`, or
   `vercel curl`.
-- Preview branch/domain: `preview` → `dev-owt-backstage.vercel.app`.
+- **Two branches deploy, and both are real:** `preview` → `dev-owt-backstage.vercel.app`,
+  `main` → **production**, `owt-backstage.vercel.app`. There is no staging branch
+  that deploys nowhere. **`preview` goes first** — see the push-order rule under
+  Conventions.
 - The stable dev domain is owned **exclusively** by the `preview` branch. Never
   point it at or deploy it directly from a feature/development branch. To update
   dev: merge the intended development branch into `preview`, push `preview`,
   then verify that Vercel deployed the `preview` commit to the stable dev domain.
+- **Verifying a deploy means checking the ALIAS, not the build.** A `● Ready`
+  build proves a commit compiled, not that any domain serves it. HTTP checks prove
+  less than nothing — the app answers `302` to SSO. Query the deployment and
+  confirm two fields: the target domain appears in `alias`, and `meta.githubCommitSha`
+  equals the commit you pushed.
+- **`preview` writes to the real Sanity dataset and emails the real team.** It is a
+  rehearsal of the UI, never a dry run of data or notifications.
 
 ## Decision records
 When a choice rejects a real alternative and the reason won't be obvious from
