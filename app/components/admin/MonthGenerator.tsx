@@ -504,7 +504,7 @@ function ConflictCard({ r, onDelete, onEdit }: { r: ConflictRule; onDelete: () =
 function PresenceCard({ r, onDelete, onEdit }: { r: PresenceRule; onDelete: () => void; onEdit: () => void }) {
   return (
     <div className="rounded-lg border border-accent/10 bg-surface-sunken/40 px-3 py-2 flex items-center gap-2">
-      <span className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/30 shrink-0">≥1</span>
+      <span className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-positive-deep/15 text-positive-strong border border-positive-deep/30 shrink-0">≥1</span>
       <span className="font-body text-xs flex-1">
         <span className="text-mono-200">{r.persons.join(", ")}</span>
         <span className="text-mono-500 mx-1">en</span>
@@ -793,7 +793,7 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
   const canAdd = selected.length >= 2;
 
   return (
-    <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-3 space-y-2">
+    <div className="rounded-lg border border-positive-deep/20 bg-positive-deep/5 p-3 space-y-2">
       <div>
         <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Al menos uno de (mín. 2)</p>
         {/*
@@ -816,7 +816,7 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
           })}
         </div>
         {selected.length > 0 && (
-          <p className="font-label text-[10px] text-green-400 mt-0.5">{selected.join(", ")}</p>
+          <p className="font-label text-[10px] text-positive-strong mt-0.5">{selected.join(", ")}</p>
         )}
       </div>
       <div>
@@ -829,7 +829,7 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
         <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-accent/20 text-mono-500 hover:text-accent hover:border-accent transition-colors">
           Cancelar
         </button>
-        <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: initialValues?.id ?? uid(), persons: selected, pattern })} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest bg-green-500/20 hover:bg-green-500/30 text-green-400 transition-colors disabled:opacity-40">
+        <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: initialValues?.id ?? uid(), persons: selected, pattern })} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest bg-positive-deep/20 hover:bg-positive-deep/30 text-positive-strong transition-colors disabled:opacity-40">
           {initialValues ? "Guardar cambios" : "Agregar presencia"}
         </button>
       </div>
@@ -915,7 +915,7 @@ function RuleBuilder({ config, onChange, members, source }: {
           <AddRuleButton
             label="≥1 Presencia"
             title="Exigir al menos una persona de un grupo en el patrón"
-            tone="border-green-500/40 text-green-400 hover:bg-green-500/10"
+            tone="border-positive-deep/40 text-positive-strong hover:bg-positive-deep/10"
             disabled={isFormOpen}
             onClick={() => setAdding("presence")}
           />

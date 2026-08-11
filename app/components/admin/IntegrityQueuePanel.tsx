@@ -193,7 +193,7 @@ export default function IntegrityQueuePanel({
 
   const toneStyle =
     tone === "clean"
-      ? "border-green-500/25 text-green-400"
+      ? "border-positive-deep/25 text-positive-strong"
       : tone === "unknown"
         ? "border-recency-fg/30 text-recency-strong"
         : "border-negative-strong/30 text-negative-fg";

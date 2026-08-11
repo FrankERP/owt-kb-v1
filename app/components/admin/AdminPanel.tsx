@@ -852,7 +852,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
               {/* Password indicator */}
               <span
                 title={m.hasPassword ? "Tiene contraseña" : "Sin contraseña"}
-                className={`w-2 h-2 rounded-full shrink-0 ${m.hasPassword ? "bg-green-500" : "bg-mono-600"}`}
+                className={`w-2 h-2 rounded-full shrink-0 ${m.hasPassword ? "bg-positive-deep" : "bg-mono-600"}`}
               />
 
               {/* Actions */}
@@ -880,7 +880,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
       {/* Legend */}
       {!loading && members.length > 0 && (
         <p className="font-label text-[11px] uppercase tracking-widest text-mono-600 flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Con contraseña
+          <span className="w-2 h-2 rounded-full bg-positive-deep inline-block" /> Con contraseña
           <span className="w-2 h-2 rounded-full bg-mono-600 inline-block ml-2" /> Solo SSO
         </p>
       )}

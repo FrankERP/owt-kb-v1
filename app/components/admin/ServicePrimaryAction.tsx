@@ -24,7 +24,7 @@ function toneClass(props: PrimaryActionProps): string {
     case "retry_load":
       return "border-warning-fg/50 bg-warning-fg/10 text-warning-faint hover:bg-warning-fg/20";
     case "publish":
-      return "border-green-500/50 bg-green-500/10 text-green-300 hover:bg-green-500/20";
+      return "border-positive-deep/50 bg-positive-deep/10 text-positive-soft hover:bg-positive-deep/20";
     default:
       return "border-accent/50 bg-accent/10 text-accent hover:bg-accent/20";
   }

@@ -160,8 +160,8 @@ export default function AvailabilityPanel() {
       {viewMode === "conflicts" && (
         <div className="space-y-4">
           {conflicts.length === 0 ? (
-            <div className="rounded-xl border border-green-500/25 bg-green-500/5 px-5 py-8 text-center">
-              <p className="font-display text-lg uppercase text-green-400">Todo bien</p>
+            <div className="rounded-xl border border-positive-deep/25 bg-positive-deep/5 px-5 py-8 text-center">
+              <p className="font-display text-lg uppercase text-positive-strong">Todo bien</p>
               <p className="font-body text-sm text-mono-500 mt-1">
                 Ningún miembro asignado tiene fechas marcadas como no disponible.
               </p>

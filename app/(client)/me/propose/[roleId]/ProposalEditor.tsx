@@ -82,7 +82,7 @@ const STATUS_LABEL: Record<ProposalStatus, string> = {
 const STATUS_STYLE: Record<ProposalStatus, string> = {
   draft: "bg-mono-500/15 text-mono-400 border border-mono-500/30",
   pending: "bg-recency-fg/15 text-recency-strong border border-recency-fg/30",
-  approved: "bg-green-500/15 text-green-400 border border-green-500/30",
+  approved: "bg-positive-deep/15 text-positive-strong border border-positive-deep/30",
   changes_requested: "bg-negative-strong/15 text-negative-fg border border-negative-strong/30",
 };
 
@@ -712,12 +712,12 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
 
       {/* Approved banner */}
       {isApproved && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-green-500/20 bg-green-500/5">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-400 shrink-0">
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-positive-deep/20 bg-positive-deep/5">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-positive-strong shrink-0">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
             <polyline points="22 4 12 14.01 9 11.01" />
           </svg>
-          <p className="font-label text-xs uppercase tracking-widest text-green-400">
+          <p className="font-label text-xs uppercase tracking-widest text-positive-strong">
             Propuesta aprobada — el setlist ha sido publicado
           </p>
         </div>

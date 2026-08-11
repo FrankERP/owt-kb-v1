@@ -46,7 +46,7 @@ function calendarDaysAgo(iso: string): number {
 function activityStatus(lastActive: string | null): { color: string; label: string } {
   const days = daysSince(lastActive);
   if (days === null)  return { color: "bg-mono-700",      label: "Sin actividad" };
-  if (days <= 7)      return { color: "bg-green-500",     label: "Activo" };
+  if (days <= 7)      return { color: "bg-positive-deep",     label: "Activo" };
   if (days <= 30)     return { color: "bg-recency-fg",    label: "Reciente" };
   return               { color: "bg-negative-strong/70",          label: "Inactivo" };
 }
@@ -80,7 +80,7 @@ function Avatar({ name }: { name: string }) {
 function ProviderBadge({ provider }: { provider: string }) {
   const colors: Record<string, string> = {
     google:      "bg-negative-strong/15 text-negative-fg border-negative-strong/30",
-    credentials: "bg-green-500/15 text-green-400 border-green-500/30",
+    credentials: "bg-positive-deep/15 text-positive-strong border-positive-deep/30",
     azure:       "bg-blue-500/15 text-blue-400 border-blue-500/30",
   };
   return (
@@ -127,7 +127,7 @@ export default function ActivityPanel() {
       {/* Summary stats */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Activos esta semana",  value: activeThisWeek,  dot: "bg-green-500"  },
+          { label: "Activos esta semana",  value: activeThisWeek,  dot: "bg-positive-deep"  },
           { label: "Activos este mes",     value: activeThisMonth, dot: "bg-recency-fg" },
           { label: "Sin actividad",        value: neverActive,     dot: "bg-mono-600"   },
         ].map((stat) => (

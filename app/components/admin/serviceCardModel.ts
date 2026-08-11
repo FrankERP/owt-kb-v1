@@ -661,7 +661,7 @@ export type ReadinessTone = "ok" | "approved" | "warn" | "error" | "unknown" | "
 /** Dark-mode-only tone classes. Purple is never a readiness tone. */
 export const TONE_CLASS: Record<ReadinessTone, string> = {
   ok: "border-accent/40 bg-accent/10 text-accent",
-  approved: "border-green-500/40 bg-green-500/10 text-green-400",
+  approved: "border-positive-deep/40 bg-positive-deep/10 text-positive-strong",
   warn: "border-warning-fg/40 bg-warning-fg/10 text-warning-strong",
   error: "border-negative-strong/50 bg-negative-strong/10 text-negative-muted",
   unknown: "border-mono-500/40 bg-mono-500/10 text-mono-300",
