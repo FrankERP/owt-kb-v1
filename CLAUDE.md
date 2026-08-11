@@ -88,7 +88,25 @@ several exist precisely to stop a plausible-looking change.
 `summarizeUnfilledSeats`, `isMemberActive` (30s-TTL auth gate),
 `requireActiveSession`/`requireActiveManager`, `wantsNotification` (the ONLY
 per-type email-preference resolver — nothing reads `notifPrefs` directly),
-`sweepOutbox`, `shell`/`td`/`C` (`emailShell.ts` — the shared email palette).
+`sweepOutbox`, `shell`/`td`/`C` (`emailShell.ts` — the shared email palette),
+`themeColour` (`app/utils/themeColour.ts`).
+
+## Colour tokens
+Colour lives in **30 base roles + 23 composed tokens** (`app/brand.css` `:root`,
+`tailwind.config.ts`). The seven retired `--brand-*` COLOUR variables and their `brand.*`
+Tailwind keys are **gone**; the four non-colour ones (`--brand-radius-*`,
+`--brand-duration-*`) survive.
+- **Never build a colour by string concatenation.** `` `${hex}55` `` worked on a bare hex;
+  a token cannot be appended to, and `rgb(var(--accent-rgb) / 0.2)55` is not a valid
+  `<color>` — the browser drops the whole declaration with nothing in the console. Use
+  `themeColour(rgbVar, alpha?)`, which always returns a complete colour.
+- **`var()` is not substituted inside SVG presentation attributes** (`fill=`, `stroke=`).
+  Set `color` on an ancestor and let the attribute inherit `currentColor`.
+- **Composed tokens bake their own alpha** — an opacity modifier on one double-applies it.
+  A lint clause bans it.
+- **Collapsing a `dark:` variant changes specificity.** A `dark:` base at (0,2,0) masks a
+  bare `hover:`/`focus:` utility; an unprefixed token at (0,1,0) does not. Check what a
+  base was masking before removing it.
 
 ## Auth
 Roles: `super-admin` > `admin` > `content-editor` > `member`. Gate via

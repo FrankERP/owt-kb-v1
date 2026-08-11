@@ -1,5 +1,20 @@
 # Utilities, Context & Components
 
+### `themeColour(rgbVar, alpha?)` — `app/utils/themeColour.ts`
+
+Builds a complete CSS colour from a token's RGB triplet: `themeColour("--accent-rgb", 0.2)`
+→ `rgb(var(--accent-rgb) / 0.2)`.
+
+**It deliberately cannot return a fragment.** Before Child B, components built colours by
+concatenating a two-hex-digit alpha onto a bare hex — `` `${accentHex}55` ``. A token cannot
+survive that: `rgb(var(--accent-rgb) / 0.2)55` is not a valid `<color>`, so the browser drops
+the entire declaration silently, with nothing in the console. That was live at 24 call sites
+across four files.
+
+**Not for SVG presentation attributes.** `var()` is not substituted inside `fill=`/`stroke=`.
+Set `color` on an ancestor and inherit `currentColor` instead.
+
+
 The shared logic layer. **Before writing new logic, check here — these helpers are the
 single source of truth for their concern, and several encode invariants you'd otherwise get
 wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching test in

@@ -36,9 +36,20 @@ enumerated segment, and emits `<html class="dark">` / `<html class="light">`.
 
 - The gallery duplicates the shell both real root layouts carry. That is deliberate — it must
   not import `app/utils/Provider`, which renders `ActivityPing` and fetches on mount.
-- Its `<body>` must carry `brand-atmosphere … bg-brand-blackout`, because `.brand-atmosphere`
+- Its `<body>` must carry `brand-atmosphere … bg-surface-base`, because `.brand-atmosphere`
   is the opaque page wash and 14 of the 15 colour-carrying `.brand-*` classes are
   alpha-composited over it. Without it every baseline is wrong in a way a reviewer cannot see.
 - `dynamicParams = false` alongside `generateStaticParams` is required: `generateStaticParams`
   alone does not 404, and an unlisted segment would reflect arbitrary input into a root
   `class` attribute.
+
+## Addendum — Child B, 2026-08-11
+
+The class named above was `bg-brand-blackout` when this ADR was written. Child B's B2 slice
+rewrote `brand.css`'s rule bodies onto role tokens and B-final removed the `brand.*` Tailwind
+keys entirely, so `bg-brand-blackout` now resolves to nothing. It is `bg-surface-base` —
+the same value, `1 11 23`.
+
+This matters more here than in most files: the ADR's own argument is that without the wash
+"every baseline is wrong in a way a reviewer cannot see by looking at it". Pasting the old
+class back would silently produce exactly that.

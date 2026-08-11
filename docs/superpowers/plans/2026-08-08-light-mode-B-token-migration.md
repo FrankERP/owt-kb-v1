@@ -9,7 +9,14 @@ bodies and the typography theme.
 
 **Status: COMPLETE.** All slices merged — B1 (token layer), B2 (`brand.css` bodies),
 B3 (the five-file accent unit), B4 (the bulk call-site migration and the special cases),
-and B-final (removal + lint clauses).
+B-final (removal + lint clauses), and **B5**, which was not in this plan.
+
+**B5 exists because code review found a third rendering diff this plan could not have
+caught.** Collapsing a pair replaces a `dark:` variant with an unprefixed token, and that
+changes SPECIFICITY, not only colour: a `dark:` base at (0,2,0) had been masking bare
+`hover:`/`focus:` utilities on the same property, so those styles were dead code in this
+dark-forced app. An unprefixed token at (0,1,0) stops masking them. 39 sites across 19
+files, repaired by adding the `dark:<state>:` counterpart. See the licensed-diffs section.
 
 **30 roles** and **23 composed tokens** now carry the app's colour. The seven retired
 `--brand-*` colour declarations and their Tailwind keys are gone; the four non-colour
@@ -659,4 +666,4 @@ B's own tokens as B's migration target.
 
 ## Terminal state
 
-**`READY_FOR_ADVERSARIAL_REVIEW`**
+**`IMPLEMENTED AND MERGED — approved at review round 9, then shipped in six slices (B1, B2, B3, B4, B-final, B5)`**
