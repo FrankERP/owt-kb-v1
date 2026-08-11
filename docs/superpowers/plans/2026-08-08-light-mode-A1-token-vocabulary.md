@@ -103,7 +103,7 @@ no design intent distinguishes them. Child B's diff list must enumerate these 13
 |---|---|---|---|
 | **warning** | `--warning-fg-rgb: 245 158 11` (`#f59e0b`, 14) | `--warning-surface-rgb: 120 53 15` (`#78350f`, 7) · deep `28 8 0` (`#1c0800`, 3) | `--warning-border-rgb: 146 64 14` (`#92400e`, 2) |
 | **info** | `--info-fg-rgb: 167 139 250` (`#a78bfa`, 30) | `--info-surface-rgb: 76 29 149` (`#4c1d95`, 7) · deep `30 10 60` (`#1e0a3c`, 3) | `--info-border-rgb: 91 33 182` (`#5b21b6`, 2) |
-| **positive** | `--positive-fg-rgb: 55 245 138` (`--brand-signal`, 13 sites) | — | — |
+| **positive** | `--positive-fg-rgb: 55 245 138` (`--brand-signal`, 14 rows) | — | — |
 | **negative** | `--negative-fg-rgb: 248 113 113` (`#f87171`, 1) | — | — |
 
 `positive` and `negative` have foreground only **today**. Child C's `red` family (192 rows, 9
@@ -129,12 +129,14 @@ normalisations Child B must enumerate:
    occurrences (29 alpha-bearing plus three alpha-free at `:120`, `:182`, `:219`) and 87
    utility usages, including `.brand-atmosphere`'s wash and `selection:bg-brand-beam/35` on
    both root layouts.
-2. **`#3dff7c` `61 255 124` → `--positive-fg` `55 245 138`** — **2 sites**. Two greens exist:
-   `--brand-signal` `#37f58a` on 13 sites and `#3dff7c` on 2. The role takes signal's value
-   because it carries six times the usage, so the two `#3dff7c` sites change. An earlier
-   revision of this document claimed `--brand-signal` mapped onto `#3dff7c` and called the
-   pair value-identical — **it is not**, and building to that claim would have made the
-   equality harness fail on 13 sites or silently collapse two distinct greens.
+2. **`#3dff7c` `61 255 124` → `--positive-fg` `55 245 138`** — **6 rows**, all in
+   `DayCard.tsx`: two bracketed `[#3dff7c]` and four `rgba(61,255,124,·)` at .10/.3/.5/.8.
+   Two greens exist: `--brand-signal` `#37f58a` on **14** rows and `#3dff7c` on 6. The role
+   takes signal's value because it carries more than twice the usage, so the six `#3dff7c`
+   rows change. An earlier revision of this document claimed `--brand-signal` mapped onto
+   `#3dff7c` and called the pair value-identical — **it is not**, and building to that claim
+   would have made the equality harness fail on 14 rows or silently collapse two distinct
+   greens.
 
 Every other diff is a defect.
 

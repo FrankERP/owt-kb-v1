@@ -33,16 +33,16 @@ D6. **32** `brand.css` occurrences (29 alpha-bearing, plus three alpha-free at `
 `:182`, `:219`) and **87** utility usages, including `.brand-atmosphere`'s body wash, every
 glow, and `selection:bg-brand-beam/35` on both root layouts.
 
-**2. `#3dff7c` `61 255 124` → `--positive-fg` `55 245 138`** — **6 rows**: two bracketed
-(`DayCard.tsx`) and four `rgba(61,255,124,·)` at .10/.3/.5/.8. Two greens exist —
-`--brand-signal` `#37f58a` on 13 sites and `#3dff7c` on 6 — and the role takes signal's value
-because it carries more than twice the usage.
+**2. `#3dff7c` `61 255 124` → `--positive-fg` `55 245 138`** — **6 rows**, all in
+`DayCard.tsx`: two bracketed `[#3dff7c]` and four `rgba(61,255,124,·)` at .10/.3/.5/.8. Two
+greens exist — `--brand-signal` `#37f58a` on **14** rows and `#3dff7c` on 6 — and the role
+takes signal's value because it carries more than twice the usage.
 
 **An earlier revision of this plan said there was one licensed diff and that six of seven
 retired variables were value-identical renames. That was false:** `--brand-signal` is
 `55 245 138`, not `#3dff7c`. **Five** are value-identical (`blackout`, `console`, `deck`,
-`frost`, `steel`). Built to the old claim, the equality harness would have failed on 13 sites
-or an implementer would have silently collapsed two distinct greens.
+`frost`, `steel`). Built to the old claim, the equality harness would have failed on 14 rows
+or an implementer would have silently collapsed two distinct greens. **14 rows, not 13.**
 
 **Both diffs are enumerated site-by-site and reviewed. Any third diff is a defect.**
 
