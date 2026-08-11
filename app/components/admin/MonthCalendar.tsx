@@ -319,7 +319,7 @@ export default function MonthCalendar({
           const tone = selected
             ? dow === 0
               ? "border-accent/50 bg-accent/10 text-accent"
-              : "border-yellow-400/50 bg-yellow-400/10 text-yellow-400"
+              : "border-recency-strong/50 bg-recency-strong/10 text-recency-strong"
             : special
               ? "border-info-fg/50 bg-info-fg/10 text-info-fg"
               : "border-accent/15 text-mono-500 hover:border-accent/40 hover:text-ink-muted";

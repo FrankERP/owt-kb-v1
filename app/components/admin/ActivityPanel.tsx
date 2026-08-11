@@ -47,7 +47,7 @@ function activityStatus(lastActive: string | null): { color: string; label: stri
   const days = daysSince(lastActive);
   if (days === null)  return { color: "bg-mono-700",      label: "Sin actividad" };
   if (days <= 7)      return { color: "bg-green-500",     label: "Activo" };
-  if (days <= 30)     return { color: "bg-yellow-500",    label: "Reciente" };
+  if (days <= 30)     return { color: "bg-recency-fg",    label: "Reciente" };
   return               { color: "bg-negative-strong/70",          label: "Inactivo" };
 }
 
@@ -128,7 +128,7 @@ export default function ActivityPanel() {
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: "Activos esta semana",  value: activeThisWeek,  dot: "bg-green-500"  },
-          { label: "Activos este mes",     value: activeThisMonth, dot: "bg-yellow-500" },
+          { label: "Activos este mes",     value: activeThisMonth, dot: "bg-recency-fg" },
           { label: "Sin actividad",        value: neverActive,     dot: "bg-mono-600"   },
         ].map((stat) => (
           <div key={stat.label} className="rounded-xl border border-edge-accent-subtle bg-accent/5 px-4 py-3 text-center">

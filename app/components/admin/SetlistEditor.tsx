@@ -32,7 +32,7 @@ function RepeatBadge({ lastUsed }: { lastUsed: string }) {
   if (weeks > 4) return null;
   const cls = weeks <= 2
     ? "bg-negative-strong/20 text-negative-fg border-negative-strong/30"
-    : "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
+    : "bg-recency-fg/20 text-recency-strong border-recency-fg/30";
   return (
     <span className={`font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${cls}`}>
       {weeks <= 0 ? "esta sem." : `hace ${weeks} sem.`}
@@ -477,7 +477,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
         <button
           type="button"
           onClick={() => setReloadToken(t => t + 1)}
-          className="w-full py-2 rounded-lg border border-yellow-500/40 font-label text-xs uppercase tracking-widest text-yellow-300 hover:bg-yellow-500/10 transition-colors"
+          className="w-full py-2 rounded-lg border border-recency-fg/40 font-label text-xs uppercase tracking-widest text-recency-soft hover:bg-recency-fg/10 transition-colors"
         >
           Recargar setlist
         </button>

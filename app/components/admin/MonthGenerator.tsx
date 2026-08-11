@@ -467,12 +467,12 @@ function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDele
             </span>
           ))}
           {r.fairness === "exempt" && (
-            <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30">
+            <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-recency-fg/15 text-recency-strong border border-recency-fg/30">
               fairness_exempt
             </span>
           )}
           {r.fairness === "slack" && (
-            <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30">
+            <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-recency-fg/15 text-recency-strong border border-recency-fg/30">
               slack {r.fairnessSlack}
             </span>
           )}

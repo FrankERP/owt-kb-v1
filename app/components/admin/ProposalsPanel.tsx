@@ -63,7 +63,7 @@ const SERVICE_LABEL: Record<string, string> = {
 
 const STATUS_STYLE: Record<ProposalStatus, string> = {
   draft: "bg-mono-500/15 text-mono-400 border border-mono-500/30",
-  pending: "bg-yellow-500/15 text-yellow-400 border border-yellow-500/30",
+  pending: "bg-recency-fg/15 text-recency-strong border border-recency-fg/30",
   approved: "bg-green-500/15 text-green-400 border border-green-500/30",
   changes_requested: "bg-negative-strong/15 text-negative-fg border border-negative-strong/30",
 };
@@ -234,9 +234,9 @@ function ProposalCard({
       {/* Stale-review banner (409). The card keeps exactly what was reviewed. */}
       {conflict && (
         <div className="px-4 pb-3">
-          <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-3 py-2">
-            <p className="font-label text-[11px] uppercase tracking-widest text-yellow-400">Propuesta actualizada</p>
-            <p className="font-body text-sm text-yellow-200/90">
+          <div className="rounded-lg border border-recency-fg/40 bg-recency-fg/10 px-3 py-2">
+            <p className="font-label text-[11px] uppercase tracking-widest text-recency-strong">Propuesta actualizada</p>
+            <p className="font-body text-sm text-recency-faint/90">
               Cambió mientras la revisabas. Recarga las propuestas y vuelve a revisar.
             </p>
           </div>
@@ -535,7 +535,7 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
           >
             {label}
             {id === "pending" && pendingCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-yellow-500 text-black font-bold text-[10px] flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-recency-fg text-black font-bold text-[10px] flex items-center justify-center">
                 {pendingCount}
               </span>
             )}
@@ -547,7 +547,7 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
       {handoffNotice && (
         <p
           role="status"
-          className="rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 font-body text-sm text-yellow-200/90 [overflow-wrap:anywhere]"
+          className="rounded-xl border border-recency-fg/40 bg-recency-fg/10 px-4 py-3 font-body text-sm text-recency-faint/90 [overflow-wrap:anywhere]"
         >
           {handoffNotice}
         </p>

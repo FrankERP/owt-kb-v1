@@ -195,7 +195,7 @@ export default function IntegrityQueuePanel({
     tone === "clean"
       ? "border-green-500/25 text-green-400"
       : tone === "unknown"
-        ? "border-yellow-500/30 text-yellow-400"
+        ? "border-recency-fg/30 text-recency-strong"
         : "border-negative-strong/30 text-negative-fg";
 
   return (
@@ -245,11 +245,11 @@ export default function IntegrityQueuePanel({
 
       {/* Honest partial-source state: never a clean zero. */}
       {queue.incomplete && (
-        <div className="mx-3 mb-2 rounded-lg border border-yellow-500/30 bg-yellow-500/5 px-3 py-2 sm:mx-4">
-          <p className="font-body text-xs text-yellow-200/90">{INTEGRITY_INCOMPLETE_NOTE}</p>
+        <div className="mx-3 mb-2 rounded-lg border border-recency-fg/30 bg-recency-fg/5 px-3 py-2 sm:mx-4">
+          <p className="font-body text-xs text-recency-faint/90">{INTEGRITY_INCOMPLETE_NOTE}</p>
           <ul className="mt-1 space-y-0.5">
             {queue.unproven.map((u) => (
-              <li key={u.source} className="font-body text-xs text-yellow-200/70">
+              <li key={u.source} className="font-body text-xs text-recency-faint/70">
                 {u.state === "loading" ? "Cargando" : "Falló"}:{" "}
                 {DOMAIN_LABEL[
                   INTEGRITY_DOMAINS.find((d) => INTEGRITY_DOMAIN_SOURCE[d] === u.source) ?? "roles"

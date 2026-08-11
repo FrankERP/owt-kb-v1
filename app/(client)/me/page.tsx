@@ -34,7 +34,7 @@ const STATUS_LABEL: Record<ProposalStatus, string> = {
 
 const STATUS_STYLE: Record<ProposalStatus, string> = {
   draft: "border-surface-accent-30 text-mono-400 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent",
-  pending: "border-yellow-500/40 text-yellow-400 hover:border-yellow-400",
+  pending: "border-recency-fg/40 text-recency-strong hover:border-recency-strong",
   approved: "border-green-500/40 text-green-400 cursor-default",
   changes_requested: "border-negative-strong/40 text-negative-fg hover:border-negative-muted",
 };

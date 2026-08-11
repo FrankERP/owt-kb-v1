@@ -81,7 +81,7 @@ const STATUS_LABEL: Record<ProposalStatus, string> = {
 
 const STATUS_STYLE: Record<ProposalStatus, string> = {
   draft: "bg-mono-500/15 text-mono-400 border border-mono-500/30",
-  pending: "bg-yellow-500/15 text-yellow-400 border border-yellow-500/30",
+  pending: "bg-recency-fg/15 text-recency-strong border border-recency-fg/30",
   approved: "bg-green-500/15 text-green-400 border border-green-500/30",
   changes_requested: "bg-negative-strong/15 text-negative-fg border border-negative-strong/30",
 };
@@ -398,16 +398,16 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
       {/* Stale-reload banner (409: a co-lead changed the shared proposal, or it
           was approved). Non-destructive — the editor keeps the lead's unsaved work. */}
       {staleReload && (
-        <div className="rounded-xl border border-yellow-500/40 bg-yellow-500/10 p-4 space-y-2">
-          <p className="font-label text-xs uppercase tracking-widest text-yellow-400">Propuesta actualizada</p>
-          <p className="font-body text-sm text-yellow-200/90">
+        <div className="rounded-xl border border-recency-fg/40 bg-recency-fg/10 p-4 space-y-2">
+          <p className="font-label text-xs uppercase tracking-widest text-recency-strong">Propuesta actualizada</p>
+          <p className="font-body text-sm text-recency-faint/90">
             Otro líder actualizó esta propuesta compartida (o ya fue aprobada). Recarga para ver
             los cambios antes de volver a guardar.
           </p>
           <button
             type="button"
             onClick={() => { setStaleReload(false); router.refresh(); }}
-            className="mt-1 py-2 px-4 rounded-lg border border-yellow-500/40 font-label text-xs uppercase tracking-widest text-yellow-300 hover:bg-yellow-500/10 transition-colors"
+            className="mt-1 py-2 px-4 rounded-lg border border-recency-fg/40 font-label text-xs uppercase tracking-widest text-recency-soft hover:bg-recency-fg/10 transition-colors"
           >
             Recargar
           </button>
