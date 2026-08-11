@@ -151,6 +151,14 @@ export default defineConfig([
             "TemplateElement[value.raw=/\\b(bg|text|border|ring-offset|ring|divide|from|via|to|fill|stroke|placeholder|shadow|outline|decoration|caret|accent)-(gray|red|yellow|green|amber|orange|purple|blue|slate|zinc|neutral|stone|emerald|teal|cyan|sky|indigo|violet|fuchsia|pink|rose|lime)-[0-9]{2,3}\\b/]",
           message: "Raw Tailwind palette class in a template — use a role token.",
         },
+        // SCOPE, stated because the clauses above read broader than they are: this block
+        // is `files: ["app/**/*.{ts,tsx}"]`, so it covers TS and TSX only. It does NOT
+        // cover app/(admin)/globals.css, app/(client)/globals.css, app/brand.css,
+        // scripts/, sanity/ or tailwind.config.ts — ESLint cannot lint CSS without a
+        // plugin. Both globals.css files carry zero palette classes and zero rgba()/hsl()
+        // literals today, so there is no live hole; but "stops them coming back" is true
+        // of the TS/TSX surface, not of the whole repository.
+        //
         // STILL NOT HERE: any clause for `white`/`black`. Child C left 45 such rows
         // literal on purpose — they are contrast anchors, not palette entries — and a
         // family clause keyed on `-\d{2,3}` cannot match a keyword anyway. Adding an
