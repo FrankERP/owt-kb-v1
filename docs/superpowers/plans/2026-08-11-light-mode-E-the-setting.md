@@ -14,7 +14,8 @@ No secrets, credentials or personal data appear here.
 
 - **Document status:** Draft — not reviewed, not approved, not authorization to implement.
 - **Requirement source:** [parent scope spec](../specs/2026-08-07-light-mode-member-first-scope.md),
-  row E of §11; requirements D5, D7, D12, D14, D16, D17; assumptions A5 and A6.
+  row E of §11; §12's coverage table; requirements D5, D7, D12, D14, **D15**, D16, D17;
+  invariants 14 and 17; assumptions A5 and A6; §9's landmines.
 - **Risk tier: CRITICAL — two sequential fresh `APPROVED` verdicts on byte-identical text.**
   Not because it is large; it is the smallest child by line count. Because it:
   - ships a **mutating production write route** (`PATCH /api/me/theme`) against the real
@@ -30,11 +31,12 @@ No secrets, credentials or personal data appear here.
 
 | # | Change | File |
 |---|---|---|
-| 1 | `themePref` field on `teamMembers` | `sanity/schemas/worshipTeam.ts` |
+| 1 | `themePref` on `teamMembers` — **no `initialValue`**, `hidden: true` | `sanity/schemas/worshipTeam.ts` |
 | 2 | `PATCH /api/me/theme` — a member writes their own preference | `app/api/me/theme/route.ts` (new) |
 | 3 | **`GET /api/me` projection gains `themePref`** — D15's read path | `app/api/me/route.ts` |
 | 3b | The `/me` control | `app/components/ui/ThemeControl.tsx` (new), rendered in `app/(client)/me/page.tsx` |
-| 4 | `localStorage` mirror + pre-hydration paint | `app/utils/themePref.ts` (new), `app/components/ThemeBootstrap.tsx` (new) |
+| 4 | The fetch/validate helper and `clearThemeMirror()` — **not** a second store | `app/utils/themePref.ts` (new) |
+| 4b | Reads the projection, calls `setTheme`, swaps the `<meta>` | `app/components/ThemeBootstrap.tsx` (new), mounted in `Provider.tsx` |
 | 5 | **`forcedTheme="dark"` removed**, explicit `defaultTheme="dark"` added | `app/utils/Provider.tsx:16` |
 | 6 | `themeColor` **swapped client-side on the resolved theme** | `app/components/ThemeBootstrap.tsx` |
 | 7 | iOS status bar | **deferred with a recorded remnant — see A6 below** |
@@ -71,6 +73,17 @@ So: the projection gains `themePref`, and `ThemeBootstrap` **calls `setTheme()`*
 it reads. Writing `localStorage` alone does not repaint the current tab — `next-themes`
 only listens for `storage` events, which fire cross-tab, never in the tab that wrote.
 
+**`themePref.ts` must not own storage.** `next-themes` already does both halves —
+`setTheme` writes the mirror, its injected script does the pre-hydration seed — so this
+file holds only the `GET /api/me` fetch, the `"dark" | "light"` validator, and
+`clearThemeMirror()`. A second mirror on a second key is the failure mode to avoid.
+
+**`ThemeBootstrap` mounts inside `Provider.tsx`, not in a layout.** It needs `setTheme`, so
+it must sit inside `<ThemeProvider>`. `TextScaleBootstrap` — the shape precedent — is
+mounted only at `(client)/layout.tsx:76`, and copying that placement would leave an admin
+whose first load of a session is `/admin` on a preference they never fetched. Mounting
+inside `Provider` covers both root layouts and correctly excludes the provider-less gallery.
+
 ### `setTheme` MUST be guarded, and this is the most dangerous line in Child E
 
 **`next-themes` has no falsy guard on the setter.** Verified in its source:
@@ -101,8 +114,8 @@ this — that is the server store, this is the browser one, and they fail indepe
 The parent records this landmine in §9. An earlier revision of this plan cited §9 for the
 `enableSystem` trap and missed the `setTheme` one sitting beside it.
 
-**UNSET MUST STAY DISTINGUISHABLE, and F depends on it** (invariant 14). The control
-renders a fourth state — no preference yet — and **must not write `themePref` on mount, on
+**UNSET MUST STAY DISTINGUISHABLE, and F depends on it** (invariant 14). The control has
+**three** states — Dark, Light, and no preference yet — and **must not write `themePref` on mount, on
 first render, or on any path a member has not explicitly clicked.** `TextSizeControl`
 initialises to a concrete default, so following it here would write `"dark"` the moment
 someone opens `/me`, destroying F's staged rollout for that member with no way to detect
@@ -136,12 +149,30 @@ writeClient.patch(session.user.sanityId).set({ themePref: theme }).commit()
   route test pins it. The theme still applies locally for the impersonating admin — it just
   never persists to the impersonated member's record.
 
-- **Sign-out clears the `localStorage` mirror**, and so does stopping impersonation, or a
-  shared device carries one member's theme into the next session. **Name the call sites
-  rather than the intent:** `next-themes` owns the key `"theme"`, so the clear is
-  `localStorage.removeItem("theme")` in the sign-out handler and in the stop-impersonating
-  handler. An implementer told only "clears the mirror" will guess at both the key and the
-  place.
+- **Sign-out clears the `localStorage` mirror — at all FOUR call sites.** An earlier
+  revision said "the sign-out handler", singular. There are four, and the two most-used are
+  not the one an implementer would guess:
+
+  | Site | |
+  |---|---|
+  | `app/components/BottomNav.tsx:88` | mobile "Salir" — the most-used path on phones |
+  | `app/components/NavMenu.tsx:159` | desktop menu |
+  | `app/components/SignOutButton.tsx:8` | |
+  | `app/(client)/auth/not-a-member/page.tsx:21` | |
+
+  **There is no precedent to copy:** `grep -rn removeItem app` returns nothing, and
+  `textZoom.ts` — the named precedent — never clears at all.
+
+  So `themePref.ts` exports **`clearThemeMirror()`**, all four sites call it, and the
+  stop-impersonating handler calls it too. `next-themes` owns the key `"theme"`.
+
+  **This gets a guard, not just a mention.** A source-scan test asserts that no file
+  containing `signOut(` lacks the clear — the same shape as the `Provider.tsx` source-text
+  test, and for the same reason: the failure is silent. Shipped without it, a member who
+  signs out on the mobile nav leaves `theme=light` behind; the next member signs in, the
+  seed paints light, and `ThemeBootstrap` correctly does nothing because their `themePref`
+  is unset. That falsifies E's safe ending state, and their only escape is to pick Dark —
+  which writes `themePref` and destroys the unset signal **Child F depends on**.
 - **E's 403 is deliberately STRICTER than the repo precedent, and that is not an
   inconsistency to reconcile.** `PATCH /api/me` (alias, email) already writes to the
   impersonated member's record with no such guard. E does not follow it because a theme is
@@ -203,10 +234,22 @@ recording because they are opposite errors:
 Keying on the RESOLVED theme has neither problem: unset resolves to dark, so the swap
 writes `#010b17` and nothing changes for anyone who opted into nothing.
 
+**The light value is `#eef3f9`** — `--surface-base`'s light triplet, the page wash itself.
+Written as a hex literal in `ThemeBootstrap.tsx` it trips Child C's
+`Literal[value=/#[0-9a-fA-F]{6}\b/]` clause, which is error-level across `app/**/*.tsx`.
+Use the inline `eslint-disable-next-line` with a reason, exactly as the rule's own message
+sanctions and as `(client)/layout.tsx:47` already does — a `<meta>` content attribute
+cannot take a `var()`.
+
 `appleWebApp.statusBarStyle` stays `"black-translucent"` — it is a static PWA enum with no
 client-side equivalent, and **A6's fallback covers it**: `@capacitor/status-bar` is
 confirmed absent from `package.json`, so the native bar keeps its `Info.plist` default and
 is recorded as a known remnant. The web surface is unaffected.
+
+**That remnant has a destination.** Parent §5:202 asserts the `Info.plist` value "is
+overridden at runtime by Child E's status-bar work" — which becomes false the moment E
+takes A6's fallback. E's docs pass corrects that line rather than leaving the parent
+claiming something the delivery did not do.
 
 ### A6: the iOS status bar is deferred, with the remnant recorded
 
@@ -215,6 +258,18 @@ explicit fallback: ship without the plugin, leave the native bar at its `Info.pl
 default, record it as a known remnant, and **do not let it block the delivery**. E takes
 that fallback. `appleWebApp.statusBarStyle: "black-translucent"` stays on both layouts and
 is wrong in light on a native build; the web surface is unaffected.
+
+## The schema field must have NO `initialValue`
+
+Every neighbouring preference in `sanity/schemas/worshipTeam.ts` carries one —
+`initialValue: true` at `:75`, `:80`, `:87`. Copying that habit here would write a default
+on Studio document creation and **breach invariant 14 before a member ever opens the
+control**, taking F's staged rollout with it.
+
+`themePref` is a bare `string` with no `initialValue`, and `hidden: true` — following
+`deviceTokens` at `:60` — so it stays out of Studio's member form. It is a client
+preference, not something an admin sets on someone's behalf, which is the same reasoning
+behind the route's 403 under impersonation.
 
 ## Slicing
 
@@ -243,6 +298,10 @@ A reviewer should spend their attention there and treat E1–E3 as ordinary work
   acceptance criteria (§4.4), **plus `/posts/[slug]`**: §12 marks Child B's typography and
   `dark:prose-invert` row "E verifies on device", and that route is where the unstyled-lyrics
   regression §9 warns about would show.
+- **Every guard below lives under `app/utils/__tests__/`.** `vitest.config.ts` includes only
+  `app/**`, `scripts/**` and `e2e/**`, so a test written outside those roots never runs and
+  never fails — §9's landmine, and it would silently void the highest-consequence assertion
+  in this child.
 - **A test that no mount path writes `themePref`** — invariant 14's "unset stays
   distinguishable", which F depends on.
 - **A route test for the impersonation rejection**, since that claim is the one a
