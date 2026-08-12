@@ -8,10 +8,11 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 310,
-    "filesScanned": 213,
-    "filesWithColour": 45,
+    "literalRows": 312,
+    "filesScanned": 214,
+    "filesWithColour": 46,
     "byCategory": {
+      "2": 2,
       "4": 70,
       "8": 89,
       "9": 10,
@@ -19,7 +20,7 @@
       "12": 134
     },
     "byDisposition": {
-      "B": 116,
+      "B": 118,
       "exempt": 26,
       "keep": 241,
       "C": 7,
@@ -186,7 +187,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 47,
+      "line": 49,
       "disposition": "exempt",
       "reason": "Static viewport themeColor. Child E makes it theme-responsive under parent invariant 17."
     },
@@ -2922,18 +2923,6 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 172,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/BottomNav.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "fill=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "fill",
       "line": 173,
       "disposition": "B",
       "reason": null
@@ -2954,11 +2943,11 @@
       "file": "app/components/BottomNav.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
+      "value": "fill=\"currentColor\"",
       "alpha": null,
       "utility": null,
-      "carrier": "stroke",
-      "line": 141,
+      "carrier": "fill",
+      "line": 175,
       "disposition": "B",
       "reason": null
     },
@@ -2970,7 +2959,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 152,
+      "line": 142,
       "disposition": "B",
       "reason": null
     },
@@ -2982,7 +2971,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 162,
+      "line": 153,
       "disposition": "B",
       "reason": null
     },
@@ -2994,7 +2983,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 171,
+      "line": 163,
       "disposition": "B",
       "reason": null
     },
@@ -3006,7 +2995,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 181,
+      "line": 172,
       "disposition": "B",
       "reason": null
     },
@@ -3018,7 +3007,19 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 189,
+      "line": 182,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/BottomNav.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 190,
       "disposition": "B",
       "reason": null
     },
@@ -3222,7 +3223,7 @@
       "alpha": null,
       "utility": "ring",
       "carrier": null,
-      "line": 117,
+      "line": 118,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3234,7 +3235,7 @@
       "alpha": null,
       "utility": "ring",
       "carrier": null,
-      "line": 120,
+      "line": 121,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3246,7 +3247,7 @@
       "alpha": null,
       "utility": "text",
       "carrier": null,
-      "line": 126,
+      "line": 127,
       "disposition": "C",
       "reason": null
     },
@@ -3621,6 +3622,30 @@
       "line": 168,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/ThemeBootstrap.tsx",
+      "category": 2,
+      "categoryName": "bare-hex",
+      "value": "#010b17",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 55,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/ThemeBootstrap.tsx",
+      "category": 2,
+      "categoryName": "bare-hex",
+      "value": "#eef3f9",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 58,
+      "disposition": "B",
+      "reason": null
     },
     {
       "file": "app/components/ui/CueDialog.tsx",

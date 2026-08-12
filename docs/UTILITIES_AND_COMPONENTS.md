@@ -144,10 +144,30 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
 - **`interface.tsx`** — shared domain TS interfaces (no runtime): `Post`, `Tag`, `Author`,
   `TeamMember`, `SundayRole`/`SaturdayRole`/`SpecialRole`, `SetlistProposal`, etc.
 - **`Provider.tsx`** — client root provider: `SessionProvider` → `ThemeProvider`
-  (`forcedTheme="dark"`, `enableSystem={false}`) → `PlayerProvider` → `CueDialogProvider`.
-  **Note for the light-mode migration:** with `enableSystem={false}` and no `defaultTheme`,
-  next-themes resolves `defaultTheme` to `"light"` — so removing `forcedTheme` alone would
-  ship unset members into *light*. Child E must add `defaultTheme="dark"` explicitly.
+  (`defaultTheme="dark"`, `forcedTheme="dark"`, `enableSystem={false}`) → **`ThemeBootstrap`**
+  → `PlayerProvider` → `CueDialogProvider`.
+  **`defaultTheme="dark"` is load-bearing, do not remove it:** with `enableSystem={false}`
+  and no explicit default, next-themes resolves `defaultTheme` to `"light"`, so dropping
+  `forcedTheme` would ship every unset member into *light*. `themeWiring.test.ts` asserts it
+  as source text, because a rendering test passes either way.
+- **`ThemeBootstrap.tsx`** — reads the member's `themePref` from `GET /api/me`, calls
+  `setTheme` with it, and exposes the **literal** value (never the resolved theme) to
+  `ThemeControl` via context. Wraps `children` rather than rendering beside them, because the
+  control sits several layers below `Provider` and props cannot reach it. Skips the fetch
+  entirely while impersonating, and gates on `useSession().status === "authenticated"`.
+  Also swaps `<meta name="theme-color">` on the resolved theme, null-guarded because
+  `(admin)/layout.tsx` exports no `viewport`.
+- **`themePref.ts`** — the fetch/validate helper, `clearThemeMirror()`, and
+  `THEME_MIGRATION_SCRIPT`. **Carries no `"use client"`** (both root layouts import the script
+  constant as Server Components) and wraps every `localStorage` access, because
+  `clearThemeMirror()` runs inside four sign-out `onClick` handlers where a throw would abort
+  the handler before `signOut()`.
+
+**Two client-side storage keys**, neither a secret, both persistent state worth not
+"cleaning up": **`theme`** is next-themes' own mirror — a paint cache, not the source of
+truth (`themePref` on the member document is), cleared at sign-out so a shared device does
+not show one member's theme to the next; and **`owt-theme-migrated`** is the one-time flag for
+the legacy-mirror reconciliation that runs before the seed in both root layouts.
 
 ---
 

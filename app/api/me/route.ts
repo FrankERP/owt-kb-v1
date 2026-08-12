@@ -12,7 +12,12 @@ export async function GET() {
     `*[_type == "teamMembers" && _id == $id][0] {
       _id, member_name, alias, email, role, memberType,
       "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl),
-      "hasPassword": defined(passwordHash) && passwordHash != ""
+      "hasPassword": defined(passwordHash) && passwordHash != "",
+      // ADDITIVE. Do not narrow this projection to just themePref for the sake of
+      // ThemeBootstrap's per-load cost: nothing in app/ GETs this route today, so
+      // no test and no gate would catch the eight fields above going missing.
+      // If the cost ever matters, add a separate narrow reader.
+      themePref
     }`,
     { id: session.user.sanityId }
   );
