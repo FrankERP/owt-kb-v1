@@ -32,10 +32,11 @@ No secrets, credentials or personal data appear here.
 |---|---|---|
 | 1 | `themePref` field on `teamMember` | `sanity/schemas/worshipTeam.ts` |
 | 2 | `PATCH /api/me/theme` — a member writes their own preference | `app/api/me/theme/route.ts` (new) |
-| 3 | The `/me` control | `app/components/ui/ThemeControl.tsx` (new), rendered in `app/(client)/me/page.tsx` |
+| 3 | **`GET /api/me` projection gains `themePref`** — D15's read path | `app/api/me/route.ts` |
+| 3b | The `/me` control | `app/components/ui/ThemeControl.tsx` (new), rendered in `app/(client)/me/page.tsx` |
 | 4 | `localStorage` mirror + pre-hydration paint | `app/utils/themePref.ts` (new), `app/components/ThemeBootstrap.tsx` (new) |
 | 5 | **`forcedTheme="dark"` removed**, explicit `defaultTheme="dark"` added | `app/utils/Provider.tsx:16` |
-| 6 | `themeColor` becomes theme-responsive | `app/(client)/layout.tsx:47`, `app/(admin)/layout.tsx` |
+| 6 | `themeColor` **stays static**, remnant recorded — invariant 17's own fallback | *(no change; see below)* |
 | 7 | iOS status bar | **deferred with a recorded remnant — see A6 below** |
 
 ## The default is `"dark"`, and it must be written explicitly
@@ -52,6 +53,30 @@ for anyone who does not opt in.
 **A test asserts it**, and asserts it by reading `Provider.tsx` rather than by rendering,
 because a rendering test passes just as happily with `forcedTheme` still present.
 
+## The server value needs a way DOWN, not just up
+
+An earlier revision of this plan called `themePref` the source of truth and shipped only
+the write route. **`GET /api/me` does not project `themePref`** — verified — and
+`TextScaleBootstrap`, the named precedent, reads `localStorage` only. Following it
+"exactly" would have produced a **device-local preference with a write-only server
+field**: the plan's own "follows the member across devices" claim, unimplementable.
+
+Parent §12 assigns E "`GET /api/me` projection + write route (D15)", and D15 is explicit
+that the projection is the mechanism and that a JWT claim is **not** an acceptable
+substitute — the session carries a 30-second-TTL `{_id, disabled, role}` projection and
+nothing more.
+
+So: the projection gains `themePref`, and `ThemeBootstrap` **calls `setTheme()`** with what
+it reads. Writing `localStorage` alone does not repaint the current tab — `next-themes`
+only listens for `storage` events, which fire cross-tab, never in the tab that wrote.
+
+**UNSET MUST STAY DISTINGUISHABLE, and F depends on it** (invariant 14). The control
+renders a fourth state — no preference yet — and **must not write `themePref` on mount, on
+first render, or on any path a member has not explicitly clicked.** `TextSizeControl`
+initialises to a concrete default, so following it here would write `"dark"` the moment
+someone opens `/me`, destroying F's staged rollout for that member with no way to detect
+it. A test asserts no mount path issues a PATCH.
+
 ## The write route
 
 `PATCH /api/me/theme`, modelled on `app/api/me/notif-prefs/route.ts` — the repo's only
@@ -59,13 +84,29 @@ member-writes-own-preference route, and the shape D7 mandates following.
 
 ```
 requireActiveSession()  ->  401 if absent
-body: { theme: "dark" | "light" | "system" }
+body: { theme: "dark" | "light" }        <- NOT "system"; see E-Q1
 validate against that literal set  ->  400 on anything else
+reject if session.user.isImpersonating   ->  403
 writeClient.patch(session.user.sanityId).set({ themePref: theme }).commit()
 ```
 
-- **Self-write only.** The document id comes from `session.user.sanityId`, never from the
-  body. A member cannot write another member's preference because the id is never an input.
+- **Self-write only, with one real exception that must be handled.** The document id comes
+  from `session.user.sanityId`, never from the body, so no member can address another
+  member's record by crafting a request.
+
+  **But impersonation rewrites that id.** `auth.ts:182` sets `token.sanityId = target._id`
+  and `auth.ts:263` surfaces it, so a super-admin who toggles the theme while impersonating
+  writes the IMPERSONATED member's `themePref` to production Sanity — a persistent
+  cross-member write from a UI action that looks local. Parent §12 assigns E
+  "impersonation isolation" and an earlier revision of this plan claimed self-write safety
+  without qualification, which was simply false.
+
+  **The route rejects the write when `session.user.isImpersonating` is true** (403), and a
+  route test pins it. The theme still applies locally for the impersonating admin — it just
+  never persists to the impersonated member's record.
+
+- **Sign-out clears the `localStorage` mirror**, and so does stopping impersonation.
+  Otherwise a shared device carries the previous member's theme into the next session.
 - **No `revalidate*` call, and that is deliberate.** `CLAUDE.md`'s cache invariant covers
   routes that mutate **content**; `themePref` is per-member chrome that no ISR page renders.
   Calling `revalidateServiceViews()` here would invalidate the whole schedule for a colour
@@ -84,28 +125,38 @@ Two stores, and the split matters:
 | `themePref` on `teamMember` | **source of truth** | Follows the member across devices, and is what D7 asks for |
 | `localStorage` | **paint cache** | `next-themes` needs the value BEFORE hydration or the page flashes the wrong theme |
 
-`ThemeBootstrap` mirrors the server value into `localStorage` on mount, following
-`TextScaleBootstrap` exactly. On a fresh device the first paint uses the default (`dark`)
-and corrects after the session resolves — **a one-frame flash toward dark, never toward
-light**, which is the safe direction.
+`ThemeBootstrap` reads `themePref` from the `GET /api/me` projection and calls
+`setTheme()` — **not** a bare `localStorage` write, which would not repaint the current
+tab, since `next-themes` only listens for cross-tab `storage` events. `next-themes` writes
+the mirror itself as a side effect of `setTheme`.
+
+**The first-paint claim, stated accurately.** On a device with no mirror, the first paint
+uses `defaultTheme="dark"` and corrects once the session resolves — a flash toward dark,
+which is the safe direction because it matches what ships today. **But that is only true of
+a fresh device.** A member who chose Light on device A and has an unrelated mirror on
+device B sees a flash toward light on B until the projection lands. An earlier revision
+claimed "never toward light", which was stronger than the mechanism supports.
 
 ## `themeColor` and the native shell
 
-`(client)/layout.tsx:47` pins `themeColor: "#010b17"`. Next.js accepts an array with
-`media` conditions, so it becomes:
+`(client)/layout.tsx:47` pins `themeColor: "#010b17"`, and **it stays pinned.**
 
-```
-themeColor: [
-  { media: "(prefers-color-scheme: dark)",  color: "#010b17" },
-  { media: "(prefers-color-scheme: light)", color: "#eef3f9" },
-]
-```
+An earlier revision made it an OS-keyed media array. That is not one of the two outcomes
+invariant 17 sanctions, and it **regresses the default member**: someone on a light-OS
+device who never touches the control — the common case, since iOS defaults to light —
+would get `#eef3f9` browser chrome around a still-dark app. That directly contradicts
+this plan's own safe-ending-state claim, and the earlier text described the mismatch
+backwards, citing the rare dark-OS-forcing-light case instead.
 
-**This keys off the OS preference, not our `themePref`** — a static export cannot read a
-per-member value. So a member who forces Light on a dark-OS device gets dark browser
-chrome around a light page. **Accepted, and recorded here as a known cosmetic mismatch**
-rather than discovered later; making it exact requires a client-side `<meta>` swap, which
-is Child F's call if anyone minds.
+Invariant 17 permits exactly two things: a client-side `<meta>` swap, or leave it static
+and record the remnant. **E takes the second.** The chrome stays `#010b17` for everyone,
+which is what ships today, so a member who opts into Light gets dark browser chrome around
+a light page — visible, cosmetic, and strictly better than changing it for people who
+opted into nothing. `appleWebApp.statusBarStyle` stays `"black-translucent"` for the same
+reason; §12 couples them to the same requirement.
+
+**Recorded remnant for F:** the `<meta>` swap is the exact fix, and F is where it belongs,
+because F is where the default moves and the chrome question becomes load-bearing.
 
 ### A6: the iOS status bar is deferred, with the remnant recorded
 
@@ -124,7 +175,7 @@ it ships inert and independently revertible.
 |---|---|---|
 | **E1** | `themePref` schema field + Studio deploy | no |
 | **E2** | `PATCH /api/me/theme` + its route test | no — nothing calls it |
-| **E3** | `themePref.ts`, `ThemeBootstrap`, the `/me` control | no — `forcedTheme` still wins |
+| **E3** | `GET /api/me` projection, `themePref.ts`, `ThemeBootstrap`, the `/me` control | no — `forcedTheme` still wins |
 | **E4** | **Remove `forcedTheme`, add `defaultTheme="dark"`, theme-responsive `themeColor`** | **YES** |
 
 **E4 is the whole risk.** E1–E3 are additive and could sit on `main` for a week harmlessly.
@@ -140,7 +191,21 @@ A reviewer should spend their attention there and treat E1–E3 as ordinary work
 - **Browser, both themes, on the real components** — the pass that found the two defects D
   shipped. Specifically an open `CueDialog` and `PlannerGrid` full-screen, which the parent
   names as acceptance criteria (§4.4).
+- **A test that no mount path writes `themePref`** — invariant 14's "unset stays
+  distinguishable", which F depends on.
+- **A route test for the impersonation rejection**, since that claim is the one a
+  Critical-tier reviewer should not have to take on trust.
 - `npx tsc --noEmit`, `npm test`, `npx eslint .` at 0 errors, per slice.
+- **Two stale comments to update in the same delivery**, per CLAUDE.md's currency rule:
+  `app/(gallery)/theme-gallery/[theme]/layout.tsx:10-14` and
+  `app/utils/__tests__/themeGallery.test.ts:98-100` both justify their design "while
+  `forcedTheme` is still in force". The reasoning survives E4 — the nested-provider
+  pass-through is independent of `forcedTheme` — but the sentences go stale the moment it
+  lands.
+- **Name the read path the control initialises from.** `/me` carries
+  `export const revalidate = 60`, so "no ISR page renders `themePref`" must be checkable
+  rather than asserted: the control initialises from the client-side `GET /api/me` fetch,
+  not from the server-rendered page, which is why the no-`revalidate` argument holds.
 
 ## Risks
 
@@ -156,7 +221,7 @@ A reviewer should spend their attention there and treat E1–E3 as ordinary work
 
 | # | Question | Blocking? | Bounded default |
 |---|---|---|---|
-| **E-Q1** | Does the `/me` control offer three options (Dark / Light / Follow System) or two? | **No** | Three. `system` costs one extra literal and is what F moves the default to |
+| **E-Q1** | Does the `/me` control offer three options or two? | **RESOLVED — two: Dark and Light** | An earlier revision defaulted to three, which ships a silent failure. With `enableSystem={false}`, `next-themes` treats `"system"` as `i==="system"&&n&&(...)` — the `n` is `enableSystem` — so it adds a literal `system` class and NO `light`/`dark` class. The member picks "Follow System", the app stays dark forever, `themePref` reads `"system"` in Sanity, and nothing logs. Parent §9 names this exact trap and §12 assigns the `enableSystem` flip to **F**. `"system"` stays out of the accepted literal set until F owns it |
 | **E-Q2** | Does the `(admin)` chrome get its own control? | **No** | No — D14 says admin follows the theme, one preference for both |
 
 ---
