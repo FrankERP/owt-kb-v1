@@ -52,7 +52,7 @@ Documentation, in the same delivery:
 | D-c | `themePref.ts` + `ThemeBootstrap` (E3); `ThemeControl` (E4) | `UTILITIES_AND_COMPONENTS.md` |
 | D-d | The two client-side keys — `"theme"` (next-themes' mirror) and `owt-theme-migrated` (the one-time flag). Neither is a secret; both are persistent state a later hand would otherwise "clean up" | `UTILITIES_AND_COMPONENTS.md`, beside `themePref` |
 | D-e | **ADR-0008 interim Consequences note** — precondition met, lever pulled in E4; full supersession stays Child F's | `docs/adr/0008-forced-dark-theme.md` (E4) |
-| D-f | Parent §5:188-190 + its §12 row **amended** with the `statusBarStyle` geometry constraint and remnant; parent §5:202 corrected; `§5:181`'s stale `(client)/layout.tsx:42` corrected to `:47`; the present-tense `forcedTheme` statements at **§3:43** and **§12:591** updated in the same pass | the parent scope spec |
+| D-f | Parent §5:188-190 + its §12 row **amended** with the `statusBarStyle` geometry constraint and remnant; parent §5:202 corrected; `§5:181`'s **and `:64`'s** stale `(client)/layout.tsx:42` corrected to `:47`; the present-tense `forcedTheme` statements at **§3:43** and **§12:591** updated in the same pass | the parent scope spec |
 | D-g | The two PWA remnants recorded together — `statusBarStyle` and `manifest.webmanifest`'s `theme_color` | `UTILITIES_AND_COMPONENTS.md` |
 | D-i | **`CLAUDE.md:8` + `AGENTS.md:8` — "Dark-mode only."** becomes flatly false at E4. **Both files, same commit**: `app/utils/__tests__/agentDocsParity.test.ts` asserts they are byte-identical outside the title and the Continuous-improvement section, so editing one turns `npm test` red | **E4** |
 | D-h | **Four** stale `forcedTheme` statements — see Verification for the full list and the method | gallery layout, `themeGallery.test.ts`, `UTILITIES_AND_COMPONENTS.md`, **`app/brand.css:362`** |
@@ -367,9 +367,24 @@ leave next-themes holding `"light"` internally, and doing only the `setTheme` wo
 unset population to a `"dark"` mirror and quietly defeat F's rollout.
 
 This costs an unset member with no mirror nothing: the condition is never true for them. It
-subsumes the flag for repair purposes — a re-poisoned mirror is cleared on the very next load
-— while the pre-hydration script still earns its place, because without it the legacy member
-sees a light **first paint** before any React code runs.
+subsumes the flag for repair purposes, while the pre-hydration script still earns its place:
+without it the legacy member sees a light **first paint** before any React code runs.
+
+**The repair converges once the poisoning tab is gone, which is not the same as "on the next
+load".** The repair's own `clearThemeMirror()` issues a `removeItem`, which the stale pre-E3
+tab answers with `setTheme("light")` all over again. In E3 that is invisible — `forcedTheme`
+still masks the paint, and only the `theme-color` symptom recurs. If that same tab is *still*
+open at E4, the member repaints light post-hydration having chosen nothing. It self-heals the
+instant that tab is closed or reloaded, and the cohort is legacy-mirror ∩ tab-open-across-**two**
+deploys, so this is stated rather than designed around — but stated, because "cleared on the
+next load" is a guarantee that sits one open tab away from false.
+
+**A failed fetch is NOT unset.** The repair fires only when `GET /api/me` **succeeds** and the
+field is absent. An implementer who treats a non-`ok` response or a network error as
+`themePref === undefined` would clear an explicit-Light member's mirror and repaint them dark
+on every blip. It never writes Sanity and self-corrects on the next successful load, so it is
+not terminal — but every other population in this plan is separated carefully, and this one
+deserves the same clause.
 
 **Child F must still not treat mirror-absence as authoritative**; `themePref` being unset is
 the authoritative signal.
@@ -622,6 +637,13 @@ pass caught the two remaining defects, and E ships the explicit `defaultTheme="d
 keeps the flip from meaning "everyone gets light" — and that the lever was pulled in E4 with
 full supersession pending F.
 
+**One window is accepted deliberately.** ADR-0008's Decision block quotes the provider line
+verbatim at `:21`, and **E3** changes that line by adding `defaultTheme="dark"` while the
+interim note does not land until **E4**. If the two slices merge separately, the ADR quotes a
+line that does not exist for that window. This is the ADR-as-dated-record reasoning applied to
+ADR-0015, and it is left alone for the same reason — but named, so the choice is deliberate
+rather than an oversight.
+
 **One mechanical constraint:** `adrIndex.test.ts:36` matches
 `\*\*Date:\*\*.+\*\*Status:\*\*` with no `s` flag, so `**Date:** … **Status:**` must stay on a
 single line.
@@ -637,8 +659,9 @@ taking F's staged rollout with it.
 parent counts "an irreversible Studio schema deploy" among the reasons E is Critical
 (spec `:302-303`), and CLAUDE.md gates remote-mutating actions. Concretely: it is run against
 the **production dataset** — the only one this project has — by the operator running the
-delivery, using the repo's `sanity:deploy-schema` path, and what "undoes" it is redeploying a
-schema without the field. **Nothing is written to any document by the deploy itself**, which
+delivery, with **`npx sanity schema deploy`** — `package.json` defines no `sanity:*` script, so an
+invented one would fail at the worst moment — and what "undoes" it is redeploying a schema
+without the field. **Nothing is written to any document by the deploy itself**, which
 is the whole reason this particular remote mutation is low-risk: a hidden `string` with no
 `initialValue` adds a field definition and touches no data. Stated rather than assumed,
 because "irreversible remote action" is a category the reader should not have to size for
@@ -737,20 +760,31 @@ highest-consequence assertion in this child.
 - `npx tsc --noEmit`, `npm test`, `npx eslint .` at 0 errors, per slice.
 - **Four stale `forcedTheme` statements**, per CLAUDE.md's currency rule — separate from the
   ADR note (D-e) and the parent amendments (D-f). The list is the implementer's checklist, so
-  it enumerates **`forcedTheme` statements only**, and is exhaustive for those within a named
-  scope: shipped code and **live reference docs**.
+  **it is the OUTPUT of a stated sweep rather than a list assembled from memory** — three
+  earlier revisions of this plan enumerated and each time missed a member, because a claim E
+  falsifies need not contain the word `forcedTheme`. Re-run the sweep rather than trusting the
+  list:
 
-  **A grep for `forcedTheme` structurally cannot find every stale claim, which is why D-i is a
-  separate row.** `CLAUDE.md:8` and `AGENTS.md:8` describe the stack as **"Dark-mode only."** —
-  a sentence containing no `forcedTheme` token, in the most canonical live reference doc the
-  repo has, asserting a property E4 destroys. Parent invariant 4 ("Documentation current in the
-  same delivery; no stale 'not released' claims") is one of the repository invariants where
-  violating any fails the delivery.
+  ```
+  grep -rn -i "dark-only\|dark only\|dark-mode only\|still unreachable\|forcedTheme\|
+               child e makes\|child e removes\|child e must\|until child e" \
+    app CLAUDE.md AGENTS.md docs/*.md
+  ```
 
-  **It is E's, not B's or F's.** §12:604 assigns B "CLAUDE.md + AGENTS.md **invariants**,
-  mirrored" — a different row — and B could not have touched this sentence anyway, since light
-  was still unreachable then. F's rows are the `enableSystem` flip, the default move, the
-  announcement and the ADR supersession. **Reachability changes at E4 and nowhere else.**
+  **Scope: shipped code and live reference docs** — what a reader consults to learn how the
+  system works today. Dated design records (the design specs, review logs, sibling child plans,
+  ADRs) are historical and left alone, for the same reason as ADR-0015 below. The parent scope
+  spec is the one exception and is handled in **D-f**, which is already amending it.
+
+  Parent invariant 4 ("Documentation current in the same delivery; no stale 'not released'
+  claims") is one of the invariants where violating any fails the delivery, so this list is
+  load-bearing rather than tidy-up.
+
+  **On `CLAUDE.md`/`AGENTS.md` ownership:** §12:604 assigns B "CLAUDE.md + AGENTS.md
+  **invariants**, mirrored" — a different row — and B could not have touched the "Dark-mode
+  only." sentence anyway, with light still unreachable then. F's rows are the `enableSystem`
+  flip, the default move, the announcement and the supersession. **Reachability changes at E4
+  and nowhere else**, so the sentence is E's.
   `grep -rn forcedTheme app docs` returns roughly seventeen further hits, all in **dated
   design records**: the two design specs, the parent scope spec, and review logs. Those are
   historical by nature and are left alone for the same reason as ADR-0015 below — rewriting a
@@ -766,8 +800,20 @@ highest-consequence assertion in this child.
      becomes a false description the moment it is followed.
   4. **`app/brand.css:362`** — *"STILL UNREACHABLE. Child E removes `forcedTheme="dark"`; until
      then these values are inert and only the theme gallery renders them."* A present-tense
-     "not released" claim sitting inside the `.light` block itself, which is the exact shape
-     CLAUDE.md's currency rule requires removing when a release advances.
+     "not released" claim sitting inside the `.light` block itself (E4).
+  5. **`app/brand.css:273`** — *"THE APP IS DARK-ONLY TODAY, so each token carries only its
+     dark value."* Same file, same shape, and its second clause is **already** false: Child D's
+     `.light` block at `:330` declares those halves. E4, alongside `:362`.
+  6. **`app/(client)/layout.tsx:43`** — *"Child E makes it theme-responsive under parent
+     invariant 17."* A pending-work note three lines above the `themeColor` literal and the
+     `eslint-disable` this plan deliberately keeps. Rewritten in **E3**, with the swap, to
+     describe the shipped mechanism — a static server-rendered initial value, swapped at
+     runtime by `ThemeBootstrap` — so the surviving disable still reads as deliberate rather
+     than as a leftover.
+  7. **`app/utils/__tests__/__fixtures__/colour-inventory.json:191`** carries a **derived copy**
+     of that same sentence in its `reason` field. Regenerate the inventory artifact in the same
+     slice, or the repo keeps a tracked claim that E has already falsified.
+  8. **`CLAUDE.md:8` + `AGENTS.md:8`** — the D-i row; see below.
 
   **`docs/adr/0015-gallery-root-layout.md:7,23` is deliberately left alone.** It says the
   gallery "must render **both** themes while `forcedTheme="dark"` is still in force" — but an
