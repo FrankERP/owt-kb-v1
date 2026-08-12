@@ -15,7 +15,7 @@ No secrets, credentials or personal data appear here.
 - **Document status:** Draft — not reviewed, not approved, not authorization to implement.
 - **Requirement source:** [parent scope spec](../specs/2026-08-07-light-mode-member-first-scope.md)
   — the Child E row of §8's table (`:299`); §12's coverage table; requirements D5, D7, D12,
-  D14, **D15**; invariants 14, 16 and 17; assumptions A5 and A6; §9's landmines.
+  D11, D14, **D15**; invariants **13**, 14, 16 and 17; assumptions A5 and A6; §9's landmines.
 - **Risk tier: CRITICAL — two sequential fresh `APPROVED` verdicts on byte-identical text.**
   Not because it is large; it is the smallest child by line count. Because it:
   - ships a **mutating production write route** (`PATCH /api/me/theme`) against the real
@@ -36,7 +36,7 @@ No secrets, credentials or personal data appear here.
 | 3 | **`GET /api/me` projection gains `themePref`** — additive, D15's read path | `app/api/me/route.ts` |
 | 4 | The fetch/validate helper, `clearThemeMirror()`, `THEME_MIGRATION_SCRIPT` — **not** a second store, and **no `"use client"`** | `app/utils/themePref.ts` (new) |
 | 5 | Wraps `children`, reads the projection, calls `setTheme`, exposes the literal via context, swaps the `theme-color` `<meta>` | `app/components/ThemeBootstrap.tsx` (new), mounted in `Provider.tsx` |
-| 6 | The one-time legacy reconciliation — an inline `<script>` as the **first child of `<body>`, immediately before `<Provider>`** | `app/(client)/layout.tsx` + `app/(admin)/layout.tsx` — *not* the gallery root layout |
+| 6 | The one-time legacy reconciliation — an inline `<script>` as the **first child of `<body>`, immediately before `<Provider>`**; ships in **E3**, with `defaultTheme` | `app/(client)/layout.tsx` + `app/(admin)/layout.tsx` — *not* the gallery root layout |
 | 7 | The `/me` control | `app/components/ui/ThemeControl.tsx` (new), rendered in `app/(client)/me/page.tsx` |
 | 8a | **Explicit `defaultTheme="dark"` added** — lands in **E3**, ahead of the removal | `app/utils/Provider.tsx:16` |
 | 8b | **`forcedTheme="dark"` removed** — E4, the whole risk | `app/utils/Provider.tsx:16` |
@@ -52,7 +52,7 @@ Documentation, in the same delivery:
 | D-c | `themePref.ts` + `ThemeBootstrap` (E3); `ThemeControl` (E4) | `UTILITIES_AND_COMPONENTS.md` |
 | D-d | The two client-side keys — `"theme"` (next-themes' mirror) and `owt-theme-migrated` (the one-time flag). Neither is a secret; both are persistent state a later hand would otherwise "clean up" | `UTILITIES_AND_COMPONENTS.md`, beside `themePref` |
 | D-e | **ADR-0008 interim Consequences note** — precondition met, lever pulled in E4; full supersession stays Child F's | `docs/adr/0008-forced-dark-theme.md` (E4) |
-| D-f | Parent §5:188-190 + its §12 row **amended** with the `statusBarStyle` geometry constraint and remnant; parent §5:202 corrected | the parent scope spec |
+| D-f | Parent §5:188-190 + its §12 row **amended** with the `statusBarStyle` geometry constraint and remnant; parent §5:202 corrected; the present-tense `forcedTheme` statements at **§5:43** and **§12:591** updated in the same pass | the parent scope spec |
 | D-g | The two PWA remnants recorded together — `statusBarStyle` and `manifest.webmanifest`'s `theme_color` | `UTILITIES_AND_COMPONENTS.md` |
 | D-h | **Four** stale `forcedTheme` statements — see Verification for the full list and the method | gallery layout, `themeGallery.test.ts`, `UTILITIES_AND_COMPONENTS.md`, **`app/brand.css:362`** |
 
@@ -97,8 +97,27 @@ into production markup rendering a dark app: light browser and PWA chrome around
 for everyone, for as long as E3 sits on `main` before E4. `main` is production and slices
 merge periodically, so that is the expected path.
 
-Landing `defaultTheme="dark"` in E3 makes `resolvedTheme` truthful and the swap genuinely
-inert — it writes back `#010b17`, the value already in the markup.
+Landing `defaultTheme="dark"` in E3 fixes that for the mirror-**less** member. It does not
+fix the member holding a legacy mirror, because `Z()` reads `localStorage.getItem(key) ||
+defaultTheme` and **a stored value beats `defaultTheme`** — the same rule this plan relies on
+two sections down. For a browser carrying `theme: "light"` from the old `ThemeSwitch`,
+`resolvedTheme === "light"` in E3 no matter what `defaultTheme` says, and the swap writes
+`#eef3f9` on a dark page for exactly the cohort the mirror section is about.
+
+**So the reconciliation script ships in E3 as well, alongside `ThemeBootstrap`.** That is
+safe and is in fact the better home for it: while `forcedTheme` still wins the paint, the
+clear is completely invisible — it removes a key that is not being applied — and its
+`owt-theme-migrated` flag means it does not run again in E4. It also means the legacy cohort
+is already reconciled *before* the unmasking rather than in the same breath as it.
+
+With both in E3, `resolvedTheme` is `"dark"` for every member — no mirror survives the clear,
+and `defaultTheme` answers — so the swap writes back `#010b17`, the value already in the
+markup, and E3 is genuinely inert.
+
+**Within E4, the ordering constraint disappears with it.** Had the script stayed in E4, it
+would have had to land in the same commit as the `forcedTheme` removal or before it; a build
+carrying the removal without the script strands the legacy cohort in light. Shipping it a
+slice earlier removes that trap rather than documenting it.
 
 ## Two stores, and why `localStorage` is not the source of truth
 
@@ -139,7 +158,9 @@ importing `THEME_MIGRATION_SCRIPT` from it; under a client boundary that export 
 client *reference* rather than a string and the `<script>` renders nothing usable.
 `app/utils/textZoom.ts`, the precedent, correctly omits the directive. Neither guard below
 would catch a stray one — the source scan greps for an identifier, the jsdom test imports
-outside any RSC boundary — so it is stated as a constraint rather than left to luck.
+outside any RSC boundary. **So it gets its own one-line source-text assertion** — that
+`themePref.ts`'s first non-comment line is not `"use client"`. Cheap, and it closes the one
+constraint that would otherwise rest on discipline.
 
 **`ThemeBootstrap` mounts inside `Provider.tsx`, not in a layout.** It needs `setTheme`, so
 it must sit inside `<ThemeProvider>`. `TextScaleBootstrap` is mounted only at
@@ -254,6 +275,17 @@ try.** For the same storage-blocked population the pre-hydration document then g
 flash, not a terminal state — but it is one line to prevent in a script both layouts already
 render ahead of the seed.
 
+**The mirror can hold `"system"`, not only `"light"`, and that case is strictly worse.** The
+Provider before `749588c` was a bare `<ThemeProvider attribute="class">` — no
+`enableSystem={false}`, and next-themes defaults it **true** — so a browser of that era can
+carry `theme: "system"`. Under today's `enableSystem={false}` that value resolves to
+`classList.add("system")` with `light` and `dark` both stripped: a class-less document, not
+merely a light one. It is §9's silent-failure landmine in its purest form.
+
+The script's **unconditional** `removeItem` already covers it, which is precisely why it must
+stay unconditional. An implementer "tightening" it to `if (v === "light") removeItem(…)`
+would reintroduce the worse case while appearing more careful.
+
 **A clear, not a `setTheme("dark")`.** Both land the member on dark, but only the clear
 preserves the property F depends on: **no mirror means no preference**, so when F changes the
 default, a member who never chose anything actually follows it. Writing `"dark"` into the
@@ -295,7 +327,15 @@ mirror-absence as authoritative**; `themePref` being unset is the authoritative 
 ## The write route
 
 `PATCH /api/me/theme`, modelled on `app/api/me/notif-prefs/route.ts` — the repo's only
-member-writes-own-preference route, and the shape D7 mandates following.
+member-writes-own-preference **route**, so its 401/400/self-id shape is what this one copies.
+
+**D7's named precedent is a different thing and is honoured elsewhere.** D7 points at
+`TextSizeControl.tsx` + `app/utils/textZoom.ts` + `TextScaleBootstrap` — the preference
+*plumbing*, not the route — and this plan follows it in the bootstrap's mount placement, the
+no-`"use client"` constraint on `themePref.ts`, and the deliberate, stated divergence from
+`TextSizeControl`'s concrete-default initialisation. D7 says that precedent is
+localStorage-only and that server persistence "is the only intended difference", which is
+exactly the split in the two-stores table above.
 
 ```
 requireActiveSession()  ->  401 if absent
@@ -333,7 +373,12 @@ writeClient.patch(session.user.sanityId).set({ themePref: theme }).commit()
   inconsistency to reconcile.** `PATCH /api/me` (alias, email) already writes to the
   impersonated member's record with no such guard. E does not follow it because a theme is a
   preference an admin has no reason to set on someone's behalf, where a name correction
-  plausibly is. Stated so a later reviewer does not "fix" the difference.
+  plausibly is.
+
+  **That rationale must land somewhere a maintainer will look, not only in this plan.** It is
+  exactly CLAUDE.md's "code that looks like a bug but isn't" shape. It goes in the route's own
+  row in `API_REFERENCE.md` and as a one-line comment beside the check in the route, so the
+  person tempted to "harmonise" the two endpoints reads it first.
 
 - **No `revalidate*` call, and that is deliberate.** `CLAUDE.md`'s cache invariant covers
   routes that mutate **content**; `themePref` is per-member chrome that no ISR page renders.
@@ -535,7 +580,13 @@ Studio document creation and **breach invariant 14 before a member ever opens th
 taking F's staged rollout with it.
 
 `themePref` is a bare `string` with no `initialValue`, and `hidden: true` — following
-`deviceTokens` at `:60` — so it stays out of Studio's member form. It is a client preference,
+`deviceTokens` at `:60` — so it stays out of Studio's member form.
+
+**That `hidden: true` is also how invariant 13 is met** (`themePref` is member-only and never
+appears in `MemberForm`, per D11). The admin panel's form is hand-written in
+`app/components/admin/AdminPanel.tsx`, so the invariant additionally requires simply **not
+adding a field there** — an omission rather than a change, which is the kind of requirement
+that is met by accident and broken by accident. Named so it is auditable. It is a client preference,
 not something an admin sets on someone's behalf, which is the same reasoning behind the
 route's 403 under impersonation.
 
@@ -548,14 +599,17 @@ everything before it ships inert and independently revertible.
 |---|---|---|
 | **E1** | `themePref` schema field + Studio deploy | no |
 | **E2** | `PATCH /api/me/theme` + its route test | no — nothing calls it |
-| **E3** | **`defaultTheme="dark"`**; `GET /api/me` projection, `themePref.ts`, `ThemeBootstrap` including its `theme-color` swap — **not the control** | no — inert, *because* `defaultTheme` lands here |
-| **E4** | **Remove `forcedTheme`**; the `/me` control; the legacy-mirror reconciliation script; the ADR note and doc amendments | **YES** |
+| **E3** | **`defaultTheme="dark"`**; the **legacy-mirror reconciliation script**; `GET /api/me` projection, `themePref.ts`, `ThemeBootstrap` including its `theme-color` swap — **not the control** | no — inert, *because* those first two land here |
+| **E4** | **Remove `forcedTheme`**; the `/me` control; the ADR note and doc amendments | **YES** |
 
 E1–E3 are inert: a schema field nothing reads, a route nothing calls, and a bootstrap whose
-`setTheme` is overridden by `forcedTheme`. Its `theme-color` swap writes back `#010b17`, the
-value already in the markup — **but only because `defaultTheme="dark"` ships in the same
-slice.** Without it `resolvedTheme` would read `"light"` on a dark page; see above. E3 still
-gets a browser check rather than being waved through as untestable.
+`setTheme` is overridden by `forcedTheme`. Its `theme-color` swap writes back `#010b17` —
+**but only because `defaultTheme="dark"` AND the reconciliation script both ship in the same
+slice.** Either one alone leaves `resolvedTheme` reading `"light"` on a dark page, for the
+mirror-less and legacy cohorts respectively; see above. E3 still gets a browser check rather
+than being waved through as untestable, and that check must include a browser seeded with
+`localStorage.theme = "light"` — a reviewer's own browser almost certainly has no legacy
+mirror, so the cohort that matters is invisible unless it is created deliberately.
 
 **The control and the unmasking land in the same merge, because a control that ships earlier is
 not harmless.** `/me` is the ordinary member profile page and E2's route is live by then, so in
@@ -594,6 +648,9 @@ highest-consequence assertion in this child.
 - **`clearThemeMirror()` is called at exactly four sites**, with the remediation-shaped failure
   message above.
 - **The migration script's two guards** — source-text in both layouts, and the jsdom chain test.
+- **`themePref.ts`'s first non-comment line is not `"use client"`** — a one-line source-text
+  assertion, because both root layouts import `THEME_MIGRATION_SCRIPT` from it as Server
+  Components and neither of the two guards above would catch a stray directive.
 - **Browser, both themes, on the real components** — the pass that found the two defects D
   shipped. An open `CueDialog` and `PlannerGrid` full-screen, which the parent names as
   acceptance criteria (§4.4); **one `(admin)` route**, since §12 notes `(admin)/layout.tsx` "can
@@ -606,8 +663,14 @@ highest-consequence assertion in this child.
 - `npx tsc --noEmit`, `npm test`, `npx eslint .` at 0 errors, per slice.
 - **Four stale `forcedTheme` statements**, per CLAUDE.md's currency rule — separate from the
   ADR note (D-e) and the parent amendments (D-f). The list is the implementer's checklist, so
-  it is stated as exhaustive and was derived by grepping every shipped file, not by memory:
-  `grep -rn forcedTheme app docs` minus this plan's own directory.
+  it is stated as exhaustive **within a named scope**: shipped code and **live reference
+  docs** — the files a reader consults to learn how the system works today.
+  `grep -rn forcedTheme app docs` returns roughly seventeen further hits, all in **dated
+  design records**: the two design specs, the parent scope spec, and review logs. Those are
+  historical by nature and are left alone for the same reason as ADR-0015 below — rewriting a
+  record of what was decided under the conditions of its day falsifies the history. The one
+  exception is the parent scope spec, which E is already amending under **D-f**; its
+  present-tense statements at `§5:43` and `§12:591` are updated there, in that pass, not here.
   1. `app/(gallery)/theme-gallery/[theme]/layout.tsx:10-14` and
   2. `app/utils/__tests__/themeGallery.test.ts:98-100` — both justify their design "while
      `forcedTheme` is still in force". The reasoning survives E4, since the nested-provider
