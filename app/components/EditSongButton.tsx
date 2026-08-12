@@ -32,7 +32,7 @@ const CHORD_MARKER_RE = /\[[^\]]+\]/;
 const SECTION_LABELS = ["Intro", "Verso", "Pre-Coro", "Coro", "Puente", "Outro"];
 
 const inputCls =
-  "w-full rounded-lg border border-accent/20 bg-transparent px-3 py-2 font-body text-sm text-ink transition-colors placeholder:text-ink-dim/45 focus:border-accent focus:outline-none";
+  "w-full rounded-lg border border-accent/20 bg-transparent px-3 py-2 font-body text-sm text-ink transition-colors placeholder:text-placeholder focus:border-accent focus:outline-none";
 
 function postToForm(post: Post): FormState {
   return {
@@ -324,7 +324,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
               <textarea
                 id={`${fieldId}-lyrics`}
                 ref={lyricsRef}
-                className="w-full resize-none rounded-b-lg border border-accent/20 bg-transparent px-3 py-2 font-mono text-xs leading-relaxed text-ink transition-colors placeholder:text-ink-dim/45 focus:border-accent focus:outline-none"
+                className="w-full resize-none rounded-b-lg border border-accent/20 bg-transparent px-3 py-2 font-mono text-xs leading-relaxed text-ink transition-colors placeholder:text-placeholder focus:border-accent focus:outline-none"
                 rows={14}
                 value={form.lyrics}
                 onChange={set("lyrics")}
@@ -490,8 +490,8 @@ function RepeatRows({
           </div>
           {rows.map((row, i) => (
             <div key={row.key} className={`group grid grid-cols-[1fr_2fr_2rem] items-center gap-3 px-3 py-2 transition-colors hover:bg-accent/5 ${i > 0 ? "border-t border-accent/10" : ""}`}>
-              <input aria-label={row.titleLabel} className="min-w-0 bg-transparent font-body text-sm placeholder:text-mono-600 focus:outline-none" value={row.title} onChange={(e) => row.onTitle(e.target.value)} placeholder={firstHeader} />
-              <input aria-label={row.urlLabel} className="min-w-0 bg-transparent font-body text-sm placeholder:text-mono-600 focus:outline-none" value={row.url} onChange={(e) => row.onUrl(e.target.value)} placeholder="https://…" />
+              <input aria-label={row.titleLabel} className="min-w-0 bg-transparent font-body text-sm placeholder:text-placeholder focus:outline-none" value={row.title} onChange={(e) => row.onTitle(e.target.value)} placeholder={firstHeader} />
+              <input aria-label={row.urlLabel} className="min-w-0 bg-transparent font-body text-sm placeholder:text-placeholder focus:outline-none" value={row.url} onChange={(e) => row.onUrl(e.target.value)} placeholder="https://…" />
               <button type="button" onClick={row.onRemove} aria-label={row.removeLabel} className="justify-self-center text-base leading-none text-mono-500 opacity-100 transition-colors hover:text-negative-fg sm:opacity-0 sm:transition-all sm:group-hover:opacity-100">
                 ×
               </button>

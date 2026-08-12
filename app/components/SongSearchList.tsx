@@ -97,7 +97,7 @@ export default function SongSearchList({ posts }: Props) {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar por título, autor o tonalidad..."
             aria-label="Buscar canciones"
-            className="w-full bg-transparent py-3 pl-10 pr-10 font-label text-sm text-ink placeholder:text-ink-dim/45 focus:outline-none"
+            className="w-full bg-transparent py-3 pl-10 pr-10 font-label text-sm text-ink placeholder:text-placeholder focus:outline-none"
           />
           {query && (
             <button

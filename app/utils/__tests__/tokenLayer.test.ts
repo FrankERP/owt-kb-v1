@@ -30,7 +30,7 @@
 //   is not generated — a build-time absence, not a silent substitution.
 
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -76,6 +76,12 @@ const COMPOSED = [
   "surface-ink-l70-d50", "surface-accent-l15-d4", "surface-accent-l100-d15",
   "surface-ink-l50-d35", "surface-accent-l5-d3", "surface-accent-l50-d40",
   "surface-accent-l50-d15",
+
+  // Control affordances (2026-08-12). Composed, so alpha-baked and NOT
+  // alpha-capable. One declaration each covers both themes because
+  // `--ink-muted-rgb` inverts — that is the role layer doing its job.
+  "placeholder",
+  "edge-control",
 ] as const;
 
 const UTILITY_PREFIXES = [
@@ -342,5 +348,145 @@ describe("brand.css rule bodies — B2's invariant, which later slices must not 
     expect(bodies).toContain("var(--brand-duration-fast)");
     expect(bodies).toContain("var(--brand-duration-reveal)");
     expect(bodies).not.toContain("var(--brand-radius-");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The gap that let a "fix" ship inert.
+//
+// `--placeholder` was declared correctly in both blocks and registered in
+// COMPOSED above, so every guard in this file passed. It was keyed in
+// tailwind.config.ts as `"placeholder"` — but `theme.extend.colors` keys are
+// COLOUR names, not utility names, so that generates `text-text-placeholder`.
+// The class actually written at 13 call sites, `placeholder:text-placeholder`,
+// matched no colour named `placeholder` and Tailwind emitted NOTHING. No build
+// error. Every site fell back to preflight `#9ca3af`, which measured 2.12:1 in
+// light — worse than the 3.09:1 the change was fixing.
+//
+// Arithmetic over the CSS variables cannot see this, because the variables were
+// right. These two assertions can.
+// ---------------------------------------------------------------------------
+
+const TAILWIND = readFileSync(path.join(REPO_ROOT, "tailwind.config.ts"), "utf8");
+
+/** Every file under a repo-relative directory. */
+function walk(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(path.join(REPO_ROOT, dir))) {
+    const rel = path.join(dir, entry);
+    if (statSync(path.join(REPO_ROOT, rel)).isDirectory()) out.push(...walk(rel));
+    else out.push(rel);
+  }
+  return out;
+}
+
+/** Every key in `theme.extend.colors`. */
+function colourKeys(): Set<string> {
+  const start = TAILWIND.indexOf("colors: {");
+  const block = TAILWIND.slice(start, TAILWIND.indexOf("\n\t\t\t},", start));
+  // Quoted OR bare: `placeholder: "var(--placeholder)"` is valid TS and the more
+  // natural form, and a parser that only saw quoted keys would make it invisible
+  // to both assertions below — turning a guard into a false pass.
+  return new Set([...block.matchAll(/^\s*"?([a-z0-9-]+)"?\s*:/gm)].map((m) => m[1]));
+}
+
+describe("colour KEYS are colour names, not utility names", () => {
+  it("no key begins with a utility prefix", () => {
+    // UTILITY_PREFIXES, not a second inline list that drifts from it — but a key
+    // is only an offender if it is NOT itself a declared role or token. Several
+    // prefixes double as legitimate colour names here: `accent` is the primary
+    // brand role, so `accent-deep` is a colour, not a mistake. The mistake this
+    // catches is a key naming the utility it will be used with, like the
+    // `text-placeholder` that generated `text-text-placeholder` and emitted
+    // nothing.
+    const declared = new Set<string>([...BASE_ROLES, ...COMPOSED]);
+    const offenders = [...colourKeys()].filter(
+      (k) => !declared.has(k) && UTILITY_PREFIXES.some((p) => k.startsWith(`${p}-`)),
+    );
+    expect(
+      offenders,
+      "A colours key is the COLOUR name — Tailwind prepends the utility itself. " +
+        'Keying "text-foo" produces `text-text-foo`, and any class written as ' +
+        "`text-foo` then silently emits nothing. Name the key `foo`.",
+    ).toEqual([]);
+  });
+
+  it("`border-edge-control` resolves, and the sign-in inputs still use it", () => {
+    // The border was the OTHER measured failure — 1.46 dark / 1.42 light — and
+    // those fields carry no affordance besides it. A rename or typo emits no CSS
+    // and the outline silently disappears; the key-prefix check above catches the
+    // historical mistake, not this direction.
+    expect(colourKeys().has("edge-control")).toBe(true);
+    const signin = readFileSync(
+      path.join(REPO_ROOT, "app/(client)/auth/signin/page.tsx"), "utf8",
+    );
+    expect(
+      (signin.match(/border-edge-control/g) ?? []).length,
+      "both sign-in inputs must carry the token border",
+    ).toBeGreaterThanOrEqual(1);
+  });
+
+  it("every `placeholder:text-*` class in app/ resolves to a declared colour", () => {
+    const keys = colourKeys();
+    const used = new Map<string, string[]>();
+    for (const file of walk("app")) {
+      if (!/\.tsx?$/.test(file) || file.includes("__tests__")) continue;
+      const src = readFileSync(path.join(REPO_ROOT, file), "utf8");
+      for (const m of src.matchAll(/placeholder:text-([a-z0-9-]+(?:\/[0-9.[\]%]+)?)/g)) {
+        const name = m[1].split("/")[0];
+        if (!used.has(name)) used.set(name, []);
+        used.get(name)!.push(file);
+      }
+    }
+    const unresolved = [...used.entries()].filter(
+      ([name]) => !keys.has(name) && !BUILTIN_COLOURS.has(name),
+    );
+    expect(
+      unresolved.map(([n, f]) => `${n} (${f.length} site${f.length > 1 ? "s" : ""}: ${f[0]})`),
+      "these placeholder classes name a colour Tailwind does not know, so they " +
+        "emit no CSS and the element falls back to preflight grey",
+    ).toEqual([]);
+  });
+});
+
+/** Tailwind's own palette names, which need no key of ours. */
+const BUILTIN_COLOURS = new Set([
+  "white", "black", "transparent", "current", "inherit",
+  "slate", "gray", "zinc", "neutral", "stone", "red", "orange", "amber", "yellow",
+  "lime", "green", "emerald", "teal", "cyan", "sky", "blue", "indigo", "violet",
+  "purple", "fuchsia", "pink", "rose",
+]);
+
+
+// ---------------------------------------------------------------------------
+// The lint clause must cover EVERY composed token, not the families that
+// happened to exist when it was written.
+//
+// It enumerates `surface-accent|surface-ink|edge-accent` — the naming families
+// the design spec established. `--edge-control` honours that convention;
+// `--placeholder` deliberately does not, and when both were added the clause
+// silently stopped covering them. An opacity modifier on a composed token is
+// dropped by Tailwind with no error, which is the same no-error, no-failing-test
+// shape that let the first version of this fix ship inert.
+// ---------------------------------------------------------------------------
+describe("the composed-alpha lint clause keeps up with the registry", () => {
+  it("covers every composed token", () => {
+    const config = readFileSync(path.join(REPO_ROOT, "eslint.config.mjs"), "utf8");
+
+    // Pull the token-family alternation out of the selector. Parsing the whole
+    // regex back out of a JS string literal is fiddly and was wrong the first
+    // time; the alternation is the part that actually has to keep up.
+    const m = config.match(/\)-\(([a-z0-9|-]+)\)\[a-z0-9-\]\*/);
+    expect(m, "the composed-alpha clause must still carry a token-family group").toBeTruthy();
+    const families = m![1].split("|");
+
+    const uncovered = COMPOSED.filter((t) => !families.some((f) => t === f || t.startsWith(f)));
+    expect(
+      uncovered,
+      "these composed tokens bake their own alpha, but the lint clause's family " +
+        "list would let an opacity modifier through — and Tailwind drops it " +
+        "silently, so nothing else would catch it. Add them to the alternation " +
+        "in eslint.config.mjs.",
+    ).toEqual([]);
   });
 });

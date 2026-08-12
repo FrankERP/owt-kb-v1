@@ -316,6 +316,31 @@
   --surface-accent-l5-d3:        rgb(var(--accent-rgb) / 0.03);                /* light: accent-deep @5%   - 1 */
   --surface-accent-l50-d40:        rgb(var(--accent-rgb) / 0.40);         /* light: accent-deep @50%  - 1 */
   --surface-accent-l50-d15:        rgb(var(--accent-rgb) / 0.15);         /* light: accent-deep @50%  - 1 */
+
+  /* --- Control affordances, added 2026-08-12 after a measured WCAG failure ------
+     A placeholder at `ink-dim/70` measured 3.55:1 in dark and 3.09:1 in light
+     against 4.5, and an input border at `ink-dim/25` measured 1.46 / 1.42
+     against 3.0 (1.4.11). Both failed in BOTH themes — this was pre-existing
+     debt, not something the light-mode revival introduced.
+
+     They are COMPOSED tokens, so they bake their own alpha and must never take
+     an opacity modifier (the lint clause bans it). One alpha each is enough
+     because `--ink-muted-rgb` already inverts per theme, which is the whole
+     point of the role layer. MEASURED on a production build, dark / light:
+     placeholder 7.70 / 5.41 (was 3.55 / 3.09) and border 5.24 / 3.54 (was
+     1.46 / 1.42).
+
+     `ink-muted` rather than a higher alpha on `ink-dim`: light needed ink-dim at
+     100% to clear 4.5, which is not a placeholder any more.
+
+     One honest caveat on how secondary this reads: the placeholder-to-typed-text
+     separation measures 2.78:1 in light but only 1.97:1 in DARK, so an empty
+     field and a filled one are closer together there than the light side
+     suggests. No WCAG criterion covers that distinction, and lowering the dark
+     alpha to widen it spends contrast against the 4.5 floor. Left as is,
+     recorded rather than glossed. */
+  --placeholder:                   rgb(var(--ink-muted-rgb) / 0.75);   /* name == Tailwind key, deliberately: see below */
+  --edge-control:                  rgb(var(--ink-muted-rgb) / 0.6);
 }
 
 /* Light branch. `:root` above hardcodes `color-scheme: dark`, which is masked in the
@@ -461,6 +486,8 @@
   --surface-accent-l5-d3: rgb(var(--accent-rgb) / 0.05);        /* light: accent-deep @5% */
   --surface-accent-l50-d40: rgb(var(--accent-rgb) / 0.5);       /* light: accent-deep @50% */
   --surface-accent-l50-d15: rgb(var(--accent-rgb) / 0.5);       /* light: accent-deep @50% */
+  --placeholder: rgb(var(--ink-muted-rgb) / 0.75);
+  --edge-control: rgb(var(--ink-muted-rgb) / 0.6);
 }
 
 .brand-atmosphere {
