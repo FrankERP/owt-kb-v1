@@ -98,12 +98,34 @@ change becomes machine-verifiable in both themes without a human or a credential
 |---|---|---|
 | 1 | `theme-gallery(?:/\|$)` added to the matcher's negative lookahead | `app/utils/routeMatcher.ts` |
 | 2 | **The identical edit**, byte-for-byte | `proxy.ts` |
+| 1b | **`routeMatcher.ts:3-7`'s prose allow-list** — "auth pages, NextAuth API, static assets" — plus a rationale paragraph for the new exclusion, in the style the file already gives `api/cron` (`:18-26`) and the A3 identity route (`:9-16`), pointing at ADR-0017 | `app/utils/routeMatcher.ts` |
+| 2b | **`proxy.ts:31-35`'s `config` comment** — "Protect everything except: auth pages, NextAuth API, the cron routes and static assets". **Note its enumeration already omits `api/service-readiness-verification/identity`** — pre-existing drift of exactly the shape this plan corrects in `MOBILE.md:82`, fixed in the same pass | `proxy.ts` |
 | 3 | **`"/theme-gallery/sample/sample"`** added to `PUBLIC_ROUTES` — the literal the on-disk walk produces (`[x]` → `sample`), appended last to keep the array's sorted order for the `toEqual` | `app/utils/__tests__/routeMatcher.test.ts` |
 | 3b | **A2's three gating assertions rewritten, not deleted** — they become the record that the gate was opened deliberately, pointing at the ADR | `app/utils/__tests__/themeGallery.test.ts:39-61` |
+| 3c | **The inertness guard widened, as a numbered deliverable** — the whole disclosure argument rests on it. Today's (`themeGallery.test.ts:130-135`) checks only the three fixture files, only for `useSession\|next-auth\|fetch(`. It must cover `layout.tsx` and `page.tsx` too, and add a Sanity-client check. **Stated limit:** still one level deep — it would not catch a fixture importing a component that fetches | `app/utils/__tests__/themeGallery.test.ts` |
 | 4 | An ADR — an auth boundary moved deliberately. **Numbered `0017` exactly**: `adrIndex.test.ts:30` requires consecutive numbering and `:20` fails on a file not linked from the index | `docs/adr/0017-public-theme-gallery.md` **+ `docs/adr/README.md`** |
 | 4b | **Parent spec §6 guard 8 (`:235-242`) amended** — it currently reads *"If a child finds itself adding a `PUBLIC_ROUTES` entry for the gallery, the placement is wrong — that entry is the signal, not the fix."* **Left standing, that is a live instruction to revert ship item 3.** Superseded-by pointer to ADR-0017, not deletion | the parent scope spec |
-| 4c | **Parent spec §8.4 (`:409-424`) amended** — "The gallery sits on a **gated** path — not under `/auth/`, not public", plus its four recorded consequences, three of which this change reverses | the parent scope spec |
+| 4c | **Parent spec §8.4 (`:409-435`) amended** — "The gallery sits on a **gated** path — not under `/auth/`, not public", plus its **five** recorded consequences. The fifth, at `:435`, is *"The VR harness must authenticate. That cost is real and belongs to Child A."* — the single sentence this change most directly reverses, and the original of the `playwright.vr.config.ts` prose item 5 also fixes | the parent scope spec |
 | 5 | **The documentation sweep — a rule and a command, not a list.** See below; three drafts of this plan enumerated by hand and three times a reviewer found a member I had missed | as derived |
+
+### Two files the sweep structurally cannot find
+
+`routeMatcher.ts:3-7` and `proxy.ts:31-35` each carry a **prose enumeration of the
+public allow-list**, and neither contains the words "gallery", "gated" or
+"PUBLIC_ROUTES" — so no keyword sweep built around this change will ever surface
+them. They are found by reading the two files the change edits, which is the only
+method that works here.
+
+They matter more than their size suggests. `routeMatcher.ts` gives every
+non-obvious exclusion its own rationale paragraph — why `api/cron` is excluded, why
+the A3 identity route is. Ship items 1 and 2 change only the literal, so
+`theme-gallery` would land as **the one exclusion in that file with no recorded
+reason**, in the file whose whole job is recording them.
+
+That directly contradicts this plan's own argument for preferring a matcher edit
+over an `/auth/` placement — *"visible in the auth boundary… a named alternation
+someone must review"*. An alternation nobody explained is not more auditable than a
+path prefix; it is just a different way of being unexplained.
 
 ## The documentation sweep
 
@@ -127,11 +149,11 @@ the same one Children E and F used, applied here without exception:
 
 | File | Why |
 |---|---|
-| `app/utils/__tests__/themeGallery.test.ts` | Executable. **`:11`, `:39`, `:57`** — note `:11`'s header sits *outside* the `:39-61` range, so an implementer working that range literally leaves it stale |
+| `app/utils/__tests__/themeGallery.test.ts` | Executable. **`:12`, `:39`, `:57`** — note `:12`'s header sits *outside* the `:39-61` range, so an implementer working that range literally leaves it stale |
 | `docs/superpowers/specs/2026-08-07-light-mode-member-first-scope.md` | **The governing document, and the only spec that gets amended.** `:235-242` (§6 guard 8), `:306`, `:321-323`, `:364`, **`:409-435`** — §8.4 runs to `:435`, not `:424` as an earlier draft said, and has **five** bullets, the fifth being *"The VR harness must authenticate"* — and `:582`, whose guard-traceability row is instruction-shaped |
 | `docs/ROUTES.md` | `:6`, **`:12`** (*"enforced at two layers… must be logged in"* — an over-statement once one row is public), `:41` |
 | `docs/AUTH_AND_SECURITY.md:116-118` | The canonical auth doc's allow-list |
-| `playwright.vr.config.ts:11-20` **and `:36`** | The whole rationale block, not two lines — it argues for a constraint that stops existing |
+| `playwright.vr.config.ts:11-20` **and `:36`** | The whole rationale block, not two lines — it argues for a constraint that stops existing. **The `THEME_GALLERY_VR_ENABLED`/`BASE_URL` refusal itself STAYS** — `:36` is a runtime `throw`, not a comment; only its reason changes, so do not delete the guard while rewriting the message |
 | `e2e/theme-gallery/README.md:11` | Live |
 
 **LEAVE — dated records of what was decided under the conditions of their day:**
