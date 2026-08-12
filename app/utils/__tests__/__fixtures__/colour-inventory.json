@@ -8,10 +8,11 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 310,
-    "filesScanned": 211,
-    "filesWithColour": 45,
+    "literalRows": 312,
+    "filesScanned": 215,
+    "filesWithColour": 46,
     "byCategory": {
+      "2": 2,
       "4": 70,
       "8": 89,
       "9": 10,
@@ -19,7 +20,7 @@
       "12": 134
     },
     "byDisposition": {
-      "B": 116,
+      "B": 118,
       "exempt": 26,
       "keep": 241,
       "C": 7,
@@ -30,7 +31,7 @@
     "compositingClassNameOccurrences": 68,
     "compositingRuleBodies": 32,
     "lightCounterpartClasses": 15,
-    "pairs": 12,
+    "pairs": 14,
     "pairsDifferingInAlpha": 0
   },
   "literalRows": [
@@ -186,7 +187,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 47,
+      "line": 49,
       "disposition": "exempt",
       "reason": "Static viewport themeColor. Child E makes it theme-responsive under parent invariant 17."
     },
@@ -198,7 +199,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 286,
+      "line": 287,
       "disposition": "B",
       "reason": null
     },
@@ -210,7 +211,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 306,
+      "line": 307,
       "disposition": "B",
       "reason": null
     },
@@ -222,7 +223,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 318,
+      "line": 319,
       "disposition": "B",
       "reason": null
     },
@@ -234,7 +235,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 335,
+      "line": 336,
       "disposition": "B",
       "reason": null
     },
@@ -246,7 +247,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 357,
+      "line": 358,
       "disposition": "B",
       "reason": null
     },
@@ -414,7 +415,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 366,
+      "line": 368,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -450,7 +451,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 365,
+      "line": 367,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -474,7 +475,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 427,
+      "line": 429,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -486,7 +487,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 423,
+      "line": 425,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -510,7 +511,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 426,
+      "line": 428,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -534,7 +535,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 424,
+      "line": 426,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -558,7 +559,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 425,
+      "line": 427,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -582,7 +583,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 431,
+      "line": 433,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -606,7 +607,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 430,
+      "line": 432,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -630,7 +631,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 429,
+      "line": 431,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -654,7 +655,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 428,
+      "line": 430,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -678,7 +679,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 393,
+      "line": 395,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -714,7 +715,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 394,
+      "line": 396,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -726,7 +727,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 395,
+      "line": 397,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -762,7 +763,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 397,
+      "line": 399,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -774,7 +775,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 396,
+      "line": 398,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -798,7 +799,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 392,
+      "line": 394,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -834,7 +835,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 388,
+      "line": 390,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -846,7 +847,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 380,
+      "line": 382,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -882,7 +883,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 378,
+      "line": 380,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -894,7 +895,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 384,
+      "line": 386,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -918,7 +919,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 379,
+      "line": 381,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -954,7 +955,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 369,
+      "line": 371,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -978,7 +979,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 368,
+      "line": 370,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -990,7 +991,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 367,
+      "line": 369,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1026,7 +1027,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 398,
+      "line": 400,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1050,7 +1051,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 399,
+      "line": 401,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1074,7 +1075,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 400,
+      "line": 402,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1098,7 +1099,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 401,
+      "line": 403,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1122,7 +1123,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 402,
+      "line": 404,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1146,7 +1147,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 403,
+      "line": 405,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1158,7 +1159,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 404,
+      "line": 406,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1194,7 +1195,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 409,
+      "line": 411,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1206,7 +1207,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 405,
+      "line": 407,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1230,7 +1231,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 382,
+      "line": 384,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1254,7 +1255,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 407,
+      "line": 409,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1278,7 +1279,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 406,
+      "line": 408,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1302,7 +1303,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 408,
+      "line": 410,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1338,7 +1339,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 411,
+      "line": 413,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1350,7 +1351,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 412,
+      "line": 414,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1386,7 +1387,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 410,
+      "line": 412,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1410,7 +1411,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 391,
+      "line": 393,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1422,7 +1423,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 422,
+      "line": 424,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1446,7 +1447,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 381,
+      "line": 383,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1482,7 +1483,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 420,
+      "line": 422,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1494,7 +1495,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 421,
+      "line": 423,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1518,7 +1519,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 416,
+      "line": 418,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1542,7 +1543,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 419,
+      "line": 421,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1566,7 +1567,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 417,
+      "line": 419,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1590,7 +1591,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 418,
+      "line": 420,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1626,7 +1627,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 390,
+      "line": 392,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1650,7 +1651,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 370,
+      "line": 372,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1662,7 +1663,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 373,
+      "line": 375,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1686,7 +1687,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 389,
+      "line": 391,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1710,7 +1711,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 386,
+      "line": 388,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1746,7 +1747,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 387,
+      "line": 389,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1770,7 +1771,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 385,
+      "line": 387,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1794,7 +1795,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 372,
+      "line": 374,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1818,7 +1819,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 371,
+      "line": 373,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1842,7 +1843,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 374,
+      "line": 376,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1866,7 +1867,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 377,
+      "line": 379,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1878,7 +1879,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 413,
+      "line": 415,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1902,7 +1903,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 375,
+      "line": 377,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1926,7 +1927,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 414,
+      "line": 416,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1950,7 +1951,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 415,
+      "line": 417,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -1974,7 +1975,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 383,
+      "line": 385,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
     },
@@ -2010,33 +2011,9 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 376,
+      "line": 378,
       "disposition": "keep",
       "reason": "Child B's token layer — the destination vocabulary"
-    },
-    {
-      "file": "app/brand.css",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "transparent",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 467,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/brand.css",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "transparent",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 468,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
     },
     {
       "file": "app/brand.css",
@@ -2070,18 +2047,6 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 470,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/brand.css",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "transparent",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
       "line": 471,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
@@ -2094,7 +2059,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 471,
+      "line": 472,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2106,7 +2071,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 515,
+      "line": 472,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2118,7 +2083,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 532,
+      "line": 473,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2130,7 +2095,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 532,
+      "line": 473,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2142,7 +2107,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 577,
+      "line": 517,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2154,7 +2119,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 577,
+      "line": 534,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2166,7 +2131,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 604,
+      "line": 534,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2178,7 +2143,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 616,
+      "line": 579,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2190,7 +2155,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 616,
+      "line": 579,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2202,7 +2167,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 666,
+      "line": 606,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2214,7 +2179,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 678,
+      "line": 618,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2226,7 +2191,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 678,
+      "line": 618,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2238,7 +2203,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 690,
+      "line": 668,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2250,7 +2215,43 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 705,
+      "line": 680,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/brand.css",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "transparent",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 680,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/brand.css",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "transparent",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 692,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/brand.css",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "transparent",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 707,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2922,18 +2923,6 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 172,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/BottomNav.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "fill=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "fill",
       "line": 173,
       "disposition": "B",
       "reason": null
@@ -2954,11 +2943,11 @@
       "file": "app/components/BottomNav.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
+      "value": "fill=\"currentColor\"",
       "alpha": null,
       "utility": null,
-      "carrier": "stroke",
-      "line": 141,
+      "carrier": "fill",
+      "line": 175,
       "disposition": "B",
       "reason": null
     },
@@ -2970,7 +2959,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 152,
+      "line": 142,
       "disposition": "B",
       "reason": null
     },
@@ -2982,7 +2971,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 162,
+      "line": 153,
       "disposition": "B",
       "reason": null
     },
@@ -2994,7 +2983,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 171,
+      "line": 163,
       "disposition": "B",
       "reason": null
     },
@@ -3006,7 +2995,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 181,
+      "line": 172,
       "disposition": "B",
       "reason": null
     },
@@ -3018,7 +3007,19 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 189,
+      "line": 182,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/BottomNav.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 190,
       "disposition": "B",
       "reason": null
     },
@@ -3222,7 +3223,7 @@
       "alpha": null,
       "utility": "ring",
       "carrier": null,
-      "line": 117,
+      "line": 118,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3234,7 +3235,7 @@
       "alpha": null,
       "utility": "ring",
       "carrier": null,
-      "line": 120,
+      "line": 121,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3246,7 +3247,7 @@
       "alpha": null,
       "utility": "text",
       "carrier": null,
-      "line": 126,
+      "line": 127,
       "disposition": "C",
       "reason": null
     },
@@ -3621,6 +3622,30 @@
       "line": 168,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/ThemeBootstrap.tsx",
+      "category": 2,
+      "categoryName": "bare-hex",
+      "value": "#010b17",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 55,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/ThemeBootstrap.tsx",
+      "category": 2,
+      "categoryName": "bare-hex",
+      "value": "#eef3f9",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 58,
+      "disposition": "B",
+      "reason": null
     },
     {
       "file": "app/components/ui/CueDialog.tsx",
@@ -4683,6 +4708,24 @@
     },
     {
       "file": "app/components/TextSizeControl.tsx",
+      "utility": "text",
+      "light": "mono-500",
+      "lightAlpha": null,
+      "dark": "mono-400",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/ui/ThemeControl.tsx",
+      "utility": "text",
+      "light": "mono-500",
+      "lightAlpha": null,
+      "dark": "mono-400",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/ui/ThemeControl.tsx",
       "utility": "text",
       "light": "mono-500",
       "lightAlpha": null,

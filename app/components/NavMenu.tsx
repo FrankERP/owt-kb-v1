@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { signOut, useSession } from "next-auth/react";
+import { clearThemeMirror } from "@/app/utils/themePref";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -156,7 +157,7 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
 
           {/* Sign out */}
           <div className="border-t border-edge-accent-subtle py-1">
-            <MenuItem onClick={() => signOut({ callbackUrl: "/" })}>
+            <MenuItem onClick={() => { clearThemeMirror(); signOut({ callbackUrl: "/" }); }}>
               Cerrar sesión
             </MenuItem>
           </div>

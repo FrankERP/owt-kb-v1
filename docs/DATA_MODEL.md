@@ -74,6 +74,7 @@ referenced by every seat, proposal, and login event. **A member's identity in au
 | `role` | string (radio) | **Authorization role:** `super-admin` / `admin` / `content-editor` / `member`. Default `member`. |
 | `disabled` | boolean | **Kill switch.** `true` revokes access within ~30s (reversible). Default `false`. |
 | `deviceTokens` | array (hidden) | `{ token, platform, updatedAt }` — FCM push tokens. |
+| `themePref` | string (hidden) | `"dark"` \| `"light"`, member-set via `PATCH /api/me/theme`. **Deliberately has NO `initialValue`** — an *unset* field means "has never chosen", which is distinct from "chose dark" and is the signal Child F's staged rollout reads. Guarded by `themePrefSchema.test.ts`. Hidden and never in `MemberForm` (D11): a theme is a client preference, not something an admin sets on someone's behalf. |
 | `notifPrefs` | object | `assignments` (bool, def true), `email` (bool, def true — assignment emails), `setlist` (string: `all`/`assigned`/`off`, def `all`), `proposals` (bool, def true), `reminders` (bool, def true). |
 | `memberType` | array of string | Multi-select: `voz`, `instrumento`, `foh`, `sunday_lead`, `saturday_lead`, `support`. Governs sections + solver pools. |
 | `profilePhoto` | image | `hotspot: true`. |

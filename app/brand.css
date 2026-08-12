@@ -270,7 +270,8 @@
      at TextSizeControl: its light side is a palette class Child C owns, so B
      leaves that pair split and C collapses it later.
 
-     THE APP IS DARK-ONLY TODAY, so each token carries only its dark value. The
+     Each token below carries its dark value; the `.light` block declares the
+     light halves. The
      light halves in the comments are the sole thing standing between Child D
      and re-deriving them; the generated `pairs` snapshot in the inventory is
      their machine-readable record.
@@ -359,8 +360,9 @@
      is a panel rather than text, and reading it nominally produced a mid-grey slab
      that dropped the text on it to 3.07:1.
 
-     STILL UNREACHABLE. Child E removes forcedTheme="dark"; until then these
-     values are inert and only the theme gallery renders them. */
+     REACHABLE as of Child E4, which removed forcedTheme="dark". A member picks a
+     theme at /me; unset still resolves to dark, so nobody who opts into nothing
+     sees a change. */
 
   --accent-rgb: 0 53 114;                 /* #003572  <- dark 0 191 255 */
   --accent-deep-rgb: 0 31 63;             /* #001f3f  <- dark 0 53 114 */

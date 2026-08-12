@@ -56,6 +56,29 @@ and decide whether `enableSystem` comes back. Do that **last**: until the 47
 untreated files are handled, flipping it re-exposes exactly the broken state
 this ADR exists to prevent.
 
+### Interim note (2026-08-12) — the lever was pulled, and the precondition was met
+
+**Child E4 removed `forcedTheme="dark"`.** The condition this ADR set was
+satisfied rather than ignored: the light-mode revival programme's Children A–D
+built a token layer, migrated 2,397 colour decisions onto it, and designed 90
+light counterparts, so the 47 untreated files above are treated. Child D's visual
+pass on the real components caught the two defects that survived the migration.
+
+Two things keep the flip from meaning "everyone gets light". Child E adds an
+explicit `defaultTheme="dark"` — `next-themes` resolves an unset default to
+`"light"` under `enableSystem={false}`, so without it the whole team would flip
+silently — and a one-time reconciliation clears the legacy `ThemeSwitch` mirror
+this ADR's own table points at. A member who never opens the new `/me` control
+sees exactly what they saw before.
+
+`enableSystem` has **not** come back; Child F owns that decision.
+
+**Status stays `Accepted — being revisited` deliberately.** Full supersession is
+Child F's, per the parent scope spec (§12, §14), because the superseding record
+must also capture why a partial-surface revival was rejected — F's story, not E's.
+This note exists so that a reader arriving between E and F finds a record that
+matches the code rather than a warning against the change that shipped.
+
 Related and **not** in scope: email templates are deliberately light and stay
 that way regardless of what the app does — see `CLAUDE.md` (Known landmines) and
 `docs/NOTIFICATIONS.md`. Five attempts to hold a dark palette against Outlook

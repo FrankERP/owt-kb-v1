@@ -40,7 +40,7 @@ from now is light-correct by construction, not by remembering.
 
 ## 3. Current behavior and the gap
 
-`app/utils/Provider.tsx:16` sets `forcedTheme="dark" enableSystem={false}`, which overrides
+`app/utils/Provider.tsx:16` **used to set** `forcedTheme="dark" enableSystem={false}` (Child E4 removed `forcedTheme`; `defaultTheme="dark"` now holds the default), which overrode
 both user and system preference. `ThemeSwitch.tsx` was deleted in `33c6e15`. There is no
 light path to return to: `app/brand.css` declares `:root { color-scheme: dark }` at line 2
 with **no `.light` branch and no `prefers-color-scheme` query**, and 11 `:root` custom
@@ -178,7 +178,7 @@ static panel does not cover them.
 - `themePref` on `teamMembers`, its write route, the `/me` control, the `localStorage`
   mirror, the provider's `defaultTheme` / `enableSystem` configuration (§9), the iOS status
   bar.
-- **Theme-responsive `themeColor`, subject to invariant 17.** `(client)/layout.tsx:42` is a
+- **Theme-responsive `themeColor`, subject to invariant 17.** `(client)/layout.tsx:47` is a
   static `themeColor: "#010b17"`. The native mechanism — `generateViewport()` reading the
   session — **is forbidden here**: it makes the `(client)` root layout dynamic and de-ISRs
   five statically-rendered routes. The requirement must be met **client-side**, by updating
@@ -187,7 +187,18 @@ static panel does not cover them.
   that as a remnant, rather than trade ISR for it.
 - **`appleWebApp.statusBarStyle`**, currently the static `"black-translucent"` on both root
   layouts (`(client)/layout.tsx:31`, `(admin)/layout.tsx:26`). It is theme-dependent on the
-  installed-PWA path and is subject to the same invariant-17 constraint as `themeColor`.
+  installed-PWA path and is subject to the same invariant-17 constraint as `themeColor`. **AMENDED by Child E
+  (2026-08-12): `statusBarStyle` stays `black-translucent` and is recorded as a
+  remnant — the reason is GEOMETRY, not colour.** `black-translucent` is what makes
+  the WebView extend under the iOS status bar, which is what gives
+  `env(safe-area-inset-top)` a non-zero value; `Navbar.tsx:18`, `CueDialog.tsx:236`
+  and `PlannerGrid.tsx:1769` all consume it. Every light-appropriate value
+  (`default`, `black`) is non-translucent, so honouring a runtime swap would collapse
+  the inset and move all three — a layout jump on every toggle in an installed PWA.
+  The cost is stated: in an installed iOS PWA in light mode the status-bar glyphs stay
+  white over a light wash. That is narrower than the jump, and its fix belongs to the
+  iOS work, where the safe-area padding can move in the same change. `themeColor` IS
+  swapped — it is pure colour with no geometry attached.
 - Verification scaffolding: colour inventory, snapshot guard, `brand.css` guard, theme
   gallery, read-only Playwright config, WCAG AA contrast gate, the colour lint rule.
 
@@ -199,7 +210,7 @@ static panel does not cover them.
 | Email templates and `app/utils/emailShell.ts` | Deliberately light; five attempts to hold dark against Outlook for Mac failed | CLAUDE.md landmine, `docs/NOTIFICATIONS.md`; lint-exempt |
 | `manifest.webmanifest` `theme_color` / `background_color`, PWA splash | A static file cannot follow a per-user runtime preference | Permanent documented remnant |
 | `mobile/fallback/index.html` | Capacitor offline page, shown before any preference can be read; outside `app/**` | Permanent documented remnant |
-| `ios/App/App/Info.plist:57–58` (`UIStatusBarStyle` / `UIStatusBarStyleLightContent`), `android/…/values/styles.xml:7–8` | Native defaults. The iOS one is overridden **at runtime** by Child E's status-bar work; the static value stays | Documented remnants |
+| `ios/App/App/Info.plist:57–58` (`UIStatusBarStyle` / `UIStatusBarStyleLightContent`), `android/…/values/styles.xml:7–8` | Native defaults. **CORRECTED by Child E (2026-08-12): the iOS one is NOT overridden at runtime.** A6's fallback was taken — `@capacitor/status-bar` is not installed — so the native bar keeps its `Info.plist` default. The web/PWA meta is a separate matter, also left static, for the safe-area reason recorded at §5 | Documented remnants |
 | Raster brand assets — `/icons/backstage-v2-*.png`, `/LogoOasis.png` | Opaque `#010b17` tile marks, outside every glob | Decision, not omission |
 | The Google brand logo at `(client)/auth/signin/page.tsx` (`#4285F4 #34A853 #FBBC05 #EA4335`) | A third-party mark that must not be themed | Lint-exempt, with reason |
 | Building lint/test CI | `.github/workflows/` holds two workflows — one `schedule:` cron and one `workflow_dispatch:`-only diagnostic — and neither has a `push` or `pull_request` trigger; no PR gate exists (CLAUDE.md mandates direct push) | Guards ride the existing `npm test` done-gate |
