@@ -1,8 +1,9 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { useSession } from "next-auth/react";
+import { usePathname } from "next/navigation";
 import {
   clearThemeMirror,
   fetchThemePref,
@@ -60,9 +61,32 @@ const META_LIGHT = "#eef3f9";
 export function ThemeBootstrap({ children }: { children: React.ReactNode }) {
   const { setTheme, resolvedTheme } = useTheme();
   const { status, data } = useSession();
-  const [pref, setPref] = useState<ThemePref | undefined>(undefined);
+  const [pref, setPrefState] = useState<ThemePref | undefined>(undefined);
   const [loaded, setLoaded] = useState(false);
   const applied = useRef(false);
+
+  // `setTheme` MUST NOT be an effect dependency. next-themes defines it as
+  // `useCallback(..., [theme])`, so its identity changes on every theme change —
+  // including changes this component itself causes. With it in the dep array the
+  // effect below tears down and re-runs the moment anyone picks a theme, the
+  // in-flight GET /api/me is cancelled, and the `applied` guard then refuses to
+  // re-issue it: `loaded` stays false and the /me control shows nothing selected
+  // for the rest of the page's life. Holding it in a ref keeps the effect keyed
+  // on what it actually cares about — the session gates.
+  const setThemeRef = useRef(setTheme);
+  // Assigned in an effect, never during render — writing a ref while rendering is
+  // the anti-pattern `react-hooks` flags as an error. `useRef(setTheme)` already
+  // holds the right value on first mount, and this keeps it current afterwards;
+  // the async continuation below reads `.current` long after effects have run.
+  useEffect(() => { setThemeRef.current = setTheme; });
+
+  // Exposed through context instead of the raw setter: a successful save must
+  // mark the state LOADED as well, or `active` stays false on every button and a
+  // write that landed looks like a tap that did not register.
+  const setPref = useCallback((p: ThemePref) => {
+    setPrefState(p);
+    setLoaded(true);
+  }, []);
 
   const isImpersonating = Boolean(
     (data?.user as { isImpersonating?: boolean } | undefined)?.isImpersonating,
@@ -85,10 +109,21 @@ export function ThemeBootstrap({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     void (async () => {
       const { ok, pref: stored } = await fetchThemePref();
-      if (cancelled || !ok) return;   // A FAILED FETCH IS NOT "UNSET" — see below.
+      if (cancelled) return;
+
+      // A FAILED FETCH IS NOT "UNSET" — it must not clear anyone's mirror. But it
+      // must also not be terminal: one transient 500 or offline moment would
+      // otherwise leave an explicit-Light member on the resolved default for the
+      // whole session, with nothing to retrigger the read. Releasing the guard
+      // costs nothing (this branch mutates no state) and restores a retry on the
+      // next session-gate change.
+      if (!ok) {
+        applied.current = false;
+        return;
+      }
 
       setLoaded(true);
-      setPref(stored);
+      setPrefState(stored);
 
       if (stored) {
         // Only ever a value isThemePref accepts — "dark", "light" or (since Child
@@ -97,7 +132,7 @@ export function ThemeBootstrap({ children }: { children: React.ReactNode }) {
         // setTheme(undefined) would persist the string "undefined" and poison the
         // NEXT load into `classList.add("undefined")` — no dark, no light, and
         // all 94 dark: utilities off at once.
-        setTheme(stored);
+        setThemeRef.current(stored);
         return;
       }
 
@@ -120,13 +155,13 @@ export function ThemeBootstrap({ children }: { children: React.ReactNode }) {
       // legacy-mirror cohort to dark on every load, against the new default,
       // invisibly. Guarded by themeWiring.test.ts.
       if (hasThemeMirror()) {
-        setTheme("system");
+        setThemeRef.current("system");
         clearThemeMirror();
       }
     })();
 
     return () => { cancelled = true; };
-  }, [status, isImpersonating, setTheme]);
+  }, [status, isImpersonating]);
 
   // The browser/PWA chrome colour, keyed on the RESOLVED theme — which since Child
   // F means an unset member follows their device, so this follows it too. Keying on
@@ -143,12 +178,18 @@ export function ThemeBootstrap({ children }: { children: React.ReactNode }) {
   // env(safe-area-inset-top) a non-zero value for Navbar/CueDialog/PlannerGrid.
   // Every light-appropriate value is non-translucent, so swapping it would collapse
   // the inset and move all three — geometry, not colour. Recorded as a remnant.
+  // `pathname` is a dependency deliberately. Next re-renders route metadata on a
+  // client-side navigation, so a <meta> written here can be replaced by one
+  // carrying the server-rendered value again. Keyed on resolvedTheme alone the
+  // effect would not re-fire (the theme did not change) and a light member would
+  // pick up dark browser chrome by walking between routes.
+  const pathname = usePathname();
   useEffect(() => {
     if (!resolvedTheme) return;
     const meta = document.querySelector('meta[name="theme-color"]');
     if (!meta) return;
     meta.setAttribute("content", resolvedTheme === "light" ? META_LIGHT : META_DARK);
-  }, [resolvedTheme]);
+  }, [resolvedTheme, pathname]);
 
   return (
     <Ctx.Provider value={{ pref, loaded, setPref }}>

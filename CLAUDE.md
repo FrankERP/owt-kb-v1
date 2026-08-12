@@ -14,6 +14,17 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
 ## Conventions
 - Work on a branch, **merge to `main` periodically** (don't commit routine work
   straight to `main`). **Direct push, no PRs.**
+- **A MERGE TO `main` IS A RELEASE, SO IT NEEDS A FRESH CODE REVIEW FIRST.** Not the
+  plan review — a review of the *diff*. Children E and F were both adversarially reviewed
+  as plans (19 rounds and 2), merged, and deployed; the code review ran afterwards and
+  found three control-flow bugs already serving the team. Plan review cannot see them by
+  construction: it reads plans. One round even blocked on `clearThemeMirror()`'s error
+  handling while standing next to the `setTheme`-identity bug in the same function, because
+  it was not looking at code. The order is:
+
+      implement → gates green → FRESH CODE REVIEW on the merge range → fix → merge to main
+      → preview → verify alias → main
+
 - **PUSH ORDER IS `preview` FIRST, THEN `main`. Always, without being asked.**
   `main` auto-deploys to **production** — `owt-backstage.vercel.app`, the app the
   team uses. So `git push origin main` *is* a production release, not a checkpoint.

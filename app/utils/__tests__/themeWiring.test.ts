@@ -74,7 +74,10 @@ describe("Provider.tsx", () => {
       "copy 2 of 3 — the unset-with-a-mirror repair must hand setTheme the SAME " +
         "default as the provider, or the legacy-mirror cohort is silently excluded " +
         "from the rollout",
-    ).toMatch(/setTheme\("system"\)/);
+      // Matches the ref form too: setTheme must NOT be an effect dependency (its
+      // identity changes on every theme change in next-themes), so the call site
+      // goes through a latest-ref rather than the destructured binding.
+    ).toMatch(/setTheme(Ref\.current)?\("system"\)/);
 
     // 3 — the migration script's catch. This one cannot carry the literal: it
     // resolves the device, because a hardcoded value would exclude the
@@ -208,7 +211,10 @@ describe("clearThemeMirror() at sign-out", () => {
     // setTheme-only pins the unset population to a mirror and defeats the default.
     // Child F moved the literal here from "dark" to "system" — this is the seventh
     // E-era guard the F plan should have listed as inverting, found by running them.
-    const setDefault = src.indexOf('setTheme("system")');
+    const setDefault = Math.max(
+      src.indexOf('setTheme("system")'),
+      src.indexOf('setThemeRef.current("system")'),
+    );
     const clear = src.indexOf("clearThemeMirror()");
     expect(setDefault, "the repair must hand setTheme the current default").toBeGreaterThan(-1);
     expect(setDefault, 'setTheme("system") must precede clearThemeMirror()').toBeLessThan(clear);

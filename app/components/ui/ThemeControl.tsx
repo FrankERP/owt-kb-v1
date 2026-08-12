@@ -78,12 +78,15 @@ export default function ThemeControl() {
 
   return (
     <section id="tema" className="rounded-2xl border border-surface-accent-20 p-5">
-      <h3 className="font-display text-lg font-bold mb-1">Tema</h3>
+      <h3 id="tema-h" className="font-display text-lg font-bold mb-1">Tema</h3>
       <p className="font-body text-sm text-mono-500 dark:text-mono-400 mb-4">
         Por defecto la app sigue el modo de tu teléfono. Tu elección te sigue en
         todos tus dispositivos.
       </p>
-      <div className="flex flex-wrap gap-2">
+      {/* A radiogroup, not three toggles. `aria-pressed` on mutually exclusive
+          buttons reads to a screen reader as three unrelated switches; radio
+          semantics say "one of these three", which is what this is. */}
+      <div role="radiogroup" aria-labelledby="tema-h" className="flex flex-wrap gap-2">
         {OPTIONS.map((o) => {
           // `loaded` distinguishes "not fetched yet" from "never chosen": before
           // the projection lands, `pref` is undefined for everyone, and neither
@@ -96,16 +99,25 @@ export default function ThemeControl() {
             <button
               key={o.value}
               type="button"
+              role="radio"
+              aria-checked={active}
               onClick={() => void choose(o.value)}
-              aria-pressed={active}
-              disabled={saving !== null}
-              className={`font-label text-xs uppercase tracking-widest px-4 py-2 rounded-full border transition-colors disabled:opacity-60 ${
+              // Not `disabled`: disabling the pressed control during the
+              // round-trip drops it out of the a11y tree mid-interaction. Busy
+              // + a guard in `choose()` gives the same protection.
+              aria-busy={saving === o.value}
+              className={`font-label text-xs uppercase tracking-widest px-4 py-2 rounded-full border transition-colors ${
+                saving === o.value ? "opacity-60" : ""
+              } ${
                 active
                   ? "border-accent text-accent bg-accent/10"
                   : "border-surface-accent-l25-d20 text-mono-500 dark:text-mono-400 hover:border-accent/50 dark:hover:border-surface-accent-l25-d20"
               }`}
             >
-              {saving === o.value ? "Guardando…" : o.label}
+              {o.label}
+              {saving === o.value && (
+                <span className="sr-only"> — guardando</span>
+              )}
             </button>
           );
         })}
