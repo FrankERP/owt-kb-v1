@@ -56,3 +56,4 @@ wrote down why — a known gap, not a guess).
 | [0013](0013-smtp-sends-stay-serial.md) | SMTP sends stay serial, and the recipient cap sits below the seat count | Accepted |
 - [ADR-0014: Two Playwright configs](0014-two-playwright-configs.md) — why the write-safety harness is not reused for visual regression
 - [ADR-0015: A third root layout, at a dynamic segment](0015-gallery-root-layout.md) — why the theme gallery's layout cannot be moved upward
+- [ADR-0016: Revive light mode by tokenising colour](0016-light-mode-revived-by-tokenisation.md) — **supersedes ADR-0008**; why `dark:` variants and a partial-surface revival were both rejected
