@@ -58,3 +58,28 @@ reviewers converging on one line is a stronger signal than either verdict alone.
   but E edits that file.
 - A same-bundle multi-tab writeback can leave a stale `"dark"` mirror that outlives the
   repair; Child F's own repair fixes it on any single-tab load.
+
+
+## Implementation — what the browser gate could and could not cover
+
+Verified live on the dev server, at `localhost:3000`, on the E4 build:
+
+| Scenario | Seeded state | Result |
+|---|---|---|
+| **Unset member** — the safe ending state | no mirror | `<html class="dark">`, `theme-color` `#010b17`, body `rgb(1,11,23)` |
+| **Legacy `ThemeSwitch` mirror** — the terminal-light failure | `theme=light`, no flag | mirror **cleared**, painted **dark**, flag set to `1` |
+| **A member who chose Claro** | `theme=light` + flag | `<html class="light">`, body `rgb(238,243,249)`, ink `rgb(10,25,41)`, accent `rgb(0,53,114)`, **`theme-color` swapped to `#eef3f9`** — which also proves `ThemeBootstrap` is mounted and keying on the resolved theme |
+| Sign-in page contrast, light | — | 8 text elements checked, **0 below AA** once translucent layers are composited over their ancestors |
+| Console | — | no errors |
+
+**NOT covered, and it is the first thing to do:** the authenticated visual pass —
+the `/me` control itself, `CueDialog`, a full-screen `PlannerGrid`, `/posts[slug]`,
+one `(admin)` route and `/studio`. Every route except `/auth/*` and static assets is
+session-gated (`MIDDLEWARE_MATCHER` in `app/utils/routeMatcher.ts`), and signing in
+means entering the user's credentials, which I do not do.
+
+That gap is bounded by the design rather than by luck: light mode is **opt-in**, and
+the first row above is the live proof that a member who opts into nothing still gets
+exactly what they got yesterday. What is unverified is how the app *looks* to someone
+who does opt in — which is a polish question, on components Child D already passed
+over, not a question about whether the release is safe for the team.
