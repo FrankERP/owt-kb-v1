@@ -30,14 +30,15 @@ No secrets, credentials or personal data appear here.
 
 | # | Change | File |
 |---|---|---|
-| 1 | `themePref` field on `teamMember` | `sanity/schemas/worshipTeam.ts` |
+| 1 | `themePref` field on `teamMembers` | `sanity/schemas/worshipTeam.ts` |
 | 2 | `PATCH /api/me/theme` — a member writes their own preference | `app/api/me/theme/route.ts` (new) |
 | 3 | **`GET /api/me` projection gains `themePref`** — D15's read path | `app/api/me/route.ts` |
 | 3b | The `/me` control | `app/components/ui/ThemeControl.tsx` (new), rendered in `app/(client)/me/page.tsx` |
 | 4 | `localStorage` mirror + pre-hydration paint | `app/utils/themePref.ts` (new), `app/components/ThemeBootstrap.tsx` (new) |
 | 5 | **`forcedTheme="dark"` removed**, explicit `defaultTheme="dark"` added | `app/utils/Provider.tsx:16` |
-| 6 | `themeColor` **stays static**, remnant recorded — invariant 17's own fallback | *(no change; see below)* |
+| 6 | `themeColor` **swapped client-side on the resolved theme** | `app/components/ThemeBootstrap.tsx` |
 | 7 | iOS status bar | **deferred with a recorded remnant — see A6 below** |
+| 8 | **Docs, per slice** — §12 assigns them to the owning child | `DATA_MODEL.md` (E1), `API_REFERENCE.md` + `ROUTES.md` (E2), `UTILITIES_AND_COMPONENTS.md` (E3) |
 
 ## The default is `"dark"`, and it must be written explicitly
 
@@ -69,6 +70,36 @@ nothing more.
 So: the projection gains `themePref`, and `ThemeBootstrap` **calls `setTheme()`** with what
 it reads. Writing `localStorage` alone does not repaint the current tab — `next-themes`
 only listens for `storage` events, which fire cross-tab, never in the tab that wrote.
+
+### `setTheme` MUST be guarded, and this is the most dangerous line in Child E
+
+**`next-themes` has no falsy guard on the setter.** Verified in its source:
+
+```
+f = useCallback(i => { let c = typeof i === "function" ? i(a) : i;
+                       r(c); try { localStorage.setItem(o, c) } catch {} })
+```
+
+`setTheme(undefined)` therefore stores the **string `"undefined"`**, and the
+pre-hydration seed is `localStorage.getItem(s) || n` — `"undefined"` is truthy, so it
+wins over the default, and the applier removes `light`/`dark` and adds a class literally
+named `undefined`.
+
+**`themePref` is unset for the entire team on the day E ships** — invariant 14 requires
+that absence be the normal state — so an unguarded bootstrap would put every member into
+a themeless document. With `tailwind.config.ts:10` at `darkMode: "class"` and **92 `dark:`
+utilities still live**, they all stop applying at once. And per `CLAUDE.md`, a `dark:` base
+at specificity (0,2,0) *masks* bare `hover:`/`focus:` utilities, so this is not a missing
+colour — it changes which rules win. Child B paid for that lesson with 39 real bugs.
+
+**So `ThemeBootstrap` calls `setTheme` only when the projection returns the literal
+`"dark"` or `"light"`, and does nothing at all otherwise.** A test asserts that an
+absent, `null` or unrecognised `themePref` produces **no `setTheme` call and no
+`localStorage` write**. The existing "no mount path issues a PATCH" test does not cover
+this — that is the server store, this is the browser one, and they fail independently.
+
+The parent records this landmine in §9. An earlier revision of this plan cited §9 for the
+`enableSystem` trap and missed the `setTheme` one sitting beside it.
 
 **UNSET MUST STAY DISTINGUISHABLE, and F depends on it** (invariant 14). The control
 renders a fourth state — no preference yet — and **must not write `themePref` on mount, on
@@ -105,8 +136,20 @@ writeClient.patch(session.user.sanityId).set({ themePref: theme }).commit()
   route test pins it. The theme still applies locally for the impersonating admin — it just
   never persists to the impersonated member's record.
 
-- **Sign-out clears the `localStorage` mirror**, and so does stopping impersonation.
-  Otherwise a shared device carries the previous member's theme into the next session.
+- **Sign-out clears the `localStorage` mirror**, and so does stopping impersonation, or a
+  shared device carries one member's theme into the next session. **Name the call sites
+  rather than the intent:** `next-themes` owns the key `"theme"`, so the clear is
+  `localStorage.removeItem("theme")` in the sign-out handler and in the stop-impersonating
+  handler. An implementer told only "clears the mirror" will guess at both the key and the
+  place.
+- **E's 403 is deliberately STRICTER than the repo precedent, and that is not an
+  inconsistency to reconcile.** `PATCH /api/me` (alias, email) already writes to the
+  impersonated member's record with no such guard. E does not follow it because a theme is
+  a preference an admin has no reason to set on someone's behalf, where a name correction
+  plausibly is. Stated so a later reviewer does not "fix" the difference.
+- **The control hides itself during impersonation** rather than rendering a button that
+  always 403s. The mutation-handler invariant requires a failure be surfaced, and a red
+  toast on every impersonated toggle is a worse outcome than not offering the control.
 - **No `revalidate*` call, and that is deliberate.** `CLAUDE.md`'s cache invariant covers
   routes that mutate **content**; `themePref` is per-member chrome that no ISR page renders.
   Calling `revalidateServiceViews()` here would invalidate the whole schedule for a colour
@@ -139,24 +182,31 @@ claimed "never toward light", which was stronger than the mechanism supports.
 
 ## `themeColor` and the native shell
 
-`(client)/layout.tsx:47` pins `themeColor: "#010b17"`, and **it stays pinned.**
+**`ThemeBootstrap` swaps `<meta name="theme-color">` on the RESOLVED theme.** The static
+`themeColor: "#010b17"` in `(client)/layout.tsx:47` stays as the server-rendered initial
+value, which is what an unset member keeps.
 
-An earlier revision made it an OS-keyed media array. That is not one of the two outcomes
-invariant 17 sanctions, and it **regresses the default member**: someone on a light-OS
-device who never touches the control — the common case, since iOS defaults to light —
-would get `#eef3f9` browser chrome around a still-dark app. That directly contradicts
-this plan's own safe-ending-state claim, and the earlier text described the mismatch
-backwards, citing the rare dark-OS-forcing-light case instead.
+This plan reached the right answer by two wrong routes before this one, and both are worth
+recording because they are opposite errors:
 
-Invariant 17 permits exactly two things: a client-side `<meta>` swap, or leave it static
-and record the remnant. **E takes the second.** The chrome stays `#010b17` for everyone,
-which is what ships today, so a member who opts into Light gets dark browser chrome around
-a light page — visible, cosmetic, and strictly better than changing it for people who
-opted into nothing. `appleWebApp.statusBarStyle` stays `"black-translucent"` for the same
-reason; §12 couples them to the same requirement.
+- An **OS-keyed `media` array** regresses the default member. Someone on a light-OS
+  device who never touches the control — the common case, iOS defaults to light — would
+  get `#eef3f9` chrome around a still-dark app.
+- **Leaving it static** looked like invariant 17's sanctioned fallback, but that fallback
+  is *conditional*: §5 permits it only for "a child that CANNOT meet it without a session
+  read in a shared layout". E ships `ThemeBootstrap`, a client component that already holds
+  the resolved theme, so no session read in any layout is required and **the precondition
+  is not met.** §12 assigns E "theme-responsive `themeColor` + `statusBarStyle`, client-side
+  only", and Child C's lint `ignores` entry is scoped "until Child E makes it dynamic" — an
+  exemption written to expire here.
 
-**Recorded remnant for F:** the `<meta>` swap is the exact fix, and F is where it belongs,
-because F is where the default moves and the chrome question becomes load-bearing.
+Keying on the RESOLVED theme has neither problem: unset resolves to dark, so the swap
+writes `#010b17` and nothing changes for anyone who opted into nothing.
+
+`appleWebApp.statusBarStyle` stays `"black-translucent"` — it is a static PWA enum with no
+client-side equivalent, and **A6's fallback covers it**: `@capacitor/status-bar` is
+confirmed absent from `package.json`, so the native bar keeps its `Info.plist` default and
+is recorded as a known remnant. The web surface is unaffected.
 
 ### A6: the iOS status bar is deferred, with the remnant recorded
 
@@ -176,7 +226,7 @@ it ships inert and independently revertible.
 | **E1** | `themePref` schema field + Studio deploy | no |
 | **E2** | `PATCH /api/me/theme` + its route test | no — nothing calls it |
 | **E3** | `GET /api/me` projection, `themePref.ts`, `ThemeBootstrap`, the `/me` control | no — `forcedTheme` still wins |
-| **E4** | **Remove `forcedTheme`, add `defaultTheme="dark"`, theme-responsive `themeColor`** | **YES** |
+| **E4** | **Remove `forcedTheme`, add `defaultTheme="dark"`**, and the client-side `themeColor` swap | **YES** |
 
 **E4 is the whole risk.** E1–E3 are additive and could sit on `main` for a week harmlessly.
 A reviewer should spend their attention there and treat E1–E3 as ordinary work.
@@ -189,8 +239,10 @@ A reviewer should spend their attention there and treat E1–E3 as ordinary work
   theme, self-id only, happy path writes the field.
 - The `/me` control's handler: `res.ok` checked, flag reset in `finally`, failure surfaced.
 - **Browser, both themes, on the real components** — the pass that found the two defects D
-  shipped. Specifically an open `CueDialog` and `PlannerGrid` full-screen, which the parent
-  names as acceptance criteria (§4.4).
+  shipped. An open `CueDialog` and `PlannerGrid` full-screen, which the parent names as
+  acceptance criteria (§4.4), **plus `/posts/[slug]`**: §12 marks Child B's typography and
+  `dark:prose-invert` row "E verifies on device", and that route is where the unstyled-lyrics
+  regression §9 warns about would show.
 - **A test that no mount path writes `themePref`** — invariant 14's "unset stays
   distinguishable", which F depends on.
 - **A route test for the impersonation rejection**, since that claim is the one a
