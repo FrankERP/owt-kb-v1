@@ -1,6 +1,6 @@
 # ADR-0008: Force dark mode app-wide
 
-**Date:** 2026-06-06 (default) → 2026-07-16 (forced) · **Status:** Accepted — being revisited 2026-07-29
+**Date:** 2026-06-06 (default) → 2026-07-16 (forced) · **Status:** Superseded by [ADR-0016](0016-light-mode-revived-by-tokenisation.md) on 2026-08-12
 
 ## Context
 
@@ -56,7 +56,7 @@ and decide whether `enableSystem` comes back. Do that **last**: until the 47
 untreated files are handled, flipping it re-exposes exactly the broken state
 this ADR exists to prevent.
 
-### Interim note (2026-08-12) — the lever was pulled, and the precondition was met
+### Superseded (2026-08-12) — the precondition was met, and the constraint changed
 
 **Child E4 removed `forcedTheme="dark"`.** The condition this ADR set was
 satisfied rather than ignored: the light-mode revival programme's Children A–D
@@ -73,11 +73,14 @@ sees exactly what they saw before.
 
 `enableSystem` has **not** come back; Child F owns that decision.
 
-**Status stays `Accepted — being revisited` deliberately.** Full supersession is
-Child F's, per the parent scope spec (§12, §14), because the superseding record
-must also capture why a partial-surface revival was rejected — F's story, not E's.
-This note exists so that a reader arriving between E and F finds a record that
-matches the code rather than a warning against the change that shipped.
+**Child F completed the delivery** on 2026-08-12: `enableSystem` is now `true` and the
+default is Follow System, so a member who has never chosen follows their device.
+
+**This ADR is superseded in full by [ADR-0016](0016-light-mode-revived-by-tokenisation.md)**,
+which records what actually changed — colour was tokenised, so the drift mechanism this ADR
+described is removed rather than out-run — and why a partial-surface revival was specified,
+reviewed and rejected (parent spec §4.1). Read 0016 first; this file is kept for the history
+of *why dark-only was right in July 2026*, which it still is.
 
 Related and **not** in scope: email templates are deliberately light and stay
 that way regardless of what the app does — see `CLAUDE.md` (Known landmines) and

@@ -85,10 +85,10 @@ describe("PATCH /api/me/theme", () => {
     expect(h.patchedIds, "no cross-member write may reach Sanity").toEqual([]);
   });
 
-  it('400s on "system" — legal-looking, and silently does nothing in the browser', async () => {
+  it('accepts "system" as of Child F, which flipped enableSystem with it', async () => {
     const res = await PATCH(req({ theme: "system" }));
-    expect(res.status).toBe(400);
-    expect(h.patchedIds).toEqual([]);
+    expect(res.status).toBe(200);
+    expect(h.sets).toEqual([{ themePref: "system" }]);
   });
 
   it.each([

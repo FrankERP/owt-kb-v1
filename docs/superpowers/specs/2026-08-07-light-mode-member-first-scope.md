@@ -608,9 +608,9 @@ Every requirement has exactly one primary owner. Cross-cutting verification is m
 | Theme-responsive `themeColor` + `statusBarStyle`, **client-side only** (invariant 17) | **E** | — |
 | iOS status bar (A6) | E | — |
 | Unset stays distinguishable (invariant 14) | E | F depends on it |
-| **Flip `enableSystem` to `true`** (§9) | **F** | — |
-| Default → Follow System; Spanish announcement | F | — |
-| ADR-0008 superseded | F | — |
+| **Flip `enableSystem` to `true`** (§9) | **F** | ✅ delivered 2026-08-12 |
+| Default → Follow System; Spanish announcement | F | ✅ delivered 2026-08-12 |
+| ADR-0008 superseded | F | ✅ [ADR-0016](../../adr/0016-light-mode-revived-by-tokenisation.md), 2026-08-12 |
 | `DATA_MODEL.md`, `API_REFERENCE.md`, `ROUTES.md`, `UTILITIES_AND_COMPONENTS.md` | owning child | docs audit at each merge |
 | CLAUDE.md + AGENTS.md invariants, mirrored | B | guard 9 enforces |
 
@@ -634,7 +634,9 @@ a palette, so the drift mechanism is removed rather than out-run. ADR-0008 named
 revival — re-adding `dark:` variants — and this design rejects it for the same reason:
 238 of 251 existing variants carry a hex literal, so that path scales the drift.
 
-ADR-0008 is superseded **fully** on completion of Child F.
+ADR-0008 is superseded **fully** on completion of Child F. **Done — 2026-08-12, by
+[ADR-0016](../../adr/0016-light-mode-revived-by-tokenisation.md)**, which carries the §4.1
+record required below.
 
 The superseding ADR must also record §4.1: that a partial-surface revival was specified,
 reviewed and rejected because containing an unthemed island is not achievable against

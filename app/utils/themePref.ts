@@ -21,15 +21,24 @@
  * nothing, permanently, for that population. Fail soft, like `textZoom.ts`.
  */
 
-export type ThemePref = "dark" | "light";
+export type ThemePref = "dark" | "light" | "system";
 
 /**
- * The accepted literal set. "system" is NOT a member: with `enableSystem={false}`
- * next-themes adds a literal `system` class and strips light/dark, so the app
- * stays dark forever while Sanity stores "system" and nothing logs. Child F owns
- * the `enableSystem` flip and inherits this constant when it does.
+ * The accepted literal set.
+ *
+ * "system" became legal at Child F, and ONLY because F flipped `enableSystem` to
+ * true in the same delivery. With it false, next-themes resolves nothing: the
+ * applier strips light/dark and adds a literal `system` class, leaving the
+ * document with no theme class at all while Sanity happily stores "system" and
+ * nothing logs. The two changes are one change.
+ *
+ * `PATCH /api/me/theme` validates only through `isThemePref`, so the route's
+ * accepted set moves with this constant and never drifts from it.
  */
-const VALID: ReadonlySet<string> = new Set<ThemePref>(["dark", "light"]);
+const VALID: ReadonlySet<string> = new Set<ThemePref>(["dark", "light", "system"]);
+
+/** For error messages, so the 400 body cannot drift from what is accepted. */
+export const VALID_THEMES: readonly ThemePref[] = ["dark", "light", "system"];
 
 export function isThemePref(v: unknown): v is ThemePref {
   return typeof v === "string" && VALID.has(v);
@@ -66,16 +75,25 @@ export const THEME_MIGRATED_KEY = "owt-theme-migrated";
  * WHY THE `catch` BODY ADDS A CLASS: with `forcedTheme` gone, next-themes' seed
  * takes its `try { getItem(...) ... apply }` branch — and the WHOLE apply sits
  * inside that try. For a storage-blocked browser the pre-hydration document would
- * then carry neither `dark` nor `light`: all 94 `dark:` utilities stop applying at
- * once, and per CLAUDE.md a `dark:` base at (0,2,0) was masking bare hover:/focus:
- * rules that now come unmasked. One line prevents it.
+ * otherwise carry neither `dark` nor `light`: all 94 `dark:` utilities stop
+ * applying at once, and per CLAUDE.md a `dark:` base at (0,2,0) was masking bare
+ * hover:/focus: rules that now come unmasked. One line prevents it.
  *
- * NOTE: this is the THIRD copy of the dark default, after `Provider.tsx`'s
- * `defaultTheme` and `ThemeBootstrap`'s repair literal. Child F must change all
- * three together, or a storage-blocked member stays pinned to dark under F's
- * Follow-System default.
+ * SINCE CHILD F IT RESOLVES THE DEVICE rather than hardcoding dark, because the
+ * default is now Follow System and a hardcoded `dark` here would have quietly
+ * excluded exactly the storage-blocked population from the rollout. It cannot
+ * read `themePref` (this runs pre-hydration), but `matchMedia` is the same call
+ * next-themes' own seed makes, so it reaches the same answer. The inner try is
+ * not decoration: this is a catch block whose entire job is coping with hostile
+ * browser environments, and a throw here would leave the document class-less —
+ * the exact failure the line exists to prevent.
+ *
+ * THIRD OF THE THREE DEFAULT COPIES, after `Provider.tsx`'s `defaultTheme` and
+ * `ThemeBootstrap`'s repair. Child F moved all three together. They cannot share
+ * a constant — `useTheme()` exposes no `defaultTheme`, and this one is a string
+ * of JavaScript, not a value — so `themeWiring.test.ts` asserts them as a set.
  */
-export const THEME_MIGRATION_SCRIPT = `try{if(!localStorage.getItem("${THEME_MIGRATED_KEY}")){localStorage.removeItem("${THEME_MIRROR_KEY}");localStorage.setItem("${THEME_MIGRATED_KEY}","1")}}catch(e){document.documentElement.classList.add("dark")}`;
+export const THEME_MIGRATION_SCRIPT = `try{if(!localStorage.getItem("${THEME_MIGRATED_KEY}")){localStorage.removeItem("${THEME_MIRROR_KEY}");localStorage.setItem("${THEME_MIGRATED_KEY}","1")}}catch(e){try{document.documentElement.classList.add(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e2){document.documentElement.classList.add("dark")}}`;
 
 /**
  * Clears next-themes' mirror. Called at the four sign-out sites and by

@@ -20,7 +20,7 @@ and per-page guards (`requireActiveSession` / `requireActiveManager`).
   Loads Google fonts (Advent Pro / Urbanist / Jura), exports `metadata` (title, PWA manifest,
   icons, Apple web-app config) and `viewport` (`viewportFit: "cover"`, themeColor `#010b17`).
   Wraps children in [`<Provider>`](../app/utils/Provider.tsx) (SessionProvider → ThemeProvider
-  dark-default → PlayerProvider) and mounts persistent chrome: `ImpersonationBanner`,
+  system-default, `enableSystem` → `ThemeBootstrap` → PlayerProvider) and mounts persistent chrome: `ImpersonationBanner`,
   `ActivityPing`, `NativeAuthBootstrap`, `TextScaleBootstrap`, `AudioPlayer`, `SongSheet`.
 - **`app/(admin)/layout.tsx`** (server) — separate root used only for Studio (Orbitron font,
   `CmsNavbar`, its own metadata). Studio does **not** inherit the client chrome.
