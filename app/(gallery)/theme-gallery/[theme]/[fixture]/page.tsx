@@ -9,7 +9,7 @@
 //     full-viewport overlay portalled to `document.body`, covering every swatch. It
 //     also sets `body.style.overflow = "hidden"` and `inert` on body children, so the
 //     swatch tree is inert and a fullPage capture degrades to one viewport.
-//   - `CueDialog.tsx:235` is `fixed inset-0 z-[90]` behind `bg-black/68
+//   - `CueDialog.tsx:235` is `fixed inset-0 z-[90]` behind `bg-scrim/[0.68]
 //     backdrop-blur-md` — ABOVE the planner's z-50, painting a blurred sheet over it.
 //   - `CueDialogProvider.tsx:86–89` sets `inert` on the wrapper holding `children`,
 //     which contains the "⛶ Pantalla completa" button — so with a dialog already open,

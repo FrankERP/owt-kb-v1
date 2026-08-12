@@ -289,7 +289,7 @@ const Page = async ({ params }: Params) => {
                 <a href={post.musicalReferenceUrl || post.referenceLinks![0].url}
                   target="_blank" rel="noopener noreferrer"
                   className="brand-library-module brand-surface-interactive group flex items-center gap-4 p-4">
-                  <span className="flex items-center justify-center w-11 h-11 rounded-full bg-accent/12 text-accent shrink-0">
+                  <span className="flex items-center justify-center w-11 h-11 rounded-full bg-accent/[0.12] text-accent shrink-0">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg>
                   </span>
                   <span className="flex-1">
@@ -302,7 +302,7 @@ const Page = async ({ params }: Params) => {
                 <a href={post.lyricsVideoUrl}
                   target="_blank" rel="noopener noreferrer"
                   className="brand-library-module brand-surface-interactive group flex items-center gap-4 p-4">
-                  <span className="flex items-center justify-center w-11 h-11 rounded-full bg-accent/12 text-accent shrink-0">
+                  <span className="flex items-center justify-center w-11 h-11 rounded-full bg-accent/[0.12] text-accent shrink-0">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="22" /></svg>
                   </span>
                   <span className="flex-1">

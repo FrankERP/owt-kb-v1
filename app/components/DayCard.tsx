@@ -227,7 +227,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
 
           {/* Team */}
           {hasRole && (
-            <section className={hasSetlist ? "border-t border-ink-dim/12 pt-5" : ""}>
+            <section className={hasSetlist ? "border-t border-ink-dim/[0.12] pt-5" : ""}>
               <h4 className="font-label text-xs md:text-sm lg:text-base uppercase tracking-widest text-surface-ink-l70-d50 mb-3">
                 Equipo
               </h4>

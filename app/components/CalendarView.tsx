@@ -385,9 +385,9 @@ function MonthGrid({
           let cls = "aspect-square flex flex-col items-center justify-center rounded-lg text-sm font-label transition-colors relative ";
 
           if (isSelected) {
-            cls += colorKey === "sat" ? "bg-warning-fg text-black font-bold"
-                 : colorKey === "sun" ? "bg-accent text-black font-bold"
-                 : "bg-info-fg text-black font-bold";
+            cls += colorKey === "sat" ? "bg-warning-fg text-surface-base font-bold"
+                 : colorKey === "sun" ? "bg-accent text-surface-base font-bold"
+                 : "bg-info-fg text-surface-base font-bold";
           } else if (hasActive) {
             cls += colorKey === "sat"
               ? "bg-warning-surface/50 border border-warning-fg/50 text-warning-fg cursor-pointer hover:bg-warning-surface/80 hover:border-warning-fg"

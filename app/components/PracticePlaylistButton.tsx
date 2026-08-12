@@ -152,12 +152,12 @@ export default function PracticePlaylistButton({ songIds, accentVar }: { songIds
         >
           <button type="button" onClick={() => void go("musica")}
             className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-accent/10 transition-colors border-b border-accent/10">
-            <span className="font-label text-sm text-white">🎵 Música</span>
+            <span className="font-label text-sm text-ink">🎵 Música</span>
             <span className="font-body text-xs text-ink-muted/60">referencia musical</span>
           </button>
           <button type="button" onClick={() => void go("letras")}
             className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-accent/10 transition-colors">
-            <span className="font-label text-sm text-white">🎤 Letras</span>
+            <span className="font-label text-sm text-ink">🎤 Letras</span>
             <span className="font-body text-xs text-ink-muted/60">letra en español</span>
           </button>
         </div>

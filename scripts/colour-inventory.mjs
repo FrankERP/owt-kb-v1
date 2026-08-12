@@ -553,7 +553,7 @@ const TOKEN_LAYER_ROLES = new RegExp(
       "warning-surface-deep", "info-surface-deep",
       "surface-overlay", "surface-overlay-deep", "surface-overlay-deepest",
       // Added in B4: the shadow black and the six categorical hues.
-      "elevation",
+      "elevation", "surface-lift", "scrim",
       "chart-lead", "chart-bgv", "chart-coro", "chart-especial", "chart-instr", "chart-foh",
       // Child C's 34 palette-family roles. Without these the category-12 scan
       // dispositions them to B, and C1 — a slice that migrates nothing — would move
