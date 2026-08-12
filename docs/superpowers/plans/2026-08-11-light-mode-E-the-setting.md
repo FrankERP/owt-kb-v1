@@ -48,12 +48,13 @@ Documentation, in the same delivery:
 | # | Doc change | Where |
 |---|---|---|
 | D-a | `themePref` field | `DATA_MODEL.md` (E1) |
-| D-b | The write route (E2); **the projection's new field (E3, with the code)** — documenting it at E2 would describe a field the endpoint does not yet return | `API_REFERENCE.md` + `ROUTES.md` |
+| D-b | The write route (E2); **the projection's new field (E3, with the code)**; **`ROUTES.md:18-23`'s enumeration of what `(client)/layout.tsx` mounts gains the reconciliation `<script>` (E3)** — documenting it at E2 would describe a field the endpoint does not yet return | `API_REFERENCE.md` + `ROUTES.md` |
 | D-c | `themePref.ts` + `ThemeBootstrap` (E3); `ThemeControl` (E4) | `UTILITIES_AND_COMPONENTS.md` |
 | D-d | The two client-side keys — `"theme"` (next-themes' mirror) and `owt-theme-migrated` (the one-time flag). Neither is a secret; both are persistent state a later hand would otherwise "clean up" | `UTILITIES_AND_COMPONENTS.md`, beside `themePref` |
 | D-e | **ADR-0008 interim Consequences note** — precondition met, lever pulled in E4; full supersession stays Child F's | `docs/adr/0008-forced-dark-theme.md` (E4) |
-| D-f | Parent §5:188-190 + its §12 row **amended** with the `statusBarStyle` geometry constraint and remnant; parent §5:202 corrected; the present-tense `forcedTheme` statements at **§5:43** and **§12:591** updated in the same pass | the parent scope spec |
+| D-f | Parent §5:188-190 + its §12 row **amended** with the `statusBarStyle` geometry constraint and remnant; parent §5:202 corrected; `§5:181`'s stale `(client)/layout.tsx:42` corrected to `:47`; the present-tense `forcedTheme` statements at **§3:43** and **§12:591** updated in the same pass | the parent scope spec |
 | D-g | The two PWA remnants recorded together — `statusBarStyle` and `manifest.webmanifest`'s `theme_color` | `UTILITIES_AND_COMPONENTS.md` |
+| D-i | **`CLAUDE.md:8` + `AGENTS.md:8` — "Dark-mode only."** becomes flatly false at E4. **Both files, same commit**: `app/utils/__tests__/agentDocsParity.test.ts` asserts they are byte-identical outside the title and the Continuous-improvement section, so editing one turns `npm test` red | **E4** |
 | D-h | **Four** stale `forcedTheme` statements — see Verification for the full list and the method | gallery layout, `themeGallery.test.ts`, `UTILITIES_AND_COMPONENTS.md`, **`app/brand.css:362`** |
 
 ## The default is `"dark"`, and it must be written explicitly
@@ -110,9 +111,11 @@ clear is completely invisible — it removes a key that is not being applied —
 `owt-theme-migrated` flag means it does not run again in E4. It also means the legacy cohort
 is already reconciled *before* the unmasking rather than in the same breath as it.
 
-With both in E3, `resolvedTheme` is `"dark"` for every member — no mirror survives the clear,
-and `defaultTheme` answers — so the swap writes back `#010b17`, the value already in the
-markup, and E3 is genuinely inert.
+With both in E3, `resolvedTheme` is `"dark"` for every member **whose mirror the script
+actually cleared** — no such mirror survives it, and `defaultTheme` answers — so the swap
+writes back `#010b17`, the value already in the markup, and E3 is inert. **One cohort escapes
+the script and is handled separately**: a browser whose mirror is re-poisoned by another tab
+across the deploy boundary. See the multi-tab section, which is where that is closed.
 
 **Within E4, the ordering constraint disappears with it.** Had the script stayed in E4, it
 would have had to land in the same commit as the `forcedTheme` removal or before it; a build
@@ -275,16 +278,20 @@ try.** For the same storage-blocked population the pre-hydration document then g
 flash, not a terminal state — but it is one line to prevent in a script both layouts already
 render ahead of the seed.
 
-**The mirror can hold `"system"`, not only `"light"`, and that case is strictly worse.** The
-Provider before `749588c` was a bare `<ThemeProvider attribute="class">` — no
-`enableSystem={false}`, and next-themes defaults it **true** — so a browser of that era can
-carry `theme: "system"`. Under today's `enableSystem={false}` that value resolves to
-`classList.add("system")` with `light` and `dark` both stripped: a class-less document, not
-merely a light one. It is §9's silent-failure landmine in its purest form.
+**The `removeItem` is unconditional, and that is a requirement rather than a convenience.**
+The rule is: **clear any value this codebase did not write**, not "clear `light`".
 
-The script's **unconditional** `removeItem` already covers it, which is precisely why it must
-stay unconditional. An implementer "tightening" it to `if (v === "light") removeItem(…)`
-would reintroduce the worse case while appearing more careful.
+The reason is what an unrecognised value costs. `"system"` is the worst case and is reachable
+in principle — the Provider before `749588c` was a bare `<ThemeProvider attribute="class">`
+with no `enableSystem={false}`, and next-themes defaults it **true** — though no shipped code
+path is known to have written it, so the cohort may well be empty. It does not need to be
+non-empty for the rule to hold. Under today's `enableSystem={false}` such a value resolves to
+`classList.add("system")` with `light` and `dark` both stripped: a **class-less document**, not
+merely a light one, which is §9's silent-failure landmine in its purest form. The same is true
+of any other junk in that key.
+
+So an implementer "tightening" this to `if (v === "light") removeItem(…)` would look more
+careful and be strictly less safe.
 
 **A clear, not a `setTheme("dark")`.** Both land the member on dark, but only the clear
 preserves the property F depends on: **no mirror means no preference**, so when F changes the
@@ -343,7 +350,15 @@ storage event, so mirror-less members are untouched; this is specific to the leg
 re-asserted on every load rather than once per browser:
 
 > when the projection returns **unset** and a mirror is nonetheless present, `ThemeBootstrap`
-> calls `setTheme(defaultTheme)` and then `clearThemeMirror()`, in that order.
+> calls `setTheme("dark")` and then `clearThemeMirror()`, in that order.
+
+**It is the literal `"dark"`, not a read of `defaultTheme`, because `useTheme()` does not
+expose one.** Its context value is `{theme, setTheme, forcedTheme, resolvedTheme, themes,
+systemTheme}`. So this is a **second copy of the default**, and the E3 source-text guard pins
+the first as a literal in `Provider.tsx`, which forecloses sharing a constant between them.
+That is acceptable for E, where the default is dark in both places by construction — but
+**Child F changes the default, and must change it in both**, or the repair will pin members to
+dark exactly as F is trying to move them off it.
 
 The order matters. `setTheme("dark")` first makes next-themes' own state truthful and paints
 the correct class; `clearThemeMirror()` then removes the key it just wrote, so the member ends
@@ -648,12 +663,12 @@ everything before it ships inert and independently revertible.
 | Slice | Content | Reachable? |
 |---|---|---|
 | **E1** | `themePref` schema field + Studio deploy | no |
-
 | **E2** | `PATCH /api/me/theme` + its route test | no — nothing calls it |
 | **E3** | **`defaultTheme="dark"`**; the **legacy-mirror reconciliation script**; `GET /api/me` projection, `themePref.ts`, `ThemeBootstrap` including its `theme-color` swap — **not the control** | no — inert, *because* those first two land here |
 | **E4** | **Remove `forcedTheme`**; the `/me` control; the ADR note and doc amendments | **YES** |
 
-E1–E3 are inert: a schema field nothing reads, a route nothing calls, and a bootstrap whose
+E1–E3 are inert — with the one multi-tab exception the storage-listener section closes via
+`ThemeBootstrap`'s every-load repair. A schema field nothing reads, a route nothing calls, and a bootstrap whose
 `setTheme` is overridden by `forcedTheme`. Its `theme-color` swap writes back `#010b17` —
 **but only because `defaultTheme="dark"` AND the reconciliation script both ship in the same
 slice.** Either one alone leaves `resolvedTheme` reading `"light"` on a dark page, for the
@@ -703,6 +718,10 @@ highest-consequence assertion in this child.
 - **`clearThemeMirror()` is called at exactly four sites**, with the remediation-shaped failure
   message above.
 - **The migration script's two guards** — source-text in both layouts, and the jsdom chain test.
+- **`CLAUDE.md` and `AGENTS.md` no longer say "Dark-mode only."** and remain byte-identical
+  outside the two sections `agentDocsParity.test.ts` exempts — that guard turns `npm test` red
+  if only one is edited, which is the desired behaviour and worth expecting rather than
+  debugging.
 - **`themePref.ts`'s first non-comment line is not `"use client"`** — a one-line source-text
   assertion, because both root layouts import `THEME_MIGRATION_SCRIPT` from it as Server
   Components and neither of the two guards above would catch a stray directive.
@@ -718,15 +737,26 @@ highest-consequence assertion in this child.
 - `npx tsc --noEmit`, `npm test`, `npx eslint .` at 0 errors, per slice.
 - **Four stale `forcedTheme` statements**, per CLAUDE.md's currency rule — separate from the
   ADR note (D-e) and the parent amendments (D-f). The list is the implementer's checklist, so
-  it is stated as exhaustive **within a named scope**: shipped code and **live reference
-  docs** — the files a reader consults to learn how the system works today.
+  it enumerates **`forcedTheme` statements only**, and is exhaustive for those within a named
+  scope: shipped code and **live reference docs**.
+
+  **A grep for `forcedTheme` structurally cannot find every stale claim, which is why D-i is a
+  separate row.** `CLAUDE.md:8` and `AGENTS.md:8` describe the stack as **"Dark-mode only."** —
+  a sentence containing no `forcedTheme` token, in the most canonical live reference doc the
+  repo has, asserting a property E4 destroys. Parent invariant 4 ("Documentation current in the
+  same delivery; no stale 'not released' claims") is one of the repository invariants where
+  violating any fails the delivery.
+
+  **It is E's, not B's or F's.** §12:604 assigns B "CLAUDE.md + AGENTS.md **invariants**,
+  mirrored" — a different row — and B could not have touched this sentence anyway, since light
+  was still unreachable then. F's rows are the `enableSystem` flip, the default move, the
+  announcement and the ADR supersession. **Reachability changes at E4 and nowhere else.**
   `grep -rn forcedTheme app docs` returns roughly seventeen further hits, all in **dated
   design records**: the two design specs, the parent scope spec, and review logs. Those are
   historical by nature and are left alone for the same reason as ADR-0015 below — rewriting a
   record of what was decided under the conditions of its day falsifies the history. The one
   exception is the parent scope spec, which E is already amending under **D-f**; its
-  present-tense statements at **`§3:43`** (the line is right; it sits under "Current behavior
-and the gap", not §5) and `§12:591` are updated there, in that pass, not here.
+  present-tense statements at **`§3:43`** and `§12:591` are updated there, in that pass, not here.
   1. `app/(gallery)/theme-gallery/[theme]/layout.tsx:10-14` and
   2. `app/utils/__tests__/themeGallery.test.ts:98-100` — both justify their design "while
      `forcedTheme` is still in force". The reasoning survives E4, since the nested-provider
