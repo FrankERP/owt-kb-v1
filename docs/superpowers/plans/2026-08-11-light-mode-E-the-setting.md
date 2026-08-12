@@ -35,14 +35,14 @@ No secrets, credentials or personal data appear here.
 | 2 | `PATCH /api/me/theme` — a member writes their own preference | `app/api/me/theme/route.ts` (new) |
 | 3 | **`GET /api/me` projection gains `themePref`** — D15's read path | `app/api/me/route.ts` |
 | 3b | The `/me` control — **ships in E4, not E3** (see the slice table) | `app/components/ui/ThemeControl.tsx` (new), rendered in `app/(client)/me/page.tsx` |
-| 4c | **The one-time legacy reconciliation**, as an inline `<script>` in `<head>` **before `<Provider>`** | `app/(client)/layout.tsx` + `app/(admin)/layout.tsx` — *not* the gallery root layout |
+| 4c | **The one-time legacy reconciliation**, an inline `<script>` as the **first child of `<body>`, immediately before `<Provider>`** (not `<head>` — see below) | `app/(client)/layout.tsx` + `app/(admin)/layout.tsx` — *not* the gallery root layout |
 | 4 | The fetch/validate helper and `clearThemeMirror()` — **not** a second store | `app/utils/themePref.ts` (new) |
 | 4b | Reads the projection, calls `setTheme`, swaps both `<meta>`s | `app/components/ThemeBootstrap.tsx` (new), mounted in `Provider.tsx` |
 | 5 | **`forcedTheme="dark"` removed**, explicit `defaultTheme="dark"` added | `app/utils/Provider.tsx:16` |
 | 6 | `themeColor` **swapped client-side on the resolved theme** | `app/components/ThemeBootstrap.tsx` |
 | 7 | `appleWebApp.statusBarStyle` — **swapped in `ThemeBootstrap` beside `themeColor`** | `app/components/ThemeBootstrap.tsx` |
 | 7b | Capacitor's **native** status bar (`@capacitor/status-bar`) | **deferred with a recorded remnant — that, and only that, is A6** |
-| 8 | **Docs, per slice** — §12 assigns them to the owning child | `DATA_MODEL.md` (E1), `API_REFERENCE.md` + `ROUTES.md` (E2), `UTILITIES_AND_COMPONENTS.md` (E3) |
+| 8 | **Docs, per slice** — §12 assigns them to the owning child | `DATA_MODEL.md` (E1), `API_REFERENCE.md` + `ROUTES.md` (E2), `UTILITIES_AND_COMPONENTS.md` for `themePref.ts` + `ThemeBootstrap` (E3) and for `ThemeControl` (E4, with the control itself) |
 
 ## The default is `"dark"`, and it must be written explicitly
 
