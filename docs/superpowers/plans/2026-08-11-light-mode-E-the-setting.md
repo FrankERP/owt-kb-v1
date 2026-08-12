@@ -34,7 +34,8 @@ No secrets, credentials or personal data appear here.
 | 1 | `themePref` on `teamMembers` — **no `initialValue`**, `hidden: true` | `sanity/schemas/worshipTeam.ts` |
 | 2 | `PATCH /api/me/theme` — a member writes their own preference | `app/api/me/theme/route.ts` (new) |
 | 3 | **`GET /api/me` projection gains `themePref`** — D15's read path | `app/api/me/route.ts` |
-| 3b | The `/me` control | `app/components/ui/ThemeControl.tsx` (new), rendered in `app/(client)/me/page.tsx` |
+| 3b | The `/me` control — **ships in E4, not E3** (see the slice table) | `app/components/ui/ThemeControl.tsx` (new), rendered in `app/(client)/me/page.tsx` |
+| 4c | **The one-time legacy reconciliation**, as an inline `<script>` in `<head>` **before `<Provider>`** | `app/(client)/layout.tsx` + `app/(admin)/layout.tsx` — *not* the gallery root layout |
 | 4 | The fetch/validate helper and `clearThemeMirror()` — **not** a second store | `app/utils/themePref.ts` (new) |
 | 4b | Reads the projection, calls `setTheme`, swaps the `<meta>` | `app/components/ThemeBootstrap.tsx` (new), mounted in `Provider.tsx` |
 | 5 | **`forcedTheme="dark"` removed**, explicit `defaultTheme="dark"` added | `app/utils/Provider.tsx:16` |
