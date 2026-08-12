@@ -54,6 +54,21 @@ export const teamMembers = defineType({
       description: "Si está activo, este miembro pierde el acceso a la app en segundos (kill switch). Reversible.",
     },
     {
+      // NO `initialValue` — deliberate, and the neighbouring prefs below all have one.
+      // An unset `themePref` is the load-bearing signal Child F's staged rollout reads:
+      // "this member has never chosen", as distinct from "this member chose dark". An
+      // initialValue would stamp every document on creation and empty F's cohort before
+      // F begins. Guarded by themePrefSchema.test.ts.
+      //
+      // `hidden` keeps it out of Studio's member form (invariant 13 / D11) — a theme is
+      // a client preference, not something an admin sets on someone's behalf, which is
+      // the same reasoning behind PATCH /api/me/theme's 403 under impersonation.
+      name: "themePref",
+      title: "Theme preference (member-set)",
+      type: "string",
+      hidden: true,
+    },
+    {
       name: "deviceTokens",
       title: "Device push tokens",
       type: "array",
