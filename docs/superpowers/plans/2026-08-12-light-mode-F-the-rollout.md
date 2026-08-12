@@ -35,7 +35,7 @@ No secrets, credentials or personal data appear here.
 | # | Change | File |
 |---|---|---|
 | 1 | **`enableSystem={true}`** and **`defaultTheme="system"`** | `app/utils/Provider.tsx` |
-| 2 | `"system"` joins the accepted literal set | `app/utils/themePref.ts` |
+| 2 | `"system"` joins the accepted literal set — **and the `ThemePref` TYPE widens with it**, rippling through `ThemeBootstrap`'s context, `ThemeControl`'s `OPTIONS` and the route's `satisfies`. `tsc` finds every site | `app/utils/themePref.ts` |
 | 3 | The repair's fallback moves `"dark"` → `"system"` | `app/components/ThemeBootstrap.tsx` |
 | 4 | The migration script's `catch` resolves the OS instead of hardcoding dark | `app/utils/themePref.ts` |
 | 5 | A third option, **"Seguir sistema"**, and it becomes the *unset* rendering | `app/components/ui/ThemeControl.tsx` |
@@ -168,7 +168,10 @@ unchanged and still correct — "not known yet" is not "follows the system".
 
 Parent Q2's bounded default is *"In-app banner on `/me`, drafted at F"*, and F takes it.
 
-- **Placement:** top of `/me`, above the theme control it is about.
+- **Placement:** top of `/me`. Note the control renders at `me/page.tsx:438`, **below the
+  service cards, the availability calendar and `ProfilePanel`** — on a phone that is most of
+  a page away, so "Elígelo aquí abajo" would be a small lie. The banner's last clause is an
+  anchor link to the control (`#tema`), and the control's `<section>` carries that `id`.
 - **Dismissal is per member and client-side.** A `localStorage` flag
   (`owt-theme-announced`), wrapped in `try`/`catch` like every other storage access in this
   programme, and treated as "not dismissed" on a throw — a member seeing the banner twice is
@@ -177,7 +180,7 @@ Parent Q2's bounded default is *"In-app banner on `/me`, drafted at F"*, and F t
 - **Copy** (Spanish, matching the app's register):
 
   > **Ahora puedes elegir el tema.** La app sigue el modo claro u oscuro de tu teléfono.
-  > ¿Prefieres uno fijo? Elígelo aquí abajo.
+  > ¿Prefieres uno fijo? [Elígelo aquí](#tema).
 
 - **It is not an email.** The notification system sends real mail to the real team; a theme
   change does not warrant one, and nothing in this plan touches `sweepOutbox`,
@@ -259,9 +262,15 @@ of it, for the same reason twice:
   unless they open `/me`" is not inertness for a banner that lives on `/me`.
 
 Both land in F2, with the flip that makes them true — the same shape as Child E holding its
-control back until the `forcedTheme` removal. **F1 then genuinely changes nothing:** the
-widened literal set is unreachable, because no UI offers `"system"` and no default produces
-it.
+control back until the `forcedTheme` removal.
+
+**F1's inertness is a UI claim, not a route claim, and that gap is closed by shipping F1 and
+F2 in the same deploy.** Widening `isThemePref` also widens `PATCH /api/me/theme`, so between
+the two slices an authenticated member could hand-craft `{"theme":"system"}`; `ThemeBootstrap`
+would then `setTheme("system")` with `enableSystem` still false, and that member is
+persistently in the class-less document. It takes a deliberate `curl` by a volunteer, so it is
+not a production risk — but the honest fix is free: **F1 and F2 merge together.** They are
+separated for reviewability and revert granularity, not for independent release.
 
 ## Verification
 
@@ -277,10 +286,20 @@ it.
 - **The four existing guards F must INVERT, named so they are expected rather than
   debugged.** They fail the instant F2 lands, loudly, which is correct — but an implementer
   should know they are the plan working, not a regression:
-  `themeWiring.test.ts:29` (`defaultTheme="dark"`), `themeWiring.test.ts:46`
-  (`enableSystem={false}` — its own message already says "Child F owns that flip"),
-  `themePrefModule.test.ts:75` (`"system"` is rejected), and
-  `themePrefModule.test.ts:100-104` (the `catch` adds `"dark"`).
+  **Six, not four**, and two of them invert at **F1** rather than F2:
+
+  | Guard | Inverts at |
+  |---|---|
+  | `themePrefModule.test.ts:75` — `"system"` is rejected | **F1** |
+  | `themeRoute.test.ts:88-90` — the route 400s on `"system"` | **F1** |
+  | `themePrefModule.test.ts:175-178` — "drops an unrecognised stored value", whose fixture *is* `themePref: "system"` | **F1** |
+  | `themeWiring.test.ts:29` — `defaultTheme="dark"` | F2 |
+  | `themeWiring.test.ts:46` — `enableSystem={false}` (its message already says "Child F owns that flip") | F2 |
+  | `themePrefModule.test.ts:100-104` — the `catch` adds `"dark"` | F2 |
+
+  So **F1 is not literally one line** — it is one behavioural line plus three guard
+  inversions. Said plainly, because an implementer told to expect four failures and shown
+  six will start looking for a regression that is not there.
 - **`isThemePref("system")` is true**, and the route accepts it (a route test), and rejects
   everything else still.
 - **The control renders Seguir sistema as selected for BOTH unset and `"system"`**, and
@@ -301,10 +320,13 @@ it.
   memory is always short. So the sweep is the command, and the list below is its **output**:
 
   ```
-  grep -rn -i "dark-default\|unset member\|resolves to dark\|unset resolves\|dark-mode only\|
-               Two client-side storage keys\|defaultTheme\|forcedTheme" \
-    app CLAUDE.md AGENTS.md docs/*.md docs/adr/*.md
+  grep -rn -i "dark-default\|unset member\|resolves to dark\|unset resolves\|dark-mode only\|Two client-side storage keys\|defaultTheme\|forcedTheme" app CLAUDE.md AGENTS.md docs/*.md docs/adr/*.md
   ```
+
+  **On ONE line, deliberately.** Wrapped, the embedded newline becomes part of an
+  alternative: `ugrep` errors outright, and GNU grep silently never matches
+  `Two client-side storage keys`, dropping row 11 without a word. A sweep that is the
+  mechanism has to be a command that runs.
 
   Note `docs/adr/*.md` explicitly — the earlier pattern's `docs/*.md` does not descend, and
   the superseded record lives there. Dated design records under `docs/superpowers/` stay
@@ -323,6 +345,17 @@ it.
   | 9 | `app/components/ui/ThemeControl.tsx:51` | "an unset member is never overridden" |
   | 10 | `docs/UTILITIES_AND_COMPONENTS.md:147` | **already stale since E4** — still lists `forcedTheme="dark"` on the provider stack. D-c rewrites the line; fixed deliberately rather than incidentally |
   | 11 | `docs/UTILITIES_AND_COMPONENTS.md:182` | "**Two** client-side storage keys" — F adds `owt-theme-announced` as a third |
+
+  **Two more that this pattern cannot reach, and no pattern reliably would** — found by
+  reading the files F edits rather than by grepping:
+
+  | # | Site | Why |
+  |---|---|---|
+  | 12 | `ThemeBootstrap.tsx:94-97` | "Only ever the literal `"dark"` or `"light"`. An unrecognised value never reaches `setTheme`" — false once `"system"` is legal |
+  | 13 | `Provider.tsx:23` | names `providerTheme.test.ts`, **a file that does not exist** — the guard is in `themeWiring.test.ts`. Stale from Child E; inside the block row 7 rewrites anyway |
+
+  The lesson from E's four rounds on this holds: the grep catches what it can name, and the
+  rest comes from reading every file the delivery touches.
 
 ## Risks
 
