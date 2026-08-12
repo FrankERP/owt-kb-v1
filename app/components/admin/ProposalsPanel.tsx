@@ -535,7 +535,7 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
           >
             {label}
             {id === "pending" && pendingCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-recency-fg text-black font-bold text-[10px] flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-recency-fg text-surface-base font-bold text-[10px] flex items-center justify-center">
                 {pendingCount}
               </span>
             )}

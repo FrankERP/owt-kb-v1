@@ -1673,7 +1673,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
           <button
             type="button"
             onClick={closePicker}
-            className="min-h-[44px] min-w-[44px] shrink-0 font-label text-xs uppercase tracking-widest text-ink-muted/60 hover:text-white"
+            className="min-h-[44px] min-w-[44px] shrink-0 font-label text-xs uppercase tracking-widest text-ink-muted/60 hover:text-ink"
           >
             Cerrar
           </button>

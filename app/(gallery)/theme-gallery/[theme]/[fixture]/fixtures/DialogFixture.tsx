@@ -26,7 +26,7 @@ function OpenDialog() {
   return (
     <div ref={fallbackRef} data-gallery-surface="dialog">
       <p className="text-sm opacity-80">
-        El diálogo está abierto. Su fondo <code>bg-black/68 backdrop-blur-md</code> es el sujeto
+        El diálogo está abierto. Su fondo <code>bg-scrim/[0.68] backdrop-blur-md</code> es el sujeto
         de esta captura.
       </p>
       <CueDialog

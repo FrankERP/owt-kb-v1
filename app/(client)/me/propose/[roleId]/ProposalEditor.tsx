@@ -748,7 +748,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
       {/* Submit confirmation modal */}
       {confirmSubmit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setConfirmSubmit(false)} />
+          <div className="absolute inset-0 bg-scrim/60 backdrop-blur-sm" onClick={() => setConfirmSubmit(false)} />
           <div className="relative z-10 w-full max-w-sm bg-surface-raised-alt border border-accent/20 rounded-2xl shadow-2xl p-6 space-y-5">
             <div className="space-y-1">
               <h3 className="font-display text-lg uppercase tracking-wide">Enviar propuesta</h3>

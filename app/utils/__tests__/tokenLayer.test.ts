@@ -52,7 +52,7 @@ const BASE_ROLES = [
   "warning-surface-deep", "info-surface-deep",
   "surface-overlay", "surface-overlay-deep", "surface-overlay-deepest",
   // B4 additions — the vocabulary's "no role here" table, decided.
-  "elevation",
+  "elevation", "surface-lift", "scrim",
   "chart-lead", "chart-bgv", "chart-coro", "chart-especial", "chart-instr", "chart-foh",
   // Child C — the palette families. The stray-key assertion below fails without these.
   "mono-200", "mono-300", "mono-400", "mono-500",
