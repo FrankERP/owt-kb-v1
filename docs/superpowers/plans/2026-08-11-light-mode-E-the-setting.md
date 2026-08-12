@@ -105,7 +105,20 @@ that member opens `/me` and picks Dark — which writes `themePref` and burns th
 signal Child F depends on. `clearThemeMirror()` at sign-out does not help: it only governs
 mirrors created after E ships.
 
-So **E4 runs a one-time reconciliation**, keyed on a version marker:
+So **E4 runs a one-time reconciliation — and WHERE it runs is the whole difficulty.**
+
+`next-themes` injects its own seed via `dangerouslySetInnerHTML`, so that script executes
+in `<head>` **before hydration**. Any React component — `ThemeBootstrap` included — runs
+after it. By then the seed has already done `classList.add("light")` and latched
+`theme: "light"` into state, and removing the key afterwards **repaints nothing**:
+`next-themes` re-reads storage only on the cross-tab `storage` event, never in the tab that
+wrote. An earlier revision put this snippet in prose with no file, and the only home it
+implied was `ThemeBootstrap`, where it would have left the legacy population on light for
+the whole page load and the rest of the SPA session.
+
+**It ships as an inline `<script>` in the `<head>` of `(client)/layout.tsx` and
+`(admin)/layout.tsx`, placed BEFORE `<Provider>` renders** — deliberately not in the
+gallery root layout, which has no provider and no member.
 
 ```
 if (!localStorage.getItem("owt-theme-migrated")) {
@@ -121,8 +134,24 @@ the mirror would pin the whole unset population to dark and quietly defeat F's r
 
 It runs once, so a value E's own control writes afterwards is never touched.
 
-**A test asserts the whole chain**: a pre-existing `localStorage.theme = "light"` plus an
-unset `themePref` ends on **dark**, issues **no PATCH**, and leaves `themePref` unset.
+**The test must assert the RESOLVED `documentElement` class after a render**, not the
+helper in isolation: a helper-only test passes green while the app paints light, which is
+exactly the failure mode above. Chain: a pre-existing `localStorage.theme = "light"` plus an
+unset `themePref` ends with `<html class="dark">`, issues **no PATCH**, and leaves
+`themePref` unset.
+
+**Same conflation, second place:** `clearThemeMirror()` at stop-impersonation does not
+repaint either. `ImpersonationBanner.tsx:15-19` calls `update()`, `router.push("/admin")`
+and `router.refresh()` — a soft navigation that neither remounts the provider nor re-runs
+the seed. The clear must therefore be paired with `setTheme()` at that call site, or the
+admin keeps the impersonated member's theme until a hard reload.
+
+**And a multi-tab caveat worth stating rather than discovering:** the provider's storage
+listener is `key === "theme" && (newValue ? set(newValue) : setTheme(default))`, so a
+`removeItem` in one tab makes every *other* open tab write `theme="dark"` straight back.
+Visually safe — dark is the default anyway — but it means "no mirror" is not an absolute
+guarantee on a multi-tab device, and **Child F must not treat mirror-absence as
+authoritative**; `themePref` being unset is the authoritative signal.
 
 ### `setTheme` MUST be guarded, and this is the most dangerous line in Child E
 
@@ -133,10 +162,14 @@ f = useCallback(i => { let c = typeof i === "function" ? i(a) : i;
                        r(c); try { localStorage.setItem(o, c) } catch {} })
 ```
 
-`setTheme(undefined)` therefore stores the **string `"undefined"`**, and the
-pre-hydration seed is `localStorage.getItem(s) || n` — `"undefined"` is truthy, so it
-wins over the default, and the applier removes `light`/`dark` and adds a class literally
-named `undefined`.
+`setTheme(undefined)` therefore stores the **string `"undefined"`**.
+
+**The damage is deferred, and describing it as immediate is misleading enough to matter.**
+`applyTheme` opens `let c = i; if (!c) return;`, so the calling session adds no bad class
+and looks fine. The poison is what was *persisted*: on the **next** load the seed reads
+`localStorage.getItem("theme") || defaultTheme`, `"undefined"` is truthy and wins, and the
+applier does `classList.add("undefined")` — removing `dark`. An implementer who tests the
+immediate claim sees nothing happen and may conclude the trap is not real.
 
 **`themePref` is unset for the entire team on the day E ships** — invariant 14 requires
 that absence be the normal state — so an unguarded bootstrap would put every member into
@@ -186,8 +219,16 @@ writeClient.patch(session.user.sanityId).set({ themePref: theme }).commit()
   without qualification, which was simply false.
 
   **The route rejects the write when `session.user.isImpersonating` is true** (403), and a
-  route test pins it. The theme still applies locally for the impersonating admin — it just
-  never persists to the impersonated member's record.
+  route test pins it.
+
+  **The READ side needs the same isolation, and §12's row covers both.** `ThemeBootstrap`
+  fetches `GET /api/me`, which during impersonation returns the *impersonated* member's
+  record — so without a guard the admin's browser adopts and mirrors someone else's theme.
+  `ThemeBootstrap` skips the fetch entirely when `isImpersonating`.
+
+  With the control hidden and the fetch skipped, an impersonating admin simply keeps their
+  own theme. An earlier revision said "the theme still applies locally for the impersonating
+  admin", which contradicted hiding the control — with it hidden there is nothing to toggle.
 
 - **Sign-out clears the `localStorage` mirror — at all FOUR call sites.** An earlier
   revision said "the sign-out handler", singular. There are four, and the two most-used are
@@ -320,11 +361,23 @@ it ships inert and independently revertible.
 |---|---|---|
 | **E1** | `themePref` schema field + Studio deploy | no |
 | **E2** | `PATCH /api/me/theme` + its route test | no — nothing calls it |
-| **E3** | `GET /api/me` projection, `themePref.ts`, `ThemeBootstrap`, the `/me` control | no — `forcedTheme` still wins |
+| **E3** | `GET /api/me` projection, `themePref.ts`, `ThemeBootstrap` — **not the control** | no — genuinely inert |
 | **E4** | **Remove `forcedTheme`, add `defaultTheme="dark"`**, and the client-side `themeColor` swap | **YES** |
 
-**E4 is the whole risk.** E1–E3 are additive and could sit on `main` for a week harmlessly.
-A reviewer should spend their attention there and treat E1–E3 as ordinary work.
+**E4 is the whole risk**, and it now carries the `/me` control as well as the
+`forcedTheme` removal — **because a control that ships before E4 is not harmless.**
+
+An earlier revision put `ThemeControl` in E3 and claimed E1–E3 "could sit on `main` for a
+week harmlessly". They could not. `/me` is the ordinary member profile page and E2's route
+is live by then, so in that window a member opens `/me`, picks Light, gets a `200`, sees
+**nothing change**, and now has `themePref: "light"` persisted — invariant 14's unset state
+destroyed, with no route that can unset it, in exchange for a control that looks broken.
+This repo merges to `main` periodically and `main` is production, so that is the expected
+path rather than a hypothetical.
+
+E1–E3 are now genuinely inert: a schema field nothing reads, a route nothing calls, and a
+bootstrap whose `setTheme` is overridden by `forcedTheme`. **The control and the unmasking
+land in the same merge.**
 
 ## Verification
 
