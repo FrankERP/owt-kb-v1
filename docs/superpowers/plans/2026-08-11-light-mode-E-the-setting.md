@@ -48,14 +48,14 @@ Documentation, in the same delivery:
 | # | Doc change | Where |
 |---|---|---|
 | D-a | `themePref` field | `DATA_MODEL.md` (E1) |
-| D-b | The write route (E2); **the projection's new field (E3, with the code)**; **`ROUTES.md:18-23`'s enumeration of what `(client)/layout.tsx` mounts gains the reconciliation `<script>` (E3)** — documenting it at E2 would describe a field the endpoint does not yet return | `API_REFERENCE.md` + `ROUTES.md` |
+| D-b | The write route (E2); **the projection's new field (E3, with the code)**; **`ROUTES.md:19-24`'s enumeration of what `(client)/layout.tsx` mounts gains the reconciliation `<script>` (E3)** — documenting it at E2 would describe a field the endpoint does not yet return | `API_REFERENCE.md` + `ROUTES.md` |
 | D-c | `themePref.ts` + `ThemeBootstrap` (E3); `ThemeControl` (E4) | `UTILITIES_AND_COMPONENTS.md` |
 | D-d | The two client-side keys — `"theme"` (next-themes' mirror) and `owt-theme-migrated` (the one-time flag). Neither is a secret; both are persistent state a later hand would otherwise "clean up" | `UTILITIES_AND_COMPONENTS.md`, beside `themePref` |
 | D-e | **ADR-0008 interim Consequences note** — precondition met, lever pulled in E4; full supersession stays Child F's | `docs/adr/0008-forced-dark-theme.md` (E4) |
 | D-f | Parent §5:188-190 + its §12 row **amended** with the `statusBarStyle` geometry constraint and remnant; parent §5:202 corrected; `§5:181`'s **and `:64`'s** stale `(client)/layout.tsx:42` corrected to `:47`; the present-tense `forcedTheme` statements at **§3:43** and **§12:591** updated in the same pass | the parent scope spec |
 | D-g | The two PWA remnants recorded together — `statusBarStyle` and `manifest.webmanifest`'s `theme_color` | `UTILITIES_AND_COMPONENTS.md` |
 | D-i | **`CLAUDE.md:8` + `AGENTS.md:8` — "Dark-mode only."** becomes flatly false at E4. **Both files, same commit**: `app/utils/__tests__/agentDocsParity.test.ts` asserts they are byte-identical outside the title and the Continuous-improvement section, so editing one turns `npm test` red | **E4** |
-| D-h | **Four** stale `forcedTheme` statements — see Verification for the full list and the method | gallery layout, `themeGallery.test.ts`, `UTILITIES_AND_COMPONENTS.md`, **`app/brand.css:362`** |
+| D-h | **Eight** stale claims — four containing `forcedTheme`, four that do not; see Verification for the list and the grep that generates it | gallery layout, `themeGallery.test.ts`, `UTILITIES_AND_COMPONENTS.md`, **`app/brand.css:362`** |
 
 ## The default is `"dark"`, and it must be written explicitly
 
@@ -498,8 +498,31 @@ decision, not an oversight, and F must plan for a cohort that only ever shrinks.
 | `app/components/SignOutButton.tsx:8` | |
 | `app/(client)/auth/not-a-member/page.tsx:21` | |
 
-**There is no precedent to copy:** `grep -rn removeItem app` returns nothing, and
-`textZoom.ts` never clears at all. So `themePref.ts` exports **`clearThemeMirror()`** and
+**EVERY `localStorage` access this child adds is wrapped in `try`/`catch`, and this one is
+the reason the rule is stated rather than left to the script's example.** The plan already
+establishes the throwing population — storage blocked, Safari private mode, some Capacitor
+WebView configurations — and makes the migration script's `try` load-bearing on it. The same
+hazard applies to the two accesses `themePref.ts` and `ThemeBootstrap` add, and one of them is
+worse than a wrong colour:
+
+- **`clearThemeMirror()`'s `removeItem` runs synchronously inside four sign-out `onClick`
+  handlers.** Unguarded, a throw there aborts the handler **before `signOut()` is called**, so
+  the "Salir" button silently does nothing — permanently, for that population, on
+  `BottomNav.tsx:88`, the most-used path on phones. That is a locked-out member, not a
+  cosmetic defect.
+- **`ThemeBootstrap`'s mirror-presence read** (`getItem("theme")`, needed to evaluate the
+  durable repair) throws inside a root-`Provider` effect on **every** load for the same
+  population — landing on `app/(client)/error.tsx`, and on Next's default boundary under
+  `(admin)`, which has none.
+
+**A throw is treated as "no mirror"** — the same fail-soft shape as the precedent this plan
+already names, `app/utils/textZoom.ts:18-32`, whose `getStoredMode`/`setStoredMode` wrap 100%
+of their access and return a default on failure. **Verification carries a storage-blocked
+case** so this is proven rather than inferred: the four-site source scan counts call sites and
+would pass green against an unguarded helper.
+
+**There is no precedent for the clearing itself:** `grep -rn removeItem app` returns nothing,
+and `textZoom.ts` never clears — only its `try`/`catch` shape carries over. So `themePref.ts` exports **`clearThemeMirror()`** and
 **exactly those four sites call it** — not the stop-impersonating handler. `next-themes` owns
 the key `"theme"`.
 
@@ -712,7 +735,10 @@ periodically and `main` is production, so that is the expected path rather than 
 **Every guard lives under `app/`** — utility guards in `app/utils/__tests__/`, route guards
 beside their named precedent in `app/api/__tests__/` (`notifPrefsRoute.test.ts`). Both are
 inside `vitest.config.ts`'s `app/**` glob; a test written outside `app/**`, `scripts/**` or
-`e2e/**` never runs and never fails, which is §9's landmine and would silently void the
+`e2e/**` never runs and never fails, which is §9's landmine. **This is a deliberate divergence
+from §9:476-478's literal wording** ("all new guards go under `app/utils/__tests__/`"): route
+guards belong beside `notifPrefsRoute.test.ts`, the precedent D7 points at, and the landmine's
+substance — being inside the include glob — is honoured either way and would silently void the
 highest-consequence assertion in this child.
 
 - **Source-text on `Provider.tsx`, split across the two slices that change it:** E3 asserts
@@ -739,7 +765,12 @@ highest-consequence assertion in this child.
 - **An unset `themePref` renders the control in its neither-selected state** and issues no PATCH.
 - **A failed PATCH leaves both stores untouched** — mirror unchanged, `themePref` unchanged.
 - **`clearThemeMirror()` is called at exactly four sites**, with the remediation-shaped failure
-  message above.
+  message above. **Slice: E3**, with `themePref.ts` — inert there, since nothing has yet written
+  a mirror that E owns.
+- **A storage-blocked case**: with `localStorage` stubbed to throw, `clearThemeMirror()` does
+  not propagate and the sign-out handler still reaches `signOut()`, and `ThemeBootstrap`'s
+  mirror read resolves to "no mirror" rather than throwing into the root error boundary. The
+  four-site scan counts call sites and cannot see this.
 - **The migration script's two guards** — source-text in both layouts, and the jsdom chain test.
 - **`CLAUDE.md` and `AGENTS.md` no longer say "Dark-mode only."** and remain byte-identical
   outside the two sections `agentDocsParity.test.ts` exempts — that guard turns `npm test` red
@@ -758,7 +789,8 @@ highest-consequence assertion in this child.
   typography and `dark:prose-invert` row "E verifies on device" and where the unstyled-lyrics
   regression §9 warns about would show.
 - `npx tsc --noEmit`, `npm test`, `npx eslint .` at 0 errors, per slice.
-- **Four stale `forcedTheme` statements**, per CLAUDE.md's currency rule — separate from the
+- **EIGHT stale claims**, per CLAUDE.md's currency rule — four contain the literal
+  `forcedTheme` and four do not, which is the whole reason this is a sweep and not a list — separate from the
   ADR note (D-e) and the parent amendments (D-f). The list is the implementer's checklist, so
   **it is the OUTPUT of a stated sweep rather than a list assembled from memory** — three
   earlier revisions of this plan enumerated and each time missed a member, because a claim E
@@ -785,8 +817,10 @@ highest-consequence assertion in this child.
   only." sentence anyway, with light still unreachable then. F's rows are the `enableSystem`
   flip, the default move, the announcement and the supersession. **Reachability changes at E4
   and nowhere else**, so the sentence is E's.
-  `grep -rn forcedTheme app docs` returns roughly seventeen further hits, all in **dated
-  design records**: the two design specs, the parent scope spec, and review logs. Those are
+  `grep -rn forcedTheme app docs` returns **77 hits in total**; the 8 in shipped code and live
+  reference docs are listed below, and **every one of the other 69 sits under
+  `docs/superpowers/` or `docs/adr/`** — the two design specs, the sibling child plans for A,
+  A2, B and C, the review logs, and the ADRs. All **dated design records**. Those are
   historical by nature and are left alone for the same reason as ADR-0015 below — rewriting a
   record of what was decided under the conditions of its day falsifies the history. The one
   exception is the parent scope spec, which E is already amending under **D-f**; its
