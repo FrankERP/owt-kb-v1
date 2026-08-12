@@ -37,10 +37,11 @@ No secrets, credentials or personal data appear here.
 | 3b | The `/me` control — **ships in E4, not E3** (see the slice table) | `app/components/ui/ThemeControl.tsx` (new), rendered in `app/(client)/me/page.tsx` |
 | 4c | **The one-time legacy reconciliation**, as an inline `<script>` in `<head>` **before `<Provider>`** | `app/(client)/layout.tsx` + `app/(admin)/layout.tsx` — *not* the gallery root layout |
 | 4 | The fetch/validate helper and `clearThemeMirror()` — **not** a second store | `app/utils/themePref.ts` (new) |
-| 4b | Reads the projection, calls `setTheme`, swaps the `<meta>` | `app/components/ThemeBootstrap.tsx` (new), mounted in `Provider.tsx` |
+| 4b | Reads the projection, calls `setTheme`, swaps both `<meta>`s | `app/components/ThemeBootstrap.tsx` (new), mounted in `Provider.tsx` |
 | 5 | **`forcedTheme="dark"` removed**, explicit `defaultTheme="dark"` added | `app/utils/Provider.tsx:16` |
 | 6 | `themeColor` **swapped client-side on the resolved theme** | `app/components/ThemeBootstrap.tsx` |
-| 7 | iOS status bar | **deferred with a recorded remnant — see A6 below** |
+| 7 | `appleWebApp.statusBarStyle` — **swapped in `ThemeBootstrap` beside `themeColor`** | `app/components/ThemeBootstrap.tsx` |
+| 7b | Capacitor's **native** status bar (`@capacitor/status-bar`) | **deferred with a recorded remnant — that, and only that, is A6** |
 | 8 | **Docs, per slice** — §12 assigns them to the owning child | `DATA_MODEL.md` (E1), `API_REFERENCE.md` + `ROUTES.md` (E2), `UTILITIES_AND_COMPONENTS.md` (E3) |
 
 ## The default is `"dark"`, and it must be written explicitly
@@ -117,9 +118,16 @@ wrote. An earlier revision put this snippet in prose with no file, and the only 
 implied was `ThemeBootstrap`, where it would have left the legacy population on light for
 the whole page load and the rest of the SPA session.
 
-**It ships as an inline `<script>` in the `<head>` of `(client)/layout.tsx` and
-`(admin)/layout.tsx`, placed BEFORE `<Provider>` renders** — deliberately not in the
-gallery root layout, which has no provider and no member.
+**It ships as an inline `<script>` rendered as the FIRST CHILD OF `<body>` in
+`(client)/layout.tsx` and `(admin)/layout.tsx`, immediately before `<Provider>`** —
+deliberately not in the gallery root layout, which has no provider and no member.
+
+The operative constraint is **document order, not `<head>`**. Neither layout renders a
+`<head>` element, and React 19 hoists only `<script async src>`, never inline
+`dangerouslySetInnerHTML`. An implementer who reads "in the `<head>`" will add a raw `<head>`
+to a root layout and collide with Next's metadata injection. next-themes' own seed is a
+plain `React.createElement("script", { dangerouslySetInnerHTML })` inside the provider —
+this script sits just above it and therefore runs first.
 
 ```
 if (!localStorage.getItem("owt-theme-migrated")) {
@@ -141,15 +149,23 @@ exactly the failure mode above. Chain: a pre-existing `localStorage.theme = "lig
 unset `themePref` ends with `<html class="dark">`, issues **no PATCH**, and leaves
 `themePref` unset.
 
-**Same conflation, second place:** `clearThemeMirror()` at stop-impersonation does not
-repaint either. `ImpersonationBanner.tsx:15-19` calls `update()`, `router.push("/admin")`
-and `router.refresh()` — a soft navigation that neither remounts the provider nor re-runs
-the seed. The clear must therefore be paired with `setTheme()` at that call site, or the
-admin keeps the impersonated member's theme until a hard reload.
+**And the stop-impersonation clear is dropped entirely — it was dead work.** An earlier
+revision had `clearThemeMirror()` fire when impersonation ends, reasoning that the admin
+would otherwise keep the member's theme until a hard reload. That rationale is false under
+E's own read isolation: `ThemeBootstrap` skips the fetch while `isImpersonating`, so the
+admin never adopts the member's theme and the mirror holds the **admin's** value throughout.
+Worse, the instruction could not be carried out. `ImpersonationBanner.tsx:15-19` calls
+`update()`, `router.push("/admin")` and `router.refresh()` — a soft navigation that neither
+remounts the provider nor re-seeds — so the clear would have to be paired with `setTheme()`,
+and at that moment the admin's own `themePref` has not been fetched (it was deliberately
+skipped). There is no argument to pass. `setTheme(undefined)` is the §9 landmine this plan
+spends a section on; `setTheme("dark")` silently overrides a Light admin. **Nothing fires at
+stop-impersonation.** The admin's theme was never disturbed, so nothing needs restoring.
 
-**And a multi-tab caveat worth stating rather than discovering:** the provider's storage
+**And a multi-tab caveat worth stating rather than discovering — it applies to BOTH clears,
+the migration one here and `clearThemeMirror()` at sign-out:** the provider's storage
 listener is `key === "theme" && (newValue ? set(newValue) : setTheme(default))`, so a
-`removeItem` in one tab makes every *other* open tab write `theme="dark"` straight back.
+`removeItem` in either place makes every *other* open tab write `theme="dark"` straight back.
 Visually safe — dark is the default anyway — but it means "no mirror" is not an absolute
 guarantee on a multi-tab device, and **Child F must not treat mirror-absence as
 authoritative**; `themePref` being unset is the authoritative signal.
@@ -174,7 +190,7 @@ immediate claim sees nothing happen and may conclude the trap is not real.
 
 **`themePref` is unset for the entire team on the day E ships** — invariant 14 requires
 that absence be the normal state — so an unguarded bootstrap would put every member into
-a themeless document. With `tailwind.config.ts:10` at `darkMode: "class"` and **92 `dark:`
+a themeless document. With `tailwind.config.ts:10` at `darkMode: "class"` and **94 `dark:`
 utilities still live**, they all stop applying at once. And per `CLAUDE.md`, a `dark:` base
 at specificity (0,2,0) *masks* bare `hover:`/`focus:` utilities, so this is not a missing
 colour — it changes which rules win. Child B paid for that lesson with 39 real bugs.
@@ -226,6 +242,11 @@ writeClient.patch(session.user.sanityId).set({ themePref: theme }).commit()
   fetches `GET /api/me`, which during impersonation returns the *impersonated* member's
   record — so without a guard the admin's browser adopts and mirrors someone else's theme.
   `ThemeBootstrap` skips the fetch entirely when `isImpersonating`.
+
+  **That skip is only sound if the fetch waits for the session.** `ThemeBootstrap` gates on
+  `useSession().status === "authenticated"` rather than firing on bare mount: while status is
+  `"loading"` the `isImpersonating` flag is not yet readable, and a fetch issued in that
+  window bypasses the isolation the row promises.
 
   With the control hidden and the fetch skipped, an impersonating admin simply keeps their
   own theme. An earlier revision said "the theme still applies locally for the impersonating
@@ -289,8 +310,21 @@ the mirror itself as a side effect of `setTheme`.
 **The first-paint claim, stated accurately.** On a device with no mirror, the first paint
 uses `defaultTheme="dark"` and stays there — with `themePref` unset the projection lands
 and changes nothing, which is correct. A member who chose Light on device A and lands on a
-mirror-less device B sees dark until they choose again; the server value only overrides
-once `themePref` is set. An earlier revision claimed a "flash toward light … until the
+mirror-less device B **sees dark for one paint, then repaints to light** — `ThemeBootstrap`
+reads the literal `themePref` and calls `setTheme("light")`. An earlier revision claimed
+they "see dark until they choose again", which contradicted this plan's own read path.
+
+**The consequence is a repaint on every sign-in, and it is accepted rather than hidden.**
+`clearThemeMirror()` at the four sign-out sites (`BottomNav.tsx:88`, `NavMenu.tsx:159`,
+`SignOutButton.tsx:8`, `(client)/auth/not-a-member/page.tsx:21`) leaves every device
+mirror-less at the next sign-in, so a Light member gets a dark→light flash after hydration each time they sign in.
+That is the price of the clear, which exists so a shared device never shows member A's theme
+to member B. Both paths repaint — without the clear B sees A's theme and then flips, with it
+B sees dark and then flips — so the clear adds no repaint to the shared case; it moves the
+cost onto every sign-in in exchange for never showing one member another's setting. **The
+trade is deliberate.** Sign-in is rare next to page loads, where the mirror does its job and
+the first paint is already right. If the flash proves objectionable in use, the fix is a
+server-rendered class and belongs to Child F, not here. An earlier revision claimed a "flash toward light … until the
 projection lands", which described a correction that does not happen for an unset member.
 
 ## `themeColor` and the native shell
@@ -298,6 +332,26 @@ projection lands", which described a correction that does not happen for an unse
 **`ThemeBootstrap` swaps `<meta name="theme-color">` on the RESOLVED theme.** The static
 `themeColor: "#010b17"` in `(client)/layout.tsx:47` stays as the server-rendered initial
 value, which is what an unset member keeps.
+
+**Both swaps must null-guard, because on admin routes the meta does not exist.**
+`(admin)/layout.tsx` exports **no `viewport` at all** — there is no `<meta name="theme-color">`
+on any admin page — while `ThemeBootstrap` mounts inside `Provider`, which both layouts use.
+An unguarded `.setAttribute` on a `null` query result throws *inside the bootstrap*, taking
+the `setTheme` call down with it and disabling the member's theme on every admin page. Query,
+skip if absent, never create.
+
+**`appleWebApp.statusBarStyle` is swapped the same way, and it is in scope.** It is the
+static `"black-translucent"` at `(client)/layout.tsx:31` and `(admin)/layout.tsx:26`. An
+earlier revision deferred it by citing **A6**, which is a different thing entirely: A6 is
+Capacitor's **native** `@capacitor/status-bar` plugin, and §12 lists that as its own row.
+`apple-mobile-web-app-status-bar-style` is a DOM meta under invariant 17's ordinary
+constraint, and §5's escape clause is conditional on a child that *cannot* meet it without a
+session read in a shared layout — a precondition this plan already demolishes for
+`themeColor`, since `ThemeBootstrap` holds the resolved theme client-side. The same argument
+carries. **Uncertainty recorded rather than argued away:** whether an *installed* iOS PWA
+re-reads that meta after standalone launch is unverified — no device was available. Swapping
+it costs one guarded line; if iOS ignores the runtime change, nothing is worse than the
+deferral, and the browser-tab case is fixed either way.
 
 This plan reached the right answer by two wrong routes before this one, and both are worth
 recording because they are opposite errors:
@@ -373,6 +427,12 @@ week harmlessly". They could not. `/me` is the ordinary member profile page and 
 is live by then, so in that window a member opens `/me`, picks Light, gets a `200`, sees
 **nothing change**, and now has `themePref: "light"` persisted — invariant 14's unset state
 destroyed, with no route that can unset it, in exchange for a control that looks broken.
+
+**That one-way door survives into E4 and is deliberate.** E ships no route that can return
+`themePref` to unset, so a member who ever touches the control leaves Child F's
+default-unset cohort permanently. This is the intended shape — an explicit choice should
+outrank a later default — but it is a decision, not an oversight, and F must plan for a
+cohort that only ever shrinks.
 This repo merges to `main` periodically and `main` is production, so that is the expected
 path rather than a hypothetical.
 
@@ -386,6 +446,11 @@ land in the same merge.**
   `forcedTheme` is absent.** Source-text, not rendered — see above.
 - Route tests mirroring `notifPrefsRoute.test.ts`: 401 unauthenticated, 400 on an invalid
   theme, self-id only, happy path writes the field.
+- **A test that `GET /api/me` actually projects `themePref`.** The four above cover the
+  `PATCH` only. If the projection line is dropped, the bootstrap reads `undefined`, correctly
+  does nothing, and every symptom reads as "this member has no preference" — the silent-
+  failure shape this plan guards against everywhere else. Assert the field is in the response
+  for a member who has one.
 - The `/me` control's handler: `res.ok` checked, flag reset in `finally`, failure surfaced.
 - **Browser, both themes, on the real components** — the pass that found the two defects D
   shipped. An open `CueDialog` and `PlannerGrid` full-screen, which the parent names as
