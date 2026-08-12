@@ -9,10 +9,12 @@
 // super-admin toggling the theme while impersonating would persist it to someone
 // else's document from a UI action that looks entirely local.
 //
-// SECOND: "system" is rejected. With `enableSystem={false}` next-themes would add
-// a literal `system` class and strip light/dark, so the app stays dark forever
-// while Sanity stores "system" and nothing logs. Child F owns the flip that makes
-// that value legal.
+// SECOND: the accepted literal set is exactly what `isThemePref` accepts, and
+// nothing else. "system" was rejected until Child F, which legalised it TOGETHER
+// with the `enableSystem` flip that makes it resolvable — before that flip,
+// next-themes would have added a literal `system` class and stripped light/dark,
+// leaving the app with no theme class while Sanity happily stored the value.
+// themePrefModule.test.ts asserts that pairing so it cannot come apart.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
