@@ -108,6 +108,33 @@ change becomes machine-verifiable in both themes without a human or a credential
 | 4c | **Parent spec §8.4 (`:409-435`) amended** — "The gallery sits on a **gated** path — not under `/auth/`, not public", plus its **five** recorded consequences. The fifth, at `:435`, is *"The VR harness must authenticate. That cost is real and belongs to Child A."* — the single sentence this change most directly reverses, and the original of the `playwright.vr.config.ts` prose item 5 also fixes | the parent scope spec |
 | 5 | **The documentation sweep — a rule and a command, not a list.** See below; three drafts of this plan enumerated by hand and three times a reviewer found a member I had missed | as derived |
 
+### The sweep needs TWO axes, because half the claims never name the gallery
+
+Axis 1 finds statements *about the gallery*. It is structurally blind to statements
+*about the allow-list* — which assert the same fact without ever using the word
+"gallery", and are the ones that become flatly false. Two rounds of review found
+members of this category one at a time; the fix is the second command, not more
+entries:
+
+```
+grep -rniE "login gate|anonymous (public|internet)|public allow-list|must be logged in|except the auth pages|entire app is behind|no anonymous" app docs proxy.ts README.md CONTEXT.md
+```
+
+**Its output, all AMEND:**
+
+| File | The claim |
+|---|---|
+| `docs/ARCHITECTURE.md:26` | *"there is no anonymous public surface except the auth pages"* — **exactly true today and false afterwards**; the first page surface to break it |
+| `docs/ARCHITECTURE.md:99`, `:133` | "except the small public allow-list"; "must be logged in" |
+| `docs/ROUTES.md:12` | "enforced at **two layers**… must be logged in" |
+| `docs/ROUTES.md:57-58` | The `*` footnote — *"visible to any logged-in team member, not the anonymous internet"* — which **defines the `Public*` label the gallery's own row sits beside** |
+| `docs/AUTH_AND_SECURITY.md:116-117` | The allow-list enumeration — **and its pre-existing omission of `api/cron` and the A3 identity route is corrected in the same pass**, exactly as item 2b does for `proxy.ts` |
+| `README.md:30` | *"The whole app is behind a login gate"* — **found by this axis and named by no reviewer**, which is the argument for running the command rather than trusting a list |
+
+`app/utils/routeMatcher.ts:3-7` and `proxy.ts:31-35` are the same category and are
+items 1b and 2b. `routeMatcher.test.ts:150`'s "a drift here would silently re-open
+the login gate" stays accurate and is left.
+
 ### Two files the sweep structurally cannot find
 
 `routeMatcher.ts:3-7` and `proxy.ts:31-35` each carry a **prose enumeration of the
@@ -154,7 +181,7 @@ the same one Children E and F used, applied here without exception:
 | `docs/ROUTES.md` | `:6`, **`:12`** (*"enforced at two layers… must be logged in"* — an over-statement once one row is public), `:41` |
 | `docs/AUTH_AND_SECURITY.md:116-118` | The canonical auth doc's allow-list |
 | `playwright.vr.config.ts:11-20` **and `:36`** | The whole rationale block, not two lines — it argues for a constraint that stops existing. **The `THEME_GALLERY_VR_ENABLED`/`BASE_URL` refusal itself STAYS** — `:36` is a runtime `throw`, not a comment; only its reason changes, so do not delete the guard while rewriting the message |
-| `e2e/theme-gallery/README.md:11` | Live |
+| `e2e/theme-gallery/README.md:9-13` | The whole section, not one line — its heading *"Nothing runs yet, and that is deliberate"* and the "would re-tier Child A2" sentence at `:12` are the stale unit. Same shape as `themeGallery.test.ts:12` sitting outside the `:39-61` range |
 
 **LEAVE — dated records of what was decided under the conditions of their day:**
 `2026-08-07-light-mode-A-verification-scaffolding.md` (already marked *SUPERSEDED —
@@ -278,7 +305,8 @@ CLAUDE.md requires documentation current in the same delivery. One commit.
 | The regex opens more than intended | A lookahead alternation is easy to get subtly wrong | `ungated === PUBLIC_ROUTES` enumerates the entire resulting public surface; plus explicit negative cases |
 | The two matcher copies drift | Next.js forces the duplication | The existing byte-identical sync guard, which fails on any divergence |
 | Design disclosure | The gallery becomes world-readable | Stated, not dismissed — the reviewer should test this judgement. No data, no personal information, no runtime path |
-| Someone later adds a data-reading fixture | The safety argument is "it reads nothing", which is a property of today's code | **Add a guard**: assert `app/(gallery)` imports no Sanity client, no session helper, and calls no `fetch`. **Stated limit:** it is one level deep and would not catch a fixture importing a component that fetches. Harmless today — every API route stays gated, so a client-side fetch from an anonymous visit gets a 307, not data — but the ADR records the gap rather than letting the guard imply more than it checks |
+| **`dynamicParams = false` becomes security-relevant** | Today it stops an arbitrary `[theme]` string being reflected into the root `className` on a members-only route; afterwards it does that for the anonymous internet | Already guarded (`themeGallery.test.ts:108-122`), but **ADR-0017 records that its status changed** — otherwise a future "let the gallery take any theme string, it's just a class" looks harmless |
+| Someone later adds a data-reading fixture | The safety argument is "it reads nothing", which is a property of today's code | **Add a guard**: assert `app/(gallery)` imports no Sanity client, no session helper, and calls no `fetch`. **Stated limit:** it is one level deep and would not catch a fixture importing a component that fetches. Harmless today only for **client-side** fetches — every API route stays gated, so one from an anonymous visit gets a 307, not data. **A server-side read in `page.tsx` would be a different matter**: it bakes real data into public prerendered HTML, where a 307 is irrelevant. Item 3c's widened guard covers `page.tsx` directly, so what remains is the transitive case — but the ADR records the gap rather than letting the guard imply more than it checks |
 
 That last row is the one worth insisting on. The disclosure argument rests
 entirely on the gallery being inert, and nothing currently prevents a future
