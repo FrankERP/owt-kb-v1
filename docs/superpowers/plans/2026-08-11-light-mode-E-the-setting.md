@@ -130,11 +130,20 @@ plain `React.createElement("script", { dangerouslySetInnerHTML })` inside the pr
 this script sits just above it and therefore runs first.
 
 ```
-if (!localStorage.getItem("owt-theme-migrated")) {
-  localStorage.removeItem("theme");          // legacy ThemeSwitch value, not a preference
-  localStorage.setItem("owt-theme-migrated", "1");
-}
+try {
+  if (!localStorage.getItem("owt-theme-migrated")) {
+    localStorage.removeItem("theme");        // legacy ThemeSwitch value, not a preference
+    localStorage.setItem("owt-theme-migrated", "1");
+  }
+} catch (e) {}
 ```
+
+**The `try/catch` is not decoration.** `localStorage` *throws* — `SecurityError` with
+storage blocked, Safari private mode, some Capacitor WebView configurations — and
+`next-themes` wraps every single access for exactly that reason. Without it the script
+throws before `setItem`, the migration silently never runs for those members, and they keep
+the legacy mirror forever. Because it is its own `<script>` element, a throw here would not
+stop hydration — it would just quietly skip the fix.
 
 A **clear**, not a `setTheme("dark")`. Both land the member on dark, but only the clear
 preserves the property F depends on: **no mirror means no preference**, so when F changes
@@ -243,7 +252,13 @@ writeClient.patch(session.user.sanityId).set({ themePref: theme }).commit()
   record — so without a guard the admin's browser adopts and mirrors someone else's theme.
   `ThemeBootstrap` skips the fetch entirely when `isImpersonating`.
 
-  **That skip is only sound if the fetch waits for the session.** `ThemeBootstrap` gates on
+  **One read, not two.** `ThemeBootstrap` and the `/me` control both need the member's
+current `themePref`, and both would otherwise issue their own `GET /api/me` — a duplicated
+Sanity round-trip on the one page where they coexist. The control takes its initial value
+from the resolved theme `next-themes` already holds (which the bootstrap has by then set),
+and issues no read of its own.
+
+**The bootstrap's skip is only sound if its fetch waits for the session.** `ThemeBootstrap` gates on
   `useSession().status === "authenticated"` rather than firing on bare mount: while status is
   `"loading"` the `isImpersonating` flag is not yet readable, and a fetch issued in that
   window bypasses the isolation the row promises.
@@ -266,10 +281,14 @@ writeClient.patch(session.user.sanityId).set({ themePref: theme }).commit()
   **There is no precedent to copy:** `grep -rn removeItem app` returns nothing, and
   `textZoom.ts` — the named precedent — never clears at all.
 
-  So `themePref.ts` exports **`clearThemeMirror()`**, all four sites call it, and the
-  stop-impersonating handler calls it too. `next-themes` owns the key `"theme"`.
+  So `themePref.ts` exports **`clearThemeMirror()`** and **exactly those four sites call
+  it** — *not* the stop-impersonating handler, for the reasons given above: with the read
+  isolated there is nothing of the member's to clear, and no argument to hand `setTheme()`.
+  `next-themes` owns the key `"theme"`.
 
-  **This gets a guard, not just a mention.** A source-scan test asserts that no file
+  **This gets a guard, not just a mention.** The source-scan test asserts the call count is
+  exactly **four**, so a later hand cannot quietly add a fifth at the impersonation handler.
+  It also asserts that no file
   containing `signOut(` lacks the clear — the same shape as the `Provider.tsx` source-text
   test, and for the same reason: the failure is silent. Shipped without it, a member who
   signs out on the mobile nav leaves `theme=light` behind; the next member signs in, the
@@ -364,8 +383,11 @@ recording because they are opposite errors:
   read in a shared layout". E ships `ThemeBootstrap`, a client component that already holds
   the resolved theme, so no session read in any layout is required and **the precondition
   is not met.** §12 assigns E "theme-responsive `themeColor` + `statusBarStyle`, client-side
-  only", and Child C's lint `ignores` entry is scoped "until Child E makes it dynamic" — an
-  exemption written to expire here.
+  only". An earlier revision also cited a Child C lint `ignores` entry "written to expire
+  here"; **no such entry exists** — `eslint.config.mjs:59-64` ignores only
+  `app/**/__tests__/**` and `app/utils/emailShell.ts`, and row exemptions carry an inline
+  disable rather than a whole-file ignore (`:69-72`). The conclusion rests on parent
+  §5:188-190 and §12 alone, which is enough.
 
 Keying on the RESOLVED theme has neither problem: unset resolves to dark, so the swap
 writes `#010b17` and nothing changes for anyone who opted into nothing.
@@ -377,23 +399,24 @@ Use the inline `eslint-disable-next-line` with a reason, exactly as the rule's o
 sanctions and as `(client)/layout.tsx:47` already does — a `<meta>` content attribute
 cannot take a `var()`.
 
-`appleWebApp.statusBarStyle` stays `"black-translucent"` — it is a static PWA enum with no
-client-side equivalent, and **A6's fallback covers it**: `@capacitor/status-bar` is
-confirmed absent from `package.json`, so the native bar keeps its `Info.plist` default and
-is recorded as a known remnant. The web surface is unaffected.
+`appleWebApp.statusBarStyle` **is swapped, not deferred** — see the section above. An
+earlier revision said here that it "stays `black-translucent`" because "A6's fallback covers
+it", which contradicted that section outright and dropped a §12 row. A6 is a different
+thing, and only that thing:
+
+### A6: the NATIVE iOS status bar is deferred, with the remnant recorded
+
+**A6 is `@capacitor/status-bar`, the native plugin — not the PWA meta.** The plugin is
+**not in `package.json`** (verified). The parent's A6 gives an explicit fallback: ship
+without it, leave the native bar at its `Info.plist` default, record a known remnant, and
+**do not let it block the delivery**. E takes that fallback. The web and PWA surfaces are
+unaffected, because `apple-mobile-web-app-status-bar-style` is handled by `ThemeBootstrap`
+under invariant 17 and is §12's own separate row.
 
 **That remnant has a destination.** Parent §5:202 asserts the `Info.plist` value "is
-overridden at runtime by Child E's status-bar work" — which becomes false the moment E
-takes A6's fallback. E's docs pass corrects that line rather than leaving the parent
-claiming something the delivery did not do.
-
-### A6: the iOS status bar is deferred, with the remnant recorded
-
-`@capacitor/status-bar` is **not in `package.json`** — verified. The parent's A6 gives an
-explicit fallback: ship without the plugin, leave the native bar at its `Info.plist`
-default, record it as a known remnant, and **do not let it block the delivery**. E takes
-that fallback. `appleWebApp.statusBarStyle: "black-translucent"` stays on both layouts and
-is wrong in light on a native build; the web surface is unaffected.
+overridden at runtime by Child E's status-bar work" — which stays false for the *native*
+bar whichever way the meta goes. E's docs pass corrects that line rather than leaving the
+parent claiming something the delivery did not do.
 
 ## The schema field must have NO `initialValue`
 
@@ -417,7 +440,17 @@ it ships inert and independently revertible.
 | **E1** | `themePref` schema field + Studio deploy | no |
 | **E2** | `PATCH /api/me/theme` + its route test | no — nothing calls it |
 | **E3** | `GET /api/me` projection, `themePref.ts`, `ThemeBootstrap` — **not the control** | no — genuinely inert |
-| **E4** | **Remove `forcedTheme`, add `defaultTheme="dark"`**, and the client-side `themeColor` swap | **YES** |
+| **E4** | **Remove `forcedTheme`, add `defaultTheme="dark"`**; the `/me` control (item 3b); the legacy-mirror reconciliation script (item 4c); the client-side `themeColor` + `statusBarStyle` swaps | **YES** |
+
+**The control writes BEFORE it paints, and the order is not a style preference.**
+`ThemeControl` awaits the PATCH and calls `setTheme` only on `res.ok`; on failure it
+surfaces the error and paints nothing. An optimistic paint would be **unrecoverable**: a
+`setTheme("light")` whose PATCH then fails leaves `localStorage.theme = "light"` while
+`themePref` stays unset, and `ThemeBootstrap`'s unset guard — which this plan requires, so
+that an unset member is never overridden — means no later load can ever correct it. That is
+the identical terminal chain this plan proves for `setTheme(undefined)` and for the legacy
+mirror. The cost of the safe order is a round-trip's latency before the paint; the cost of
+the fast order is a member permanently stuck in a theme they did not persist.
 
 **E4 is the whole risk**, and it now carries the `/me` control as well as the
 `forcedTheme` removal — **because a control that ships before E4 is not harmless.**
@@ -452,6 +485,8 @@ land in the same merge.**
   failure shape this plan guards against everywhere else. Assert the field is in the response
   for a member who has one.
 - The `/me` control's handler: `res.ok` checked, flag reset in `finally`, failure surfaced.
+- **A test that a FAILED PATCH leaves both stores untouched** — the mirror unchanged and
+  `themePref` unchanged. See the ordering rule below; this is the guard on it.
 - **Browser, both themes, on the real components** — the pass that found the two defects D
   shipped. An open `CueDialog` and `PlannerGrid` full-screen, which the parent names as
   acceptance criteria (§4.4), **plus one `(admin)` route** — §12 notes `(admin)/layout.tsx`
@@ -459,7 +494,10 @@ land in the same merge.**
   chrome is observable in light at all — **and `/posts/[slug]`**: §12 marks Child B's typography and
   `dark:prose-invert` row "E verifies on device", and that route is where the unstyled-lyrics
   regression §9 warns about would show.
-- **Every guard below lives under `app/utils/__tests__/`.** `vitest.config.ts` includes only
+- **Every guard below lives under `app/`** — utility guards in `app/utils/__tests__/`, route
+  guards beside their named precedent in `app/api/__tests__/` (`notifPrefsRoute.test.ts`).
+  Both are inside the `app/**` glob, which is the whole of the constraint. `vitest.config.ts`
+  includes only
   `app/**`, `scripts/**` and `e2e/**`, so a test written outside those roots never runs and
   never fails — §9's landmine, and it would silently void the highest-consequence assertion
   in this child.
@@ -485,7 +523,7 @@ land in the same merge.**
 |---|---|---|
 | **`defaultTheme` omitted** | The whole team silently flips to light | Asserted by a source-text test; called out as E4's first line |
 | A member's preference leaks across accounts | The id would have to come from the body | It comes from the session; a route test pins it |
-| The `/me` control writes but the UI does not follow | Two stores can disagree | `next-themes`' `setTheme` drives the paint; the route is fire-and-forget with an error path |
+| The `/me` control writes but the UI does not follow | Two stores can disagree | **PATCH first, `setTheme` only on `res.ok`** — never optimistic; see below |
 | Light mode is reachable before it is *good* | D's visual pass found 2 real defects; there may be more | The browser gate is per-slice, and F stages the default separately |
 | 57 sites remain sub-AA in **both** themes | Pre-existing debt surfaced by D's audit | **Explicitly out of scope** — named in F's backlog, not silently inherited |
 
