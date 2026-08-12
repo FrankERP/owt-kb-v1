@@ -42,8 +42,8 @@ export const viewport: Viewport = {
   viewportFit: "cover",
   // Static viewport themeColor — the browser chrome colour, read before any CSS is
   // parsed, so it cannot be a token. This is the SERVER-RENDERED INITIAL value, and
-  // it is what an unset member keeps; `ThemeBootstrap` swaps it at runtime on the
-  // resolved theme (parent invariant 17). Row-level: three of this file's other rows are Child B's own, one of
+  // `ThemeBootstrap` swaps it at runtime on the RESOLVED theme (parent invariant
+  // 17), which since Child F means it follows the member's device. Row-level: three of this file's other rows are Child B's own, one of
   // them the `selection:` utility that motivated the var()-integrity guard.
   // eslint-disable-next-line no-restricted-syntax -- pre-CSS viewport colour, see ADR/parent invariant 17
   themeColor: "#010b17",

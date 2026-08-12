@@ -10,6 +10,7 @@ import NextServiceHero from "@/app/components/NextServiceHero";
 import ProfilePanel from "@/app/components/ProfilePanel";
 import TextSizeControl from "@/app/components/TextSizeControl";
 import ThemeControl from "@/app/components/ui/ThemeControl";
+import ThemeAnnouncement from "@/app/components/ui/ThemeAnnouncement";
 import AvailabilityCalendar from "@/app/components/AvailabilityCalendar";
 import AddToCalendarButton from "@/app/components/AddToCalendarButton";
 import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
@@ -346,6 +347,10 @@ export default async function MePage() {
     <div>
       <Navbar title={navbarTitle} schedule tags />
       <div className="mx-auto max-w-4xl px-6 pt-10 pb-16 space-y-12">
+        {/* Top of /me, per parent Q2. Its "Elígelo aquí" is an anchor to #tema,
+            because ThemeControl renders below the service cards, the availability
+            calendar and ProfilePanel — most of a phone-page away. */}
+        <ThemeAnnouncement />
 
         {/* Upcoming services */}
         <div>

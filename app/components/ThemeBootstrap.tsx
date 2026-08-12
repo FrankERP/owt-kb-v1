@@ -91,8 +91,9 @@ export function ThemeBootstrap({ children }: { children: React.ReactNode }) {
       setPref(stored);
 
       if (stored) {
-        // Only ever the literal "dark" or "light". An unrecognised value never
-        // reaches setTheme: next-themes has no falsy guard on the setter, so
+        // Only ever a value isThemePref accepts — "dark", "light" or (since Child
+        // F) "system". An unrecognised value never reaches setTheme: it has no
+        // falsy guard, so
         // setTheme(undefined) would persist the string "undefined" and poison the
         // NEXT load into `classList.add("undefined")` — no dark, no light, and
         // all 94 dark: utilities off at once.
@@ -112,10 +113,14 @@ export function ThemeBootstrap({ children }: { children: React.ReactNode }) {
       // holding "light" internally; only the setTheme would pin the whole unset
       // population to a "dark" mirror and quietly defeat F's rollout.
       //
-      // This is the THIRD copy of the dark default (Provider's defaultTheme and
-      // the migration script's catch are the others). Child F must change all three.
+      // SECOND OF THE THREE DEFAULT COPIES (Provider's defaultTheme and the
+      // migration script's catch are the others; useTheme() exposes no
+      // defaultTheme to share). Child F moved all three from "dark" to "system"
+      // together — leaving this one behind would have re-pinned exactly the
+      // legacy-mirror cohort to dark on every load, against the new default,
+      // invisibly. Guarded by themeWiring.test.ts.
       if (hasThemeMirror()) {
-        setTheme("dark");
+        setTheme("system");
         clearThemeMirror();
       }
     })();
@@ -123,8 +128,9 @@ export function ThemeBootstrap({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, [status, isImpersonating, setTheme]);
 
-  // The browser/PWA chrome colour, keyed on the RESOLVED theme so an unset member
-  // (who resolves to dark) simply gets the value already in the markup.
+  // The browser/PWA chrome colour, keyed on the RESOLVED theme — which since Child
+  // F means an unset member follows their device, so this follows it too. Keying on
+  // the resolved value rather than the stored one is what makes that automatic.
   //
   // NULL-GUARDED because (admin)/layout.tsx exports no `viewport` at all — there is
   // no theme-color meta on any admin page, while this component mounts in Provider,

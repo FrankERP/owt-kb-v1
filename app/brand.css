@@ -360,9 +360,9 @@
      is a panel rather than text, and reading it nominally produced a mid-grey slab
      that dropped the text on it to 3.07:1.
 
-     REACHABLE as of Child E4, which removed forcedTheme="dark". A member picks a
-     theme at /me; unset still resolves to dark, so nobody who opts into nothing
-     sees a change. */
+     LIVE. Child E4 removed forcedTheme="dark"; Child F moved the default to
+     Follow System, so these values render for any member whose device is in
+     light mode, and for anyone who pins Claro at /me. */
 
   --accent-rgb: 0 53 114;                 /* #003572  <- dark 0 191 255 */
   --accent-deep-rgb: 0 31 63;             /* #001f3f  <- dark 0 53 114 */
