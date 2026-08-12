@@ -29,8 +29,11 @@ export default withAuth(
 );
 
 export const config = {
-  // Protect everything except: auth pages, NextAuth API, the cron routes and
-  // static assets. Studio is now included — it requires login + admin role
+  // Protect everything except: auth pages, NextAuth API, the cron routes, the
+  // service-readiness identity route, the theme gallery and static assets.
+  // (The identity route was already excluded and this comment had never said so.)
+  // The theme gallery is a prerendered, data-free review surface — see ADR-0017
+  // and the rationale block in app/utils/routeMatcher.ts. Studio is now included — it requires login + admin role
   // (checked above). `api/cron/*` is excluded because it authenticates with
   // `Authorization: Bearer ${CRON_SECRET}` inside each handler; a session gate
   // in front of a machine caller only ever redirects it to the sign-in page.
@@ -42,6 +45,6 @@ export const config = {
   // sync guard (routeMatcher.test.ts). Each excluded prefix is anchored with
   // `(?:/|$)` so `/author` is not mistaken for a public `/auth` route.
   matcher: [
-    "/((?!auth(?:/|$)|api/auth(?:/|$)|api/cron(?:/|$)|api/service-readiness-verification/identity$|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$|icons(?:/|$)|manifest\\.webmanifest$).*)",
+    "/((?!auth(?:/|$)|api/auth(?:/|$)|api/cron(?:/|$)|theme-gallery(?:/|$)|api/service-readiness-verification/identity$|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$|icons(?:/|$)|manifest\\.webmanifest$).*)",
   ],
 };
