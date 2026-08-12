@@ -120,7 +120,7 @@ function Avatar({
         // eslint-disable-next-line @next/next/no-img-element
         <img src={photoUrl} alt={name} className="w-full h-full object-cover" />
       ) : (
-        <div className="w-full h-full bg-surface-accent-l100-d10 flex items-center justify-center">
+        <div className="w-full h-full bg-surface-accent-l100-d10 text-on-fill flex items-center justify-center">
           <span className="font-label text-xs text-accent">{initials}</span>
         </div>
       )}
@@ -312,7 +312,7 @@ export function MemberForm({
         <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
           Cancelar
         </button>
-        <button type="submit" disabled={loading} className="flex-1 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+        <button type="submit" disabled={loading} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
           {loading ? "Guardando..." : "Guardar"}
         </button>
       </div>
@@ -362,7 +362,7 @@ function PasswordForm({
         <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
           Cancelar
         </button>
-        <button type="submit" disabled={loading} className="flex-1 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+        <button type="submit" disabled={loading} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
           {loading ? "Guardando..." : "Establecer"}
         </button>
       </div>

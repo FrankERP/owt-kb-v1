@@ -283,7 +283,7 @@ function ProposalCard({
               <button
                 onClick={handleApprove}
                 disabled={submitting || conflict || proposal.songs.length === 0}
-                className="flex-1 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+                className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
               >
                 {submitting ? "Aprobando…" : "Aprobar"}
               </button>
@@ -323,7 +323,7 @@ function ProposalCard({
                 <button
                   onClick={handleReopen}
                   disabled={submitting || conflict}
-                  className="flex-1 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+                  className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
                 >
                   {submitting ? "Reabriendo…" : "Reabrir"}
                 </button>
@@ -529,7 +529,7 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
             }}
             className={`relative font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors ${
               filter === id
-                ? "bg-surface-accent-solid text-accent"
+                ? "bg-surface-accent-solid text-on-fill"
                 : "text-mono-500 hover:text-accent"
             }`}
           >
@@ -566,7 +566,7 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
             Este servicio tiene más de una propuesta válida ({highlightIds.length}). Resuélvelo antes
             de publicar.
           </p>
-          <p className="mt-1 font-mono text-[11px] text-negative-soft/70 [overflow-wrap:anywhere]">
+          <p className="mt-1 font-mono text-[11px] text-negative-soft/75 [overflow-wrap:anywhere]">
             {conflictKey} · {highlightIds.join(" · ")}
           </p>
         </div>

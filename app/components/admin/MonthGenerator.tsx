@@ -3143,7 +3143,7 @@ export default function MonthGenerator({
           onClick={handlePreview}
           disabled={columns.length === 0 || !!gateBlocked || !!rulesBlocked}
           title={gateBlocked ?? rulesBlocked ?? undefined}
-          className="flex-1 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+          className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
         >
           Previsualizar →
         </button>
@@ -3180,7 +3180,7 @@ export default function MonthGenerator({
       {storedMode && (!storedSource || !storedInventory.coherent) && (
         <div className="rounded-lg border border-warning-fg/30 bg-warning-fg/10 px-3 py-2.5">
           <p className="font-body text-sm text-warning-faint">No se puede editar este mes hasta verificar todos los servicios.</p>
-          <p className="mt-1 font-body text-xs text-warning-soft/80">
+          <p className="mt-1 font-body text-xs text-warning-soft/85">
             {storedSource?.rolesStatus === "error" || storedSource?.integrityStatus === "error"
               ? "Falló una fuente de datos. Reintenta la carga."
               : storedInventory.reasons.join(", ") || "Cargando datos…"}
@@ -3226,7 +3226,7 @@ export default function MonthGenerator({
                 </label>
               ) : <div />}
               <div className="flex gap-2">
-                <button type="button" onClick={() => void handleCreateOne()} disabled={creatingOne || (storedMutationLocked && createAttemptStatus !== "unknown") || storedWriteUnresolved || createAttemptStatus === "committedUnverified" || !!storedCreateBlocked} title={storedCreateBlocked ?? undefined} className="min-h-[44px] rounded-lg bg-surface-accent-solid px-4 font-label text-xs uppercase tracking-widest disabled:opacity-50">
+                <button type="button" onClick={() => void handleCreateOne()} disabled={creatingOne || (storedMutationLocked && createAttemptStatus !== "unknown") || storedWriteUnresolved || createAttemptStatus === "committedUnverified" || !!storedCreateBlocked} title={storedCreateBlocked ?? undefined} className="min-h-[44px] rounded-lg bg-surface-accent-solid text-on-fill px-4 font-label text-xs uppercase tracking-widest disabled:opacity-50">
                   {creatingOne ? "Creando…" : createAttemptStatus === "unknown" ? "Reintentar misma solicitud" : createAttemptStatus === "committedUnverified" ? "Verificando…" : "Crear vacío"}
                 </button>
                 <button type="button" onClick={() => setComposerOpen(false)} disabled={creatingOne || createAttemptStatus !== null} className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50">
@@ -3272,7 +3272,7 @@ export default function MonthGenerator({
               type="button"
               onClick={confirmPendingDiscard}
               disabled={storedTransportActive}
-              className="min-h-[44px] rounded-lg bg-surface-accent-solid px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50"
+              className="min-h-[44px] rounded-lg bg-surface-accent-solid text-on-fill px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50"
             >
               {!storedMode && pendingDiscard === "back" ? "Volver de todos modos" : "Cerrar de todos modos"}
             </button>
@@ -3287,12 +3287,12 @@ export default function MonthGenerator({
         <div className="flex rounded-lg border border-surface-accent-30 overflow-hidden">
           <button type="button" onClick={() => setViewMode("edit")}
             className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
-              viewMode === "edit" ? "bg-surface-accent-solid text-ink-muted" : "text-mono-500 hover:text-ink-muted"}`}>
+              viewMode === "edit" ? "bg-surface-accent-solid text-on-fill text-ink-muted" : "text-mono-500 hover:text-ink-muted"}`}>
             Editar
           </button>
           <button type="button" onClick={() => setViewMode("view")}
             className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors border-l border-accent-deep/30 dark:border-accent/20 ${
-              viewMode === "view" ? "bg-surface-accent-solid text-ink-muted" : "text-mono-500 hover:text-ink-muted"}`}>
+              viewMode === "view" ? "bg-surface-accent-solid text-on-fill text-ink-muted" : "text-mono-500 hover:text-ink-muted"}`}>
             Vista
           </button>
         </div>
@@ -3526,7 +3526,7 @@ export default function MonthGenerator({
             onClick={() => void handleStoredSave()}
             disabled={storedMutationLocked || dirtyStoredColumns.length === 0 || invalidStoredColumns.length > 0 || !storedInventory.coherent || !!storedSaveBlocked}
             title={storedSaveBlocked ?? undefined}
-            className="flex-1 min-h-[44px] rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+            className="flex-1 min-h-[44px] rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
           >
             {savingStored ? "Guardando…" : `Guardar ${dirtyStoredColumns.length} servicio${dirtyStoredColumns.length !== 1 ? "s" : ""}`}
           </button>
@@ -3536,10 +3536,10 @@ export default function MonthGenerator({
           <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
             Cancelar
           </button>
-          <button type="button" onClick={() => handleConfirm(false)} disabled={pushing || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+          <button type="button" onClick={() => handleConfirm(false)} disabled={pushing || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
             {pushing ? "Creando..." : `Crear ${toCreate.length} borrador${toCreate.length !== 1 ? "es" : ""}`}
           </button>
-          <button type="button" onClick={() => handleConfirm(true)} disabled={pushing || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+          <button type="button" onClick={() => handleConfirm(true)} disabled={pushing || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
             Crear y publicar
           </button>
         </div>

@@ -217,8 +217,8 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
             disabled={saving || !dirty}
             className={`px-4 py-2 rounded-lg font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${
               dirty
-                ? "bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 ring-1 ring-warning-strong/50"
-                : "bg-surface-accent-solid"
+                ? "bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 ring-1 ring-warning-strong/50"
+                : "bg-surface-accent-solid text-on-fill"
             }`}
           >
             {saving ? "Guardando..." : saved ? "Guardado ✓" : dirty ? "Guardar •" : "Guardar"}
@@ -252,7 +252,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
             <button
               type="button"
               onClick={() => applyRecurring(true)}
-              className="px-4 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors"
+              className="px-4 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors"
             >
               Marcar
             </button>
@@ -400,7 +400,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
           >
             {/* Date label + close */}
             <div className="flex items-start justify-between gap-2">
-              <p className="font-label text-[11px] uppercase tracking-widest text-availability-strong/80 leading-tight capitalize">
+              <p className="font-label text-[11px] uppercase tracking-widest text-availability-strong leading-tight capitalize">
                 {fmtDayLabel(popover.iso)}
               </p>
               <button

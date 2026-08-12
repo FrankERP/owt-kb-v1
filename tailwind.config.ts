@@ -54,6 +54,7 @@ const config: Config = {
 				"elevation": "rgb(var(--elevation-rgb) / <alpha-value>)",
 				"surface-lift": "rgb(var(--surface-lift-rgb) / <alpha-value>)",
 				"scrim": "rgb(var(--scrim-rgb) / <alpha-value>)",
+				"on-fill": "rgb(var(--on-fill-rgb) / <alpha-value>)",
 				"chart-lead": "rgb(var(--chart-lead-rgb) / <alpha-value>)",
 				"chart-bgv": "rgb(var(--chart-bgv-rgb) / <alpha-value>)",
 				"chart-coro": "rgb(var(--chart-coro-rgb) / <alpha-value>)",

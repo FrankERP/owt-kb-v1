@@ -24,7 +24,7 @@ export default function SongNotFound() {
 
       <Link
         href="/"
-        className="font-label text-xs uppercase tracking-widest px-4 py-2.5 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        className="font-label text-xs uppercase tracking-widest px-4 py-2.5 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
         Ver todas las canciones
       </Link>

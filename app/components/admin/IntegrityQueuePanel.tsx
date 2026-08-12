@@ -249,7 +249,7 @@ export default function IntegrityQueuePanel({
           <p className="font-body text-xs text-recency-faint/90">{INTEGRITY_INCOMPLETE_NOTE}</p>
           <ul className="mt-1 space-y-0.5">
             {queue.unproven.map((u) => (
-              <li key={u.source} className="font-body text-xs text-recency-faint/70">
+              <li key={u.source} className="font-body text-xs text-recency-faint/80">
                 {u.state === "loading" ? "Cargando" : "Falló"}:{" "}
                 {DOMAIN_LABEL[
                   INTEGRITY_DOMAINS.find((d) => INTEGRITY_DOMAIN_SOURCE[d] === u.source) ?? "roles"
