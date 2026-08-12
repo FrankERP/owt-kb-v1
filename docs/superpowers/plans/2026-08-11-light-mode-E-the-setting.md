@@ -84,6 +84,46 @@ mounted only at `(client)/layout.tsx:76`, and copying that placement would leave
 whose first load of a session is `/admin` on a preference they never fetched. Mounting
 inside `Provider` covers both root layouts and correctly excludes the provider-less gallery.
 
+### The mirror is NOT empty today, and `forcedTheme` is the only thing hiding it
+
+**A production theme toggle wrote this exact key for twenty months.**
+`app/components/ThemeSwitch.tsx` was `onClick={() => setTheme(isDark ? "light" : "dark")}`,
+labelled *"Cambiar a tema claro"*. It shipped in the member navbar until `749588c`
+(2026-04-24) and in the **admin** navbar until `33c6e15` (2026-07-16 — under four weeks
+ago). Both are ancestors of `main`. The Provider of that era carried no `storageKey`, so it
+used next-themes' default — `"theme"`, **the same key E uses** — under a comment reading
+*"Light mode is kept intact — the ThemeSwitch toggle still works."*
+
+Today the seed takes its `if (forced) apply(forced)` branch, so that stored value is read
+and never applied. **E4 removes the mask.** For any browser holding `theme: "light"` from
+that toggle, the seed `localStorage.getItem("theme") || "dark"` returns **`"light"`** —
+a stored value beats `defaultTheme` — and `ThemeBootstrap`, correctly per the guard below,
+does nothing at all because `themePref` is unset.
+
+That is not the one-frame flash described further down. **It is the terminal state**, until
+that member opens `/me` and picks Dark — which writes `themePref` and burns the unset
+signal Child F depends on. `clearThemeMirror()` at sign-out does not help: it only governs
+mirrors created after E ships.
+
+So **E4 runs a one-time reconciliation**, keyed on a version marker:
+
+```
+if (!localStorage.getItem("owt-theme-migrated")) {
+  localStorage.removeItem("theme");          // legacy ThemeSwitch value, not a preference
+  localStorage.setItem("owt-theme-migrated", "1");
+}
+```
+
+A **clear**, not a `setTheme("dark")`. Both land the member on dark, but only the clear
+preserves the property F depends on: **no mirror means no preference**, so when F changes
+the default, a member who never chose anything actually follows it. Writing `"dark"` into
+the mirror would pin the whole unset population to dark and quietly defeat F's rollout.
+
+It runs once, so a value E's own control writes afterwards is never touched.
+
+**A test asserts the whole chain**: a pre-existing `localStorage.theme = "light"` plus an
+unset `themePref` ends on **dark**, issues **no PATCH**, and leaves `themePref` unset.
+
 ### `setTheme` MUST be guarded, and this is the most dangerous line in Child E
 
 **`next-themes` has no falsy guard on the setter.** Verified in its source:
@@ -196,7 +236,7 @@ Two stores, and the split matters:
 
 | Store | Role | Why |
 |---|---|---|
-| `themePref` on `teamMember` | **source of truth** | Follows the member across devices, and is what D7 asks for |
+| `themePref` on `teamMembers` | **source of truth** | Follows the member across devices, and is what D7 asks for |
 | `localStorage` | **paint cache** | `next-themes` needs the value BEFORE hydration or the page flashes the wrong theme |
 
 `ThemeBootstrap` reads `themePref` from the `GET /api/me` projection and calls
@@ -205,11 +245,11 @@ tab, since `next-themes` only listens for cross-tab `storage` events. `next-them
 the mirror itself as a side effect of `setTheme`.
 
 **The first-paint claim, stated accurately.** On a device with no mirror, the first paint
-uses `defaultTheme="dark"` and corrects once the session resolves — a flash toward dark,
-which is the safe direction because it matches what ships today. **But that is only true of
-a fresh device.** A member who chose Light on device A and has an unrelated mirror on
-device B sees a flash toward light on B until the projection lands. An earlier revision
-claimed "never toward light", which was stronger than the mechanism supports.
+uses `defaultTheme="dark"` and stays there — with `themePref` unset the projection lands
+and changes nothing, which is correct. A member who chose Light on device A and lands on a
+mirror-less device B sees dark until they choose again; the server value only overrides
+once `themePref` is set. An earlier revision claimed a "flash toward light … until the
+projection lands", which described a correction that does not happen for an unset member.
 
 ## `themeColor` and the native shell
 
@@ -295,7 +335,9 @@ A reviewer should spend their attention there and treat E1–E3 as ordinary work
 - The `/me` control's handler: `res.ok` checked, flag reset in `finally`, failure surfaced.
 - **Browser, both themes, on the real components** — the pass that found the two defects D
   shipped. An open `CueDialog` and `PlannerGrid` full-screen, which the parent names as
-  acceptance criteria (§4.4), **plus `/posts/[slug]`**: §12 marks Child B's typography and
+  acceptance criteria (§4.4), **plus one `(admin)` route** — §12 notes `(admin)/layout.tsx`
+  "can only follow the theme at E, when `forcedTheme` goes", making E the first moment admin
+  chrome is observable in light at all — **and `/posts/[slug]`**: §12 marks Child B's typography and
   `dark:prose-invert` row "E verifies on device", and that route is where the unstyled-lyrics
   regression §9 warns about would show.
 - **Every guard below lives under `app/utils/__tests__/`.** `vitest.config.ts` includes only
