@@ -103,10 +103,51 @@ change becomes machine-verifiable in both themes without a human or a credential
 | 4 | An ADR — an auth boundary moved deliberately. **Numbered `0017` exactly**: `adrIndex.test.ts:30` requires consecutive numbering and `:20` fails on a file not linked from the index | `docs/adr/0017-public-theme-gallery.md` **+ `docs/adr/README.md`** |
 | 4b | **Parent spec §6 guard 8 (`:235-242`) amended** — it currently reads *"If a child finds itself adding a `PUBLIC_ROUTES` entry for the gallery, the placement is wrong — that entry is the signal, not the fix."* **Left standing, that is a live instruction to revert ship item 3.** Superseded-by pointer to ADR-0017, not deletion | the parent scope spec |
 | 4c | **Parent spec §8.4 (`:409-424`) amended** — "The gallery sits on a **gated** path — not under `/auth/`, not public", plus its four recorded consequences, three of which this change reverses | the parent scope spec |
-| 4d | **A2's plan marked superseded on three points** — its Standard-tier derivation (`:29-35`), the four dropped containment mechanisms (`:139-140`), and preserved-invariant #8, *"`routeMatcher.test.ts` — must stay green without being edited"* (`:146-148`) | `2026-08-08-light-mode-A2-rendering.md` |
-| 5 | **Eight live "the gallery is gated" statements** — the count is the sweep's output, not an estimate, and an earlier draft said five because it swept `app/` and `docs/*.md` but not the specs, found by sweeping rather than guessing: `playwright.vr.config.ts:11` and **`:36`** — the latter a `throw` that tells a future operator the route "is a GATED route, so an authenticated session is required", which becomes actively wrong advice; `e2e/theme-gallery/README.md:11`; `docs/ROUTES.md:6` prose **and** its `**Gated**` cell at `:41`; and **`docs/AUTH_AND_SECURITY.md:116-118`**, the canonical auth doc, whose allow-list already omits `api/cron` and the A3 identity route and would gain a third omission. **`playwright.vr.config.ts` needs its whole `:11-20` block rewritten, not just the two lines** — the surrounding "CREDENTIALS ARE DEFERRED, DELIBERATELY" rationale argues for a constraint that stops existing | as listed |
+| 5 | **The documentation sweep — a rule and a command, not a list.** See below; three drafts of this plan enumerated by hand and three times a reviewer found a member I had missed | as derived |
 
-**Deliberately NOT swept:** `docs/superpowers/specs/2026-07-29-light-mode-role-tokens-design.md:761-807` still describes an `/auth/theme-gallery/…` placement that never shipped. It was already superseded by the parent scope spec before this plan existed, so it is pre-existing drift rather than something this change falsifies — named here so the omission is a decision, not a miss.
+## The documentation sweep
+
+Three drafts enumerated this by hand — five statements, then eight — and a reviewer
+found more each time. **That is a method failure, not three instance failures**, and
+this repo has paid for the same lesson before (see the commits titled *"two
+corrections that never reached their originals"* and *"the last two stale twins,
+found by sweeping every mention rather than fixing the one a reviewer quoted"*).
+
+So the sweep is a command and a **rule for triaging its output**, and the
+implementer re-runs it rather than trusting any list:
+
+```
+grep -rn -iE "gallery.{0,80}(gated|not public|no PUBLIC_ROUTES)|gated.{0,60}gallery|PUBLIC_ROUTES entry|stays green.{0,30}unedited|green.{0,20}without being edited|fully gated" app docs e2e playwright*.ts proxy.ts CLAUDE.md AGENTS.md
+```
+
+It returns roughly thirty hits across eight files. **The rule that sorts them** —
+the same one Children E and F used, applied here without exception:
+
+**AMEND — anything a reader consults to learn how the system works *today*:**
+
+| File | Why |
+|---|---|
+| `app/utils/__tests__/themeGallery.test.ts` | Executable. **`:11`, `:39`, `:57`** — note `:11`'s header sits *outside* the `:39-61` range, so an implementer working that range literally leaves it stale |
+| `docs/superpowers/specs/2026-08-07-light-mode-member-first-scope.md` | **The governing document, and the only spec that gets amended.** `:235-242` (§6 guard 8), `:306`, `:321-323`, `:364`, **`:409-435`** — §8.4 runs to `:435`, not `:424` as an earlier draft said, and has **five** bullets, the fifth being *"The VR harness must authenticate"* — and `:582`, whose guard-traceability row is instruction-shaped |
+| `docs/ROUTES.md` | `:6`, **`:12`** (*"enforced at two layers… must be logged in"* — an over-statement once one row is public), `:41` |
+| `docs/AUTH_AND_SECURITY.md:116-118` | The canonical auth doc's allow-list |
+| `playwright.vr.config.ts:11-20` **and `:36`** | The whole rationale block, not two lines — it argues for a constraint that stops existing |
+| `e2e/theme-gallery/README.md:11` | Live |
+
+**LEAVE — dated records of what was decided under the conditions of their day:**
+`2026-08-07-light-mode-A-verification-scaffolding.md` (already marked *SUPERSEDED —
+do not implement* at `:17`), **`2026-08-08-light-mode-A2-rendering.md`**, and every
+review log. An earlier draft had a ship row amending A2's plan; that row is
+**removed**, because rewriting a delivered plan falsifies the history. ADR-0017 is
+where the supersession is recorded — that is what an ADR is for.
+
+**Named exclusions, so each is a decision rather than a miss:**
+`docs/superpowers/specs/2026-07-29-light-mode-role-tokens-design.md:761-807`
+describes an `/auth/` placement that never shipped and was superseded before this
+plan existed. `docs/MOBILE.md:82` (*"the app is fully gated by `proxy.ts`"*) is
+already imprecise — auth pages, cron and the A3 identity route are all public
+today — so it is pre-existing drift; **corrected anyway**, since this change makes
+it one degree worse and the edit is one line.
 
 ## The matcher is duplicated, and the duplication is load-bearing
 
@@ -192,6 +233,9 @@ CLAUDE.md requires documentation current in the same delivery. One commit.
   still `true`.
 - **`/theme-gallery-anything` is still GATED** — the `(?:/|$)` anchor, tested
   explicitly rather than assumed.
+- **`/theme-gallery` and `/theme-gallery/` return 404, not 200.** They become
+  anonymously reachable and resolve to no route; with no root `not-found.tsx` the
+  built-in 404 serves. Inert, but asserted rather than assumed.
 - **`ungated === PUBLIC_ROUTES`** still holds, with the gallery routes added to the
   list and a comment saying why they are safe.
 - **The proxy.ts sync guard passes** — both copies byte-identical.
@@ -223,7 +267,7 @@ instinct that put six real names there in the first place.
 
 | # | Question | Blocking? | Bounded default |
 |---|---|---|---|
-| **Q1** | Public on production, or only on the dev deployment? | **No — and the Deployment-Protection unknown genuinely does not gate it.** The judgement is that the disclosure is acceptable *at full public exposure*; the unknown changes only how much the deployed half BUYS, not how much it risks. An earlier draft said "confirm before implementing", which contradicted its own non-blocking label | **Both — but the case is weaker than it looks and is stated honestly.** `visual-verifier`'s brief accepts a local dev server, and the matcher change takes effect under `next start` locally, so **the capability lands in full with no deployed exposure at all.** Against that: the deployed surfaces also sit behind Vercel Deployment Protection, which this plan cannot query read-only — **if that covers the dev alias, the production half carries the entire permanent disclosure while the deployed half buys nothing.** Confirm the protection scope before implementing. A dev-only gate is rejected regardless: environment-conditional middleware is more moving parts in an auth path than the change itself. |
+| **Q1** | Public on production, or only on the dev deployment? | **No — and the Deployment-Protection unknown genuinely does not gate it.** The judgement is that the disclosure is acceptable *at full public exposure*; the unknown changes only how much the deployed half BUYS, not how much it risks. Two earlier drafts said "confirm before implementing" while labelling the row non-blocking; the check is **post-hoc information**, not a precondition, and the row now says only that | **Both — but the case is weaker than it looks and is stated honestly.** `visual-verifier`'s brief accepts a local dev server, and the matcher change takes effect under `next start` locally, so **the capability lands in full with no deployed exposure at all.** Against that: the deployed surfaces also sit behind Vercel Deployment Protection, which this plan cannot query read-only — **if that covers the dev alias, the production half carries the entire permanent disclosure while the deployed half buys nothing.** Confirm the protection scope before implementing. A dev-only gate is rejected regardless: environment-conditional middleware is more moving parts in an auth path than the change itself. |
 | **Q2** | Should the gallery be `noindex`? | **No — ALREADY DONE, do not add a duplicate** | `app/(gallery)/theme-gallery/[theme]/layout.tsx:34-37` already sets `robots: { index: false, follow: false }`. An earlier draft said "yes, add it", which would have produced a second declaration. |
 
 ---
