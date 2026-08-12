@@ -104,7 +104,7 @@ export function Modal({
 
   return (
     <div className={`fixed inset-0 ${zClass} flex items-start justify-center pt-4 px-4 pb-4`}>
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-scrim/60 backdrop-blur-sm" onClick={onClose} />
       <div
         ref={dialogRef}
         role="dialog"

@@ -236,14 +236,14 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
             <select
               value={recurDow}
               onChange={e => setRecurDow(Number(e.target.value))}
-              className="rounded-lg border border-surface-accent-l40-d20 bg-white/5 px-3 py-2 font-body text-sm text-mono-200 focus:outline-none focus:border-accent/50 dark:focus:border-surface-accent-l40-d20"
+              className="rounded-lg border border-surface-accent-l40-d20 bg-surface-lift/5 px-3 py-2 font-body text-sm text-mono-200 focus:outline-none focus:border-accent/50 dark:focus:border-surface-accent-l40-d20"
             >
               {WEEKDAYS.map((w, i) => <option key={i} value={i} className="bg-surface-base">{w}</option>)}
             </select>
             <select
               value={recurInterval}
               onChange={e => setRecurInterval(Number(e.target.value))}
-              className="rounded-lg border border-surface-accent-l40-d20 bg-white/5 px-3 py-2 font-body text-sm text-mono-200 focus:outline-none focus:border-accent/50 dark:focus:border-surface-accent-l40-d20"
+              className="rounded-lg border border-surface-accent-l40-d20 bg-surface-lift/5 px-3 py-2 font-body text-sm text-mono-200 focus:outline-none focus:border-accent/50 dark:focus:border-surface-accent-l40-d20"
             >
               <option value={1} className="bg-surface-base">Cada semana</option>
               <option value={2} className="bg-surface-base">Cada 2 semanas</option>
@@ -359,7 +359,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
                         <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${unavailable ? "bg-availability-strong/60" : isPast ? "bg-mono-600" : "bg-accent/70"}`} />
                       )}
                       {hasNote && (
-                        <span className="absolute top-0.5 right-0.5 w-1 h-1 rounded-full bg-white/50" />
+                        <span className="absolute top-0.5 right-0.5 w-1 h-1 rounded-full bg-surface-lift/50" />
                       )}
                     </button>
                   );
@@ -432,7 +432,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
                 setSaved(false);
               }}
               onKeyDown={e => { if (e.key === "Enter") setPopover(null); }}
-              className="w-full rounded-lg border border-surface-accent-l50-d15 bg-white/5 px-3 py-2 font-body text-sm text-mono-200 placeholder:text-mono-400 focus:outline-none focus:border-accent/40 dark:focus:border-surface-accent-l50-d15"
+              className="w-full rounded-lg border border-surface-accent-l50-d15 bg-surface-lift/5 px-3 py-2 font-body text-sm text-mono-200 placeholder:text-mono-400 focus:outline-none focus:border-accent/40 dark:focus:border-surface-accent-l50-d15"
             />
 
             {/* Remove date */}

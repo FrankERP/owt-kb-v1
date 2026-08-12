@@ -142,7 +142,7 @@ export default function SongSheet() {
             ref={closeButtonRef}
             type="button"
             onClick={closeSheet}
-            className="p-2 -mr-2 rounded-lg text-mono-500 hover:text-mono-300 hover:bg-white/5 transition-colors shrink-0"
+            className="p-2 -mr-2 rounded-lg text-mono-500 hover:text-mono-300 hover:bg-surface-lift/5 transition-colors shrink-0"
             aria-label="Cerrar"
           >
             <CloseIcon />
@@ -421,7 +421,7 @@ function SetlistPopover({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 -mr-1 rounded-lg text-mono-500 hover:text-mono-300 hover:bg-white/5 transition-colors"
+            className="p-1.5 -mr-1 rounded-lg text-mono-500 hover:text-mono-300 hover:bg-surface-lift/5 transition-colors"
             aria-label="Cerrar"
           >
             <CloseIcon />

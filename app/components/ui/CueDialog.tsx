@@ -241,7 +241,7 @@ export default function CueDialog({
         aria-label="Cerrar"
         tabIndex={-1}
         onClick={() => top && onDismiss("backdrop")}
-        className="absolute inset-0 cursor-default bg-black/68 backdrop-blur-md"
+        className="absolute inset-0 cursor-default bg-scrim/[0.68] backdrop-blur-md"
       />
       <div
         ref={shellRef}
@@ -272,7 +272,7 @@ export default function CueDialog({
             <button
               type="button"
               onClick={() => onDismiss("escape")}
-              className="rounded-lg p-2 text-ink-dim transition-colors hover:bg-white/5 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+              className="rounded-lg p-2 text-ink-dim transition-colors hover:bg-surface-lift/5 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               aria-label={label ? `Cerrar ${label}` : "Cerrar diálogo"}
             >
               <CloseIcon />

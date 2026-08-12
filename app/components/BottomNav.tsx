@@ -31,7 +31,7 @@ export default function BottomNav() {
       {/* Backdrop */}
       {moreOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-scrim/50 backdrop-blur-sm lg:hidden"
           onClick={() => setMoreOpen(false)}
         />
       )}

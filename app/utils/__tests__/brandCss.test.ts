@@ -201,10 +201,34 @@ function parityViolations(css: string): string[] {
 describe("brand.css — (b) theme parity, dormant until .light carries custom properties", () => {
   const css = read("app/brand.css");
 
-  it("is dormant today: .light exists but declares no custom property", () => {
+  it("is ACTIVE as of Child D: .light carries a counterpart for every colour role", () => {
+    // This assertion was authored dormant, and it self-activated the moment Child D
+    // declared its first custom property in `.light` — which is the whole reason it was
+    // written that way. It used to assert `.size === 0`; the flip is the milestone, not
+    // a weakening.
+    //
+    // What it enforces now is the thing that makes Child D ATOMIC: a `:root` colour with
+    // no `.light` counterpart falls back to the dark value in light mode, silently and
+    // per-property. There is no half-themed state this guard will let through.
     expect(lightBlock(css)).not.toBeNull();
-    expect(customProperties(lightBlock(css) ?? "").size).toBe(0);
+    expect(customProperties(lightBlock(css) ?? "").size).toBeGreaterThan(0);
     expect(parityViolations(css)).toEqual([]);
+  });
+
+  it("counts both sides, so a role added to one block alone cannot pass", () => {
+    // 89 colour properties per side — 66 base roles and 23 composed tokens. The four
+    // non-colour ones (`--brand-radius-*`, `--brand-duration-*`) are correctly excluded:
+    // a light radius is nonsense, and demanding one would make the guard unsatisfiable.
+    //
+    // The first expectation is the real invariant and cannot go stale. The pinned total
+    // is deliberately maintained by hand so that ADDING a role is a visible decision —
+    // it went 87 -> 89 when Child D added `--surface-lift` and `--scrim` for the tints,
+    // and that edit is the point, not an inconvenience.
+    const root = customProperties(css.slice(css.indexOf(":root {"), css.indexOf("\n}", css.indexOf(":root {"))));
+    const light = customProperties(lightBlock(css) ?? "");
+    const rootColour = [...root].filter((p) => isColourProperty(p, css));
+    expect(light.size).toBe(rootColour.length);
+    expect(light.size).toBe(89);
   });
 
   it("FIRES on a synthetic .light block with a missing counterpart (the fire-proof)", () => {

@@ -193,15 +193,15 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                   title={gates.swap.reason ?? "Intercambiar equipo completo"}
                   className={`${CARD_STYLE.menuTrigger} shrink-0 rounded-lg px-2.5 font-label text-xs transition-colors disabled:opacity-40 ${
                     isCardSelected
-                      ? "border border-white/40 bg-white/20 text-white"
-                      : "border border-transparent text-ink-muted/70 hover:bg-white/15 hover:text-white"
+                      ? "border border-surface-lift/40 bg-surface-lift/20 text-ink"
+                      : "border border-transparent text-ink-muted/70 hover:bg-surface-lift/15 hover:text-ink"
                   }`}
                 >
                   ⇄ Equipo
                 </button>
               ) : copyMode ? (
                 isCopySource ? (
-                  <span className="shrink-0 rounded-lg border border-white/40 bg-white/20 px-2.5 py-1.5 font-label text-[11px] uppercase tracking-widest text-white">
+                  <span className="shrink-0 rounded-lg border border-surface-lift/40 bg-surface-lift/20 px-2.5 py-1.5 font-label text-[11px] uppercase tracking-widest text-ink">
                     Origen
                   </span>
                 ) : (
@@ -210,7 +210,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                     onClick={props.onCopyPick}
                     disabled={!gates.copyInstruments.enabled}
                     title={gates.copyInstruments.reason ?? "Copiar los instrumentos del origen a este día"}
-                    className={`${CARD_STYLE.menuTrigger} shrink-0 rounded-lg border border-accent/40 px-2.5 font-label text-xs text-ink-muted/70 transition-colors hover:bg-accent/25 hover:text-white disabled:opacity-40`}
+                    className={`${CARD_STYLE.menuTrigger} shrink-0 rounded-lg border border-accent/40 px-2.5 font-label text-xs text-ink-muted/70 transition-colors hover:bg-accent/25 hover:text-ink disabled:opacity-40`}
                   >
                     Pegar aquí
                   </button>
@@ -237,7 +237,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                     aria-expanded={menuOpen}
                     aria-label="Más acciones"
                     title="Más acciones"
-                    className={`${CARD_STYLE.menuTrigger} flex items-center justify-center rounded-lg text-ink-muted/70 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`}
+                    className={`${CARD_STYLE.menuTrigger} flex items-center justify-center rounded-lg text-ink-muted/70 transition-colors hover:bg-surface-lift/15 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`}
                   >
                     <KebabIcon />
                   </button>
@@ -795,7 +795,7 @@ function IconAction({
       disabled={disabled}
       aria-label={label}
       title={disabled ? (gate.reason ?? label) : label}
-      className={`${CARD_STYLE.menuTrigger} flex items-center justify-center rounded-lg text-ink-muted/70 transition-colors hover:bg-white/15 hover:text-white disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`}
+      className={`${CARD_STYLE.menuTrigger} flex items-center justify-center rounded-lg text-ink-muted/70 transition-colors hover:bg-surface-lift/15 hover:text-ink disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`}
     >
       {icon}
     </button>
@@ -825,7 +825,7 @@ function MenuItem({
         disabled={disabled}
         title={disabled ? (gate?.reason ?? undefined) : undefined}
         className={`flex min-h-[44px] w-full min-w-0 items-center gap-2.5 px-3 text-left text-sm transition-colors disabled:opacity-40 ${
-          danger ? "text-negative-muted hover:bg-negative-strong/15" : "text-ink-muted hover:bg-white/10"
+          danger ? "text-negative-muted hover:bg-negative-strong/15" : "text-ink-muted hover:bg-surface-lift/10"
         }`}
       >
         <span className="shrink-0 opacity-80">{icon}</span>

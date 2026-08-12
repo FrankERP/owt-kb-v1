@@ -91,7 +91,7 @@ export default function AudioTransport({
 
       <button
         onClick={onClose}
-        className="-mr-1 shrink-0 rounded-lg p-2 text-mono-500 transition-colors hover:bg-white/5 hover:text-mono-300"
+        className="-mr-1 shrink-0 rounded-lg p-2 text-mono-500 transition-colors hover:bg-surface-lift/5 hover:text-mono-300"
         aria-label={`Cerrar reproductor de ${track.songTitle} — ${track.title}`}
       >
         <CloseIcon />

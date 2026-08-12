@@ -92,6 +92,39 @@
      literal gives Child D nothing to change. */
   --elevation-rgb: 0 0 0;
 
+  /* Two roles Child D adds for the tints Child C left literal.
+     C's reasoning — "white and black are contrast anchors, true in both themes" —
+     holds for the 17 OPAQUE text rows and fails for the alpha-bearing ones. A
+     `bg-white/5` hover is not an anchor, it is a subtle LIFT of whatever surface it
+     sits on, and on a light page a 5% white wash is invisible. The scanner audit is
+     what surfaced this: category 4 had no opacity alternation, so all 24 of these
+     recorded a null alpha and read as opaque. */
+  --surface-lift-rgb: 255 255 255;  /* a subtle lift of the surface beneath */
+  --scrim-rgb: 0 0 0;               /* dims the page behind a modal */
+
+  /* SEVEN white/black usages remain literal, and each is a real anchor rather than a
+     leftover — checked one at a time rather than by rule:
+       - two toggle KNOBS (ChordChart, EmailPrefToggles). A knob is a physical
+         metaphor and stays white in both themes. ChordChart's OFF track is opaque
+         mono-300 and the knob reads at 11.35:1; EmailPrefToggles' was mono-500/40,
+         which composites to a pale grey and put its knob at 2.09:1 — under the 3:1
+         WCAG minimum for a non-text control. That track is now /70, and the knob
+         reads 3.79:1. An earlier note here claimed 7.56:1 for both, which was the
+         figure for an OPAQUE track and true of neither.
+       - one notification count on `bg-negative-strong` — white on red, both themes.
+       - four spinner/icon strokes inside a `bg-scrim` overlay. The scrim is dark in
+         both themes, so white on it is invariant by construction.
+     DARK MODE MOVES SLIGHTLY HERE, and it is worth saying rather than filing under
+     "tokenisation". Nine `text-white` became `text-ink` (#ffffff -> #d7e7f6) and five
+     `text-black` became `text-surface-base` (#000000 -> #010b17). The second is
+     imperceptible; the first is a real, small blue-shift on hover and selected labels
+     in dark. Both are the price of those labels being able to invert at all.
+
+     What did NOT survive: every `text-black` sitting on a coloured fill. Those fills
+     go DARK in light — accent is navy, recency-fg is a dark gold, warning-fg a deep
+     brown — and black on them is unreadable. They became `text-surface-base`, the
+     theme's inverse-of-ink, which is what the accent chips already used. */
+
   /* WHITE AND BLACK ARE NOT ROLES, and Child C decided that deliberately.
      45 rows keep `bg-white`, `text-white`, `bg-black`, `text-black`,
      `border-white`, `border-black` and `stroke-white` as literals.
@@ -278,6 +311,135 @@
    self-activates the theme-parity assertion in `app/utils/__tests__/brandCss.test.ts`. */
 .light {
   color-scheme: light;
+
+  /* ---- Child D: the light counterpart set -------------------------------
+     A REVIVAL, not a new design. The app had a light theme before it was forced
+     dark, and the 246-pair snapshot captured it — 10 roles have a directly
+     recorded counterpart and all 23 composed tokens carry their light half in
+     their :root comment. Where the record is silent the value is hand-designed
+     and contrast-checked; a test asserts every foreground role clears WCAG AA
+     4.5:1 against the page wash.
+
+     The two anchors the evidence gave us: panels were #C8D8EB where dark is
+     #010b17, and the accent was #003572 deep navy where dark is #00bfff cyan.
+     Zero pairs ever used white, so this is a blue-grey light theme rather than
+     a white one, and that is the app's own history rather than a preference.
+
+     TWO DEVIATIONS FROM THE RECORD. The first, and the one that shapes the theme: evidence
+     puts --surface-base at #C8D8EB, but those four sites are PANELS
+     (AvailabilityPanel, SetlistEditor, NavMenu, SongFormModal). A whole page at
+     #C8D8EB is heavy, and in dark the hierarchy runs page-darkest, so light must
+     run page-lightest. The recorded value therefore lands on
+     --surface-raised-alt, where those panels actually live, and the page takes a
+     lighter tint of the same hue.
+
+     The second is narrower and was found in review: three of the four --surface-ink-*
+     composed tokens do NOT use their recorded light half. Read faithfully they would
+     land near 1.2:1 against the text that sits on them, because the recorded value was
+     chosen for a theme whose page was #C8D8EB rather than #EEF3F9. They take light's
+     own ink-muted instead. The fourth, --surface-ink-l40-d100-base, IS faithful — it
+     is a panel rather than text, and reading it nominally produced a mid-grey slab
+     that dropped the text on it to 3.07:1.
+
+     STILL UNREACHABLE. Child E removes forcedTheme="dark"; until then these
+     values are inert and only the theme gallery renders them. */
+
+  --accent-rgb: 0 53 114;                 /* #003572  <- dark 0 191 255 */
+  --accent-deep-rgb: 0 31 63;             /* #001f3f  <- dark 0 53 114 */
+  --ink-rgb: 10 25 41;                    /* #0a1929  <- dark 215 231 246 */
+  --ink-muted-rgb: 31 50 71;              /* #1f3247  <- dark 200 216 235 */
+  --ink-dim-rgb: 74 92 114;               /* #4a5c72  <- dark 127 148 168 */
+  --surface-base-rgb: 238 243 249;        /* #eef3f9  <- dark 1 11 23 */
+  --surface-raised-rgb: 255 255 255;      /* #ffffff  <- dark 13 34 52 */
+  --surface-raised-alt-rgb: 200 216 235;  /* #c8d8eb  <- dark 10 25 41 */
+  --surface-console-rgb: 221 231 243;     /* #dde7f3  <- dark 7 22 36 */
+  --surface-sunken-rgb: 182 202 226;      /* #b6cae2  <- dark 0 31 63 */
+  --warning-fg-rgb: 120 53 15;            /* #78350f  <- dark 245 158 11 */
+  --warning-surface-rgb: 253 240 217;     /* #fdf0d9  <- dark 120 53 15 */
+  --warning-border-rgb: 194 117 26;       /* #c2751a  <- dark 146 64 14 */
+  --info-fg-rgb: 76 29 149;               /* #4c1d95  <- dark 167 139 250 */
+  --info-surface-rgb: 238 231 252;        /* #eee7fc  <- dark 76 29 149 */
+  --info-border-rgb: 124 58 237;          /* #7c3aed  <- dark 91 33 182 */
+  --positive-fg-rgb: 15 107 52;           /* #0f6b34  <- dark 55 245 138 */
+  --negative-fg-rgb: 161 27 27;           /* #a11b1b  <- dark 248 113 113 */
+  --warning-surface-deep-rgb: 252 231 191;/* #fce7bf  <- dark 28 8 0 */
+  --info-surface-deep-rgb: 225 213 250;   /* #e1d5fa  <- dark 30 10 60 */
+  --surface-overlay-rgb: 255 255 255;     /* #ffffff  <- dark 0 22 46 */
+  --surface-overlay-deep-rgb: 251 253 255;/* #fbfdff  <- dark 3 16 31 */
+  --surface-overlay-deepest-rgb: 245 249 253;/* #f5f9fd  <- dark 2 15 28 */
+  --elevation-rgb: 30 41 59;
+  --surface-lift-rgb: 10 25 41;     /* a lift on a light page DARKENS */
+  --scrim-rgb: 0 0 0;               /* black in both: a scrim dims either ground */
+  --chart-lead-rgb: 31 95 168;            /* #1f5fa8  <- dark 55 138 221 */
+  --chart-bgv-rgb: 18 107 78;             /* #126b4e  <- dark 29 158 117 */
+  --chart-coro-rgb: 79 73 168;            /* #4f49a8  <- dark 127 119 221 */
+  --chart-especial-rgb: 168 56 51;        /* #a83833  <- dark 217 83 79 */
+  --chart-instr-rgb: 138 86 15;           /* #8a560f  <- dark 186 117 23 */
+  --chart-foh-rgb: 94 93 88;              /* #5e5d58  <- dark 136 135 128 */
+  --mono-200-rgb: 36 46 60;               /* #242e3c  <- dark 229 231 235 */
+  --mono-300-rgb: 48 59 74;               /* #303b4a  <- dark 209 213 219 */
+  --mono-400-rgb: 60 72 87;              /* #3c4857  <- dark 156 163 175 */
+  --mono-500-rgb: 72 85 102;               /* #485566  <- dark 107 114 128 */
+  --mono-600-rgb: 84 98 116;             /* #546274  <- dark 75 85 99 */
+  --mono-700-rgb: 96 111 129;             /* #606f81  <- dark 55 65 81 */
+  --mono-800-rgb: 209 213 219;            /* #d1d5db  <- dark 31 41 55 */
+  --negative-faint-rgb: 127 29 29;        /* #7f1d1d  <- dark 254 226 226 */
+  --negative-soft-rgb: 153 27 27;         /* #991b1b  <- dark 254 202 202 */
+  --negative-muted-rgb: 185 28 28;        /* #b91c1c  <- dark 252 165 165 */
+  --negative-strong-rgb: 220 38 38;       /* #dc2626  <- dark 239 68 68 */
+  --negative-border-rgb: 239 68 68;       /* #ef4444  <- dark 185 28 28 */
+  --negative-surface-rgb: 254 226 226;    /* #fee2e2  <- dark 153 27 27 */
+  --negative-surface-deep-rgb: 254 202 202;/* #fecaca  <- dark 127 29 29 */
+  --negative-surface-deepest-rgb: 252 165 165;/* #fca5a5  <- dark 69 10 10 */
+  --warning-faint-rgb: 120 53 15;         /* #78350f  <- dark 253 230 138 */
+  --warning-soft-rgb: 146 64 14;          /* #92400e  <- dark 252 211 77 */
+  --warning-strong-rgb: 180 83 9;         /* #b45309  <- dark 251 191 36 */
+  --recency-faint-rgb: 113 63 18;         /* #713f12  <- dark 254 240 138 */
+  --recency-soft-rgb: 133 77 14;          /* #854d0e  <- dark 253 224 71 */
+  --recency-strong-rgb: 150 92 6;         /* #965c06  <- dark 250 204 21 */
+  --recency-fg-rgb: 202 138 4;            /* #ca8a04  <- dark 234 179 8 */
+  --positive-soft-rgb: 20 83 45;          /* #14532d  <- dark 134 239 172 */
+  --positive-strong-rgb: 22 101 52;       /* #166534  <- dark 74 222 128 */
+  --positive-deep-rgb: 21 128 61;         /* #15803d  <- dark 34 197 94 */
+  --availability-faint-rgb: 124 45 18;    /* #7c2d12  <- dark 254 215 170 */
+  --availability-soft-rgb: 154 52 18;     /* #9a3412  <- dark 253 186 116 */
+  --availability-strong-rgb: 194 65 12;   /* #c2410c  <- dark 251 146 60 */
+  --availability-fg-rgb: 234 88 12;       /* #ea580c  <- dark 249 115 22 */
+  --availability-deep-rgb: 249 115 22;    /* #f97316  <- dark 234 88 12 */
+  --badge-violet-fg-rgb: 109 40 217;      /* #6d28d9  <- dark 192 132 252 */
+  --badge-violet-deep-rgb: 124 58 237;    /* #7c3aed  <- dark 168 85 247 */
+  --badge-azure-fg-rgb: 29 78 216;        /* #1d4ed8  <- dark 96 165 250 */
+  --badge-azure-deep-rgb: 37 99 235;      /* #2563eb  <- dark 59 130 246 */
+
+  /* Composed tokens. Each records its light half in the :root comment beside it,
+     naming the role that carries that value IN DARK — so the light block cannot
+     copy the name, it has to ask which role plays that PART in light. Example:
+     a token whose light half is "accent-deep @100%" means the value #003572, and
+     #003572 is --accent here, not --accent-deep. Reading it nominally instead of
+     semantically flips navy for cyan on 36 sites. */
+  --surface-accent-solid: rgb(var(--accent-rgb));               /* light: accent-deep @100% */
+  --surface-accent-30: rgb(var(--accent-rgb) / 0.3);            /* light: accent-deep @30% */
+  --surface-accent-hover: rgb(var(--accent-rgb) / 0.8);         /* light: accent-deep @80% */
+  --edge-accent-subtle: rgb(var(--accent-rgb) / 0.15);          /* light: accent-deep @15% */
+  --surface-accent-20: rgb(var(--accent-rgb) / 0.2);            /* light: accent-deep @20% */
+  --surface-accent-faint: rgb(var(--accent-rgb) / 0.2);         /* light: accent-deep @20% */
+  --surface-accent-wash: rgb(var(--accent-rgb) / 0.1);          /* light: accent-deep @10% */
+  --surface-accent-l20-d60-sunken: rgb(var(--accent-rgb) / 0.2);/* light: accent-deep @20% */
+  --surface-accent-l100-d10: rgb(var(--accent-rgb));            /* light: accent-deep @100% */
+  --surface-accent-l40-d20: rgb(var(--accent-rgb) / 0.4);       /* light: accent-deep @40% */
+  --surface-accent-l30-d25: rgb(var(--accent-rgb) / 0.3);       /* light: accent-deep @30% */
+  --surface-accent-l10-d4: rgb(var(--accent-rgb) / 0.1);        /* light: accent-deep @10% */
+  --surface-ink-l60-d50: rgb(var(--ink-muted-rgb) / 0.6);       /* light: ink-muted @60% */
+  --surface-ink-l40-d100-base: rgb(var(--surface-raised-alt-rgb) / 0.4); /* light: ink-muted @40% */
+  --surface-accent-l25-d20: rgb(var(--accent-rgb) / 0.25);      /* light: accent-deep @25% */
+  --surface-accent-l25-d15: rgb(var(--accent-rgb) / 0.25);      /* light: accent-deep @25% */
+  --surface-ink-l70-d50: rgb(var(--ink-muted-rgb) / 0.7);       /* light: ink-muted @70% */
+  --surface-accent-l15-d4: rgb(var(--accent-rgb) / 0.15);       /* light: accent-deep @15% */
+  --surface-accent-l100-d15: rgb(var(--accent-rgb));            /* light: accent-deep @100% */
+  --surface-ink-l50-d35: rgb(var(--ink-muted-rgb) / 0.5);       /* light: ink-muted @50% */
+  --surface-accent-l5-d3: rgb(var(--accent-rgb) / 0.05);        /* light: accent-deep @5% */
+  --surface-accent-l50-d40: rgb(var(--accent-rgb) / 0.5);       /* light: accent-deep @50% */
+  --surface-accent-l50-d15: rgb(var(--accent-rgb) / 0.5);       /* light: accent-deep @50% */
 }
 
 .brand-atmosphere {

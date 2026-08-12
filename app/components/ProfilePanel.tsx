@@ -40,7 +40,7 @@ function Avatar({
         </div>
       )}
       {onClick && (
-        <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-1 opacity-0 group-hover/av:opacity-100 transition-opacity">
+        <div className="absolute inset-0 bg-scrim/50 flex flex-col items-center justify-center gap-1 opacity-0 group-hover/av:opacity-100 transition-opacity">
           {uploading ? (
             <svg className="animate-spin w-4 h-4 text-white" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
