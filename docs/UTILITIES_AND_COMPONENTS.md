@@ -163,6 +163,22 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   `clearThemeMirror()` runs inside four sign-out `onClick` handlers where a throw would abort
   the handler before `signOut()`.
 
+- **`ui/ThemeControl.tsx`** — the `/me` theme picker. **Three states:** Oscuro, Claro, and
+  *never chosen* (neither button pressed) — an unset `themePref` is Child F's cohort signal
+  and no route can restore it, so the control must not write on mount. Binds to the literal
+  `themePref` from `ThemeBootstrap`'s context, never to `resolvedTheme` (which is `"dark"` for
+  an explicit-Dark member and an unset one alike). **PATCHes first and paints only on
+  `res.ok`** — an optimistic paint whose write failed would strand the member in a theme they
+  never persisted, with no later load able to correct it. Hidden while impersonating.
+
+**Two PWA remnants, recorded together.** `appleWebApp.statusBarStyle` stays
+`black-translucent`: it is what makes the WebView extend under the iOS status bar, and every
+light-appropriate value is non-translucent, so swapping it would collapse
+`env(safe-area-inset-top)` and move `Navbar`/`CueDialog`/`PlannerGrid` on every toggle —
+geometry, not colour. And `manifest.webmanifest`'s `theme_color` is read at install time and
+cannot follow a runtime theme. **So an installed iOS PWA keeps dark chrome in light mode.**
+Both are fixed by the iOS work, not by a colour change.
+
 **Two client-side storage keys**, neither a secret, both persistent state worth not
 "cleaning up": **`theme`** is next-themes' own mirror — a paint cache, not the source of
 truth (`themePref` on the member document is), cleared at sign-out so a shared device does
@@ -223,7 +239,7 @@ Legend: **[C]** client, **[S]** server.
 | `BottomNav` [C] | Mobile bottom tab bar. |
 | `SectionNav` [C] | In-page section anchors. |
 | `Header` [S], `CmsNavbar` [S], `icons.tsx` [S] | Page header / Studio navbar / SVG icons. |
-| `ThemeSwitch` [C], `SignOutButton` [C] | Theme toggle / sign out. |
+| `SignOutButton` [C] | Sign out. Clears the theme mirror first — see `themePref.ts`. (`ThemeSwitch` was deleted in `33c6e15`; the theme picker is now `ui/ThemeControl.tsx` at `/me`.) |
 | `NativeAuthBootstrap` [C] | Native cold-start silent Google re-auth. |
 | `TextScaleBootstrap` [C] / `TextSizeControl` [C] | Apply stored text scale / segmented size control. |
 

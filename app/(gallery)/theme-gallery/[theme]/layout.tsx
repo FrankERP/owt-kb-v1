@@ -9,9 +9,9 @@
 //      `[theme]` and receives `{}` — it could not read the theme at all.
 //   2. It must NOT be nested under `app/(client)`, because next-themes 0.4.6 makes a
 //      nested `ThemeProvider` a literal pass-through (`useContext(L) ? Fragment : X`).
-//      `forcedTheme="dark"` in `app/utils/Provider.tsx` would therefore be
+//      the app provider's own theme in `app/utils/Provider.tsx` would therefore be
 //      un-overridable from inside, and the whole point of this route is to render
-//      BOTH themes while `forcedTheme` is still in force.
+//      BOTH themes regardless of what the app's own provider resolves to.
 //
 // A layout with no `layout.js` above it IS a root layout, so this path is both valid
 // and the only one that works. There is no `app/layout.tsx`; `(admin)` and `(client)`

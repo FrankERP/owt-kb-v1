@@ -96,7 +96,7 @@ describe("theme gallery — the root layout contract", () => {
 
   it("does NOT import Provider — it would fetch on mount and force dark", () => {
     // `(client)/layout.tsx` renders ActivityPing, which fetches. And next-themes 0.4.6
-    // makes a nested ThemeProvider a pass-through, so forcedTheme would be
+    // makes a nested ThemeProvider a pass-through, so the app's theme would be
     // un-overridable — defeating the route's entire purpose.
     expect(layoutCode).not.toMatch(/from ["'].*utils\/Provider["']/);
   });

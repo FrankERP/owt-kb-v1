@@ -46,6 +46,18 @@ describe("Provider.tsx", () => {
   it("keeps enableSystem={false} — Child F owns that flip", () => {
     expect(src).toMatch(/enableSystem=\{false\}/);
   });
+
+  it("has NO forcedTheme — E4's lever, and the whole point of Child E", () => {
+    // Comments stripped: this file explains at length why forcedTheme was removed
+    // and how to roll it back, and the guard must not read that as the attribute.
+    const code = src.replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+    expect(
+      code,
+      "forcedTheme back on ThemeProvider makes light mode unreachable again — " +
+        "which IS the documented rollback, but it must be a deliberate act, not " +
+        "something that creeps back in.",
+    ).not.toMatch(/forcedTheme=/);
+  });
 });
 
 describe("the legacy-mirror reconciliation script", () => {

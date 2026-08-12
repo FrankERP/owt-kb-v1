@@ -27,8 +27,11 @@ export const Provider = ({ children }: Props) => {
         never reaches `resolvedTheme` (it only feeds the applier), so without an
         explicit default `resolvedTheme` reads "light" while the page paints dark —
         and ThemeBootstrap's theme-color swap would write light chrome onto a dark app.
+
+        `forcedTheme` is gone as of Child E4. Rollback is re-adding it here: one
+        line, instant, no data migration — `themePref` simply goes inert again.
       */}
-      <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark" enableSystem={false}>
+      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
         <ThemeBootstrap>
           <PlayerProvider>
             <CueDialogProvider>{children}</CueDialogProvider>

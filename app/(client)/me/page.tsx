@@ -9,6 +9,7 @@ import { DayCard } from "@/app/components/DayCard";
 import NextServiceHero from "@/app/components/NextServiceHero";
 import ProfilePanel from "@/app/components/ProfilePanel";
 import TextSizeControl from "@/app/components/TextSizeControl";
+import ThemeControl from "@/app/components/ui/ThemeControl";
 import AvailabilityCalendar from "@/app/components/AvailabilityCalendar";
 import AddToCalendarButton from "@/app/components/AddToCalendarButton";
 import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
@@ -434,6 +435,7 @@ export default async function MePage() {
 
         {/* Profile settings */}
         {member && <ProfilePanel initialMember={member} />}
+        <ThemeControl />
         <TextSizeControl />
 
       </div>
