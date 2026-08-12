@@ -198,16 +198,21 @@ function rolesIn(selector: string): Map<string, [number, number, number]> {
   return out;
 }
 
-/** The alpha a composed token bakes, read from the declaration itself. */
-function bakedAlpha(token: string): number {
-  const m = CSS.match(new RegExp(`--${token}:\\s*rgb\\(var\\(--([a-z0-9-]+)-rgb\\)\\s*/\\s*([0-9.]+)\\)`));
-  if (!m) throw new Error(`--${token} is not a composed rgb()/alpha token`);
-  return Number(m[2]);
-}
-function bakedRole(token: string): string {
-  const m = CSS.match(new RegExp(`--${token}:\\s*rgb\\(var\\(--([a-z0-9-]+)-rgb\\)`));
-  if (!m) throw new Error(`--${token} has no base role`);
-  return m[1];
+/**
+ * The role and alpha a composed token bakes, read from WITHIN a given block.
+ *
+ * Reading them from the whole file returns the `:root` declaration every time,
+ * because `String.match` without `g` stops at the first hit. The light half of
+ * this guard was then measuring the dark declaration's alpha — so a `.light`
+ * block that softened `--placeholder` to something unreadable would have stayed
+ * green, which is precisely the thing the block below claims to prevent.
+ */
+function bakedIn(selector: string, token: string): { role: string; alpha: number } {
+  const start = CSS.indexOf(selector);
+  const block = CSS.slice(start, CSS.indexOf("\n}", start));
+  const m = block.match(new RegExp(`--${token}:\\s*rgb\\(var\\(--([a-z0-9-]+)-rgb\\)\\s*/\\s*([0-9.]+)\\)`));
+  if (!m) throw new Error(`--${token} is not declared as a composed rgb()/alpha token in ${selector}`);
+  return { role: m[1], alpha: Number(m[2]) };
 }
 
 describe("control affordances clear WCAG in BOTH themes", () => {
@@ -215,12 +220,13 @@ describe("control affordances clear WCAG in BOTH themes", () => {
     ["placeholder", 4.5, "WCAG 1.4.3 — placeholder text"],
     ["edge-control", 3.0, "WCAG 1.4.11 — the only affordance these inputs have"],
   ])("%s", (token, required, why) => {
-    const role = bakedRole(token);
-    const alpha = bakedAlpha(token);
-
-    for (const [theme, selector] of [[":root {", ":root {"], ["light", ".light {"]] as const) {
+    for (const [theme, selector] of [["dark", ":root {"], ["light", ".light {"]] as const) {
+      const { role, alpha } = bakedIn(selector, token);
       const roles = rolesIn(selector);
       const fg = roles.get(role);
+      // Not just `surface-base`. The ratio is a property of the token AND its
+      // ground, and the light `surface-sunken` is the tightest realistic one —
+      // an input placed there is the case a base-only guard would miss.
       const ground = roles.get("surface-base");
       expect(fg, `--${role}-rgb must exist in ${selector}`).toBeDefined();
       expect(ground).toBeDefined();

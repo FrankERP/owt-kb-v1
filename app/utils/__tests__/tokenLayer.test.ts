@@ -384,13 +384,24 @@ function walk(dir: string): string[] {
 function colourKeys(): Set<string> {
   const start = TAILWIND.indexOf("colors: {");
   const block = TAILWIND.slice(start, TAILWIND.indexOf("\n\t\t\t},", start));
-  return new Set([...block.matchAll(/^\s*"([a-z0-9-]+)":/gm)].map((m) => m[1]));
+  // Quoted OR bare: `placeholder: "var(--placeholder)"` is valid TS and the more
+  // natural form, and a parser that only saw quoted keys would make it invisible
+  // to both assertions below — turning a guard into a false pass.
+  return new Set([...block.matchAll(/^\s*"?([a-z0-9-]+)"?\s*:/gm)].map((m) => m[1]));
 }
 
 describe("colour KEYS are colour names, not utility names", () => {
   it("no key begins with a utility prefix", () => {
-    const offenders = [...colourKeys()].filter((k) =>
-      /^(text|bg|border|ring|fill|stroke|divide|outline|shadow|from|via|to)-/.test(k),
+    // UTILITY_PREFIXES, not a second inline list that drifts from it — but a key
+    // is only an offender if it is NOT itself a declared role or token. Several
+    // prefixes double as legitimate colour names here: `accent` is the primary
+    // brand role, so `accent-deep` is a colour, not a mistake. The mistake this
+    // catches is a key naming the utility it will be used with, like the
+    // `text-placeholder` that generated `text-text-placeholder` and emitted
+    // nothing.
+    const declared = new Set<string>([...BASE_ROLES, ...COMPOSED]);
+    const offenders = [...colourKeys()].filter(
+      (k) => !declared.has(k) && UTILITY_PREFIXES.some((p) => k.startsWith(`${p}-`)),
     );
     expect(
       offenders,
@@ -398,6 +409,21 @@ describe("colour KEYS are colour names, not utility names", () => {
         'Keying "text-foo" produces `text-text-foo`, and any class written as ' +
         "`text-foo` then silently emits nothing. Name the key `foo`.",
     ).toEqual([]);
+  });
+
+  it("`border-edge-control` resolves, and the sign-in inputs still use it", () => {
+    // The border was the OTHER measured failure — 1.46 dark / 1.42 light — and
+    // those fields carry no affordance besides it. A rename or typo emits no CSS
+    // and the outline silently disappears; the key-prefix check above catches the
+    // historical mistake, not this direction.
+    expect(colourKeys().has("edge-control")).toBe(true);
+    const signin = readFileSync(
+      path.join(REPO_ROOT, "app/(client)/auth/signin/page.tsx"), "utf8",
+    );
+    expect(
+      (signin.match(/border-edge-control/g) ?? []).length,
+      "both sign-in inputs must carry the token border",
+    ).toBeGreaterThanOrEqual(1);
   });
 
   it("every `placeholder:text-*` class in app/ resolves to a declared colour", () => {
@@ -430,3 +456,37 @@ const BUILTIN_COLOURS = new Set([
   "lime", "green", "emerald", "teal", "cyan", "sky", "blue", "indigo", "violet",
   "purple", "fuchsia", "pink", "rose",
 ]);
+
+
+// ---------------------------------------------------------------------------
+// The lint clause must cover EVERY composed token, not the families that
+// happened to exist when it was written.
+//
+// It enumerates `surface-accent|surface-ink|edge-accent` — the naming families
+// the design spec established. `--edge-control` honours that convention;
+// `--placeholder` deliberately does not, and when both were added the clause
+// silently stopped covering them. An opacity modifier on a composed token is
+// dropped by Tailwind with no error, which is the same no-error, no-failing-test
+// shape that let the first version of this fix ship inert.
+// ---------------------------------------------------------------------------
+describe("the composed-alpha lint clause keeps up with the registry", () => {
+  it("covers every composed token", () => {
+    const config = readFileSync(path.join(REPO_ROOT, "eslint.config.mjs"), "utf8");
+
+    // Pull the token-family alternation out of the selector. Parsing the whole
+    // regex back out of a JS string literal is fiddly and was wrong the first
+    // time; the alternation is the part that actually has to keep up.
+    const m = config.match(/\)-\(([a-z0-9|-]+)\)\[a-z0-9-\]\*/);
+    expect(m, "the composed-alpha clause must still carry a token-family group").toBeTruthy();
+    const families = m![1].split("|");
+
+    const uncovered = COMPOSED.filter((t) => !families.some((f) => t === f || t.startsWith(f)));
+    expect(
+      uncovered,
+      "these composed tokens bake their own alpha, but the lint clause's family " +
+        "list would let an opacity modifier through — and Tailwind drops it " +
+        "silently, so nothing else would catch it. Add them to the alternation " +
+        "in eslint.config.mjs.",
+    ).toEqual([]);
+  });
+});

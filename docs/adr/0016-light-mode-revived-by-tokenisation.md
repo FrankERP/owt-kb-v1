@@ -17,7 +17,7 @@ question this record answers is what changed such that it does not.
 ## Decision
 
 **Colour was tokenised, so a component can no longer name a palette.** 30 base roles plus
-23 composed tokens live in `app/brand.css`, declared once under `:root` and again under
+25 composed tokens live in `app/brand.css`, declared once under `:root` and again under
 `.light`; `tailwind.config.ts` exposes them as utilities. 2,397 colour decisions across the
 app were migrated onto them, and an error-level ESLint clause
 (`eslint.config.mjs:73`) now rejects a raw hex literal anywhere under `app/**/*.{ts,tsx}`.
