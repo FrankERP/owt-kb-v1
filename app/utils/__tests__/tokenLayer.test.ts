@@ -30,7 +30,7 @@
 //   is not generated — a build-time absence, not a silent substitution.
 
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -76,6 +76,12 @@ const COMPOSED = [
   "surface-ink-l70-d50", "surface-accent-l15-d4", "surface-accent-l100-d15",
   "surface-ink-l50-d35", "surface-accent-l5-d3", "surface-accent-l50-d40",
   "surface-accent-l50-d15",
+
+  // Control affordances (2026-08-12). Composed, so alpha-baked and NOT
+  // alpha-capable. One declaration each covers both themes because
+  // `--ink-muted-rgb` inverts — that is the role layer doing its job.
+  "placeholder",
+  "edge-control",
 ] as const;
 
 const UTILITY_PREFIXES = [
@@ -344,3 +350,83 @@ describe("brand.css rule bodies — B2's invariant, which later slices must not 
     expect(bodies).not.toContain("var(--brand-radius-");
   });
 });
+
+// ---------------------------------------------------------------------------
+// The gap that let a "fix" ship inert.
+//
+// `--placeholder` was declared correctly in both blocks and registered in
+// COMPOSED above, so every guard in this file passed. It was keyed in
+// tailwind.config.ts as `"placeholder"` — but `theme.extend.colors` keys are
+// COLOUR names, not utility names, so that generates `text-text-placeholder`.
+// The class actually written at 13 call sites, `placeholder:text-placeholder`,
+// matched no colour named `placeholder` and Tailwind emitted NOTHING. No build
+// error. Every site fell back to preflight `#9ca3af`, which measured 2.12:1 in
+// light — worse than the 3.09:1 the change was fixing.
+//
+// Arithmetic over the CSS variables cannot see this, because the variables were
+// right. These two assertions can.
+// ---------------------------------------------------------------------------
+
+const TAILWIND = readFileSync(path.join(REPO_ROOT, "tailwind.config.ts"), "utf8");
+
+/** Every file under a repo-relative directory. */
+function walk(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(path.join(REPO_ROOT, dir))) {
+    const rel = path.join(dir, entry);
+    if (statSync(path.join(REPO_ROOT, rel)).isDirectory()) out.push(...walk(rel));
+    else out.push(rel);
+  }
+  return out;
+}
+
+/** Every key in `theme.extend.colors`. */
+function colourKeys(): Set<string> {
+  const start = TAILWIND.indexOf("colors: {");
+  const block = TAILWIND.slice(start, TAILWIND.indexOf("\n\t\t\t},", start));
+  return new Set([...block.matchAll(/^\s*"([a-z0-9-]+)":/gm)].map((m) => m[1]));
+}
+
+describe("colour KEYS are colour names, not utility names", () => {
+  it("no key begins with a utility prefix", () => {
+    const offenders = [...colourKeys()].filter((k) =>
+      /^(text|bg|border|ring|fill|stroke|divide|outline|shadow|from|via|to)-/.test(k),
+    );
+    expect(
+      offenders,
+      "A colours key is the COLOUR name — Tailwind prepends the utility itself. " +
+        'Keying "text-foo" produces `text-text-foo`, and any class written as ' +
+        "`text-foo` then silently emits nothing. Name the key `foo`.",
+    ).toEqual([]);
+  });
+
+  it("every `placeholder:text-*` class in app/ resolves to a declared colour", () => {
+    const keys = colourKeys();
+    const used = new Map<string, string[]>();
+    for (const file of walk("app")) {
+      if (!/\.tsx?$/.test(file) || file.includes("__tests__")) continue;
+      const src = readFileSync(path.join(REPO_ROOT, file), "utf8");
+      for (const m of src.matchAll(/placeholder:text-([a-z0-9-]+(?:\/[0-9.[\]%]+)?)/g)) {
+        const name = m[1].split("/")[0];
+        if (!used.has(name)) used.set(name, []);
+        used.get(name)!.push(file);
+      }
+    }
+    const unresolved = [...used.entries()].filter(
+      ([name]) => !keys.has(name) && !BUILTIN_COLOURS.has(name),
+    );
+    expect(
+      unresolved.map(([n, f]) => `${n} (${f.length} site${f.length > 1 ? "s" : ""}: ${f[0]})`),
+      "these placeholder classes name a colour Tailwind does not know, so they " +
+        "emit no CSS and the element falls back to preflight grey",
+    ).toEqual([]);
+  });
+});
+
+/** Tailwind's own palette names, which need no key of ours. */
+const BUILTIN_COLOURS = new Set([
+  "white", "black", "transparent", "current", "inherit",
+  "slate", "gray", "zinc", "neutral", "stone", "red", "orange", "amber", "yellow",
+  "lime", "green", "emerald", "teal", "cyan", "sky", "blue", "indigo", "violet",
+  "purple", "fuchsia", "pink", "rose",
+]);

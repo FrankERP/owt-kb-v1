@@ -134,6 +134,20 @@ const config: Config = {
 				"surface-accent-l5-d3": "var(--surface-accent-l5-d3)",
 				"surface-accent-l50-d40": "var(--surface-accent-l50-d40)",
 				"surface-accent-l50-d15": "var(--surface-accent-l50-d15)",
+
+				// Control affordances. COMPOSED, so not alpha-capable — an opacity
+				// modifier on one double-applies the baked alpha and the lint clause
+				// bans it. Added after a measured WCAG failure; see brand.css.
+				// THE KEY IS THE COLOUR NAME, NOT THE UTILITY NAME. This one shipped wrong
+				// once: it was keyed `text-placeholder`, which generates the utility
+				// `text-text-placeholder`. The class written at 13 call sites is
+				// `placeholder:text-placeholder` — it matched no colour called `placeholder`,
+				// so Tailwind emitted NOTHING. No build error, no failing test: every site
+				// silently fell back to preflight #9ca3af, which measured 2.12:1 in light,
+				// WORSE than the 3.09 the change was meant to fix. Guarded now by
+				// tokenLayer.test.ts, which rejects any key starting with a utility prefix.
+				"placeholder": "var(--placeholder)",
+				"edge-control": "var(--edge-control)",
 			},
 			fontFamily: {
 				display: ["var(--font-display)", "sans-serif"],

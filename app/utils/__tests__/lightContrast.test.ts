@@ -168,3 +168,76 @@ describe("light theme — WCAG AA contrast", () => {
     expect(ratio).toBeLessThan(4.5);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The two control affordances, pinned in BOTH themes.
+//
+// These existed as `ink-dim/70` (placeholder) and `ink-dim/25` (input border)
+// and were measured failing in both themes on the sign-in page — the one screen
+// every member sees before they can see anything else:
+//
+//   placeholder   3.55:1 dark   3.09:1 light   against 4.5 (WCAG 1.4.3)
+//   input border  1.46:1 dark   1.42:1 light   against 3.0 (WCAG 1.4.11)
+//
+// They are composed tokens now, so the ratio is a property of the token rather
+// than of each call site, and pinning it here means a future alpha tweak has to
+// argue with a number instead of slipping through.
+//
+// The border matters as much as the text: those fields carry no affordance other
+// than the border, so a member cannot tell where the control is without it.
+// ---------------------------------------------------------------------------
+
+/** Both blocks' triplets — the light guard above reads only `.light`. */
+function rolesIn(selector: string): Map<string, [number, number, number]> {
+  const start = CSS.indexOf(selector);
+  const block = CSS.slice(start, CSS.indexOf("\n}", start));
+  const out = new Map<string, [number, number, number]>();
+  for (const m of block.matchAll(/--([a-z0-9-]+)-rgb:\s*(\d+)\s+(\d+)\s+(\d+)\s*;/g)) {
+    out.set(m[1], [Number(m[2]), Number(m[3]), Number(m[4])]);
+  }
+  return out;
+}
+
+/** The alpha a composed token bakes, read from the declaration itself. */
+function bakedAlpha(token: string): number {
+  const m = CSS.match(new RegExp(`--${token}:\\s*rgb\\(var\\(--([a-z0-9-]+)-rgb\\)\\s*/\\s*([0-9.]+)\\)`));
+  if (!m) throw new Error(`--${token} is not a composed rgb()/alpha token`);
+  return Number(m[2]);
+}
+function bakedRole(token: string): string {
+  const m = CSS.match(new RegExp(`--${token}:\\s*rgb\\(var\\(--([a-z0-9-]+)-rgb\\)`));
+  if (!m) throw new Error(`--${token} has no base role`);
+  return m[1];
+}
+
+describe("control affordances clear WCAG in BOTH themes", () => {
+  it.each([
+    ["placeholder", 4.5, "WCAG 1.4.3 — placeholder text"],
+    ["edge-control", 3.0, "WCAG 1.4.11 — the only affordance these inputs have"],
+  ])("%s", (token, required, why) => {
+    const role = bakedRole(token);
+    const alpha = bakedAlpha(token);
+
+    for (const [theme, selector] of [[":root {", ":root {"], ["light", ".light {"]] as const) {
+      const roles = rolesIn(selector);
+      const fg = roles.get(role);
+      const ground = roles.get("surface-base");
+      expect(fg, `--${role}-rgb must exist in ${selector}`).toBeDefined();
+      expect(ground).toBeDefined();
+
+      // Composite the token over the page wash before measuring — reading a
+      // translucent value as opaque is the mistake that made this whole class of
+      // failure invisible for so long.
+      const composited = fg!.map((c, i) => c * alpha + ground![i] * (1 - alpha)) as
+        [number, number, number];
+      const r = contrast(composited, ground!);
+
+      expect(
+        r,
+        `--${token} is ${r.toFixed(2)}:1 in ${theme} against --surface-base; ` +
+          `needs ${required} (${why}). It was raised here after a measured failure — ` +
+          `if you are lowering the alpha, you are undoing that.`,
+      ).toBeGreaterThanOrEqual(required);
+    }
+  });
+});

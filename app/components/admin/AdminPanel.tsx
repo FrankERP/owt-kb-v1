@@ -771,7 +771,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
           <input
-            className="w-full bg-transparent py-2.5 pl-9 pr-8 font-body text-sm placeholder:text-ink-dim/40 focus:outline-none"
+            className="w-full bg-transparent py-2.5 pl-9 pr-8 font-body text-sm placeholder:text-placeholder focus:outline-none"
             placeholder="Buscar por nombre, alias o email…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}

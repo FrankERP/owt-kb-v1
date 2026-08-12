@@ -127,7 +127,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar..."
-              className="w-36 bg-transparent py-2 pl-8 pr-8 font-label text-sm text-ink placeholder:text-ink-dim/45 focus:outline-none sm:w-48"
+              className="w-36 bg-transparent py-2 pl-8 pr-8 font-label text-sm text-ink placeholder:text-placeholder focus:outline-none sm:w-48"
             />
             <svg
               className="absolute left-2.5 top-1/2 -translate-y-1/2 text-mono-600 pointer-events-none"
