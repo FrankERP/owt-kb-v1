@@ -201,7 +201,7 @@ export const CARD_ACCENT: Record<ServiceType, string> = {
 
 export const CARD_ACCENT_MUTED: Record<ServiceType, string> = {
   sunday_role: "text-accent/70",
-  saturday_role: "text-warning-fg/70",
+  saturday_role: "text-warning-fg/80",
   special_role: "text-info-fg/70",
 };
 

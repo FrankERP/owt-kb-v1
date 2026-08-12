@@ -289,7 +289,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
               )}
             </div>
 
-            <p className="font-label text-xs capitalize text-ink-muted/60">{identity.dateText}</p>
+            <p className="font-label text-xs capitalize text-ink-muted/70">{identity.dateText}</p>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               <span
                 className={`rounded-full px-2 py-0.5 font-label text-[11px] uppercase tracking-widest ${SERVICE_BADGE[role._type]}`}
@@ -303,7 +303,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                 className="!py-0.5"
               />
               {identity.relative && (
-                <span className="font-label text-[11px] uppercase tracking-widest text-ink-muted/60">
+                <span className="font-label text-[11px] uppercase tracking-widest text-ink-muted/70">
                   {identity.relative}
                 </span>
               )}
@@ -833,7 +833,7 @@ function MenuItem({
       </button>
       {disabled && gate?.reason && (
         // `role="none"` so this explanatory line is not read as a menu item.
-        <p role="none" className={`px-3 pb-1.5 font-body text-[11px] text-warning-strong/80 ${CARD_STYLE.longText}`}>
+        <p role="none" className={`px-3 pb-1.5 font-body text-[11px] text-warning-strong ${CARD_STYLE.longText}`}>
           {gate.reason}
         </p>
       )}

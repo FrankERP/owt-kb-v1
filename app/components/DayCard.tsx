@@ -40,7 +40,7 @@ const SATURDAY_THEME = {
   headerBg:     "bg-warning-surface-deep",
   headerBorder: "border-warning-fg",
   accent:       "text-warning-fg",
-  accentMuted:  "text-warning-fg/70",
+  accentMuted:  "text-warning-fg/80",
   accentVar:    "--warning-fg-rgb",
 };
 
@@ -101,7 +101,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                 {day}
               </h3>
               {date && (
-                <p className="mt-2 truncate font-body text-xs capitalize text-ink/55 md:text-sm">
+                <p className="mt-2 truncate font-body text-xs capitalize text-ink/60 md:text-sm">
                   {new Date(date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-ES", {
                     weekday: "long", year: "numeric", month: "long", day: "numeric",
                   })}

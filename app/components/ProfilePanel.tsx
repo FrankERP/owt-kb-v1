@@ -35,7 +35,7 @@ function Avatar({
         // eslint-disable-next-line @next/next/no-img-element
         <img src={photoUrl} alt={name} className="w-full h-full object-cover" />
       ) : (
-        <div className="w-full h-full bg-surface-accent-l100-d10 flex items-center justify-center">
+        <div className="w-full h-full bg-surface-accent-l100-d10 text-on-fill flex items-center justify-center">
           <span className={`font-display ${textSize} text-accent`}>{initials}</span>
         </div>
       )}
@@ -301,7 +301,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
             <button
               onClick={handleSaveProfile}
               disabled={savingProfile}
-              className="w-full py-2.5 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+              className="w-full py-2.5 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
             >
               {savingProfile ? "Guardando…" : "Guardar cambios"}
             </button>
@@ -339,7 +339,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
             <button
               onClick={handleSavePassword}
               disabled={savingPw || !newPw}
-              className="w-full py-2.5 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+              className="w-full py-2.5 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
             >
               {savingPw ? "Guardando…" : member.hasPassword ? "Actualizar contraseña" : "Establecer contraseña"}
             </button>

@@ -146,7 +146,7 @@ export default function AvailabilityPanel() {
               onClick={() => setViewMode(v)}
               className={`px-3 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
                 viewMode === v
-                  ? "bg-surface-accent-solid text-accent"
+                  ? "bg-surface-accent-solid text-on-fill"
                   : "text-mono-500 hover:text-accent"
               }`}
             >
@@ -246,7 +246,7 @@ export default function AvailabilityPanel() {
                         <div className="pl-5 space-y-0.5">
                           {datesWithNotes.map(d => (
                             <p key={d} className="font-body text-xs italic text-mono-500 leading-snug">
-                              <span className="not-italic font-label uppercase tracking-widest text-warning-strong/80">{fmtDate(d)}:</span>{" "}
+                              <span className="not-italic font-label uppercase tracking-widest text-warning-strong">{fmtDate(d)}:</span>{" "}
                               &quot;{noteMap.get(d)}&quot;
                             </p>
                           ))}

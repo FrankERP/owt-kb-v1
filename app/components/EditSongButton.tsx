@@ -231,7 +231,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
           ref={triggerRef}
           type="button"
           onClick={handleOpen}
-          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full border border-accent/30 bg-surface-accent-solid px-4 py-2.5 font-label text-xs uppercase tracking-widest shadow-lg transition-colors hover:bg-accent-deep/80 dark:hover:bg-accent/30"
+          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full border border-accent/30 bg-surface-accent-solid text-on-fill px-4 py-2.5 font-label text-xs uppercase tracking-widest shadow-lg transition-colors hover:bg-accent-deep/80 dark:hover:bg-accent/30"
           aria-label={`Editar canción ${post.title}`}
         >
           <PencilIcon />

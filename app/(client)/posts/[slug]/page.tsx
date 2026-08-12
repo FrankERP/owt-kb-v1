@@ -195,7 +195,7 @@ const Page = async ({ params }: Params) => {
           {post?.authors && post.authors.length > 0 ? (
             <div className="mb-9 mt-4 flex flex-wrap justify-center gap-x-2 gap-y-1">
               {post.authors.map((a, i) => (
-                <span key={a._id} className="font-body text-lg text-ink-muted/60">
+                <span key={a._id} className="font-body text-lg text-ink-muted/70">
                   <Link href={`/author/${a.slug.current}`} className="hover:text-accent transition-colors">
                     {a.name}
                   </Link>

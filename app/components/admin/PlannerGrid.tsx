@@ -1673,7 +1673,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
           <button
             type="button"
             onClick={closePicker}
-            className="min-h-[44px] min-w-[44px] shrink-0 font-label text-xs uppercase tracking-widest text-ink-muted/60 hover:text-ink"
+            className="min-h-[44px] min-w-[44px] shrink-0 font-label text-xs uppercase tracking-widest text-ink-muted/70 hover:text-ink"
           >
             Cerrar
           </button>
@@ -1802,7 +1802,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             type="button"
             onClick={handleAutoClick}
             disabled={!!autoState.disabledReason || autoState.pending}
-            className="min-h-[44px] rounded-lg bg-surface-accent-solid px-4 font-label text-xs uppercase tracking-widest transition-colors hover:bg-accent-deep/80 disabled:opacity-50 dark:hover:bg-accent/30"
+            className="min-h-[44px] rounded-lg bg-surface-accent-solid text-on-fill px-4 font-label text-xs uppercase tracking-widest transition-colors hover:bg-accent-deep/80 disabled:opacity-50 dark:hover:bg-accent/30"
           >
             {autoState.pending ? "Calculando..." : "🤖 Auto-asignar con Solver"}
           </button>
@@ -1856,7 +1856,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             <button
               type="button"
               onClick={confirmAuto}
-              className="min-h-[44px] rounded-lg bg-surface-accent-solid px-3 font-label text-xs uppercase tracking-widest"
+              className="min-h-[44px] rounded-lg bg-surface-accent-solid text-on-fill px-3 font-label text-xs uppercase tracking-widest"
             >
               Confirmar
             </button>

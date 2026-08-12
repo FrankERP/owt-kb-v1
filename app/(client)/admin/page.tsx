@@ -35,7 +35,7 @@ export default async function AdminPage() {
           </div>
           <div className="flex items-center gap-2 self-start rounded-full border border-positive-fg/20 bg-positive-fg/[0.055] px-3 py-1.5 sm:self-auto">
             <span className="h-1.5 w-1.5 rounded-full bg-positive-fg shadow-[0_0_10px_rgb(var(--positive-fg-rgb)/0.8)]" />
-            <span className="font-label text-[10px] uppercase tracking-[0.2em] text-positive-fg/80">Acceso autorizado</span>
+            <span className="font-label text-[10px] uppercase tracking-[0.2em] text-positive-fg/90">Acceso autorizado</span>
           </div>
         </header>
         <div className="brand-admin-shell">

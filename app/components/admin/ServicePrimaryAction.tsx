@@ -52,7 +52,7 @@ export default function ServicePrimaryAction({
         {action.label}
       </button>
       {action.reason && (
-        <p className={`font-body text-[11px] text-warning-strong/90 ${CARD_STYLE.longText}`}>
+        <p className={`font-body text-[11px] text-warning-strong ${CARD_STYLE.longText}`}>
           {action.reason}
         </p>
       )}

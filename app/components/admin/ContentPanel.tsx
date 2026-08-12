@@ -184,7 +184,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
         </div>
         <button
           onClick={() => { setModalError(null); setModal({ type: "add" }); }}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors"
         >
           <span className="text-base leading-none">+</span>
           Agregar
