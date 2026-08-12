@@ -25,9 +25,10 @@ No secrets, credentials or personal data appear here.
   very nearly the entire team and F is what makes their phones follow iOS.
 - **Safe ending state:** every member who has chosen keeps exactly what they chose; every
   member who has not follows their device, and can still pin either theme at `/me`.
-- **Rollback:** `defaultTheme` back to `"dark"` and `enableSystem` back to `false` — but
-  see **Rollback is not one line any more**, below. It is one *decision* and four edits,
-  and getting it wrong is worse than not rolling back.
+- **Rollback:** move the three default copies back to `"dark"` and **leave `enableSystem`
+  true** — see **Rollback is not one line any more**, below. Taking `enableSystem` back as
+  well is a four-step sequence involving a client-side reconciliation that must *deploy*
+  first; improvised, it lands every Seguir-sistema member in a class-less document.
 
 ## What ships
 
@@ -38,7 +39,7 @@ No secrets, credentials or personal data appear here.
 | 3 | The repair's fallback moves `"dark"` → `"system"` | `app/components/ThemeBootstrap.tsx` |
 | 4 | The migration script's `catch` resolves the OS instead of hardcoding dark | `app/utils/themePref.ts` |
 | 5 | A third option, **"Seguir sistema"**, and it becomes the *unset* rendering | `app/components/ui/ThemeControl.tsx` |
-| 6 | The Spanish announcement — an in-app banner on `/me` (Q2's bounded default) | `app/components/ui/ThemeAnnouncement.tsx` (new), rendered in `app/(client)/me/page.tsx` |
+| 6 | The Spanish announcement — an in-app banner on `/me` (Q2's bounded default). **Ships in F2, with the flip that makes its copy true** | `app/components/ui/ThemeAnnouncement.tsx` (new), rendered in `app/(client)/me/page.tsx` |
 | 7 | **ADR-0008 superseded in full**, carrying the §4.1 record | `docs/adr/0008-forced-dark-theme.md` + a new ADR |
 
 Documentation, same delivery:
@@ -49,6 +50,7 @@ Documentation, same delivery:
 | D-b | The route's literal set gains `"system"` | `API_REFERENCE.md` |
 | D-c | The provider stack line, and the default | `UTILITIES_AND_COMPONENTS.md` + `CLAUDE.md`/`AGENTS.md` (**both**, same commit) |
 | D-d | Parent §12's three F rows and §14 marked delivered | the parent scope spec |
+| D-e | The provider-stack line's "dark-default" | `ROUTES.md:23` — named in §12's docs row and missed by the first draft of this table |
 
 ## The `enableSystem` flip is the whole mechanism, not a label
 
@@ -117,8 +119,14 @@ document class-less — the exact failure the line exists to prevent.
 
 ## `"system"` becomes a legal stored value, and what that means for `themePref`
 
-`isThemePref` and the route's literal set gain `"system"`. A member who picks **Seguir
-sistema** stores `themePref: "system"` — that is a *choice*, recorded as one.
+`isThemePref` gains `"system"`, and because `PATCH /api/me/theme` validates only through
+that helper, the route moves with it — no second edit. A member who picks **Seguir sistema**
+stores `themePref: "system"` — that is a *choice*, recorded as one.
+
+**One thing does not move for free:** the route's 400 body is the hardcoded string
+`'theme must be "dark" or "light"'`, which `isThemePref` does not drive. It is a fourth copy
+of the literal set and goes stale silently — not a behaviour bug, just a lie in an error
+message. F derives it from the accepted set instead.
 
 **After F, unset and `"system"` behave identically, and that convergence is the point.**
 Invariant 14 existed so that F could tell "never chose" from "chose dark"; once the default
@@ -190,34 +198,89 @@ Seguir sistema lands in a class-less document**, silently.
 1. Revert `defaultTheme` to `"dark"` and the two other default copies with it.
 2. Leave **`enableSystem={true}`**. It is harmless with a dark default, and it is the only
    thing keeping stored `"system"` values renderable.
-3. Only if `enableSystem` must also go back: first migrate stored `"system"` values to
-   `"dark"` (a `--apply`-guarded script under `scripts/`, production Sanity writes needing
-   explicit consent per CLAUDE.md), and only then flip it.
+3. Only if `enableSystem` must also go back — and this is the step that turns a rollback
+   into an incident if improvised:
 
-Step 3 is the one that turns a rollback into an incident if improvised. Written here so it
-never has to be.
+   **Migrating Sanity is necessary and NOT sufficient, because the seed does not read
+   Sanity.** The pre-hydration seed is
+   `let r = localStorage.getItem(s) || n, y = u && r === "system" ? a() : r` — it consults
+   the **`localStorage` mirror**. `setTheme("system")` writes `"system"` into that mirror,
+   and nothing clears it except sign-out or the unset repair. So a `--apply` script that
+   rewrites every `themePref: "system"` to `"dark"` and then flips `enableSystem` still
+   leaves those browsers seeding `"system"` with `u` now false → `classList.add("system")`
+   after stripping `light`/`dark`. The class-less document, silently, on first paint. The
+   exact failure this section exists to prevent.
+
+   **And the mirror population is strictly LARGER than the chose-system population.** The
+   storage listener is `c.newValue ? r(c.newValue) : f(u)`: when any tab removes the key —
+   a sign-out elsewhere, or `ThemeBootstrap`'s own `clearThemeMirror()` — every other open
+   tab writes `defaultTheme` back, which after F2 is `"system"`, **for members who never
+   chose anything.** A Sanity-only migration cannot see them at all.
+
+   So the order is:
+
+   a. Bump `THEME_MIGRATED_KEY` to `owt-theme-migrated-v2` and extend
+      `THEME_MIGRATION_SCRIPT` to normalise a `"system"` mirror to the reverted default.
+      Because the key changed, it re-runs once per browser.
+   b. **Ship and deploy (a), and let it reach the team**, before touching `enableSystem`.
+   c. Migrate `themePref: "system"` → `"dark"` in Sanity — a `--apply`-guarded script under
+      `scripts/`, run with `node --env-file=.env.local`, production writes needing explicit
+      user consent per CLAUDE.md.
+   d. Only now flip `enableSystem` to `false`.
+
+   Steps (a) and (b) are the ones an improvised rollback skips, and skipping them is what
+   produces the class-less document. Written here so it never has to be worked out under
+   pressure.
+
+**One cosmetic consequence of a step-1/2 rollback, stated so it is not mistaken for a bug:**
+F2 binds *unset* to a selected **Seguir sistema** button. Revert the default to `"dark"` and
+unset means dark again, while the control still shows Seguir sistema as chosen. It
+self-corrects the moment the member taps anything, and stored `"system"` still resolves
+because step 2 leaves `enableSystem` true. Fixing the label is a fourth edit, and worth
+making if the rollback is expected to last more than a day.
 
 ## Slicing
 
 | Slice | Content | Visible? |
 |---|---|---|
-| **F1** | `"system"` joins the literal set; the control's third option; the announcement component — all behind the still-`"dark"` default | no — nothing changes for a member who does not open `/me` |
-| **F2** | **The default moves**: `enableSystem={true}`, `defaultTheme="system"`, and the other two copies | **YES — the whole team** |
+| **F1** | `"system"` joins the accepted literal set — **nothing else** | no — invisible; no UI offers the value and no default produces it |
+| **F2** | **The default moves**: `enableSystem={true}`, `defaultTheme="system"`, the other two copies, **the third button, and the announcement** | **YES — the whole team** |
 | **F3** | ADR supersession + the doc pass | no |
 
-**F1 is genuinely inert and F2 is the entire risk.** A member who opens `/me` during F1 can
-choose Seguir sistema and it will work — `enableSystem` is still false, so… **no. It will
-not, and that is F1's one real hazard.** Offering the option before the flip is exactly the
-§9 landmine. **So F1 ships the literal set and the announcement but NOT the third button**;
-the button lands in F2 with the flip, the same way Child E held its control back until the
-`forcedTheme` removal. F1 is then inert for real.
+**F1 is one line, and everything else waits for the flip.** Two things had to be pulled out
+of it, for the same reason twice:
+
+- **The third button.** Offering Seguir sistema before `enableSystem` is true is the §9
+  landmine — the member picks it, the app paints nothing, Sanity stores `"system"`, and
+  nothing logs.
+- **The announcement.** Its copy says *"La app sigue el modo claro u oscuro de tu
+  teléfono"*, which is simply **false until F2 lands**, and F1 withholds the button, so a
+  member who reads it cannot even act on it. `/me` is exactly where members go, so "inert
+  unless they open `/me`" is not inertness for a banner that lives on `/me`.
+
+Both land in F2, with the flip that makes them true — the same shape as Child E holding its
+control back until the `forcedTheme` removal. **F1 then genuinely changes nothing:** the
+widened literal set is unreachable, because no UI offers `"system"` and no default produces
+it.
 
 ## Verification
 
 - **Source-text on `Provider.tsx`:** `enableSystem={true}` and `defaultTheme="system"`.
-- **A guard that all THREE default copies agree**, by construction rather than by eye — a
-  test that reads the three sites and asserts a single value across them. This is the guard
-  Child E's plan asked F to have, and the one that catches the silent partial rollout.
+- **A guard that all THREE default copies agree** — the guard Child E's plan asked F to
+  have, and the one that catches the silent partial rollout. **It cannot assert a single
+  shared literal**, because after F site 3 encodes the default as a `matchMedia` resolution
+  rather than a string. So it asserts, per site: (1) `Provider.tsx` declares
+  `defaultTheme="system"`; (2) `ThemeBootstrap`'s repair calls `setTheme("system")`; (3) the
+  migration script's `catch` resolves via `matchMedia` and hardcodes **no** theme literal.
+  Written this way it still fails the moment one site is left behind, which is the whole
+  job.
+- **The four existing guards F must INVERT, named so they are expected rather than
+  debugged.** They fail the instant F2 lands, loudly, which is correct — but an implementer
+  should know they are the plan working, not a regression:
+  `themeWiring.test.ts:29` (`defaultTheme="dark"`), `themeWiring.test.ts:46`
+  (`enableSystem={false}` — its own message already says "Child F owns that flip"),
+  `themePrefModule.test.ts:75` (`"system"` is rejected), and
+  `themePrefModule.test.ts:100-104` (the `catch` adds `"dark"`).
 - **`isThemePref("system")` is true**, and the route accepts it (a route test), and rejects
   everything else still.
 - **The control renders Seguir sistema as selected for BOTH unset and `"system"`**, and
@@ -233,10 +296,33 @@ the button lands in F2 with the flip, the same way Child E held its control back
   had no credentials), so **F inherits it in full** and it is the acceptance gate, not a
   formality.
 - `npx tsc --noEmit`, `npm test`, `npx eslint .` at 0 errors, per slice.
-- **The stale claims F creates**, swept the same way E's were — re-run
-  `grep -rn -i "dark-mode only\|unset resolves to dark\|defaultTheme" app CLAUDE.md AGENTS.md docs/*.md`
-  rather than trusting a list. E left `CLAUDE.md:8` reading "unset resolves to dark", which
-  F falsifies.
+- **The stale claims F creates.** Child E learned this the hard way over four rounds: a
+  claim F falsifies need not contain the word `defaultTheme`, and a list assembled from
+  memory is always short. So the sweep is the command, and the list below is its **output**:
+
+  ```
+  grep -rn -i "dark-default\|unset member\|resolves to dark\|unset resolves\|dark-mode only\|
+               Two client-side storage keys\|defaultTheme\|forcedTheme" \
+    app CLAUDE.md AGENTS.md docs/*.md docs/adr/*.md
+  ```
+
+  Note `docs/adr/*.md` explicitly — the earlier pattern's `docs/*.md` does not descend, and
+  the superseded record lives there. Dated design records under `docs/superpowers/` stay
+  historical, as in E.
+
+  | # | Site | Why F falsifies it |
+  |---|---|---|
+  | 1 | `CLAUDE.md:8` + `AGENTS.md:8` | "unset resolves to dark". **Both, same commit** — `agentDocsParity.test.ts` |
+  | 2 | `app/brand.css:363-364` | "unset still resolves to dark, so nobody who opts into nothing sees a change" |
+  | 3 | `docs/ROUTES.md:23` | "ThemeProvider **dark-default**". §12's docs row names `ROUTES.md`, and this was missing from the doc table entirely — now **D-e** |
+  | 4 | `app/(client)/layout.tsx:45` | "it is what an unset member keeps" — after F an unset member on a light device does not keep it |
+  | 5 | `app/components/ThemeBootstrap.tsx:126-127` | "an unset member (who resolves to dark)" |
+  | 6 | `app/components/ThemeBootstrap.tsx:115` | "the THIRD copy of the dark default" — the copies survive, their *value* does not |
+  | 7 | `app/utils/Provider.tsx:18-34` | the whole `defaultTheme="dark"` rationale block, including its rollback note |
+  | 8 | `app/utils/themePref.ts:66,74` | the `catch`-body rationale and "Child F must change all three", now past tense |
+  | 9 | `app/components/ui/ThemeControl.tsx:51` | "an unset member is never overridden" |
+  | 10 | `docs/UTILITIES_AND_COMPONENTS.md:147` | **already stale since E4** — still lists `forcedTheme="dark"` on the provider stack. D-c rewrites the line; fixed deliberately rather than incidentally |
+  | 11 | `docs/UTILITIES_AND_COMPONENTS.md:182` | "**Two** client-side storage keys" — F adds `owt-theme-announced` as a third |
 
 ## Risks
 
