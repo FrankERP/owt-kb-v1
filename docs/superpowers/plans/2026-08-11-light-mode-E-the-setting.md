@@ -15,7 +15,7 @@ No secrets, credentials or personal data appear here.
 - **Document status:** Draft — not reviewed, not approved, not authorization to implement.
 - **Requirement source:** [parent scope spec](../specs/2026-08-07-light-mode-member-first-scope.md)
   — the Child E row of §8's table (`:299`); §12's coverage table; requirements D5, D7, D12,
-  D11, D14, **D15**; invariants **13**, 14, 16 and 17; assumptions A5 and A6; §9's landmines.
+  D11, D14, **D15**; invariants **13**, 14, 16, 17 and **18**; assumptions A5 and A6; §9's landmines.
 - **Risk tier: CRITICAL — two sequential fresh `APPROVED` verdicts on byte-identical text.**
   Not because it is large; it is the smallest child by line count. Because it:
   - ships a **mutating production write route** (`PATCH /api/me/theme`) against the real
@@ -48,7 +48,7 @@ Documentation, in the same delivery:
 | # | Doc change | Where |
 |---|---|---|
 | D-a | `themePref` field | `DATA_MODEL.md` (E1) |
-| D-b | The write route and the projection | `API_REFERENCE.md` + `ROUTES.md` (E2) |
+| D-b | The write route (E2); **the projection's new field (E3, with the code)** — documenting it at E2 would describe a field the endpoint does not yet return | `API_REFERENCE.md` + `ROUTES.md` |
 | D-c | `themePref.ts` + `ThemeBootstrap` (E3); `ThemeControl` (E4) | `UTILITIES_AND_COMPONENTS.md` |
 | D-d | The two client-side keys — `"theme"` (next-themes' mirror) and `owt-theme-migrated` (the one-time flag). Neither is a secret; both are persistent state a later hand would otherwise "clean up" | `UTILITIES_AND_COMPONENTS.md`, beside `themePref` |
 | D-e | **ADR-0008 interim Consequences note** — precondition met, lever pulled in E4; full supersession stays Child F's | `docs/adr/0008-forced-dark-theme.md` (E4) |
@@ -318,11 +318,46 @@ code. So:
 ### The multi-tab caveat
 
 The provider's storage listener is
-`key === "theme" && (newValue ? set(newValue) : setTheme(default))`, so a `removeItem` — in
-this script **or** in `clearThemeMirror()` at sign-out — makes every *other* open tab write
-`theme="dark"` straight back. Visually safe, since dark is the default anyway, but it means
-"no mirror" is not an absolute guarantee on a multi-tab device. **Child F must not treat
-mirror-absence as authoritative**; `themePref` being unset is the authoritative signal.
+`key === "theme" && (newValue ? set(newValue) : setTheme(defaultTheme))`, so a `removeItem`
+makes every *other* open tab write its `defaultTheme` straight back. **What that value is
+depends on which bundle the other tab is running, and at exactly one moment it is `"light"`.**
+
+- **`clearThemeMirror()` at sign-out** — every tab is on E3-or-later, `defaultTheme="dark"`,
+  so the writeback is `"dark"`. Visually safe; dark is the default anyway.
+- **The migration script** — this is the dangerous one. It runs **once per browser, on the
+  first document load after E3 deploys**, so any other tab still open is by construction
+  running the **pre-E3** bundle, where `Provider.tsx` passes `enableSystem={false}` and no
+  `defaultTheme` and the listener's `setTheme(defaultTheme)` is therefore
+  **`setTheme("light")`** — which writes `theme="light"` straight back into the key the
+  script just cleared.
+
+That member is then worse off than before: `resolvedTheme === "light"` in E3 while
+`forcedTheme` paints dark, so the `theme-color` swap writes `#eef3f9` onto a dark page; and at
+E4 they are terminally stranded in light — the exact failure the reconciliation exists to
+prevent — with `owt-theme-migrated` already `"1"`, so the script can never repair it. The
+cohort is the legacy-mirror population intersected with "had a tab open across one deploy",
+which on a phone-first PWA is not hypothetical. (`removeItem` on an absent key fires no
+storage event, so mirror-less members are untouched; this is specific to the legacy cohort.)
+
+**So the one-shot flag is not the durable guarantee — `ThemeBootstrap` is.** The invariant is
+re-asserted on every load rather than once per browser:
+
+> when the projection returns **unset** and a mirror is nonetheless present, `ThemeBootstrap`
+> calls `setTheme(defaultTheme)` and then `clearThemeMirror()`, in that order.
+
+The order matters. `setTheme("dark")` first makes next-themes' own state truthful and paints
+the correct class; `clearThemeMirror()` then removes the key it just wrote, so the member ends
+on dark with **no mirror** — the property F depends on. Doing only the `removeItem` would
+leave next-themes holding `"light"` internally, and doing only the `setTheme` would pin the
+unset population to a `"dark"` mirror and quietly defeat F's rollout.
+
+This costs an unset member with no mirror nothing: the condition is never true for them. It
+subsumes the flag for repair purposes — a re-poisoned mirror is cleared on the very next load
+— while the pre-hydration script still earns its place, because without it the legacy member
+sees a light **first paint** before any React code runs.
+
+**Child F must still not treat mirror-absence as authoritative**; `themePref` being unset is
+the authoritative signal.
 
 ## The write route
 
@@ -387,6 +422,8 @@ writeClient.patch(session.user.sanityId).set({ themePref: theme }).commit()
   argument is checkable rather than asserted. Calling `revalidateServiceViews()` here would
   invalidate the whole schedule for a colour change. Stated rather than omitted, because "a
   mutating route with no revalidate" is exactly the shape that invariant exists to catch.
+  **That invariant is 18, and the parent points it at Child E** (spec `:262`), so it is
+  answered here by number rather than only in substance.
 
 ## The `/me` control
 
@@ -437,7 +474,9 @@ decision, not an oversight, and F must plan for a cohort that only ever shrinks.
 the key `"theme"`.
 
 **This gets a guard, not just a mention.** A source-scan test asserts the call count is
-exactly **four** and that no file containing `signOut(` lacks the clear — the same shape as
+exactly **four** and that no file containing `signOut(` lacks the clear — **scanning `app/`
+with `app/**/__tests__/**` excluded**, since a mocked `signOut(` inside a test file would
+otherwise fail the second assertion for a reason that has nothing to do with the invariant — the same shape as
 the `Provider.tsx` source-text test, and for the same reason: the failure is silent. Shipped
 without it, a member who signs out on the mobile nav leaves `theme=light` behind; the next
 member signs in, the seed paints light, and `ThemeBootstrap` correctly does nothing because
@@ -579,6 +618,17 @@ Every neighbouring preference in `sanity/schemas/worshipTeam.ts` carries one —
 Studio document creation and **breach invariant 14 before a member ever opens the control**,
 taking F's staged rollout with it.
 
+**E1 ends in a Studio schema deploy, which is a remote mutation and is named as such.** The
+parent counts "an irreversible Studio schema deploy" among the reasons E is Critical
+(spec `:302-303`), and CLAUDE.md gates remote-mutating actions. Concretely: it is run against
+the **production dataset** — the only one this project has — by the operator running the
+delivery, using the repo's `sanity:deploy-schema` path, and what "undoes" it is redeploying a
+schema without the field. **Nothing is written to any document by the deploy itself**, which
+is the whole reason this particular remote mutation is low-risk: a hidden `string` with no
+`initialValue` adds a field definition and touches no data. Stated rather than assumed,
+because "irreversible remote action" is a category the reader should not have to size for
+themselves.
+
 `themePref` is a bare `string` with no `initialValue`, and `hidden: true` — following
 `deviceTokens` at `:60` — so it stays out of Studio's member form.
 
@@ -598,6 +648,7 @@ everything before it ships inert and independently revertible.
 | Slice | Content | Reachable? |
 |---|---|---|
 | **E1** | `themePref` schema field + Studio deploy | no |
+
 | **E2** | `PATCH /api/me/theme` + its route test | no — nothing calls it |
 | **E3** | **`defaultTheme="dark"`**; the **legacy-mirror reconciliation script**; `GET /api/me` projection, `themePref.ts`, `ThemeBootstrap` including its `theme-color` swap — **not the control** | no — inert, *because* those first two land here |
 | **E4** | **Remove `forcedTheme`**; the `/me` control; the ADR note and doc amendments | **YES** |
@@ -642,7 +693,11 @@ highest-consequence assertion in this child.
   empty before F begins.
 - **No mount path writes `themePref`** and **no mount path issues a PATCH**.
 - **An absent / `null` / unrecognised `themePref` produces no `setTheme` and no `localStorage`
-  write.**
+  write — WHEN no mirror is present.** That is the ordinary unset case and it must stay inert.
+- **An unset `themePref` WITH a mirror present clears it** — `setTheme(defaultTheme)` then
+  `clearThemeMirror()`, ending on dark with no mirror. This is the durable repair for a
+  re-poisoned mirror and the two assertions must be written as one pair, or a later hand
+  reading only the first will "fix" the second into inertness.
 - **An unset `themePref` renders the control in its neither-selected state** and issues no PATCH.
 - **A failed PATCH leaves both stores untouched** — mirror unchanged, `themePref` unchanged.
 - **`clearThemeMirror()` is called at exactly four sites**, with the remediation-shaped failure
@@ -670,7 +725,8 @@ highest-consequence assertion in this child.
   historical by nature and are left alone for the same reason as ADR-0015 below — rewriting a
   record of what was decided under the conditions of its day falsifies the history. The one
   exception is the parent scope spec, which E is already amending under **D-f**; its
-  present-tense statements at `§5:43` and `§12:591` are updated there, in that pass, not here.
+  present-tense statements at **`§3:43`** (the line is right; it sits under "Current behavior
+and the gap", not §5) and `§12:591` are updated there, in that pass, not here.
   1. `app/(gallery)/theme-gallery/[theme]/layout.tsx:10-14` and
   2. `app/utils/__tests__/themeGallery.test.ts:98-100` — both justify their design "while
      `forcedTheme` is still in force". The reasoning survives E4, since the nested-provider
