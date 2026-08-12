@@ -14,7 +14,7 @@ No secrets, credentials or personal data appear here.
 
 - **Document status:** Draft — not reviewed, not approved, not authorization to implement.
 - **Requirement source:** [parent scope spec](../specs/2026-08-07-light-mode-member-first-scope.md)
-  — the Child E row of §8's table (`:300`); §12's coverage table; requirements D5, D7, D12,
+  — the Child E row of §8's table (`:299`); §12's coverage table; requirements D5, D7, D12,
   D14, **D15**; invariants 14, 16 and 17; assumptions A5 and A6; §9's landmines.
 - **Risk tier: CRITICAL — two sequential fresh `APPROVED` verdicts on byte-identical text.**
   Not because it is large; it is the smallest child by line count. Because it:
@@ -38,7 +38,8 @@ No secrets, credentials or personal data appear here.
 | 5 | Wraps `children`, reads the projection, calls `setTheme`, exposes the literal via context, swaps the `theme-color` `<meta>` | `app/components/ThemeBootstrap.tsx` (new), mounted in `Provider.tsx` |
 | 6 | The one-time legacy reconciliation — an inline `<script>` as the **first child of `<body>`, immediately before `<Provider>`** | `app/(client)/layout.tsx` + `app/(admin)/layout.tsx` — *not* the gallery root layout |
 | 7 | The `/me` control | `app/components/ui/ThemeControl.tsx` (new), rendered in `app/(client)/me/page.tsx` |
-| 8 | **`forcedTheme="dark"` removed**, explicit `defaultTheme="dark"` added | `app/utils/Provider.tsx:16` |
+| 8a | **Explicit `defaultTheme="dark"` added** — lands in **E3**, ahead of the removal | `app/utils/Provider.tsx:16` |
+| 8b | **`forcedTheme="dark"` removed** — E4, the whole risk | `app/utils/Provider.tsx:16` |
 | 9 | `appleWebApp.statusBarStyle` — **stays `black-translucent`**, recorded remnant (geometry, not colour) | unchanged |
 | 10 | Capacitor's **native** status bar (`@capacitor/status-bar`) | deferred with a recorded remnant — that, and only that, is A6 |
 
@@ -53,7 +54,7 @@ Documentation, in the same delivery:
 | D-e | **ADR-0008 interim Consequences note** — precondition met, lever pulled in E4; full supersession stays Child F's | `docs/adr/0008-forced-dark-theme.md` (E4) |
 | D-f | Parent §5:188-190 + its §12 row **amended** with the `statusBarStyle` geometry constraint and remnant; parent §5:202 corrected | the parent scope spec |
 | D-g | The two PWA remnants recorded together — `statusBarStyle` and `manifest.webmanifest`'s `theme_color` | `UTILITIES_AND_COMPONENTS.md` |
-| D-h | Three stale `forcedTheme` statements — see Verification | gallery layout, `themeGallery.test.ts`, `UTILITIES_AND_COMPONENTS.md` |
+| D-h | **Four** stale `forcedTheme` statements — see Verification for the full list and the method | gallery layout, `themeGallery.test.ts`, `UTILITIES_AND_COMPONENTS.md`, **`app/brand.css:362`** |
 
 ## The default is `"dark"`, and it must be written explicitly
 
@@ -70,6 +71,34 @@ opt in.
 rendering test passes just as happily with `forcedTheme` still present. The same test
 asserts `ThemeBootstrap` is mounted and wraps `children`: drop the mount and every member
 silently loses their theme with nothing failing.
+
+**`defaultTheme="dark"` lands in E3, one slice AHEAD of the removal**, and the guard splits
+with it: E3 asserts `defaultTheme="dark"` is present, E4 asserts `forcedTheme` is absent.
+Two reasons, and the second is a defect the obvious ordering would have shipped.
+
+The first is ordinary risk management: the highest-consequence line in the child gets to be
+green and observed on production for a slice before the line that makes it matter.
+
+The second is that **`forcedTheme` does not reach `resolvedTheme`**, so E3 is not inert
+without it. In `next-themes` 0.4.6:
+
+```
+resolvedTheme: a === "system" ? T : a      // a = useState(() => Z(storageKey, defaultTheme))
+Z = (e, s) => { … n = localStorage.getItem(e) || void 0 … return n || s }
+useEffect(() => { S(e ?? a) }, [e, a])     // e = forcedTheme — the APPLIED CLASS only
+```
+
+`resolvedTheme` is the state, seeded from `localStorage.getItem("theme") || defaultTheme`;
+`forcedTheme` short-circuits only what gets applied to the document. With `defaultTheme`
+still unset during E3 it computes to `"light"`, so for every member with no mirror — after
+the reconciliation, essentially the whole team — **`resolvedTheme === "light"` while the page
+paints dark.** A `theme-color` swap keyed on the resolved theme would then write `#eef3f9`
+into production markup rendering a dark app: light browser and PWA chrome around a dark page,
+for everyone, for as long as E3 sits on `main` before E4. `main` is production and slices
+merge periodically, so that is the expected path.
+
+Landing `defaultTheme="dark"` in E3 makes `resolvedTheme` truthful and the swap genuinely
+inert — it writes back `#010b17`, the value already in the markup.
 
 ## Two stores, and why `localStorage` is not the source of truth
 
@@ -422,7 +451,7 @@ every admin page. Query, skip if absent, never create.
 
 **The light value is `#eef3f9`** — `--surface-base`'s light triplet, the page wash itself.
 Written as a hex literal in `ThemeBootstrap.tsx` it trips Child B's
-`Literal[value=/#[0-9a-fA-F]{6}\b/]` clause (`eslint.config.mjs:45-46`), error-level across
+`Literal[value=/#[0-9a-fA-F]{6}\b/]` clause (`eslint.config.mjs:73`), error-level across
 `app/**/*.tsx`. Use the inline `eslint-disable-next-line` with a reason, exactly as the rule's
 own message sanctions and as `(client)/layout.tsx:47` already does — a `<meta>` content
 attribute cannot take a `var()`.
@@ -519,12 +548,14 @@ everything before it ships inert and independently revertible.
 |---|---|---|
 | **E1** | `themePref` schema field + Studio deploy | no |
 | **E2** | `PATCH /api/me/theme` + its route test | no — nothing calls it |
-| **E3** | `GET /api/me` projection, `themePref.ts`, `ThemeBootstrap` including its `theme-color` swap — **not the control** | no — genuinely inert |
-| **E4** | **Remove `forcedTheme`, add `defaultTheme="dark"`**; the `/me` control; the legacy-mirror reconciliation script; the ADR note and doc amendments | **YES** |
+| **E3** | **`defaultTheme="dark"`**; `GET /api/me` projection, `themePref.ts`, `ThemeBootstrap` including its `theme-color` swap — **not the control** | no — inert, *because* `defaultTheme` lands here |
+| **E4** | **Remove `forcedTheme`**; the `/me` control; the legacy-mirror reconciliation script; the ADR note and doc amendments | **YES** |
 
-E1–E3 are genuinely inert: a schema field nothing reads, a route nothing calls, and a bootstrap
-whose `setTheme` is overridden by `forcedTheme` (its `theme-color` swap writes back the value
-already in the markup).
+E1–E3 are inert: a schema field nothing reads, a route nothing calls, and a bootstrap whose
+`setTheme` is overridden by `forcedTheme`. Its `theme-color` swap writes back `#010b17`, the
+value already in the markup — **but only because `defaultTheme="dark"` ships in the same
+slice.** Without it `resolvedTheme` would read `"light"` on a dark page; see above. E3 still
+gets a browser check rather than being waved through as untestable.
 
 **The control and the unmasking land in the same merge, because a control that ships earlier is
 not harmless.** `/me` is the ordinary member profile page and E2's route is live by then, so in
@@ -541,8 +572,10 @@ inside `vitest.config.ts`'s `app/**` glob; a test written outside `app/**`, `scr
 `e2e/**` never runs and never fails, which is §9's landmine and would silently void the
 highest-consequence assertion in this child.
 
-- **Source-text on `Provider.tsx`:** `defaultTheme="dark"` present, `forcedTheme` absent,
-  `ThemeBootstrap` mounted and wrapping `children`.
+- **Source-text on `Provider.tsx`, split across the two slices that change it:** E3 asserts
+  `defaultTheme="dark"` is present and that `ThemeBootstrap` is mounted and wraps `children`;
+  **E4 asserts `forcedTheme` is absent.** Written as one test it could not be green in E3,
+  where `forcedTheme` is still deliberately there.
 - **Route tests** mirroring `notifPrefsRoute.test.ts`: 401 unauthenticated, 400 on an invalid
   theme, self-id only, happy path writes the field, **403 under impersonation** — that last is
   the claim a Critical-tier reviewer should not have to take on trust.
@@ -571,8 +604,10 @@ highest-consequence assertion in this child.
   typography and `dark:prose-invert` row "E verifies on device" and where the unstyled-lyrics
   regression §9 warns about would show.
 - `npx tsc --noEmit`, `npm test`, `npx eslint .` at 0 errors, per slice.
-- **Three stale `forcedTheme` statements**, per CLAUDE.md's currency rule — separate from the
-  ADR note (D-e) and the parent amendments (D-f):
+- **Four stale `forcedTheme` statements**, per CLAUDE.md's currency rule — separate from the
+  ADR note (D-e) and the parent amendments (D-f). The list is the implementer's checklist, so
+  it is stated as exhaustive and was derived by grepping every shipped file, not by memory:
+  `grep -rn forcedTheme app docs` minus this plan's own directory.
   1. `app/(gallery)/theme-gallery/[theme]/layout.tsx:10-14` and
   2. `app/utils/__tests__/themeGallery.test.ts:98-100` — both justify their design "while
      `forcedTheme` is still in force". The reasoning survives E4, since the nested-provider
@@ -580,6 +615,17 @@ highest-consequence assertion in this child.
   3. `docs/UTILITIES_AND_COMPONENTS.md:146-150` — states the provider carries `forcedTheme="dark"`
      and that "Child E must add `defaultTheme="dark"` explicitly": a correct instruction that
      becomes a false description the moment it is followed.
+  4. **`app/brand.css:362`** — *"STILL UNREACHABLE. Child E removes `forcedTheme="dark"`; until
+     then these values are inert and only the theme gallery renders them."* A present-tense
+     "not released" claim sitting inside the `.light` block itself, which is the exact shape
+     CLAUDE.md's currency rule requires removing when a release advances.
+
+  **`docs/adr/0015-gallery-root-layout.md:7,23` is deliberately left alone.** It says the
+  gallery "must render **both** themes while `forcedTheme="dark"` is still in force" — but an
+  ADR is a dated record of why a decision was made under the conditions of its day, not a
+  description of current state. Rewriting it would falsify the history. The interim note in
+  0008 (D-e) is the place a reader learns the condition ended. Stated so the next reviewer
+  sees it was considered rather than missed.
 
 ## Risks
 
