@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
+import { clearThemeMirror } from "@/app/utils/themePref";
 
 export default function BottomNav() {
   const { data: session } = useSession();
@@ -85,7 +86,7 @@ export default function BottomNav() {
               </Link>
             )}
             <button
-              onClick={() => signOut({ callbackUrl: "/auth/signin" })}
+              onClick={() => { clearThemeMirror(); signOut({ callbackUrl: "/auth/signin" }); }}
               className="w-full flex items-center gap-3 px-5 py-4 text-negative-fg hover:bg-negative-strong/10 transition-colors"
             >
               <SignOutIcon />
