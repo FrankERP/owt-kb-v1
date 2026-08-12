@@ -14,8 +14,11 @@ No secrets, credentials or personal data appear here.
 
 - **Document status:** Draft — not reviewed, not approved, not authorization to implement.
 - **Requirement source:** [parent scope spec](../specs/2026-08-07-light-mode-member-first-scope.md),
-  row E of §11; §12's coverage table; requirements D5, D7, D12, D14, **D15**, D16, D17;
-  invariants 14 and 17; assumptions A5 and A6; §9's landmines.
+  the Child E row of §8's table (`:300`); §12's coverage table; requirements D5, D7, D12,
+  D14, **D15** — the Decisions table ends at D15; an earlier revision also cited "D16, D17",
+  which do not exist and collided with *invariants* 16 and 17 — invariants 14, 16 and 17;
+  assumptions A5 and A6; §9's landmines. (§11 is prose, "Nothing is deferred", with no
+  table.)
 - **Risk tier: CRITICAL — two sequential fresh `APPROVED` verdicts on byte-identical text.**
   Not because it is large; it is the smallest child by line count. Because it:
   - ships a **mutating production write route** (`PATCH /api/me/theme`) against the real
@@ -37,12 +40,12 @@ No secrets, credentials or personal data appear here.
 | 3b | The `/me` control — **ships in E4, not E3** (see the slice table) | `app/components/ui/ThemeControl.tsx` (new), rendered in `app/(client)/me/page.tsx` |
 | 4c | **The one-time legacy reconciliation**, an inline `<script>` as the **first child of `<body>`, immediately before `<Provider>`** (not `<head>` — see below) | `app/(client)/layout.tsx` + `app/(admin)/layout.tsx` — *not* the gallery root layout |
 | 4 | The fetch/validate helper, `clearThemeMirror()`, and `THEME_MIGRATION_SCRIPT` — **not** a second store, and **no `"use client"`** | `app/utils/themePref.ts` (new) |
-| 4b | Reads the projection, calls `setTheme`, swaps both `<meta>`s | `app/components/ThemeBootstrap.tsx` (new), mounted in `Provider.tsx` |
+| 4b | Reads the projection, calls `setTheme`, swaps the **`theme-color`** `<meta>` — **that one only** (row 7) | `app/components/ThemeBootstrap.tsx` (new), mounted in `Provider.tsx` |
 | 5 | **`forcedTheme="dark"` removed**, explicit `defaultTheme="dark"` added | `app/utils/Provider.tsx:16` |
 | 6 | `themeColor` **swapped client-side on the resolved theme** | `app/components/ThemeBootstrap.tsx` |
 | 7 | `appleWebApp.statusBarStyle` — **stays `black-translucent`; recorded remnant under invariant 17** (it is geometry, not colour — see below) | unchanged |
 | 7b | Capacitor's **native** status bar (`@capacitor/status-bar`) | **deferred with a recorded remnant — that, and only that, is A6** |
-| 8c | **ADR-0008 superseded** (its precondition was met, not ignored) + `docs/adr/README.md` if it indexes status | `docs/adr/0008-forced-dark-theme.md` — **E4** |
+| 8c | **ADR-0008 gets an interim Consequences note** — precondition met, lever pulled in E4, **full supersession stays Child F's** (parent §12:602, §14:626) | `docs/adr/0008-forced-dark-theme.md` — **E4** |
 | 8d | **Parent §5:188-190 + its §12 row amended** with the `statusBarStyle` geometry constraint and remnant | `docs/superpowers/specs/2026-08-07-light-mode-member-first-scope.md` |
 | 8b | **The two client-side keys documented** — `"theme"` (next-themes' mirror) and `owt-theme-migrated` (the one-time reconciliation flag) | `UTILITIES_AND_COMPONENTS.md`, beside `themePref` — neither is a secret, both are persistent state a later hand would otherwise "clean up" |
 | 8 | **Docs, per slice** — §12 assigns them to the owning child | `DATA_MODEL.md` (E1), `API_REFERENCE.md` + `ROUTES.md` (E2), `UTILITIES_AND_COMPONENTS.md` for `themePref.ts` + `ThemeBootstrap` (E3) and for `ThemeControl` (E4, with the control itself) |
@@ -426,9 +429,12 @@ projection lands", which described a correction that does not happen for an unse
 `themeColor: "#010b17"` in `(client)/layout.tsx:47` stays as the server-rendered initial
 value, which is what an unset member keeps.
 
-**Both swaps must null-guard, because on admin routes the meta does not exist.**
-`(admin)/layout.tsx` exports **no `viewport` at all** — there is no `<meta name="theme-color">`
-on any admin page — while `ThemeBootstrap` mounts inside `Provider`, which both layouts use.
+**The `theme-color` swap must null-guard, because `(admin)/layout.tsx` exports no
+`viewport`.** There is no `<meta name="theme-color">` on any admin page, while
+`ThemeBootstrap` mounts inside `Provider`, which both layouts use. (An earlier revision said
+"both swaps" and "the meta does not exist" — wrong on both counts now: only `theme-color` is
+swapped, and `appleWebApp.statusBarStyle` **is** exported on admin, at `(admin)/layout.tsx:26`.
+It is simply not touched.)
 An unguarded `.setAttribute` on a `null` query result throws *inside the bootstrap*, taking
 the `setTheme` call down with it and disabling the member's theme on every admin page. Query,
 skip if absent, never create.
@@ -449,7 +455,10 @@ the inset to zero and **moves all three** — a visible layout jump on every tog
 installed PWA. That is a geometry change wearing a colour change's clothes, and it does not
 belong to a colour child.
 
-**So it is recorded as a remnant under invariant 17's own terms — not A6's.** The cost is
+**So it is recorded as a remnant against invariant 17's requirement — by amending the
+parent, not by claiming a clause.** It is emphatically not A6's, which governs the native
+plugin; and it does not lean on §5:186-187's fallback either, whose precondition E fails on
+its own argument below. Item 8d is the concrete form: E amends §5:188-190 and its §12 row. The cost is
 honest and stated: in an installed iOS PWA in light mode the status-bar glyphs stay white
 over a light wash and are hard to read. That is a real defect, it is narrower than a layout
 jump on every toggle, and its fix is the iOS work (where the safe-area padding can move in
@@ -486,7 +495,7 @@ Keying on the RESOLVED theme has neither problem: unset resolves to dark, so the
 writes `#010b17` and nothing changes for anyone who opted into nothing.
 
 **The light value is `#eef3f9`** — `--surface-base`'s light triplet, the page wash itself.
-Written as a hex literal in `ThemeBootstrap.tsx` it trips Child C's
+Written as a hex literal in `ThemeBootstrap.tsx` it trips Child B's (`eslint.config.mjs:45-46` labels it "Child B, B-final")
 `Literal[value=/#[0-9a-fA-F]{6}\b/]` clause, which is error-level across `app/**/*.tsx`.
 Use the inline `eslint-disable-next-line` with a reason, exactly as the rule's own message
 sanctions and as `(client)/layout.tsx:47` already does — a `<meta>` content attribute
@@ -517,14 +526,26 @@ no longer exists and warns against the change that shipped — and CLAUDE.md say
 the relevant ADR before 'fixing' something that looks wrong"**, so a stale 0008 actively
 misleads the next reader into thinking E4 was the mistake 0008 forbids.
 
-**E4 amends 0008 to `Superseded by` this delivery**, recording that its precondition was met
-rather than ignored: Children A–D treated the untreated files, D's visual pass caught the
-two remaining defects, and E ships the explicit `defaultTheme="dark"` that keeps the flip
-from meaning "everyone gets light". `docs/adr/README.md` is updated if it indexes status.
-Superseding an ADR because its condition was satisfied is the ordinary path; deleting it, or
-leaving it silently false, is not.
+**But supersession is Child F's, not E's — the parent says so twice**, and an earlier
+revision of this plan simply took it: §12:602 is `| ADR-0008 superseded | F | — |`, and
+§14:626 reads "ADR-0008 is superseded **fully** on completion of Child F." §14:628-630 then
+attaches a content requirement E *cannot* satisfy — the superseding record must also capture
+§4.1, that a partial-surface revival was specified, reviewed and rejected because an unthemed
+island cannot be contained against body-level portals. That is F's story, not E's.
 
-Also stale on the same day: **`docs/UTILITIES_AND_COMPONENTS.md:147-149`**, which states the
+**So E writes an interim note in 0008's Consequences and leaves the status alone.** The note
+records what changed under it: the precondition it set was **met, not ignored** — A–D treated
+the untreated files, D's visual pass caught the two remaining defects, and E ships the
+explicit `defaultTheme="dark"` that keeps the flip from meaning "everyone gets light" — and
+that the lever was pulled in E4 with full supersession pending F. A reader who arrives after
+E4 then finds a record that matches the code, and F still authors the superseding ADR the
+parent asked for.
+
+**Editing that file has one mechanical constraint:** `adrIndex.test.ts:36` matches
+`\*\*Date:\*\*.+\*\*Status:\*\*` with no `s` flag, so `**Date:** … **Status:**` must stay on a
+single line. A loud failure rather than a silent one, but cheap to know in advance.
+
+Also stale on the same day: **`docs/UTILITIES_AND_COMPONENTS.md:146-150`**, which states the
 provider stack carries `forcedTheme="dark"` and that "Child E must add `defaultTheme="dark"`
 explicitly" — a correct instruction that becomes a false description the moment it is
 followed.
@@ -564,8 +585,8 @@ it ships inert and independently revertible.
 |---|---|---|
 | **E1** | `themePref` schema field + Studio deploy | no |
 | **E2** | `PATCH /api/me/theme` + its route test | no — nothing calls it |
-| **E3** | `GET /api/me` projection, `themePref.ts`, `ThemeBootstrap` — **not the control** | no — genuinely inert |
-| **E4** | **Remove `forcedTheme`, add `defaultTheme="dark"`**; the `/me` control (item 3b); the legacy-mirror reconciliation script (item 4c); the client-side `themeColor` swap | **YES** |
+| **E3** | `GET /api/me` projection, `themePref.ts`, `ThemeBootstrap` **including its `theme-color` swap** — **not the control** | no — genuinely inert |
+| **E4** | **Remove `forcedTheme`, add `defaultTheme="dark"`**; the `/me` control (item 3b); the legacy-mirror reconciliation script (item 4c). **The `theme-color` swap ships with `ThemeBootstrap` in E3** — inert there, since the resolved theme under `forcedTheme` is dark and it writes back the value already in the markup | **YES** |
 
 **The control writes BEFORE it paints, and the order is not a style preference.**
 `ThemeControl` awaits the PATCH and calls `setTheme` only on `res.ok`; on failure it
@@ -664,11 +685,13 @@ land in the same merge.**
      `forcedTheme` is still in force". The reasoning survives E4 (the nested-provider
      pass-through is independent of `forcedTheme`), but the sentences go stale the moment
      it lands.
-  3. `docs/UTILITIES_AND_COMPONENTS.md:147-149` — states the provider carries
+  3. `docs/UTILITIES_AND_COMPONENTS.md:146-150` — states the provider carries
      `forcedTheme="dark"` and that "Child E must add `defaultTheme="dark"` explicitly": a
      correct instruction that becomes a false description the moment it is followed.
-  4. **`docs/adr/0008-forced-dark-theme.md` — superseded, not merely edited.** See its own
-     section above; this is the artefact whose whole subject is the line E4 deletes.
+  4. **`docs/adr/0008-forced-dark-theme.md` — an interim Consequences note, *not* a status
+     change.** See its own section above; this is the artefact whose whole subject is the
+     line E4 deletes, and full supersession remains Child F's under parent §12:602 and
+     §14:626.
 - **Name the read path the control initialises from.** `/me` carries
   `export const revalidate = 60`, so "no ISR page renders `themePref`" must be checkable
   rather than asserted: the control initialises from the literal `themePref` in
