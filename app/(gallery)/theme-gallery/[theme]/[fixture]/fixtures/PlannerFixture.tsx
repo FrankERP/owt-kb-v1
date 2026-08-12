@@ -28,13 +28,23 @@ import type { RankMember } from "@/app/components/admin/candidateRanking";
 const ROWS: GridRow[] = buildRows();
 const COLUMNS: GridColumn[] = buildColumns({ sundayDates: ["2026-08-09"], activeSatDates: ["2026-08-08"] });
 
+// PLACEHOLDER NAMES, DELIBERATELY — do not "improve" these back to real ones.
+//
+// This fixture used the first names of six actual team members. It exercises
+// PlannerGrid's layout, which needs names of realistic LENGTH, not real people:
+// nothing here reads Sanity, and these strings are the only personal data the
+// gallery would carry. That matters because this route is a candidate for being
+// served publicly (it is the one surface built to render both themes without a
+// session), and a name published to the open internet is not retractable.
+//
+// Kept short and varied so the column widths still get a realistic workout.
 const MEMBERS: RankMember[] = [
-  { _id: "m1", member_name: "Frank", memberType: ["voz"] },
-  { _id: "m2", member_name: "Gaby", memberType: ["voz"] },
-  { _id: "m3", member_name: "Liu", memberType: ["voz"] },
-  { _id: "d1", member_name: "Samo", memberType: ["instrumento"] },
-  { _id: "d2", member_name: "Tony", memberType: ["instrumento"] },
-  { _id: "f1", member_name: "Rene", memberType: ["foh"] },
+  { _id: "m1", member_name: "Ana", memberType: ["voz"] },
+  { _id: "m2", member_name: "Beto", memberType: ["voz"] },
+  { _id: "m3", member_name: "Cami", memberType: ["voz"] },
+  { _id: "d1", member_name: "Dani", memberType: ["instrumento"] },
+  { _id: "d2", member_name: "Emi", memberType: ["instrumento"] },
+  { _id: "f1", member_name: "Fito", memberType: ["foh"] },
 ];
 
 const noop = () => {};
