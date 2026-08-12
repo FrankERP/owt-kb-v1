@@ -491,7 +491,7 @@ export function SongForm({
         <button
           type="submit"
           disabled={loading}
-          className="flex-1 py-2.5 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+          className="flex-1 py-2.5 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
         >
           {loading ? "Guardando..." : "Guardar"}
         </button>

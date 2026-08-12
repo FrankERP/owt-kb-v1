@@ -997,7 +997,7 @@ export default function ServicesPanel() {
               disabled={!publishGate.enabled}
               title={publishGate.reason ?? undefined}
               onClick={() => openPublishPlan(visibleCards)}
-              className="min-h-[44px] rounded-lg bg-surface-accent-solid px-3 font-label text-xs uppercase tracking-widest transition-colors hover:bg-accent-deep/80 dark:hover:bg-surface-accent-solid disabled:opacity-40">
+              className="min-h-[44px] rounded-lg bg-surface-accent-solid text-on-fill px-3 font-label text-xs uppercase tracking-widest transition-colors hover:bg-accent-deep/80 dark:hover:bg-surface-accent-solid disabled:opacity-40">
               Publicar listos ({counters.readyToPublish})
             </button>
           )}
@@ -1021,7 +1021,7 @@ export default function ServicesPanel() {
             <button ref={newServiceTriggerRef} onClick={() => openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, true, { kind: "new" })}
               disabled={!createGate.enabled}
               title={createGate.reason ?? undefined}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-40">
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-40">
               <span className="text-base leading-none">+</span> Nuevo
             </button>
           )}
@@ -1483,7 +1483,7 @@ function PublicationFooter({
           className={`min-h-[44px] flex-1 rounded-lg px-3 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${
             danger
               ? "bg-availability-deep/70 hover:bg-availability-deep"
-              : "bg-surface-accent-solid hover:bg-accent-deep/80 dark:hover:bg-accent/30"
+              : "bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30"
           }`}
         >
           {loading ? "Guardando..." : confirmLabel}
