@@ -100,3 +100,17 @@ is non-translucent and would collapse `env(safe-area-inset-top)`, moving `Navbar
 `CueDialog` and `PlannerGrid` on every toggle. That is geometry, not colour, and belongs to
 the iOS work. 57 sites remain below WCAG AA in **both** themes — pre-existing debt surfaced
 by Child D's audit, explicitly out of scope here rather than silently inherited.
+
+**Measured on the sign-in page after the delivery**, and named here so the numbers exist
+rather than the adjective. Both fail in dark *and* light, so this delivery neither introduced
+them nor inherited a passing baseline:
+
+| Element | Dark | Light | Required |
+|---|---|---|---|
+| `Email` / `Contraseña` placeholder text | 3.55:1 | **3.09:1** | 4.5:1 (1.4.3) |
+| The two `<input>` borders | 1.46:1 | **1.42:1** | 3:1 (1.4.11) |
+
+The input borders are the sharper of the two: those fields carry no visual affordance other
+than the border, so there is nothing else marking where the control is. The buttons' and
+card's borders measure similarly low but are decorative — a filled background identifies them
+independently — and are a taste judgement rather than a failure.
