@@ -42,6 +42,8 @@ No secrets, credentials or personal data appear here.
 | 6 | `themeColor` **swapped client-side on the resolved theme** | `app/components/ThemeBootstrap.tsx` |
 | 7 | `appleWebApp.statusBarStyle` — **stays `black-translucent`; recorded remnant under invariant 17** (it is geometry, not colour — see below) | unchanged |
 | 7b | Capacitor's **native** status bar (`@capacitor/status-bar`) | **deferred with a recorded remnant — that, and only that, is A6** |
+| 8c | **ADR-0008 superseded** (its precondition was met, not ignored) + `docs/adr/README.md` if it indexes status | `docs/adr/0008-forced-dark-theme.md` — **E4** |
+| 8d | **Parent §5:188-190 + its §12 row amended** with the `statusBarStyle` geometry constraint and remnant | `docs/superpowers/specs/2026-08-07-light-mode-member-first-scope.md` |
 | 8b | **The two client-side keys documented** — `"theme"` (next-themes' mirror) and `owt-theme-migrated` (the one-time reconciliation flag) | `UTILITIES_AND_COMPONENTS.md`, beside `themePref` — neither is a secret, both are persistent state a later hand would otherwise "clean up" |
 | 8 | **Docs, per slice** — §12 assigns them to the owning child | `DATA_MODEL.md` (E1), `API_REFERENCE.md` + `ROUTES.md` (E2), `UTILITIES_AND_COMPONENTS.md` for `themePref.ts` + `ThemeBootstrap` (E3) and for `ThemeControl` (E4, with the control itself) |
 
