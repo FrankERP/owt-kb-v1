@@ -26,13 +26,14 @@ const GALLERY_LAYOUT = "app/(gallery)/theme-gallery/[theme]/layout.tsx";
 describe("Provider.tsx", () => {
   const src = read("app/utils/Provider.tsx");
 
-  it('declares defaultTheme="dark" EXPLICITLY', () => {
+  it('declares defaultTheme="system" EXPLICITLY', () => {
     expect(
       src,
-      'next-themes computes defaultTheme = enableSystem ? "system" : "light". With ' +
-        "enableSystem={false} and no explicit default, removing forcedTheme sends " +
-        "every member with no stored preference to LIGHT — the whole team, silently.",
-    ).toMatch(/defaultTheme="dark"/);
+      "The default must be written out rather than inferred. next-themes computes " +
+        'defaultTheme = enableSystem ? "system" : "light", so an omitted default is ' +
+        "only accidentally right, and it silently becomes LIGHT the day enableSystem " +
+        "is flipped back.",
+    ).toMatch(/defaultTheme="system"/);
   });
 
   it("mounts ThemeBootstrap and WRAPS children with it", () => {
@@ -43,8 +44,50 @@ describe("Provider.tsx", () => {
     expect(src).toMatch(/import \{ ThemeBootstrap \}/);
   });
 
-  it("keeps enableSystem={false} — Child F owns that flip", () => {
-    expect(src).toMatch(/enableSystem=\{false\}/);
+  it("declares enableSystem={true} — inseparable from the system default", () => {
+    // With enableSystem false, applyTheme is `i === "system" && n && (c = x())`,
+    // so nothing resolves: the applier strips light/dark and adds a literal
+    // `system` class. No theme class at all, no error, nothing logged.
+    expect(
+      src,
+      'defaultTheme="system" without enableSystem={true} puts every member with no ' +
+        "stored preference into a class-less document. Parent §9 names this trap.",
+    ).toMatch(/enableSystem=\{true\}/);
+  });
+
+  it("THE THREE DEFAULT COPIES AGREE — the guard Child E asked Child F to build", () => {
+    // The default cannot be shared as one constant: useTheme() exposes no
+    // defaultTheme, and the third copy lives inside a string of JavaScript that
+    // runs before hydration. So it is asserted as a SET. Miss any one and the
+    // rollout is partial in a way nothing else would catch — most dangerously
+    // copy 2, which would re-pin the legacy-mirror cohort to dark on every load,
+    // invisibly, against the new default.
+    const code = (f: string) =>
+      read(f).replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+
+    // 1 — the provider
+    expect(code("app/utils/Provider.tsx"), "copy 1 of 3").toMatch(/defaultTheme="system"/);
+
+    // 2 — ThemeBootstrap's unset-with-a-mirror repair
+    expect(
+      code("app/components/ThemeBootstrap.tsx"),
+      "copy 2 of 3 — the unset-with-a-mirror repair must hand setTheme the SAME " +
+        "default as the provider, or the legacy-mirror cohort is silently excluded " +
+        "from the rollout",
+    ).toMatch(/setTheme\("system"\)/);
+
+    // 3 — the migration script's catch. This one cannot carry the literal: it
+    // resolves the device, because a hardcoded value would exclude the
+    // storage-blocked population from a follow-the-system default.
+    const script = code("app/utils/themePref.ts");
+    expect(script, "copy 3 of 3 — must resolve the device").toMatch(/prefers-color-scheme/);
+    // Capture the whole template literal — the script body is full of semicolons,
+    // so anything terminating at the first `;` reads only its opening clause.
+    expect(
+      script.match(/THEME_MIGRATION_SCRIPT\s*=\s*`[^`]*`/)?.[0] ?? "",
+      "copy 3 of 3 — the catch must not hardcode a theme as its PRIMARY answer; " +
+        "matchMedia resolves it, with a literal only as the inner-throw fallback",
+    ).toMatch(/matchMedia\("\(prefers-color-scheme: dark\)"\)\.matches\?"dark":"light"/);
   });
 
   it("has NO forcedTheme — E4's lever, and the whole point of Child E", () => {
@@ -159,14 +202,16 @@ describe("clearThemeMirror() at sign-out", () => {
     // one is the every-load durable repair, not a sign-out.
     const src = code("app/components/ThemeBootstrap.tsx");
     expect((src.match(/clearThemeMirror\(\)/g) ?? []).length).toBe(1);
-    // And it must be preceded by setTheme("dark"): the setTheme makes next-themes'
-    // state truthful and paints the class, the clear then removes the key it just
-    // wrote. Clear-only leaves next-themes holding "light"; setTheme-only pins the
-    // unset population to a "dark" mirror and defeats Child F.
-    const setDark = src.indexOf('setTheme("dark")');
+    // And it must be preceded by setTheme(<the default>): the setTheme makes
+    // next-themes' state truthful and paints the class, the clear then removes the
+    // key it just wrote. Clear-only leaves next-themes holding the stale value;
+    // setTheme-only pins the unset population to a mirror and defeats the default.
+    // Child F moved the literal here from "dark" to "system" — this is the seventh
+    // E-era guard the F plan should have listed as inverting, found by running them.
+    const setDefault = src.indexOf('setTheme("system")');
     const clear = src.indexOf("clearThemeMirror()");
-    expect(setDark).toBeGreaterThan(-1);
-    expect(setDark, 'setTheme("dark") must precede clearThemeMirror()').toBeLessThan(clear);
+    expect(setDefault, "the repair must hand setTheme the current default").toBeGreaterThan(-1);
+    expect(setDefault, 'setTheme("system") must precede clearThemeMirror()').toBeLessThan(clear);
   });
 
   it("clears BEFORE signOut() runs, in every one of them", () => {

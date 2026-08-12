@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
-import { isThemePref, type ThemePref } from "@/app/utils/themePref";
+import { isThemePref, VALID_THEMES, type ThemePref } from "@/app/utils/themePref";
 
 /**
  * A member writes their own theme preference.
@@ -41,14 +41,13 @@ export async function PATCH(req: NextRequest) {
   const theme: unknown = body?.theme;
 
   // The literal set is the ONLY validation — `themePref` is a bare string in the
-  // schema. Note "system" is rejected: with `enableSystem={false}`, next-themes
-  // would add a literal `system` class and strip light/dark, leaving a class-less
-  // document while Sanity happily stored "system". Parent §9 names that trap and
-  // §12 assigns the enableSystem flip to Child F, which is when "system" becomes
-  // a legal value here.
+  // schema. "system" joined that set at Child F, together with the `enableSystem`
+  // flip that makes it resolvable; before F it would have left a class-less
+  // document. The message is DERIVED from the set rather than written out, so a
+  // future change cannot leave the 400 body describing a different contract.
   if (!isThemePref(theme)) {
     return NextResponse.json(
-      { error: 'theme must be "dark" or "light"' },
+      { error: `theme must be one of: ${VALID_THEMES.join(", ")}` },
       { status: 400 },
     );
   }

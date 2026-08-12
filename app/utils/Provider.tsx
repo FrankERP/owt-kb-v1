@@ -15,23 +15,29 @@ export const Provider = ({ children }: Props) => {
   return (
     <SessionProvider>
       {/*
-        `defaultTheme="dark"` IS LOAD-BEARING AND MUST NOT BE DROPPED.
-        next-themes computes `defaultTheme = enableSystem ? "system" : "light"`, so
-        with enableSystem={false} and no explicit default, every member with no
-        stored preference resolves to LIGHT the moment `forcedTheme` goes. That is
-        the whole team, silently, with no control touched. Asserted as source text
-        by providerTheme.test.ts, because a rendering test passes just as happily
-        with forcedTheme still present.
+        `defaultTheme="system"` + `enableSystem={true}` — ONE change, not two.
 
-        It landed one slice AHEAD of the forcedTheme removal on purpose: `forcedTheme`
-        never reaches `resolvedTheme` (it only feeds the applier), so without an
-        explicit default `resolvedTheme` reads "light" while the page paints dark —
-        and ThemeBootstrap's theme-color swap would write light chrome onto a dark app.
+        These two must move together, in both directions. next-themes resolves a
+        "system" theme only when enableSystem is true: `applyTheme` is
+        `i === "system" && n && (c = x())`, so with `n` false the resolution never
+        runs and the applier strips light/dark and adds a literal `system` class,
+        leaving the document with NO theme class at all — no error, nothing logged,
+        all 94 dark: utilities off at once. Parent §9 names this exactly.
 
-        `forcedTheme` is gone as of Child E4. Rollback is re-adding it here: one
-        line, instant, no data migration — `themePref` simply goes inert again.
+        THE DEFAULT LIVES IN THREE PLACES and they must agree, because useTheme()
+        exposes no defaultTheme to share: here, ThemeBootstrap's unset-with-a-mirror
+        repair, and THEME_MIGRATION_SCRIPT's catch in themePref.ts. Miss the second
+        and the legacy-mirror cohort stays pinned to dark against the new default,
+        invisibly, with the suite green. Guarded by themeWiring.test.ts.
+
+        ROLLBACK IS ORDERED — see the Child F plan. Move the three defaults back to
+        "dark" but LEAVE enableSystem true: stored "system" values are still out
+        there in members' localStorage mirrors, and flipping the flag back while
+        they exist puts every one of those members in the class-less document. If
+        the flag must also go back, a client-side mirror reconciliation has to ship
+        and reach the team first.
       */}
-      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem={true}>
         <ThemeBootstrap>
           <PlayerProvider>
             <CueDialogProvider>{children}</CueDialogProvider>

@@ -68,12 +68,25 @@ describe("themePref.ts — module-level constraints", () => {
 });
 
 describe("isThemePref", () => {
-  it.each(["dark", "light"])("accepts %s", (v) => {
+  it.each(["dark", "light", "system"])("accepts %s", (v) => {
     expect(isThemePref(v)).toBe(true);
   });
 
-  it('rejects "system" — Child F owns the enableSystem flip that legalises it', () => {
-    expect(isThemePref("system")).toBe(false);
+  it('accepts "system" ONLY because Child F flipped enableSystem alongside it', () => {
+    // These two facts are one change. With enableSystem={false}, next-themes
+    // resolves nothing: it strips light/dark and adds a literal `system` class,
+    // leaving no theme class at all while Sanity stores "system" and nothing
+    // logs. So the literal set and the provider flag are asserted together —
+    // legalising the value without the flag is the landmine parent §9 names.
+    expect(isThemePref("system")).toBe(true);
+    const provider = readFileSync(
+      path.join(process.cwd(), "app/utils/Provider.tsx"), "utf8",
+    );
+    expect(
+      provider,
+      '"system" is an accepted themePref, so enableSystem MUST be true — ' +
+        "otherwise every member who chooses it lands in a class-less document.",
+    ).toMatch(/enableSystem=\{true\}/);
   });
 
   it.each([undefined, null, "", "sepia", 1, true, {}])("rejects %o", (v) => {
@@ -173,12 +186,57 @@ describe("fetchThemePref — a failed fetch is NOT 'unset'", () => {
   });
 
   it("drops an unrecognised stored value rather than passing it to setTheme", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ themePref: "system" }) }));
+    // "system" was the fixture here until Child F legalised it; "sepia" keeps the
+    // property under test — an unknown literal must never reach setTheme, which
+    // has no falsy guard and would persist it for the next load.
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ themePref: "sepia" }) }));
     expect(await fetchThemePref()).toEqual({ ok: true, pref: undefined });
+  });
+
+  it("passes 'system' through now that it is a legal stored value", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ themePref: "system" }) }));
+    expect(await fetchThemePref()).toEqual({ ok: true, pref: "system" });
   });
 
   it("returns the literal for a member who chose one", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ themePref: "light" }) }));
     expect(await fetchThemePref()).toEqual({ ok: true, pref: "light" });
+  });
+});
+
+describe("the theme announcement writes nothing to the server", () => {
+  const SRC = readFileSync(
+    path.join(process.cwd(), "app/components/ui/ThemeAnnouncement.tsx"),
+    "utf8",
+  );
+  const code = SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+
+  it("issues no fetch and no PATCH — dismissal is client-side only", () => {
+    // Same property Child E guarded on the control's mount path, for the same
+    // reason: nothing about reading or dismissing a banner may remove a member
+    // from the never-chosen population.
+    expect(code).not.toMatch(/fetch\s*\(/);
+    expect(code).not.toMatch(/themePref/);
+    expect(code).not.toMatch(/PATCH/);
+  });
+
+  it("wraps every localStorage access, and fails soft toward SHOWING", () => {
+    const accesses = code.match(/localStorage\./g) ?? [];
+    const catches = code.match(/\}\s*catch\b/g) ?? [];
+    expect(accesses.length).toBeGreaterThan(0);
+    expect(
+      catches.length,
+      "a throw here must not break /me; showing the banner twice is the acceptable failure",
+    ).toBeGreaterThanOrEqual(accesses.length);
+  });
+
+  it("anchors to the control rather than saying 'below'", () => {
+    // ThemeControl renders well below the fold on /me, past the service cards,
+    // the availability calendar and ProfilePanel.
+    expect(code).toMatch(/href="#tema"/);
+    const control = readFileSync(
+      path.join(process.cwd(), "app/components/ui/ThemeControl.tsx"), "utf8",
+    );
+    expect(control, "the anchor needs a target").toMatch(/id="tema"/);
   });
 });

@@ -144,12 +144,14 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
 - **`interface.tsx`** — shared domain TS interfaces (no runtime): `Post`, `Tag`, `Author`,
   `TeamMember`, `SundayRole`/`SaturdayRole`/`SpecialRole`, `SetlistProposal`, etc.
 - **`Provider.tsx`** — client root provider: `SessionProvider` → `ThemeProvider`
-  (`defaultTheme="dark"`, `forcedTheme="dark"`, `enableSystem={false}`) → **`ThemeBootstrap`**
+  (`defaultTheme="system"`, `enableSystem={true}`) → **`ThemeBootstrap`**
   → `PlayerProvider` → `CueDialogProvider`.
-  **`defaultTheme="dark"` is load-bearing, do not remove it:** with `enableSystem={false}`
-  and no explicit default, next-themes resolves `defaultTheme` to `"light"`, so dropping
-  `forcedTheme` would ship every unset member into *light*. `themeWiring.test.ts` asserts it
-  as source text, because a rendering test passes either way.
+  **`defaultTheme="system"` and `enableSystem={true}` are ONE change, in both directions.**
+  With `enableSystem` false, next-themes resolves nothing for a `"system"` theme: it strips
+  `light`/`dark` and adds a literal `system` class, leaving no theme class at all and no
+  error. The default also exists in **three** places that cannot share a constant —
+  here, `ThemeBootstrap`'s unset-with-a-mirror repair, and `THEME_MIGRATION_SCRIPT`'s
+  `catch` — and `themeWiring.test.ts` asserts all three as a set.
 - **`ThemeBootstrap.tsx`** — reads the member's `themePref` from `GET /api/me`, calls
   `setTheme` with it, and exposes the **literal** value (never the resolved theme) to
   `ThemeControl` via context. Wraps `children` rather than rendering beside them, because the
@@ -179,11 +181,13 @@ geometry, not colour. And `manifest.webmanifest`'s `theme_color` is read at inst
 cannot follow a runtime theme. **So an installed iOS PWA keeps dark chrome in light mode.**
 Both are fixed by the iOS work, not by a colour change.
 
-**Two client-side storage keys**, neither a secret, both persistent state worth not
+**Three client-side storage keys**, none a secret, all persistent state worth not
 "cleaning up": **`theme`** is next-themes' own mirror — a paint cache, not the source of
 truth (`themePref` on the member document is), cleared at sign-out so a shared device does
 not show one member's theme to the next; and **`owt-theme-migrated`** is the one-time flag for
-the legacy-mirror reconciliation that runs before the seed in both root layouts.
+the legacy-mirror reconciliation that runs before the seed in both root layouts; and
+**`owt-theme-announced`** is Child F's per-device dismissal flag for the `/me` banner, which
+writes nothing to Sanity and fails soft toward showing the banner again.
 
 ---
 

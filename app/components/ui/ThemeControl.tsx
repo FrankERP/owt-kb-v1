@@ -7,6 +7,7 @@ import { useThemePref } from "@/app/components/ThemeBootstrap";
 import type { ThemePref } from "@/app/utils/themePref";
 
 const OPTIONS: ReadonlyArray<{ value: ThemePref; label: string }> = [
+  { value: "system", label: "Seguir sistema" },
   { value: "dark", label: "Oscuro" },
   { value: "light", label: "Claro" },
 ];
@@ -14,12 +15,18 @@ const OPTIONS: ReadonlyArray<{ value: ThemePref; label: string }> = [
 /**
  * The member's theme choice.
  *
- * THREE STATES, NOT TWO. Dark, Light, and "has never chosen" — the last renders
- * with NEITHER button pressed. That is not a cosmetic nicety: an unset `themePref`
- * is the signal Child F's staged rollout reads, there is no route that can return
- * the field to unset, and `TextSizeControl` (the shape precedent) initialises to a
- * concrete default. Following it here would write "dark" the moment someone opened
- * /me and quietly remove them from F's cohort forever.
+ * THREE OPTIONS, AND UNSET RENDERS AS "SEGUIR SISTEMA".
+ *
+ * Child E deliberately rendered unset as NEITHER button pressed, because showing a
+ * concrete default would have invited a member to "confirm" it and burn the unset
+ * signal F's rollout depended on. **Child F inverts that on purpose.** Once the
+ * default IS follow-the-system, unset and "system" mean the same thing, so showing
+ * Seguir sistema as selected is honest rather than misleading — and there is no
+ * longer a cohort to protect. A reviewer who read E's rules will flag this as a
+ * regression; it is the opposite.
+ *
+ * Still true, and still load-bearing: this control must not WRITE on mount. A
+ * member who has never chosen keeps an unset field until they tap something.
  *
  * It binds to the LITERAL `themePref` from ThemeBootstrap's context, never to
  * `resolvedTheme` — which is "dark" for an explicit-Dark member and an unset one
@@ -47,9 +54,9 @@ export default function ThemeControl() {
     try {
       // WRITE FIRST, PAINT SECOND — the order is not a style preference. An
       // optimistic setTheme whose PATCH then failed would leave localStorage on
-      // "light" while `themePref` stayed unset, and ThemeBootstrap's unset guard
-      // (required, so an unset member is never overridden) means no later load
-      // could correct it. The member would be stuck in a theme they never
+      // "light" while `themePref` stayed unset — and ThemeBootstrap only calls
+      // setTheme for a value the projection actually returned, so no later load
+      // would correct it. The member would be stuck in a theme they never
       // persisted. The cost of this order is one round-trip before the repaint.
       const res = await fetch("/api/me/theme", {
         method: "PATCH",
@@ -70,17 +77,21 @@ export default function ThemeControl() {
   }
 
   return (
-    <section className="rounded-2xl border border-surface-accent-20 p-5">
+    <section id="tema" className="rounded-2xl border border-surface-accent-20 p-5">
       <h3 className="font-display text-lg font-bold mb-1">Tema</h3>
       <p className="font-body text-sm text-mono-500 dark:text-mono-400 mb-4">
-        Tu elección te sigue en todos tus dispositivos.
+        Por defecto la app sigue el modo de tu teléfono. Tu elección te sigue en
+        todos tus dispositivos.
       </p>
       <div className="flex flex-wrap gap-2">
         {OPTIONS.map((o) => {
           // `loaded` distinguishes "not fetched yet" from "never chosen": before
           // the projection lands, `pref` is undefined for everyone, and neither
           // button should look selected.
-          const active = loaded && pref === o.value;
+          // `loaded` still gates everything: before the projection lands, nothing
+          // is selected. "Not known yet" is not "follows the system".
+          // Unset resolves to the system option, which is what the default now is.
+          const active = loaded && (pref ?? "system") === o.value;
           return (
             <button
               key={o.value}

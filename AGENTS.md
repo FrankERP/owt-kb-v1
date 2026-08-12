@@ -5,7 +5,7 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
 
 ## Stack & commands
 - Next.js 16 (App Router; `proxy.ts` = middleware), React 19, Sanity v5
-  (`next-sanity`), Tailwind, NextAuth v4, Fuse.js. Node 22. Dark and light themes (member-set at `/me`; unset resolves to dark).
+  (`next-sanity`), Tailwind, NextAuth v4, Fuse.js. Node 22. Dark and light themes — follows the device by default; members can pin either at `/me`.
   Studio embedded at `/studio`. iOS app via Capacitor.
 - **Before claiming done, all three must pass:** `npx tsc --noEmit`, `npm test`
   (vitest), and `npx eslint .` with **0 errors** (warnings are a deliberate
