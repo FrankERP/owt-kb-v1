@@ -47,6 +47,17 @@ const contrast = (a: number[], b: number[]) => {
   return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
 };
 
+/** The `:root` triplets, for checking that a pairing survives in BOTH themes. */
+function darkRoles(): Map<string, [number, number, number]> {
+  const start = CSS.indexOf(":root {");
+  const block = CSS.slice(start, CSS.indexOf("\n}", start));
+  const out = new Map<string, [number, number, number]>();
+  for (const m of block.matchAll(/--([a-z0-9-]+)-rgb:\s*(\d{1,3}) (\d{1,3}) (\d{1,3});/gi)) {
+    out.set(m[1], [+m[2], +m[3], +m[4]]);
+  }
+  return out;
+}
+
 const LIGHT = lightRoles();
 const page = () => LIGHT.get("surface-base")!;
 
@@ -69,12 +80,31 @@ const FOREGROUND_ON_PAGE = [
   "chart-lead", "chart-bgv", "chart-coro", "chart-especial", "chart-instr", "chart-foh",
 ] as const;
 
-/** Two roles are only ever text ON a filled accent chip, never on the page. */
-const FOREGROUND_ON_ACCENT = ["surface-base", "surface-sunken"] as const;
+/**
+ * Foregrounds that never touch the page — they sit on a FILLED chip or badge, so the
+ * page is the wrong reference and would fail them for the wrong reason.
+ *
+ * This started as "two roles, always on `accent`", and that shape is what let a real
+ * defect ship green. Child D pointed `text-surface-base` at four different fills, and
+ * only one of them was `accent`: the pending-count badge sits on `recency-fg`, a MID
+ * gold in light, where near-white measures 2.63:1 — worse than the `text-black` it
+ * replaced (7.15:1). Measuring against `accent` alone said nothing about it.
+ *
+ * So the ground is named per site. Adding a `text-<role>` on a new fill means adding a
+ * row here; that is the cost of the guard being able to see it at all.
+ */
+const FOREGROUND_ON_FILL: ReadonlyArray<readonly [string, string, string]> = [
+  ["surface-base", "accent", "SongSheet.tsx:223 — current-song chip"],
+  ["surface-sunken", "accent", "ChordChart.tsx:183 — selected key"],
+  ["surface-base", "warning-fg", "CalendarView.tsx:388, ImpersonationBanner.tsx:22"],
+  ["surface-base", "info-fg", "CalendarView.tsx:390 — special service"],
+  ["scrim", "recency-fg", "ProposalsPanel.tsx:538 — pending count"],
+];
 
 describe("light theme — WCAG AA contrast", () => {
   it("declares a light value for every role this file measures", () => {
-    const missing = [...FOREGROUND_ON_PAGE, ...FOREGROUND_ON_ACCENT].filter((r) => !LIGHT.has(r));
+    const measured = [...FOREGROUND_ON_PAGE, ...FOREGROUND_ON_FILL.flatMap(([r, g]) => [r, g])];
+    const missing = measured.filter((r) => !LIGHT.has(r));
     expect(missing, "a measured role vanished from .light").toEqual([]);
   });
 
@@ -83,11 +113,20 @@ describe("light theme — WCAG AA contrast", () => {
     expect(ratio, `${role} is ${ratio.toFixed(2)}:1 on the light page`).toBeGreaterThanOrEqual(4.5);
   });
 
-  it.each(FOREGROUND_ON_ACCENT)("`%s` clears 4.5:1 as text on a filled accent chip", (role) => {
-    // `ChordChart.tsx:183` and `SongSheet.tsx:223` — `bg-accent text-surface-*`. Measuring
-    // these against the page would fail them for the wrong reason: they never touch it.
-    const ratio = contrast(LIGHT.get(role)!, LIGHT.get("accent")!);
-    expect(ratio, `${role} is ${ratio.toFixed(2)}:1 on bg-accent`).toBeGreaterThanOrEqual(4.5);
+  it.each(FOREGROUND_ON_FILL)("`%s` clears 4.5:1 on `%s` (%s)", (role, ground) => {
+    const ratio = contrast(LIGHT.get(role)!, LIGHT.get(ground)!);
+    expect(ratio, `${role} on ${ground} is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("checks the DARK side of those pairings too — a fill inverts, the text on it may not", () => {
+    // `text-scrim` on `bg-recency-fg` is the case that motivated this: black on gold is
+    // strong in BOTH themes, which is what makes it the right anchor. A role that only
+    // worked in light would be half a fix.
+    const dark = darkRoles();
+    for (const [role, ground] of FOREGROUND_ON_FILL) {
+      const ratio = contrast(dark.get(role)!, dark.get(ground)!);
+      expect(ratio, `${role} on ${ground} is ${ratio.toFixed(2)}:1 in DARK`).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   it("keeps the surface hierarchy the right way round", () => {
