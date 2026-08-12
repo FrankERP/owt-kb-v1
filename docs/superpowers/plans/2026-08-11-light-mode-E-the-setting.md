@@ -36,7 +36,7 @@ No secrets, credentials or personal data appear here.
 | 3 | **`GET /api/me` projection gains `themePref`** — D15's read path | `app/api/me/route.ts` |
 | 3b | The `/me` control — **ships in E4, not E3** (see the slice table) | `app/components/ui/ThemeControl.tsx` (new), rendered in `app/(client)/me/page.tsx` |
 | 4c | **The one-time legacy reconciliation**, an inline `<script>` as the **first child of `<body>`, immediately before `<Provider>`** (not `<head>` — see below) | `app/(client)/layout.tsx` + `app/(admin)/layout.tsx` — *not* the gallery root layout |
-| 4 | The fetch/validate helper and `clearThemeMirror()` — **not** a second store | `app/utils/themePref.ts` (new) |
+| 4 | The fetch/validate helper, `clearThemeMirror()`, and `THEME_MIGRATION_SCRIPT` — **not** a second store, and **no `"use client"`** | `app/utils/themePref.ts` (new) |
 | 4b | Reads the projection, calls `setTheme`, swaps both `<meta>`s | `app/components/ThemeBootstrap.tsx` (new), mounted in `Provider.tsx` |
 | 5 | **`forcedTheme="dark"` removed**, explicit `defaultTheme="dark"` added | `app/utils/Provider.tsx:16` |
 | 6 | `themeColor` **swapped client-side on the resolved theme** | `app/components/ThemeBootstrap.tsx` |
@@ -136,8 +136,21 @@ try {
     localStorage.removeItem("theme");        // legacy ThemeSwitch value, not a preference
     localStorage.setItem("owt-theme-migrated", "1");
   }
-} catch (e) {}
+} catch (e) {
+  document.documentElement.classList.add("dark");   // see below — not an empty catch
+}
 ```
+
+**The `catch` body is load-bearing, and it covers a hazard E4 creates rather than one the
+migration creates.** Today `forcedTheme` makes next-themes' seed take the `if (forced)`
+branch, which touches no storage, so `dark` always lands. **With `forcedTheme` gone the seed
+takes the `try { localStorage.getItem(…) … apply }` branch — and the whole apply sits inside
+that try.** On the exact population this script's `try/catch` exists for (Safari private
+mode, blocked storage, some Capacitor WebViews) the pre-hydration document then gets
+**neither `dark` nor `light`**: all 94 `dark:` utilities stop applying at once and, per
+CLAUDE.md's specificity note, bare `hover:`/`focus:` rules they were masking come unmasked.
+It self-corrects at hydration — a flash, not a terminal state — but it is one line to
+prevent, in a script both layouts already render ahead of the seed.
 
 **The `try/catch` is not decoration.** `localStorage` *throws* — `SecurityError` with
 storage blocked, Safari private mode, some Capacitor WebView configurations — and
@@ -170,7 +183,16 @@ path and fails for reasons unrelated to the shipped code. So:
 1. **A source-text guard** that *both* layouts render `THEME_MIGRATION_SCRIPT`, as the first
    child of `<body>`, before `<Provider>`.
 2. **A jsdom chain test** that `eval`s the exported constant — the same string the layouts
-   render, not a copy — then renders, then asserts the resolved class.
+   render, not a copy — then renders, then asserts the resolved class. It needs a per-file
+   `// @vitest-environment jsdom` pragma: `vitest.config.ts:14` sets `environment: "node"`
+   globally and its own comment warns that a DOM test must set jsdom up itself.
+
+**`themePref.ts` must NOT carry `"use client"`.** Both root layouts are Server Components
+importing `THEME_MIGRATION_SCRIPT` from it; under a client boundary that export becomes a
+client *reference* rather than a string, and the `<script>` renders nothing usable. The named
+precedent, `app/utils/textZoom.ts`, correctly omits the directive — but neither guard above
+would catch a stray one (the source scan greps for an identifier; the jsdom test imports
+outside any RSC boundary), so it is stated here as a constraint rather than left to luck.
 
 The distinction the earlier revision was reaching for still holds and is preserved in (2):
 assert the **resolved `documentElement` class**, never the helper's return value in
@@ -291,8 +313,14 @@ is "`/me` control bound to **server** `themePref`" and §9:529-531 says the requ
 - **The round-trip it saved was one request, not a duplication.** `ProfilePanel` PATCHes
   `/api/me` (`:122`) and never GETs it, so there was no existing client read to piggyback on.
 
-**The single read is kept by sharing, not by substituting.** `ThemeBootstrap` performs the
-one fetch and the control receives the literal value through context or props. **A test
+**The single read is kept by sharing, not by substituting — via CONTEXT, not props.**
+`ThemeBootstrap` performs the one fetch and exposes the literal value through a context it
+provides. Props are structurally impossible: `ThemeControl` renders from
+`app/(client)/me/page.tsx`, several layers below `Provider`. Saying "context or props" left
+the lazy resolution open — a second `GET /api/me` from the control, the very thing this
+paragraph forbids. **`ThemeBootstrap` therefore wraps `children` rather than rendering
+beside them**, and the source-text guard asserts that shape, not merely that the component
+is mounted. **A test
 asserts an unset `themePref` renders the control in its neither-selected state and issues no
 PATCH.**
 
@@ -423,8 +451,15 @@ belong to a colour child.
 honest and stated: in an installed iOS PWA in light mode the status-bar glyphs stay white
 over a light wash and are hard to read. That is a real defect, it is narrower than a layout
 jump on every toggle, and its fix is the iOS work (where the safe-area padding can move in
-the same change), not this one. §5:186-187's recorded-remnant fallback is worded to permit
-exactly this. **`themeColor` is still swapped** — it is pure colour with no geometry
+the same change), not this one. **The parent must be amended rather than reinterpreted, and that is E's job here.**
+§5:186-187's remnant fallback is *conditional* — it covers a child that **cannot** meet the
+requirement without a session read in a shared layout — and this plan already argues, for
+`themeColor`, that E does not meet that precondition. The precondition is equally unmet for
+`statusBarStyle`: E **can** swap the meta client-side and declines for geometry reasons,
+which is a different and better reason the parent does not currently name. So E does not
+stretch the clause to cover it. **E's docs pass amends parent §5:188-190 and the §12 row** to
+record the geometry constraint and the remnant explicitly, so the half-row is visibly
+answered rather than quietly dropped. **`themeColor` is still swapped** — it is pure colour with no geometry
 attached, and it is the row that fixes the browser-tab and non-installed cases.
 
 This plan reached the right answer by two wrong routes before this one, and both are worth
@@ -465,6 +500,32 @@ read at install time and cannot follow a runtime theme. That is not E's to fix, 
 child that makes light reachable, so E's docs are the right place to record that an
 **installed PWA keeps dark chrome in light mode**, alongside the `statusBarStyle` remnant
 above. Two remnants, one paragraph, so the next reader finds them together.
+
+### ADR-0008 must be superseded in E4, not left contradicting the code
+
+`docs/adr/0008-forced-dark-theme.md` is **Status: Accepted — being revisited**, its Decision
+block quotes `<ThemeProvider attribute="class" forcedTheme="dark" enableSystem={false}>`
+verbatim (`:21`), and its Consequences say the lever "is one line — remove
+`forcedTheme="dark"` from `Provider.tsx`" and **"Do that last: until the 47 untreated files
+are handled, flipping it re-exposes exactly the broken state this ADR exists to prevent"**
+(`:54`).
+
+E4 *is* that flip. The moment it lands, the repo's own decision record describes a line that
+no longer exists and warns against the change that shipped — and CLAUDE.md says to **"read
+the relevant ADR before 'fixing' something that looks wrong"**, so a stale 0008 actively
+misleads the next reader into thinking E4 was the mistake 0008 forbids.
+
+**E4 amends 0008 to `Superseded by` this delivery**, recording that its precondition was met
+rather than ignored: Children A–D treated the untreated files, D's visual pass caught the
+two remaining defects, and E ships the explicit `defaultTheme="dark"` that keeps the flip
+from meaning "everyone gets light". `docs/adr/README.md` is updated if it indexes status.
+Superseding an ADR because its condition was satisfied is the ordinary path; deleting it, or
+leaving it silently false, is not.
+
+Also stale on the same day: **`docs/UTILITIES_AND_COMPONENTS.md:147-149`**, which states the
+provider stack carries `forcedTheme="dark"` and that "Child E must add `defaultTheme="dark"`
+explicitly" — a correct instruction that becomes a false description the moment it is
+followed.
 
 ### A6: the NATIVE iOS status bar is deferred, with the remnant recorded
 
@@ -543,11 +604,26 @@ land in the same merge.**
   there: drop it and every member silently loses their theme with nothing failing.
 - Route tests mirroring `notifPrefsRoute.test.ts`: 401 unauthenticated, 400 on an invalid
   theme, self-id only, happy path writes the field.
-- **The read is a `themePref`-only projection, not the full member document.**
-  `ThemeBootstrap` mounts in the root `Provider`, so this fetch happens on **every full page
-  load for every member** — `requireActiveSession` → `isMemberActive`, plus a Sanity fetch —
-  to read one string. Project only the field. This is the one new per-load cost E adds and
-  it should be as small as it can be.
+- **The `themePref` addition to `GET /api/me` is ADDITIVE. The route's shape does not
+  narrow.** An earlier revision said "project only the field", reaching for a smaller
+  per-load cost; taken literally that shrinks a shared, documented endpoint
+  (`docs/API_REFERENCE.md:226`, "GET own member doc (incl. `hasPassword`)") from eight fields
+  to one. **Nothing in `app/` GETs it today**, so no test and no gate would catch the
+  regression — the exact silent-failure shape this plan guards against everywhere else. §12:593
+  assigns E "`GET /api/me` projection", and additive is what the parent sanctions.
+
+  **The per-load cost is real and stays named rather than fixed here.** `ThemeBootstrap`
+  mounts in the root `Provider`, so this fetch runs on every full page load for every member
+  — `requireActiveSession` → `isMemberActive`, plus a Sanity fetch — to read one string. If
+  that proves to matter, the answer is a **separate narrow reader**, never a narrowing of the
+  shared route. Measured in F, not assumed here.
+- **A schema source-scan asserting `themePref` has NO `initialValue` — and it belongs to
+  E1.** Every client-side guard here checks that no mount path *writes* the field, but an
+  `initialValue` breaches invariant 14 with **no client code running at all**: Sanity would
+  stamp every member document and Child F's cohort would be empty before F begins. Three
+  immediate neighbours in the same schema carry `initialValue: true` (`:75`, `:80`, `:87`),
+  so this is the natural mistake for a later Studio edit, and it is the cheapest guard in
+  the child.
 - **A test that `GET /api/me` actually projects `themePref`.** The four above cover the
   `PATCH` only. If the projection line is dropped, the bootstrap reads `undefined`, correctly
   does nothing, and every symptom reads as "this member has no preference" — the silent-
@@ -558,7 +634,10 @@ land in the same merge.**
   `themePref` unchanged. See the ordering rule below; this is the guard on it.
 - **Browser, both themes, on the real components** — the pass that found the two defects D
   shipped. An open `CueDialog` and `PlannerGrid` full-screen, which the parent names as
-  acceptance criteria (§4.4), **plus one `(admin)` route** — §12 notes `(admin)/layout.tsx`
+  acceptance criteria (§4.4), **plus one `(admin)` route, and one look at `/studio`** — `app/(admin)/studio/[[...tool]]/page.tsx`
+  inherits the admin `Provider`, so E4 is the first moment `<html class="light">` can reach
+  Sanity Studio. Studio's own theming is out of scope (D10); the look is to confirm that
+  decision is *survivable* rather than merely declared, and to record what it looks like — §12 notes `(admin)/layout.tsx`
   "can only follow the theme at E, when `forcedTheme` goes", making E the first moment admin
   chrome is observable in light at all — **and `/posts/[slug]`**: §12 marks Child B's typography and
   `dark:prose-invert` row "E verifies on device", and that route is where the unstyled-lyrics
@@ -575,12 +654,19 @@ land in the same merge.**
 - **A route test for the impersonation rejection**, since that claim is the one a
   Critical-tier reviewer should not have to take on trust.
 - `npx tsc --noEmit`, `npm test`, `npx eslint .` at 0 errors, per slice.
-- **Two stale comments to update in the same delivery**, per CLAUDE.md's currency rule:
-  `app/(gallery)/theme-gallery/[theme]/layout.tsx:10-14` and
-  `app/utils/__tests__/themeGallery.test.ts:98-100` both justify their design "while
-  `forcedTheme` is still in force". The reasoning survives E4 — the nested-provider
-  pass-through is independent of `forcedTheme` — but the sentences go stale the moment it
-  lands.
+- **FOUR stale artefacts to update in the same delivery**, per CLAUDE.md's currency rule.
+  An earlier revision said "two" and named only the first pair, which read as a finished
+  audit and hid the one that matters most:
+  1. `app/(gallery)/theme-gallery/[theme]/layout.tsx:10-14` and
+  2. `app/utils/__tests__/themeGallery.test.ts:98-100` — both justify their design "while
+     `forcedTheme` is still in force". The reasoning survives E4 (the nested-provider
+     pass-through is independent of `forcedTheme`), but the sentences go stale the moment
+     it lands.
+  3. `docs/UTILITIES_AND_COMPONENTS.md:147-149` — states the provider carries
+     `forcedTheme="dark"` and that "Child E must add `defaultTheme="dark"` explicitly": a
+     correct instruction that becomes a false description the moment it is followed.
+  4. **`docs/adr/0008-forced-dark-theme.md` — superseded, not merely edited.** See its own
+     section above; this is the artefact whose whole subject is the line E4 deletes.
 - **Name the read path the control initialises from.** `/me` carries
   `export const revalidate = 60`, so "no ISR page renders `themePref`" must be checkable
   rather than asserted: the control initialises from the literal `themePref` in
