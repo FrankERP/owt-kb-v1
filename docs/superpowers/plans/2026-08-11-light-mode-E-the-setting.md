@@ -40,8 +40,9 @@ No secrets, credentials or personal data appear here.
 | 4b | Reads the projection, calls `setTheme`, swaps both `<meta>`s | `app/components/ThemeBootstrap.tsx` (new), mounted in `Provider.tsx` |
 | 5 | **`forcedTheme="dark"` removed**, explicit `defaultTheme="dark"` added | `app/utils/Provider.tsx:16` |
 | 6 | `themeColor` **swapped client-side on the resolved theme** | `app/components/ThemeBootstrap.tsx` |
-| 7 | `appleWebApp.statusBarStyle` — **swapped in `ThemeBootstrap` beside `themeColor`** | `app/components/ThemeBootstrap.tsx` |
+| 7 | `appleWebApp.statusBarStyle` — **stays `black-translucent`; recorded remnant under invariant 17** (it is geometry, not colour — see below) | unchanged |
 | 7b | Capacitor's **native** status bar (`@capacitor/status-bar`) | **deferred with a recorded remnant — that, and only that, is A6** |
+| 8b | **The two client-side keys documented** — `"theme"` (next-themes' mirror) and `owt-theme-migrated` (the one-time reconciliation flag) | `UTILITIES_AND_COMPONENTS.md`, beside `themePref` — neither is a secret, both are persistent state a later hand would otherwise "clean up" |
 | 8 | **Docs, per slice** — §12 assigns them to the owning child | `DATA_MODEL.md` (E1), `API_REFERENCE.md` + `ROUTES.md` (E2), `UTILITIES_AND_COMPONENTS.md` for `themePref.ts` + `ThemeBootstrap` (E3) and for `ThemeControl` (E4, with the control itself) |
 
 ## The default is `"dark"`, and it must be written explicitly
@@ -152,9 +153,28 @@ the mirror would pin the whole unset population to dark and quietly defeat F's r
 
 It runs once, so a value E's own control writes afterwards is never touched.
 
-**The test must assert the RESOLVED `documentElement` class after a render**, not the
-helper in isolation: a helper-only test passes green while the app paints light, which is
-exactly the failure mode above. Chain: a pre-existing `localStorage.theme = "light"` plus an
+**The script ships as an exported constant so that it can be both guarded and executed.**
+`themePref.ts` exports `THEME_MIGRATION_SCRIPT`; both layouts render
+`<script dangerouslySetInnerHTML={{ __html: THEME_MIGRATION_SCRIPT }} />`. That is not
+tidiness — it is what makes a real guard possible, and it closes a duplication hazard:
+written out twice by hand, an implementer can add it to `(client)` and forget `(admin)`,
+shipping a terminal light state on admin routes with a green suite.
+
+**Two guards, because one cannot do the job alone.** An earlier revision demanded only "the
+resolved `documentElement` class after a render, not the helper in isolation". That test
+**cannot exist as specified**: React sets inline scripts via `innerHTML`, and per the HTML
+spec scripts inserted that way **do not execute** — under `@testing-library/react` neither
+this script nor next-themes' own seed ever runs, so a render test exercises only the effect
+path and fails for reasons unrelated to the shipped code. So:
+
+1. **A source-text guard** that *both* layouts render `THEME_MIGRATION_SCRIPT`, as the first
+   child of `<body>`, before `<Provider>`.
+2. **A jsdom chain test** that `eval`s the exported constant — the same string the layouts
+   render, not a copy — then renders, then asserts the resolved class.
+
+The distinction the earlier revision was reaching for still holds and is preserved in (2):
+assert the **resolved `documentElement` class**, never the helper's return value in
+isolation, because a helper-only assertion passes green while the app paints light. Chain: a pre-existing `localStorage.theme = "light"` plus an
 unset `themePref` ends with `<html class="dark">`, issues **no PATCH**, and leaves
 `themePref` unset.
 
@@ -200,7 +220,9 @@ immediate claim sees nothing happen and may conclude the trap is not real.
 **`themePref` is unset for the entire team on the day E ships** — invariant 14 requires
 that absence be the normal state — so an unguarded bootstrap would put every member into
 a themeless document. With `tailwind.config.ts:10` at `darkMode: "class"` and **94 `dark:`
-utilities still live**, they all stop applying at once. And per `CLAUDE.md`, a `dark:` base
+utilities still live** (`grep -rEho 'dark:[a-zA-Z-]+' app --include='*.tsx' --include='*.ts'
+--include='*.css' | wc -l` — the method is stated because reviewers have counted 92 with a
+different pattern, and the argument holds at either figure), they all stop applying at once. And per `CLAUDE.md`, a `dark:` base
 at specificity (0,2,0) *masks* bare `hover:`/`focus:` utilities, so this is not a missing
 colour — it changes which rules win. Child B paid for that lesson with 39 real bugs.
 
@@ -252,11 +274,27 @@ writeClient.patch(session.user.sanityId).set({ themePref: theme }).commit()
   record — so without a guard the admin's browser adopts and mirrors someone else's theme.
   `ThemeBootstrap` skips the fetch entirely when `isImpersonating`.
 
-  **One read, not two.** `ThemeBootstrap` and the `/me` control both need the member's
-current `themePref`, and both would otherwise issue their own `GET /api/me` — a duplicated
-Sanity round-trip on the one page where they coexist. The control takes its initial value
-from the resolved theme `next-themes` already holds (which the bootstrap has by then set),
-and issues no read of its own.
+  **One read, shared — and the control binds to the LITERAL `themePref`, never the resolved
+theme.** An earlier revision had the control initialise from the resolved theme to avoid a
+second `GET /api/me`. That was wrong three ways, and the parent forbids it outright: §12:594
+is "`/me` control bound to **server** `themePref`" and §9:529-531 says the requirement holds
+"because the client seed is not the source of truth".
+
+- **The resolved theme cannot express the third state.** It is `"dark"` for an explicit-Dark
+  member *and* for an unset one. A control sourced from it is structurally incapable of the
+  three states this plan demands, and invariant 14 is precisely about that distinction.
+- **It displays the wrong value in a real race.** `ThemeControl` and `ThemeBootstrap` mount
+  in the same paint and the bootstrap's fetch is async, so a Light member opening `/me` sees
+  the control read `"dark"` — the pre-fetch value. If it captures that into state, it stays
+  wrong, and **one click writes `themePref: "dark"` over their real preference** from a stale
+  display. If the fetch fails outright the control shows Dark for a Light member forever.
+- **The round-trip it saved was one request, not a duplication.** `ProfilePanel` PATCHes
+  `/api/me` (`:122`) and never GETs it, so there was no existing client read to piggyback on.
+
+**The single read is kept by sharing, not by substituting.** `ThemeBootstrap` performs the
+one fetch and the control receives the literal value through context or props. **A test
+asserts an unset `themePref` renders the control in its neither-selected state and issues no
+PATCH.**
 
 **The bootstrap's skip is only sound if its fetch waits for the session.** `ThemeBootstrap` gates on
   `useSession().status === "authenticated"` rather than firing on bare mount: while status is
@@ -288,6 +326,9 @@ and issues no read of its own.
 
   **This gets a guard, not just a mention.** The source-scan test asserts the call count is
   exactly **four**, so a later hand cannot quietly add a fifth at the impersonation handler.
+  **Its failure message must say "a new sign-out path needs `clearThemeMirror()` — add the
+  call, then update this count", not just report 5 ≠ 4** — otherwise the day a legitimate
+  fifth sign-out entry appears, someone bumps the number and the guard becomes decoration.
   It also asserts that no file
   containing `signOut(` lacks the clear — the same shape as the `Provider.tsx` source-text
   test, and for the same reason: the failure is silent. Shipped without it, a member who
@@ -338,7 +379,10 @@ they "see dark until they choose again", which contradicted this plan's own read
 `SignOutButton.tsx:8`, `(client)/auth/not-a-member/page.tsx:21`) leaves every device
 mirror-less at the next sign-in, so a Light member gets a dark→light flash after hydration each time they sign in.
 That is the price of the clear, which exists so a shared device never shows member A's theme
-to member B. Both paths repaint — without the clear B sees A's theme and then flips, with it
+to member B — **on the paths it covers.** It fires only on the four explicit sign-out
+entries; a session that simply expires, or a browser closed without signing out, still
+leaves A's mirror for B. The guarantee is "no leak through sign-out", not "no leak ever",
+and the residue self-corrects the moment B's projection lands. Both paths repaint — without the clear B sees A's theme and then flips, with it
 B sees dark and then flips — so the clear adds no repaint to the shared case; it moves the
 cost onto every sign-in in exchange for never showing one member another's setting. **The
 trade is deliberate.** Sign-in is rare next to page loads, where the mirror does its job and
@@ -359,18 +403,29 @@ An unguarded `.setAttribute` on a `null` query result throws *inside the bootstr
 the `setTheme` call down with it and disabling the member's theme on every admin page. Query,
 skip if absent, never create.
 
-**`appleWebApp.statusBarStyle` is swapped the same way, and it is in scope.** It is the
-static `"black-translucent"` at `(client)/layout.tsx:31` and `(admin)/layout.tsx:26`. An
-earlier revision deferred it by citing **A6**, which is a different thing entirely: A6 is
-Capacitor's **native** `@capacitor/status-bar` plugin, and §12 lists that as its own row.
-`apple-mobile-web-app-status-bar-style` is a DOM meta under invariant 17's ordinary
-constraint, and §5's escape clause is conditional on a child that *cannot* meet it without a
-session read in a shared layout — a precondition this plan already demolishes for
-`themeColor`, since `ThemeBootstrap` holds the resolved theme client-side. The same argument
-carries. **Uncertainty recorded rather than argued away:** whether an *installed* iOS PWA
-re-reads that meta after standalone launch is unverified — no device was available. Swapping
-it costs one guarded line; if iOS ignores the runtime change, nothing is worse than the
-deferral, and the browser-tab case is fixed either way.
+**`appleWebApp.statusBarStyle` STAYS `"black-translucent"` — and the reason is geometry,
+not colour.** It sits at `(client)/layout.tsx:31` and `(admin)/layout.tsx:26`. Two earlier
+revisions got this wrong in opposite directions: one deferred it by citing **A6**, which
+governs something else entirely; the next swapped it in `ThemeBootstrap` on the grounds that
+"if iOS ignores the runtime change, nothing is worse than the deferral". That symmetry only
+covers the ignored case. **The honoured case is the dangerous one.**
+
+`black-translucent` is exactly what makes the WebView extend under the iOS status bar, and
+that is what gives `env(safe-area-inset-top)` a non-zero value — `(client)/layout.tsx:35-37`
+documents `viewportFit: "cover"` as its activator. Three components consume it:
+`Navbar.tsx:18`, `CueDialog.tsx:236`, `PlannerGrid.tsx:1769`. The only light-appropriate
+values (`default`, `black`) are **non-translucent**, so honouring a runtime swap collapses
+the inset to zero and **moves all three** — a visible layout jump on every toggle in an
+installed PWA. That is a geometry change wearing a colour change's clothes, and it does not
+belong to a colour child.
+
+**So it is recorded as a remnant under invariant 17's own terms — not A6's.** The cost is
+honest and stated: in an installed iOS PWA in light mode the status-bar glyphs stay white
+over a light wash and are hard to read. That is a real defect, it is narrower than a layout
+jump on every toggle, and its fix is the iOS work (where the safe-area padding can move in
+the same change), not this one. §5:186-187's recorded-remnant fallback is worded to permit
+exactly this. **`themeColor` is still swapped** — it is pure colour with no geometry
+attached, and it is the row that fixes the browser-tab and non-installed cases.
 
 This plan reached the right answer by two wrong routes before this one, and both are worth
 recording because they are opposite errors:
@@ -382,8 +437,9 @@ recording because they are opposite errors:
   is *conditional*: §5 permits it only for "a child that CANNOT meet it without a session
   read in a shared layout". E ships `ThemeBootstrap`, a client component that already holds
   the resolved theme, so no session read in any layout is required and **the precondition
-  is not met.** §12 assigns E "theme-responsive `themeColor` + `statusBarStyle`, client-side
-  only". An earlier revision also cited a Child C lint `ignores` entry "written to expire
+  is not met** — for `themeColor`, which E therefore ships. §12 assigns E "theme-responsive
+  `themeColor` + `statusBarStyle`, client-side only"; the `statusBarStyle` half is answered
+  with a recorded remnant and a stated reason (geometry), not dropped in silence. An earlier revision also cited a Child C lint `ignores` entry "written to expire
   here"; **no such entry exists** — `eslint.config.mjs:59-64` ignores only
   `app/**/__tests__/**` and `app/utils/emailShell.ts`, and row exemptions carry an inline
   disable rather than a whole-file ignore (`:69-72`). The conclusion rests on parent
@@ -399,10 +455,16 @@ Use the inline `eslint-disable-next-line` with a reason, exactly as the rule's o
 sanctions and as `(client)/layout.tsx:47` already does — a `<meta>` content attribute
 cannot take a `var()`.
 
-`appleWebApp.statusBarStyle` **is swapped, not deferred** — see the section above. An
-earlier revision said here that it "stays `black-translucent`" because "A6's fallback covers
-it", which contradicted that section outright and dropped a §12 row. A6 is a different
-thing, and only that thing:
+`appleWebApp.statusBarStyle` stays `black-translucent` **for the safe-area reason given
+above, under invariant 17's own remnant clause** — *not* because A6 covers it. A6 is a
+different thing, and only that thing:
+
+**One more remnant belongs in E's docs pass.** Parent §5:200 already rules
+`manifest.webmanifest`'s `theme_color: "#010b17"` permanently out of scope — a manifest is
+read at install time and cannot follow a runtime theme. That is not E's to fix, but E is the
+child that makes light reachable, so E's docs are the right place to record that an
+**installed PWA keeps dark chrome in light mode**, alongside the `statusBarStyle` remnant
+above. Two remnants, one paragraph, so the next reader finds them together.
 
 ### A6: the NATIVE iOS status bar is deferred, with the remnant recorded
 
@@ -440,7 +502,7 @@ it ships inert and independently revertible.
 | **E1** | `themePref` schema field + Studio deploy | no |
 | **E2** | `PATCH /api/me/theme` + its route test | no — nothing calls it |
 | **E3** | `GET /api/me` projection, `themePref.ts`, `ThemeBootstrap` — **not the control** | no — genuinely inert |
-| **E4** | **Remove `forcedTheme`, add `defaultTheme="dark"`**; the `/me` control (item 3b); the legacy-mirror reconciliation script (item 4c); the client-side `themeColor` + `statusBarStyle` swaps | **YES** |
+| **E4** | **Remove `forcedTheme`, add `defaultTheme="dark"`**; the `/me` control (item 3b); the legacy-mirror reconciliation script (item 4c); the client-side `themeColor` swap | **YES** |
 
 **The control writes BEFORE it paints, and the order is not a style preference.**
 `ThemeControl` awaits the PATCH and calls `setTheme` only on `res.ok`; on failure it
@@ -475,10 +537,17 @@ land in the same merge.**
 
 ## Verification
 
-- **A test reads `Provider.tsx` and asserts `defaultTheme="dark"` is present and
-  `forcedTheme` is absent.** Source-text, not rendered — see above.
+- **A test reads `Provider.tsx` and asserts `defaultTheme="dark"` is present,
+  `forcedTheme` is absent, and `ThemeBootstrap` is mounted.** Source-text, not rendered —
+  see above. The mount belongs in the same assertion for the same reason the other two are
+  there: drop it and every member silently loses their theme with nothing failing.
 - Route tests mirroring `notifPrefsRoute.test.ts`: 401 unauthenticated, 400 on an invalid
   theme, self-id only, happy path writes the field.
+- **The read is a `themePref`-only projection, not the full member document.**
+  `ThemeBootstrap` mounts in the root `Provider`, so this fetch happens on **every full page
+  load for every member** — `requireActiveSession` → `isMemberActive`, plus a Sanity fetch —
+  to read one string. Project only the field. This is the one new per-load cost E adds and
+  it should be as small as it can be.
 - **A test that `GET /api/me` actually projects `themePref`.** The four above cover the
   `PATCH` only. If the projection line is dropped, the bootstrap reads `undefined`, correctly
   does nothing, and every symptom reads as "this member has no preference" — the silent-
@@ -514,8 +583,10 @@ land in the same merge.**
   lands.
 - **Name the read path the control initialises from.** `/me` carries
   `export const revalidate = 60`, so "no ISR page renders `themePref`" must be checkable
-  rather than asserted: the control initialises from the client-side `GET /api/me` fetch,
-  not from the server-rendered page, which is why the no-`revalidate` argument holds.
+  rather than asserted: the control initialises from the literal `themePref` in
+  `ThemeBootstrap`'s client-side `GET /api/me` fetch — shared, not re-issued, and never from
+  the resolved theme — not from the server-rendered page, which is why the no-`revalidate`
+  argument holds.
 
 ## Risks
 
