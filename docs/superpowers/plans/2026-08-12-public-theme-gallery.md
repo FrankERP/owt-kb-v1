@@ -26,6 +26,56 @@ No secrets, credentials or personal data appear in this plan.
 - **Rollback:** remove the alternation from both copies of the matcher. One line
   each, instant, no data implications — the route simply 307s again.
 
+## This REVERSES a deliberate, tested decision — and that is the whole question
+
+**Child A2 chose gating on purpose and left a tripwire to force this conversation.**
+`app/utils/__tests__/themeGallery.test.ts:39` is titled *"theme gallery — it is
+GATED, and that is the whole auth story"*, and asserts three things: every gallery
+path runs the middleware (`:40-48`); the gallery is **not** placed under `/auth/`,
+which the matcher already excludes (`:50-55`); and `routeMatcher.test.ts` contains
+no `theme-gallery` string at all (`:57-61`), commented *"If the gallery ever needs
+an entry there, the placement is wrong. That entry is the signal, not the fix."*
+
+Ship item 3 trips that last assertion by construction. An earlier draft of this
+plan did not mention the file, which meant it was arguing against a recorded
+decision without knowing one existed — exactly what CLAUDE.md's ADR rule exists to
+prevent.
+
+**What A2's reasoning actually was.** From
+[A2's plan](2026-08-08-light-mode-A2-rendering.md): it shipped at **Standard** tier
+*because* the route was gated (`:28-35`) — "an unauthenticated route … is a
+secret/auth-boundary change on CLAUDE.md's Critical list, and this plan must be
+re-tiered" — and gating let it drop four containment mechanisms that "existed only
+to contain an unauthenticated route" (`:139-140`): an env flag, a `PUBLIC_ROUTES`
+entry, a build-time refusal, and a new env var.
+
+**So A2's reason was cost and tier, not an inherent property of the route.** The
+gallery is inert — that was true at A2 and is re-verified below. What has changed
+is not the route: it is that a verification agent now exists which cannot enter
+credentials, and did not when A2 was written.
+
+**This plan therefore supersedes that decision explicitly rather than deleting its
+guard.** The tripwire did its job — it stopped a plausible-looking change long
+enough to surface the reasoning. It gets an answer in an ADR, not a `git rm`.
+
+### The alternative A2 named, and why this plan still edits the matcher
+
+A2 recorded that `/auth/theme-gallery/…` needs **no matcher edit at all**, since
+`auth(?:/|$)` is already excluded — and asserted the gallery is *not* there
+(`themeGallery.test.ts:50-55`).
+
+**That alternative produces the identical exposure.** A route under `/auth/` is
+public; the middleware does not run for it. It is the same decision reached by
+placement instead of by regex, so it does not avoid the security question — it only
+avoids *looking* like it is being asked. A2 saw this too: *"Both placements need no
+matcher edit, so 'no matcher edit' justified neither."*
+
+Between two routes to the same exposure, this plan takes the one that is **visible
+in the auth boundary**: a named alternation in `MIDDLEWARE_MATCHER`, a
+`PUBLIC_ROUTES` entry someone must review, and a Critical-tier record. Hiding a
+public route inside the `/auth/` prefix would leave the app's list of anonymous
+surfaces less auditable, not more — and `PUBLIC_ROUTES` would still need the entry.
+
 ## Why this is worth an auth-boundary change at all
 
 `visual-verifier` cannot enter credentials, and that constraint is correct and
@@ -48,9 +98,10 @@ change becomes machine-verifiable in both themes without a human or a credential
 |---|---|---|
 | 1 | `theme-gallery(?:/\|$)` added to the matcher's negative lookahead | `app/utils/routeMatcher.ts` |
 | 2 | **The identical edit**, byte-for-byte | `proxy.ts` |
-| 3 | `/theme-gallery/…` added to `PUBLIC_ROUTES` with its reason | `app/utils/__tests__/routeMatcher.test.ts` |
+| 3 | **`"/theme-gallery/sample/sample"`** added to `PUBLIC_ROUTES` — the literal the on-disk walk produces (`[x]` → `sample`), appended last to keep the array's sorted order for the `toEqual` | `app/utils/__tests__/routeMatcher.test.ts` |
+| 3b | **A2's three gating assertions rewritten, not deleted** — they become the record that the gate was opened deliberately, pointing at the ADR | `app/utils/__tests__/themeGallery.test.ts:39-61` |
 | 4 | An ADR — an auth boundary moved deliberately | `docs/adr/00NN-public-theme-gallery.md` |
-| 5 | Doc rows | `ROUTES.md`, `CLAUDE.md`/`AGENTS.md` if either enumerates public routes |
+| 5 | **Five live "the gallery is gated" statements**, found by sweeping rather than guessing: `playwright.vr.config.ts:11` and **`:36`** — the latter a `throw` that tells a future operator the route "is a GATED route, so an authenticated session is required", which becomes actively wrong advice; `e2e/theme-gallery/README.md:11`; `docs/ROUTES.md:6` prose **and** its `**Gated**` cell at `:41`; and **`docs/AUTH_AND_SECURITY.md:116-118`**, the canonical auth doc, whose allow-list already omits `api/cron` and the A3 identity route and would gain a third omission | as listed |
 
 ## The matcher is duplicated, and the duplication is load-bearing
 
@@ -94,8 +145,14 @@ Verified before proposing, not asserted:
   machinery — `ThemeBootstrap`, the `/api/me` read, the migration script — runs
   there at all.
 
-**What it does expose:** the app's visual design, its component layouts, and its
-colour system, to anyone with the URL. That is a real disclosure and should be
+**The marginal disclosure is smaller than it first appears.** `_next/static` is
+*already* excluded from the matcher, so the app's entire client bundle — every
+component, every class name, the whole colour system — is world-readable today.
+What the gallery adds is a *rendered, browsable* view of it, not the information
+itself.
+
+**What it does expose:** the app's visual design and component layouts, assembled
+and legible, to anyone with the URL. That is a real disclosure and should be
 stated as one rather than dismissed. The judgement is that a worship-team
 scheduling tool's swatch page is not sensitive, and the design is already visible
 to ~40 volunteers. **This is the decision the reviewer should press on**, because
@@ -161,8 +218,8 @@ instinct that put six real names there in the first place.
 
 | # | Question | Blocking? | Bounded default |
 |---|---|---|---|
-| **Q1** | Public on production, or only on the dev deployment? | **No** | **Both.** A dev-only gate would need environment-conditional middleware, which is more moving parts in an auth path than the change itself — and the whole point is verifying what production actually renders. |
-| **Q2** | Should the gallery be `noindex`? | **No** | **Yes, add it.** Cheap, and there is no reason for a swatch page to appear in search results. |
+| **Q1** | Public on production, or only on the dev deployment? | **No** | **Both — but the case is weaker than it looks and is stated honestly.** `visual-verifier`'s brief accepts a local dev server, and the matcher change takes effect under `next start` locally, so **the capability lands in full with no deployed exposure at all.** Against that: the deployed surfaces also sit behind Vercel Deployment Protection, which this plan cannot query read-only — **if that covers the dev alias, the production half carries the entire permanent disclosure while the deployed half buys nothing.** Confirm the protection scope before implementing. A dev-only gate is rejected regardless: environment-conditional middleware is more moving parts in an auth path than the change itself. |
+| **Q2** | Should the gallery be `noindex`? | **No — ALREADY DONE, do not add a duplicate** | `app/(gallery)/theme-gallery/[theme]/layout.tsx:34-37` already sets `robots: { index: false, follow: false }`. An earlier draft said "yes, add it", which would have produced a second declaration. |
 
 ---
 
