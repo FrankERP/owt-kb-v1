@@ -175,6 +175,35 @@ describe("theme gallery — the fixtures are hermetic", () => {
       expect(src, `${rel} must not fetch`).not.toMatch(/\bfetch\(/);
       expect(src, `${rel} must not reach Sanity`).not.toMatch(/serverClient|operationalClient|writeClient|@\/sanity|groq/);
       expect(src, `${rel} must not read env`).not.toMatch(/process\.env/);
+      // `next/headers` is a DIRECT request read — cookies(), headers(), draftMode()
+      // — inside the level this guard covers, not the one-level-deep gap the ADR
+      // discloses. It would also force dynamic rendering, silently un-prerendering
+      // a route whose safety argument depends on being static.
+      expect(src, `${rel} must not read the request`).not.toMatch(/next\/headers|\bcookies\(|\bheaders\(|\bdraftMode\(/);
+      // "use server" would make an anonymously-reachable POST endpoint on a route
+      // the middleware no longer touches. The fixtures pass `noop` mutation
+      // handlers today — wiring one up is exactly the plausible next edit.
+      expect(src, `${rel} must not declare a server action`).not.toMatch(/["']use server["']/);
+    }
+  });
+
+  it("the planner fixture carries PLACEHOLDER names, not real people", () => {
+    // This is load-bearing and was previously guarded only by a comment. Six real
+    // team members' first names lived here until 2183b3d; the route is now
+    // prerendered and served to the anonymous internet, so "make the planner more
+    // realistic" — an edit this repo has already made once — would publish a real
+    // person's name in world-readable HTML with nothing to stop it.
+    const PLACEHOLDERS = new Set(["Ana", "Beto", "Cami", "Dani", "Emi", "Fito"]);
+    const src = read(`${GALLERY}/[fixture]/fixtures/PlannerFixture.tsx`);
+    const names = [...src.matchAll(/member_name:\s*"([^"]+)"/g)].map((m) => m[1]);
+    expect(names.length, "the fixture must still carry members").toBeGreaterThan(0);
+    for (const n of names) {
+      expect(
+        PLACEHOLDERS.has(n),
+        `"${n}" is not one of the agreed placeholders. This route is PUBLIC — a ` +
+          `real member's name here is published to the anonymous internet. If the ` +
+          `placeholder set is genuinely changing, change it here deliberately.`,
+      ).toBe(true);
     }
   });
 

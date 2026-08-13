@@ -33,9 +33,12 @@ const COLUMNS: GridColumn[] = buildColumns({ sundayDates: ["2026-08-09"], active
 // This fixture used the first names of six actual team members. It exercises
 // PlannerGrid's layout, which needs names of realistic LENGTH, not real people:
 // nothing here reads Sanity, and these strings are the only personal data the
-// gallery would carry. That matters because this route is a candidate for being
-// served publicly (it is the one surface built to render both themes without a
-// session), and a name published to the open internet is not retractable.
+// gallery would carry. That matters because this route IS served publicly as of
+// ADR-0017 — it is the one surface built to render both themes without a session
+// — and a name published to the open internet is not retractable.
+//
+// themeGallery.test.ts pins these values. If you are changing them, change them
+// there too, deliberately.
 //
 // Kept short and varied so the column widths still get a realistic workout.
 const MEMBERS: RankMember[] = [
