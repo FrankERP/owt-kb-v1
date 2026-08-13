@@ -236,10 +236,14 @@ and currently green:
 
 8. `app/utils/__tests__/routeMatcher.test.ts:52` asserts `ungated` equals `PUBLIC_ROUTES`
    (`:34–42`) by walking `app/` on disk. **Any new unauthenticated route breaks `npm test`
-   the moment it exists.** **The theme gallery is deliberately NOT such a route** (§8.4): it
-   sits on a gated path, so it must never appear in `ungated`, and this guard must stay green
-   **without being edited**. If a child finds itself adding a `PUBLIC_ROUTES` entry for the
-   gallery, the placement is wrong — that entry is the signal, not the fix.
+   the moment it exists.** **AMENDED 2026-08-12, superseded by [ADR-0017](../../adr/0017-public-theme-gallery.md).**
+   This clause used to read: *"The theme gallery is deliberately NOT such a route (§8.4): it
+   sits on a gated path… If a child finds itself adding a `PUBLIC_ROUTES` entry for the
+   gallery, the placement is wrong — that entry is the signal, not the fix."* The gallery is
+   now public and **does** carry a `PUBLIC_ROUTES` entry, deliberately. The guard's real
+   invariant is unchanged and still absolute: **any new unauthenticated route breaks
+   `npm test` the moment it exists**, so it cannot happen without someone editing that list
+   on purpose. What changed is that for this one route, editing it was the decision.
 9. `app/utils/__tests__/agentDocsParity.test.ts` asserts `CLAUDE.md` and `AGENTS.md` are
    byte-identical after normalisation. Both must be edited in the same commit.
 10. `app/utils/__tests__/adrIndex.test.ts` requires every `docs/adr/NNNN-*.md` to be linked
@@ -303,7 +307,7 @@ are **not** split because the document was long.
 
 | Child | Outcome | Safe end state | Rollback boundary | Tier |
 |---|---|---|---|---|
-| **A — Verification scaffolding** | Inventory, guards, gallery, VR harness exist. | No user-visible change. Dark-only, unchanged. The gallery is a **gated** route, reachable in production by any signed-in member — accepted (§8.4). | Revert; nothing user-facing moved. | Standard |
+| **A — Verification scaffolding** | Inventory, guards, gallery, VR harness exist. | No user-visible change. Dark-only, unchanged. The gallery is a **public** route as of ADR-0017 (it was gated at A2; §8.4 amended). | Revert; nothing user-facing moved. | Standard |
 | **B — Token layer + hex/`brand-*` migration** | All hex and `brand-*` utilities resolve through tokens. Dark values byte-identical. | Dark-only, visually identical except the enumerated normalisations. | Atomic. Tag before; a half-migrated token layer compiles and renders wrong. | Standard |
 | **C — Palette families** | The 881 raw palette classes and 45 `white`/`black` resolve through roles. | Dark-only, per-family visual deltas enumerated and reviewed. | Per colour family; each independently revertible. | Standard |
 | **D — Light counterpart design** | `.light` carries a designed counterpart for every token and the **15** `.brand-*` classes that carry colour (of 17 — generated). Acceptance includes an **open `CueDialog`** and **`PlannerGrid` full-screen** (§4.4). | Light values exist but are **unreachable** — `forcedTheme="dark"` still in force. | Atomic. Tag before; the `brand.css` guard demands a full counterpart set. | Standard |
@@ -320,7 +324,7 @@ exclusion. Child A's review established that the stated justification for that p
 "it needs no matcher edit" — is true of a **gated** path as well (verified against the live
 matcher), so it justified neither, and the user chose the gated placement. A therefore
 changes no trust boundary: it adds a route the middleware protects exactly like `/admin`,
-`routeMatcher.test.ts` stays green **without being edited**, and there is no env flag,
+`routeMatcher.test.ts` stayed green **without being edited** *at the time* (ADR-0017 later edited it deliberately), and there is no env flag,
 `PUBLIC_ROUTES` entry, `docs/SECRETS.md` entry or build-time refusal to review.
 
 ### 8.1 Why the token vocabulary is a Child A deliverable, not a section here
@@ -361,7 +365,7 @@ two separable outcomes, so it was split:
   inventory and its guard, the reconciliation, the palette-family analysis and token
   vocabulary, both `brand.css` guards, and `.light { color-scheme }`. **No route**, which is
   what keeps the trust boundary out of measurement work.
-- **[A2 — rendering](../plans/2026-08-08-light-mode-A2-rendering.md):** the gated gallery route
+- **[A2 — rendering](../plans/2026-08-08-light-mode-A2-rendering.md):** the gallery route (gated at A2, public as of ADR-0017)
   and its composition (one fixture per route), fixture hosting, the read-only VR harness and
   its credential question, the `redesign/explore` polarity review, and this document's AA-gate
   inputs.
@@ -406,11 +410,17 @@ Accepted when, and only when:
    light — subject to A6's fallback.
 8. ADR-0008 is superseded.
 
-### 8.4 The theme gallery is gated, and reachable in production
+### 8.4 The theme gallery is PUBLIC, and reachable in production
+
+> **AMENDED 2026-08-12 by [ADR-0017](../../adr/0017-public-theme-gallery.md).** This section
+> recorded the gating decision and its five consequences. Three of the five are reversed: it
+> is no longer gated, it now has a `PUBLIC_ROUTES` entry, and the VR harness no longer needs
+> to authenticate. Kept in place with this note rather than rewritten, so the original
+> reasoning stays legible — a decision and its supersession are both part of the record.
 
 Amended 2026-08-07, after this document's first approval.
 
-The gallery sits on a **gated** path — not under `/auth/`, not public. Consequences, recorded
+The gallery sat on a **gated** path — not under `/auth/`, not public. Consequences, recorded
 so none of them is discovered later:
 
 - **It is deployed to production and reachable there by any signed-in team member.** It
@@ -579,7 +589,7 @@ Every requirement has exactly one primary owner. Cross-cutting verification is m
 | Token vocabulary, reviewed (§8.1) | A | B applies it |
 | `brand.css` reference-integrity guard | A | B relies on it |
 | `brand.css` theme-parity guard, colour-scoped, staged | A authors | D activates |
-| Theme gallery, on a **gated** route (§8.4) | A | `routeMatcher.test.ts` proves the gating, unedited |
+| Theme gallery, on a **public** route (§8.4, ADR-0017) | A | `routeMatcher.test.ts` carries its `PUBLIC_ROUTES` entry; `themeGallery.test.ts` proves it reads nothing |
 | Gallery must be able to host an open `CueDialog` (§4.4) | A | D exercises it |
 | Read-only Playwright config + its ADR | A | — |
 | `redesign/explore` / `7af69d8` polarity review | A | — |

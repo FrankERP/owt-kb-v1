@@ -114,7 +114,11 @@ Next.js 16 renamed `middleware.ts` → **`proxy.ts`**. It wraps the app in NextA
   blocked from Studio).
 
 **Matcher** — protects everything except a small public allow-list (`/auth*`, `/api/auth*`,
+`/api/cron*`, `/api/service-readiness-verification/identity`, `/theme-gallery*`,
 `_next/static`, `_next/image`, `favicon.ico`, `LogoOasis.png`, `/icons`, `manifest.webmanifest`).
+The cron routes authenticate with `Bearer CRON_SECRET` in-handler; the identity route fails
+closed with a 404; the theme gallery is prerendered and reads nothing (ADR-0017). The first
+three had been public for some time without appearing in this list.
 Each excluded prefix is anchored with `(?:/|$)` so `/author` is **not** mistaken for the public
 `/auth` route (this was a real login-gate-bypass bug — the anchor is the fix).
 

@@ -3,13 +3,14 @@
 The app uses **three route groups**, each with its own root `<html>`/`<body>` layout:
 - **`app/(client)/`** — the member-facing app.
 - **`app/(admin)/`** — only the embedded Sanity Studio.
-- **`app/(gallery)/`** — the theme gallery, a gated review surface for the light-mode
+- **`app/(gallery)/`** — the theme gallery, a **public** (ADR-0017) review surface for the light-mode
   migration. Its root layout sits **at** the `[theme]` dynamic segment rather than at the
   group root, which is unusual and deliberate — see [ADR-0015](adr/0015-gallery-root-layout.md).
 
 Route groups in parentheses **do not** contribute to the URL. There is no top-level
 `app/layout.tsx` or `app/page.tsx`; each group supplies its own root layout. Access control is
-enforced at **two layers**: the `proxy.ts` middleware (must be logged in; Studio needs admin+)
+enforced at **two layers**: the `proxy.ts` middleware (must be logged in, except the public
+allow-list — auth pages, cron, the A3 identity route and the theme gallery; Studio needs admin+)
 and per-page guards (`requireActiveSession` / `requireActiveManager`).
 
 ---
@@ -38,7 +39,7 @@ Legend: **S** = server component (async unless noted; e.g. the Studio page is sy
 
 | URL | File | Type | Access | Rendering | Description |
 |-----|------|------|--------|-----------|-------------|
-| `/theme-gallery/[theme]/[fixture]` | `(gallery)/theme-gallery/[theme]/[fixture]/page.tsx` | S | **Gated** | SSG (6 static) | Theme gallery. `[theme]` ∈ `dark\|light`, `[fixture]` ∈ `swatches\|dialog\|planner`; `dynamicParams=false` 404s anything else. Renders colour swatches only — no session read, no fetch. Review surface for the light-mode migration. |
+| `/theme-gallery/[theme]/[fixture]` | `(gallery)/theme-gallery/[theme]/[fixture]/page.tsx` | S | **Public** (ADR-0017) | SSG (6 static) | Theme gallery. `[theme]` ∈ `dark\|light`, `[fixture]` ∈ `swatches\|dialog\|planner`; `dynamicParams=false` 404s anything else. Renders colour swatches only — no session read, no fetch. Review surface for the light-mode migration. |
 | `/` | `(client)/page.tsx` | S | Public* | ISR 60s | Home "Esta semana." This weekend's Sat/Sun/special services + full searchable song list. |
 | `/schedule` | `(client)/schedule/page.tsx` | S | Public* | ISR 60s | Upcoming services calendar; `?m=YYYY-MM` month browse. |
 | `/author` | `(client)/author/page.tsx` | S | Public* | ISR 60s | Artist index with per-author counts. |
@@ -54,8 +55,10 @@ Legend: **S** = server component (async unless noted; e.g. the Studio page is sy
 | `/studio`, `/studio/*` | `(admin)/studio/[[...tool]]/page.tsx` | S | **admin+** | `force-static` | Embedded Sanity Studio (`NextStudio`). |
 
 \* **"Public"** means no page-level guard, **but** `proxy.ts` still requires an authenticated
-session for everything except the auth pages and static assets — so in practice these pages are
-visible to any logged-in team member, not the anonymous internet.
+session for everything except the auth pages, the cron routes, the A3 identity route, the theme
+gallery (ADR-0017) and static assets — so in practice these pages are visible to any
+logged-in team member. **The theme gallery is the one exception**: it is reachable by the
+anonymous internet, deliberately, because it is prerendered and reads nothing.
 
 ### Dynamic segments
 - `posts/[slug]` → `post.slug.current` (has `generateStaticParams()`).

@@ -6,11 +6,12 @@ Specs here run under `playwright.vr.config.ts` (read-only; see ADR-0014), **not*
 **Name specs `*.spec.ts`.** `vitest.config.ts:15` includes `e2e/**/*.test.ts`, so a spec
 named `.test.ts` gets swept into `npm test` and fails there.
 
-## Nothing runs yet, and that is deliberate
+## Nothing runs yet, but the reason has changed
 
-The gallery is a gated route, so a headless run needs a member session. Provisioning one is
-a secret/auth-boundary change on CLAUDE.md's Critical list and would re-tier Child A2, so
-A2's bounded default is to take Child D's baselines **manually** and record them.
+The gallery is **public** as of ADR-0017 — prerendered, reading nothing — so a headless run
+needs no member session, and the credential problem that used to block this is gone. What
+remains is only that nobody has enabled the harness and taken baselines; that is now an
+ordinary piece of work rather than an auth-boundary change.
 
 ## The three assertions that need a real browser
 

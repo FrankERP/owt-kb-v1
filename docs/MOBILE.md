@@ -79,7 +79,8 @@ signing" → select your Apple Developer team.
 3. Remove static-export blockers: swap the 7 `next/image` usages (use `@sanity/image-url`),
    set `output: 'export'` on the mobile build.
 4. Add an offline cache (IndexedDB, stale-while-revalidate) in `packages/shared`.
-5. **Auth migration (mandatory):** the app is fully gated by `proxy.ts` (next-auth `withAuth`).
+5. **Auth migration (mandatory):** the app is gated by `proxy.ts` (next-auth `withAuth`) apart from a small public allow-list —
+   auth pages, the cron routes, the A3 identity route and the theme gallery (ADR-0017).
    The bundled client must authenticate with a **bearer token**, not a cross-origin cookie —
    add a token endpoint and store it via Capacitor Secure Storage.
 6. In `capacitor.config.ts`: remove the `server` block, set `webDir: "out"`, `npx cap sync`.

@@ -39,6 +39,14 @@ const PUBLIC_ROUTES = [
   "/api/service-readiness-verification/identity", // A3 §4; fails closed with 404
   "/auth/not-a-member",
   "/auth/signin",
+  // The theme gallery: statically prerendered, reads nothing (no Sanity client,
+  // no session, no env, no fetch in its runtime import closure), noindex, and
+  // carrying only placeholder fixture data. Opened deliberately so an agent that
+  // must never enter credentials can verify both themes on the app's real
+  // components. Child A2 gated it for tier-and-cost reasons; ADR-0017 supersedes
+  // that. THIS ENTRY IS THE DECISION, not an accident — if it appears without an
+  // ADR behind it, that is the signal something went wrong.
+  "/theme-gallery/sample/sample",
 ];
 
 describe("auth middleware route matcher", () => {
