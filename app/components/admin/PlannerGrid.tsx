@@ -2241,7 +2241,7 @@ function RowGroup({
               onClick={onRemove}
               disabled={mutationLocked}
               aria-label={`Eliminar fila ${row.label}`}
-              className="font-label text-[10px] uppercase tracking-widest text-negative-fg/70 hover:text-negative-fg"
+              className="font-label text-[10px] uppercase tracking-widest text-negative-fg/80 hover:text-negative-fg"
             >
               Eliminar
             </button>
