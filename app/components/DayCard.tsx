@@ -50,7 +50,7 @@ const SPECIAL_THEME = {
   headerBg:     "bg-info-surface-deep",
   headerBorder: "border-info-fg",
   accent:       "text-info-fg",
-  accentMuted:  "text-info-fg/70",
+  accentMuted:  "text-info-fg/80",
   accentVar:    "--info-fg-rgb",
 };
 

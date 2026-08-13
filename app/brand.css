@@ -212,8 +212,21 @@
   --mono-200-rgb: 229 231 235;                /* gray-200 #e5e7eb */
   --mono-300-rgb: 209 213 219;                /* gray-300 #d1d5db */
   --mono-400-rgb: 156 163 175;                /* gray-400 #9ca3af */
-  --mono-500-rgb: 107 114 128;                /* gray-500 #6b7280 */
-  --mono-600-rgb: 75 85 99;                   /* gray-600 #4b5563 */
+  --mono-500-rgb: 137 142 153;                /* was gray-500 #6b7280 — RAISED 2026-08-12 */
+  --mono-600-rgb: 118 126 136;                   /* was gray-600 #4b5563 — RAISED 2026-08-12 */
+
+  /* mono-500 and mono-600 no longer carry Tailwind's literal gray values in DARK.
+     Child C migrated them faithfully, and on this near-black surface-base they
+     measured 4.09:1 and 2.62:1 against a 4.5 floor — 233 and 64 uses respectively,
+     as body text. The theme gallery going public is what finally made them
+     measurable; visual-verifier found 36 AA failures on one screen.
+
+     Raised to 6.02:1 and 4.81:1, preserving hue and the scale's strict ordering.
+     Their LIGHT counterparts already passed (6.8 and 5.58) and are untouched: the
+     light halves were tuned when Child D designed them, the dark ones never were.
+
+     mono-700 and mono-800 remain deliberately below the text floor (1.91, 1.35).
+     They are surface and border roles on dark, not text roles. */
   --mono-700-rgb: 55 65 81;                   /* gray-700 #374151 */
   --mono-800-rgb: 31 41 55;                   /* gray-800 #1f2937 */
 
@@ -425,8 +438,8 @@
   --mono-200-rgb: 36 46 60;               /* #242e3c  <- dark 229 231 235 */
   --mono-300-rgb: 48 59 74;               /* #303b4a  <- dark 209 213 219 */
   --mono-400-rgb: 60 72 87;              /* #3c4857  <- dark 156 163 175 */
-  --mono-500-rgb: 72 85 102;               /* #485566  <- dark 107 114 128 */
-  --mono-600-rgb: 84 98 116;             /* #546274  <- dark 75 85 99 */
+  --mono-500-rgb: 72 85 102;               /* #485566  <- dark 137 142 153 */
+  --mono-600-rgb: 84 98 116;             /* #546274  <- dark 118 126 136 */
   --mono-700-rgb: 96 111 129;             /* #606f81  <- dark 55 65 81 */
   --mono-800-rgb: 209 213 219;            /* #d1d5db  <- dark 31 41 55 */
   --negative-faint-rgb: 127 29 29;        /* #7f1d1d  <- dark 254 226 226 */
