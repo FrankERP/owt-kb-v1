@@ -27,7 +27,8 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
-The whole app is behind a login gate; sign in with Google SSO (your email must exist as a
+The app is behind a login gate (bar the auth pages, the machine-authenticated cron routes and
+the data-free theme gallery — ADR-0017); sign in with Google SSO (your email must exist as a
 `teamMembers` doc in Sanity) or email/password. The embedded Sanity Studio is at `/studio`
 (admin+ only).
 

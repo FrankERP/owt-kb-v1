@@ -8,16 +8,13 @@
 // This config CANNOT WRITE. It carries no Sanity identity, no bypass secret, and no
 // write flag. Its only job is to open pages and capture them.
 //
-// CREDENTIALS ARE DEFERRED, DELIBERATELY. The gallery is gated, so a headless run needs
-// a member session — and provisioning one is a secret/auth-boundary change on CLAUDE.md's
-// Critical list, which would re-tier Child A2 and require re-review. A2's bounded default
-// is therefore: take Child D's baselines MANUALLY and record them. This config refuses to
-// run until that decision is taken explicitly, rather than inventing credentials to
-// unblock a screenshot.
+// NO CREDENTIALS ARE NEEDED ANY MORE. The gallery is public as of ADR-0017 — it is
+// prerendered and reads nothing — so a headless run needs no member session. That removes
+// the reason this file used to give for deferring: provisioning a session was a
+// secret/auth-boundary change on CLAUDE.md's Critical list.
 //
-// When credentials ARE provisioned, whatever variable they use gets a `docs/SECRETS.md`
-// entry in the same commit — name, platforms that need it and those that do not, where the
-// value came from, rotation steps, blast radius. Never the value.
+// THE REFUSAL BELOW STAYS. It is not about credentials; it is about not running a visual
+// baseline against an unspecified target. Enabling the harness is still an explicit act.
 //
 // Specs are `*.spec.ts`, NEVER `*.test.ts`: `vitest.config.ts:15` includes
 // `e2e/**/*.test.ts` and would sweep them into `npm test`.
@@ -33,10 +30,9 @@ if (!OPT_IN || !BASE_URL) {
       "playwright.vr.config.ts refuses to run.",
       "",
       "Set THEME_GALLERY_VR_ENABLED=true and THEME_GALLERY_VR_BASE_URL to opt in.",
-      "The theme gallery is a GATED route, so an authenticated session is required —",
-      "and provisioning one re-opens Child A2's risk tier (CLAUDE.md's Critical list).",
-      "Until that decision is taken, take Child D's baselines manually and record them.",
-      "See docs/superpowers/plans/2026-08-08-light-mode-A2-rendering.md, step 5.",
+      "No session is needed: the gallery is public as of ADR-0017 (prerendered, reads",
+      "nothing). This refusal is about not shooting baselines against an unspecified",
+      "target, not about credentials. See docs/adr/0017-public-theme-gallery.md.",
     ].join("\n"),
   );
 }

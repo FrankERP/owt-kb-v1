@@ -23,7 +23,8 @@ music ministry. It replaces spreadsheets and WhatsApp threads with a single sour
 - **Notifications** — push (FCM) and email (SMTP/Resend) on assignment/publish/reminders.
 
 The UI is **entirely in Spanish** (`<html lang="es">`), **dark-mode-first**, and the entire
-app is behind a login gate (there is no anonymous public surface except the auth pages).
+app is behind a login gate (the only anonymous surfaces are the auth pages, the cron
+routes, the service-readiness identity route and the theme gallery — see ADR-0017).
 
 ---
 
@@ -96,7 +97,8 @@ flowchart TB
 
 ## 4. Request lifecycle
 
-Every request (except the small public allow-list) passes through **`proxy.ts`**
+Every request (except the small public allow-list — auth, cron, the A3 identity route
+and the theme gallery) passes through **`proxy.ts`**
 (NextAuth `withAuth` middleware) before hitting a page or API route:
 
 ```mermaid
