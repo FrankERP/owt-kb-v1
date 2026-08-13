@@ -378,7 +378,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
                     </div>
                   </div>
                   <input
-                    className="w-14 px-1.5 py-1 rounded border border-accent/15 bg-transparent font-body text-xs text-center focus:outline-none focus:border-accent"
+                    className="w-14 px-1.5 py-1 rounded border border-edge-control bg-transparent font-body text-xs text-center focus:outline-none focus:border-accent"
                     placeholder="Tono"
                     value={e.play_key}
                     onChange={ev => setEntries(prev => prev.map(x => x.localId === e.localId ? { ...x, play_key: ev.target.value } : x))}
@@ -413,13 +413,13 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
         <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">Agregar canción</p>
         <div className="flex gap-2">
           <input
-            className="flex-1 px-3 py-1.5 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors placeholder-mono-600"
+            className="flex-1 px-3 py-1.5 rounded-lg border border-edge-control bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors placeholder-mono-600"
             placeholder="Buscar por título..."
             value={searchQ}
             onChange={e => setSearchQ(e.target.value)}
           />
           <input
-            className="w-16 px-2 py-1.5 rounded-lg border border-accent/20 bg-transparent font-body text-sm text-center focus:outline-none focus:border-accent transition-colors placeholder-mono-600"
+            className="w-16 px-2 py-1.5 rounded-lg border border-edge-control bg-transparent font-body text-sm text-center focus:outline-none focus:border-accent transition-colors placeholder-mono-600"
             placeholder="Tono"
             value={addKey}
             onChange={e => setAddKey(e.target.value)}

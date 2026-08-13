@@ -324,7 +324,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
               <textarea
                 id={`${fieldId}-lyrics`}
                 ref={lyricsRef}
-                className="w-full resize-none rounded-b-lg border border-accent/20 bg-transparent px-3 py-2 font-mono text-xs leading-relaxed text-ink transition-colors placeholder:text-placeholder focus:border-accent focus:outline-none"
+                className="w-full resize-none rounded-b-lg border border-edge-control bg-transparent px-3 py-2 font-mono text-xs leading-relaxed text-ink transition-colors placeholder:text-placeholder focus:border-accent focus:outline-none"
                 rows={14}
                 value={form.lyrics}
                 onChange={set("lyrics")}
