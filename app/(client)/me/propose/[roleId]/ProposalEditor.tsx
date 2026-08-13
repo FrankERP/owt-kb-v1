@@ -574,7 +574,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
                 aria-label={linked ? "Desagrupar medley" : "Agrupar en medley"}
                 className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all ${
                   linked
-                    ? "border-accent/30 bg-surface-base text-accent/60"
+                    ? "border-accent/30 bg-surface-base text-accent/70"
                     : "border-dashed border-mono-700/40 bg-surface-base text-mono-600/50 hover:border-accent/30 hover:text-accent/50"
                 }`}
               >
@@ -587,7 +587,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
           {/* Static medley indicator when approved (read-only) */}
           {idx < songs.length - 1 && isApproved && linked && (
             <div className="-my-0.5 flex items-center justify-center relative z-10">
-              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full border border-accent/30 bg-surface-base text-accent/60">
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full border border-accent/30 bg-surface-base text-accent/70">
                 <ChainLinkIcon strokeWidth={2.5} />
                 <span className="font-label text-[10px] uppercase tracking-widest ml-0.5">medley</span>
               </span>
@@ -819,7 +819,7 @@ function XIcon() {
 
 function UserIcon() {
   return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent/60">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent/70">
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
       <circle cx="12" cy="7" r="4" />
     </svg>

@@ -93,12 +93,12 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
         <div className="flex items-baseline gap-4 flex-1">
           <div className="flex items-baseline gap-1.5">
             <span className="font-display text-4xl text-accent">{tags.length}</span>
-            <span className="font-label text-[10px] uppercase tracking-[0.2em] text-ink-dim/55">etiquetas</span>
+            <span className="font-label text-[10px] uppercase tracking-[0.2em] text-ink-dim">etiquetas</span>
           </div>
           <span className="text-mono-700 text-sm">·</span>
           <div className="flex items-baseline gap-1.5">
             <span className="font-display text-4xl text-ink">{totalSongs}</span>
-            <span className="font-label text-[10px] uppercase tracking-[0.2em] text-ink-dim/55">canciones</span>
+            <span className="font-label text-[10px] uppercase tracking-[0.2em] text-ink-dim">canciones</span>
           </div>
         </div>
 
@@ -114,7 +114,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
                   ${i > 0 ? "border-l border-surface-accent-20" : ""}
                   ${sort === mode
                     ? "bg-accent/15 text-accent"
-                    : "text-ink-dim/60 hover:bg-accent/5 hover:text-ink"
+                    : "text-ink-dim hover:bg-accent/5 hover:text-ink"
                   }`}
               >
                 {mode === "popular" ? "Popular" : "A–Z"}
@@ -185,7 +185,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
                           </p>
                         )}
                       </div>
-                      <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-accent/15 bg-accent/[0.055] text-accent/50 transition-colors duration-200 group-hover:border-accent/30 group-hover:text-accent">
+                      <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-accent/15 bg-accent/[0.055] text-accent/70 transition-colors duration-200 group-hover:border-accent/30 group-hover:text-accent">
                         {icon}
                       </span>
                     </div>

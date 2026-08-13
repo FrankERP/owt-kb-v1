@@ -157,7 +157,7 @@ export default function ActivityPanel() {
                   <div className="flex items-baseline gap-2 flex-wrap">
                     <span className="font-body text-sm font-semibold">{m.member_name}</span>
                     {m.alias?.trim() && (
-                      <span className="font-label text-[11px] uppercase tracking-widest text-accent/60">&ldquo;{m.alias}&rdquo;</span>
+                      <span className="font-label text-[11px] uppercase tracking-widest text-accent/70">&ldquo;{m.alias}&rdquo;</span>
                     )}
                   </div>
                   <p className="font-label text-[11px] uppercase tracking-widest text-mono-500 mt-0.5">

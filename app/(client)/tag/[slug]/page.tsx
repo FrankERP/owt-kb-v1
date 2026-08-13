@@ -61,11 +61,11 @@ const page = async ({ params }: Params) => {
       {/* Tag hero */}
       <div className="brand-song-hero">
         <div className="relative mx-auto flex max-w-7xl flex-col items-center gap-3 px-6 py-12 text-center sm:py-16">
-          <p className="font-label text-[10px] uppercase tracking-[0.26em] text-ink-dim/60">Colección</p>
+          <p className="font-label text-[10px] uppercase tracking-[0.26em] text-ink-dim">Colección</p>
           <p className="font-display text-4xl capitalize leading-none text-accent sm:text-6xl">
             #{displayName}
           </p>
-          <p className="rounded-full border border-ink-dim/15 bg-surface-base/30 px-3 py-1.5 font-label text-[10px] uppercase tracking-widest text-ink-dim/65">
+          <p className="rounded-full border border-ink-dim/15 bg-surface-base/30 px-3 py-1.5 font-label text-[10px] uppercase tracking-widest text-ink-dim">
             {posts.length} {posts.length === 1 ? "canción" : "canciones"}
           </p>
         </div>

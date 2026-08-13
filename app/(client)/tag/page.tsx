@@ -38,7 +38,7 @@ const page = async () => {
           <h1 className="mt-2 max-w-2xl font-display text-4xl font-semibold leading-none text-ink sm:text-5xl">
             Mapa de etiquetas
           </h1>
-          <p className="mt-4 max-w-xl font-body text-sm leading-relaxed text-ink-dim/70 sm:text-base">
+          <p className="mt-4 max-w-xl font-body text-sm leading-relaxed text-ink-dim sm:text-base">
             Encuentra canciones por energía, momento y función dentro del servicio.
           </p>
         </div>

@@ -411,7 +411,7 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
         <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">{label}</p>
         <button
           type="button" onClick={onSelectAll}
-          className="font-label text-[10px] uppercase tracking-widest text-accent/60 hover:text-accent transition-colors"
+          className="font-label text-[10px] uppercase tracking-widest text-accent/70 hover:text-accent transition-colors"
         >
           {allSelected ? "Ninguno" : "Todos"}
         </button>
@@ -642,7 +642,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
         <button
           type="button"
           onClick={() => setWeekEx(ws => [...ws, { id: uid(), week: 1, pattern: "*.*" }])}
-          className="font-label text-[10px] uppercase tracking-widest text-accent/60 hover:text-accent transition-colors mt-1"
+          className="font-label text-[10px] uppercase tracking-widest text-accent/70 hover:text-accent transition-colors mt-1"
         >
           + Semana
         </button>
@@ -712,7 +712,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
         <button
           type="button"
           onClick={() => setCaps(cs => [...cs, { id: uid(), pattern: "Sun.*", op: "<=", value: 2, relative: false, relOffset: 2 }])}
-          className="font-label text-[10px] uppercase tracking-widest text-accent/60 hover:text-accent transition-colors mt-1"
+          className="font-label text-[10px] uppercase tracking-widest text-accent/70 hover:text-accent transition-colors mt-1"
         >
           + Cap
         </button>
@@ -1398,7 +1398,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         <div>
           <p className="font-label text-[11px] uppercase tracking-widest text-mono-500 mb-1">
             Historial ({history.length})
-            <span className="ml-1 text-accent/50 normal-case">— últimas {Math.min(history.length, 3)} ejecuciones usadas</span>
+            <span className="ml-1 text-accent/70 normal-case">— últimas {Math.min(history.length, 3)} ejecuciones usadas</span>
           </p>
           <div className="flex flex-wrap gap-1.5">
             {[...history].reverse().map(h => (

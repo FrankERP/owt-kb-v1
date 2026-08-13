@@ -167,12 +167,12 @@ export default function SongSheet() {
                   </span>
                 )}
                 {sheet.bpm && (
-                  <span className="font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/50">
+                  <span className="font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/70">
                     {sheet.bpm} BPM
                   </span>
                 )}
                 {sheet.timeSig && (
-                  <span className="font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/50">
+                  <span className="font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/70">
                     {sheet.timeSig}
                   </span>
                 )}
@@ -355,7 +355,7 @@ export default function SongSheet() {
               <Link
                 href={`/posts/${sheet.slug}`}
                 onClick={closeSheet}
-                className="brand-search-console flex w-full items-center justify-center gap-2 py-3 font-label text-xs uppercase tracking-widest text-ink-dim/70 transition-colors hover:border-accent/35 hover:text-accent"
+                className="brand-search-console flex w-full items-center justify-center gap-2 py-3 font-label text-xs uppercase tracking-widest text-ink-dim transition-colors hover:border-accent/35 hover:text-accent"
               >
                 Ver página completa ↗
               </Link>

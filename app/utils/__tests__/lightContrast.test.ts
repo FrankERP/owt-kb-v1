@@ -332,9 +332,34 @@ describe("alpha-modified text roles still clear AA, in both themes", () => {
    * excluded by a regex that happens not to match it. WCAG exempts inactive
    * controls and pure decoration; it does not exempt "we did not check".
    */
+  /**
+   * Exemptions, keyed `role/alpha@file` — NOT by token alone.
+   *
+   * A bare `accent/50` key exempts that utility EVERYWHERE, so the reason written
+   * for one site silently covers the next one someone writes. Keying by file means
+   * a second occurrence has to be judged on its own merits, which is the whole
+   * point of an exemption having a reason.
+   */
   const DECORATIVE = new Set<string>([
-    "ink-dim/55",     // empty-slot placeholders
-    "mono-600/50",    // separator glyphs between metadata
+    // Not text. WCAG 1.4.11 applies at 3:1, not 1.4.3 at 4.5.
+    "accent/55@app/components/SongSearchList.tsx",
+    //   an <svg> search glyph; 3.46/3.20, so it clears its ACTUAL threshold.
+    "mono-700/40@app/components/admin/SetlistEditor.tsx",
+    "accent/40@app/components/admin/SetlistEditor.tsx",
+    "mono-600/50@app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
+    "accent/50@app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
+    //   the medley toggle, linked/unlinked. An earlier version of this comment
+    //   called these "inactive user interface components" under 1.4.3 — WRONG:
+    //   1.4.3's exemption means DISABLED, and these toggles are enabled and
+    //   clickable in their off state. The real reason is that the off branch
+    //   renders only <ChainLinkIcon>; the <span>medley</span> is gated behind
+    //   `linked`. They colour an ICON, never text. Same category as the glyph
+    //   above. (Their non-text 3:1 compliance is unmeasured — nothing in this
+    //   repo checks 1.4.11 yet, and that is a real gap, named rather than hidden.)
+
+    // Punctuation.
+    "ink-muted/30@app/(client)/posts/[slug]/page.tsx",
+    //   the "," BETWEEN author names; the names themselves are ink-muted/70.
   ]);
 
   /**
@@ -354,30 +379,39 @@ describe("alpha-modified text roles still clear AA, in both themes", () => {
    * Ratios are dark/light on surface-base at the time of writing.
    */
   const KNOWN_FAILING = new Set<string>([
-    "accent/40",       // 2.35 / 2.17
-    "accent/50",       // 3.05 / 2.81
-    "accent/55",       // 3.46 / 3.20
-    "accent/60",       // 3.92 / 3.62  <- 13 sites, the largest single group
-    "ink-dim/40",      // 1.92 / 1.83
-    "ink-dim/45",      // 2.13 / 1.99
-    "ink-dim/60",      // 2.93 / 2.62
-    "ink-dim/65",      // 3.25 / 2.89
-    "ink-dim/70",      // 3.60 / 3.18
-    "ink-muted/30",    // 2.14 / 1.60
-    "ink-muted/40",    // 2.95 / 2.03
-    "ink-muted/50",    // 4.00 / 2.82
-    "mono-500/80",     // below in one theme
-    "mono-700/40",     // below in both
+    // EMPTY, and that is the point.
+    //
+    // This carried 14 entries when the guard was widened from `-fg`-only to every
+    // role. All 14 were then opened, read in context, and resolved: the ones that
+    // carried information — a track's musical key, a member's name and alias, body
+    // paragraphs, an author byline, tab labels, a "Copiar a todo el mes" button —
+    // were raised to the minimum alpha clearing AA in BOTH themes. The ones that
+    // did not are in DECORATIVE above, each with the reason it is exempt.
+    //
+    // Keep this list empty. If an entry is ever added, it is a promise to come
+    // back, and the assertion below makes a broken promise fail loudly.
   ]);
 
   const key = (f: { role: string; alpha: number }) =>
     `${f.role}/${Math.round(f.alpha * 100)}`;
+  const siteKey = (f: { role: string; alpha: number; file: string }) =>
+    `${key(f)}@${f.file}`;
   const all = alphaTextRoles();
-  const found = all.filter((f) => !DECORATIVE.has(key(f)) && !KNOWN_FAILING.has(key(f)));
+  const found = all.filter(
+    (f) => !DECORATIVE.has(siteKey(f)) && !KNOWN_FAILING.has(key(f)),
+  );
 
   it("finds the pattern at all — otherwise this guard is vacuous", () => {
     expect(all.length).toBeGreaterThan(0);
     expect(found.length, "everything is exempted; the guard checks nothing").toBeGreaterThan(0);
+  });
+
+  it("every DECORATIVE exemption still names a real site", () => {
+    // The same ratchet KNOWN_FAILING gets. Without it, an exemption outlives the
+    // code it was written for and quietly covers whatever reuses the key.
+    const present = new Set(all.map(siteKey));
+    const stale = [...DECORATIVE].filter((k) => !present.has(k));
+    expect(stale, "these exemptions no longer match any site — remove them").toEqual([]);
   });
 
   it("the KNOWN_FAILING list only SHRINKS — every entry must still exist in app/", () => {
