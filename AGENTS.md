@@ -126,7 +126,7 @@ per-type email-preference resolver — nothing reads `notifPrefs` directly),
 `themeColour` (`app/utils/themeColour.ts`).
 
 ## Colour tokens
-Colour lives in **30 base roles + 25 composed tokens** (`app/brand.css` `:root`,
+Colour lives in **67 base roles + 26 composed tokens** (`app/brand.css` `:root`,
 `tailwind.config.ts`). The seven retired `--brand-*` COLOUR variables and their `brand.*`
 Tailwind keys are **gone**; the four non-colour ones (`--brand-radius-*`,
 `--brand-duration-*`) survive.

@@ -393,8 +393,10 @@
   /* ---- Child D: the light counterpart set -------------------------------
      A REVIVAL, not a new design. The app had a light theme before it was forced
      dark, and the 246-pair snapshot captured it — 10 roles have a directly
-     recorded counterpart and all 23 composed tokens carry their light half in
-     their :root comment. Where the record is silent the value is hand-designed
+     recorded counterpart and all 23 composed tokens THAT EXISTED IN CHILD D carry
+     their light half in their :root comment. The three added on 2026-08-12
+     (--warning-glow, --placeholder, --edge-control) declare theirs in `.light`
+     only. Where the record is silent the value is hand-designed
      and contrast-checked; a test asserts every foreground role clears WCAG AA
      4.5:1 against the page wash.
 
