@@ -1,6 +1,24 @@
+import type { PortableTextBlock } from "@portabletext/react";
+
+/**
+ * A rich-text body as it comes out of Sanity, and the one source of truth for
+ * that shape. `post.body` is `of: [{type:"block"}, {type:"image"}]`, so an entry
+ * is a Portable Text block OR some other typed object — readers must narrow, and
+ * this type makes them. `PortableTextBlock` is the same type
+ * `<PortableText value={…} />` consumes, so a body typed with it goes straight
+ * to the renderer instead of being cast on the way in.
+ */
+export type PortableTextBody = Array<PortableTextBlock | { _type: string }>;
+
 export interface ChordChart {
   key: string;
   content: string;
+}
+
+/** A `tutorial` object in `post.tutorials2`. Neither field is required in the schema. */
+export interface Tutorial {
+  title?: string;
+  url?: string;
 }
 
 export interface Post {
@@ -13,8 +31,8 @@ export interface Post {
   timeSig: string;
   bpm: string;
   key: string;
-  body: any;
-  tutorials2: Array<any>;
+  body: PortableTextBody;
+  tutorials2: Array<Tutorial>;
   lyricsURL: string;
   audioTracks: Array<{ title: string; tone: string; audioFileURL: string }>;
   chordsPDF: Array<{ title: string; key: string; chordsURL: string }>;
@@ -44,7 +62,7 @@ export interface Author {
 export interface setList {
   title: string;
   _id: string;
-  body: any;
+  body: PortableTextBody;
 }
 
 export interface SetlistSong {

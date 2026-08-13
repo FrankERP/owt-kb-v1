@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import type { PortableTextBody } from "@/app/utils/interface";
 import {
   SongForm,
   SongTag,
@@ -22,7 +23,7 @@ interface Song {
   bpm?: number;
   timeSig?: string;
   publishDate?: string;
-  body?: any[];
+  body?: PortableTextBody;
   chords?: Array<{ key: string; content: string }>;
   referenceLinks?: Array<{ label: string; url: string }>;
   tags?: SongTag[];

@@ -42,7 +42,7 @@ function postToForm(post: Post): FormState {
     bpm: post.bpm?.toString() ?? "",
     timeSig: post.timeSig ?? "",
     lyrics: post.chords?.[0]?.content || bodyToLyrics(post.body),
-    tutorials: (post.tutorials2 ?? []).map((t: any) => ({ title: t.title ?? "", url: t.url ?? "" })),
+    tutorials: (post.tutorials2 ?? []).map((t) => ({ title: t.title ?? "", url: t.url ?? "" })),
     referenceLinks: post.referenceLinks ?? [],
     musicalReferenceUrl: post.musicalReferenceUrl ?? "",
     lyricsVideoUrl: post.lyricsVideoUrl ?? "",

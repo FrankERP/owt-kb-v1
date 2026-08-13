@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useId } from "react";
+import type { PortableTextBody } from "@/app/utils/interface";
 import { bodyToLyrics } from "@/app/utils/lyrics";
 import { useFocusTrap } from "@/app/utils/useFocusTrap";
 
@@ -29,7 +30,7 @@ interface SongForForm {
   key?: string;
   bpm?: number;
   timeSig?: string;
-  body?: any[];
+  body?: PortableTextBody;
   chords?: Array<{ key: string; content: string }>;
   referenceLinks?: Array<{ label: string; url: string }>;
   tags?: SongTag[];
