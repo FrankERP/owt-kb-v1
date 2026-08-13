@@ -48,7 +48,7 @@ wrote down why — a known gap, not a guess).
 | [0005](0005-play-history-bounded-by-week.md) | Bound play history by week, not by a published-role join | Accepted |
 | [0006](0006-approval-keeps-sibling-proposals.md) | Approving a proposal keeps the other proposals | Accepted |
 | [0007](0007-client-side-auth-keeps-pages-static.md) | Read auth client-side so member pages stay static | Accepted |
-| [0008](0008-forced-dark-theme.md) | Force dark mode app-wide | Accepted — being revisited |
+| [0008](0008-forced-dark-theme.md) | Force dark mode app-wide | Superseded by [0016](0016-light-mode-revived-by-tokenisation.md) |
 | [0009](0009-redesign-variants-abandoned.md) | Abandon seven UI redesign variants for "Backstage" | Rationale not recorded |
 | [0010](0010-specials-fill-locally-not-in-the-solver.md) | Fill special services locally; move the rules to Sanity | Accepted — P6 implemented 2026-08-03 |
 | [0011](0011-serialize-special-identities-globally.md) | Serialize special-service identities with one global coordinator | Accepted |

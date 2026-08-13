@@ -3,7 +3,7 @@
 Internal app for the **Oasis Worship Team** (Oasis church music ministry). A single source of
 truth for the **song library**, **weekly setlists**, **team role assignments**, **member
 availability**, **shared setlist proposals**, and an **OR-Tools auto-scheduler**. Spanish-language
-UI, dark-mode-first, timezone **America/Mexico_City**. Ships as a web app (Vercel), an embedded
+UI, dark and light themes (following the device by default), timezone **America/Mexico_City**. Ships as a web app (Vercel), an embedded
 Sanity Studio, and native iOS/Android apps (Capacitor).
 
 > **New here — human or AI agent? Read [`docs/`](docs/README.md) first.** It is the complete,

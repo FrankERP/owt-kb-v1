@@ -39,7 +39,7 @@ Legend: **S** = server component (async unless noted; e.g. the Studio page is sy
 
 | URL | File | Type | Access | Rendering | Description |
 |-----|------|------|--------|-----------|-------------|
-| `/theme-gallery/[theme]/[fixture]` | `(gallery)/theme-gallery/[theme]/[fixture]/page.tsx` | S | **Public** (ADR-0017) | SSG (6 static) | Theme gallery. `[theme]` ∈ `dark\|light`, `[fixture]` ∈ `swatches\|dialog\|planner`; `dynamicParams=false` 404s anything else. Renders colour swatches only — no session read, no fetch. Review surface for the light-mode migration. |
+| `/theme-gallery/[theme]/[fixture]` | `(gallery)/theme-gallery/[theme]/[fixture]/page.tsx` | S | **Public** (ADR-0017) | SSG (6 static) | Theme gallery. `[theme]` ∈ `dark\|light`, `[fixture]` ∈ `swatches\|dialog\|planner`; `dynamicParams=false` 404s anything else. Renders real components from hardcoded fixtures — no session read, no fetch. Review surface for the light-mode migration. |
 | `/` | `(client)/page.tsx` | S | Public* | ISR 60s | Home "Esta semana." This weekend's Sat/Sun/special services + full searchable song list. |
 | `/schedule` | `(client)/schedule/page.tsx` | S | Public* | ISR 60s | Upcoming services calendar; `?m=YYYY-MM` month browse. |
 | `/author` | `(client)/author/page.tsx` | S | Public* | ISR 60s | Artist index with per-author counts. |

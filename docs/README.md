@@ -51,7 +51,8 @@ Services start as **drafts** (`published: false`) visible only to managers; publ
 reveals them to members and fires **push + email** notifications. Leads can co-author a
 **shared `setlistProposal`** per service; an admin approves it, which writes the real
 setlist. The **solver** (`/api/admin/solve` → Python OR-Tools) proposes a whole month's
-roster. Everything is **Spanish UI**, **dark-mode-first**, timezone **America/Mexico_City**.
+roster. Everything is **Spanish UI**, **dark and light themes** (following the device by
+default), timezone **America/Mexico_City**.
 
 ---
 

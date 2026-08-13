@@ -225,7 +225,9 @@ describe("brand.css — (b) theme parity, dormant until .light carries custom pr
     // it went 87 -> 89 for the tints, 90 when `--on-fill` fixed the dark-in-both fills,
     // and 92 when `--placeholder` and `--edge-control` answered a MEASURED WCAG
     // failure (placeholders 3.55 dark / 3.09 light against 4.5; input borders 1.46 /
-    // 1.42 against 3.0). That edit is the point, not an inconvenience.
+    // 1.42 against 3.0), and 93 when `--warning-glow` replaced the Sabado card's
+    // `shadow-warning-fg/20` — a yellow bloom that read as an alert in light mode.
+    // That edit is the point, not an inconvenience.
     const root = customProperties(css.slice(css.indexOf(":root {"), css.indexOf("\n}", css.indexOf(":root {"))));
     const light = customProperties(lightBlock(css) ?? "");
     const rootColour = [...root].filter((p) => isColourProperty(p, css));
