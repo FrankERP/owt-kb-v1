@@ -342,8 +342,11 @@ describe("alpha-modified text roles still clear AA, in both themes", () => {
    */
   const DECORATIVE = new Set<string>([
     // Not text. WCAG 1.4.11 applies at 3:1, not 1.4.3 at 4.5.
-    "accent/55@app/components/SongSearchList.tsx",
-    //   an <svg> search glyph; 3.46/3.20, so it clears its ACTUAL threshold.
+    "accent/65@app/components/SongSearchList.tsx",
+    //   an <svg> search glyph. Raised /55 -> /65 when the 1.4.11 guard began
+    //   measuring against surface-sunken: it was 2.73 there in light. Now 3.38 on
+    //   the worst ground in either theme, and still exempt from the 4.5 TEXT rule
+    //   because it is not text.
     "mono-700/40@app/components/admin/SetlistEditor.tsx",
     "accent/40@app/components/admin/SetlistEditor.tsx",
     "mono-600/50@app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
@@ -459,11 +462,15 @@ describe("alpha-modified text roles still clear AA, in both themes", () => {
 //     prefers that pattern (a `var()` is not substituted inside an SVG
 //     presentation attribute), so a large share of icons colour from a parent
 //     and cannot be resolved without rendering.
-//   - Borders. ~250 alpha border utilities exist and 1.4.11 only binds the ones
-//     that ARE the affordance identifying a control or its state. A blanket
-//     border rule would fire on every decorative card outline, get exempted
-//     wholesale, and end up meaning nothing. `--edge-control` is the token for
-//     the borders that do carry that job, and the guard above pins it.
+//   - DECORATIVE borders. 367 alpha border utilities exist across 333 sites, and
+//     1.4.11 binds only the ones that ARE the affordance identifying a control.
+//     A blanket rule would fire on every card outline and be exempted wholesale.
+//     But that objection only defeats a BLANKET rule: borders on
+//     `<input|select|textarea>` are the affordance by definition, are the same
+//     regex shape as the icon rule below, and need no exemption list — so they
+//     ARE guarded, in the describe that follows. An earlier draft of this comment
+//     claimed `--edge-control` already covered that job; it is used at 2 of 9
+//     control borders, so that was coverage asserted rather than held.
 //
 // A guard that names what it cannot see is worth more than one that implies
 // coverage it does not have — which is the mistake this file has already made
@@ -507,6 +514,15 @@ describe("non-text contrast (WCAG 1.4.11, 3:1) — icons with their own colour",
     return out;
   }
 
+  /** Names that legitimately resolve to no `--<role>-rgb` triplet. */
+  const COMPOSED_OR_NON_COLOUR = new Set<string>([
+    // Non-colour text utilities.
+    "ellipsis", "balance", "pretty", "justify", "wrap", "nowrap", "clip",
+    // Composed tokens bake their own alpha and are not `--<role>-rgb` triplets,
+    // so they cannot be composited here. tokenLayer.test.ts owns them.
+    "placeholder", "edge-control",
+  ]);
+
   const found = icons();
 
   it("finds icons at all — otherwise this guard is vacuous", () => {
@@ -516,17 +532,107 @@ describe("non-text contrast (WCAG 1.4.11, 3:1) — icons with their own colour",
   it.each([...new Map(found.map((f) => [`${f.role}/${f.alpha}`, f])).values()])(
     "icon text-$role at alpha $alpha",
     ({ role, alpha, file, line }) => {
+      // GROUND: the tightest realistic surface, not the page. This file already
+      // argued that point for --edge-control and then measured against
+      // surface-base anyway; repeating the mistake in the block whose whole
+      // thesis is naming what it cannot see would be worse than not writing it.
+      // An icon on `surface-sunken` in light is the thin case — text-accent/55
+      // measures 3.19 on base there and 2.73 on sunken.
       for (const [theme, roles] of [["dark", DARK], ["light", LIGHT]] as const) {
         const fg = roles.get(role);
-        if (!fg) continue; // a composed token, not a base role — out of scope here
+        if (!fg) {
+          // Do NOT silently continue. A missing role is either a composed token
+          // (legitimately out of scope — composed tokens bake their own alpha and
+          // are not `-rgb` triplets), a non-colour `text-*` utility, or a TYPO.
+          // Skipping all three alike means `text-mono-750` passes in silence.
+          expect(
+            COMPOSED_OR_NON_COLOUR.has(role),
+            `text-${role} on an <svg> at ${file}:${line} names no --${role}-rgb ` +
+              `role. If it is a composed token or a non-colour utility, add it to ` +
+              `COMPOSED_OR_NON_COLOUR; otherwise it is a typo and colours nothing.`,
+          ).toBe(true);
+          continue;
+        }
+      for (const groundName of ["surface-base", "surface-raised", "surface-sunken"] as const) {
+          const bg = roles.get(groundName);
+          if (!bg) continue;
+          const composited = fg.map((c, i) => c * alpha + bg[i] * (1 - alpha)) as
+            [number, number, number];
+          const r = contrast(composited, bg);
+          expect(
+            r,
+            `icon at ${file}:${line} is ${r.toFixed(2)}:1 in ${theme} on ` +
+              `--${groundName}. Non-text UI needs 3:1 (WCAG 1.4.11) — lower than ` +
+              `text, but not nothing.`,
+          ).toBeGreaterThanOrEqual(3);
+        }
+      }
+    },
+  );
+});
+
+
+// ---------------------------------------------------------------------------
+// 1.4.11 again, for the other half: FORM CONTROL BORDERS.
+//
+// An `<input>`, `<select>` or `<textarea>` border is not decoration — very often
+// it is the only thing marking where the control is, which is why the sign-in
+// fields got `--edge-control` in the first place. Those two sites are pinned
+// above; these are every other one, and they were unguarded.
+// ---------------------------------------------------------------------------
+describe("non-text contrast — form control borders (WCAG 1.4.11, 3:1)", () => {
+  function controlBorders(): Array<{ role: string; alpha: number; file: string; line: number }> {
+    const out: Array<{ role: string; alpha: number; file: string; line: number }> = [];
+    const walk = (dir: string): string[] => {
+      const acc: string[] = [];
+      for (const e of readdirSync(path.join(REPO_ROOT, dir))) {
+        const rel = path.join(dir, e);
+        if (rel.includes("__tests__")) continue;
+        if (statSync(path.join(REPO_ROOT, rel)).isDirectory()) acc.push(...walk(rel));
+        else if (/\.tsx$/.test(e)) acc.push(rel);
+      }
+      return acc;
+    };
+    for (const file of walk("app")) {
+      const src = readFileSync(path.join(REPO_ROOT, file), "utf8");
+      for (const m of src.matchAll(/<(?:input|select|textarea)\b[\s\S]*?>/g)) {
+        const cls = /className=\{?["`\']([^"`\']*)["`\']/.exec(m[0]);
+        if (!cls) continue;
+        for (const c of cls[1].matchAll(/\bborder-([a-z][a-z0-9-]+)(?:\/(\d{1,3}))?\b/g)) {
+          out.push({
+            role: c[1],
+            alpha: c[2] ? Number(c[2]) / 100 : 1,
+            file,
+            line: src.slice(0, m.index!).split("\n").length,
+          });
+        }
+      }
+    }
+    return out;
+  }
+
+  const borders = controlBorders();
+
+  it("finds control borders at all", () => {
+    expect(borders.length).toBeGreaterThan(0);
+  });
+
+  it.each([...new Map(borders.map((b) => [`${b.role}/${b.alpha}@${b.file}`, b])).values()])(
+    "$file border-$role/$alpha",
+    ({ role, alpha, file, line }) => {
+      for (const [theme, roles] of [["dark", DARK], ["light", LIGHT]] as const) {
+        const fg = roles.get(role);
+        if (!fg) continue; // composed token — pinned by the edge-control guard
         const bg = roles.get("surface-base")!;
         const composited = fg.map((c, i) => c * alpha + bg[i] * (1 - alpha)) as
           [number, number, number];
         const r = contrast(composited, bg);
         expect(
           r,
-          `icon at ${file}:${line} is ${r.toFixed(2)}:1 in ${theme}. Non-text UI ` +
-            `needs 3:1 (WCAG 1.4.11) — lower than text, but not nothing.`,
+          `the border on the control at ${file}:${line} is ${r.toFixed(2)}:1 in ` +
+            `${theme}. For a form field the border is frequently the ONLY thing ` +
+            `marking where the control is, so 1.4.11 wants 3:1. --edge-control is ` +
+            `the token for exactly this.`,
         ).toBeGreaterThanOrEqual(3);
       }
     },

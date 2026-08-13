@@ -366,7 +366,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
           onClick={() => router.push("/me")}
           className="flex items-center gap-1.5 font-label text-xs uppercase tracking-widest text-mono-500 hover:text-accent transition-colors mb-5"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-mono-600">
             <path d="M19 12H5M12 5l-7 7 7 7" />
           </svg>
           Volver
