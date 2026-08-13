@@ -1,5 +1,7 @@
 "use client";
 
+import { useTransientValue } from "@/app/utils/useTransientValue";
+
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import MonthGenerator from "./MonthGenerator";
 import { useSolverConfig } from "./useSolverConfig";
@@ -172,7 +174,7 @@ export default function ServicesPanel() {
   const [submitting, setSubmitting] = useState(false);
   const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
   const [showPastMonths, setShowPastMonths] = useState(false);
-  const [toast, setToast]       = useState<string | null>(null);
+  const [toast, showToast]      = useTransientValue<string | null>(null, 3000);
 
   // Delete modal. Roster create/edit now lives in the stored month editor.
   type EditModal = { type: "delete"; role: ServiceRole } | null;
@@ -260,7 +262,6 @@ export default function ServicesPanel() {
     { kind: "publish" | "unpublish"; ids: string[]; published: boolean } | null
   >(null);
 
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
   // Transient proposal / integrity handoff, owned by `AdminPanel`.
   const { openReviewTarget, openIntegrityIssue } = useServiceHandoff();

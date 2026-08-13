@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTransientValue } from "@/app/utils/useTransientValue";
 import type { SolveResponse } from "@/app/api/admin/solve/route";
 import { DayCard } from "@/app/components/DayCard";
 import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
@@ -1586,7 +1587,7 @@ export default function MonthGenerator({
 
   const [viewMode, setViewMode]   = useState<"edit" | "view">("edit");
   const [swapSel, setSwapSel]     = useState<string | null>(null);
-  const [swapToast, setSwapToast] = useState<string | null>(null);
+  const [swapToast, setSwapToast] = useTransientValue<string | null>(null, 2500);
   const [swapVerificationPending, setSwapVerificationPending] = useState(false);
   const pendingSwapExpected = useRef<{
     body: string;
@@ -1956,7 +1957,7 @@ export default function MonthGenerator({
       setTouchedStoredRoleIds(new Set());
       setSwapVerificationPending(false);
     }
-  }, [allStoredTranslations, dirtyStoredColumns.length, invalidStoredColumns.length, pendingSaveAttempts, saveKnownFailures, storedGenerationKey, storedInventory, storedMode, storedRowsDirty, storedTranslations, swapVerificationPending]);
+  }, [allStoredTranslations, dirtyStoredColumns.length, invalidStoredColumns.length, pendingSaveAttempts, saveKnownFailures, setSwapToast, storedGenerationKey, storedInventory, storedMode, storedRowsDirty, storedTranslations, swapVerificationPending]);
 
   useEffect(() => {
     const attempt = createAttempt.current;
@@ -2498,7 +2499,6 @@ export default function MonthGenerator({
     if (typeA === "special_role" || typeB === "special_role") {
       setSwapSel(null);
       setSwapToast("No se puede intercambiar un servicio especial: su nombre se queda en su fecha.");
-      setTimeout(() => setSwapToast(null), 2500);
       return;
     }
     if (typeA !== typeB) {
@@ -2509,7 +2509,6 @@ export default function MonthGenerator({
       setSwapToast(
         `No se puede intercambiar un ${typeA ? SERVICE_LABEL[typeA] : "servicio"} con un ${typeB ? SERVICE_LABEL[typeB] : "servicio"}.`,
       );
-      setTimeout(() => setSwapToast(null), 2500);
       return;
     }
     const byRowA = new Map(cells.filter(c => c.columnId === a).map(c => [c.rowId, c]));
@@ -2526,7 +2525,6 @@ export default function MonthGenerator({
     setDrafts(prev => cellsToDrafts(next, columns, skippedColumnIds, prev, existingRoles));
     setSwapSel(null);
     setSwapToast(`⇄ ${fmtDate(columnA?.date ?? "")} ↔ ${fmtDate(columnB?.date ?? "")}`);
-    setTimeout(() => setSwapToast(null), 2500);
   }
 
   async function handleSectionSwap() {

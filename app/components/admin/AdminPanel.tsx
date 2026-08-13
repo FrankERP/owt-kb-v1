@@ -21,6 +21,7 @@ import {
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
 import EmailPrefToggles, { resolveEmailPrefs, type EmailPrefValues } from "../ui/EmailPrefToggles";
+import { useTransientValue } from "@/app/utils/useTransientValue";
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
@@ -450,7 +451,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
   const [modal, setModal]       = useState<ModalState>(null);
   const [modalError, setModalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [toast, setToast]       = useState<string | null>(null);
+  const [toast, showToast]      = useTransientValue<string | null>(null, 3000);
   const [query, setQuery]           = useState("");
   const [filterKey, setFilterKey]   = useState<FilterKey>("type");
   const [filterValue, setFilterValue] = useState("");
@@ -497,10 +498,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
     });
   }, [categoryFiltered, fuse, query, sortDir]);
 
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  };
+
 
   const openModal = (next: Exclude<ModalState, null>) => {
     setModalError(null);

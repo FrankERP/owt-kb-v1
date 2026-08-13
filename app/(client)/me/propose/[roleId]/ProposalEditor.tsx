@@ -6,6 +6,7 @@ import { ProposalStatus } from "@/app/utils/interface";
 import { normalizeMedleyTags } from "@/app/utils/medley";
 import { useFocusTrap } from "@/app/utils/useFocusTrap";
 import { ChainLinkIcon } from "@/app/components/ChainLinkIcon";
+import { useTransientValue } from "@/app/utils/useTransientValue";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
@@ -121,7 +122,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
   const [teamNotes, setTeamNotes] = useState(proposal?.team_notes ?? "");
   const [status, setStatus]       = useState<ProposalStatus>(proposal?.status ?? "draft");
   const [saving, setSaving]       = useState(false);
-  const [toast, setToast]         = useState<{ msg: string; ok: boolean } | null>(null);
+  const [toast, setToastValue]    = useTransientValue<{ msg: string; ok: boolean } | null>(null, 3000);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [staleReload, setStaleReload] = useState(false);
 
@@ -266,10 +267,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
   const searchRef    = useRef<HTMLDivElement>(null);
   const debounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showToast = (msg: string, ok = true) => {
-    setToast({ msg, ok });
-    setTimeout(() => setToast(null), 3000);
-  };
+  const showToast = (msg: string, ok = true) => setToastValue({ msg, ok });
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {

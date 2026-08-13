@@ -11,6 +11,7 @@ import {
 } from "./SongFormModal";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
+import { useTransientValue } from "@/app/utils/useTransientValue";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,12 +49,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
   const [modal, setModal]     = useState<ModalState>(null);
   const [modalError, setModalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [toast, setToast]     = useState<string | null>(null);
-
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  };
+  const [toast, showToast]    = useTransientValue<string | null>(null, 3000);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
