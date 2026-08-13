@@ -40,10 +40,13 @@ const SKILL_DIR = join(process.cwd(), ".agents", "skills", "adversarial-plan-rev
  * and only after copying the same change to `~/.agents/skills/adversarial-plan-review/`.
  */
 const EXPECTED_DIGESTS: Record<string, string> = {
-  // Bumped 2026-08-07 for the incident carve-in in the risk ladder. The
+  // Bumped 2026-08-12 for HR's churn-cap amendment: reaching the cap now
+  // requires a coordinator-inline entry naming the defect class, because a cap
+  // that is only a rule was passed silently 20 times in one day. Bumped
+  // 2026-08-07 before that for the incident carve-in in the risk ladder. The
   // canonical copy at ~/.agents/skills/adversarial-plan-review/SKILL.md was
   // updated in the same change and verified byte-identical with `diff -q`.
-  "SKILL.md": "2dc338377204f974e4a00c2f63b2a8528650f946bd9ee0bd1fe8700c5069bcfd",
+  "SKILL.md": "b55e34bfa07f91e4a53207be9cfca072cc13fea5ce10254f64fda97cf453424b",
   "agents/openai.yaml": "92ca8b13523357a7c2ddb1093c7ab4169450fd869eca2577e1c779e5bb573ac9",
   "reviewer-brief.md": "cc569efa0a766fcc0da62dd10d4ff325cf101bd76980910995cfc86b54aeb01c",
 };
