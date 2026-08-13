@@ -180,7 +180,7 @@ export default async function Home() {
             <p className="font-label text-[10px] uppercase tracking-[0.24em] text-accent">Biblioteca</p>
             <h2 className="mt-1 font-display text-3xl font-semibold text-ink md:text-4xl">Todas las canciones</h2>
           </div>
-          <p className="hidden font-label text-[11px] uppercase tracking-widest text-ink-dim/45 sm:block">
+          <p className="hidden font-label text-[11px] uppercase tracking-widest text-ink-dim sm:block">
             {posts?.length ?? 0} títulos
           </p>
         </div>

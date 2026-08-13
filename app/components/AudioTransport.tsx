@@ -43,7 +43,7 @@ export default function AudioTransport({
           <span className="truncate font-body text-xs font-semibold">{track.songTitle}</span>
           <span className="max-w-[8rem] shrink-0 truncate font-label text-[11px] uppercase tracking-widest text-mono-500">{track.title}</span>
           {track.tone && (
-            <span className="shrink-0 font-label text-[11px] text-accent/60">{track.tone}</span>
+            <span className="shrink-0 font-label text-[11px] text-accent/70">{track.tone}</span>
           )}
         </div>
 

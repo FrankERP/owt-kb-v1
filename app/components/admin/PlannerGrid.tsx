@@ -2599,7 +2599,7 @@ function GridCellView({
               if (!mutationLocked) onCopy();
             }}
             disabled={mutationLocked}
-            className="mt-1 font-label text-[9px] uppercase tracking-widest text-ink-muted/40 hover:text-ink-muted/70"
+            className="mt-1 font-label text-[9px] uppercase tracking-widest text-ink-muted/70 hover:text-ink-muted"
           >
             Copiar a todo el mes
           </button>

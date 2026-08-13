@@ -227,7 +227,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
         <div className="flex-1 min-w-0">
           <p className="font-display text-base leading-tight truncate">{displayName}</p>
           {member.alias?.trim() && (
-            <p className="font-body text-xs text-accent/60 truncate">{member.member_name}</p>
+            <p className="font-body text-xs text-accent/70 truncate">{member.member_name}</p>
           )}
           <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mt-0.5">{member.role}</p>
         </div>
@@ -263,7 +263,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
               uploading={uploadingPhoto}
             />
             <div className="min-w-0">
-              <p className="font-body text-xs text-accent/60 truncate">{displayName}</p>
+              <p className="font-body text-xs text-accent/70 truncate">{displayName}</p>
               <p className="font-label text-[10px] uppercase tracking-widest text-mono-500">{member.role}</p>
             </div>
           </div>

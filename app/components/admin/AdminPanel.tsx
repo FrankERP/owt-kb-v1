@@ -397,7 +397,7 @@ function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) =>
               className={`font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${
                 active === id
                   ? "bg-accent/15 text-accent shadow-[inset_0_0_0_1px_rgb(var(--accent-rgb)/0.15)]"
-                  : "text-ink-dim/60 hover:bg-accent/[0.04] hover:text-ink"
+                  : "text-ink-dim hover:bg-accent/[0.04] hover:text-ink"
               }`}
             >
               {label}
@@ -715,7 +715,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
                 className={`px-3 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
                   filterKey === k
                     ? "bg-accent/15 text-accent"
-                    : "text-ink-dim/60 hover:text-accent"
+                    : "text-ink-dim hover:text-accent"
                 }`}
               >
                 {k === "type" ? "Tipo" : "Rol"}
@@ -752,7 +752,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
                 className={`px-3 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
                   sortDir === d
                     ? "bg-accent/15 text-accent"
-                    : "text-ink-dim/60 hover:text-accent"
+                    : "text-ink-dim hover:text-accent"
                 }`}
               >
                 {d === "asc" ? "A→Z" : "Z→A"}
@@ -831,7 +831,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
                     : <p className="font-body text-sm font-semibold truncate">{m.member_name}</p>
                   }
                   {m.alias?.trim() && (
-                    <span className="font-body text-sm text-accent/60 truncate">{m.member_name}</span>
+                    <span className="font-body text-sm text-accent/70 truncate">{m.member_name}</span>
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap mt-0.5">

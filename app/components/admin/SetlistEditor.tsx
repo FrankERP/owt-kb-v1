@@ -393,7 +393,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
                       title={linked ? "Desagrupar medley" : "Agrupar en medley"}
                       className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all ${
                         linked
-                          ? "border-accent/30 bg-surface-base text-accent/60"
+                          ? "border-accent/30 bg-surface-base text-accent/70"
                           : "border-dashed border-mono-700/30 bg-surface-base text-mono-700/40 hover:border-accent/30 hover:text-accent/40"
                       }`}
                     >

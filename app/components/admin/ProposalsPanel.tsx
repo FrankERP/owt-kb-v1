@@ -193,7 +193,7 @@ function ProposalCard({
                   )}
                 </div>
                 {linkedPrev && (
-                  <span className="font-label text-[10px] uppercase tracking-widest text-accent/60 shrink-0">medley</span>
+                  <span className="font-label text-[10px] uppercase tracking-widest text-accent/70 shrink-0">medley</span>
                 )}
                 <span className="font-label text-xs px-2 py-0.5 rounded-full border border-accent/20 text-accent shrink-0">
                   {song.play_key}
@@ -590,7 +590,7 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
           <p className="font-body text-sm text-mono-500">
             {filter === "all" ? "No hay propuestas todavía." : `Sin propuestas en esta categoría.`}
           </p>
-          <p className="font-body text-xs text-mono-500/80">
+          <p className="font-body text-xs text-mono-500">
             Los líderes proponen setlists desde su perfil; aparecerán aquí para revisión.
           </p>
         </div>
