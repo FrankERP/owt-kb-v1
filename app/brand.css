@@ -334,6 +334,23 @@
   --surface-accent-l50-d40:        rgb(var(--accent-rgb) / 0.40);         /* light: accent-deep @50%  - 1 */
   --surface-accent-l50-d15:        rgb(var(--accent-rgb) / 0.15);         /* light: accent-deep @50%  - 1 */
 
+  /* --- The Saturday card's shadow, 2026-08-12 ---------------------------------
+     A coloured glow is a DARK-mode idiom: `warning-fg` there is amber
+     (245 158 11), and at 20% over a near-black page it reads as light coming off
+     the card. In LIGHT, `warning-fg` is a rust-brown (120 53 15) — the palette's
+     only warm role — and the same 20% composites to rgb(214 205 202), a muddy
+     warm smudge on a cool blue-grey page. Reported from a real look at the app,
+     which is the only way this kind of thing gets found.
+
+     So it resolves per theme: the glow survives in dark, and light gets a plain
+     neutral shadow, which is what a light UI wants anyway.
+
+     Domingo (`accent/10` -> 214 224 236) and the special-service card
+     (`info-fg/20` -> 206 200 229) both composite COOL and sit in the palette
+     correctly, so they are deliberately left alone. This was one card, for a
+     reason specific to the one warm role. */
+  --warning-glow:               rgb(var(--warning-fg-rgb) / 0.2);
+
   /* --- Control affordances, added 2026-08-12 after a measured WCAG failure ------
      A placeholder at `ink-dim/70` measured 3.55:1 in dark and 3.09:1 in light
      against 4.5, and an input border at `ink-dim/25` measured 1.46 / 1.42
@@ -503,6 +520,7 @@
   --surface-accent-l5-d3: rgb(var(--accent-rgb) / 0.05);        /* light: accent-deep @5% */
   --surface-accent-l50-d40: rgb(var(--accent-rgb) / 0.5);       /* light: accent-deep @50% */
   --surface-accent-l50-d15: rgb(var(--accent-rgb) / 0.5);       /* light: accent-deep @50% */
+  --warning-glow: rgb(var(--elevation-rgb) / 0.1);
   --placeholder: rgb(var(--ink-muted-rgb) / 0.75);
   --edge-control: rgb(var(--ink-muted-rgb) / 0.6);
 }

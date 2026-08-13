@@ -216,7 +216,7 @@ describe("brand.css — (b) theme parity, dormant until .light carries custom pr
   });
 
   it("counts both sides, so a role added to one block alone cannot pass", () => {
-    // 92 colour properties per side — 67 base roles and 25 composed tokens. The four
+    // 93 colour properties per side — 67 base roles and 26 composed tokens. The four
     // non-colour ones (`--brand-radius-*`, `--brand-duration-*`) are correctly excluded:
     // a light radius is nonsense, and demanding one would make the guard unsatisfiable.
     //
@@ -230,7 +230,7 @@ describe("brand.css — (b) theme parity, dormant until .light carries custom pr
     const light = customProperties(lightBlock(css) ?? "");
     const rootColour = [...root].filter((p) => isColourProperty(p, css));
     expect(light.size).toBe(rootColour.length);
-    expect(light.size).toBe(92);
+    expect(light.size).toBe(93);
   });
 
   it("FIRES on a synthetic .light block with a missing counterpart (the fire-proof)", () => {

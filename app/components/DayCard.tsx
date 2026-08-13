@@ -36,7 +36,7 @@ const SUNDAY_THEME = {
 
 const SATURDAY_THEME = {
   border:       "border-warning-fg",
-  shadow:       "shadow-warning-fg/20",
+  shadow:       "shadow-warning-glow",
   headerBg:     "bg-warning-surface-deep",
   headerBorder: "border-warning-fg",
   accent:       "text-warning-fg",
