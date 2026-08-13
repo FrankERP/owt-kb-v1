@@ -16,7 +16,7 @@
 // human eye are for. This guard catches the systematic failure, not the local one.
 
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -59,6 +59,10 @@ function darkRoles(): Map<string, [number, number, number]> {
 }
 
 const LIGHT = lightRoles();
+
+// `darkRoles()` already existed above — it was written for pairing checks and then
+// never used by the mono guard, which is precisely how the dark scale drifted.
+const DARK = darkRoles();
 const page = () => LIGHT.get("surface-base")!;
 
 /**
@@ -148,15 +152,45 @@ describe("light theme — WCAG AA contrast", () => {
     // The order INVERTS between themes and that is correct: in dark a higher number is
     // darker, in light a higher number is lighter. What must hold is that the ordering
     // is strict in each.
+    // AND IT NOW CHECKS BOTH, which this comment always claimed. Until 2026-08-12
+    // it read only `LIGHT` — so the dark scale was never ordered by anything, and
+    // dark `mono-500`/`mono-600` sat at 4.09:1 and 2.62:1 against a 4.5 floor
+    // across 233 and 64 body-text uses. A guard whose comment promises more than
+    // it checks is worse than no guard: it is a green tick over an unchecked thing.
     const shades = [200, 300, 400, 500, 600, 700, 800] as const;
-    const lums = shades.map((s) => relLum(LIGHT.get(`mono-${s}`)!));
 
-    const seen = new Set(shades.map((s) => LIGHT.get(`mono-${s}`)!.join(",")));
-    expect(seen.size, "two mono steps share a value").toBe(shades.length);
+    for (const [theme, roles, lighterWithNumber] of [
+      ["light", LIGHT, true],
+      ["dark", DARK, false],
+    ] as const) {
+      const vals = shades.map((s) => roles.get(`mono-${s}`)!);
+      expect(
+        new Set(vals.map((v) => v.join(","))).size,
+        `two mono steps share a value in ${theme}`,
+      ).toBe(shades.length);
 
-    for (let i = 1; i < lums.length; i++) {
-      expect(lums[i], `mono-${shades[i]} is not lighter than mono-${shades[i - 1]}`)
-        .toBeGreaterThan(lums[i - 1]);
+      const lums = vals.map(relLum);
+      for (let i = 1; i < lums.length; i++) {
+        const [a, b] = [lums[i - 1], lums[i]];
+        expect(
+          lighterWithNumber ? b > a : b < a,
+          `${theme}: mono-${shades[i]} is not ${lighterWithNumber ? "lighter" : "darker"} than mono-${shades[i - 1]}`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("the mono steps used as BODY TEXT clear AA in dark too", () => {
+    // 200-600 are text roles; 700 and 800 are surface/border roles on dark and are
+    // deliberately below the floor. This is the assertion that would have caught
+    // the 2.62:1 the theme gallery eventually surfaced.
+    const base = DARK.get("surface-base")!;
+    for (const s of [200, 300, 400, 500, 600] as const) {
+      const r = contrast(DARK.get(`mono-${s}`)!, base);
+      expect(
+        r,
+        `dark mono-${s} is ${r.toFixed(2)}:1 on surface-base; body text needs 4.5`,
+      ).toBeGreaterThanOrEqual(4.5);
     }
   });
 
@@ -246,4 +280,132 @@ describe("control affordances clear WCAG in BOTH themes", () => {
       ).toBeGreaterThanOrEqual(required);
     }
   });
+});
+
+// ---------------------------------------------------------------------------
+// Alpha-modified TEXT roles, measured in both themes.
+//
+// `text-negative-fg/70` measured 3.91:1 dark and 3.98:1 light against a 4.5
+// floor — while `negative-fg` at full alpha is 7.15 and 7.00. The role was never
+// the problem; the modifier was, on the smallest text in the component.
+//
+// CLAUDE.md already bans an opacity modifier on a COMPOSED token, because it
+// double-applies a baked alpha. This is the neighbouring hazard on a BASE role,
+// where the modifier is legal, does exactly what it says, and quietly walks the
+// text under the threshold. Nothing was checking it.
+// ---------------------------------------------------------------------------
+describe("alpha-modified text roles still clear AA, in both themes", () => {
+  /**
+   * Every `text-<role>/<alpha>` in app/ — ALL roles, not just `-fg`.
+   *
+   * The first version of this guard matched `[a-z0-9-]*-fg` only, so it tested 5
+   * of the 38 pairs in the tree and reported green while `text-accent/60` sat at
+   * 3.92:1 across 13 sites — the same defect, same magnitude, as the
+   * `text-negative-fg/70` it was written to catch. A guard whose docstring
+   * promises more than its regex delivers is the exact failure this file's mono
+   * guard was fixed for, two describes above.
+   */
+  function alphaTextRoles(): Array<{ role: string; alpha: number; file: string }> {
+    const out: Array<{ role: string; alpha: number; file: string }> = [];
+    const walk = (dir: string): string[] => {
+      const acc: string[] = [];
+      for (const e of readdirSync(path.join(REPO_ROOT, dir))) {
+        const rel = path.join(dir, e);
+        if (rel.includes("__tests__")) continue;
+        if (statSync(path.join(REPO_ROOT, rel)).isDirectory()) acc.push(...walk(rel));
+        else if (/\.tsx?$/.test(e)) acc.push(rel);
+      }
+      return acc;
+    };
+    for (const file of walk("app")) {
+      const src = readFileSync(path.join(REPO_ROOT, file), "utf8");
+      for (const m of src.matchAll(/\btext-([a-z][a-z0-9-]+)\/(\d{1,3})\b/g)) {
+        out.push({ role: m[1], alpha: Number(m[2]) / 100, file });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Sites where a low ratio is the POINT — an empty slot, a separator glyph, a
+   * disabled control. Each needs naming here, deliberately, rather than being
+   * excluded by a regex that happens not to match it. WCAG exempts inactive
+   * controls and pure decoration; it does not exempt "we did not check".
+   */
+  const DECORATIVE = new Set<string>([
+    "ink-dim/55",     // empty-slot placeholders
+    "mono-600/50",    // separator glyphs between metadata
+  ]);
+
+  /**
+   * PRE-EXISTING FAILURES — a ratchet, not an absolution.
+   *
+   * Widening this guard from `-fg`-only to every role took it from 5 pairs to 38
+   * and surfaced 14 that are below AA today. They are NOT fixed here: each needs a
+   * per-site judgement (is this a disabled control, a decorative glyph, or real
+   * text?) that cannot be made from a token name, and guessing at fourteen of them
+   * in one pass is how you ship a regression while claiming an accessibility fix.
+   *
+   * What this list does is stop the bleeding: anything NOT on it must pass, so no
+   * new alpha-modified text can drop below AA. Removing an entry is the unit of
+   * work — measure the site, decide decorative-or-not, fix or move it to
+   * DECORATIVE above with a reason.
+   *
+   * Ratios are dark/light on surface-base at the time of writing.
+   */
+  const KNOWN_FAILING = new Set<string>([
+    "accent/40",       // 2.35 / 2.17
+    "accent/50",       // 3.05 / 2.81
+    "accent/55",       // 3.46 / 3.20
+    "accent/60",       // 3.92 / 3.62  <- 13 sites, the largest single group
+    "ink-dim/40",      // 1.92 / 1.83
+    "ink-dim/45",      // 2.13 / 1.99
+    "ink-dim/60",      // 2.93 / 2.62
+    "ink-dim/65",      // 3.25 / 2.89
+    "ink-dim/70",      // 3.60 / 3.18
+    "ink-muted/30",    // 2.14 / 1.60
+    "ink-muted/40",    // 2.95 / 2.03
+    "ink-muted/50",    // 4.00 / 2.82
+    "mono-500/80",     // below in one theme
+    "mono-700/40",     // below in both
+  ]);
+
+  const key = (f: { role: string; alpha: number }) =>
+    `${f.role}/${Math.round(f.alpha * 100)}`;
+  const all = alphaTextRoles();
+  const found = all.filter((f) => !DECORATIVE.has(key(f)) && !KNOWN_FAILING.has(key(f)));
+
+  it("finds the pattern at all — otherwise this guard is vacuous", () => {
+    expect(all.length).toBeGreaterThan(0);
+    expect(found.length, "everything is exempted; the guard checks nothing").toBeGreaterThan(0);
+  });
+
+  it("the KNOWN_FAILING list only SHRINKS — every entry must still exist in app/", () => {
+    // A ratchet that keeps stale entries stops being a ratchet: a role could be
+    // deleted and re-added at a worse alpha under the same key. If this fails, the
+    // entry was fixed or removed — delete it from the list, do not re-add it.
+    const present = new Set(all.map(key));
+    const stale = [...KNOWN_FAILING].filter((k) => !present.has(k));
+    expect(stale, "these are exempted but no longer used — remove them").toEqual([]);
+  });
+
+  it.each([...new Map(found.map((f) => [`${f.role}/${f.alpha}`, f])).values()])(
+    "text-$role at alpha $alpha",
+    ({ role, alpha, file }) => {
+      for (const [theme, roles] of [["dark", DARK], ["light", LIGHT]] as const) {
+        const fg = roles.get(role);
+        const bg = roles.get("surface-base")!;
+        expect(fg, `--${role}-rgb must exist in ${theme}`).toBeDefined();
+        const composited = fg!.map((c, i) => c * alpha + bg[i] * (1 - alpha)) as
+          [number, number, number];
+        const r = contrast(composited, bg);
+        expect(
+          r,
+          `text-${role}/${Math.round(alpha * 100)} is ${r.toFixed(2)}:1 in ${theme} ` +
+            `(${file}). The ROLE passes at full alpha — the modifier is what breaks it. ` +
+            `Raise the alpha or drop it.`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    },
+  );
 });

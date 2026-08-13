@@ -574,7 +574,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
           ))}
         </div>
         {excl.length > 0 && (
-          <p className="font-label text-[10px] text-negative-fg/70 mt-1">{excl.join(" · ")}</p>
+          <p className="font-label text-[10px] text-negative-fg/80 mt-1">{excl.join(" · ")}</p>
         )}
       </div>
 
