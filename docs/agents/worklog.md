@@ -57,12 +57,41 @@ Two entries agents cannot report for themselves, and the coordinator must write:
   the recruiting signal: recurring inline work with no owner is how `hr-officer` spots
   a role the roster is missing. Do not omit these to keep the log tidy.
 
+**The entry ships in the same commit as the work it describes.** This is the default
+and the only form that needs no safeguards. It is stated as a rule because the
+alternative — "I'll log it at the end" — has now failed in three separate cycles, and
+because the one rule of this kind that *was* written down (review before merge) held
+without exception on the same day the unwritten one failed twice. An intention is not
+a control.
+
 **Incidents and firefights count as cycles.** Nobody logs mid-fire, and nobody is
-expected to — backfill the entries once the fire is out (out-of-order timestamps are
-fine; the file is append-only) and dispatch `hr-officer` over the incident window
-like any other cycle. Incident work runs with the least scrutiny, which makes it the
-cycle most worth closing properly. The 2026-08-07 SMTP incident (an afternoon of
-production commits, zero entries) is the case this rule exists for.
+expected to — backfill the entries once the fire is out and dispatch `hr-officer` over
+the incident window like any other cycle. Incident work runs with the least scrutiny,
+which makes it the cycle most worth closing properly. The 2026-08-07 SMTP incident (an
+afternoon of production commits, zero entries) is the case this rule exists for.
+
+### Backfilling, when it cannot be avoided
+
+Backfill is a repair, not a workflow, and it is the origin of **every** defect this
+file has ever carried. Three constraints, each earned:
+
+- **Mark it: `"backfilled": true`.** A missing `tokens`/`duration_ms` already hints at
+  it; the flag says it.
+- **Derive `ts` from an artifact — the commit the dispatch produced, or the commit that
+  closes its findings — never from recollection**, and record which in
+  `"ts_derived_from"`. On 2026-08-12 four backfilled reviews were timestamped from
+  memory and *three landed before the commits they reviewed*: a review at 16:40 of an
+  implementation committed at 17:48. The log asserted an impossibility.
+- **Grep for the same `(agent, cycle, task)` before appending.** All seven duplicate
+  entries this file has ever held came from a backfill re-recording a dispatch that was
+  already logged — twice by the same coordinator inside one day.
+
+Out-of-order timestamps remain fine; the file is append-only and `hr-officer` reads it
+in file order. What is not fine is a timestamp that could not have happened.
+
+**One line per dispatch, including each review round.** Collapsing "rounds 1–5" into a
+single entry undercounts volume by four and makes per-round verdicts unauditable from
+the log — which is the one place they are supposed to be auditable.
 
 An entry's `outcome` reflects the agent's own verdict, not the cycle's mood: a report
 carrying any Important finding logs as `findings`, never `ok`.
