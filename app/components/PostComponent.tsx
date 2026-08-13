@@ -41,7 +41,7 @@ const PostComponent = React.memo(({ post }: Props) => {
           {post.key || "—"}
         </span>
         <div className="min-w-0 flex-1 pt-0.5">
-          <p className="mb-1 font-label text-[10px] uppercase tracking-[0.2em] text-ink-dim/55">
+          <p className="mb-1 font-label text-[10px] uppercase tracking-[0.2em] text-ink-dim">
             Repertorio
           </p>
           <h2 className="line-clamp-2 font-display text-base font-semibold leading-snug text-ink transition-colors group-hover:text-accent lg:text-lg">
@@ -59,7 +59,7 @@ const PostComponent = React.memo(({ post }: Props) => {
       </div>
 
       {(post.bpm || post.timeSig) && (
-        <div className="flex items-center gap-3 border-t border-ink-dim/10 pt-3 font-label text-[11px] uppercase tracking-widest text-ink-dim/55">
+        <div className="flex items-center gap-3 border-t border-ink-dim/10 pt-3 font-label text-[11px] uppercase tracking-widest text-ink-dim">
           {post.bpm && <span>{post.bpm} BPM</span>}
           {post.bpm && post.timeSig && <span className="h-3 w-px bg-ink-dim/15" />}
           {post.timeSig && <span>{post.timeSig}</span>}
@@ -70,7 +70,7 @@ const PostComponent = React.memo(({ post }: Props) => {
       {post.tags?.length > 0 && (
         <div className={`flex flex-wrap gap-1.5 ${post.bpm || post.timeSig ? "" : "border-t border-ink-dim/10 pt-3"}`}>
           {post.tags.map((tag) => (
-            <span key={tag._id} className="rounded-md border border-ink-dim/10 bg-surface-base/30 px-2 py-1 font-label text-[10px] lowercase text-ink-dim transition-colors group-hover:border-accent/15 group-hover:text-ink-dim/90">
+            <span key={tag._id} className="rounded-md border border-ink-dim/10 bg-surface-base/30 px-2 py-1 font-label text-[10px] lowercase text-ink-dim transition-colors group-hover:border-accent/15 group-hover:text-ink">
               #{tag.name}
             </span>
           ))}

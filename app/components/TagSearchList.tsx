@@ -93,12 +93,12 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
         <div className="flex items-baseline gap-4 flex-1">
           <div className="flex items-baseline gap-1.5">
             <span className="font-display text-4xl text-accent">{tags.length}</span>
-            <span className="font-label text-[10px] uppercase tracking-[0.2em] text-ink-dim/55">etiquetas</span>
+            <span className="font-label text-[10px] uppercase tracking-[0.2em] text-ink-dim">etiquetas</span>
           </div>
           <span className="text-mono-700 text-sm">·</span>
           <div className="flex items-baseline gap-1.5">
             <span className="font-display text-4xl text-ink">{totalSongs}</span>
-            <span className="font-label text-[10px] uppercase tracking-[0.2em] text-ink-dim/55">canciones</span>
+            <span className="font-label text-[10px] uppercase tracking-[0.2em] text-ink-dim">canciones</span>
           </div>
         </div>
 
