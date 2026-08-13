@@ -82,6 +82,7 @@ const COMPOSED = [
   // `--ink-muted-rgb` inverts — that is the role layer doing its job.
   "placeholder",
   "edge-control",
+  "warning-glow",   // the Saturday card's shadow: warm glow in dark, neutral in light
 ] as const;
 
 const UTILITY_PREFIXES = [

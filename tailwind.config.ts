@@ -148,6 +148,9 @@ const config: Config = {
 				// tokenLayer.test.ts, which rejects any key starting with a utility prefix.
 				"placeholder": "var(--placeholder)",
 				"edge-control": "var(--edge-control)",
+				// Composed, so not alpha-capable. Resolves to a warm glow in dark and a
+				// neutral shadow in light — see brand.css.
+				"warning-glow": "var(--warning-glow)",
 			},
 			fontFamily: {
 				display: ["var(--font-display)", "sans-serif"],
