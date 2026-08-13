@@ -295,7 +295,16 @@ describe("control affordances clear WCAG in BOTH themes", () => {
 // text under the threshold. Nothing was checking it.
 // ---------------------------------------------------------------------------
 describe("alpha-modified text roles still clear AA, in both themes", () => {
-  /** Every `text-<role>/<alpha>` written anywhere in app/, from source. */
+  /**
+   * Every `text-<role>/<alpha>` in app/ — ALL roles, not just `-fg`.
+   *
+   * The first version of this guard matched `[a-z0-9-]*-fg` only, so it tested 5
+   * of the 38 pairs in the tree and reported green while `text-accent/60` sat at
+   * 3.92:1 across 13 sites — the same defect, same magnitude, as the
+   * `text-negative-fg/70` it was written to catch. A guard whose docstring
+   * promises more than its regex delivers is the exact failure this file's mono
+   * guard was fixed for, two describes above.
+   */
   function alphaTextRoles(): Array<{ role: string; alpha: number; file: string }> {
     const out: Array<{ role: string; alpha: number; file: string }> = [];
     const walk = (dir: string): string[] => {
@@ -310,17 +319,74 @@ describe("alpha-modified text roles still clear AA, in both themes", () => {
     };
     for (const file of walk("app")) {
       const src = readFileSync(path.join(REPO_ROOT, file), "utf8");
-      for (const m of src.matchAll(/\btext-([a-z][a-z0-9-]*-fg)\/(\d{1,3})\b/g)) {
+      for (const m of src.matchAll(/\btext-([a-z][a-z0-9-]+)\/(\d{1,3})\b/g)) {
         out.push({ role: m[1], alpha: Number(m[2]) / 100, file });
       }
     }
     return out;
   }
 
-  const found = alphaTextRoles();
+  /**
+   * Sites where a low ratio is the POINT — an empty slot, a separator glyph, a
+   * disabled control. Each needs naming here, deliberately, rather than being
+   * excluded by a regex that happens not to match it. WCAG exempts inactive
+   * controls and pure decoration; it does not exempt "we did not check".
+   */
+  const DECORATIVE = new Set<string>([
+    "ink-dim/55",     // empty-slot placeholders
+    "mono-600/50",    // separator glyphs between metadata
+  ]);
+
+  /**
+   * PRE-EXISTING FAILURES — a ratchet, not an absolution.
+   *
+   * Widening this guard from `-fg`-only to every role took it from 5 pairs to 38
+   * and surfaced 14 that are below AA today. They are NOT fixed here: each needs a
+   * per-site judgement (is this a disabled control, a decorative glyph, or real
+   * text?) that cannot be made from a token name, and guessing at fourteen of them
+   * in one pass is how you ship a regression while claiming an accessibility fix.
+   *
+   * What this list does is stop the bleeding: anything NOT on it must pass, so no
+   * new alpha-modified text can drop below AA. Removing an entry is the unit of
+   * work — measure the site, decide decorative-or-not, fix or move it to
+   * DECORATIVE above with a reason.
+   *
+   * Ratios are dark/light on surface-base at the time of writing.
+   */
+  const KNOWN_FAILING = new Set<string>([
+    "accent/40",       // 2.35 / 2.17
+    "accent/50",       // 3.05 / 2.81
+    "accent/55",       // 3.46 / 3.20
+    "accent/60",       // 3.92 / 3.62  <- 13 sites, the largest single group
+    "ink-dim/40",      // 1.92 / 1.83
+    "ink-dim/45",      // 2.13 / 1.99
+    "ink-dim/60",      // 2.93 / 2.62
+    "ink-dim/65",      // 3.25 / 2.89
+    "ink-dim/70",      // 3.60 / 3.18
+    "ink-muted/30",    // 2.14 / 1.60
+    "ink-muted/40",    // 2.95 / 2.03
+    "ink-muted/50",    // 4.00 / 2.82
+    "mono-500/80",     // below in one theme
+    "mono-700/40",     // below in both
+  ]);
+
+  const key = (f: { role: string; alpha: number }) =>
+    `${f.role}/${Math.round(f.alpha * 100)}`;
+  const all = alphaTextRoles();
+  const found = all.filter((f) => !DECORATIVE.has(key(f)) && !KNOWN_FAILING.has(key(f)));
 
   it("finds the pattern at all — otherwise this guard is vacuous", () => {
-    expect(found.length).toBeGreaterThan(0);
+    expect(all.length).toBeGreaterThan(0);
+    expect(found.length, "everything is exempted; the guard checks nothing").toBeGreaterThan(0);
+  });
+
+  it("the KNOWN_FAILING list only SHRINKS — every entry must still exist in app/", () => {
+    // A ratchet that keeps stale entries stops being a ratchet: a role could be
+    // deleted and re-added at a worse alpha under the same key. If this fails, the
+    // entry was fixed or removed — delete it from the list, do not re-add it.
+    const present = new Set(all.map(key));
+    const stale = [...KNOWN_FAILING].filter((k) => !present.has(k));
+    expect(stale, "these are exempted but no longer used — remove them").toEqual([]);
   });
 
   it.each([...new Map(found.map((f) => [`${f.role}/${f.alpha}`, f])).values()])(

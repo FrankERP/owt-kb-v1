@@ -213,7 +213,7 @@
   --mono-300-rgb: 209 213 219;                /* gray-300 #d1d5db */
   --mono-400-rgb: 156 163 175;                /* gray-400 #9ca3af */
   --mono-500-rgb: 137 142 153;                /* was gray-500 #6b7280 — RAISED 2026-08-12 */
-  --mono-600-rgb: 118 126 136;                   /* was gray-600 #4b5563 — RAISED 2026-08-12 */
+  --mono-600-rgb: 126 134 143;                   /* was gray-600 #4b5563 — RAISED 2026-08-12 */
 
   /* mono-500 and mono-600 no longer carry Tailwind's literal gray values in DARK.
      Child C migrated them faithfully, and on this near-black surface-base they
@@ -221,7 +221,11 @@
      as body text. The theme gallery going public is what finally made them
      measurable; visual-verifier found 36 AA failures on one screen.
 
-     Raised to 6.02:1 and 4.81:1, preserving hue and the scale's strict ordering.
+     Raised to 6.02:1 and 5.36:1 on surface-base — and, more to the point, to
+     5.20:1 and 4.63:1 on the WORST realistic card ground (`.brand-surface`'s
+     gradient over `surface-console`), which is where most of these sites actually
+     live. Measuring only against the bare page would have called 4.15:1 a pass.
+     Hue and the scale's strict ordering are preserved.
      Their LIGHT counterparts already passed (6.8 and 5.58) and are untouched: the
      light halves were tuned when Child D designed them, the dark ones never were.
 
@@ -439,7 +443,7 @@
   --mono-300-rgb: 48 59 74;               /* #303b4a  <- dark 209 213 219 */
   --mono-400-rgb: 60 72 87;              /* #3c4857  <- dark 156 163 175 */
   --mono-500-rgb: 72 85 102;               /* #485566  <- dark 137 142 153 */
-  --mono-600-rgb: 84 98 116;             /* #546274  <- dark 118 126 136 */
+  --mono-600-rgb: 84 98 116;             /* #546274  <- dark 126 134 143 */
   --mono-700-rgb: 96 111 129;             /* #606f81  <- dark 55 65 81 */
   --mono-800-rgb: 209 213 219;            /* #d1d5db  <- dark 31 41 55 */
   --negative-faint-rgb: 127 29 29;        /* #7f1d1d  <- dark 254 226 226 */
