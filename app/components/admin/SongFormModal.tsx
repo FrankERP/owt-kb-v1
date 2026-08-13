@@ -363,7 +363,7 @@ export function SongForm({
         <textarea
           id={fid("lyrics")}
           ref={lyricsRef}
-          className="w-full px-3 py-2 rounded-b-lg border border-accent/20 bg-transparent font-mono text-xs leading-relaxed resize-none focus:outline-none focus:border-accent transition-colors"
+          className="w-full px-3 py-2 rounded-b-lg border border-edge-control bg-transparent font-mono text-xs leading-relaxed resize-none focus:outline-none focus:border-accent transition-colors"
           rows={14}
           value={form.lyrics}
           onChange={set("lyrics")}

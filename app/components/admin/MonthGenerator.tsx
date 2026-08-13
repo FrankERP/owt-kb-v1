@@ -417,7 +417,7 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
         </button>
       </div>
       <input
-        className="w-full px-2 py-1 mb-1 rounded border border-accent/15 bg-transparent font-body text-xs focus:outline-none focus:border-accent placeholder-mono-600"
+        className="w-full px-2 py-1 mb-1 rounded border border-edge-control bg-transparent font-body text-xs focus:outline-none focus:border-accent placeholder-mono-600"
         placeholder="Buscar..." value={search} onChange={e => onSearch(e.target.value)}
       />
       {/*
