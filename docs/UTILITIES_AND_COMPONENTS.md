@@ -290,7 +290,8 @@ the 15-rule ladder, per-control gating), `serviceCardModel.ts` (card assembly + 
 
 ## Tests
 
-**98 test files / 2,196 tests** (75 under `app/` + 13 under `scripts/`, plus others).
+**153 test files / 3,721 tests** (129 under `app/` + 15 under `scripts/` + 9 harness unit
+tests under `e2e/service-readiness/__tests__/`).
 Separately, **11 Playwright specs** under `e2e/service-readiness/` run only against the isolated
 verification deployment and are **not** part of `npm test` — see
 [`VERIFICATION_HARNESS.md`](VERIFICATION_HARNESS.md). Vitest (`environment: "node"`) covers

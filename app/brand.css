@@ -275,7 +275,7 @@
   --badge-azure-fg-rgb: 96 165 250;           /* blue-400 #60a5fa */
   --badge-azure-deep-rgb: 59 130 246;         /* blue-500 #3b82f6 */
 
-  /* ---- Child B, Layer 2: 23 composed tokens ------------------------------
+  /* ---- Child B, Layer 2: 23 composed tokens (26 today — three added 2026-08-12) ----
      These exist because 166 of the 246 per-element light/dark pairs differ in
      ALPHA, not only in hue, and a theme-invariant opacity modifier cannot say
      "opaque navy in light, 20% cyan in dark". Each token bakes its own alpha,
@@ -393,8 +393,10 @@
   /* ---- Child D: the light counterpart set -------------------------------
      A REVIVAL, not a new design. The app had a light theme before it was forced
      dark, and the 246-pair snapshot captured it — 10 roles have a directly
-     recorded counterpart and all 23 composed tokens carry their light half in
-     their :root comment. Where the record is silent the value is hand-designed
+     recorded counterpart and all 23 composed tokens THAT EXISTED IN CHILD D carry
+     their light half in their :root comment. The three added on 2026-08-12
+     (--warning-glow, --placeholder, --edge-control) declare theirs in `.light`
+     only. Where the record is silent the value is hand-designed
      and contrast-checked; a test asserts every foreground role clears WCAG AA
      4.5:1 against the page wash.
 
@@ -491,8 +493,10 @@
   --badge-azure-fg-rgb: 29 78 216;        /* #1d4ed8  <- dark 96 165 250 */
   --badge-azure-deep-rgb: 37 99 235;      /* #2563eb  <- dark 59 130 246 */
 
-  /* Composed tokens. Each records its light half in the :root comment beside it,
-     naming the role that carries that value IN DARK — so the light block cannot
+  /* Composed tokens. Each of Child B's 23 records its light half in the :root
+     comment beside it — EXCEPT --warning-glow, --placeholder and --edge-control,
+     added 2026-08-12, whose light halves are declared here and nowhere else.
+     A :root comment names the role that carries that value IN DARK — so the light block cannot
      copy the name, it has to ask which role plays that PART in light. Example:
      a token whose light half is "accent-deep @100%" means the value #003572, and
      #003572 is --accent here, not --accent-deep. Reading it nominally instead of

@@ -40,7 +40,7 @@ worth changing is a success, not a failure. Never manufacture churn.
 5. **Verify it works — hard gate, no exceptions:**
    ```
    npx tsc --noEmit      # must exit 0
-   npm test              # must be all-green (currently 141 tests)
+   npm test              # must be all-green (currently ~3,700 tests)
    ```
    For data scripts, dry-run first, then verify against production. Only claim
    success with evidence in hand — never assert "done" without the command
@@ -149,7 +149,7 @@ for polish:
 (`next-sanity`), Tailwind, NextAuth v4, Fuse.js. Node 22. Dark-mode-only. Studio
 embedded at `/studio`. Spanish-language UI (`lang="es"`).
 
-**Commands:** `npx tsc --noEmit` (typecheck), `npm test` (vitest, ~141 tests).
+**Commands:** `npx tsc --noEmit` (typecheck), `npm test` (vitest, ~3,700 tests).
 No `build` needed for the gate.
 
 **Timezone & dates (critical):** all service dates are Sanity `date` type

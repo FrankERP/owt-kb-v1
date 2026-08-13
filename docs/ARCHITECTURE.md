@@ -22,7 +22,8 @@ music ministry. It replaces spreadsheets and WhatsApp threads with a single sour
 - **Auto-scheduling** — an OR-Tools constraint solver generates a fair monthly roster.
 - **Notifications** — push (FCM) and email (SMTP/Resend) on assignment/publish/reminders.
 
-The UI is **entirely in Spanish** (`<html lang="es">`), **dark-mode-first**, and the entire
+The UI is **entirely in Spanish** (`<html lang="es">`), **themed dark or light — following the
+device unless the member pins one at `/me`** (ADR-0016), and the entire
 app is behind a login gate (the only anonymous surfaces are the auth pages, the cron
 routes, the service-readiness identity route and the theme gallery — see ADR-0017).
 
