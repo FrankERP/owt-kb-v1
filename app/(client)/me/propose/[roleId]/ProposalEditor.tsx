@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, Fragment } from "react";
+import { useState, useEffect, useRef, useCallback, useId, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { ProposalStatus } from "@/app/utils/interface";
 import { normalizeMedleyTags } from "@/app/utils/medley";
+import { useFocusTrap } from "@/app/utils/useFocusTrap";
 import { ChainLinkIcon } from "@/app/components/ChainLinkIcon";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -123,6 +124,32 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
   const [toast, setToast]         = useState<{ msg: string; ok: boolean } | null>(null);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [staleReload, setStaleReload] = useState(false);
+
+  /**
+   * The submit-confirmation modal is a real overlay: the editor stays mounted
+   * and interactive behind it, which is exactly the case `CueDialog` and
+   * `SongFormModal` trap focus for (and the case `MonthGenerator`'s D10 note
+   * excludes itself from, because that panel REPLACES its view instead).
+   * Without a trap, Tab walks out of the confirmation into the song list and
+   * the "Enviar propuesta" button that opened it — a member can reorder the
+   * setlist, or fire submit a second time, while being asked to confirm the
+   * first. `useFocusTrap` also moves focus in on open and returns it to the
+   * opener on close, neither of which happened before.
+   */
+  const confirmRef = useFocusTrap<HTMLDivElement>(confirmSubmit);
+  const confirmTitleId = useId();
+
+  // Escape closes the confirmation, matching every other dialog in the app.
+  // Safe to close unconditionally: this modal holds no user input of its own,
+  // so dismissing it discards nothing — it just returns to the editor.
+  useEffect(() => {
+    if (!confirmSubmit) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setConfirmSubmit(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [confirmSubmit]);
 
   // The doc revision for optimistic concurrency. MUST track the live prop (not a
   // one-time initializer): after a 409 the reload banner calls router.refresh(),
@@ -749,9 +776,16 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
       {confirmSubmit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-scrim/60 backdrop-blur-sm" onClick={() => setConfirmSubmit(false)} />
-          <div className="relative z-10 w-full max-w-sm bg-surface-raised-alt border border-accent/20 rounded-2xl shadow-2xl p-6 space-y-5">
+          <div
+            ref={confirmRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={confirmTitleId}
+            tabIndex={-1}
+            className="relative z-10 w-full max-w-sm bg-surface-raised-alt border border-accent/20 rounded-2xl shadow-2xl p-6 space-y-5 focus:outline-none"
+          >
             <div className="space-y-1">
-              <h3 className="font-display text-lg uppercase tracking-wide">Enviar propuesta</h3>
+              <h3 id={confirmTitleId} className="font-display text-lg uppercase tracking-wide">Enviar propuesta</h3>
               <p className="font-body text-sm text-mono-400">
                 Vas a enviar {songs.length} canción{songs.length !== 1 ? "es" : ""} para {serviceLabel}. El admin recibirá tu propuesta para revisión.
               </p>
@@ -784,13 +818,20 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
         </div>
       )}
 
-      {/* Toast */}
+      {/* Toast. It is the ONLY confirmation that a save or a submit landed, and
+          it disappears after 3s — so it has to be announced, not just drawn.
+          `assertive` on failure matches CueDialogStatus: "no se pudo enviar"
+          must interrupt, because the member's next move depends on it. */}
       {toast && (
-        <div className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl border font-label text-xs uppercase tracking-widest shadow-xl ${
-          toast.ok
-            ? "bg-surface-raised-alt border-accent/30"
-            : "bg-negative-surface-deep/80 border-negative-strong/30"
-        }`}>
+        <div
+          role={toast.ok ? "status" : "alert"}
+          aria-live={toast.ok ? "polite" : "assertive"}
+          className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl border font-label text-xs uppercase tracking-widest shadow-xl ${
+            toast.ok
+              ? "bg-surface-raised-alt border-accent/30"
+              : "bg-negative-surface-deep/80 border-negative-strong/30"
+          }`}
+        >
           {toast.msg}
         </div>
       )}
