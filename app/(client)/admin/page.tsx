@@ -29,7 +29,7 @@ export default async function AdminPage() {
           <div className="brand-section-heading">
             <p className="font-label text-[10px] uppercase tracking-[0.26em] text-accent">Backstage operations</p>
             <h1 className="mt-2 font-display text-4xl font-semibold leading-none text-ink sm:text-5xl">Control Room</h1>
-            <p className="mt-3 max-w-xl font-body text-sm text-ink-dim/65">
+            <p className="mt-3 max-w-xl font-body text-sm text-ink-dim">
               Servicios, equipo y contenido desde una sola consola.
             </p>
           </div>

@@ -204,7 +204,7 @@ const Page = async ({ params }: Params) => {
               ))}
             </div>
           ) : post?.author ? (
-            <p className="mb-9 mt-4 font-body text-lg text-ink-dim/70">{post.author}</p>
+            <p className="mb-9 mt-4 font-body text-lg text-ink-dim">{post.author}</p>
           ) : null}
 
           <div className="flex flex-wrap justify-center gap-2.5">
@@ -214,12 +214,12 @@ const Page = async ({ params }: Params) => {
               </span>
             )}
             {post?.bpm && (
-              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[11px] uppercase tracking-widest text-ink-dim/70">
+              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[11px] uppercase tracking-widest text-ink-dim">
                 {post.bpm} BPM
               </span>
             )}
             {post?.timeSig && (
-              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[11px] uppercase tracking-widest text-ink-dim/70">
+              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[11px] uppercase tracking-widest text-ink-dim">
                 {post.timeSig}
               </span>
             )}

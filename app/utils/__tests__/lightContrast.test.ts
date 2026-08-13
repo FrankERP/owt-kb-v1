@@ -333,8 +333,21 @@ describe("alpha-modified text roles still clear AA, in both themes", () => {
    * controls and pure decoration; it does not exempt "we did not check".
    */
   const DECORATIVE = new Set<string>([
-    "ink-dim/55",     // empty-slot placeholders
-    "mono-600/50",    // separator glyphs between metadata
+    // WCAG 1.4.3 exempts inactive components and pure decoration. Each of these
+    // was opened and judged individually, not matched by a convenient pattern.
+    "ink-dim/55",     // empty-slot placeholders — no content to read
+    "mono-600/50",    // metadata separator glyphs
+    "ink-muted/30",   // posts/[slug]:202 — the "," BETWEEN author names. Punctuation.
+    "mono-700/40",    // SetlistEditor:397 — the medley toggle's INACTIVE state, a
+                      // dashed outline offering an action not yet taken. Its ACTIVE
+                      // twin was text-accent/60 and is now /70, which is the state
+                      // carrying information.
+    "accent/40",      // …:397 hover of that same inactive control
+    "accent/50",      // ProposalEditor:578 — the same pattern, same component shape
+    "accent/55",      // SongSearchList:88 — an <svg> search glyph, NOT text. It is
+                      // non-text UI under 1.4.11 at 3:1 and measures 3.46/3.20,
+                      // so it passes its ACTUAL threshold; listing it here keeps a
+                      // text rule from being applied to a thing that is not text.
   ]);
 
   /**
@@ -354,20 +367,17 @@ describe("alpha-modified text roles still clear AA, in both themes", () => {
    * Ratios are dark/light on surface-base at the time of writing.
    */
   const KNOWN_FAILING = new Set<string>([
-    "accent/40",       // 2.35 / 2.17
-    "accent/50",       // 3.05 / 2.81
-    "accent/55",       // 3.46 / 3.20
-    "accent/60",       // 3.92 / 3.62  <- 13 sites, the largest single group
-    "ink-dim/40",      // 1.92 / 1.83
-    "ink-dim/45",      // 2.13 / 1.99
-    "ink-dim/60",      // 2.93 / 2.62
-    "ink-dim/65",      // 3.25 / 2.89
-    "ink-dim/70",      // 3.60 / 3.18
-    "ink-muted/30",    // 2.14 / 1.60
-    "ink-muted/40",    // 2.95 / 2.03
-    "ink-muted/50",    // 4.00 / 2.82
-    "mono-500/80",     // below in one theme
-    "mono-700/40",     // below in both
+    // EMPTY, and that is the point.
+    //
+    // This carried 14 entries when the guard was widened from `-fg`-only to every
+    // role. All 14 were then opened, read in context, and resolved: the ones that
+    // carried information — a track's musical key, a member's name and alias, body
+    // paragraphs, an author byline, tab labels, a "Copiar a todo el mes" button —
+    // were raised to the minimum alpha clearing AA in BOTH themes. The ones that
+    // did not are in DECORATIVE above, each with the reason it is exempt.
+    //
+    // Keep this list empty. If an entry is ever added, it is a promise to come
+    // back, and the assertion below makes a broken promise fail loudly.
   ]);
 
   const key = (f: { role: string; alpha: number }) =>

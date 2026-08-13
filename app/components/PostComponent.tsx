@@ -48,12 +48,12 @@ const PostComponent = React.memo(({ post }: Props) => {
             {post.title}
           </h2>
           {post.author && (
-            <p className="mt-1 truncate font-body text-sm text-ink-dim/70">
+            <p className="mt-1 truncate font-body text-sm text-ink-dim">
               {post.author}
             </p>
           )}
         </div>
-        <span className={`pointer-events-none mt-1 flex shrink-0 items-center gap-1 font-label text-[10px] uppercase tracking-widest transition-colors ${fresh ? "text-accent" : "text-ink-dim/40 group-hover:text-accent/80"}`}>
+        <span className={`pointer-events-none mt-1 flex shrink-0 items-center gap-1 font-label text-[10px] uppercase tracking-widest transition-colors ${fresh ? "text-accent" : "text-ink-dim group-hover:text-accent"}`}>
           {fresh ? "Nuevo" : <><EyeIcon /> Ver</>}
         </span>
       </div>
@@ -70,7 +70,7 @@ const PostComponent = React.memo(({ post }: Props) => {
       {post.tags?.length > 0 && (
         <div className={`flex flex-wrap gap-1.5 ${post.bpm || post.timeSig ? "" : "border-t border-ink-dim/10 pt-3"}`}>
           {post.tags.map((tag) => (
-            <span key={tag._id} className="rounded-md border border-ink-dim/10 bg-surface-base/30 px-2 py-1 font-label text-[10px] lowercase text-ink-dim/60 transition-colors group-hover:border-accent/15 group-hover:text-ink-dim/90">
+            <span key={tag._id} className="rounded-md border border-ink-dim/10 bg-surface-base/30 px-2 py-1 font-label text-[10px] lowercase text-ink-dim transition-colors group-hover:border-accent/15 group-hover:text-ink-dim/90">
               #{tag.name}
             </span>
           ))}
