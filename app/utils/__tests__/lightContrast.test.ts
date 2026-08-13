@@ -443,3 +443,92 @@ describe("alpha-modified text roles still clear AA, in both themes", () => {
     },
   );
 });
+
+// ---------------------------------------------------------------------------
+// WCAG 1.4.11 — NON-TEXT contrast, at 3:1.
+//
+// Nothing in this repo checked this until now, which came up twice on the same
+// day: the alpha-text guard had to exempt an `<svg>` search glyph because a
+// 4.5 text rule does not apply to it, and `visual-verifier` named non-text
+// contrast as the largest area its gallery pass did not cover.
+//
+// SCOPE, AND ITS LIMIT, STATED UP FRONT — this guard covers **icons that carry
+// their own colour class**. It does NOT cover:
+//
+//   - Icons inheriting `currentColor` from an ancestor. CLAUDE.md actively
+//     prefers that pattern (a `var()` is not substituted inside an SVG
+//     presentation attribute), so a large share of icons colour from a parent
+//     and cannot be resolved without rendering.
+//   - Borders. ~250 alpha border utilities exist and 1.4.11 only binds the ones
+//     that ARE the affordance identifying a control or its state. A blanket
+//     border rule would fire on every decorative card outline, get exempted
+//     wholesale, and end up meaning nothing. `--edge-control` is the token for
+//     the borders that do carry that job, and the guard above pins it.
+//
+// A guard that names what it cannot see is worth more than one that implies
+// coverage it does not have — which is the mistake this file has already made
+// twice today, in the mono scale and in the alpha-text regex.
+// ---------------------------------------------------------------------------
+describe("non-text contrast (WCAG 1.4.11, 3:1) — icons with their own colour", () => {
+  /** `<svg …>` opening tags that carry a `text-<role>` class themselves. */
+  function icons(): Array<{ role: string; alpha: number; file: string; line: number }> {
+    const out: Array<{ role: string; alpha: number; file: string; line: number }> = [];
+    const SIZE_OR_LAYOUT = new Set([
+      "xs", "sm", "base", "lg", "xl", "2xl", "3xl", "left", "center", "right",
+      "white", "black", "transparent", "current", "inherit", "wrap", "nowrap",
+    ]);
+    const walk = (dir: string): string[] => {
+      const acc: string[] = [];
+      for (const e of readdirSync(path.join(REPO_ROOT, dir))) {
+        const rel = path.join(dir, e);
+        if (rel.includes("__tests__")) continue;
+        if (statSync(path.join(REPO_ROOT, rel)).isDirectory()) acc.push(...walk(rel));
+        else if (/\.tsx$/.test(e)) acc.push(rel);
+      }
+      return acc;
+    };
+    for (const file of walk("app")) {
+      const src = readFileSync(path.join(REPO_ROOT, file), "utf8");
+      // Match the whole opening tag, which routinely spans several lines.
+      for (const m of src.matchAll(/<svg\b[\s\S]*?>/g)) {
+        const cls = /className=\{?["`']([^"`']*)["`']/.exec(m[0]);
+        if (!cls) continue;
+        for (const c of cls[1].matchAll(/\btext-([a-z][a-z0-9-]+)(?:\/(\d{1,3}))?\b/g)) {
+          if (SIZE_OR_LAYOUT.has(c[1])) continue;
+          out.push({
+            role: c[1],
+            alpha: c[2] ? Number(c[2]) / 100 : 1,
+            file,
+            line: src.slice(0, m.index!).split("\n").length,
+          });
+        }
+      }
+    }
+    return out;
+  }
+
+  const found = icons();
+
+  it("finds icons at all — otherwise this guard is vacuous", () => {
+    expect(found.length).toBeGreaterThan(3);
+  });
+
+  it.each([...new Map(found.map((f) => [`${f.role}/${f.alpha}`, f])).values()])(
+    "icon text-$role at alpha $alpha",
+    ({ role, alpha, file, line }) => {
+      for (const [theme, roles] of [["dark", DARK], ["light", LIGHT]] as const) {
+        const fg = roles.get(role);
+        if (!fg) continue; // a composed token, not a base role — out of scope here
+        const bg = roles.get("surface-base")!;
+        const composited = fg.map((c, i) => c * alpha + bg[i] * (1 - alpha)) as
+          [number, number, number];
+        const r = contrast(composited, bg);
+        expect(
+          r,
+          `icon at ${file}:${line} is ${r.toFixed(2)}:1 in ${theme}. Non-text UI ` +
+            `needs 3:1 (WCAG 1.4.11) — lower than text, but not nothing.`,
+        ).toBeGreaterThanOrEqual(3);
+      }
+    },
+  );
+});
