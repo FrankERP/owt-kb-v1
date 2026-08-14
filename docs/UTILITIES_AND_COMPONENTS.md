@@ -120,7 +120,7 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   hand-rolled that and all eight leaked the timer, so a second toast inside the window
   inherited the first one's clock. The costly pair is success-then-error: the error is the
   message that flashes and disappears, and the toast is often the only signal a mutation
-  failed. A ninth, `MonthGenerator`'s swap toast, was never that pattern — it mixes transient
+  failed. A ninth, `MonthGenerator`'s swap toast, was not ONLY that pattern — it mixes transient
   and persistent messages through one slot, and briefly lost its persistent ones to a blanket
   conversion (caught in review).
   - `reset` returns to idle now and cancels the timer, for invalidation that is not time-based.

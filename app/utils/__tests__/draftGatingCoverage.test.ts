@@ -155,9 +155,12 @@ function assignedQueryArguments(src: string): string[] {
     if (/\bfunction\s+$/.test(clean.slice(Math.max(0, m.index - 12), m.index))) continue;
     const open = m.index + m[0].length - 1;
     let depth = 0;
-    for (let i = open; i < src.length; i++) {
-      if (src[i] === "(") depth++;
-      else if (src[i] === ")") {
+    // Balance over `clean`, not `src`: an unbalanced `)` inside a comment would
+    // truncate the argument, and a truncated argument that happens to retain the
+    // clause passes vacuously.
+    for (let i = open; i < clean.length; i++) {
+      if (clean[i] === "(") depth++;
+      else if (clean[i] === ")") {
         depth--;
         if (depth === 0) {
           const arg = src.slice(open + 1, i);
@@ -225,12 +228,17 @@ describe("draft services stay invisible to members", () => {
   });
 
   it("filters it on every `assignedMemberRefsQuery` argument — the exact check", () => {
-    const args = sourceFiles(APP_DIR).flatMap((file) =>
-      assignedQueryArguments(readFileSync(file, "utf8")).map((arg) => ({
-        rel: path.relative(APP_DIR, file),
-        arg,
-      })),
-    );
+    // Same exemption list as the scans above: `api/admin` may legitimately resolve
+    // an audience over drafts, and a future admin-only helper calling this with an
+    // unfiltered predicate must not force the check to be weakened.
+    const args = sourceFiles(APP_DIR)
+      .filter((file) => !exemptionFor(path.relative(APP_DIR, file)))
+      .flatMap((file) =>
+        assignedQueryArguments(readFileSync(file, "utf8")).map((arg) => ({
+          rel: path.relative(APP_DIR, file),
+          arg,
+        })),
+      );
     // One inline call site today (`outboxSweep`); the other two pass a variable and
     // are covered by the bare-predicate check above. A sentinel either way: a
     // heuristic that quietly stops matching passes forever.

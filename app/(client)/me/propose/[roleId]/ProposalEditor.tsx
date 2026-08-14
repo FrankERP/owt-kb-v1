@@ -131,8 +131,9 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
    * and interactive behind it, which is exactly the case `CueDialog` and
    * `SongFormModal` trap focus for. `MonthGenerator`'s D10 note excludes itself
    * because that panel REPLACES its view rather than stacking on one;
-   * `PlannerGrid`'s full-screen view does stack, but is opaque and makes its
-   * siblings `inert`, so it needs no scrim and no trap.
+   * `PlannerGrid`'s full-screen view does stack, and does trap Tab — it is opaque
+   * and inerts its siblings, so it needs no scrim, but `inert` is not honoured for
+   * sequential focus in every engine this app ships to (see its own note).
    * Without a trap, Tab walks out of the confirmation into the song list and
    * the "Enviar propuesta" button that opened it — a member can reorder the
    * setlist, or fire submit a second time, while being asked to confirm the

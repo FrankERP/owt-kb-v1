@@ -406,7 +406,14 @@ async function putHandler(req: NextRequest) {
   // the default `all` preference — landing them on a page where the service does
   // not exist, because every member-facing read filters `published != false`.
   // `!== false` grandfathers a missing flag, exactly as the rest of the module does.
-  if (subject?.published !== false) await notifySetlistSaved(week);
+  // `subject &&`, not `subject?.` — a weekend setlist saved before its role exists
+  // has NO owning role, and `publishedSetlist(role, songs)` then returns null, so
+  // members see nothing at all. Notifying there is the same failure as notifying
+  // for a draft, only stronger. The debounced email already declines it
+  // (`setlistUpsert` returns null on a missing roleId) and docs/NOTIFICATIONS.md
+  // states it as a rule: "A weekend setlist saved before its role exists never
+  // notifies." The push was the half that did not honour it.
+  if (subject && subject.published !== false) await notifySetlistSaved(week);
   // The DEBOUNCED email (§2): one `setlist` notice for this service, keyed on the
   // owning role so this writer and the approve path share one subject — two keys
   // would mean two outbox documents and two emails for one change.
