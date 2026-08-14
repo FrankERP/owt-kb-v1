@@ -313,7 +313,7 @@ Shares `songToForm` / chart helpers with `SongFormModal`. Lyrics and charts are 
 
 ## Tests
 
-**153 test files / 3,721 tests** (129 under `app/` + 15 under `scripts/` + 9 harness unit
+**161 test files / 3,777 tests** (137 under `app/` + 15 under `scripts/` + 9 harness unit
 tests under `e2e/service-readiness/__tests__/`).
 Separately, **11 Playwright specs** under `e2e/service-readiness/` run only against the isolated
 verification deployment and are **not** part of `npm test` — see

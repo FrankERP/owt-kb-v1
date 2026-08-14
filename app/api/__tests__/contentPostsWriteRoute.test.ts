@@ -40,7 +40,7 @@ vi.mock("@/app/utils/revalidate", () => ({
 }));
 
 const { PATCH } = await import("@/app/api/content/posts/[id]/route");
-const { POST, GET } = await import("@/app/api/content/posts/route");
+const { POST } = await import("@/app/api/content/posts/route");
 
 function req(body: unknown): NextRequest {
   return { json: async () => body } as unknown as NextRequest;
