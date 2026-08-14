@@ -123,7 +123,12 @@ several exist precisely to stop a plausible-looking change.
 `requireActiveSession`/`requireActiveManager`, `wantsNotification` (the ONLY
 per-type email-preference resolver — nothing reads `notifPrefs` directly),
 `sweepOutbox`, `shell`/`td`/`C` (`emailShell.ts` — the shared email palette),
-`themeColour` (`app/utils/themeColour.ts`).
+`themeColour` (`app/utils/themeColour.ts`), `useTransientValue` (`[value, show, reset,
+hold]` — every auto-dismissing toast and "Guardado ✓" flash. A bare
+`setTimeout(() => setToast(null))` leaks its timer, so a second toast inherits the
+first one's clock and an error can vanish in 100ms. Use `hold` for a message that must
+PERSIST until something replaces it — `MonthGenerator`'s swap toast, which reports
+writes that landed in Sanity but could not be verified. Never hand-roll the timer).
 
 ## Colour tokens
 Colour lives in **67 base roles + 26 composed tokens** (`app/brand.css` `:root`,

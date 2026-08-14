@@ -8,6 +8,7 @@ import CueDialog from "@/app/components/ui/CueDialog";
 import CueDialogStatus from "@/app/components/ui/CueDialogStatus";
 import { bodyToLyrics } from "@/app/utils/lyrics";
 import { Post } from "@/app/utils/interface";
+import { useTransientValue } from "@/app/utils/useTransientValue";
 
 interface SongTag { _id: string; name: string; slug: { current: string }; }
 interface SongAuthor { _id: string; name: string; }
@@ -42,7 +43,7 @@ function postToForm(post: Post): FormState {
     bpm: post.bpm?.toString() ?? "",
     timeSig: post.timeSig ?? "",
     lyrics: post.chords?.[0]?.content || bodyToLyrics(post.body),
-    tutorials: (post.tutorials2 ?? []).map((t: any) => ({ title: t.title ?? "", url: t.url ?? "" })),
+    tutorials: (post.tutorials2 ?? []).map((t) => ({ title: t.title ?? "", url: t.url ?? "" })),
     referenceLinks: post.referenceLinks ?? [],
     musicalReferenceUrl: post.musicalReferenceUrl ?? "",
     lyricsVideoUrl: post.lyricsVideoUrl ?? "",
@@ -84,12 +85,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
   const [authorState, setAuthorState] = useState<LoadState>("idle");
   const [saving, setSaving] = useState(false);
   const [formStatus, setFormStatus] = useState<{ tone: "error" | "pending"; message: string } | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  };
+  const [toast, showToast] = useTransientValue<string | null>(null, 3000);
 
   const loadTags = useCallback(async () => {
     if (tagState === "ready" || tagState === "loading") return;

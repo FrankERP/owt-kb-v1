@@ -287,8 +287,8 @@ function body(over: Record<string, unknown> = {}) {
   };
 }
 
-function seedWeekendService() {
-  store.roles.push(sundayRole());
+function seedWeekendService(roleOver: Record<string, unknown> = {}) {
+  store.roles.push(sundayRole(roleOver));
   store.locks.push(lock());
   store.members.push({ _id: "mem-1" }, { _id: "mem-2", setlist: "assigned" });
   store.assigned = ["mem-1"];
@@ -377,6 +377,39 @@ describe("PUT /api/admin/setlists — observed none", () => {
     // The existing setlist audience is preserved: "all" members plus assigned
     // "assigned"-preference members, derived from committed server state.
     expect(sendPushMock).toHaveBeenCalledWith(["mem-1"], "setlist", expect.anything());
+  });
+
+  // The push is publication-gated, exactly as the debounced email beside it is.
+  // Nothing pinned this before: the suite only ever asserted the push FIRES for a
+  // published role, so a gate that silently degraded to "always notify" — by
+  // `published` dropping out of ROLE_PROJECTION, say — would stay green.
+  it("does NOT push for a DRAFT service: the members it would reach cannot open it", async () => {
+    seedWeekendService({ published: false });
+    const res = await PUT(req(body()));
+    expect(res.status).toBe(200);
+    // The save itself is unaffected — only the notification is withheld.
+    expect(committedTransactions()).toHaveLength(1);
+    expect(sendPushMock).not.toHaveBeenCalled();
+  });
+
+  it("still pushes when `published` is absent — a missing flag is grandfathered", async () => {
+    seedWeekendService({ published: undefined });
+    const res = await PUT(req(body()));
+    expect(res.status).toBe(200);
+    expect(sendPushMock).toHaveBeenCalledWith(["mem-1"], "setlist", expect.anything());
+  });
+
+  // Finding from the pre-merge review: `subject?.published !== false` still
+  // notified when there was NO owning role, because `undefined !== false`. That is
+  // the case members provably see nothing — `publishedSetlist(null, songs)` returns
+  // null — so it is a stronger version of the draft leak, not an exception to it.
+  // docs/NOTIFICATIONS.md states the rule; the email honoured it and the push did not.
+  it("does NOT push when the setlist has no owning role at all", async () => {
+    store.locks.push(lock());
+    store.members.push({ _id: "mem-1" }, { _id: "mem-2", setlist: "assigned" });
+    store.assigned = ["mem-1"];
+    await PUT(req(body()));
+    expect(sendPushMock).not.toHaveBeenCalled();
   });
 
   it("swallows a failed audience notification without failing the save (§7)", async () => {

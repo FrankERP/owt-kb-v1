@@ -670,8 +670,14 @@ export async function notifySetlistSaved(week: string): Promise<void> {
     const members = await operationalClient.fetch<{ _id: string; setlist?: SetlistPref }[]>(
       `*[_type == "teamMembers"]{ _id, "setlist": notifPrefs.setlist }`,
     );
+    // `published != false` matches the sibling audience in `api/cron/service-reminders`.
+    // Without it, a member whose preference is `assigned` and who serves only on a
+    // DRAFT role that week was pushed "Ya están las canciones de este servicio" for a
+    // service they cannot open — learning they are rostered before the admin published
+    // it. Members whose preference is `all` are unaffected; the publish flow still
+    // notifies the assigned ones when the service actually goes live.
     const roleFilter =
-      `_type in ["sunday_role","saturday_role","special_role"] && (week == $week || date == $week)`;
+      `_type in ["sunday_role","saturday_role","special_role"] && (week == $week || date == $week) && published != false`;
     const assigned = await operationalClient.fetch<string[]>(assignedMemberRefsQuery(roleFilter), {
       week,
     });

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTransientValue } from "@/app/utils/useTransientValue";
 
 import {
   HANDOFF_NOTICE,
@@ -365,7 +366,7 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [toast, setToastValue] = useTransientValue<{ msg: string; ok: boolean } | null>(null, 3000);
   const [filter, setFilter] = useState<ProposalFilter>("pending");
   const [highlightIds, setHighlightIds] = useState<string[]>([]);
   const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
@@ -373,10 +374,7 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
   const cardRefs = useRef(new Map<string, HTMLDivElement | null>());
   const scrollTargetRef = useRef<string | null>(null);
 
-  const showToast = (msg: string, ok = true) => {
-    setToast({ msg, ok });
-    setTimeout(() => setToast(null), 3000);
-  };
+  const showToast = (msg: string, ok = true) => setToastValue({ msg, ok });
 
   const load = useCallback(async () => {
     setLoading(true);

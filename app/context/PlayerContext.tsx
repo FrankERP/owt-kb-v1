@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useRef, useCallback, useMemo, useEffect, ReactNode } from "react";
+import type { PortableTextBody } from "@/app/utils/interface";
 
 export interface AudioTrack {
   url: string;
@@ -19,7 +20,7 @@ export interface SongSheetData {
   bpm?: string;
   timeSig?: string;
   _createdAt?: string;
-  body?: any[];
+  body?: PortableTextBody;
   chords?: { key: string; content: string }[];
   audioTracks?: { title: string; tone?: string; audioFileURL: string }[];
   chordsPDF?: { title: string; key: string; chordsURL: string }[];
