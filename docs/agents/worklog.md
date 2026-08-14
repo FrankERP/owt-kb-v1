@@ -7,8 +7,16 @@ the agents actually did their jobs.
 
 ## The file
 
-- Path: `.agents/log/worklog.jsonl` — local-only, one JSON object per line. Gitignored;
-  never committed or pushed.
+- Path: `.agents/log/worklog.jsonl` — one JSON object per line. In this repo it is a
+  **symlink**, gitignored, pointing at `log/worklog.jsonl` in the PRIVATE repository
+  [`FrankERP/owt-agent-logs`](https://github.com/FrankERP/owt-agent-logs). Append
+  through the symlink as normal; commit and push in that repo, never this one.
+- **Why it is not tracked here.** `owt-kb-v1` is public. This log is agent-written free
+  text covering incident work, and nothing scans an entry before it is appended — on a
+  public repo that failure is one-way, because a leaked value must be rotated, never
+  recovered. It was tracked publicly 2026-08-06 → 2026-08-13 (46 commits); an audit of
+  all 167 entries found no tokens, emails, `NAME=value` pairs or member data, which is
+  what makes that week acceptable rather than a rotation event.
 - **Append-only.** Nothing rewrites, reorders, or truncates it, including `hr-officer`.
 
 ## Schema
@@ -59,7 +67,8 @@ Two entries agents cannot report for themselves, and the coordinator must write:
   the recruiting signal: recurring inline work with no owner is how `hr-officer` spots
   a role the roster is missing. Do not omit these to keep the log tidy.
 
-**The entry is appended locally when the work happens.** Never stage or push this file.
+**The entry is appended when the work happens.** Never stage it in `owt-kb-v1` — the
+gitignore makes that a no-op anyway. It is committed and pushed in `owt-agent-logs`.
 The old "ships in the same commit" rule is how the log landed on the remote; it is
 retired. Append immediately so "I'll log it at the end" cannot skip a dispatch.
 
