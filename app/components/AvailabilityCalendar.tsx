@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useTransientValue } from "@/app/utils/useTransientValue";
 
 interface Props {
   initialDates: string[];
@@ -53,7 +54,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
   const [dates, setDates]   = useState<Set<string>>(new Set(initialDates));
   const serviceSet = new Set(serviceDates);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved]   = useState(false);
+  const [saved, flashSaved, clearSaved] = useTransientValue(false, 2500);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [page, setPage]     = useState(0);
 
@@ -115,7 +116,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
     if (!dates.has(iso)) {
       // Select the date
       setDates(prev => { const n = new Set(prev); n.add(iso); return n; });
-      setSaved(false);
+      clearSaved();
     }
     // Open popover (whether newly selected or re-clicking to edit note)
     const rect = e.currentTarget.getBoundingClientRect();
@@ -129,7 +130,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
   function removeDate(iso: string) {
     setDates(prev => { const n = new Set(prev); n.delete(iso); return n; });
     setNotes(prev => { const m = new Map(prev); m.delete(iso); return m; });
-    setSaved(false);
+    clearSaved();
     setPopover(null);
   }
 
@@ -150,7 +151,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
     }
     setDates(prev => { const n = new Set(prev); series.forEach(d => (add ? n.add(d) : n.delete(d))); return n; });
     if (!add) setNotes(prev => { const m = new Map(prev); series.forEach(d => m.delete(d)); return m; });
-    setSaved(false);
+    clearSaved();
     setRecurOpen(false);
   }
 
@@ -172,8 +173,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
       });
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
       setInitialSnap(snapshot(dates, notes));
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
+      flashSaved(true);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Error al guardar");
     } finally {
@@ -429,7 +429,7 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
                   else m.delete(popover.iso);
                   return m;
                 });
-                setSaved(false);
+                clearSaved();
               }}
               onKeyDown={e => { if (e.key === "Enter") setPopover(null); }}
               className="w-full rounded-lg border border-surface-accent-l50-d15 bg-surface-lift/5 px-3 py-2 font-body text-sm text-mono-200 placeholder:text-placeholder focus:outline-none focus:border-accent/40 dark:focus:border-surface-accent-l50-d15"

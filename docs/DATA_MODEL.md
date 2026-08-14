@@ -381,6 +381,14 @@ The `published` boolean lives on **role docs only** (`sunday_role`/`saturday_rol
 - **Member-facing GROQ filters `published != false`.** The `!= false` form treats a **missing**
   `published` as published ("grandfathered"), while explicit `false` is a draft. Used in
   `app/(client)/page.tsx`, `schedule/page.tsx`, `api/song/[id]/route.ts`, and more (9 files under `app/`).
+  **Enforced, not just documented:** [`draftGatingCoverage.test.ts`](../app/utils/__tests__/draftGatingCoverage.test.ts)
+  scans every `*[…]` filter group in `app/**` — and, separately, every bare filter-predicate
+  string such as the one `assignedMemberRefsQuery()` takes — and fails on one that selects a role
+  type without the filter. The scan is inverted (everything is checked unless exempt), so a new
+  member-facing surface is covered by default; see the file's header for the two shapes it still
+  cannot see. `MAY_SEE_DRAFTS` there holds the two reads that
+  legitimately see drafts (`api/admin/**`, manager-gated; and `serviceReadQueries.ts`, the
+  admin/write read model), each with its reason. **Do not add a member-facing query to either.**
 - **Setlists have no flag**, so [`app/utils/draftGating.ts`](../app/utils/draftGating.ts)
   `publishedSetlist(role, setlist)` returns the setlist only when the (already
   `published != false`-filtered) role exists — otherwise a draft service would leak its song

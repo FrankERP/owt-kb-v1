@@ -404,7 +404,7 @@ never a `drafts.*` overlay that could widen the audience. The rules, exhaustivel
 | Published create | every initial assignee |
 | Published/grandfathered edit, swap, or copy | **only newly added** assignees, per destination role |
 | Publish `false → true` | every current assignee (one consolidated email batch) |
-| Manual setlist save | the existing `setlistRecipientIds` audience + `revalidateServiceViews()` |
+| Manual setlist save | **published only** — the existing `setlistRecipientIds` audience (its `assigned` half `published != false`-filtered) + `revalidateServiceViews()`; a draft save is silent |
 | Proposal committed as `pending` | the existing admin/co-lead push + allowlist/preference-aware admin email |
 | `request_changes` / `reopen` / approval | the existing review recipients (proposal `lead` + contributors) |
 | Approval | also `revalidateServiceViews()` |

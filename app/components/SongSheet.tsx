@@ -4,6 +4,7 @@ import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { PortableText } from "next-sanity";
+import type { PortableTextComponents } from "@portabletext/react";
 import { usePlayer, AudioTrack, SongHistoryEntry } from "@/app/context/PlayerContext";
 import AudioTransport from "./AudioTransport";
 import ChordChart from "./ChordChart";
@@ -12,30 +13,30 @@ import { groupBySections } from "@/app/utils/lyrics";
 
 // ─── Portable-text renderer for the sheet (no prose class, tight spacing) ─────
 
-const bodyComponents = {
+const bodyComponents: PortableTextComponents = {
   block: {
-    normal: ({ children }: any) => (
+    normal: ({ children }) => (
       <p className="font-body text-base leading-relaxed">{children}</p>
     ),
-    h1: ({ children }: any) => (
+    h1: ({ children }) => (
       <p className="font-label text-[11px] uppercase tracking-widest text-accent/70 mt-4 mb-0.5 first:mt-0">
         {children}
       </p>
     ),
-    h2: ({ children }: any) => (
+    h2: ({ children }) => (
       <p className="font-label text-[11px] uppercase tracking-widest text-accent/70 mt-4 mb-0.5 first:mt-0">
         {children}
       </p>
     ),
-    h3: ({ children }: any) => (
+    h3: ({ children }) => (
       <p className="font-label text-[11px] uppercase tracking-widest text-accent/70 mt-4 mb-0.5 first:mt-0">
         {children}
       </p>
     ),
   },
   marks: {
-    strong: ({ children }: any) => <strong className="font-semibold">{children}</strong>,
-    em: ({ children }: any) => <em className="italic">{children}</em>,
+    strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+    em: ({ children }) => <em className="italic">{children}</em>,
   },
 };
 

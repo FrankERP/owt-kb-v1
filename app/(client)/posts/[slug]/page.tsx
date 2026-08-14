@@ -10,6 +10,7 @@ import {
 } from "@/app/utils/serviceReadSelect";
 import Link from "next/link";
 import { PortableText } from "next-sanity";
+import type { PortableTextComponents } from "@portabletext/react";
 import Image from "next/image";
 import { urlFor } from "@/sanity/lib/image";
 import { notFound } from "next/navigation";
@@ -400,14 +401,14 @@ const Page = async ({ params }: Params) => {
 
 export default Page;
 
-const myPortableTextComponents = {
+const myPortableTextComponents: PortableTextComponents = {
   block: {
-    h1: ({ children }: any) => <h1 className="break-after-avoid">{children}</h1>,
-    h2: ({ children }: any) => <h2 className="break-after-avoid">{children}</h2>,
-    h3: ({ children }: any) => <h3 className="break-after-avoid">{children}</h3>,
+    h1: ({ children }) => <h1 className="break-after-avoid">{children}</h1>,
+    h2: ({ children }) => <h2 className="break-after-avoid">{children}</h2>,
+    h3: ({ children }) => <h3 className="break-after-avoid">{children}</h3>,
   },
   types: {
-    image: ({ value }: any) => (
+    image: ({ value }) => (
       <Image
         src={urlFor(value).width(1400).fit("max").auto("format").url()}
         alt="Post"

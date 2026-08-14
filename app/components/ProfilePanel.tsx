@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useId } from "react";
 import CueDialog from "./ui/CueDialog";
 import CueDialogStatus from "./ui/CueDialogStatus";
 import EmailPrefToggles, { EMAIL_PREF_ROWS, resolveEmailPrefs } from "./ui/EmailPrefToggles";
+import { useTransientValue } from "@/app/utils/useTransientValue";
 
 interface MemberProfile {
   _id: string;
@@ -76,7 +77,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
   const triggerRef = useRef<HTMLButtonElement>(null);
   const ids = useId();
   const fid = (name: string) => `${ids}-${name}`;
-  const [toast, setToast]     = useState<{ msg: string; ok: boolean } | null>(null);
+  const [toast, setToastValue] = useTransientValue<{ msg: string; ok: boolean } | null>(null, 3500);
   const [panelStatus, setPanelStatus] = useState<{ tone: "error" | "pending"; message: string } | null>(null);
 
   // Identity form
@@ -110,10 +111,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
     setEmailPrefs(resolveEmailPrefs(initialMember.notifPrefs));
   }, [initialMember]);
 
-  const showToast = (msg: string, ok = true) => {
-    setToast({ msg, ok });
-    setTimeout(() => setToast(null), 3500);
-  };
+  const showToast = (msg: string, ok = true) => setToastValue({ msg, ok });
 
   const handleSaveProfile = async () => {
     setSavingProfile(true);

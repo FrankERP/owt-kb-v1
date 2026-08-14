@@ -45,6 +45,36 @@ describe("lyrics text -> body -> text round-trip", () => {
   });
 });
 
+// `post.body` is `of: [{type: "block"}, {type: "image"}]`, so a body can hold
+// entries and children that are not lyric spans. bodyToLyrics feeds a textarea
+// an admin then saves back, so anything it cannot represent must contribute
+// nothing rather than leak a stray shape into the song's lyrics.
+describe("bodyToLyrics skips what it cannot represent", () => {
+  it("drops a non-block entry (an image) entirely", () => {
+    const body = [
+      { _type: "block", style: "normal", children: [{ _type: "span", text: "Sublime gracia" }] },
+      { _type: "image", asset: { _ref: "image-abc-800x600-jpg" } },
+      { _type: "block", style: "normal", children: [{ _type: "span", text: "del Señor" }] },
+    ];
+    expect(bodyToLyrics(body)).toBe("Sublime gracia\ndel Señor");
+  });
+
+  it("contributes nothing for a non-span child and keeps the spans around it", () => {
+    const body = [
+      {
+        _type: "block",
+        style: "normal",
+        children: [
+          { _type: "span", text: "Cristo " },
+          { _type: "footnote", text: "no soy un span" },
+          { _type: "span", text: "vive" },
+        ],
+      },
+    ];
+    expect(bodyToLyrics(body)).toBe("Cristo vive");
+  });
+});
+
 describe("textToBody structure", () => {
   it("marks a '# ' line as an h3 block", () => {
     const [block] = textToBody("# Puente");
@@ -54,7 +84,7 @@ describe("textToBody structure", () => {
 
   it("gives strong/em marks to bold/italic spans", () => {
     const [block] = textToBody("a **b** *c*");
-    const marks = block.children.map((s: any) => s.marks);
+    const marks = block.children.map((s) => s.marks);
     expect(marks).toContainEqual(["strong"]);
     expect(marks).toContainEqual(["em"]);
   });
@@ -71,7 +101,7 @@ describe("groupBySections", () => {
 
   it("returns [] for empty input", () => {
     expect(groupBySections([])).toEqual([]);
-    expect(groupBySections(undefined as any)).toEqual([]);
+    expect(groupBySections(undefined)).toEqual([]);
   });
 
   it("starts a new group at each heading", () => {
