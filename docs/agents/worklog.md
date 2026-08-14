@@ -20,7 +20,7 @@ the agents actually did their jobs.
 
 | Field | Required | Written by | Notes |
 |---|---|---|---|
-| `ts` | yes | coordinator | ISO-8601 with local offset (America/Mexico_City, `-06:00`) |
+| `ts` | yes | coordinator | ISO-8601 with local offset (America/Mexico_City, `-06:00`). Fresh clock read at append, or the entry's own commit — never a leftover stamp. |
 | `cycle` | yes | coordinator | Branch name, or a short label when no branch fits |
 | `agent` | yes | agent trailer | Agent name, or `coordinator-inline` |
 | `platform` | yes | coordinator | `claude` or `codex` |
@@ -30,6 +30,9 @@ the agents actually did their jobs.
 | `artifacts` | no | coordinator | Paths, commits, or docs the dispatch touched or produced |
 | `tokens` | no | coordinator | `subagent_tokens` from the dispatch result's usage block, when available |
 | `duration_ms` | no | coordinator | `duration_ms` from the same usage block (added 2026-08-11; earlier entries lack both) |
+| `corrects` | no | coordinator | 1-based line number of the entry being corrected (see Correcting a line) |
+| `field` | no | coordinator | Field name on that line |
+| `corrected_value` | no | coordinator | Replacement value |
 
 ## Who writes it
 
@@ -89,6 +92,13 @@ file has ever carried. Three constraints, each earned:
 Out-of-order timestamps remain fine; the file is append-only and `hr-officer` reads it
 in file order. What is not fine is a timestamp that could not have happened.
 
+That last sentence is not a backfill-only rule. Every entry's `ts` is a fresh clock
+read at the moment of the append, or the commit that recorded the entry — never a
+leftover stamp from earlier in the same run. Line 141 shipped with its work
+(b699195, committed 2026-08-13T07:26:22-06:00) carrying `2026-08-12T22:59:00-06:00`:
+the session date rolled over mid-run. The backfill constraint above would not have
+caught it, because the entry was live.
+
 **One line per dispatch, including each review round.** Collapsing "rounds 1–5" into a
 single entry undercounts volume by four and makes per-round verdicts unauditable from
 the log — which is the one place they are supposed to be auditable.
@@ -98,6 +108,15 @@ carrying any Important finding logs as `findings`, never `ok`.
 
 A missing or malformed line is an `hr-officer` finding, never a runtime error. Nothing
 in the app reads this file.
+
+### Correcting a line
+
+A wrong field has no in-place repair. The two precedents were rewriting the file
+(which violates append-only) and leaving it wrong. Corrections are appended, never
+edited. The correcting entry carries `corrects` (the 1-based line number), `field`,
+and `corrected_value`, alongside the normal entry fields. `hr-officer` reads the file
+in order, so a later correction supersedes an earlier value. Line 141 is the case:
+its `ts` is 8h27m before the artifact it cites, and the line itself is unchanged.
 
 ## The HR gate
 
