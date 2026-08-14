@@ -22,8 +22,16 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   handling while standing next to the `setTheme`-identity bug in the same function, because
   it was not looking at code. The order is:
 
-      implement → gates green → FRESH CODE REVIEW on the merge range → fix → merge to main
-      → preview → verify alias → main
+      implement → gates green → FRESH CODE REVIEW on the merge range → fix
+      → RE-VERIFY THE FIX (scoped review of the fix range + gates re-run on the final tree)
+      → merge to main → preview → verify alias → main
+
+  A fix for a review finding is written fast, under pressure, by the author the review just
+  corrected — it is not lower-risk than the code that produced it. The cycle that earned this
+  step ran three review rounds and each one found the previous fix incomplete: a HIGH fix left
+  a production notification audience half-gated, and the fix for that still fired when no role
+  existed. Auditable from the worklog alone: the last entry before a merge must be a
+  verification, not a fix. That property is what makes it a control rather than an intention.
 
 - **PUSH ORDER IS `preview` FIRST, THEN `main`. Always, without being asked.**
   `main` auto-deploys to **production** — `owt-backstage.vercel.app`, the app the
