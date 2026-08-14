@@ -127,7 +127,8 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   focus hook). **Any overlay with a dismissable scrim must use it** — a clickable full-bleed
   `bg-scrim` means content is stacked over a still-interactive page, so the overlay also needs
   `role="dialog"`, `aria-modal`, a name, and Escape. `dialogSemantics.test.ts` enumerates every
-  such overlay and fails on one that skips this; `NOT_A_DIALOG` there holds the justified
+  overlay drawn with a clickable `bg-scrim` and fails on one that skips this (per file,
+  and keyed to that token — see its header for what it cannot see); `NOT_A_DIALOG` there holds the justified
   exemptions (today: `BottomNav`'s sheet, which uses `inert` instead). `CueDialog` uses the
   `trapTabTarget` primitive directly rather than the hook, because it also traps portalled
   satellite nodes.

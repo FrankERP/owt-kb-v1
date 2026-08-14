@@ -35,11 +35,23 @@
 // `publishedSetlist` in `draftGating.ts` owns that last one and is tested next to
 // it. Setlist types are deliberately NOT scanned here: `published` lives on the
 // role doc, never on `featuredSongs`/`saturdarSongs`.
+//
+// It is also satisfied by ONE `published != false` per group, so a disjunction
+// whose branches name different types passes when only one branch carries it —
+// `api/me/songs` has exactly that shape today (benign: it is past-only play
+// history, bounded by `week < $today`). Tightening this needs a real GROQ parser;
+// naming the hole is honest, and a silent hole is what a guard is supposed to
+// prevent.
 
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+// The repo's own comment blanker (preserves byte offsets, so line numbers stay
+// accurate). Without it, prose that QUOTES a query — `_type == "sunday_role"` in
+// a doc comment — is scanned as if it were one.
+import { stripComments } from "../../../scripts/lib/strip-comments.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const APP_DIR = path.join(REPO_ROOT, "app");
@@ -95,6 +107,40 @@ function filterGroups(src: string): Array<{ text: string; index: number }> {
   return out;
 }
 
+/**
+ * BARE filter predicates — a GROQ condition held in a string and injected into a
+ * query somewhere else, so it never appears inside a `*[ … ]` in its own file and
+ * the group scan above is structurally blind to it.
+ *
+ * This is not hypothetical. `assignedMemberRefsQuery(roleFilter)` — the helper
+ * CLAUDE.md's invariants tell every "who serves" query to reuse — takes exactly
+ * such a string, and `api/cron/service-reminders` passes one naming all three
+ * role types. Deleting its `published != false` would push-notify the whole team
+ * about an unpublished service while the group scan stayed green.
+ *
+ * A literal is a bare predicate when it names a role type with `_type` and holds
+ * no `*[` of its own.
+ *
+ * Template literals ONLY, and only after comments are blanked. Every GROQ string
+ * this repo builds in code is a backtick literal; the same characters inside a
+ * `//` comment are markdown, not a query, and must not be reported as one.
+ */
+function templateLiterals(src: string): string[] {
+  return [...stripComments(src).matchAll(/`(?:[^`\\]|\\.)*`/g)].map((m) => m[0]);
+}
+
+function unfilteredBarePredicates(rel: string, src: string): string[] {
+  return templateLiterals(src)
+    .filter(
+      (lit) =>
+        lit.includes("_type") &&
+        ROLE_TYPES.test(lit) &&
+        !lit.includes("*[") &&
+        !/published\s*!=\s*false/.test(lit),
+    )
+    .map(() => `${rel} builds a role-type filter string without \`published != false\``);
+}
+
 const exemptionFor = (rel: string): string | undefined =>
   Object.keys(MAY_SEE_DRAFTS).find((prefix) => rel === prefix || rel.startsWith(prefix + "/"));
 
@@ -120,6 +166,15 @@ describe("draft services stay invisible to members", () => {
     const violations = unfilteredRoleReads()
       .filter(({ rel }) => !exemptionFor(rel))
       .map(({ rel, line }) => `${rel}:${line} reads a role type without \`published != false\``);
+    expect(violations).toEqual([]);
+  });
+
+  it("filters it on bare predicate strings too, which no `*[…]` group contains", () => {
+    const violations = sourceFiles(APP_DIR).flatMap((file) => {
+      const rel = path.relative(APP_DIR, file);
+      if (exemptionFor(rel)) return [];
+      return unfilteredBarePredicates(rel, readFileSync(file, "utf8"));
+    });
     expect(violations).toEqual([]);
   });
 

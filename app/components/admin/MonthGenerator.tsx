@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTransientValue } from "@/app/utils/useTransientValue";
 import type { SolveResponse } from "@/app/api/admin/solve/route";
 import { DayCard } from "@/app/components/DayCard";
 import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
@@ -1587,7 +1586,52 @@ export default function MonthGenerator({
 
   const [viewMode, setViewMode]   = useState<"edit" | "view">("edit");
   const [swapSel, setSwapSel]     = useState<string | null>(null);
-  const [swapToast, setSwapToast] = useTransientValue<string | null>(null, 2500);
+  /**
+   * The swap toast has TWO channels, which is why it does not use
+   * `useTransientValue` like every other toast in the app.
+   *
+   * Most of its messages must PERSIST until something replaces them: they report
+   * a write that already landed in Sanity but could not be verified ("no se pudo
+   * verificar la recarga", "No se reintentó; recarga para verificar"), and the
+   * "Recargar y verificar" recovery button is rendered INSIDE this toast's block.
+   * Auto-dismissing those would delete the only on-screen record that a real
+   * roster swap is unresolved — and the only control that resolves it — while
+   * `swapVerificationPending` keeps "Crear vacío" disabled with no stated reason.
+   *
+   * Only three messages are transient: two swap refusals and the local
+   * "⇄ date ↔ date" confirmation.
+   *
+   * The timer is held in a ref so a pending transient timer cannot fire into a
+   * message that replaced it. That was live before this component owned its
+   * timer: a "⇄" confirmation at t=0 armed 2.5s, and an unverified-write warning
+   * raised at t=2.4s was wiped 100ms later, recovery button included.
+   */
+  const [swapToast, setSwapToastValue] = useState<string | null>(null);
+  const swapToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearSwapToastTimer = useCallback(() => {
+    if (swapToastTimer.current !== null) {
+      clearTimeout(swapToastTimer.current);
+      swapToastTimer.current = null;
+    }
+  }, []);
+  useEffect(() => clearSwapToastTimer, [clearSwapToastTimer]);
+
+  /** Show until replaced. The default — see the two-channel note above. */
+  const setSwapToast = useCallback((msg: string | null) => {
+    clearSwapToastTimer();
+    setSwapToastValue(msg);
+  }, [clearSwapToastTimer]);
+
+  /** Show for 2.5s. ONLY for messages that report no unresolved write. */
+  const flashSwapToast = useCallback((msg: string) => {
+    clearSwapToastTimer();
+    setSwapToastValue(msg);
+    swapToastTimer.current = setTimeout(() => {
+      swapToastTimer.current = null;
+      setSwapToastValue(null);
+    }, 2500);
+  }, [clearSwapToastTimer]);
   const [swapVerificationPending, setSwapVerificationPending] = useState(false);
   const pendingSwapExpected = useRef<{
     body: string;
@@ -2498,7 +2542,7 @@ export default function MonthGenerator({
     // below so a special↔weekend attempt names the more specific reason.
     if (typeA === "special_role" || typeB === "special_role") {
       setSwapSel(null);
-      setSwapToast("No se puede intercambiar un servicio especial: su nombre se queda en su fecha.");
+      flashSwapToast("No se puede intercambiar un servicio especial: su nombre se queda en su fecha.");
       return;
     }
     if (typeA !== typeB) {
@@ -2506,7 +2550,7 @@ export default function MonthGenerator({
       // Named from the shared `SERVICE_LABEL`, not hardcoded: specials are
       // columns now, so "Domingo con un Sábado" was about to become wrong copy
       // on a real refusal. For the Sunday/Saturday pair it reads identically.
-      setSwapToast(
+      flashSwapToast(
         `No se puede intercambiar un ${typeA ? SERVICE_LABEL[typeA] : "servicio"} con un ${typeB ? SERVICE_LABEL[typeB] : "servicio"}.`,
       );
       return;
@@ -2524,7 +2568,7 @@ export default function MonthGenerator({
     setCells(next);
     setDrafts(prev => cellsToDrafts(next, columns, skippedColumnIds, prev, existingRoles));
     setSwapSel(null);
-    setSwapToast(`⇄ ${fmtDate(columnA?.date ?? "")} ↔ ${fmtDate(columnB?.date ?? "")}`);
+    flashSwapToast(`⇄ ${fmtDate(columnA?.date ?? "")} ↔ ${fmtDate(columnB?.date ?? "")}`);
   }
 
   async function handleSectionSwap() {

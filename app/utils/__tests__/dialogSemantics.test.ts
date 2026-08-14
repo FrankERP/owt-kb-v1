@@ -10,8 +10,10 @@
 // the setlist, or fire submit a second time, while being asked to confirm the
 // first.
 //
-// Three other overlays in this app got it right (`CueDialog`, `SongFormModal`,
-// and `PlannerGrid`'s full-screen view), which is exactly why the gap survived:
+// Two other scrim overlays got it right (`CueDialog`, `SongFormModal`), as does
+// `PlannerGrid`'s full-screen view by a different route — it REPLACES the page
+// rather than stacking on it, draws no scrim, and so is not what this scan
+// checks. A house pattern existed; that is exactly why the gap survived:
 // there was a house pattern and nothing that made a new overlay follow it. This
 // file is that thing. Fixing the one instance without it just means the next
 // overlay starts the cycle over.
@@ -26,6 +28,13 @@
 // trap — not that they are wired to each other, that the label is meaningful, or
 // that Escape is handled. It catches the systematic omission, not the local
 // mistake. `useFocusTrap`'s own behaviour is tested in `useFocusTrap.test.tsx`.
+//
+// Two limits worth naming rather than discovering. Checks are per FILE, so a
+// second, non-conformant overlay added to a file that already contains a good one
+// passes on the first one's attributes. And detection is keyed to the literal
+// `bg-scrim` token plus `onClick`: a scrim painted with another class, or
+// dismissed via `onPointerDown`, is invisible to this scan. It catches the
+// overlay someone forgets to make a dialog, not every conceivable overlay.
 
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";

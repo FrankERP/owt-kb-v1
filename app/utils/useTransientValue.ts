@@ -6,11 +6,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * A value that shows, then reverts to `idle` after `ms` — a toast, a "Guardado ✓"
  * flash, a transient banner.
  *
- * WHY THIS EXISTS. Nine sites across the app had hand-rolled the same two lines:
+ * WHY THIS EXISTS. Eight sites across the app had hand-rolled the same two lines:
  *
  *     const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
  *
- * and all nine had the same bug, because the timer was never held onto. A second
+ * and all eight had the same bug, because the timer was never held onto. A second
  * toast inside the window does not restart the clock — it inherits the first
  * one's. Save at t=0 and again at t=2900 and the second message shows for 100ms
  * before the FIRST timer fires and clears it.
@@ -28,9 +28,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * edits a date again. Without it a caller would have to fake a reset by showing
  * the idle value, which quietly arms another timer.
  *
+ * NOT for a toast that must persist until something replaces it. `MonthGenerator`'s
+ * swap toast is the counter-example and deliberately does not use this hook: most
+ * of its messages report a write that landed in Sanity but could not be verified,
+ * and the recovery button lives inside the toast — auto-dismissing those would
+ * delete the only record that a real roster swap is unresolved.
+ *
  * `show` and `reset` are stable as long as `idle` and `ms` are (every caller
  * passes literals — `null`, `false`, `3000`). Pass an object literal as `idle`
  * and they are re-created each render, which is harmless but not memo-friendly.
+ * They are `useCallback`s, not `useState` setters, so ESLint cannot assume
+ * stability — name them in an effect's dependency array.
  */
 export function useTransientValue<T>(
   idle: T,

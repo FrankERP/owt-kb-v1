@@ -129,8 +129,9 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
   /**
    * The submit-confirmation modal is a real overlay: the editor stays mounted
    * and interactive behind it, which is exactly the case `CueDialog` and
-   * `SongFormModal` trap focus for (and the case `MonthGenerator`'s D10 note
-   * excludes itself from, because that panel REPLACES its view instead).
+   * `SongFormModal` trap focus for (and the case `MonthGenerator`'s D10 note and
+   * `PlannerGrid`'s full-screen view exclude themselves from, because those
+   * REPLACE their view instead of stacking on it).
    * Without a trap, Tab walks out of the confirmation into the song list and
    * the "Enviar propuesta" button that opened it — a member can reorder the
    * setlist, or fire submit a second time, while being asked to confirm the

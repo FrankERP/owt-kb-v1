@@ -68,6 +68,32 @@ describe("useTransientValue", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  // `reset` exists for invalidation that is not time-based — AvailabilityCalendar
+  // clears "Guardado ✓" the moment a date is edited. The point is that it CANCELS:
+  // faking a reset by showing the idle value would arm another timer.
+  it("reset returns to idle now and cancels the pending timer", () => {
+    function Resettable() {
+      const [toast, showToast, reset] = useTransientValue<string | null>(null, 3000);
+      return (
+        <div>
+          <span data-testid="toast">{toast ?? "—"}</span>
+          <button data-testid="a" onClick={() => showToast("guardado")}>a</button>
+          <button data-testid="r" onClick={reset}>r</button>
+        </div>
+      );
+    }
+    render(<Resettable />);
+    click("a");
+    expect(toast()).toBe("guardado");
+    click("r");
+    expect(toast()).toBe("—");
+    expect(vi.getTimerCount()).toBe(0);
+    // And nothing fires later to re-clear a value shown after the reset.
+    click("a");
+    advance(2999);
+    expect(toast()).toBe("guardado");
+  });
+
   it("keeps `show` stable so it is safe in a dependency array", () => {
     const seen: Array<(next: string | null) => void> = [];
     function Probe() {

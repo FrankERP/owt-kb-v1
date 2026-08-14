@@ -123,10 +123,11 @@ several exist precisely to stop a plausible-looking change.
 `requireActiveSession`/`requireActiveManager`, `wantsNotification` (the ONLY
 per-type email-preference resolver — nothing reads `notifPrefs` directly),
 `sweepOutbox`, `shell`/`td`/`C` (`emailShell.ts` — the shared email palette),
-`themeColour` (`app/utils/themeColour.ts`), `useTransientValue` (the ONLY way to
-auto-dismiss a toast or a "Guardado ✓" flash — a bare `setTimeout(() => setToast(null))`
-leaks its timer, so a second toast inherits the first one's clock and an error message
-can vanish in 100ms).
+`themeColour` (`app/utils/themeColour.ts`), `useTransientValue` (auto-dismissing
+toasts and "Guardado ✓" flashes — a bare `setTimeout(() => setToast(null))` leaks its
+timer, so a second toast inherits the first one's clock and an error can vanish in
+100ms. NOT for a toast that must persist until replaced: `MonthGenerator`'s swap
+toast reports writes that landed but could not be verified, and owns its own timer).
 
 ## Colour tokens
 Colour lives in **67 base roles + 26 composed tokens** (`app/brand.css` `:root`,
