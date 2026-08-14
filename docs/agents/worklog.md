@@ -23,7 +23,7 @@ the agents actually did their jobs.
 | `ts` | yes | coordinator | ISO-8601 with local offset (America/Mexico_City, `-06:00`). Fresh clock read at append, or the entry's own commit — never a leftover stamp. |
 | `cycle` | yes | coordinator | Branch name, or a short label when no branch fits |
 | `agent` | yes | agent trailer | Agent name, or `coordinator-inline` |
-| `platform` | yes | coordinator | `claude` or `codex` |
+| `platform` | yes | coordinator | `claude` or `codex` or `cursor`. Cursor Task dispatches on 2026-08-13 were a true value the two-platform enum rejected. |
 | `task` | yes | agent trailer | One line: what it was asked to do |
 | `outcome` | yes | agent trailer | `ok` \| `findings` \| `approved` \| `changes_required` \| `failed` \| `no_result` |
 | `summary` | yes | agent trailer | One line: what came back |
