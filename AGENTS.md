@@ -186,7 +186,9 @@ cadence.
 ### Agent worklog + HR review
 
 **Log every subagent dispatch** to `.agents/log/worklog.jsonl` (append-only, one JSON
-object per line, local-only — never commit or push it). Agents end their reports with
+object per line; a gitignored symlink into the PRIVATE repo `FrankERP/owt-agent-logs`
+— never commit it here, because this repo is public and the log is agent-written free
+text covering incidents). Agents end their reports with
 a `WORKLOG:` trailer; the **coordinator appends** the line — including `no_result` for
 dispatches that crashed and `coordinator-inline` for specialist-shaped work done inline
 rather than dispatched.
