@@ -48,14 +48,14 @@ this is a **song**.
 | `audioTracks` | array of `audioTrack` | `{ title, tone, audioFile (.mp3 file) }`. |
 | `lyrics` | file | Lyrics PDF (`.pdf`). |
 | `chordsPDF` | array of `chordsPDF` | `{ title, key, chordsPDF (.pdf file) }`. |
-| `chords` | array of `chord_chart` | `{ key, content (text, chords written above lyric lines) }`. **The multi-chart landmine lives here.** |
+| `chords` | array of `chord_chart` | `{ key, content (text, chords written above lyric lines) }`. Independent of `body` — [ADR-0018](adr/0018-lyrics-and-charts-are-independent.md). |
 | `referenceLinks` | array of `referenceLink` | `{ label, url }`. |
 | `tags` | array of reference → `tag` | Taxonomy. |
 | `authors` | array of reference → `author` | Structured authors (parallel to the `author` string). |
 
-**Landmine:** `SongFormModal`/`EditSongButton` collapse a multi-entry `chords` array to a
-single chart on save. 0 songs affected today; treat as a feature to fix deliberately, not a
-drive-by patch.
+**Lyrics and charts are independent fields.** `body` is the lyrics textarea;
+`chords` is the repeatable chart editor. Do not classify one from the other with
+`CHORD_MARKER_RE`. See [ADR-0018](adr/0018-lyrics-and-charts-are-independent.md).
 
 ---
 

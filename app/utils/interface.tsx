@@ -11,6 +11,7 @@ import type { PortableTextBlock } from "@portabletext/react";
 export type PortableTextBody = Array<PortableTextBlock | { _type: string }>;
 
 export interface ChordChart {
+  _key?: string;
   key: string;
   content: string;
 }

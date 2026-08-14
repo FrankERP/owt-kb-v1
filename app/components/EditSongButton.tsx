@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import CueDialog from "@/app/components/ui/CueDialog";
 import CueDialogStatus from "@/app/components/ui/CueDialogStatus";
-import { bodyToLyrics } from "@/app/utils/lyrics";
+import { songToForm } from "@/app/components/admin/SongFormModal";
+import { ChordChartsFields } from "@/app/components/admin/ChordChartsFields";
+import { chartsToPayload, type ChartDraft } from "@/app/utils/songFormCharts";
 import { Post } from "@/app/utils/interface";
 import { useTransientValue } from "@/app/utils/useTransientValue";
 
@@ -20,6 +22,7 @@ interface FormState {
   bpm: string;
   timeSig: string;
   lyrics: string;
+  charts: ChartDraft[];
   tutorials: { title: string; url: string }[];
   referenceLinks: { label: string; url: string }[];
   musicalReferenceUrl: string;
@@ -29,38 +32,30 @@ interface FormState {
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 
-const CHORD_MARKER_RE = /\[[^\]]+\]/;
 const SECTION_LABELS = ["Intro", "Verso", "Pre-Coro", "Coro", "Puente", "Outro"];
 
 const inputCls =
   "w-full rounded-lg border border-accent/20 bg-transparent px-3 py-2 font-body text-sm text-ink transition-colors placeholder:text-placeholder focus:border-accent focus:outline-none";
 
 function postToForm(post: Post): FormState {
+  const shared = songToForm(post);
   return {
-    title: post.title ?? "",
-    authorIds: post.authors?.map((a) => a._id) ?? [],
-    key: post.key ?? "",
-    bpm: post.bpm?.toString() ?? "",
-    timeSig: post.timeSig ?? "",
-    lyrics: post.chords?.[0]?.content || bodyToLyrics(post.body),
+    ...shared,
     tutorials: (post.tutorials2 ?? []).map((t) => ({ title: t.title ?? "", url: t.url ?? "" })),
-    referenceLinks: post.referenceLinks ?? [],
     musicalReferenceUrl: post.musicalReferenceUrl ?? "",
     lyricsVideoUrl: post.lyricsVideoUrl ?? "",
-    tagIds: post.tags?.map((t) => t._id) ?? [],
   };
 }
 
 export function buildEditSongPayload(form: FormState) {
-  const hasChords = CHORD_MARKER_RE.test(form.lyrics);
   return {
     title: form.title,
     authorIds: form.authorIds,
     key: form.key,
     bpm: form.bpm,
     timeSig: form.timeSig,
-    lyrics: hasChords ? "" : form.lyrics,
-    chords: hasChords ? [{ key: form.key, content: form.lyrics }] : [],
+    lyrics: form.lyrics,
+    chords: chartsToPayload(form.charts),
     tutorials: form.tutorials,
     referenceLinks: form.referenceLinks,
     musicalReferenceUrl: form.musicalReferenceUrl.trim(),
@@ -324,11 +319,19 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
                 rows={14}
                 value={form.lyrics}
                 onChange={set("lyrics")}
-                placeholder={"# Verso 1\n[Am]Ante Ti [F]Postrado estoy\n\n# Coro\nLínea 1"}
+                placeholder={"# Verso 1\nAnte Ti\nPostrado estoy\n\n# Coro\nLínea 1"}
                 spellCheck={false}
               />
-              <p className="mt-1 font-label text-[11px] uppercase tracking-wide text-mono-600"># Sección · [Acorde]palabra · **negrita** · *cursiva*</p>
+              <p className="mt-1 font-label text-[11px] uppercase tracking-wide text-mono-600"># Sección · **negrita** · *cursiva* · los cifrados van en Acordes</p>
             </div>
+
+            <ChordChartsFields
+              charts={form.charts}
+              onChange={(charts) => setForm((f) => ({ ...f, charts }))}
+              inputCls={inputCls}
+              defaultKey={form.key}
+              idPrefix={fieldId}
+            />
 
             <RepeatRows
               title="Tutoriales"

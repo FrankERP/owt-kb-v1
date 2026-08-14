@@ -58,3 +58,4 @@ wrote down why — a known gap, not a guess).
 - [ADR-0015: A third root layout, at a dynamic segment](0015-gallery-root-layout.md) — why the theme gallery's layout cannot be moved upward
 - [ADR-0016: Revive light mode by tokenising colour](0016-light-mode-revived-by-tokenisation.md) — **supersedes ADR-0008**; why `dark:` variants and a partial-surface revival were both rejected
 - [ADR-0017: Serve the theme gallery without a session](0017-public-theme-gallery.md) — why an auth boundary moved, and why the `/auth/` placement that needs no matcher edit was rejected
+- [ADR-0018: Keep lyrics and chord charts as independent fields](0018-lyrics-and-charts-are-independent.md) — why `CHORD_MARKER_RE` must not route the song editor payload

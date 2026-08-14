@@ -3,6 +3,7 @@ import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { textToBody } from "@/app/utils/lyrics";
 import { revalidateSongViews } from "@/app/utils/revalidate";
+import { normalizeChordCharts } from "@/app/utils/chordChartWrite";
 
 function rng() { return Math.random().toString(36).slice(2, 9); }
 
@@ -25,7 +26,7 @@ export async function GET() {
       musicalReferenceUrl, lyricsVideoUrl,
       body,
       authors[]->{ _id, name },
-      chords[]{ key, content },
+      chords[]{ _key, key, content },
       referenceLinks[]{ label, url },
       tags[]->{ _id, name, slug }
     }`
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
     bpm?: string;
     timeSig?: string;
     lyrics?: string;
-    chords?: Array<{ key: string; content: string }>;
+    chords?: Array<{ _key?: string; key: string; content: string }>;
     referenceLinks?: Array<{ label: string; url: string }>;
     musicalReferenceUrl?: string;
     lyricsVideoUrl?: string;
@@ -81,6 +82,11 @@ export async function POST(req: NextRequest) {
   const slugBase = `${body.title}-${authorStr}`.toLowerCase()
     .replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").slice(0, 96);
 
+  const chords = normalizeChordCharts(body.chords ?? [], rng);
+  if (!chords.ok) {
+    return NextResponse.json({ error: chords.error }, { status: 400 });
+  }
+
   const doc = await writeClient.create({
     _type: "post",
     title: body.title.trim(),
@@ -91,9 +97,7 @@ export async function POST(req: NextRequest) {
     bpm: body.bpm ? Number(body.bpm) : undefined,
     timeSig: body.timeSig?.trim() ?? "",
     body: body.lyrics ? textToBody(body.lyrics) : [],
-    chords: (body.chords ?? []).map((c) => ({
-      _type: "chord_chart", _key: rng(), key: c.key, content: c.content,
-    })),
+    chords: chords.charts,
     referenceLinks: (body.referenceLinks ?? []).map((l) => ({
       _type: "referenceLink", _key: rng(), label: l.label, url: l.url,
     })),

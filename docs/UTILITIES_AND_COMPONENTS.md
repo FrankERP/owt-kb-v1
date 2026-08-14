@@ -280,7 +280,7 @@ Legend: **[C]** client, **[S]** server.
 | `PlannerGrid` | Renders the month grid `plannerModel` computes — dates across and seats down. Applicable admitted cells are editable; integrity-defective stored columns stay visible and read-only. `MonthGenerator` owns `cells`/`counts` and mutations. Owns the **three-column workspace**: Participaciones (216px), grid, and candidate picker (240px while a cell is active). The chart width is a content floor derived from `ParticipationSidebar`. **Pantalla completa** manages focus, traps Tab, locks body scroll, `inert`s the rest of `<body>`, applies safe-area padding, and portals to `document.body` for Safari. The grid scrolls horizontally rather than squeezing its `minmax(150px, 1fr)` date columns; row labels remain sticky. Its `planner-wide` root lets `app/brand.css` lift the admin frame cap through `:has()`. |
 | `MonthGenerator` | Owns create-planning and stored editing in the shared three-part `PlannerGrid`. Create mode retains solver preview/Auto and fairness history. Stored mode owns create-one, explicit full-roster save, date/name edits, team/seat swaps, frozen attempts, and roles/integrity readback reconciliation. |
 | `SetlistEditor` | Inline setlist builder (reorder/remove, play-key, medley via `normalizeMedleyTags`). |
-| `SongFormModal` | Song create/edit form + reusable `Modal`. Exports `Modal`, `SongForm`, `blankForm`, `songToForm`, `buildPayload`. |
+| `SongFormModal` | Song create/edit form + reusable `Modal`. Exports `Modal`, `SongForm`, `blankForm`, `songToForm`, `buildPayload`. Charts are edited via `ChordChartsFields` ([ADR-0018](adr/0018-lyrics-and-charts-are-independent.md)). |
 | `ContentPanel` | Song-library CRUD (via `SongForm`). |
 | `ProposalsPanel` | Admin review of lead proposals (approve / request changes / reopen). |
 | `AvailabilityPanel` | Team availability vs. scheduled services. |
@@ -305,8 +305,9 @@ the 15-rule ladder, per-control gating), `serviceCardModel.ts` (card assembly + 
 `serviceIntegrityQueue.ts`, `serviceSourceState.ts`, `publishSelection.ts`, `proposalHandoff.ts`,
 `applyRefreshedRole.ts`, and the `serviceHandoffContext.tsx` context.
 
-`EditSongButton` [C] (top-level) — inline "edit song" affordance on song pages; role-gated; uses
-`bodyToLyrics`. Subject to the **multi-chord-chart collapse landmine**.
+`EditSongButton` [C] (top-level) — inline "edit song" affordance on song pages; role-gated.
+Shares `songToForm` / chart helpers with `SongFormModal`. Lyrics and charts are independent
+([ADR-0018](adr/0018-lyrics-and-charts-are-independent.md)).
 
 ---
 
