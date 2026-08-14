@@ -30,12 +30,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
  *
  * The fourth return, `hold`, shows a value that must PERSIST until something
  * replaces it, cancelling any pending timer. It exists because a surface can need
- * both channels through one slot: `MonthGenerator`'s swap toast mostly reports a
- * write that landed in Sanity but could not be verified — and the recovery button
- * lives inside the toast, so auto-dismissing those would delete the only record
- * that a real roster swap is unresolved — while three of its messages are ordinary
- * transient refusals. Mixing the channels is only safe because ONE owner holds the
- * timer: a pending `show` can never fire into a value a later `hold` put there.
+ * both channels through one slot: `MonthGenerator`'s swap toast holds all but
+ * three of its messages, because some of them report a write that landed in Sanity
+ * but could not be verified — and the recovery button lives inside the toast, so
+ * auto-dismissing those would delete the only record that a real roster swap is
+ * unresolved. The held set is not only those; it includes refusals too, because
+ * holding is the safe default there and only three messages were ever transient
+ * (two refusals and a local confirmation). Mixing the channels is safe because ONE
+ * owner holds the timer: a pending `show` can never fire into a value a later
+ * `hold` put there.
  *
  * `show` and `reset` are stable as long as `idle` and `ms` are (every caller
  * passes literals — `null`, `false`, `3000`). Pass an object literal as `idle`

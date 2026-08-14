@@ -14,9 +14,13 @@
 // This one had a sentence in CLAUDE.md and eight correct call sites, which is a
 // state, not a mechanism. Nothing stopped the ninth from omitting the filter.
 //
-// So this file was written while coverage was measured at 100%: it cannot
-// retroactively fix anything, and that is the point — it can only fail on a
-// regression that has not happened yet.
+// The `*[…]` group scan WAS at 100% when this file was written. The bare-predicate
+// check below was not — it was added after a code review pointed out that a filter
+// held in a string and injected elsewhere is invisible to a group scan, and it
+// immediately found a real pre-existing violation: `notifySetlistSaved` resolved
+// its audience with no `published != false`. So this guard did retroactively catch
+// something, which is the more useful lesson than the one originally written here:
+// the shape a scan cannot see is where the violation was actually living.
 //
 // THE RULE. Every GROQ filter group `*[ … ]` that selects a protected ROLE type
 // must also constrain `published != false` inside that SAME group. Checking the
@@ -37,11 +41,11 @@
 // role doc, never on `featuredSongs`/`saturdarSongs`.
 //
 // It is also satisfied by ONE `published != false` per group, so a disjunction
-// whose branches name different types passes when only one branch carries it —
-// `api/me/songs` has exactly that shape today (benign: it is past-only play
-// history, bounded by `week < $today`). Tightening this needs a real GROQ parser;
-// naming the hole is honest, and a silent hole is what a guard is supposed to
-// prevent.
+// whose branches name different ROLE types would pass when only one branch carries
+// it. No query exercises that today — `api/me/songs` looks like it does, but its
+// only role branch (`special_role`) is filtered and the other names setlist types,
+// which carry no `published` at all. Tightening this needs a real GROQ parser;
+// naming the hole is honest, and a silent hole is what a guard is meant to prevent.
 
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";

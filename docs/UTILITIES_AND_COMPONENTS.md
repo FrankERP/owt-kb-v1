@@ -114,15 +114,21 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   only if already logged in), `nativeGoogleIdToken()` (interactive).
 - **`textZoom.ts`** — text-scale presets (`auto`/1.0/1.2/1.4/1.6), `getStoredMode`/`setStoredMode`
   (localStorage), `applyScale` (native `@capacitor/text-zoom` or web `-webkit-text-size-adjust`).
-- **`useTransientValue.ts`** — `[value, show, reset] = useTransientValue(idle, ms)`. A value
-  that reverts to `idle` after `ms`: every toast and the availability calendar's
-  "Guardado ✓". **Use it instead of `setTimeout(() => setToast(null), …)`** — nine sites
-  had hand-rolled that and all nine leaked the timer, so a second toast inside the window
+- **`useTransientValue.ts`** — `[value, show, reset, hold] = useTransientValue(idle, ms)`. A
+  value that reverts to `idle` after `ms`: every toast and the availability calendar's
+  "Guardado ✓". **Use it instead of `setTimeout(() => setToast(null), …)`** — eight sites had
+  hand-rolled that and all eight leaked the timer, so a second toast inside the window
   inherited the first one's clock. The costly pair is success-then-error: the error is the
   message that flashes and disappears, and the toast is often the only signal a mutation
-  failed. `reset` returns to idle now and cancels the timer, for invalidation that is not
-  time-based. NOTE: `show`/`reset` are `useCallback`s, not `useState` setters — ESLint
-  cannot assume they are stable, so name them in an effect's dependency array.
+  failed. A ninth, `MonthGenerator`'s swap toast, was never that pattern — it mixes transient
+  and persistent messages through one slot, and briefly lost its persistent ones to a blanket
+  conversion (caught in review).
+  - `reset` returns to idle now and cancels the timer, for invalidation that is not time-based.
+  - `hold` shows a value that must PERSIST until something replaces it, cancelling any pending
+    timer. Reach for it when dismissing the message would destroy information — a report that a
+    write landed but could not be verified, or a recovery control rendered inside the message.
+  - NOTE: all three callbacks are `useCallback`s, not `useState` setters — ESLint cannot assume
+    they are stable, so name them in an effect's dependency array.
 - **`focusTrap.ts`** (`trapTabTarget` pure tab math) + **`useFocusTrap.ts`** (WAI-ARIA dialog
   focus hook). **Any overlay with a dismissable scrim must use it** — a clickable full-bleed
   `bg-scrim` means content is stacked over a still-interactive page, so the overlay also needs
