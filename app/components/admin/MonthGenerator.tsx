@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTransientValue } from "@/app/utils/useTransientValue";
 import type { SolveResponse } from "@/app/api/admin/solve/route";
 import { DayCard } from "@/app/components/DayCard";
 import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
@@ -1587,8 +1588,9 @@ export default function MonthGenerator({
   const [viewMode, setViewMode]   = useState<"edit" | "view">("edit");
   const [swapSel, setSwapSel]     = useState<string | null>(null);
   /**
-   * The swap toast has TWO channels, which is why it does not use
-   * `useTransientValue` like every other toast in the app.
+   * The swap toast is the app's one TWO-CHANNEL toast, so it takes both the
+   * persistent `hold` (as `setSwapToast`) and the timed `show` (as
+   * `flashSwapToast`) from `useTransientValue`.
    *
    * Most of its messages must PERSIST until something replaces them: they report
    * a write that already landed in Sanity but could not be verified ("no se pudo
@@ -1601,37 +1603,13 @@ export default function MonthGenerator({
    * Only three messages are transient: two swap refusals and the local
    * "⇄ date ↔ date" confirmation.
    *
-   * The timer is held in a ref so a pending transient timer cannot fire into a
-   * message that replaced it. That was live before this component owned its
-   * timer: a "⇄" confirmation at t=0 armed 2.5s, and an unverified-write warning
-   * raised at t=2.4s was wiped 100ms later, recovery button included.
+   * One owner holds the timer, which is what makes mixing the channels safe. A
+   * pending flash can no longer fire into a message that replaced it — live
+   * before this: a "⇄" confirmation at t=0 armed 2.5s, and an unverified-write
+   * warning raised at t=2.4s was wiped 100ms later, recovery button included.
    */
-  const [swapToast, setSwapToastValue] = useState<string | null>(null);
-  const swapToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [swapToast, flashSwapToast, , setSwapToast] = useTransientValue<string | null>(null, 2500);
 
-  const clearSwapToastTimer = useCallback(() => {
-    if (swapToastTimer.current !== null) {
-      clearTimeout(swapToastTimer.current);
-      swapToastTimer.current = null;
-    }
-  }, []);
-  useEffect(() => clearSwapToastTimer, [clearSwapToastTimer]);
-
-  /** Show until replaced. The default — see the two-channel note above. */
-  const setSwapToast = useCallback((msg: string | null) => {
-    clearSwapToastTimer();
-    setSwapToastValue(msg);
-  }, [clearSwapToastTimer]);
-
-  /** Show for 2.5s. ONLY for messages that report no unresolved write. */
-  const flashSwapToast = useCallback((msg: string) => {
-    clearSwapToastTimer();
-    setSwapToastValue(msg);
-    swapToastTimer.current = setTimeout(() => {
-      swapToastTimer.current = null;
-      setSwapToastValue(null);
-    }, 2500);
-  }, [clearSwapToastTimer]);
   const [swapVerificationPending, setSwapVerificationPending] = useState(false);
   const pendingSwapExpected = useRef<{
     body: string;

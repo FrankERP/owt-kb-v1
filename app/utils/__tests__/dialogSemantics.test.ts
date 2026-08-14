@@ -11,9 +11,9 @@
 // first.
 //
 // Two other scrim overlays got it right (`CueDialog`, `SongFormModal`), as does
-// `PlannerGrid`'s full-screen view by a different route — it REPLACES the page
-// rather than stacking on it, draws no scrim, and so is not what this scan
-// checks. A house pattern existed; that is exactly why the gap survived:
+// `PlannerGrid`'s full-screen view by a different route — it stacks, but is
+// opaque and makes its siblings `inert`, so it draws no scrim and is not what
+// this scan checks. A house pattern existed; that is why the gap survived:
 // there was a house pattern and nothing that made a new overlay follow it. This
 // file is that thing. Fixing the one instance without it just means the next
 // overlay starts the cycle over.

@@ -129,6 +129,44 @@ function templateLiterals(src: string): string[] {
   return [...stripComments(src).matchAll(/`(?:[^`\\]|\\.)*`/g)].map((m) => m[0]);
 }
 
+/**
+ * The argument to every `assignedMemberRefsQuery(…)` call — parenthesis-balanced,
+ * so a nested call or a template with `${}` is not truncated.
+ *
+ * Covers the INLINE-literal call sites, which is where the literal heuristic
+ * below is not enough: `outboxSweep.ts` passes a double-quoted predicate binding
+ * the type as `$roleType`, so it carries no role-type literal and no backticks
+ * and every text-shape heuristic misses it.
+ *
+ * Call sites that pass a VARIABLE are skipped here and belong to the literal
+ * check — together the two cover all three of today's callers. A variable holding
+ * a double-quoted, param-bound predicate would fall between them; none exists, and
+ * naming the seam is better than implying there is none.
+ */
+function assignedQueryArguments(src: string): string[] {
+  const out: string[] = [];
+  const clean = stripComments(src);
+  for (const m of clean.matchAll(/assignedMemberRefsQuery\(/g)) {
+    // Skip the declaration itself in `notifyTargets.ts`.
+    if (/\bfunction\s+$/.test(clean.slice(Math.max(0, m.index - 12), m.index))) continue;
+    const open = m.index + m[0].length - 1;
+    let depth = 0;
+    for (let i = open; i < src.length; i++) {
+      if (src[i] === "(") depth++;
+      else if (src[i] === ")") {
+        depth--;
+        if (depth === 0) {
+          const arg = src.slice(open + 1, i);
+          // A bare identifier carries no predicate to inspect — the literal check owns it.
+          if (/["'`]/.test(arg)) out.push(arg);
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
 function unfilteredBarePredicates(rel: string, src: string): string[] {
   return templateLiterals(src)
     .filter(
@@ -170,11 +208,32 @@ describe("draft services stay invisible to members", () => {
   });
 
   it("filters it on bare predicate strings too, which no `*[…]` group contains", () => {
-    const violations = sourceFiles(APP_DIR).flatMap((file) => {
-      const rel = path.relative(APP_DIR, file);
-      if (exemptionFor(rel)) return [];
-      return unfilteredBarePredicates(rel, readFileSync(file, "utf8"));
-    });
+    const scanned = sourceFiles(APP_DIR)
+      .filter((file) => !exemptionFor(path.relative(APP_DIR, file)))
+      .map((file) => ({ rel: path.relative(APP_DIR, file), src: readFileSync(file, "utf8") }));
+    // Sentinel, for the same reason the group scan has one: a heuristic that
+    // stops matching passes forever. Two bare predicates exist today.
+    const seen = scanned.flatMap(({ src }) =>
+      templateLiterals(src).filter((l) => l.includes("_type") && ROLE_TYPES.test(l) && !l.includes("*[")),
+    );
+    expect(seen.length).toBeGreaterThanOrEqual(2);
+    expect(scanned.flatMap(({ rel, src }) => unfilteredBarePredicates(rel, src))).toEqual([]);
+  });
+
+  it("filters it on every `assignedMemberRefsQuery` argument — the exact check", () => {
+    const args = sourceFiles(APP_DIR).flatMap((file) =>
+      assignedQueryArguments(readFileSync(file, "utf8")).map((arg) => ({
+        rel: path.relative(APP_DIR, file),
+        arg,
+      })),
+    );
+    // One inline call site today (`outboxSweep`); the other two pass a variable and
+    // are covered by the bare-predicate check above. A sentinel either way: a
+    // heuristic that quietly stops matching passes forever.
+    expect(args.length).toBeGreaterThanOrEqual(1);
+    const violations = args
+      .filter(({ arg }) => !/published\s*!=\s*false/.test(arg))
+      .map(({ rel }) => `${rel} calls assignedMemberRefsQuery without \`published != false\``);
     expect(violations).toEqual([]);
   });
 

@@ -28,11 +28,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * edits a date again. Without it a caller would have to fake a reset by showing
  * the idle value, which quietly arms another timer.
  *
- * NOT for a toast that must persist until something replaces it. `MonthGenerator`'s
- * swap toast is the counter-example and deliberately does not use this hook: most
- * of its messages report a write that landed in Sanity but could not be verified,
- * and the recovery button lives inside the toast — auto-dismissing those would
- * delete the only record that a real roster swap is unresolved.
+ * The fourth return, `hold`, shows a value that must PERSIST until something
+ * replaces it, cancelling any pending timer. It exists because a surface can need
+ * both channels through one slot: `MonthGenerator`'s swap toast mostly reports a
+ * write that landed in Sanity but could not be verified — and the recovery button
+ * lives inside the toast, so auto-dismissing those would delete the only record
+ * that a real roster swap is unresolved — while three of its messages are ordinary
+ * transient refusals. Mixing the channels is only safe because ONE owner holds the
+ * timer: a pending `show` can never fire into a value a later `hold` put there.
  *
  * `show` and `reset` are stable as long as `idle` and `ms` are (every caller
  * passes literals — `null`, `false`, `3000`). Pass an object literal as `idle`
@@ -43,7 +46,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export function useTransientValue<T>(
   idle: T,
   ms: number,
-): [T, (next: T) => void, () => void] {
+): [T, (next: T) => void, () => void, (next: T) => void] {
   const [value, setValue] = useState<T>(idle);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -74,5 +77,13 @@ export function useTransientValue<T>(
     setValue(idle);
   }, [clear, idle]);
 
-  return [value, show, reset];
+  const hold = useCallback(
+    (next: T) => {
+      clear();
+      setValue(next);
+    },
+    [clear],
+  );
+
+  return [value, show, reset, hold];
 }

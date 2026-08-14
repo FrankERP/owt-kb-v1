@@ -94,6 +94,53 @@ describe("useTransientValue", () => {
     expect(toast()).toBe("guardado");
   });
 
+  // The two-channel contract, and the reason it exists. `MonthGenerator`'s swap
+  // toast reports writes that LANDED in Sanity but could not be verified, and the
+  // "Recargar y verificar" recovery button renders inside that toast. A held
+  // message that self-dismissed would delete the only record that a real roster
+  // swap is unresolved — which is exactly the defect a code review caught here,
+  // shipped through a green suite because nothing asserted the TIMING.
+  describe("hold — the persistent channel", () => {
+    function TwoChannel() {
+      const [msg, flash, , hold] = useTransientValue<string | null>(null, 2500);
+      return (
+        <div>
+          <span data-testid="toast">{msg ?? "—"}</span>
+          <button data-testid="flash" onClick={() => flash("refusal")}>flash</button>
+          <button data-testid="hold" onClick={() => hold("unverified write")}>hold</button>
+        </div>
+      );
+    }
+
+    it("never self-dismisses, however long it sits", () => {
+      render(<TwoChannel />);
+      click("hold");
+      advance(60_000);
+      expect(toast()).toBe("unverified write");
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("a pending flash timer cannot wipe a message that replaced it", () => {
+      render(<TwoChannel />);
+      click("flash");
+      advance(2400); // the flash timer is 100ms from firing
+      click("hold");
+      advance(200); // …and the old code let it fire here, taking the button with it
+      expect(toast()).toBe("unverified write");
+      advance(60_000);
+      expect(toast()).toBe("unverified write");
+    });
+
+    it("still lets a later flash replace a held message and expire normally", () => {
+      render(<TwoChannel />);
+      click("hold");
+      click("flash");
+      expect(toast()).toBe("refusal");
+      advance(2500);
+      expect(toast()).toBe("—");
+    });
+  });
+
   it("keeps `show` stable so it is safe in a dependency array", () => {
     const seen: Array<(next: string | null) => void> = [];
     function Probe() {

@@ -398,7 +398,15 @@ async function putHandler(req: NextRequest) {
   // canonical server state across all five seat paths — never a client list — and
   // a failed notification never fails the save.
   revalidateSetlistSave();
-  await notifySetlistSaved(week);
+  // Draft ⇒ silent, the same rule the debounced email below applies via
+  // `subject.published` and the same one `queueRoleCreatedNotice` states: the
+  // service is admin-only until it is published, and publishing is what notifies.
+  // This push was the one path that skipped it, so saving songs onto a DRAFT
+  // service pushed "Ya están las canciones de este servicio" to every member on
+  // the default `all` preference — landing them on a page where the service does
+  // not exist, because every member-facing read filters `published != false`.
+  // `!== false` grandfathers a missing flag, exactly as the rest of the module does.
+  if (subject?.published !== false) await notifySetlistSaved(week);
   // The DEBOUNCED email (§2): one `setlist` notice for this service, keyed on the
   // owning role so this writer and the approve path share one subject — two keys
   // would mean two outbox documents and two emails for one change.
