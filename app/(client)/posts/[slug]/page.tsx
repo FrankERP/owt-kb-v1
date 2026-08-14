@@ -69,7 +69,7 @@ async function getPost(slug: string) {
         key,
         "chordsURL": chordsPDF.asset->url,
       },
-      chords[]{ key, content },
+      chords[]{ _key, key, content },
     }`;
   return await client.fetch(query, { slug });
 }

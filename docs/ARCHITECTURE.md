@@ -551,8 +551,9 @@ Condensed here; each is expanded in the linked doc.
 
 Don't rediscover these as "bugs":
 
-- **`SongFormModal` / `EditSongButton` collapse a multi-chord-chart song to a single chart on
-  save.** 0 songs affected today; fixing it properly is a real feature, not a quick patch.
+- **Lyrics (`body`) and chord charts (`chords`) are independent fields.** Do not
+  classify one from the other with `CHORD_MARKER_RE`. See [ADR-0018](adr/0018-lyrics-and-charts-are-independent.md).
+  Adding a filled chart hides `body` in both readers until every chart is removed.
 - **~15 songs have no lyrics** because they're absent from the source catalog PDF (expected).
 - **Android build pending; Apple Developer enrollment in progress** (mobile Phase 1 verified on
   iOS device). → [MOBILE.md](MOBILE.md)

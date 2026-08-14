@@ -166,8 +166,10 @@ does one verified improvement per run with a priority ladder, verify gate, and
 honesty gate (empty runs over churn).
 
 ## Known landmines (don't rediscover as "bugs")
-- `SongFormModal`/`EditSongButton` collapse a multi-chord-chart song to one
-  chart on save (0 songs affected today; a real feature to fix, not a patch).
+- Lyrics (`body`) and chord charts (`chords`) are independent fields — do not
+  re-entangle them with `CHORD_MARKER_RE` on save. See ADR-0018. Adding a filled
+  chart hides `body` in both readers until every chart is removed (existing
+  reader behavior, not a bug).
 - ~15 songs have no lyrics source in the catalog PDF (expected).
 - Android build pending; Apple Developer enrollment in progress.
 - **Email templates are LIGHT, deliberately not `brand.css`.** Five attempts to

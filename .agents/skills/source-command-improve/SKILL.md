@@ -211,9 +211,8 @@ gating via `requireActiveManager`; some actions are super-admin-only (checked in
 the route). Impersonation is super-admin-only and enforced server-side in `auth.ts`.
 
 **Known landmines / deferred (don't rediscover as "bugs"):**
-- `SongFormModal`/`EditSongButton` collapse a multi-chord-chart song to a single
-  chart on save. 0 songs affected today; fixing it properly is a real feature, not
-  a quick patch — only tackle deliberately.
+- Lyrics (`body`) and chord charts (`chords`) are independent fields — do not
+  re-entangle them with `CHORD_MARKER_RE` on save. See ADR-0018.
 - ~15 songs have no lyrics source in the catalog PDF (expected, not a bug).
 - The proposal `medley_tag` schema field works via API/GROQ; a Studio schema
   deploy makes it visible in Studio (optional).

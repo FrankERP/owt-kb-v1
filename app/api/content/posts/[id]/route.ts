@@ -3,6 +3,7 @@ import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { textToBody } from "@/app/utils/lyrics";
 import { revalidateSongViews } from "@/app/utils/revalidate";
+import { normalizeChordCharts } from "@/app/utils/chordChartWrite";
 
 function rng() { return Math.random().toString(36).slice(2, 9); }
 
@@ -30,7 +31,7 @@ export async function PATCH(
     bpm?: string;
     timeSig?: string;
     lyrics?: string;
-    chords?: Array<{ key: string; content: string }>;
+    chords?: Array<{ _key?: string; key: string; content: string }>;
     referenceLinks?: Array<{ label: string; url: string }>;
     musicalReferenceUrl?: string;
     lyricsVideoUrl?: string;
@@ -82,9 +83,11 @@ export async function PATCH(
   if (body.timeSig != null) patch.timeSig = body.timeSig.trim();
   if (body.lyrics  != null) patch.body  = textToBody(body.lyrics);
   if (body.chords  != null) {
-    patch.chords = body.chords.map((c) => ({
-      _type: "chord_chart", _key: rng(), key: c.key, content: c.content,
-    }));
+    const normalized = normalizeChordCharts(body.chords, rng);
+    if (!normalized.ok) {
+      return NextResponse.json({ error: normalized.error }, { status: 400 });
+    }
+    patch.chords = normalized.charts;
   }
   if (body.referenceLinks != null) {
     patch.referenceLinks = body.referenceLinks.map((l) => ({

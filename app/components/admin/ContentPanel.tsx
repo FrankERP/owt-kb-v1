@@ -25,7 +25,7 @@ interface Song {
   timeSig?: string;
   publishDate?: string;
   body?: PortableTextBody;
-  chords?: Array<{ key: string; content: string }>;
+  chords?: Array<{ _key?: string; key: string; content: string }>;
   referenceLinks?: Array<{ label: string; url: string }>;
   tags?: SongTag[];
   authors?: Array<{ _id: string; name: string }>;

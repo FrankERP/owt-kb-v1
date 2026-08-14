@@ -4,6 +4,8 @@ import { useState, useRef, useEffect, useId } from "react";
 import type { PortableTextBody } from "@/app/utils/interface";
 import { bodyToLyrics } from "@/app/utils/lyrics";
 import { useFocusTrap } from "@/app/utils/useFocusTrap";
+import { chartsFromSong, chartsToPayload, type ChartDraft } from "@/app/utils/songFormCharts";
+import { ChordChartsFields } from "@/app/components/admin/ChordChartsFields";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -19,6 +21,7 @@ export interface FormState {
   bpm: string;
   timeSig: string;
   lyrics: string;
+  charts: ChartDraft[];
   referenceLinks: Array<{ label: string; url: string }>;
   tagIds: string[];
   authorIds: string[];
@@ -28,10 +31,10 @@ interface SongForForm {
   title: string;
   author?: string;
   key?: string;
-  bpm?: number;
+  bpm?: number | string;
   timeSig?: string;
   body?: PortableTextBody;
-  chords?: Array<{ key: string; content: string }>;
+  chords?: Array<{ _key?: string; key: string; content: string }>;
   referenceLinks?: Array<{ label: string; url: string }>;
   tags?: SongTag[];
   authors?: Array<{ _id: string }>;
@@ -40,7 +43,6 @@ interface SongForForm {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 export const SECTION_LABELS = ["Intro", "Verso", "Pre-Coro", "Coro", "Puente", "Outro"];
-export const CHORD_MARKER_RE = /\[[^\]]+\]/;
 
 export const inputCls =
   "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors";
@@ -49,16 +51,19 @@ export const selectCls =
   "w-full px-3 py-2 rounded-lg border border-accent/20 bg-surface-base font-body text-sm focus:outline-none focus:border-accent transition-colors";
 
 export function blankForm(): FormState {
-  return { title: "", key: "", bpm: "", timeSig: "", lyrics: "", referenceLinks: [], tagIds: [], authorIds: [] };
+  return { title: "", key: "", bpm: "", timeSig: "", lyrics: "", charts: [], referenceLinks: [], tagIds: [], authorIds: [] };
 }
 
+// ADR-0018: lyrics are body; charts are chords. Never copy chords[0] into the
+// lyrics field, and never classify lyrics with a chord-marker regex on save.
 export function songToForm(song: SongForForm): FormState {
   return {
     title:          song.title ?? "",
     key:            song.key ?? "",
     bpm:            song.bpm?.toString() ?? "",
     timeSig:        song.timeSig ?? "",
-    lyrics:         song.chords?.[0]?.content || bodyToLyrics(song.body),
+    lyrics:         bodyToLyrics(song.body),
+    charts:         chartsFromSong(song.chords),
     referenceLinks: song.referenceLinks ?? [],
     tagIds:         song.tags?.map((t) => t._id) ?? [],
     authorIds:      song.authors?.map((a) => a._id) ?? [],
@@ -66,15 +71,14 @@ export function songToForm(song: SongForForm): FormState {
 }
 
 export function buildPayload(form: FormState) {
-  const hasChords = CHORD_MARKER_RE.test(form.lyrics);
   return {
     title: form.title,
     authorIds: form.authorIds,
     key: form.key,
     bpm: form.bpm,
     timeSig: form.timeSig,
-    lyrics: hasChords ? "" : form.lyrics,
-    chords: hasChords ? [{ key: form.key, content: form.lyrics }] : [],
+    lyrics: form.lyrics,
+    chords: chartsToPayload(form.charts),
     referenceLinks: form.referenceLinks,
     tagIds: form.tagIds,
   };
@@ -368,13 +372,21 @@ export function SongForm({
           rows={14}
           value={form.lyrics}
           onChange={set("lyrics")}
-          placeholder={"# Verso 1\n[Am]Ante Ti [F]Postrado estoy\n[C]aquí me rindo\n\n# Coro\nLínea 1\nLínea 2"}
+          placeholder={"# Verso 1\nAnte Ti\nPostrado estoy\n\n# Coro\nLínea 1\nLínea 2"}
           spellCheck={false}
         />
         <p className="font-label text-[11px] text-mono-600 uppercase tracking-wide mt-1">
-          # Sección · [Acorde]palabra · **negrita** · *cursiva*
+          # Sección · **negrita** · *cursiva* · los cifrados van en Acordes
         </p>
       </div>
+
+      <ChordChartsFields
+        charts={form.charts}
+        onChange={(charts) => setForm((f) => ({ ...f, charts }))}
+        inputCls={inputCls}
+        defaultKey={form.key}
+        idPrefix={ids}
+      />
 
       {/* Reference Links */}
       <div className="space-y-2">
