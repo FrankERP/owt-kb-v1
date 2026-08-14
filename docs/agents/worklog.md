@@ -7,10 +7,9 @@ the agents actually did their jobs.
 
 ## The file
 
-- Path: `.agents/log/worklog.jsonl` — git-tracked, one JSON object per line.
+- Path: `.agents/log/worklog.jsonl` — local-only, one JSON object per line. Gitignored;
+  never committed or pushed.
 - **Append-only.** Nothing rewrites, reorders, or truncates it, including `hr-officer`.
-- `.gitattributes` marks it `merge=union` so concurrent branch appends merge without
-  conflict. Never resolve a worklog conflict by dropping lines.
 
 ## Schema
 
@@ -60,12 +59,9 @@ Two entries agents cannot report for themselves, and the coordinator must write:
   the recruiting signal: recurring inline work with no owner is how `hr-officer` spots
   a role the roster is missing. Do not omit these to keep the log tidy.
 
-**The entry ships in the same commit as the work it describes.** This is the default
-and the only form that needs no safeguards. It is stated as a rule because the
-alternative — "I'll log it at the end" — has now failed in three separate cycles, and
-because the one rule of this kind that *was* written down (review before merge) held
-without exception on the same day the unwritten one failed twice. An intention is not
-a control.
+**The entry is appended locally when the work happens.** Never stage or push this file.
+The old "ships in the same commit" rule is how the log landed on the remote; it is
+retired. Append immediately so "I'll log it at the end" cannot skip a dispatch.
 
 **Incidents and firefights count as cycles.** Nobody logs mid-fire, and nobody is
 expected to — backfill the entries once the fire is out and dispatch `hr-officer` over

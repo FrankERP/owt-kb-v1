@@ -1,3 +1,0 @@
-# Append-only agent worklog: concurrent branch appends must union, not conflict.
-# See docs/agents/worklog.md.
-.agents/log/worklog.jsonl merge=union
