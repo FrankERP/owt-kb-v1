@@ -728,7 +728,7 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
     expect(report.consumed).toBe(1);
   });
 
-  it("stops sending at the wall-clock budget and still consumes", async () => {
+  it("stops sending at the wall-clock budget and re-pends instead of consuming", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     world.notices = [roleNotice()];
     world.roles = { r1: roleDoc() };
@@ -739,8 +739,10 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
 
     expect(report.unserved).toBeGreaterThan(0);
     expect(sendEmailMock).not.toHaveBeenCalled();
-    expect(writeClientDelete).toHaveBeenCalled();
-    expect(report.consumed).toBe(1);
+    expect(writeClientDelete).not.toHaveBeenCalled();
+    expect(report.consumed).toBe(0);
+    expect(report.repended).toBe(1);
+    expect(report.lost).toBe(0);
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("unserved"));
     logSpy.mockRestore();
   });
@@ -796,14 +798,14 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
     expect(roleReads).toHaveLength(1);
   });
 
-  it("stops sending at the sweep's own deadline, so stage 8 always runs", async () => {
+  it("stops sending at the sweep's own deadline and re-pends so the next sweep can finish", async () => {
     // The 2026-08-06 stall, in one test. Not charging the read phase to the send
     // budget is correct for §1's inequality and fatal on its own: reads plus a
     // full send budget can reach the hosting route's maxDuration, the process is
     // killed before stage 8, the claims outlive it, the 5-minute lease re-offers
     // the SAME batch, and the next sweep dies in the same place — forever. The
     // second clock exists so the sweep gives up sending while it can still
-    // consume.
+    // discharge — and unserved recipients are re-pended, not destroyed.
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     world.notices = [roleNotice()];
     world.roles = { r1: roleDoc() };
@@ -822,10 +824,10 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
 
     expect(sendEmailMock).not.toHaveBeenCalled();
     expect(report.unserved).toBe(1);
-    // The point of the whole exercise: the batch is discharged, so the next
-    // sweep gets new work instead of this one again.
-    expect(writeClientDelete).toHaveBeenCalled();
-    expect(report.consumed).toBe(1);
+    expect(writeClientDelete).not.toHaveBeenCalled();
+    expect(report.consumed).toBe(0);
+    expect(report.repended).toBe(1);
+    expect(report.lost).toBe(0);
 
     const stopped = logSpy.mock.calls
       .map(([line]) => JSON.parse(String(line)) as Record<string, unknown>)
@@ -892,12 +894,9 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
     logSpy.mockRestore();
   });
 
-  it("counts a tail it could not classify as unserved, so the loss is visible", async () => {
+  it("counts a tail it could not classify as unserved, and re-pends it", async () => {
     // An unclassified notice produces no line, never reaches stage 7's entries,
-    // and so cannot be counted there — yet stage 8 deletes it anyway. The first
-    // version of this guard left that gap and reported `unserved: 0` while
-    // destroying the tail, which reads as GREEN to the workflow gate whose only
-    // job is catching exactly this.
+    // and must not be deleted — it is re-pended for the next sweep.
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const team = ids("m", 4);
     world.notices = team.map((m, i) => roleNotice({ _id: `n${i}`, memberId: m }));
@@ -918,14 +917,11 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
 
     const report = await sweepOutbox();
 
-    // Everything claimed is consumed — that contract is unchanged...
     expect(report.claimed).toBe(4);
-    expect(report.consumed).toBe(4);
+    expect(report.consumed).toBe(0);
+    expect(report.repended).toBe(4);
+    expect(report.lost).toBe(0);
     expect(report.emailed).toBe(0);
-    // ...and EVERY notice nobody emailed is reported. These are one-recipient
-    // `role` notices, so the accounting has to close exactly: asserting merely
-    // `unserved > 0` would pass on stage 7's contribution alone and miss a whole
-    // unclassified tail being deleted silently, which is the actual defect.
     expect(report.emailed + report.unserved).toBe(report.claimed);
     logSpy.mockRestore();
   });
@@ -954,13 +950,36 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
 
     expect(sendEmailMock).not.toHaveBeenCalled();
     expect(report.unserved).toBe(1);
-    // The whole purpose of refusing: stage 8 still runs, so the batch is
-    // discharged instead of being re-offered to a sweep that dies the same way.
-    expect(report.consumed).toBe(1);
+    expect(report.consumed).toBe(0);
+    expect(report.repended).toBe(1);
+    expect(report.lost).toBe(0);
     const stopped = logSpy.mock.calls
       .map(([line]) => JSON.parse(String(line)) as Record<string, unknown>)
       .find((e) => e.event === "notify_sweep_send_budget_exhausted");
     expect(stopped?.stoppedBy).toBe("sweep_deadline");
+    logSpy.mockRestore();
+  });
+
+  it("re-pends a setlist notice when the send budget stops early, instead of destroying it", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const team = ids("m", 5);
+    world.notices = [
+      setlistNotice({ before: { beforeSongs: [snapshotRow("song1")] }, knownRecipients: team }),
+    ];
+    world.roles = { r2: roleDoc({ _id: "r2", _type: "saturday_role", week: "2026-08-08" }) };
+    world.recipients = { r2: team };
+    world.weekendSongs = { "saturdarSongs:2026-08-08": [storedSong("song1"), storedSong("song2", "D")] };
+    world.titles = { song1: "Santo", song2: "Digno" };
+    world.members = members(team);
+
+    const report = await sweepOutbox({ sendBudgetMs: 0 });
+
+    expect(report.emailed).toBe(0);
+    expect(report.unserved).toBe(5);
+    expect(report.consumed).toBe(0);
+    expect(report.repended).toBe(1);
+    expect(report.lost).toBe(0);
+    expect(writeClientDelete).not.toHaveBeenCalled();
     logSpy.mockRestore();
   });
 

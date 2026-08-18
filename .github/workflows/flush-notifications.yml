@@ -75,14 +75,13 @@ jobs:
             exit 1
           fi
 
-          # A 200 is not the same as "everyone was told". `unserved` counts
-          # recipients this sweep CLAIMED and then never reached — and stage 8
-          # consumes whatever was claimed, so those notifications are DESTROYED,
-          # not retried. Nothing else reports it: the outbox is empty afterwards,
-          # so the staleness alarm sees nothing wrong, and the route still
-          # answers 200. Going red here is the only signal that mail was lost.
-          UNSERVED=$(sed -n 's/.*"unserved":\([0-9]*\).*/\1/p' "$BODY")
-          if [ -n "$UNSERVED" ] && [ "$UNSERVED" -gt 0 ]; then
-            echo "::error::Sweep discarded $UNSERVED recipient(s) unsent — they were claimed, never sent, and deleted. See notify_sweep_send_budget_exhausted."
+          # A 200 is not the same as "everyone was told". `lost` counts recipients
+          # whose notices were consumed despite never being attempted — destroyed,
+          # not retried. `unserved` may be > 0 when the send budget stops early;
+          # those are re-pended for the next sweep and are not loss. Going red on
+          # `lost` is the only signal that mail was permanently discarded.
+          LOST=$(sed -n 's/.*"lost":\([0-9]*\).*/\1/p' "$BODY")
+          if [ -n "$LOST" ] && [ "$LOST" -gt 0 ]; then
+            echo "::error::Sweep discarded $LOST recipient(s) unsent — they were claimed, never sent, and deleted. See notify_sweep_send_budget_exhausted."
             exit 1
           fi

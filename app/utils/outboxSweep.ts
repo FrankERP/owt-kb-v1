@@ -113,7 +113,12 @@ export interface SweepReport {
   emailed: number;
   consumed: number;
   deferred: number;
+  /** Recipients never attempted this sweep (informational; repended, not destroyed). */
   unserved: number;
+  /** Notices returned to `pending` for another sweep to finish. */
+  repended: number;
+  /** Recipients never attempted whose notices were consumed anyway — the only loss signal. */
+  lost: number;
 }
 
 export interface SweepOptions {
@@ -157,6 +162,7 @@ interface StoredMember {
 }
 
 interface Pair {
+  noticeId: string;
   recipientId: string;
   line: Line;
 }
@@ -310,7 +316,7 @@ async function classifyRoleNotice(notice: StoredNotice, today: string): Promise<
     // owes its assignees "Ya no participas".
     published: role ? role.published !== false : true,
   });
-  return line ? [{ recipientId: memberId, line }] : [];
+  return line ? [{ noticeId: notice._id, recipientId: memberId, line }] : [];
 }
 
 async function liveSetlistRows(
@@ -359,6 +365,7 @@ async function classifySetlistNotice(notice: StoredNotice, today: string): Promi
   // read was only a count, taken before anything was claimed.
   const recipients = await resolveRecipients(notice);
   return recipients.map((recipientId) => ({
+    noticeId: notice._id,
     recipientId,
     line: known.has(recipientId) ? changed : (introduced ?? changed),
   }));
@@ -380,7 +387,7 @@ async function classifyLeadNotesNotice(notice: StoredNotice, today: string): Pro
   });
   if (!line) return [];
   const recipients = await resolveRecipients(notice);
-  return recipients.map((recipientId) => ({ recipientId, line }));
+  return recipients.map((recipientId) => ({ noticeId: notice._id, recipientId, line }));
 }
 
 function classifyNotice(notice: StoredNotice, today: string): Promise<Pair[]> {
@@ -446,6 +453,105 @@ async function consume(claimed: ClaimedNotice[]): Promise<number> {
   return consumed;
 }
 
+interface RependInput {
+  notice: ClaimedNotice;
+  knownRecipients?: string[];
+}
+
+/**
+ * Return a claimed notice to `pending` so the next sweep can finish unserved
+ * recipients. Uses the claim revision — a writer re-pend during the send still
+ * wins via revision conflict, same as consume.
+ */
+async function repend(inputs: RependInput[]): Promise<number> {
+  let repended = 0;
+  const rependOne = async (input: RependInput): Promise<void> => {
+    const patch: Record<string, unknown> = {
+      status: "pending",
+      claimedAt: null,
+      // Immediately due: the debounce already ran; only the send budget stopped us.
+      notifyAfter: new Date().toISOString(),
+    };
+    if (input.knownRecipients) patch.knownRecipients = input.knownRecipients;
+    try {
+      await writeClient
+        .patch(input.notice.notice._id)
+        .ifRevisionId(input.notice.claimRev)
+        .set(patch)
+        .commit();
+      repended++;
+    } catch (err) {
+      // Stays `sending` with the claim lease — re-offered when the lease expires.
+      logError("notify_sweep_repend_failed", { id: input.notice.notice._id }, err);
+    }
+  };
+  for (let i = 0; i < inputs.length; i += CONSUME_CONCURRENCY) {
+    await Promise.all(inputs.slice(i, i + CONSUME_CONCURRENCY).map(rependOne));
+  }
+  return repended;
+}
+
+/**
+ * Split claimed notices into those fully discharged (consume) and those with
+ * recipients the send stage never reached (re-pend). Failed sends still consume —
+ * only never-attempted recipients trigger re-pend.
+ */
+function partitionClaimed(
+  claimed: ClaimedNotice[],
+  classifiedIds: Set<string>,
+  pendingByNotice: Map<string, Set<string>> | null,
+  attemptedRecipientIds: Set<string>,
+  emailedRecipientIds: Set<string>,
+): { toConsume: ClaimedNotice[]; toRepending: RependInput[] } {
+  const toConsume: ClaimedNotice[] = [];
+  const toRepending: RependInput[] = [];
+
+  for (const c of claimed) {
+    if (!classifiedIds.has(c.notice._id)) {
+      toRepending.push({ notice: c });
+      continue;
+    }
+    const pending = pendingByNotice?.get(c.notice._id);
+    if (!pending?.size) {
+      toConsume.push(c);
+      continue;
+    }
+    const neverAttempted = [...pending].filter((r) => !attemptedRecipientIds.has(r));
+    if (!neverAttempted.length) {
+      toConsume.push(c);
+      continue;
+    }
+    if (c.notice.kind === "setlist" || c.notice.kind === "leadNotes") {
+      const known = new Set(c.notice.knownRecipients ?? []);
+      for (const r of pending) {
+        if (emailedRecipientIds.has(r)) known.add(r);
+      }
+      toRepending.push({ notice: c, knownRecipients: [...known] });
+    } else {
+      toRepending.push({ notice: c });
+    }
+  }
+
+  return { toConsume, toRepending };
+}
+
+/** Count recipients never attempted whose notices were consumed anyway. */
+function countLost(
+  consumed: ClaimedNotice[],
+  pendingByNotice: Map<string, Set<string>> | null,
+  attemptedRecipientIds: Set<string>,
+): number {
+  let lost = 0;
+  for (const c of consumed) {
+    const pending = pendingByNotice?.get(c.notice._id);
+    if (!pending) continue;
+    for (const r of pending) {
+      if (!attemptedRecipientIds.has(r)) lost++;
+    }
+  }
+  return lost;
+}
+
 // ── The pipeline ────────────────────────────────────────────────────────────
 
 export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport> {
@@ -458,7 +564,15 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
   // Scoped to THIS sweep: stage 4 must classify against state read now, not
   // against whatever a previous invocation of this warm instance saw.
   roleReadCache = new Map();
-  const report: SweepReport = { claimed: 0, emailed: 0, consumed: 0, deferred: 0, unserved: 0 };
+  const report: SweepReport = {
+    claimed: 0,
+    emailed: 0,
+    consumed: 0,
+    deferred: 0,
+    unserved: 0,
+    repended: 0,
+    lost: 0,
+  };
 
   // ── 1. Gate ───────────────────────────────────────────────────────────────
   // BEFORE anything is claimed, and before the outbox is even read. A
@@ -583,12 +697,18 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
   report.claimed = claimed.length;
   if (!claimed.length) return report;
 
-  // From here EVERY claimed notice is consumed on every path — including a
-  // throw — which is what `finally` is for.
+  // From here EVERY claimed notice is discharged on every path — including a
+  // throw — which is what `finally` is for. Unserved recipients are re-pended,
+  // not destroyed; only fully-discharged notices are consumed.
+  const classifiedIds = new Set<string>();
+  let pendingByNotice: Map<string, Set<string>> | null = null;
+  const attemptedRecipientIds = new Set<string>();
+  const emailedRecipientIds = new Set<string>();
   try {
     // ── 4. Classify ─────────────────────────────────────────────────────────
     const pairs: Pair[] = [];
     let classified = 0;
+    const pending = new Map<string, Set<string>>();
     for (const c of claimed) {
       // Bounded for the same reason stage 2 is, and it matters MORE here because
       // these notices are already claimed: overrunning means the function dies
@@ -610,14 +730,26 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
         break;
       }
       classified++;
+      classifiedIds.add(c.notice._id);
       try {
-        pairs.push(...(await classifyNotice(c.notice, today)));
+        const noticePairs = await classifyNotice(c.notice, today);
+        for (const p of noticePairs) {
+          pairs.push(p);
+          let set = pending.get(c.notice._id);
+          if (!set) {
+            set = new Set();
+            pending.set(c.notice._id, set);
+          }
+          set.add(p.recipientId);
+        }
       } catch (err) {
         // One unreadable subject must not cost the rest of the batch its email.
         logError("notify_sweep_classify_failed", { id: c.notice._id }, err);
       }
     }
     if (!pairs.length) return report;
+
+    pendingByNotice = pending;
 
     const memberIds = unique(pairs.map((p) => p.recipientId));
     const memberRows = await operationalClient.fetch<StoredMember[] | null>(MEMBERS_QUERY, {
@@ -627,11 +759,17 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
 
     // ── 5. Filter, ── 6. Group ──────────────────────────────────────────────
     const grouped = new Map<string, Line[]>();
-    for (const { recipientId, line } of pairs) {
+    for (const { noticeId, recipientId, line } of pairs) {
       const m = byId.get(recipientId);
-      if (!m) continue;
+      if (!m) {
+        pending.get(noticeId)?.delete(recipientId);
+        continue;
+      }
       // The single per-type resolver — nothing reads `notifPrefs` directly.
-      if (!wantsNotification(m.notifPrefs, LINE_PREF[line.kind])) continue;
+      if (!wantsNotification(m.notifPrefs, LINE_PREF[line.kind])) {
+        pending.get(noticeId)?.delete(recipientId);
+        continue;
+      }
       const lines = grouped.get(recipientId);
       if (lines) lines.push(line);
       else grouped.set(recipientId, [line]);
@@ -675,6 +813,7 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
     // per WAVE rather than per recipient — a wave is the smallest unit that can
     // now be abandoned, and checking mid-wave would abandon sends already sent.
     const sendOne = async (recipientId: string, lines: Line[]): Promise<void> => {
+      attemptedRecipientIds.add(recipientId);
       const m = byId.get(recipientId);
       const email = m?.email?.trim().toLowerCase();
       if (!m || !email || !isEmailAllowed(email, allow)) return;
@@ -687,8 +826,10 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
         subject: redirectTo ? `[→ ${email}] ${subject}` : subject,
         html,
       });
-      if (res.ok) report.emailed++;
-      else logError("notify_sweep_send_failed", { memberId: recipientId, error: res.error });
+      if (res.ok) {
+        report.emailed++;
+        emailedRecipientIds.add(recipientId);
+      } else logError("notify_sweep_send_failed", { memberId: recipientId, error: res.error });
     };
 
     for (let i = 0; i < entries.length; i += SEND_CONCURRENCY) {
@@ -732,8 +873,20 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
   } catch (err) {
     logError("notify_sweep_failed", { claimed: claimed.length }, err);
   } finally {
-    // ── 8. Consume ────────────────────────────────────────────────────────────
-    report.consumed = await consume(claimed);
+    // ── 8. Discharge ──────────────────────────────────────────────────────────
+    // Fully-served notices are consumed; notices with never-attempted recipients
+    // are re-pended for the next sweep. Failed sends still consume — only the
+    // budget tail is returned, which is what makes setlist fan-out lossless.
+    const { toConsume, toRepending } = partitionClaimed(
+      claimed,
+      classifiedIds,
+      pendingByNotice,
+      attemptedRecipientIds,
+      emailedRecipientIds,
+    );
+    report.consumed = await consume(toConsume);
+    report.repended = await repend(toRepending);
+    report.lost = countLost(toConsume, pendingByNotice, attemptedRecipientIds);
     // §1's inequality rests on `ms_per_send`, and nobody has ever measured one.
     // This line is what turns it from an assumption into an observed production
     // number: `sendMs` is stage 7 alone, so `msPerSend` is exactly the quantity
