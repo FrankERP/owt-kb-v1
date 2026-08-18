@@ -123,6 +123,55 @@ describe("layer 1 — /api/cron/flush-notifications", () => {
     expect(sweepOutboxMock).toHaveBeenCalledWith();
   });
 
+  it("drains multiple rounds when a sweep re-pends work", async () => {
+    sweepOutboxMock
+      .mockResolvedValueOnce({ claimed: 1, emailed: 2, consumed: 0, deferred: 0, unserved: 8, repended: 1, lost: 0 })
+      .mockResolvedValueOnce({ claimed: 1, emailed: 2, consumed: 0, deferred: 0, unserved: 6, repended: 1, lost: 0 })
+      .mockResolvedValueOnce({ claimed: 1, emailed: 2, consumed: 0, deferred: 0, unserved: 4, repended: 1, lost: 0 })
+      .mockResolvedValueOnce({ claimed: 1, emailed: 2, consumed: 0, deferred: 0, unserved: 2, repended: 1, lost: 0 })
+      .mockResolvedValueOnce({ claimed: 1, emailed: 2, consumed: 1, deferred: 0, unserved: 0, repended: 0, lost: 0 });
+
+    const GET = await flushRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+    const body = await res.json();
+
+    expect(sweepOutboxMock).toHaveBeenCalledTimes(5);
+    expect(body).toMatchObject({ rounds: 5, emailed: 10, repended: 0, lost: 0 });
+  });
+
+  it("stops draining after loss", async () => {
+    sweepOutboxMock
+      .mockResolvedValueOnce({ claimed: 1, emailed: 2, consumed: 0, deferred: 0, unserved: 8, repended: 1, lost: 0 })
+      .mockResolvedValueOnce({ claimed: 1, emailed: 0, consumed: 1, deferred: 0, unserved: 8, repended: 0, lost: 8 });
+
+    const GET = await flushRoute();
+    const body = await GET(req({ authorization: `Bearer ${SECRET}` })).then((r) => r.json());
+
+    expect(sweepOutboxMock).toHaveBeenCalledTimes(2);
+    expect(body.lost).toBe(8);
+    expect(body.repended).toBe(0);
+  });
+
+  it("stops draining when the wall-clock budget runs out", async () => {
+    let tick = 0;
+    const started = 1_000_000;
+    sweepOutboxMock.mockImplementation(async () => {
+      tick++;
+      return { claimed: 1, emailed: 2, consumed: 0, deferred: 0, unserved: 8, repended: 1, lost: 0 };
+    });
+
+    const mod = await import("@/app/api/cron/flush-notifications/route");
+    const report = await mod.drainOutbox({
+      sweep: sweepOutboxMock,
+      now: () => started + tick * 25_000,
+    });
+
+    expect(sweepOutboxMock.mock.calls.length).toBeGreaterThan(1);
+    expect(sweepOutboxMock.mock.calls.length).toBeLessThan(5);
+    expect(report.repended).toBe(1);
+    expect(report.emailed).toBe(2 * sweepOutboxMock.mock.calls.length);
+  });
+
   it("declares a maxDuration that can host a whole fan-out", async () => {
     const mod = await import("@/app/api/cron/flush-notifications/route");
     expect(mod.maxDuration).toBe(60);

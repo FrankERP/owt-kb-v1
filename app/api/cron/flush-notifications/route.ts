@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sweepOutbox } from "@/app/utils/outboxSweep";
+import { sweepOutbox, type SweepReport } from "@/app/utils/outboxSweep";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
 // LAYER 1 of the outbox's three flush triggers (spec §3) — the PRIMARY one, and
@@ -14,6 +14,78 @@ import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext
 // `SEND_CONCURRENCY`, so give it room; the sweep's own `NOTIFY_SEND_BUDGET_MS`
 // (40 s) is sized to finish inside this.
 export const maxDuration = 60;
+
+/**
+ * Wall clock for the whole drain loop, inside `maxDuration`. Leaves headroom so
+ * the platform does not kill mid-consume on the last round.
+ */
+export const DRAIN_BUDGET_MS = 55_000;
+
+/** Do not start another round when less than this remains — even a repended tail
+ * needs claim + classify + at least one send attempt. */
+export const MIN_NEXT_ROUND_MS = 20_000;
+
+/** Hard cap on rounds per invocation — safety against a pathological loop even if
+ * time accounting drifts. Five rounds × two recipients covers a Sunday setlist. */
+export const MAX_DRAIN_ROUNDS = 5;
+
+export type FlushReport = SweepReport & { rounds: number };
+
+/** Sum numeric sweep fields across rounds; `repended`/`deferred` come from the last. */
+export function aggregateFlushReports(rounds: SweepReport[]): FlushReport {
+  if (!rounds.length) {
+    return { claimed: 0, emailed: 0, consumed: 0, deferred: 0, unserved: 0, repended: 0, lost: 0, rounds: 0 };
+  }
+  const last = rounds[rounds.length - 1];
+  let claimed = 0;
+  let emailed = 0;
+  let consumed = 0;
+  let unserved = 0;
+  let lost = 0;
+  for (const r of rounds) {
+    claimed += r.claimed;
+    emailed += r.emailed;
+    consumed += r.consumed;
+    unserved += r.unserved;
+    lost += r.lost;
+  }
+  return {
+    rounds: rounds.length,
+    claimed,
+    emailed,
+    consumed,
+    deferred: last.deferred,
+    unserved,
+    repended: last.repended,
+    lost,
+  };
+}
+
+/**
+ * Run sweeps back-to-back while work was re-pended and time/round budget remains.
+ * Each round is a full `sweepOutbox()` — same pipeline, full budget, no derating.
+ */
+export async function drainOutbox(opts: {
+  now?: () => number;
+  sweep?: typeof sweepOutbox;
+} = {}): Promise<FlushReport> {
+  const now = opts.now ?? Date.now;
+  const sweep = opts.sweep ?? sweepOutbox;
+  const startedAt = now();
+  const rounds: SweepReport[] = [];
+
+  while (rounds.length < MAX_DRAIN_ROUNDS) {
+    const report = await sweep();
+    rounds.push(report);
+    if (report.lost > 0 || report.repended === 0) break;
+
+    const elapsed = now() - startedAt;
+    if (elapsed >= DRAIN_BUDGET_MS) break;
+    if (DRAIN_BUDGET_MS - elapsed < MIN_NEXT_ROUND_MS) break;
+  }
+
+  return aggregateFlushReports(rounds);
+}
 
 // A3 §3: outbound-delivery evidence emitted anywhere under this handler carries
 // the in-flight verification run's markers. An unmarked ordinary request
@@ -35,8 +107,9 @@ async function getHandler(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // One exported sweep, three thin callers. This one runs at the FULL budget:
-  // it hosts nothing else, so the derating belongs to layer 2 alone.
-  const report = await sweepOutbox();
+  // Full budget each round; layer 2 alone is derated. When a setlist notice is
+  // re-pended because the send stage ran out of clock, drain again in the same
+  // invocation instead of waiting five minutes for the next GitHub tick.
+  const report = await drainOutbox();
   return NextResponse.json(report);
 }

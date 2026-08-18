@@ -43,7 +43,7 @@ table) · `notificationEmail.ts` + `emailShell.ts` (rendering) ·
 
 | Layer | What | Where |
 |---|---|---|
-| 1 — primary | GitHub Actions, every 5 min | `.github/workflows/flush-notifications.yml` → `/api/cron/flush-notifications` |
+| 1 — primary | GitHub Actions, every 5 min | `.github/workflows/flush-notifications.yml` → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
 | 2 — backstop | opportunistic sweep after any queueing write | end of `commitUpserts()` in `serviceMutationSideEffects.ts` |
 | 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` |
 
@@ -89,7 +89,7 @@ gh workflow run "Flush notification outbox"
 ```
 
 A healthy run prints `HTTP 200` and a report like
-`{"claimed":0,"emailed":0,"consumed":0,"deferred":0,"unserved":0,"repended":0,"lost":0}`. The workflow
+`{"claimed":0,"emailed":0,"consumed":0,"deferred":0,"unserved":0,"repended":0,"lost":0,"rounds":1}`. The workflow
 asserts the status code explicitly rather than relying on `curl --fail`, which
 ignores 3xx — see the landmine below.
 
