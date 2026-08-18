@@ -374,6 +374,14 @@ export const OPERATOR_TOOLING_ALLOWLIST: readonly AuditExemption[] = [
       "operator repair tooling (never A2 — retire it when notification delivery is reliable enough that a spent batch cannot happen)",
   },
   {
+    file: "scripts/requeue-setlist-notice.mjs",
+    operation: "module",
+    reason:
+      "notification repair tool: READS the protected role document and its weekend setlist to recover participants and song presence, and writes only notificationOutbox — never protected content. Same shape as queueSetlistNotice's helpers. Dry-run by default; --apply and --now for incident recovery after a lossy setlist fan-out",
+    removalOwner:
+      "operator repair tooling (never A2 — retire it when notification delivery is reliable enough that a spent batch cannot happen)",
+  },
+  {
     file: "scripts/backfill-legacy-seat-arrays.mjs",
     operation: "module",
     reason:

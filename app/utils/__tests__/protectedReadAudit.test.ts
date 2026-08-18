@@ -484,6 +484,7 @@ describe("A2 handoff allowlist", () => {
         // Reads role documents to re-queue notices a lossy flush spent; writes
         // only notificationOutbox, and is dry-run until --apply.
         "scripts/requeue-role-notices.mjs#module",
+        "scripts/requeue-setlist-notice.mjs#module",
         "scripts/service-readiness-cleanup.mjs#module",
         "scripts/service-readiness-feasibility.mjs#module",
       ].sort(),
