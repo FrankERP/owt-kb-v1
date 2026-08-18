@@ -69,7 +69,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.resetModules();
   process.env.CRON_SECRET = SECRET;
-  sweepOutboxMock.mockResolvedValue({ claimed: 0, emailed: 0, consumed: 0, deferred: 0, unserved: 0 });
+  sweepOutboxMock.mockResolvedValue({ claimed: 0, emailed: 0, consumed: 0, deferred: 0, unserved: 0, repended: 0, lost: 0 });
   sendEmailMock.mockResolvedValue({ ok: true });
   sendPushMock.mockResolvedValue({ sent: 0 });
   operationalFetch.mockResolvedValue([]);
@@ -247,7 +247,7 @@ describe("the liveness alarm", () => {
     sweepOutboxMock.mockImplementation(async () => {
       outbox.count = 0;
       outbox.oldest = null;
-      return { claimed: 7, emailed: 7, consumed: 7, deferred: 0, unserved: 0 };
+      return { claimed: 7, emailed: 7, consumed: 7, deferred: 0, unserved: 0, repended: 0, lost: 0 };
     });
 
     const GET = await remindersRoute();

@@ -89,18 +89,16 @@ gh workflow run "Flush notification outbox"
 ```
 
 A healthy run prints `HTTP 200` and a report like
-`{"claimed":0,"emailed":0,"consumed":0,"deferred":0,"unserved":0}`. The workflow
+`{"claimed":0,"emailed":0,"consumed":0,"deferred":0,"unserved":0,"repended":0,"lost":0}`. The workflow
 asserts the status code explicitly rather than relying on `curl --fail`, which
 ignores 3xx — see the landmine below.
 
-**A red run does not always mean the cron is broken.** The job also fails when the
-report carries `unserved > 0`, which means the opposite of a dead trigger: the
-sweep ran, claimed those recipients, never reached them, and — because stage 8
-consumes whatever was claimed — **deleted their notifications**. Nothing else
-reports it. The outbox is empty afterwards, so the staleness alarm sees nothing
-wrong and the route still answers 200; going red here is the only signal mail was
-lost. `deferred > 0` is the healthy counterpart: work left *unclaimed* for the
-next sweep, which is not loss.
+**A red run does not always mean the cron is broken.** The job fails when the
+report carries `lost > 0`, which means recipients were claimed, never reached,
+and their notices were **consumed anyway** — permanently deleted. `unserved > 0`
+with `repended > 0` is normal: the send budget stopped early and those recipients
+wait for the next sweep (every five minutes). `deferred > 0` is also healthy:
+work left *unclaimed* for the next sweep.
 
 **Is the mail path healthy, and where is its time going?**
 
@@ -123,7 +121,8 @@ Vercel's egress, which is the only path that matters. Inputs:
 It also reports `redirectTo`, which is the only way to see whether
 `EMAIL_REDIRECT_TO` is quietly diverting the whole team's mail.
 
-**Put back notices a lossy flush spent.** After a sweep reports `unserved > 0`,
+**Put back notices a lossy flush spent.** After a sweep reports `lost > 0` (not
+merely `unserved > 0` — unserved with `repended > 0` is retried automatically),
 those notifications are gone; this re-queues them for the affected services:
 
 ```bash
@@ -136,6 +135,15 @@ a notice minted here cannot drift in shape from one minted by a save, and those
 modules use extensionless specifiers Node's ESM loader refuses. Members already
 notified will receive a duplicate — that is usually the right trade against
 someone never being told they serve.
+
+**Put back a destroyed setlist notice** the same way:
+
+```bash
+npx tsx --env-file=.env.local scripts/requeue-setlist-notice.mjs <roleId> --apply --now
+```
+
+Uses an empty `beforeSongs` snapshot so every participant gets "Setlist listo".
+Members already notified will receive a duplicate.
 
 **Inspect the outbox** (Studio → the read-only *Cola de avisos* pane, or GROQ):
 
@@ -249,17 +257,14 @@ Things that are counter-intuitive and were each a real defect at some point.
   `ceil(recipients / SEND_CONCURRENCY) × ms_per_send < NOTIFY_SEND_BUDGET_MS` is
   the inequality the design actually has to satisfy — §1's version assumes
   concurrency of one.
-- **A batch larger than the budget is DESTROYED, not deferred — this is the open
-  wound.** Stage 8 consumes every claimed notice whatever stage 7 returned (§1,
-  best-effort, no retry). That is sound when `ms_per_send × EMAIL_LIMIT` fits the
-  budget, and catastrophic when it does not: at ~13 s per send only **two**
-  recipients are serviceable per sweep, so a 17-seat Sunday claims all 17, serves
-  2 and deletes 15. It happened on 2026-08-07 — one confirmed delivery out of 17,
-  and the notices gone. Until either `ms_per_send` or `NOTIFY_FLUSH_EMAIL_LIMIT`
-  comes down to meet §1's inequality, **any fan-out wider than two people is
-  mostly loss that still reports green.** Selection already knows how to leave
-  work behind (`report.deferred`); it is the limit that is wrong, not the
-  mechanism.
+- **A batch larger than the budget is re-pended, not destroyed.** Stage 8
+  consumes only notices whose every intended recipient was attempted. Recipients
+  the send stage never reached stay on a re-pended notice (`repended` in the
+  sweep report); the GitHub workflow fails only on `lost > 0` — recipients whose
+  notices were consumed despite never being attempted. Setlist fan-out therefore
+  completes across several five-minute sweeps instead of silently dropping the
+  tail. Failed sends still consume (no retry for bad addresses); only the budget
+  tail is returned.
 - **The rehearsal harness distorts the thing it measures.** `EMAIL_REDIRECT_TO`
   points every message at ONE address, so a fan-out that would have gone to 17
   domains becomes 17 messages to one — and the big providers throttle exactly
@@ -322,31 +327,16 @@ pipeline a received message does, with no SMTP credentials and nothing sent.
 
 ## Still open
 
-- **The send-budget inequality holds only because the limit was cut to 2, and
-  that is a trade, not a fix.** Spec §1 requires
+- **The send-budget inequality and the recipient cap.** Spec §1 requires
   `ms_per_send × NOTIFY_FLUSH_EMAIL_LIMIT < NOTIFY_SEND_BUDGET_MS`. Production
-  measured `ms_per_send` = **14 413 ms** (2026-08-07), against the 500 ms
-  `MEASURED_MS_PER_SEND` placeholder in `outboxSweep.test.ts` — 29× out. At the
-  code default of 40 that is `14 413 × 40 = 576 520` against a 40 000 ms budget,
-  and everything unserved is **destroyed**, because stage 8 consumes
-  unconditionally. Production therefore runs `NOTIFY_FLUSH_EMAIL_LIMIT = 2`, where
-  `14 413 × 2 = 28 826 < 40 000` and the inequality is satisfied. Concurrency
-  cannot widen this — see the landmine above.
-
-  What that buys and what it costs: role notices are now lossless and
-  **fragmented** (a member's month arrives as several emails instead of one),
-  which is the wrong shape for a monthly publish but the right side of "wrong".
-  **It does nothing for `setlist` notices**, which carry every participant in ONE
-  document and so cannot be split by any cap — they are taken alone, over budget,
-  and everyone past the second recipient is destroyed.
-
-  Two things close this, and no amount of tuning does: the **~14 s remote accept
-  on the mail server**, or **re-pending notices the sweep never attempted instead
-  of consuming them** (grouped *and* lossless across several sweeps, since a
-  recipient's notices stay together). The second changes the consume contract and
-  needs a plan and review. **Raising `MEASURED_MS_PER_SEND` to make the guard
-  green remains the one forbidden move** — the guard is green today only because
-  it asserts the default limit of 40, not the 2 production runs.
+  measured `ms_per_send` = **14 413 ms** (2026-08-07). Production runs
+  `NOTIFY_FLUSH_EMAIL_LIMIT = 2` so each sweep sends at most two recipients
+  before the budget stops; **setlist notices re-pend** for the next sweep
+  instead of losing the tail. Role notices defer via selection when the union
+  exceeds the cap. Fixing the ~14 s remote accept on the mail server would let
+  the cap return toward 40 and collapse multi-sweep setlist delivery back into
+  one. **Raising `MEASURED_MS_PER_SEND` to make the guard green remains the one
+  forbidden move.**
 - **Outlook on Windows is untested.** macOS Outlook is WebKit, so the Word-engine
   question spec §6 raises — `border-radius` and `padding` on the key pills — is
   unanswered. Expected degradation is cosmetic: squared chips, tighter padding.

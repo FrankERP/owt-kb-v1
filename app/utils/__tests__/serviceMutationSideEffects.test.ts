@@ -170,7 +170,7 @@ beforeEach(() => {
   operationalFetch.mockReset();
   sweepOutboxMock.mockImplementation(async () => {
     eventLog.push("sweep");
-    return { claimed: 0, emailed: 0, consumed: 0, deferred: 0, unserved: 0 };
+    return { claimed: 0, emailed: 0, consumed: 0, deferred: 0, unserved: 0, repended: 0, lost: 0 };
   });
 });
 
