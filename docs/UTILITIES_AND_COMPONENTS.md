@@ -53,7 +53,9 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   `appBaseUrl` (NEXTAUTH_URL → Vercel var → localhost). All best-effort. Honors `EMAIL_REDIRECT_TO`.
 - **`notifyProposalSubmitted(...)`**, **`buildProposalEmail(...)`**
   ([proposalNotify.ts](../app/utils/proposalNotify.ts)) — on proposal submit, fans out push to
-  admins + co-leads and email to admins. Every step swallowed so a notify never fails the write.
+  admins + co-leads and email to admins. The admin email includes the proposed setlist (same
+  table as "Setlist listo", no Mov. column) and lead notes when present; push stays one-line.
+  Every step swallowed so a notify never fails the write.
 - **`firebaseAdmin.getMessaging()`** ([firebaseAdmin.ts](../app/utils/firebaseAdmin.ts)) — lazy
   singleton FCM init from `FIREBASE_SERVICE_ACCOUNT`.
 

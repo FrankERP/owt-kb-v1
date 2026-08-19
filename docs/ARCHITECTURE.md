@@ -433,7 +433,8 @@ flowchart LR
 - **`notifyProposalSubmitted` is fail-closed on identity:** it resolves the service role through
   the canonical contract (§8) and sends **nothing at all** when that identity is missing,
   ambiguous (duplicate), structurally invalid, or draft-conflicted — a co-lead fan-out is never
-  read off an untrusted or draft-overlaid role.
+  read off an untrusted or draft-overlaid role. The admin email includes the proposed setlist
+  table (no Mov. column) and lead notes when present; push stays a one-line alert.
 
 See [API_REFERENCE.md](API_REFERENCE.md) for which endpoints fire what, and
 [UTILITIES_AND_COMPONENTS.md](UTILITIES_AND_COMPONENTS.md) for `push.ts`, `assignmentEmail.ts`,

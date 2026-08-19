@@ -723,12 +723,14 @@ describe("notifyProposalPending", () => {
     await notifyProposalPending({
       leadId: "mem-1",
       roleId: "role-1",
+      proposalId: "setlistProposal.role-1",
       serviceType: "sunday",
       serviceDate: "2026-08-09",
     });
     expect(notifyProposalSubmittedMock).toHaveBeenCalledWith({
       leadId: "mem-1",
       roleId: "role-1",
+      proposalId: "setlistProposal.role-1",
       serviceType: "sunday",
       serviceDate: "2026-08-09",
     });
@@ -740,6 +742,7 @@ describe("notifyProposalPending", () => {
       notifyProposalPending({
         leadId: "mem-1",
         roleId: "role-1",
+        proposalId: "setlistProposal.role-1",
         serviceType: "special",
         serviceDate: "2026-08-09",
       }),

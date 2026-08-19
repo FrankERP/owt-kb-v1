@@ -43,6 +43,17 @@ function validRole(leadRefs: string[]) {
   };
 }
 
+const SONGS = [
+  { _key: "s0", ref: "s1", key: "G", group: null },
+  { _key: "s1", ref: "s2", key: "D", group: 0 },
+  { _key: "s2", ref: "s3", key: "D", group: 0 },
+];
+const TITLES = new Map([["s1", "Abres Camino"], ["s2", "Santo"], ["s3", "Digno"]]);
+
+function submit(over: Partial<Parameters<typeof notifyProposalSubmitted>[0]> = {}) {
+  return { leadId: "lead1", roleId: "r1", proposalId: "p1", serviceType: "sunday" as const, serviceDate: "2026-07-05", ...over };
+}
+
 describe("buildProposalEmail", () => {
   it("builds a Spanish subject + body with an absolute admin link", () => {
     process.env.NEXTAUTH_URL = "https://example.com";
@@ -50,6 +61,8 @@ describe("buildProposalEmail", () => {
     expect(e.subject).toContain("Domingo");
     expect(e.html).toContain("Frank");
     expect(e.html).toContain('href="https://example.com/admin"');
+    expect(e.html).toContain("Revisar propuesta");
+    expect(e.html).not.toContain("Canción");
     delete process.env.NEXTAUTH_URL;
   });
 
@@ -57,6 +70,38 @@ describe("buildProposalEmail", () => {
     const e = buildProposalEmail({ leadName: "A & <b>", serviceType: "saturday", serviceDate: "2026-07-11" });
     expect(e.html).toContain("A &amp; &lt;b&gt;");
     expect(e.html).not.toContain("<b>");
+  });
+
+  it("renders the setlist table without a Mov. column, groups medleys, and omits empty notes", () => {
+    const e = buildProposalEmail({
+      leadName: "Frank",
+      serviceType: "sunday",
+      serviceDate: "2026-07-05",
+      songs: SONGS,
+      titles: TITLES,
+      notes: "   \n  ",
+    });
+    expect(e.html).toContain("Abres Camino");
+    expect(e.html).toContain("Santo");
+    expect(e.html).toContain("Digno");
+    expect(e.html).toContain("Medley");
+    expect(e.html).toContain("Canción");
+    expect(e.html).not.toContain("Mov.");
+    expect(e.html).not.toContain("Notas del líder");
+  });
+
+  it("renders lead notes with pre-wrap and escaped HTML", () => {
+    const e = buildProposalEmail({
+      leadName: "Frank",
+      serviceType: "sunday",
+      serviceDate: "2026-07-05",
+      notes: "Ensayo <jueves>\n& más",
+    });
+    expect(e.html).toContain("Notas del líder");
+    expect(e.html).toContain("white-space:pre-wrap");
+    expect(e.html).toContain("Ensayo &lt;jueves&gt;\n&amp; más");
+    expect(e.html).not.toContain("<jueves>");
+    expect(e.html).not.toContain("Canción");
   });
 });
 
@@ -70,18 +115,26 @@ describe("notifyProposalSubmitted", () => {
   });
   afterEach(() => { delete process.env.EMAIL_ALLOWLIST; });
 
-  // op fetches, in order: [0] canonical role-by-id array, [1] admins+lead combined,
-  // [2] admin email rows. raw fetch: drafts.* overlay for the role base id.
-  function primeValidRole(leadRefs: string[], admins: string[], adminRows: unknown[] = []) {
-    opFetchMock
+  // op fetches, in order: [0] canonical role-by-id array, [1] admins+lead+proposal,
+  // [2] song titles (only when the proposal has refs), then admin email rows.
+  // raw fetch: drafts.* overlay for the role base id.
+  function primeValidRole(
+    leadRefs: string[],
+    admins: string[],
+    adminRows: unknown[] = [],
+    extra: { proposal?: unknown; titles?: { _id: string; title?: string }[] } = {},
+  ) {
+    const proposal = extra.proposal ?? null;
+    const chain = opFetchMock
       .mockResolvedValueOnce([validRole(leadRefs)])
-      .mockResolvedValueOnce({ admins, lead: { member_name: "Frank" } })
-      .mockResolvedValueOnce(adminRows);
+      .mockResolvedValueOnce({ admins, lead: { member_name: "Frank" }, proposal });
+    if (extra.titles) chain.mockResolvedValueOnce(extra.titles);
+    chain.mockResolvedValueOnce(adminRows);
   }
 
   it("pushes to admins and to co-leads, excluding the submitting lead", async () => {
     primeValidRole(["lead1", "lead2"], ["a1"]);
-    await notifyProposalSubmitted({ leadId: "lead1", roleId: "r1", serviceType: "sunday", serviceDate: "2026-07-05" });
+    await notifyProposalSubmitted(submit());
 
     const targets = sendPushMock.mock.calls.map((c) => c[0]);
     expect(targets).toContainEqual(["a1"]);        // admins
@@ -92,7 +145,7 @@ describe("notifyProposalSubmitted", () => {
 
   it("does not push to co-leads when the lead is the only lead", async () => {
     primeValidRole(["lead1"], ["a1"]);
-    await notifyProposalSubmitted({ leadId: "lead1", roleId: "r1", serviceType: "sunday", serviceDate: "2026-07-05" });
+    await notifyProposalSubmitted(submit());
     // Only the admin push fires.
     expect(sendPushMock).toHaveBeenCalledTimes(1);
     expect(sendPushMock.mock.calls[0][0]).toEqual(["a1"]);
@@ -101,48 +154,105 @@ describe("notifyProposalSubmitted", () => {
   it("emails an allowlisted admin", async () => {
     primeValidRole(["lead1"], ["a1"], [{ _id: "a1", email: "admin@x.com" }]);
     sendEmailMock.mockResolvedValue({ ok: true });
-    await notifyProposalSubmitted({ leadId: "lead1", roleId: "r1", serviceType: "sunday", serviceDate: "2026-07-05" });
+    await notifyProposalSubmitted(submit());
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
     expect(sendEmailMock.mock.calls[0][0].to).toBe("admin@x.com");
     expect(sendEmailMock.mock.calls[0][0].subject).toContain("Domingo");
+    expect(sendEmailMock.mock.calls[0][0].html).not.toContain("Canción");
+  });
+
+  it("loads the proposal songs and notes into the admin email", async () => {
+    primeValidRole(["lead1"], ["a1"], [{ _id: "a1", email: "admin@x.com" }], {
+      proposal: {
+        songs: [
+          { play_key: "G", song: { _ref: "s1" } },
+          { play_key: "D", medley_tag: "m", song: { _ref: "s2" } },
+          { play_key: "D", medley_tag: "m", song: { _ref: "s3" } },
+        ],
+        lead_notes: "Ensayo <jueves> & más",
+      },
+      titles: [
+        { _id: "s1", title: "Abres Camino" },
+        { _id: "s2", title: "Santo" },
+        { _id: "s3", title: "Digno" },
+      ],
+    });
+    sendEmailMock.mockResolvedValue({ ok: true });
+    await notifyProposalSubmitted(submit());
+    const html = sendEmailMock.mock.calls[0][0].html as string;
+    expect(html).toContain("Abres Camino");
+    expect(html).toContain("Santo");
+    expect(html).toContain("Medley");
+    expect(html).toContain("Notas del líder");
+    expect(html).toContain("Ensayo &lt;jueves&gt; &amp; más");
+    expect(html).not.toContain("Mov.");
+    expect(html).not.toContain("<jueves>");
+  });
+
+  it("still pushes and emails when the song-title fetch throws", async () => {
+    opFetchMock
+      .mockResolvedValueOnce([validRole(["lead1"])])
+      .mockResolvedValueOnce({
+        admins: ["a1"],
+        lead: { member_name: "Frank" },
+        proposal: { songs: [{ play_key: "G", song: { _ref: "s1" } }] },
+      })
+      .mockRejectedValueOnce(new Error("titles boom"))
+      .mockResolvedValueOnce([{ _id: "a1", email: "admin@x.com" }]);
+    sendEmailMock.mockResolvedValue({ ok: true });
+    await notifyProposalSubmitted(submit());
+    expect(sendPushMock).toHaveBeenCalledTimes(1);
+    expect(sendPushMock.mock.calls[0][0]).toEqual(["a1"]);
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock.mock.calls[0][0].html).toContain("s1");
+    expect(sendEmailMock.mock.calls[0][0].html).toContain("Revisar propuesta");
+  });
+
+  it("still emails when the proposal document is missing", async () => {
+    primeValidRole(["lead1"], ["a1"], [{ _id: "a1", email: "admin@x.com" }], { proposal: null });
+    sendEmailMock.mockResolvedValue({ ok: true });
+    await notifyProposalSubmitted(submit());
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock.mock.calls[0][0].html).toContain("Revisar propuesta");
+    expect(sendEmailMock.mock.calls[0][0].html).not.toContain("Canción");
   });
 
   it("does not email a non-allowlisted admin", async () => {
     primeValidRole(["lead1"], ["a1"], [{ _id: "a1", email: "other@x.com" }]);
-    await notifyProposalSubmitted({ leadId: "lead1", roleId: "r1", serviceType: "sunday", serviceDate: "2026-07-05" });
+    await notifyProposalSubmitted(submit());
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
   it("skips an admin who opted out of email (notifPrefs.email false)", async () => {
     primeValidRole(["lead1"], ["a1"], [{ _id: "a1", email: "admin@x.com", notifPrefs: { email: false } }]);
-    await notifyProposalSubmitted({ leadId: "lead1", roleId: "r1", serviceType: "sunday", serviceDate: "2026-07-05" });
+    await notifyProposalSubmitted(submit());
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
   it("skips an admin who opted out of proposal email specifically (emailProposals false)", async () => {
     primeValidRole(["lead1"], ["a1"], [{ _id: "a1", email: "admin@x.com", notifPrefs: { emailProposals: false } }]);
-    await notifyProposalSubmitted({ leadId: "lead1", roleId: "r1", serviceType: "sunday", serviceDate: "2026-07-05" });
+    await notifyProposalSubmitted(submit());
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
   it("never throws when the fetch fails", async () => {
     opFetchMock.mockRejectedValueOnce(new Error("boom"));
     await expect(
-      notifyProposalSubmitted({ leadId: "lead1", roleId: "r1", serviceType: "sunday", serviceDate: "2026-07-05" }),
+      notifyProposalSubmitted(submit()),
     ).resolves.toBeUndefined();
   });
 
   // ── Fail-closed on non-canonical role identity: sends NOTHING ────────────────
   it("sends nothing when the role does not resolve (missing)", async () => {
     opFetchMock.mockResolvedValueOnce([]); // none
-    await notifyProposalSubmitted({ leadId: "lead1", roleId: "r1", serviceType: "sunday", serviceDate: "2026-07-05" });
+    await notifyProposalSubmitted(submit());
     expect(sendPushMock).not.toHaveBeenCalled();
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
   it("sends nothing when the role id is ambiguous (duplicate canonical docs)", async () => {
     opFetchMock.mockResolvedValueOnce([validRole(["lead1"]), validRole(["lead2"])]);
-    await notifyProposalSubmitted({ leadId: "lead1", roleId: "r1", serviceType: "sunday", serviceDate: "2026-07-05" });
+    await notifyProposalSubmitted(submit());
     expect(sendPushMock).not.toHaveBeenCalled();
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
@@ -150,7 +260,7 @@ describe("notifyProposalSubmitted", () => {
   it("sends nothing when the resolved role is structurally invalid", async () => {
     // Missing seat arrays -> validateRole not groupable.
     opFetchMock.mockResolvedValueOnce([{ _id: "r1", _rev: "v1", _type: "sunday_role", week: "2026-07-05" }]);
-    await notifyProposalSubmitted({ leadId: "lead1", roleId: "r1", serviceType: "sunday", serviceDate: "2026-07-05" });
+    await notifyProposalSubmitted(submit());
     expect(sendPushMock).not.toHaveBeenCalled();
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
@@ -158,7 +268,7 @@ describe("notifyProposalSubmitted", () => {
   it("sends nothing when the role is draft-conflicted (a drafts. overlay exists)", async () => {
     opFetchMock.mockResolvedValueOnce([validRole(["lead1", "lead2"])]);
     rawFetchMock.mockResolvedValueOnce([{ _id: "drafts.r1" }]);
-    await notifyProposalSubmitted({ leadId: "lead1", roleId: "r1", serviceType: "sunday", serviceDate: "2026-07-05" });
+    await notifyProposalSubmitted(submit());
     expect(sendPushMock).not.toHaveBeenCalled();
     expect(sendEmailMock).not.toHaveBeenCalled();
   });

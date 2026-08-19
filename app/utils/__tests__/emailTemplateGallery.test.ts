@@ -26,10 +26,16 @@ import { describe, expect, it, vi } from "vitest";
 // variables on import). Nothing here sends or reads, so both are stubbed, the
 // same way `assignmentEmail.test.ts` does it.
 vi.mock("../email", () => ({ sendEmail: vi.fn(), SEND_CONCURRENCY: 8, SEND_TIMEOUT_MS: 20_000 }));
+vi.mock("../push", () => ({ sendPush: vi.fn() }));
 vi.mock("@/sanity/lib/serverClient", () => ({ serverClient: { fetch: vi.fn() } }));
+vi.mock("@/sanity/lib/operationalClient", () => ({
+  operationalClient: { fetch: vi.fn() },
+  rawIntegrityClient: { fetch: vi.fn() },
+}));
 
 const { buildAssignmentEmail, buildBatchAssignmentEmail } = await import("../assignmentEmail");
 const { buildGroupedEmail } = await import("../notificationEmail");
+const { buildProposalEmail } = await import("../proposalNotify");
 type Line = import("../outboxClassify").Line;
 
 const titles = new Map([
@@ -150,9 +156,18 @@ add("12-publish-batch.html", "Publicación: varios servicios",
     { type: "sunday_role", date: "2026-08-23", roles: ["Guitarra"] },
   ] }));
 
+add("13-proposal.html", "Nueva propuesta (tabla + notas, sin Mov.)", buildProposalEmail({
+  leadName: "Frank",
+  serviceType: "sunday",
+  serviceDate: SUNDAY,
+  songs: [song("s1", "G"), song("s2", "D", 0), song("s3", "D", 0), song("s4", "A")],
+  titles,
+  notes: "Bajé la tonalidad de Santo a D.\nEnsayo el jueves 7pm.",
+}));
+
 describe("email template gallery", () => {
   it("renders every template without throwing", () => {
-    expect(gallery).toHaveLength(12);
+    expect(gallery).toHaveLength(13);
     for (const g of gallery) expect(g.html.length).toBeGreaterThan(200);
   });
 
@@ -217,6 +232,15 @@ describe("email template gallery", () => {
       for (const l of enc.split("=\r\n")) expect(l.length).toBeLessThanOrEqual(75);
       expect(enc).not.toMatch(/=[0-9A-F]?=\r\n/);
     }
+  });
+
+  it("proposal summary reuses the setlist table without a Mov. column", () => {
+    const g = gallery.find((x) => x.file === "13-proposal.html");
+    expect(g?.html).toContain("Abres Camino");
+    expect(g?.html).toContain("Medley");
+    expect(g?.html).toContain("Notas del líder");
+    expect(g?.html).toContain("white-space:pre-wrap");
+    expect(g?.html).not.toContain("Mov.");
   });
 
   it("never says Cantas como — three of five seat paths do not sing", () => {
