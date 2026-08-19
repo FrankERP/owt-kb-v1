@@ -292,11 +292,12 @@ async function invokeEveryTrigger(): Promise<void> {
   rawFetch.mockResolvedValue([]);
   opFetch
     .mockResolvedValueOnce([validRole()])
-    .mockResolvedValueOnce({ admins: ["a1"], lead: { member_name: "Frank" } })
+    .mockResolvedValueOnce({ admins: ["a1"], lead: { member_name: "Frank" }, proposal: null })
     .mockResolvedValueOnce([{ _id: "a1", email: "admin@oasis.mx", emailPref: null }]);
   await notifyProposalSubmitted({
     leadId: "lead1",
     roleId: "r1",
+    proposalId: "p1",
     serviceType: "sunday",
     serviceDate: SERVICE.date,
   });
@@ -305,11 +306,12 @@ async function invokeEveryTrigger(): Promise<void> {
   rawFetch.mockResolvedValue([]);
   opFetch
     .mockResolvedValueOnce([validRole()])
-    .mockResolvedValueOnce({ admins: ["a1"], lead: { member_name: "Frank" } })
+    .mockResolvedValueOnce({ admins: ["a1"], lead: { member_name: "Frank" }, proposal: null })
     .mockResolvedValueOnce([{ _id: "a1", email: "admin@oasis.mx", emailPref: null }]);
   await notifyProposalPending({
     leadId: "lead1",
     roleId: "r1",
+    proposalId: "p1",
     serviceType: "sunday",
     serviceDate: SERVICE.date,
   });

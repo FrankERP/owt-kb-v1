@@ -33,7 +33,8 @@ is blocked). Roles: `super-admin` > `admin` > `content-editor` > `member`. Many 
 - `sendAssignmentEmails(...)` / `sendAssignmentEmailsBatch(...)` — allowlist + opt-out gated.
 - `notifyProposalSubmitted(...)` — push/email fan-out for proposals. **Fail-closed on identity:**
   it resolves the role through the canonical contract and sends **nothing at all** when that
-  identity is missing, ambiguous (duplicate), structurally invalid, or draft-conflicted.
+  identity is missing, ambiguous (duplicate), structurally invalid, or draft-conflicted. The
+  admin email includes the proposed setlist table (no Mov. column) and lead notes when present.
 
 > **Convention for new mutating routes:** validate → check auth → write → **revalidate the
 > affected ISR pages** → fire best-effort notifications (never let a notify failure fail the

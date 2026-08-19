@@ -56,7 +56,10 @@ is **up to 24 hours**, until layer 3 runs.
 Layer 2 derates **both** knobs (half the recipient limit *and* half the send
 budget), so the send-time inequality holds identically there. It does not fire on
 proposal submit or review, which queue nothing; layer 1 covers those within five
-minutes.
+minutes. The proposal-submit **email** (`buildProposalEmail`) is immediate, not
+queued: intro + CTA, the same setlist table as "Setlist listo" (no Mov. column,
+medleys grouped), and `lead_notes` when present. Empty or unreadable songs still
+send the intro and CTA. Push stays a one-line alert.
 
 ## The liveness alarm
 
@@ -315,7 +318,7 @@ Things that are counter-intuitive and were each a real defect at some point.
 
 ## Verifying the templates
 
-Renders all twelve templates, asserts the email-client constraints, and writes
+Renders all thirteen templates, asserts the email-client constraints, and writes
 previews plus `.eml` files:
 
 ```bash

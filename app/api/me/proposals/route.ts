@@ -295,6 +295,7 @@ async function postHandler(req: NextRequest) {
     await notifyProposalPending({
       leadId,
       roleId: target.serviceRef,
+      proposalId,
       serviceType: target.serviceType as "sunday" | "saturday" | "special",
       serviceDate: target.serviceDate,
     });

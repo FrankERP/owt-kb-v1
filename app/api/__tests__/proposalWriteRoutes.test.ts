@@ -465,6 +465,7 @@ describe("POST /api/me/proposals — first create", () => {
     expect(notifyProposalSubmittedMock).toHaveBeenCalledWith({
       leadId: "mem-1",
       roleId: "role-1",
+      proposalId: PROPOSAL_ID,
       serviceType: "sunday",
       serviceDate: WEEK,
     });

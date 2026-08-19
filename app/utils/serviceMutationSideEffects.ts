@@ -702,6 +702,7 @@ export async function notifySetlistSaved(week: string): Promise<void> {
 export async function notifyProposalPending(opts: {
   leadId: string;
   roleId: string;
+  proposalId: string;
   serviceType: "sunday" | "saturday" | "special";
   serviceDate: string;
 }): Promise<void> {

@@ -19,6 +19,9 @@ import { sendEmail } from "./email";
 import { getAllowlist, isEmailAllowed, appBaseUrl, escapeHtml } from "./assignmentEmail";
 import { wantsNotification } from "./notifyPrefs";
 import { C, td, tr, shell } from "./emailShell";
+import { songRowsFrom, type OutboxSongRow } from "./outboxNotice";
+import { buildSetlistTable } from "./setlistDiff";
+import { renderSetlistTable } from "./notificationEmail";
 
 const SERVICE_LABEL: Record<string, string> = {
   sunday: "Domingo",
@@ -29,7 +32,14 @@ const SERVICE_LABEL: Record<string, string> = {
 // Restyled onto the shared dark shell (spec §6: "proposalNotify.ts's 'nueva
 // propuesta' admin email is restyled with them, for consistency"). Same shell
 // as assignmentEmail.ts/notificationEmail.ts, imported from emailShell.ts.
-export function buildProposalEmail(o: { leadName: string; serviceType: string; serviceDate: string }): { subject: string; html: string } {
+export function buildProposalEmail(o: {
+  leadName: string;
+  serviceType: string;
+  serviceDate: string;
+  songs?: OutboxSongRow[];
+  titles?: Map<string, string>;
+  notes?: string;
+}): { subject: string; html: string } {
   const svc = SERVICE_LABEL[o.serviceType] ?? "Servicio";
   const dateFmt = new Date(o.serviceDate + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" });
   const lead = escapeHtml(o.leadName || "Un líder");
@@ -39,11 +49,23 @@ export function buildProposalEmail(o: { leadName: string; serviceType: string; s
     `<span style="font:700 15px system-ui,sans-serif;color:${C.ink}">Nueva propuesta de setlist</span>`,
     { style: "padding:18px 24px 8px" },
   ));
-  const body = header +
-    tr(td(
-      `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}"><strong style="color:${C.accent}">${lead}</strong> envió una propuesta para el <strong style="color:${C.ink}">${svc} ${dateFmt}</strong> y está lista para tu revisión.</p>`,
+  const intro = tr(td(
+    `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}"><strong style="color:${C.accent}">${lead}</strong> envió una propuesta para el <strong style="color:${C.ink}">${svc} ${dateFmt}</strong> y está lista para tu revisión.</p>`,
+    { style: "padding:0 24px 18px" },
+  ));
+  const songs = o.songs ?? [];
+  const table = songs.length
+    ? tr(td(renderSetlistTable(buildSetlistTable([], songs), o.titles ?? new Map(), false), { style: "padding:0 24px 18px" }))
+    : "";
+  const notes = (o.notes ?? "").trim();
+  const notesBlock = notes
+    ? tr(td(
+      `<span style="display:block;font:700 10px system-ui,sans-serif;text-transform:uppercase;letter-spacing:.08em;color:${C.muted};padding-bottom:6px">Notas del líder</span>` +
+      `<p style="margin:0;white-space:pre-wrap;font:14px system-ui,sans-serif;color:${C.ink}">${escapeHtml(notes)}</p>`,
       { style: "padding:0 24px 18px" },
-    )) +
+    ))
+    : "";
+  const body = header + intro + table + notesBlock +
     tr(td(
       `<a href="${link}" style="display:inline-block;background:${C.accent};color:${C.field};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Revisar propuesta →</a>`,
       { style: "padding:0 24px 20px" },
@@ -54,7 +76,14 @@ export function buildProposalEmail(o: { leadName: string; serviceType: string; s
 
 async function emailAdmins(
   adminIds: string[],
-  o: { leadName: string; serviceType: string; serviceDate: string },
+  o: {
+    leadName: string;
+    serviceType: string;
+    serviceDate: string;
+    songs: OutboxSongRow[];
+    titles: Map<string, string>;
+    notes: string;
+  },
 ): Promise<void> {
   if (!adminIds.length) return;
   const allow = getAllowlist();
@@ -82,10 +111,11 @@ async function emailAdmins(
 export async function notifyProposalSubmitted(opts: {
   leadId: string;
   roleId: string;
+  proposalId: string;
   serviceType: "sunday" | "saturday" | "special";
   serviceDate: string;
 }): Promise<void> {
-  const { leadId, roleId, serviceType, serviceDate } = opts;
+  const { leadId, roleId, proposalId, serviceType, serviceDate } = opts;
   try {
     // Resolve the service role through the canonical (published-perspective)
     // contract, never `raw`/`[0]`. Fail closed — send NOTHING — when the role
@@ -107,16 +137,20 @@ export async function notifyProposalSubmitted(opts: {
     const data = await operationalClient.fetch<{
       admins: string[] | null;
       lead: { alias?: string; member_name?: string } | null;
+      proposal: { songs?: unknown; lead_notes?: unknown } | null;
     }>(
       `{
         "admins": *[_type == "teamMembers" && role in ["super-admin","admin"]]._id,
-        "lead": *[_type == "teamMembers" && _id == $leadId][0]{ alias, member_name }
+        "lead": *[_type == "teamMembers" && _id == $leadId][0]{ alias, member_name },
+        "proposal": *[_type == "setlistProposal" && _id == $proposalId][0]{ songs, lead_notes }
       }`,
-      { leadId },
+      { leadId, proposalId },
     );
     const admins = data.admins ?? [];
     const coLeads = canonicalLeadRefs(role).filter((id) => id && id !== leadId);
     const leadName = data.lead?.alias || data.lead?.member_name || "Un líder";
+    const songs = songRowsFrom(data.proposal?.songs);
+    const notes = typeof data.proposal?.lead_notes === "string" ? data.proposal.lead_notes : "";
 
     // 1) Admins — push
     if (admins.length) {
@@ -136,8 +170,25 @@ export async function notifyProposalSubmitted(opts: {
       });
     }
 
+    // Titles are email-only. Fetch them after push so a titles timeout cannot
+    // swallow the notify once the audience is already known. `renderSetlistTable`
+    // already falls back to the song ref when a title is missing.
+    const titles = new Map<string, string>();
+    const refs = [...new Set(songs.map((s) => s.ref).filter(Boolean))];
+    if (refs.length) {
+      try {
+        const rows = await operationalClient.fetch<{ _id: string; title?: string }[] | null>(
+          `*[_type == "post" && _id in $ids]{ _id, title }`,
+          { ids: refs },
+        );
+        for (const row of rows ?? []) if (row?._id && row.title) titles.set(row._id, row.title);
+      } catch (err) {
+        console.error("[proposalNotify] song titles fetch failed:", err);
+      }
+    }
+
     // 3) Admins — email (inert without SMTP/Resend + allowlist)
-    await emailAdmins(admins, { leadName, serviceType, serviceDate });
+    await emailAdmins(admins, { leadName, serviceType, serviceDate, songs, titles, notes });
   } catch (err) {
     console.error("[proposalNotify] notifyProposalSubmitted failed:", err);
   }
