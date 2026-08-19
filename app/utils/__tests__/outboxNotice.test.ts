@@ -108,6 +108,7 @@ describe("buildUpsert", () => {
     expect(patchSet).toEqual({
       notifyAfter: new Date(NOW.getTime() + DEBOUNCE).toISOString(),
       status: "pending",
+      servedRecipients: [],
     });
   });
 
@@ -124,6 +125,7 @@ describe("buildUpsert", () => {
     expect(patchSet).toEqual({
       notifyAfter: new Date(NOW.getTime() + debounceMs).toISOString(),
       status: "pending",
+      servedRecipients: [],
     });
   });
 

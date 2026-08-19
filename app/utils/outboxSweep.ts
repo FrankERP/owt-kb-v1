@@ -140,6 +140,7 @@ interface StoredNotice {
   roleType: RoleTypeName | null;
   before?: { beforeRoles?: string[]; beforeSongs?: OutboxSongRow[]; beforeNotes?: string } | null;
   knownRecipients?: string[] | null;
+  servedRecipients?: string[] | null;
   firstQueuedAt: string;
   notifyAfter: string;
   deadline: string;
@@ -176,7 +177,7 @@ interface Pair {
  */
 const DUE_NOTICES_QUERY = `*[_type == "notificationOutbox" && (status == "sending" || notifyAfter <= $now || deadline <= $now)] | order(firstQueuedAt asc) [0...${SCAN_LIMIT}] {
   _id, _rev, kind, subjectKey, memberId, roleId, proposalId, serviceDate, roleType,
-  before, knownRecipients, firstQueuedAt, notifyAfter, deadline, status, claimedAt
+  before, knownRecipients, servedRecipients, firstQueuedAt, notifyAfter, deadline, status, claimedAt
 }`;
 
 /**
@@ -248,20 +249,26 @@ function unique(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
 }
 
+function minusServed(ids: string[], notice: StoredNotice): string[] {
+  const served = new Set(notice.servedRecipients ?? []);
+  if (!served.size) return ids;
+  return ids.filter((id) => !served.has(id));
+}
+
 // ── Stage 2a: recipients (a COUNT, before anything is claimed) ──────────────
 
 async function resolveRecipients(notice: StoredNotice): Promise<string[]> {
-  if (notice.kind === "role") return notice.memberId ? [notice.memberId] : [];
+  if (notice.kind === "role") return minusServed(notice.memberId ? [notice.memberId] : [], notice);
   if (notice.kind === "leadNotes") {
     const rows = await operationalClient.fetch<string[] | null>(ADMIN_RECIPIENTS_QUERY, {});
-    return unique(rows ?? []);
+    return minusServed(unique(rows ?? []), notice);
   }
   if (!notice.roleId || !notice.roleType) return [];
   const rows = await operationalClient.fetch<string[] | null>(SETLIST_RECIPIENTS_QUERY, {
     roleType: notice.roleType,
     roleId: notice.roleId,
   });
-  return unique(rows ?? []);
+  return minusServed(unique(rows ?? []), notice);
 }
 
 // ── Stage 4: classification against live state ──────────────────────────────
@@ -455,7 +462,7 @@ async function consume(claimed: ClaimedNotice[]): Promise<number> {
 
 interface RependInput {
   notice: ClaimedNotice;
-  knownRecipients?: string[];
+  servedRecipients?: string[];
 }
 
 /**
@@ -472,7 +479,7 @@ async function repend(inputs: RependInput[]): Promise<number> {
       // Immediately due: the debounce already ran; only the send budget stopped us.
       notifyAfter: new Date().toISOString(),
     };
-    if (input.knownRecipients) patch.knownRecipients = input.knownRecipients;
+    if (input.servedRecipients) patch.servedRecipients = input.servedRecipients;
     try {
       await writeClient
         .patch(input.notice.notice._id)
@@ -493,15 +500,14 @@ async function repend(inputs: RependInput[]): Promise<number> {
 
 /**
  * Split claimed notices into those fully discharged (consume) and those with
- * recipients the send stage never reached (re-pend). Failed sends still consume —
- * only never-attempted recipients trigger re-pend.
+ * recipients the send stage never reached (re-pend). Failed sends still consume
+ * that recipient (no retry); only never-attempted recipients stay on the notice.
  */
 function partitionClaimed(
   claimed: ClaimedNotice[],
   classifiedIds: Set<string>,
   pendingByNotice: Map<string, Set<string>> | null,
   attemptedRecipientIds: Set<string>,
-  emailedRecipientIds: Set<string>,
 ): { toConsume: ClaimedNotice[]; toRepending: RependInput[] } {
   const toConsume: ClaimedNotice[] = [];
   const toRepending: RependInput[] = [];
@@ -516,20 +522,16 @@ function partitionClaimed(
       toConsume.push(c);
       continue;
     }
+    const attemptedHere = [...pending].filter((r) => attemptedRecipientIds.has(r));
     const neverAttempted = [...pending].filter((r) => !attemptedRecipientIds.has(r));
     if (!neverAttempted.length) {
       toConsume.push(c);
       continue;
     }
-    if (c.notice.kind === "setlist" || c.notice.kind === "leadNotes") {
-      const known = new Set(c.notice.knownRecipients ?? []);
-      for (const r of pending) {
-        if (emailedRecipientIds.has(r)) known.add(r);
-      }
-      toRepending.push({ notice: c, knownRecipients: [...known] });
-    } else {
-      toRepending.push({ notice: c });
-    }
+    toRepending.push({
+      notice: c,
+      servedRecipients: unique([...(c.notice.servedRecipients ?? []), ...attemptedHere]),
+    });
   }
 
   return { toConsume, toRepending };
@@ -703,7 +705,6 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
   const classifiedIds = new Set<string>();
   let pendingByNotice: Map<string, Set<string>> | null = null;
   const attemptedRecipientIds = new Set<string>();
-  const emailedRecipientIds = new Set<string>();
   try {
     // ── 4. Classify ─────────────────────────────────────────────────────────
     const pairs: Pair[] = [];
@@ -733,7 +734,9 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
       classifiedIds.add(c.notice._id);
       try {
         const noticePairs = await classifyNotice(c.notice, today);
+        const served = new Set(c.notice.servedRecipients ?? []);
         for (const p of noticePairs) {
+          if (served.has(p.recipientId)) continue;
           pairs.push(p);
           let set = pending.get(c.notice._id);
           if (!set) {
@@ -828,7 +831,6 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
       });
       if (res.ok) {
         report.emailed++;
-        emailedRecipientIds.add(recipientId);
       } else logError("notify_sweep_send_failed", { memberId: recipientId, error: res.error });
     };
 
@@ -882,7 +884,6 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
       classifiedIds,
       pendingByNotice,
       attemptedRecipientIds,
-      emailedRecipientIds,
     );
     report.consumed = await consume(toConsume);
     report.repended = await repend(toRepending);

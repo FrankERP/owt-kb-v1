@@ -403,7 +403,7 @@ describe("queueRoleNotices", () => {
     });
     // The patch only slides the debounce and re-pends; `before` and `deadline`
     // survive a whole burst of edits.
-    expect(Object.keys(upsertFor("m1").patchSet).sort()).toEqual(["notifyAfter", "status"]);
+    expect(Object.keys(upsertFor("m1").patchSet).sort()).toEqual(["notifyAfter", "servedRecipients", "status"]);
   });
 
   it("queues nothing for a draft service", async () => {

@@ -105,10 +105,12 @@ export interface UpsertWindowOverrides {
 
 /**
  * `createIfNotExists` writes the identity, the snapshot and the CEILING once —
- * they survive a whole burst of edits. The patch slides only `notifyAfter` and
- * re-pends. `deadline` is deliberately absent from the patch: writing it twice
- * would either kill the starvation ceiling or make a re-pended notice instantly
- * due, and Sanity cannot express "set only if unset" on one `.set()`.
+ * they survive a whole burst of edits. The patch slides `notifyAfter`, re-pends,
+ * and CLEARS `servedRecipients` so a later edit is not hidden from people a
+ * prior sweep already attempted. `deadline` is deliberately absent from the
+ * patch: writing it twice would either kill the starvation ceiling or make a
+ * re-pended notice instantly due, and Sanity cannot express "set only if unset"
+ * on one `.set()`.
  *
  * `windows` mirrors `isDue`'s injectable-override shape so the debounce/window
  * arithmetic can be tested against a non-default configuration; omit it to use
@@ -135,6 +137,7 @@ export function buildUpsert(
       roleType: input.roleType,
       before: input.before,
       knownRecipients: input.knownRecipients,
+      servedRecipients: [],
       firstQueuedAt: now.toISOString(),
       notifyAfter: new Date(now.getTime() + debounceMs).toISOString(),
       deadline: new Date(now.getTime() + maxWindowMs).toISOString(),
@@ -144,6 +147,9 @@ export function buildUpsert(
     patchSet: {
       notifyAfter: new Date(now.getTime() + debounceMs).toISOString(),
       status: "pending",
+      // A later edit on the same subject must re-include people a prior sweep
+      // already attempted — otherwise they miss the new songs/seats.
+      servedRecipients: [],
     } as Record<string, unknown>,
   };
 }

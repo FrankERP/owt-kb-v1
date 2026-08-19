@@ -983,6 +983,93 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
     logSpy.mockRestore();
   });
 
+  it("skips recipients already attempted and emails the rest", async () => {
+    const team = ids("m", 5);
+    world.notices = [
+      setlistNotice({
+        knownRecipients: team,
+        servedRecipients: ["m1", "m2", "m3"],
+      }),
+    ];
+    world.roles = { r2: roleDoc({ _id: "r2", _type: "saturday_role", week: "2026-08-08" }) };
+    world.recipients = { r2: team };
+    world.weekendSongs = { "saturdarSongs:2026-08-08": [storedSong("song1")] };
+    world.titles = { song1: "Santo" };
+    world.members = members(team);
+
+    const report = await sweepOutbox();
+
+    expect(report.emailed).toBe(2);
+    expect(report.consumed).toBe(1);
+    expect(report.repended).toBe(0);
+    const to = sendEmailMock.mock.calls.map((c) => (c[0] as { to: string }).to).sort();
+    expect(to).toEqual(["m4@example.com", "m5@example.com"]);
+  });
+
+  it("counts only remaining recipients for selection, so a second notice can be claimed", async () => {
+    const sat = ids("m", 10);
+    world.notices = [
+      setlistNotice({
+        _id: "outbox.setlist.sat",
+        roleId: "r2",
+        subjectKey: "r2",
+        knownRecipients: sat,
+        servedRecipients: sat.slice(0, 8),
+      }),
+      setlistNotice({
+        _id: "outbox.setlist.sun",
+        _rev: "rev-setlist-2",
+        roleId: "r3",
+        subjectKey: "r3",
+        serviceDate: "2026-08-09",
+        roleType: "sunday_role",
+        knownRecipients: ["m11"],
+      }),
+    ];
+    world.roles = {
+      r2: roleDoc({ _id: "r2", _type: "saturday_role", week: "2026-08-08" }),
+      r3: roleDoc({ _id: "r3", _type: "sunday_role", week: "2026-08-09" }),
+    };
+    world.recipients = { r2: sat, r3: ["m11"] };
+    world.weekendSongs = {
+      "saturdarSongs:2026-08-08": [storedSong("song1")],
+      "featuredSongs:2026-08-09": [storedSong("song1")],
+    };
+    world.titles = { song1: "Santo" };
+    world.members = members([...sat, "m11"]);
+
+    const report = await sweepOutbox({ emailLimit: 3 });
+
+    expect(report.deferred).toBe(0);
+    expect(report.claimed).toBe(2);
+    expect(report.emailed).toBe(3);
+    expect(report.consumed).toBe(2);
+  });
+
+  it("persists the union of prior served ids when a remaining tail is re-pended", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const team = ids("m", 5);
+    world.notices = [
+      setlistNotice({
+        knownRecipients: team,
+        servedRecipients: ["m1", "m2"],
+      }),
+    ];
+    world.roles = { r2: roleDoc({ _id: "r2", _type: "saturday_role", week: "2026-08-08" }) };
+    world.recipients = { r2: team };
+    world.weekendSongs = { "saturdarSongs:2026-08-08": [storedSong("song1")] };
+    world.titles = { song1: "Santo" };
+    world.members = members(team);
+
+    const report = await sweepOutbox({ sendBudgetMs: 0 });
+
+    expect(report.repended).toBe(1);
+    expect(report.consumed).toBe(0);
+    const repend = claimPatches.find((p) => p.set.status === "pending");
+    expect(repend?.set.servedRecipients).toEqual(["m1", "m2"]);
+    logSpy.mockRestore();
+  });
+
   it("logs the observed send cost on completion, so ms_per_send stops being an assumption", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     world.notices = [roleNotice()];
