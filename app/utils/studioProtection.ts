@@ -173,6 +173,7 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
     "roleType",
     "before",
     "knownRecipients",
+    "servedRecipients",
     "firstQueuedAt",
     "notifyAfter",
     "deadline",

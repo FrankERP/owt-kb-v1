@@ -40,6 +40,12 @@ describe("notificationOutbox schema", () => {
     expect(knownRecipients.of?.[0]?.type).toBe("string");
   });
 
+  it("records which recipients this notice already attempted", () => {
+    const servedRecipients = byName("servedRecipients") as unknown as { type: string; of: { type: string }[] };
+    expect(servedRecipients.type).toBe("array");
+    expect(servedRecipients.of?.[0]?.type).toBe("string");
+  });
+
   it("stores before-snapshots as three typed fields, not a JSON blob", () => {
     const before = byName("before") as unknown as {
       fields: { name: string; type: string; of?: { type: string; fields?: { name: string }[] }[] }[];

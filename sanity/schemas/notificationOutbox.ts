@@ -122,6 +122,18 @@ export const notificationOutbox = defineType({
         "Recipients known when the notice was queued. Anyone absent is new to the subject and gets an introduction rather than a diff.",
     },
 
+    // Recipients this notice already attempted (success or fail). A later sweep
+    // skips them so a setlist fan-out can finish across ticks. Cleared when a
+    // writer re-queues the same subject — that is a new change.
+    {
+      name: "servedRecipients",
+      title: "Served recipients",
+      type: "array",
+      of: [{ type: "string" }],
+      description:
+        "Recipients this notice already attempted. Later sweeps skip them. Cleared when a writer re-queues the same subject.",
+    },
+
     { name: "firstQueuedAt", title: "First queued at", type: "datetime" },
     { name: "notifyAfter", title: "Notify after", type: "datetime" },
     { name: "deadline", title: "Deadline", type: "datetime" },

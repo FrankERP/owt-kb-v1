@@ -260,11 +260,11 @@ Things that are counter-intuitive and were each a real defect at some point.
 - **A batch larger than the budget is re-pended, not destroyed.** Stage 8
   consumes only notices whose every intended recipient was attempted. Recipients
   the send stage never reached stay on a re-pended notice (`repended` in the
-  sweep report); the GitHub workflow fails only on `lost > 0` — recipients whose
-  notices were consumed despite never being attempted. Setlist fan-out therefore
-  completes across several five-minute sweeps instead of silently dropping the
-  tail. Failed sends still consume (no retry for bad addresses); only the budget
-  tail is returned.
+  sweep report) with `servedRecipients` recording who was already attempted, so
+  the next sweep emails **new** people instead of retrying the first two.
+  A writer re-queue on the same subject **clears** that list — a later edit is a
+  new change. The GitHub workflow fails only on `lost > 0`. Failed sends still
+  count as attempted (no retry for bad addresses).
 - **The rehearsal harness distorts the thing it measures.** `EMAIL_REDIRECT_TO`
   points every message at ONE address, so a fan-out that would have gone to 17
   domains becomes 17 messages to one — and the big providers throttle exactly
