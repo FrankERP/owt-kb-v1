@@ -8,19 +8,19 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 313,
-    "filesScanned": 230,
-    "filesWithColour": 47,
+    "literalRows": 316,
+    "filesScanned": 235,
+    "filesWithColour": 48,
     "byCategory": {
       "2": 2,
       "4": 71,
-      "8": 89,
+      "8": 92,
       "9": 10,
       "11": 7,
       "12": 134
     },
     "byDisposition": {
-      "B": 118,
+      "B": 121,
       "exempt": 26,
       "keep": 242,
       "C": 7,
@@ -180,6 +180,30 @@
       "reason": "Already theme-agnostic"
     },
     {
+      "file": "app/(client)/kids/page.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 112,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/(client)/kids/page.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 121,
+      "disposition": "B",
+      "reason": null
+    },
+    {
       "file": "app/(client)/layout.tsx",
       "category": 9,
       "categoryName": "runtime-colour-map",
@@ -199,7 +223,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 288,
+      "line": 335,
       "disposition": "B",
       "reason": null
     },
@@ -211,7 +235,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 308,
+      "line": 355,
       "disposition": "B",
       "reason": null
     },
@@ -223,7 +247,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 320,
+      "line": 367,
       "disposition": "B",
       "reason": null
     },
@@ -235,7 +259,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 337,
+      "line": 384,
       "disposition": "B",
       "reason": null
     },
@@ -247,7 +271,19 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 363,
+      "line": 410,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/(client)/me/page.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 515,
       "disposition": "B",
       "reason": null
     },

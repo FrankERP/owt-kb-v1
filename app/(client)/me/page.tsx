@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireActiveSession } from "@/app/utils/authGuards";
+import { getMemberAccess } from "@/app/utils/memberAccess";
 import { redirect } from "next/navigation";
 import { serverClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
@@ -17,6 +18,7 @@ import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
 import { describeContributors } from "@/app/utils/proposalContributors";
 import { pickUnique, serviceDayKey } from "@/app/utils/serviceReadSelect";
 import { orderProposals } from "@/app/utils/serviceReadModel";
+import { KIDS_SEATS, KIDS_SEAT_LABELS, type KidsSeat } from "@/app/utils/kidsTypes";
 
 export const metadata: Metadata = {
   title: "Mi perfil — Oasis Worship Team",
@@ -40,6 +42,37 @@ const STATUS_STYLE: Record<ProposalStatus, string> = {
   approved: "border-positive-deep/40 text-positive-strong cursor-default",
   changes_requested: "border-negative-strong/40 text-negative-fg hover:border-negative-muted",
 };
+
+/**
+ * The member's own next Oasis Kids Sundays. Same published contract as `/kids`:
+ * the FILTER is `published == true` (a `kidsSchedule` carries the field from
+ * birth, and `null == true` is false, which excludes a field-less document — the
+ * safe direction). The seat flags are coalesced because an empty seat
+ * dereferences to null and `$id in null` is null, not false.
+ */
+const KIDS_ME_QUERY = `*[_type == "kidsSchedule" && published == true && date >= $today && (
+    $id in ensenanza->members[]._ref ||
+    $id in chiquitos->members[]._ref ||
+    $id in medianos->members[]._ref ||
+    $id in grandes->members[]._ref
+  )] | order(date asc) [0...3] {
+    date,
+    "ensenanza": coalesce($id in ensenanza->members[]._ref, false),
+    "chiquitos": coalesce($id in chiquitos->members[]._ref, false),
+    "medianos":  coalesce($id in medianos->members[]._ref, false),
+    "grandes":   coalesce($id in grandes->members[]._ref, false)
+  }`;
+
+type KidsMeRow = { date?: string } & Partial<Record<KidsSeat, boolean>>;
+
+/** Pinned to local noon — a bare `new Date(iso)` flips the day at UTC-6. */
+function kidsDayLabel(day: string): string {
+  return new Date(day + "T12:00:00").toLocaleDateString("es-MX", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
 
 export default async function MePage() {
   const session = await requireActiveSession();
@@ -175,6 +208,20 @@ export default async function MePage() {
       { today, limit: calendarLimit }
     ),
   ]);
+
+  // Oasis Kids: only for members whose ministries include it, so a worship-only
+  // member pays no query and sees nothing new. `getMemberAccess` is the 30s-TTL
+  // entry `requireActiveSession` already filled, so the membership check is free.
+  const inKids = (await getMemberAccess(sanityId)).ministries.includes("kids");
+  const kidsRows = inKids
+    ? await operationalClient.fetch<KidsMeRow[]>(KIDS_ME_QUERY, { today, id: sanityId })
+    : [];
+  const kidsAssignments = (Array.isArray(kidsRows) ? kidsRows : [])
+    .map((row) => {
+      const day = serviceDayKey(row?.date);
+      return day ? { day, seats: KIDS_SEATS.filter((seat) => row[seat] === true) } : null;
+    })
+    .filter((a): a is { day: string; seats: KidsSeat[] } => a !== null);
 
   // One shared proposal per service, keyed by service_ref (= role doc _id). No
   // author filter — the shared doc may have been created by any co-lead. If a
@@ -428,6 +475,50 @@ export default async function MePage() {
             </div>
           )}
         </div>
+
+        {/* Oasis Kids — only for members of that ministry */}
+        {inKids && (
+          <section aria-labelledby="mis-roles-kids">
+            <h2
+              id="mis-roles-kids"
+              className="font-display text-center text-xl md:text-2xl font-bold mb-6"
+            >
+              Mis roles en Oasis Kids
+            </h2>
+            <div className="rounded-2xl border border-edge-accent-subtle bg-surface-raised p-5">
+              {kidsAssignments.length === 0 ? (
+                <p className="text-center font-body text-sm text-mono-500">
+                  No tienes domingos asignados en Oasis Kids por ahora.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {kidsAssignments.map(({ day, seats }) => (
+                    <li
+                      key={day}
+                      className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg bg-surface-sunken px-3 py-2"
+                    >
+                      <span className="font-body text-sm capitalize text-ink-muted">
+                        {kidsDayLabel(day)}
+                      </span>
+                      <span className="font-label text-[11px] uppercase tracking-widest text-accent">
+                        {seats.map((seat) => KIDS_SEAT_LABELS[seat]).join(" · ")}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Link
+                href="/kids"
+                className="mt-4 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-mono-500 hover:border-accent hover:text-accent transition-colors"
+              >
+                Ver Oasis Kids
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+              </Link>
+            </div>
+          </section>
+        )}
 
         {/* Availability */}
         {member && (
