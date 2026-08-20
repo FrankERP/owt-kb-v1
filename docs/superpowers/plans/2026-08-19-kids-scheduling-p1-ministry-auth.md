@@ -52,6 +52,13 @@ describe("ministry registry", () => {
     expect(isMinistryId("youth")).toBe(false);
     expect(isMinistryId(undefined)).toBe(false);
   });
+  it("REJECTS prototype keys — an `in` check would accept all of these", () => {
+    // `"constructor" in MINISTRIES` is true. This function validates an auth
+    // field; a member stored as a member of `toString` belongs to nothing.
+    for (const key of ["constructor", "toString", "__proto__", "hasOwnProperty", "valueOf"]) {
+      expect(isMinistryId(key), `${key} must not validate`).toBe(false);
+    }
+  });
 });
 ```
 
@@ -76,10 +83,20 @@ export type MinistryId = keyof typeof MINISTRIES;
 
 export const ALL_MINISTRY_IDS = Object.keys(MINISTRIES) as MinistryId[];
 
+/**
+ * Membership test, NOT `x in MINISTRIES`. The `in` operator walks the prototype
+ * chain, so `"constructor"`, `"toString"` and `"__proto__"` all pass it —
+ * verified: `node -e '...' ` prints true for all three. This function validates
+ * an AUTH field, and a member stored with `ministries: ["toString"]` belongs to
+ * no ministry at all, which strands them in a redirect bounce with no
+ * self-service recovery. Array membership has no prototype hole.
+ */
 export function isMinistryId(x: unknown): x is MinistryId {
-  return typeof x === "string" && x in MINISTRIES;
+  return typeof x === "string" && (ALL_MINISTRY_IDS as string[]).includes(x);
 }
 ```
+
+Declaration order matters: `ALL_MINISTRY_IDS` must be defined above `isMinistryId`.
 
 - [ ] **Step 4: Run test — expect PASS**
 - [ ] **Step 5: Commit** — `feat(auth): ministry registry (worship, kids)`
@@ -192,13 +209,19 @@ Query becomes:
 `*[_type == "teamMembers" && _id == $id][0]{ _id, disabled, role, ministries, managesMinistries }`
 ```
 
-Normalization, immediately after the fetch:
+Normalization, immediately after the fetch. It is **fail-closed for a member who does not exist** and defensive about the field's type — this value feeds two auth guards, and a string written by some future script would otherwise satisfy `"worshipkids".includes("worship")`:
 
 ```ts
-const ministries =
-  doc?.ministries && doc.ministries.length > 0 ? doc.ministries : ["worship"];
-const managesMinistries = doc?.managesMinistries ?? [];
+const asArray = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+
+// A missing/deleted member gets NO ministries: `active:false` already blocks both
+// guards, and [] is the shape that stays safe if that ever changes.
+const stored = asArray(doc?.ministries);
+const ministries = !doc ? [] : stored.length > 0 ? stored : ["worship"];
+const managesMinistries = !doc ? [] : asArray(doc?.managesMinistries);
 ```
+
+The same `[]` applies on the `if (!sanityId)` early return at the top of the function — extend its returned object rather than leaving the new keys undefined.
 
 Return them from `getMemberAccess` and store in the cache entry. Do not change `isMemberActive`, the TTL, or the cache key.
 
@@ -230,6 +253,8 @@ if (eff) {
 ```
 
 Place it inside the existing `if (eff)` block so impersonation keeps working: the effective identity's ministries are what the UI must reflect.
+
+Add a comment at the assignment site noting that `auth.ts:197` returns the token early on `trigger === "update"`, so for exactly one request after starting or stopping impersonation `token.ministries` can lag `token.sanityId`. That is tolerable **only** because this copy is render-only — every server-side authorization decision re-reads `getMemberAccess`. If anything ever authorizes off the session copy, this staleness becomes a privilege bug.
 
 - [ ] **Step 3: session callback** — beside the existing assignments:
 
@@ -405,7 +430,7 @@ Note both call `requireActiveSession()` first, so `disabled`/kill-switch and imp
 **Files:**
 - Modify: `app/api/admin/members/route.ts` (GET projection **and** POST body destructure)
 - Modify: `app/api/admin/members/[id]/route.ts` (PATCH allowlist — route is already super-admin-only for PATCH)
-- Modify: `app/components/admin/AdminPanel.tsx` (`Member` interface ~line 28, `MemberFormData` ~line 40, `MemberForm` state + `onSubmit` ~line 240-252, Miembros editor ~line 684)
+- Modify: `app/components/admin/AdminPanel.tsx` (`Member` interface ~line 28, `MemberFormData` ~line 40, **`handleAdd` ~line 528-537**, `handleEdit` ~line 548-560, `MemberForm` state + `onSubmit` ~line 240-252, Miembros editor ~line 684)
 - Test: `app/api/__tests__/membersMinistries.test.ts` following the repo's route-test pattern.
 
 **Interfaces:**
@@ -480,6 +505,17 @@ onSubmit({
 
 On CREATE (`initial` undefined) sending the arrays unconditionally is fine and desirable — there is no stored value to clobber.
 
+- [ ] **Step 4b: Carry the fields through `handleAdd` — the form does NOT call the API.** `MemberForm.onSubmit` hands its data to `handleAdd`/`handleEdit`, and `handleAdd` (`AdminPanel.tsx:533-537`) destructures a **fixed five-field list** and POSTs only those:
+
+```ts
+const { member_name, alias, email, role, memberType } = data;
+body: JSON.stringify({ member_name, alias, email, role, memberType }),
+```
+
+Without editing this, Step 2's POST change is dead code: a Kids volunteer created through the UI is stored with no `ministries`, normalizes to `["worship"]`, and has the full song catalog, schedule, tags and authors until someone remembers a second edit — precisely the state the requirement forbids, with no signal to the admin. Add both fields to the destructure and the POST body, and verify `handleEdit` (`:548-560`) forwards them too.
+
+- [ ] **Step 4c: Require at least one ministry on create.** With the "empty ⇒ worship" normalization applying to new documents as well, an admin who ticks only "Administra ministerios: Kids" creates a Kids manager who is also a full worship member — contradicting spec §5.1's "Kids manager → worship surfaces: none". Block submission in `MemberForm` when creating with zero ministries ticked (Spanish validation message: `"Elige al menos un ministerio."`), and default the create form's `ministries` state to `["worship"]` so the common case stays one click. Add a test asserting a create with an empty `ministries` array is rejected client-side.
+
 - [ ] **Step 5: UI — the controls.** Two labelled checkbox rows in the Miembros editor: "Ministerios" over `ALL_MINISTRY_IDS` (labels from `MINISTRIES[id].name`) and "Administra ministerios" over `["kids"]` only. Follow the section's existing input styling and the client-mutation invariant (try/catch/finally, `res.ok`, loading reset).
 - [ ] **Step 6: Gates** — `npx tsc --noEmit && npm test && npx eslint .`
 - [ ] **Step 7: Commit** — `feat(admin): super-admin edits member ministries (touched-field-only)`
@@ -522,14 +558,26 @@ export async function requireWorshipPage(callbackPath: string): Promise<void> {
   const session = await requireActiveSession();
   if (!session) redirect(`/auth/signin?callbackUrl=${encodeURIComponent(callbackPath)}`);
   const worship = await requireMinistryMember("worship");
-  if (!worship) redirect("/kids");
+  if (worship) return;
+  // Send them to a ministry they ACTUALLY belong to. Redirecting every
+  // non-worship visitor to /kids unconditionally would be correct only under an
+  // unstated invariant — "every active member is in worship or kids" — which
+  // neither the schema nor a future third ministry guarantees. A member of
+  // NEITHER would bounce /kids -> / -> /kids forever, locked out with no
+  // self-service recovery. /me is ministry-neutral and gated only on an active
+  // session, so it always terminates.
+  const access = await getMemberAccess(session.user.sanityId);
+  redirect(access.ministries.includes("kids") ? "/kids" : "/me");
 }
 ```
+
+`getMemberAccess` is imported from `./memberAccess`; the call is free — it is the same 30s-TTL entry `requireMinistryMember` just read.
 
 - [ ] **Step 2: Test the split** — `app/utils/__tests__/worshipPageGate.test.ts`, mocking `next/navigation`'s `redirect` and the two guards:
   - no active session → redirect target starts with `/auth/signin`, **never** `/kids`;
   - **disabled member** (active session null, even though a token exists) → sign-in, not `/kids` — the anti-loop regression test;
   - active kids-only member → `/kids`;
+  - **active member of NO known ministry** (e.g. a document holding `ministries: ["youth"]` written before that ministry was registered) → `/me`, never `/kids` — the second anti-loop test, because `/kids` would send them back here;
   - active worship member → no redirect called.
 
 - [ ] **Step 3: Apply to all seven pages** — first line of each async server component, before any data fetch, with that page's own path as the callback (e.g. `await requireWorshipPage("/tag")`). Keep the rendering below untouched.
@@ -543,9 +591,23 @@ const worship = await requireMinistryMember("worship");
 if (!worship) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 ```
 
-Replace an existing `requireActiveSession` call with it (the new guard subsumes that check). **Do not touch `app/api/content/**`** — all of its handlers gate on `requireActiveManager`, which is already worship-scoped; adding a membership check there would be a no-op at best. `app/api/me/{route.ts,availability,notif-prefs,password,photo,push-token,theme}` stay ministry-neutral by design. `app/api/me/proposals` and `app/api/me/songs`: gate only if they exist and use a member session — verify in Step 6 and record the finding.
+Replace an existing `requireActiveSession` call with it (the new guard subsumes that check). **Do not touch `app/api/content/**`** — all of its handlers gate on `requireActiveManager`, which is already worship-scoped; adding a membership check there would be a no-op at best. `app/api/me/{route.ts,availability,notif-prefs,password,photo,push-token,theme}` stay ministry-neutral by design.
 
-- [ ] **Step 6: Verify coverage by enumeration, not grep.** A `grep` for `requireActiveSession` cannot find a page that never had a session call — which is exactly how `/tag` and `/author` hid. Instead run `find "app/(client)" -name "page.tsx"` and, in the commit body, list **every** result with one word each: `gated` or `neutral (why)`. Do the same for `find app/api -name "route.ts"`. A page absent from that list is an unreviewed hole.
+**Two more routes need the gate — both exist, both sit behind a bare `requireActiveSession`, and both return worship content:**
+- `app/api/me/songs/route.ts` — returns the **entire song catalog** (title, author, key, slug). This is the single largest worship read a kids-only member could otherwise still make, and no UI change hides it from a typed URL.
+- `app/api/notifications/count/route.ts` — returns worship proposal counts.
+
+Also gate `app/api/me/proposals/**` if present. Confirm each by reading the handler, not by assuming.
+
+- [ ] **Step 6: Verify coverage by enumeration, not grep.** A `grep` for `requireActiveSession` cannot find a page that never had a session call — which is exactly how `/tag` and `/author` hid. Instead run `find "app/(client)" -name "page.tsx"` (12 results) and `find app/api -name "route.ts"` (43 results) and, in the commit body, list **every** result with one word each: `gated` or `neutral (why)`. A path absent from that list is an unreviewed hole.
+
+  Name these explicitly rather than covering them with a wildcard:
+  - `app/(client)/me/propose/[roleId]/page.tsx` — a worship setlist-proposal surface living inside the "`me/**` is neutral" exclusion. It is closed today only because its GROQ requires `$leadId in Lead[]._ref` and it `notFound()`s otherwise. That is defence in depth, not a gate; decide explicitly whether to add `requireWorshipPage` and record the choice.
+  - `app/api/me/songs/route.ts`, `app/api/notifications/count/route.ts` — gated in Step 5.
+
+- [ ] **Step 6b: Two acknowledged, deliberately-unfixed bleeds** (record in the commit body so a later reader does not read silence as oversight):
+  - `GET /api/admin/members` returns all `teamMembers`, so Kids-only volunteers appear in the worship `AvailabilityPanel` and Miembros list. A worship admin therefore sees Kids *people*, though no Kids scheduling. The solver is unaffected (its pools filter on `memberType`, `MonthGenerator.tsx:1329-1331`). Fixing it means ministry-filtering an admin read used by several worship panels — out of scope here; raise it if Frank considers member visibility part of "kids stuff".
+  - `Navbar.tsx:22` links the brand lockup to `/` for everyone, so a kids-only member's most obvious click is a redirect bounce to `/kids`. Harmless with the loop-proof gate; fix it in P2's UI pass if it grates.
 
 - [ ] **Step 7: Gates** — all three.
 - [ ] **Step 8: Commit** — `feat(auth): worship pages and member APIs require worship membership`
@@ -565,3 +627,5 @@ P1 alone leaves `/kids` redirects pointing at a route that does not exist yet. *
   2. a PATCH carrying no ministry keys leaves both stored arrays untouched (Task 5 Step 1);
   3. every `page.tsx` under `app/(client)` is enumerated as gated or deliberately neutral (Task 6 Step 6) — the check that finds a page nobody remembered, which a grep for an absent symbol cannot.
 - Spec §5.1's three layers each have an owner: **nav** = Task 3b, **pages** = Task 6, **APIs** = Task 6 Step 5 (+ P2's `/api/kids/*` guards). Nav is cosmetic; the page and API layers are the enforcement.
+- **Run `npx next build` once before the merge**, in addition to the three standard gates. Seven pages change rendering mode and `posts/[slug]` combines `generateStaticParams` with `revalidate = 3600`; `/me` already proves `revalidate` + `getServerSession` builds fine, so this is a low-risk confirmation, not an expected failure — but discovering it on preview would be worse than a two-minute check.
+- **Record the rejected alternative in P2 Task 8's ADR** (CLAUDE.md's decision-records rule asks for exactly this): gating worship paths in `proxy.ts` instead of per-page. After Task 3b the JWT carries `ministries` at the same 30s freshness the guards use, so middleware gating was genuinely available and would have kept ISR on the app's hottest pages. It was rejected because the middleware runs on a token whose claims are refreshed on NextAuth's schedule rather than read per request, and because one matcher list is a second place for route coverage to drift out of sync (the repo already carries a byte-identical-matcher guard for this exact reason). Say so in the ADR rather than leaving the dynamic-rendering cost unexplained.
