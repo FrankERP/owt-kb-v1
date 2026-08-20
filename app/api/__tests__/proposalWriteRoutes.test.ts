@@ -13,7 +13,7 @@ import type { NextRequest } from "next/server";
 
 vi.mock("server-only", () => ({}));
 
-const requireActiveSessionMock = vi.fn();
+const requireMinistryMemberMock = vi.fn();
 const requireActiveManagerMock = vi.fn();
 const operationalFetch = vi.fn();
 const rawFetch = vi.fn();
@@ -22,7 +22,7 @@ const notifyProposalSubmittedMock = vi.fn();
 const revalidateServiceViewsMock = vi.fn();
 
 vi.mock("@/app/utils/authGuards", () => ({
-  requireActiveSession: () => requireActiveSessionMock(),
+  requireMinistryMember: () => requireMinistryMemberMock(),
   requireActiveManager: () => requireActiveManagerMock(),
 }));
 
@@ -361,7 +361,7 @@ beforeEach(() => {
   transactions.length = 0;
   commitOutcomes.length = 0;
   store = emptyStore();
-  requireActiveSessionMock.mockResolvedValue(LEAD);
+  requireMinistryMemberMock.mockResolvedValue(LEAD);
   requireActiveManagerMock.mockResolvedValue(ADMIN);
   operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) =>
     canonicalRead(q, p),
@@ -374,9 +374,11 @@ beforeEach(() => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe("POST /api/me/proposals — authorization and prevalidation", () => {
-  it("401s without an active session, before any read", async () => {
-    requireActiveSessionMock.mockResolvedValueOnce(null);
-    expect((await POST(req(saveBody()))).status).toBe(401);
+  // The guard is `requireMinistryMember("worship")`: no session, a disabled
+  // member and a kids-only member are all one `null` here, and all 403.
+  it("403s without worship membership, before any read", async () => {
+    requireMinistryMemberMock.mockResolvedValueOnce(null);
+    expect((await POST(req(saveBody()))).status).toBe(403);
     expect(operationalFetch).not.toHaveBeenCalled();
   });
 

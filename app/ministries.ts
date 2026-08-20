@@ -43,6 +43,24 @@ export function normalizeMinistries(v: unknown): MinistryId[] {
   return known.length > 0 ? known : ["worship"];
 }
 
+/**
+ * The GROQ counterpart of `normalizeMinistries`, for worship admin reads of
+ * `teamMembers`. Interpolate into a filter and bind `$all`:
+ *
+ *   `*[_type == "teamMembers" && ${WORSHIP_MEMBER_GROQ_FILTER}]`, { all }
+ *
+ * `$all` is true for `super-admin` ONLY — they are the single role that can edit
+ * `ministries`, so filtering their view would leave a Kids-only member
+ * permanently uneditable through the UI. Plain `admin`/`content-editor` are
+ * worship-scoped and see worship members only.
+ *
+ * The `!defined` / `count(...) == 0` arms are NOT belt-and-braces: they are the
+ * storage contract (absent ⇒ worship). A bare `"worship" in ministries` would
+ * hide every member who predates the kids feature — which is all of them.
+ */
+export const WORSHIP_MEMBER_GROQ_FILTER =
+  '($all || !defined(ministries) || count(ministries) == 0 || "worship" in ministries)';
+
 /** Ministries a member can be granted management of. Worship management lives
  *  in the legacy admin/content-editor roles, and NO guard reads a "worship"
  *  entry here — storing one would be a lie in the data. */

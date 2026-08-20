@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
-import { validateMinistryWrite } from "@/app/ministries";
+import { validateMinistryWrite, WORSHIP_MEMBER_GROQ_FILTER } from "@/app/ministries";
 
 // Reading the member list is needed by the Servicios/Disponibilidad panels (admin-accessible).
 // Creating/editing members stays super-admin only (Miembros section).
@@ -17,13 +17,16 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Worship admins see worship members only; a super-admin sees everyone,
+  // because they are the only role that can edit `ministries` at all.
   const members = await operationalClient.fetch(
-    `*[_type == "teamMembers"] | order(member_name asc) {
+    `*[_type == "teamMembers" && ${WORSHIP_MEMBER_GROQ_FILTER}] | order(member_name asc) {
       _id, member_name, alias, email, role, memberType, notifPrefs, ministries, managesMinistries,
       unavailableDates, unavailabilityNotes,
       "hasPassword": defined(passwordHash) && passwordHash != "",
       "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl)
-    }`
+    }`,
+    { all: session.user.role === "super-admin" }
   );
 
   return NextResponse.json(members);

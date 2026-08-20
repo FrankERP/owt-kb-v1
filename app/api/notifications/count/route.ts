@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
-import { requireActiveSession } from "@/app/utils/authGuards";
+import { requireMinistryMember } from "@/app/utils/authGuards";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 
 // Notification badge count for the current user. Fetched client-side by NavMenu
 // after paint so it never blocks page rendering / static caching.
 export async function GET() {
-  const session = await requireActiveSession();
+  // The counts are worship setlist proposals. NavMenu treats a non-ok response
+  // as zero, so a kids-only member simply sees no badge.
+  const session = await requireMinistryMember("worship");
   if (!session) {
-    return NextResponse.json({ count: 0 });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const role = session.user.role as string | undefined;

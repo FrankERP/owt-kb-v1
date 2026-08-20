@@ -14,7 +14,7 @@ import type { NextRequest } from "next/server";
 vi.mock("server-only", () => ({}));
 
 const requireActiveManagerMock = vi.fn();
-const requireActiveSessionMock = vi.fn();
+const requireMinistryMemberMock = vi.fn();
 const operationalFetch = vi.fn();
 const rawFetch = vi.fn();
 const sendPushMock = vi.fn();
@@ -26,7 +26,7 @@ const afterCallbacks: (() => unknown)[] = [];
 
 vi.mock("@/app/utils/authGuards", () => ({
   requireActiveManager: () => requireActiveManagerMock(),
-  requireActiveSession: () => requireActiveSessionMock(),
+  requireMinistryMember: () => requireMinistryMemberMock(),
 }));
 
 vi.mock("@/sanity/lib/operationalClient", () => ({
@@ -416,7 +416,7 @@ beforeEach(() => {
   afterCallbacks.length = 0;
   store = emptyStore();
   requireActiveManagerMock.mockResolvedValue(ADMIN);
-  requireActiveSessionMock.mockResolvedValue(LEAD);
+  requireMinistryMemberMock.mockResolvedValue(LEAD);
   operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) =>
     canonicalRead(q, p),
   );
