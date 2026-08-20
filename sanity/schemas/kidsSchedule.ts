@@ -1,4 +1,4 @@
-import { defineType } from "sanity";
+import { defineType, type Rule } from "sanity";
 
 const pairRef = (name: string, title: string) => ({
   name,
@@ -19,7 +19,7 @@ export const kidsSchedule = defineType({
   title: "Kids — Rol del domingo",
   type: "document",
   fields: [
-    { name: "date", title: "Domingo", type: "date", validation: (r: any) => r.required() },
+    { name: "date", title: "Domingo", type: "date", validation: (r: Rule) => r.required() },
     pairRef("ensenanza", "Enseñanza"),
     pairRef("chiquitos", "RG Chiquitos"),
     pairRef("medianos", "RG Medianos"),

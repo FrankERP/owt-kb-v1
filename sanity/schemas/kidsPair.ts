@@ -1,4 +1,4 @@
-import { defineType } from "sanity";
+import { defineType, type Rule } from "sanity";
 
 /**
  * Oasis Kids scheduling unit: a fixed PAIR of people bound to one age room.
@@ -11,13 +11,13 @@ export const kidsPair = defineType({
   title: "Kids — Pareja",
   type: "document",
   fields: [
-    { name: "name", title: "Nombre", type: "string", validation: (r: any) => r.required() },
+    { name: "name", title: "Nombre", type: "string", validation: (r: Rule) => r.required() },
     {
       name: "members",
       title: "Integrantes",
       type: "array",
       of: [{ type: "reference", to: [{ type: "teamMembers" }] }],
-      validation: (r: any) => r.required().length(2),
+      validation: (r: Rule) => r.required().length(2),
     },
     {
       name: "room",
@@ -31,7 +31,7 @@ export const kidsPair = defineType({
         ],
         layout: "radio",
       },
-      validation: (r: any) => r.required(),
+      validation: (r: Rule) => r.required(),
     },
     {
       name: "active",
