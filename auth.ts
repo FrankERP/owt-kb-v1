@@ -250,7 +250,24 @@ export const authOptions: NextAuthOptions = {
       // Effective identity carries its own (or the impersonated target's) live
       // role; keep the real admin's snapshot role fresh too so that stopping
       // impersonation restores their CURRENT role, not a stale one.
-      if (eff) token.role = (eff.role ?? "member") as OWTRole;
+      // The ministries ride along with the role: they come from the SAME
+      // getMemberAccess snapshot, so carrying them costs zero extra fetches, and
+      // they live inside this `if (eff)` on purpose — during impersonation `eff`
+      // is the TARGET, and the UI must reflect the effective identity's
+      // ministries, not the admin's.
+      //
+      // Staleness note: the `trigger === "update"` branch above returns the token
+      // early (auth.ts:197), so for exactly ONE request after starting or stopping
+      // impersonation `token.ministries` can still describe the previous identity
+      // while `token.sanityId` already describes the new one. That is tolerable
+      // ONLY because this copy is render-only — every server-side authorization
+      // decision re-reads getMemberAccess. If anything ever authorizes off the
+      // session copy, this one-request lag becomes a privilege bug.
+      if (eff) {
+        token.role              = (eff.role ?? "member") as OWTRole;
+        token.ministries        = eff.ministries;
+        token.managesMinistries = eff.managesMinistries;
+      }
       if (real && token.__realAdmin) token.__realAdmin.role = (real.role ?? "member") as OWTRole;
 
       return token;
@@ -264,6 +281,11 @@ export const authOptions: NextAuthOptions = {
         session.user.alias           = token.alias ?? null;
         session.user.isImpersonating = token.isImpersonating ?? false;
         session.user.realAdminName   = token.realAdminName;
+        // `?? ["worship"]` mirrors the storage-level normalization: a token minted
+        // before this deploy carries neither key, and it must behave as a worship
+        // member rather than a member of nothing.
+        session.user.ministries        = token.ministries ?? ["worship"];
+        session.user.managesMinistries = token.managesMinistries ?? [];
       }
       return session;
     },
