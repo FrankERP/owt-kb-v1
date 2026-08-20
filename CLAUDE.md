@@ -166,7 +166,10 @@ role tier. Gate with `requireMinistryMember(id)` / `requireMinistryManager(id)`
 (`app/utils/worshipPageGate.ts`, which makes them dynamic — ADR-0020).
 - **Isolation is two-way:** a kids-only member reaches no worship surface, and a
   worship `admin`/`content-editor` gets nothing in kids. Only `super-admin` spans
-  both. Role never implies ministry; management never implies membership.
+  both. Role never implies ministry; management never implies membership. That
+  holds for the app's own surfaces — **`/studio` is not ministry-scoped** (`proxy.ts`
+  opens it to `admin`), and `teamMembers`, `managesMinistries` included, is editable
+  by anyone with Sanity project write access.
 - **Storage contract:** **absent** `ministries` ⇒ worship (the legacy,
   migration-free rule — `normalizeMinistries` + `WORSHIP_MEMBER_GROQ_FILTER` are
   the only readers). **Explicitly empty** is rejected at every write boundary

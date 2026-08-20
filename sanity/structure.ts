@@ -10,7 +10,7 @@ import { apiVersion } from './env'
 /**
  * Studio structure for the embedded Studio (Service Readiness A2 §8).
  *
- * The eleven protected types are removed from the DEFAULT document-type list and
+ * The thirteen protected types are removed from the DEFAULT document-type list and
  * re-offered only inside an explicitly labelled read-only inspection group, so
  * the ordinary "pick a type and edit it" path cannot reach them. Their documents
  * remain viewable — `readOnly: true` on the type makes the form non-editable and

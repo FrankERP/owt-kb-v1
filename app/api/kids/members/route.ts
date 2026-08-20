@@ -9,9 +9,14 @@ import { serverClient } from "@/sanity/lib/serverClient";
  * `"kids" in ministries` needs no `!defined(ministries)` arm, unlike the worship
  * filter: absent or empty normalizes to worship-only (`normalizeMinistries`),
  * never to kids, so no member the shared rule would include can be missed here.
+ *
+ * `_rev` is part of the contract, not a debugging extra: the availability
+ * override replaces `unavailableDates` wholesale and the member's own `/me`
+ * calendar writes the same field, so the panel must send back the revision it
+ * read or the PATCH refuses it (400/409). Dropping `_rev` here breaks saving.
  */
 const KIDS_MEMBERS_QUERY = `*[_type == "teamMembers" && "kids" in ministries] | order(member_name asc) {
-    _id, member_name, alias,
+    _id, _rev, member_name, alias,
     "unavailableDates": coalesce(unavailableDates, []),
     "unavailabilityNotes": coalesce(unavailabilityNotes, [])
   }`;

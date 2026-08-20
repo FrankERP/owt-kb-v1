@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireMinistryManager } from "@/app/utils/authGuards";
-import { writeClient } from "@/sanity/lib/serverClient";
+import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { revalidateKidsViews } from "@/app/utils/revalidate";
 import { KIDS_ROOMS, type KidsRoom } from "@/app/utils/kidsTypes";
+import { validatePairMembers } from "../pairMembers";
 
 const isRoom = (v: unknown): v is KidsRoom => KIDS_ROOMS.includes(v as KidsRoom);
 
@@ -21,6 +22,20 @@ export async function PATCH(
   if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
+
+  // The id comes from the PATH and is otherwise unverified — `patch(id).set({name})`
+  // would rename ANY document that has a `name` field (a worship `author` or `tag`
+  // does), and a Kids manager reaches no worship data by design. Same shape as the
+  // availability route: check the target first, 404 when it is not ours — a 403
+  // would confirm the document exists.
+  const target = await serverClient.fetch<{ _type: string } | null>(
+    `*[_id == $id][0]{ _type }`,
+    { id },
+  );
+  if (target?._type !== "kidsPair") {
+    return NextResponse.json({ error: "Not a kids pair" }, { status: 404 });
+  }
+
   const body = (await req.json()) as {
     name?: string;
     room?: string;
@@ -53,6 +68,10 @@ export async function PATCH(
     if (memberIds[0] === memberIds[1]) {
       return NextResponse.json({ error: "A pair needs two different members" }, { status: 400 });
     }
+    // Same seating rule as the create route (shared, so the two cannot drift):
+    // a swap may only seat real kids members.
+    const memberError = await validatePairMembers(memberIds);
+    if (memberError) return NextResponse.json({ error: memberError }, { status: 400 });
     // Same `_key` convention as the create route: the member ref.
     patch.members = memberIds.map((m) => ({ _type: "reference", _ref: m, _key: m }));
   }

@@ -10,6 +10,13 @@ export const kidsPair = defineType({
   name: "kidsPair",
   title: "Kids — Pareja",
   type: "document",
+  // Studio protection (PROTECTED_STUDIO_TYPES in app/utils/studioProtection.ts):
+  // read-only in the embedded Studio, because /api/kids/pairs is the writer that
+  // validates the two members, the room and the ministry gate. `document.actions`
+  // in `sanity.config.ts` also removes every mutating action (even by direct URL)
+  // and `newDocumentOptions` removes the create affordance.
+  // `__experimental_actions` is NOT used — it is inert in Sanity v5.
+  readOnly: true,
   fields: [
     { name: "name", title: "Nombre", type: "string", validation: (r: Rule) => r.required() },
     {

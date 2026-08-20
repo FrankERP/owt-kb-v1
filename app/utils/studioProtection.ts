@@ -1,4 +1,4 @@
-// Studio protection policy for the eleven protected stored types
+// Studio protection policy for the thirteen protected stored types
 // (Service Readiness A2 §8 / A3 §4) — pure, exported, and unit-testable.
 //
 // WHY a code-owned policy instead of UI configuration alone: the Studio is an
@@ -24,7 +24,7 @@
 // look at a lock, a receipt, or a malformed role while diagnosing.
 
 /**
- * The eleven protected stored types. `saturdarSongs` is a deliberate stored typo —
+ * The thirteen protected stored types. `saturdarSongs` is a deliberate stored typo —
  * never rename.
  *
  * Membership here is what earns a type a pane in `sanity/structure.ts`'s
@@ -54,6 +54,19 @@ export const PROTECTED_STUDIO_TYPES = [
   "notificationOutbox",
   "specialIdentityCoordinator",
   "solverConfig",
+  // Oasis Kids scheduling (kids design spec §4.2, §5): the app is the writer and
+  // the Studio is not the editing surface. Protected but deliberately NOT
+  // {@link INTERNAL_STUDIO_TYPES} — these are human-meaningful documents a Kids
+  // manager reads in `/kids`, not machine coordination state, so they keep an
+  // ordinary (read-only) pane instead of being `hidden: true`.
+  //
+  // What protection buys here is concrete: `kidsSchedule` ids are DETERMINISTIC
+  // (`kidsSchedule-<YYYY-MM-DD>`, minted by `app/api/kids/schedules`), and the
+  // Studio's create affordance mints a RANDOM one — two published documents for
+  // the same Sunday both pass the `/kids` filter and render under the same React
+  // key. A Studio-authored draft is the same failure by another route.
+  "kidsPair",
+  "kidsSchedule",
 ] as const;
 
 export type ProtectedStudioType = (typeof PROTECTED_STUDIO_TYPES)[number];
@@ -264,7 +277,7 @@ export function isDeleteOnlyStudioType(typeName: unknown): typeName is DeleteOnl
 }
 
 /**
- * Any type this policy governs at all — the nine fully protected types plus the
+ * Any type this policy governs at all — the fully protected types plus the
  * delete-only ones. The config resolvers branch on THIS, so a delete-only type
  * cannot escape the policy just because it is not "protected".
  */
@@ -448,4 +461,6 @@ export const PROTECTED_STUDIO_TITLES: Readonly<Record<ProtectedStudioType, strin
   notificationOutbox: "Cola de avisos (solo lectura)",
   specialIdentityCoordinator: "Coordinador de especiales (solo lectura)",
   solverConfig: "Reglas del planificador (solo lectura)",
+  kidsPair: "Kids — Parejas (solo lectura)",
+  kidsSchedule: "Kids — Roles del domingo (solo lectura)",
 });

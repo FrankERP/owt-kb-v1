@@ -3,6 +3,7 @@ import { requireMinistryManager } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { revalidateKidsViews } from "@/app/utils/revalidate";
 import { KIDS_ROOMS, type KidsRoom } from "@/app/utils/kidsTypes";
+import { validatePairMembers } from "./pairMembers";
 
 // The Oasis Kids pair roster. Guarded by `requireMinistryManager("kids")`, which
 // a worship `admin` does NOT satisfy — two-way ministry isolation (P1).
@@ -52,6 +53,10 @@ export async function POST(req: NextRequest) {
   if (memberIds[0] === memberIds[1]) {
     return NextResponse.json({ error: "A pair needs two different members" }, { status: 400 });
   }
+  // Two well-formed strings are not two PEOPLE — the ids have to resolve to kids
+  // members before they are written as references.
+  const memberError = await validatePairMembers(memberIds);
+  if (memberError) return NextResponse.json({ error: memberError }, { status: 400 });
 
   const doc = await writeClient.create({
     _type: "kidsPair",

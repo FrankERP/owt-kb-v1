@@ -308,9 +308,15 @@ export async function PATCH() {
   });
 
   it("keeps the guard registry separate from, and disjoint with, the A2 allowlist", () => {
-    expect(DEFENSIVE_TYPE_REJECTION_GUARDS).toHaveLength(1);
+    // Two `_type`-only ownership guards: the song-content editor and the kids
+    // pair editor, both of which patch a document id taken from the path.
+    expect(DEFENSIVE_TYPE_REJECTION_GUARDS).toHaveLength(2);
     expect(DEFENSIVE_TYPE_REJECTION_GUARDS[0]).toMatchObject({
       file: GUARD_FILE,
+      operation: "PATCH",
+    });
+    expect(DEFENSIVE_TYPE_REJECTION_GUARDS[1]).toMatchObject({
+      file: "app/api/kids/pairs/[id]/route.ts",
       operation: "PATCH",
     });
     // A2 never removes it.

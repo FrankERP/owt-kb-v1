@@ -179,10 +179,17 @@ The embedded Sanity Studio is an **alternate write path into exactly the documen
 mutation routes spend their whole effort protecting**. `app/utils/studioProtection.ts` closes it,
 and does so assertably — "we ticked a box in the config" is not testable; this module is.
 
-Eight `PROTECTED_STUDIO_TYPES` are read-only in Studio: `sunday_role`, `saturday_role`,
+Thirteen `PROTECTED_STUDIO_TYPES` are read-only in Studio: `sunday_role`, `saturday_role`,
 `special_role`, `featuredSongs`, `saturdarSongs`, `setlistProposal`, `roleTargetLock`,
-`roleCreationReceipt`. The last two are additionally `INTERNAL_STUDIO_TYPES` — machine-owned
-bookkeeping no operator ever authors by hand.
+`roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`, `solverConfig`,
+`kidsPair`, `kidsSchedule`. Five of them are additionally `INTERNAL_STUDIO_TYPES` — machine-owned
+bookkeeping no operator ever authors by hand. The two kids types are not: they are app-written but
+human-meaningful, so they stay visible read-only (see [DATA_MODEL → Studio](DATA_MODEL.md#studio)).
+
+**Studio is not ministry-scoped.** `proxy.ts` opens `/studio` to `admin` and above, and
+`teamMembers` — `managesMinistries` included — is not a protected type, so anyone with Sanity
+project write access can edit it. The two-way worship/kids isolation is a property of the app's own
+surfaces, not of the dataset.
 
 Three v5-correct mechanisms are used together, because each covers a different way in:
 

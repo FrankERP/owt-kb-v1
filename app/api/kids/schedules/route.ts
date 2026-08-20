@@ -146,7 +146,13 @@ export async function PUT(req: NextRequest) {
   }
   if (body.published !== undefined) seatPatch.published = body.published;
 
-  await writeClient.patch(_id).set(seatPatch).unset(seatUnset).commit();
+  // A full Sunday — every seat filled, the ordinary result of "Generar mes" —
+  // leaves `seatUnset` empty, and `@sanity/client` would put `unset: []` into the
+  // mutation verbatim. Guarded the way the repo already guards it in
+  // `applyPublishReadyAssertions`: only call `.unset()` with something to unset.
+  let patch = writeClient.patch(_id).set(seatPatch);
+  if (seatUnset.length) patch = patch.unset(seatUnset);
+  await patch.commit();
   revalidateKidsViews();
 
   return NextResponse.json({

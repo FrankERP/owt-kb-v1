@@ -108,14 +108,28 @@ export default async function MePage() {
   const calendarLimit = new Date(Date.now() + 365 * 86400 * 1000)
     .toLocaleDateString("sv", { timeZone: TZ });
 
+  // Ministry membership decides which halves of this page exist at all, so it is
+  // resolved BEFORE the reads: a kids-only member must not even query worship.
+  // `getMemberAccess` is the 30s-TTL entry `requireActiveSession` already filled,
+  // so both checks are free.
+  const { ministries } = await getMemberAccess(sanityId);
+  const inWorship = ministries.includes("worship");
+  const inKids = ministries.includes("kids");
+
   // All three reads below touch protected service types, so they go through the
   // canonical (published-perspective) client — a `drafts.*` overlay is never a
   // member's assignment, proposal, or calendar date. The member's OWN profile
   // read above stays on `serverClient`: it needs the read token and `teamMembers`
   // is not a protected service type. Weekend setlists are fetched as arrays and
   // collapsed with `pickUnique` below, never `[0]`.
+  //
+  // The first two are WORSHIP reads and are skipped entirely for a member who is
+  // not in that ministry — nothing downstream of them renders for such a member
+  // (spec §5.1: worship surfaces are "none"), so querying and discarding would be
+  // pure cost. The third is not skipped: it feeds the availability calendar, which
+  // every member sees.
   const [data, proposals, serviceDates] = await Promise.all([
-    operationalClient.fetch(
+    inWorship ? operationalClient.fetch(
       `{
         "sundays": *[_type == "sunday_role" && week >= $today && week <= $limit && published != false && ${memberFilter}] | order(week asc) {
           _id, week,
@@ -184,8 +198,8 @@ export default async function MePage() {
         }
       }`,
       { today, limit, id: sanityId }
-    ),
-    operationalClient.fetch(
+    ) : null,
+    inWorship ? operationalClient.fetch(
       // One shared proposal per service I lead. Contributors drive the "compartida
       // · con Ana" hint so a lead sees, where they already look, that a co-lead is
       // in the shared setlist too. `_createdAt` is projected so a stray duplicate
@@ -198,7 +212,7 @@ export default async function MePage() {
         "contributors": contributors[]{ "id": person->_id, "name": coalesce(person->alias, person->member_name) }
       }`,
       { id: sanityId, today }
-    ),
+    ) : [],
     operationalClient.fetch<string[]>(
       `[
         ...*[_type == "sunday_role"   && week >= $today && week <= $limit && published != false].week,
@@ -210,9 +224,7 @@ export default async function MePage() {
   ]);
 
   // Oasis Kids: only for members whose ministries include it, so a worship-only
-  // member pays no query and sees nothing new. `getMemberAccess` is the 30s-TTL
-  // entry `requireActiveSession` already filled, so the membership check is free.
-  const inKids = (await getMemberAccess(sanityId)).ministries.includes("kids");
+  // member pays no query and sees nothing new.
   const kidsRows = inKids
     ? await operationalClient.fetch<KidsMeRow[]>(KIDS_ME_QUERY, { today, id: sanityId })
     : [];
@@ -399,82 +411,87 @@ export default async function MePage() {
             calendar and ProfilePanel — most of a phone-page away. */}
         <ThemeAnnouncement />
 
-        {/* Upcoming services */}
-        <div>
-          {allAssignments.length === 0 ? (
-            <>
-              <h2 className="font-display text-center text-2xl md:text-3xl font-bold mb-2">
-                Mis próximos servicios
-              </h2>
-              <div className="flex flex-col items-center gap-3 py-20 text-mono-600">
-                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
-                <p className="font-label text-sm uppercase tracking-widest">Sin servicios asignados próximamente</p>
-              </div>
-            </>
-          ) : (
-            <div className="space-y-10">
-              {/* Toolbar */}
-              <div className="flex justify-end -mb-6">
-                <AddToCalendarButton services={calendarServices} />
-              </div>
-
-              {/* Hero: next assignment */}
-              {(() => {
-                const { day, doc, dateKey } = allAssignments[0];
-                const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: dateKey, team_notes: doc.team_notes } : undefined);
-                return (
-                  <div>
-                    <NextServiceHero
-                      day={day}
-                      date={dateKey}
-                      roleId={day !== "Domingo" && day !== "Sábado" ? doc._id : undefined}
-                      setlist={setlist}
-                      leads={doc.Lead?.map((m) => m.alias || m.member_name)}
-                      instruments={doc.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
-                      fohTeam={doc.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
-                      bgvs={doc.BGVs}
-                      chorus={doc.Chorus}
-                    />
-                    {renderProposalCta(doc)}
-                  </div>
-                );
-              })()}
-
-              {/* Remaining assignments */}
-              {allAssignments.length > 1 && (
-                <div>
-                  <h2 className="font-display text-center text-xl md:text-2xl font-bold mb-6">
-                    Próximos servicios
-                  </h2>
-                  <div className="space-y-6">
-                    {allAssignments.slice(1).map(({ day, doc, dateKey }) => {
-                      const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: dateKey, team_notes: doc.team_notes } : undefined);
-                      return (
-                        <div key={doc._id}>
-                          <DayCard
-                            day={day}
-                            date={dateKey}
-                            roleId={day !== "Domingo" && day !== "Sábado" ? doc._id : undefined}
-                            setlist={setlist}
-                            leads={doc.Lead?.map((m) => m.alias || m.member_name)}
-                            instruments={doc.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
-                            fohTeam={doc.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
-                            bgvs={doc.BGVs}
-                            chorus={doc.Chorus}
-                          />
-                          {renderProposalCta(doc)}
-                        </div>
-                      );
-                    })}
-                  </div>
+        {/* Upcoming WORSHIP services — hidden outright for a member who is not in
+            that ministry, empty state included: a kids-only volunteer has no
+            worship surface at all (spec §5.1), and "Sin servicios asignados
+            próximamente" is still a worship surface. */}
+        {inWorship && (
+          <div>
+            {allAssignments.length === 0 ? (
+              <>
+                <h2 className="font-display text-center text-2xl md:text-3xl font-bold mb-2">
+                  Mis próximos servicios
+                </h2>
+                <div className="flex flex-col items-center gap-3 py-20 text-mono-600">
+                  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                  <p className="font-label text-sm uppercase tracking-widest">Sin servicios asignados próximamente</p>
                 </div>
-              )}
-            </div>
-          )}
-        </div>
+              </>
+            ) : (
+              <div className="space-y-10">
+                {/* Toolbar */}
+                <div className="flex justify-end -mb-6">
+                  <AddToCalendarButton services={calendarServices} />
+                </div>
+
+                {/* Hero: next assignment */}
+                {(() => {
+                  const { day, doc, dateKey } = allAssignments[0];
+                  const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: dateKey, team_notes: doc.team_notes } : undefined);
+                  return (
+                    <div>
+                      <NextServiceHero
+                        day={day}
+                        date={dateKey}
+                        roleId={day !== "Domingo" && day !== "Sábado" ? doc._id : undefined}
+                        setlist={setlist}
+                        leads={doc.Lead?.map((m) => m.alias || m.member_name)}
+                        instruments={doc.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
+                        fohTeam={doc.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
+                        bgvs={doc.BGVs}
+                        chorus={doc.Chorus}
+                      />
+                      {renderProposalCta(doc)}
+                    </div>
+                  );
+                })()}
+
+                {/* Remaining assignments */}
+                {allAssignments.length > 1 && (
+                  <div>
+                    <h2 className="font-display text-center text-xl md:text-2xl font-bold mb-6">
+                      Próximos servicios
+                    </h2>
+                    <div className="space-y-6">
+                      {allAssignments.slice(1).map(({ day, doc, dateKey }) => {
+                        const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: dateKey, team_notes: doc.team_notes } : undefined);
+                        return (
+                          <div key={doc._id}>
+                            <DayCard
+                              day={day}
+                              date={dateKey}
+                              roleId={day !== "Domingo" && day !== "Sábado" ? doc._id : undefined}
+                              setlist={setlist}
+                              leads={doc.Lead?.map((m) => m.alias || m.member_name)}
+                              instruments={doc.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
+                              fohTeam={doc.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
+                              bgvs={doc.BGVs}
+                              chorus={doc.Chorus}
+                            />
+                            {renderProposalCta(doc)}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Oasis Kids — only for members of that ministry */}
         {inKids && (

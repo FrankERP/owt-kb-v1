@@ -31,7 +31,15 @@ const h = vi.hoisted(() => ({
   requireMinistryManager: vi.fn(),
   created: [] as Record<string, unknown>[],
   createdIfNotExists: [] as Record<string, unknown>[],
-  patches: [] as { id: string; set: Record<string, unknown>; unset: string[] }[],
+  // `unsetCalls` counts the `.unset()` CALLS, which an empty `unset` array cannot
+  // distinguish from never calling it — and `.unset([])` reaching the API is the
+  // thing under test.
+  patches: [] as {
+    id: string;
+    set: Record<string, unknown>;
+    unset: string[];
+    unsetCalls: number;
+  }[],
   revalidateKidsViews: vi.fn(),
   operationalFetch: vi.fn(),
 }));
@@ -47,7 +55,7 @@ async function groq(query: string, params: Record<string, unknown> = {}) {
 }
 
 function patchChain(id: string) {
-  const record = { id, set: {} as Record<string, unknown>, unset: [] as string[] };
+  const record = { id, set: {} as Record<string, unknown>, unset: [] as string[], unsetCalls: 0 };
   h.patches.push(record);
   const chain = {
     set(v: Record<string, unknown>) {
@@ -55,10 +63,17 @@ function patchChain(id: string) {
       return chain;
     },
     unset(keys: string[]) {
+      record.unsetCalls += 1;
       record.unset.push(...keys);
       return chain;
     },
-    commit: async () => ({ _id: id, ...record.set }),
+    // The availability override commits under a revision precondition. The
+    // ENFORCING fake — stale `_rev` throws a 409 and writes nothing — lives in
+    // `kidsAvailabilityConflict.test.ts`; here it only has to not be a crash.
+    ifRevisionId(_rev: string) {
+      return chain;
+    },
+    commit: async () => ({ _id: id, _rev: "rev-2", ...record.set }),
   };
   return chain;
 }
@@ -88,6 +103,8 @@ vi.mock("@/app/utils/revalidate", () => ({
 
 const member = (id: string, name: string, ministries?: string[]) => ({
   _id: id,
+  // The availability override's `ifRevisionId` precondition reads this.
+  _rev: "rev-1",
   _type: "teamMembers",
   member_name: name,
   email: `${id}@example.com`,
@@ -122,6 +139,9 @@ const DATASET = [
   member("w1", "Solo Alabanza", ["worship"]),
   // No `ministries` field at all: every member predating the kids feature.
   member("legacy", "Ana Legado"),
+  // A worship document that also has a `name` field — the shape a blind
+  // `patch(id).set({ name })` from the pairs route would happily rename.
+  { _id: "author-1", _type: "author", name: "Autor de Alabanza" },
   pair("p-chi-1", "chiquitos", "k1", "k2"),
   pair("p-chi-2", "chiquitos", "k3", "k4"),
   pair("p-med-1", "medianos", "k5", "k6"),
@@ -275,6 +295,26 @@ describe("POST /api/kids/pairs", () => {
     expect(res.status).toBe(400);
     expect(h.created).toHaveLength(0);
   });
+
+  // A pair seat is a REFERENCE: two well-formed strings are not two people, and
+  // the ids of the worship roster are enumerable by anyone who can call this.
+  it("refuses to seat anyone who is not a kids member", async () => {
+    for (const memberIds of [
+      ["k1", "w1"], // a worship member
+      ["k1", "legacy"], // absent `ministries` means worship
+      ["k1", "ghost"], // not a document at all
+      ["k1", "author-1"], // not even a member
+    ]) {
+      const res = await pairsPOST(req({ name: "Nueva", room: "grandes", memberIds }));
+      expect(res.status).toBe(400);
+    }
+    expect(h.created).toHaveLength(0);
+  });
+
+  it("seats a dual-ministry member", async () => {
+    const res = await pairsPOST(req({ name: "Nueva", room: "grandes", memberIds: ["k1", "dual"] }));
+    expect(res.status).toBe(201);
+  });
 });
 
 describe("PATCH /api/kids/pairs/[id]", () => {
@@ -298,6 +338,32 @@ describe("PATCH /api/kids/pairs/[id]", () => {
   it("rejects an unknown room and an empty body", async () => {
     expect((await pairPATCH(req({ room: "bebes" }), params("p-chi-1"))).status).toBe(400);
     expect((await pairPATCH(req({}), params("p-chi-1"))).status).toBe(400);
+    expect(h.patches).toHaveLength(0);
+  });
+
+  // The id arrives in the PATH. Unchecked, `set({ name })` renames whatever it
+  // points at — an `author` and a `tag` both carry a real `name`, and a Kids
+  // manager reaches no worship data by design. 404, never 403: the answer must
+  // not confirm the document exists.
+  it("404s for an id that is not a kidsPair, and writes nothing", async () => {
+    for (const id of ["author-1", "k1", "kidsSchedule-2026-09-06"]) {
+      const res = await pairPATCH(req({ name: "Renombrado" }), params(id));
+      expect(res.status).toBe(404);
+    }
+    expect(h.patches).toHaveLength(0);
+  });
+
+  it("404s for an id that does not exist, instead of throwing a 500", async () => {
+    const res = await pairPATCH(req({ name: "Renombrado" }), params("ghost"));
+    expect(res.status).toBe(404);
+    expect(h.patches).toHaveLength(0);
+  });
+
+  it("refuses a swap that seats someone who is not a kids member", async () => {
+    for (const memberIds of [["k1", "w1"], ["k1", "legacy"], ["k1", "ghost"]]) {
+      const res = await pairPATCH(req({ memberIds }), params("p-chi-1"));
+      expect(res.status).toBe(400);
+    }
     expect(h.patches).toHaveLength(0);
   });
 });
@@ -362,8 +428,18 @@ describe("PUT /api/kids/schedules", () => {
 
   it("UNSETS an emptied seat instead of leaving a stale reference", async () => {
     await schedulesPUT(req({ date: "2026-09-20", seats: { ensenanza: "p-chi-1" } }));
+    expect(h.patches[0].unsetCalls).toBe(1);
     expect(h.patches[0].unset).toEqual(["chiquitos", "medianos", "grandes"]);
     expect(h.patches[0].set).not.toHaveProperty("chiquitos");
+  });
+
+  // A full Sunday is the COMMON path, and `.unset([])` would be serialized into
+  // the mutation verbatim. Nothing here proves the API rejects it — which is
+  // exactly why the empty call must never be made.
+  it("does not call `.unset()` at all when every seat is filled", async () => {
+    await schedulesPUT(req({ date: "2026-09-20", seats }));
+    expect(h.patches[0].unsetCalls).toBe(0);
+    expect(h.patches[0].unset).toEqual([]);
   });
 
   it("leaves `published` alone when the body does not mention it", async () => {
@@ -500,6 +576,7 @@ describe("PATCH /api/kids/members/[id]/availability", () => {
   it("stores only well-formed dates, and notes keyed by their date", async () => {
     const res = await availabilityPATCH(
       req({
+        _rev: "rev-1",
         unavailableDates: ["2026-09-06", "no-es-fecha", "2026-09-20"],
         unavailabilityNotes: [
           { date: "2026-09-06", note: "  Viaje  " },
@@ -539,13 +616,19 @@ describe("PATCH /api/kids/members/[id]/availability", () => {
   });
 
   it("accepts a dual-ministry member", async () => {
-    const res = await availabilityPATCH(req({ unavailableDates: ["2026-09-06"] }), params("dual"));
+    const res = await availabilityPATCH(
+      req({ _rev: "rev-1", unavailableDates: ["2026-09-06"] }),
+      params("dual"),
+    );
     expect(res.status).toBe(200);
     expect(h.patches[0].id).toBe("dual");
   });
 
   it("rejects a body without an array of dates, before writing", async () => {
-    const res = await availabilityPATCH(req({ unavailableDates: "2026-09-06" }), params("k1"));
+    const res = await availabilityPATCH(
+      req({ _rev: "rev-1", unavailableDates: "2026-09-06" }),
+      params("k1"),
+    );
     expect(res.status).toBe(400);
     expect(h.patches).toHaveLength(0);
   });

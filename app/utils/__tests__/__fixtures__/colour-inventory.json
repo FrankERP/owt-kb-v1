@@ -9,7 +9,7 @@
   ],
   "summary": {
     "literalRows": 316,
-    "filesScanned": 235,
+    "filesScanned": 236,
     "filesWithColour": 48,
     "byCategory": {
       "2": 2,
@@ -223,19 +223,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 335,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/(client)/me/page.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 355,
+      "line": 347,
       "disposition": "B",
       "reason": null
     },
@@ -259,7 +247,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 384,
+      "line": 379,
       "disposition": "B",
       "reason": null
     },
@@ -271,7 +259,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 410,
+      "line": 396,
       "disposition": "B",
       "reason": null
     },
@@ -283,7 +271,19 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 515,
+      "line": 426,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/(client)/me/page.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 532,
       "disposition": "B",
       "reason": null
     },

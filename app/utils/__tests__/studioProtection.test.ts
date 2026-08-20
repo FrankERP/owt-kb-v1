@@ -2,7 +2,7 @@
 // without a browser.
 //
 // The point of these tests: "we configured the Studio" is not evidence. The
-// policy is code, so every capability of every one of the eleven protected types
+// policy is code, so every capability of every one of the thirteen protected types
 // is asserted here, plus the wiring in `sanity.config.ts` / `sanity/structure.ts`
 // that actually installs it — and the fact that the v5-inert
 // `__experimental_actions` is used nowhere.
@@ -58,7 +58,7 @@ function gitTracked(): string[] {
 // ── The policy ──────────────────────────────────────────────────────────────
 
 describe("studio protection policy", () => {
-  it("covers exactly the eleven protected types, keeping the saturdarSongs typo", () => {
+  it("covers exactly the thirteen protected types, keeping the saturdarSongs typo", () => {
     expect([...PROTECTED_STUDIO_TYPES]).toEqual([
       "sunday_role",
       "saturday_role",
@@ -74,6 +74,9 @@ describe("studio protection policy", () => {
       // `duplicate`, `restore` and `unpublish` reachable by direct URL — a
       // second write path around the `_rev`-checked admin route.
       "solverConfig",
+      // Oasis Kids: the app is the writer (kids design spec §4.2, §5).
+      "kidsPair",
+      "kidsSchedule",
     ]);
     expect(PROTECTED_STUDIO_TYPES).toContain("saturdarSongs");
     expect(PROTECTED_STUDIO_TYPES as readonly string[]).not.toContain("saturdaySongs");
@@ -89,6 +92,8 @@ describe("studio protection policy", () => {
       "roleCreationReceipt",
       "specialIdentityCoordinator",
       "solverConfig",
+      "kidsPair",
+      "kidsSchedule",
     ]);
   });
 
@@ -198,6 +203,39 @@ describe("studio protection policy", () => {
     expect(protectedDocumentActions(SANITY_V5_BUILT_IN_ACTIONS.map((action) => ({ action })), {
       schemaType: "notificationOutbox",
     })).toEqual([{ action: "delete" }]);
+  });
+
+  it("protects the two kids types without hiding them (the app is the writer, spec §4.2)", () => {
+    // The kids design spec says twice that Studio is not the editing surface for
+    // these: pairs are edited by Kids managers in the app, and schedules are
+    // written by `/api/kids/schedules` at the DETERMINISTIC id
+    // `kidsSchedule-<YYYY-MM-DD>`. Studio's create affordance mints a RANDOM id,
+    // so a hand-created document forks a Sunday that already exists — two
+    // published docs pass the `/kids` filter and render under the same key.
+    for (const type of ["kidsPair", "kidsSchedule"]) {
+      expect(isProtectedStudioType(type), type).toBe(true);
+      expect(isGovernedStudioType(type), type).toBe(true);
+      // Delete-only would leave a hand-prune path; kids documents are not
+      // coordination state an operator ever removes by hand.
+      expect(isDeleteOnlyStudioType(type), type).toBe(false);
+      for (const capability of STUDIO_MUTATING_CAPABILITIES) {
+        expect(studioCapability(type, capability).allowed, `${type}/${capability}`).toBe(false);
+      }
+      for (const action of SANITY_V5_BUILT_IN_ACTIONS) {
+        expect(studioCapability(type, action).allowed, `${type}/${action}`).toBe(false);
+      }
+      expect(protectedDocumentActions(SANITY_V5_BUILT_IN_ACTIONS.map((action) => ({ action })), {
+        schemaType: type,
+      })).toEqual([]);
+      expect(protectedNewDocumentOptions([{ templateId: type }])).toEqual([]);
+      // NOT internal: these are human-meaningful documents (a pair has names, a
+      // schedule has a Sunday), so they stay visible in the read-only group
+      // rather than `hidden: true` like the coordination types. The create
+      // mechanism must therefore be the plain one.
+      expect(isInternalStudioType(type), type).toBe(false);
+      expect(studioCapability(type, "create").mechanism).toBe("document.newDocumentOptions");
+      expect(partitionStudioTypes([type]).inspectOnly, type).toEqual([type]);
+    }
   });
 
   it("keeps the lock state and the internal idempotency fields hidden", () => {
@@ -406,6 +444,8 @@ describe("studio config installs the policy", () => {
       "sanity/schemas/roleCreationReceipt.ts",
       "sanity/schemas/notificationOutbox.ts",
       "sanity/schemas/solverConfig.ts",
+      "sanity/schemas/kidsPair.ts",
+      "sanity/schemas/kidsSchedule.ts",
     ];
     const tracked = new Set(gitTracked());
     for (const file of owned) {
@@ -420,7 +460,7 @@ describe("studio config installs the policy", () => {
     expect(structure).toContain("PROTECTED_STUDIO_TYPES");
   });
 
-  it("marks all eleven protected schema types read-only", () => {
+  it("marks all thirteen protected schema types read-only", () => {
     const files: Record<string, string> = {
       sunday_role: "sanity/schemas/sunRole.ts",
       saturday_role: "sanity/schemas/satRole.ts",
@@ -433,6 +473,8 @@ describe("studio config installs the policy", () => {
       notificationOutbox: "sanity/schemas/notificationOutbox.ts",
       specialIdentityCoordinator: "sanity/schemas/specialIdentityCoordinator.ts",
       solverConfig: "sanity/schemas/solverConfig.ts",
+      kidsPair: "sanity/schemas/kidsPair.ts",
+      kidsSchedule: "sanity/schemas/kidsSchedule.ts",
     };
     expect(Object.keys(files).sort()).toEqual([...PROTECTED_STUDIO_TYPES].sort());
     for (const type of PROTECTED_STUDIO_TYPES) {

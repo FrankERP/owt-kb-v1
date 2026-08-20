@@ -5,6 +5,8 @@ import { useTransientValue } from "@/app/utils/useTransientValue";
 
 export interface AvailabilityMember {
   _id: string;
+  /** The revision this snapshot was read at — the save's `ifRevisionId` guard. */
+  _rev: string;
   member_name: string;
   alias?: string;
   unavailableDates: string[];
@@ -22,6 +24,13 @@ const MONTHS_ES = [
 const DAYS_ES = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"];
 
 type Toast = { kind: "ok" | "error"; text: string } | null;
+
+/** What the PATCH reports as the member's stored state — on 200 and on 409 alike. */
+interface ServerState {
+  _rev: string | null;
+  unavailableDates: string[];
+  unavailabilityNotes: { date: string; note: string }[];
+}
 
 const errText = (err: unknown) => (err instanceof Error ? err.message : "error desconocido");
 
@@ -57,6 +66,16 @@ export function shiftYearMonth(year: number, month: number, delta: number) {
  * The PATCH replaces BOTH arrays wholesale, so the editor holds the member's
  * ENTIRE set of dates (not just the visible month) and sends all of it. Sending
  * only the month on screen would silently delete every absence outside it.
+ *
+ * That is also why every save carries the `_rev` this snapshot was read at. The
+ * panel opens once and can sit open for hours while the member marks their own
+ * absences at `/me`; a wholesale write from a stale snapshot would delete them
+ * with a success toast. On the resulting 409 the panel adopts the server's
+ * arrays — it does NOT keep the pending edits and retry, because retrying the
+ * same stale set against a fresh revision is the very deletion the guard just
+ * stopped. The manager redoes the toggle against real state, which is why the
+ * conflict message is HELD rather than flashed: it reports a write that did not
+ * land, and it must outlive the five seconds a toast gets.
  */
 export default function KidsAvailabilityPanel({ initialMembers }: Props) {
   const [members, setMembers] = useState<AvailabilityMember[]>(initialMembers);
@@ -66,7 +85,7 @@ export default function KidsAvailabilityPanel({ initialMembers }: Props) {
   );
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [toast, showToast] = useTransientValue<Toast>(null, 5000);
+  const [toast, showToast, , holdToast] = useTransientValue<Toast>(null, 5000);
 
   // "Today" is Mexico City's day, not the device's — the calendar opens on the
   // month the team is living in even from a browser an ocean away.
@@ -95,6 +114,24 @@ export default function KidsAvailabilityPanel({ initialMembers }: Props) {
     setDirty(true);
   }
 
+  /** Adopt the server's state for one member — the save's reply or a 409's. */
+  function adopt(id: string, server: ServerState) {
+    setMembers((prev) =>
+      prev.map((member) =>
+        member._id === id
+          ? {
+              ...member,
+              _rev: server._rev ?? member._rev,
+              unavailableDates: server.unavailableDates,
+              unavailabilityNotes: server.unavailabilityNotes,
+            }
+          : member,
+      ),
+    );
+    setDates(new Set(server.unavailableDates));
+    setDirty(false);
+  }
+
   async function save() {
     if (!selected) return;
     setSaving(true);
@@ -105,26 +142,23 @@ export default function KidsAvailabilityPanel({ initialMembers }: Props) {
       const res = await fetch(`/api/kids/members/${selected._id}/availability`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ unavailableDates: kept, unavailabilityNotes: notes }),
+        body: JSON.stringify({
+          _rev: selected._rev,
+          unavailableDates: kept,
+          unavailabilityNotes: notes,
+        }),
       });
+      if (res.status === 409) {
+        const current = (await res.json()) as ServerState;
+        adopt(selected._id, current);
+        holdToast({
+          kind: "error",
+          text: `La disponibilidad de ${displayName(selected)} cambió mientras editabas — tus cambios NO se guardaron. La lista ya muestra las fechas actuales: vuelve a marcarlas y guarda otra vez.`,
+        });
+        return;
+      }
       if (!res.ok) throw new Error(`respuesta ${res.status}`);
-      const saved = (await res.json()) as {
-        unavailableDates: string[];
-        unavailabilityNotes: { date: string; note: string }[];
-      };
-      setMembers((prev) =>
-        prev.map((member) =>
-          member._id === selected._id
-            ? {
-                ...member,
-                unavailableDates: saved.unavailableDates,
-                unavailabilityNotes: saved.unavailabilityNotes,
-              }
-            : member,
-        ),
-      );
-      setDates(new Set(saved.unavailableDates));
-      setDirty(false);
+      adopt(selected._id, (await res.json()) as ServerState);
       showToast({ kind: "ok", text: `Disponibilidad de ${displayName(selected)} guardada.` });
     } catch (err) {
       // `dirty` stays true on failure: the edits are still unsaved and the

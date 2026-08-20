@@ -28,7 +28,7 @@ const PAGE_QUERY = `{
     "grandes": grandes._ref
   },
   "members": *[_type == "teamMembers" && "kids" in ministries] | order(member_name asc) {
-    _id, member_name, alias,
+    _id, _rev, member_name, alias,
     "unavailableDates": coalesce(unavailableDates, []),
     "unavailabilityNotes": coalesce(unavailabilityNotes, [])
   }
@@ -48,6 +48,9 @@ interface PageData {
   schedules: ScheduleRow[];
   members: {
     _id: string;
+    // The availability panel sends this back as an `ifRevisionId` precondition —
+    // see `app/api/kids/members/[id]/availability/route.ts`.
+    _rev: string;
     member_name: string;
     alias?: string;
     unavailableDates: string[];

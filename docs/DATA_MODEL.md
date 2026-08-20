@@ -548,12 +548,18 @@ require a Studio deploy to appear in the Studio UI (the app reads/writes via GRO
 
 The Studio is a *second* writer into the same dataset, so it would otherwise bypass every guard in
 [API_REFERENCE → the protected mutation contract](API_REFERENCE.md#the-protected-mutation-contract).
-**Eleven** types are closed to it — the six protected service types **plus** the five internal types
-(`notificationOutbox` keeps `delete` alone, so an operator can prune a stray entry):
+**Thirteen** types are closed to it — the six protected service types, the five internal types
+(`notificationOutbox` keeps `delete` alone, so an operator can prune a stray entry) **plus** the two
+Oasis Kids types, whose writer is the app (`/api/kids/pairs`, `/api/kids/schedules`):
 
 `sunday_role`, `saturday_role`, `special_role`, `featuredSongs`, `saturdarSongs`, `setlistProposal`,
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
-`solverConfig`.
+`solverConfig`, `kidsPair`, `kidsSchedule`.
+
+The kids pair is protected but **not** internal: unlike the coordination types it is a
+human-meaningful document, so it stays visible (read-only) rather than `hidden: true`. What
+protection buys there is the create affordance — a Studio-created `kidsSchedule` gets a RANDOM
+`_id` instead of `kidsSchedule-<YYYY-MM-DD>`, forking a Sunday that already exists.
 
 The rules are pure and unit-tested in
 [`app/utils/studioProtection.ts`](../app/utils/studioProtection.ts) (`PROTECTED_STUDIO_TYPES`,
