@@ -80,7 +80,27 @@ export default async function MePage() {
 
   const { sanityId } = session.user;
 
-  const member = await serverClient.fetch(
+  // The generic is load-bearing, not decoration: `_rev` is REQUIRED below by
+  // `initialRev`, and an untyped fetch would let a projection edit drop it
+  // silently — at which point `PATCH /api/me/availability` 400s and EVERY
+  // member loses the ability to save availability, with only "Server returned
+  // 400" on screen. Typed, the compiler refuses the projection instead.
+  const member = await serverClient.fetch<{
+    _id: string;
+    _rev: string;
+    // Non-optional to match ProfilePanel's MemberProfile, which this feeds:
+    // every teamMembers document carries them.
+    member_name: string;
+    email: string;
+    role: string;
+    alias?: string;
+    memberType?: string[];
+    notifPrefs?: Record<string, unknown>;
+    unavailableDates?: string[];
+    unavailabilityNotes?: { date: string; note: string }[];
+    photoUrl?: string;
+    hasPassword: boolean;
+  } | null>(
     // `_rev` feeds the availability calendar's save precondition: the PATCH
     // requires the revision this page was rendered at, because a Kids manager
     // can write the same two fields while this tab sits open.

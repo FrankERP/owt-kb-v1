@@ -14,7 +14,7 @@
 //     unrelated edits away for it would be a new bug shipped by the guard. Those
 //     rebase onto the fresh revision exactly once.
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AvailabilityCalendar from "../AvailabilityCalendar";
 
@@ -124,7 +124,14 @@ describe("AvailabilityCalendar — saving against a revision", () => {
     expect(screen.queryByText("Cambios sin guardar")).toBeNull();
 
     // And it does NOT auto-dismiss: it reports a write that never landed.
-    await vi.advanceTimersByTimeAsync(30_000);
+    // MUST be wrapped in act(): without it the re-render that useTransientValue's
+    // timer schedules is never flushed before the assertion reads the DOM, so the
+    // check below passes even when the notice is bound to the 2500ms `show`
+    // channel instead of `hold` — i.e. the assertion silently guards nothing.
+    // Verified by mutation: swapping the destructure to `show` fails only with act().
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
     expect(screen.getByRole("status").textContent).toContain("NO se guardaron");
 
     // Redoing the edit saves against the revision that won.
