@@ -1,5 +1,5 @@
-import { requireActiveSession } from "@/app/utils/authGuards";
-import { redirect, notFound } from "next/navigation";
+import { requireWorshipPage } from "@/app/utils/worshipPageGate";
+import { notFound } from "next/navigation";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import Navbar from "@/app/components/Navbar";
 import ProposalEditor from "./ProposalEditor";
@@ -60,10 +60,13 @@ export default async function ProposePage({
 }: {
   params: Promise<{ roleId: string }>;
 }) {
-  const session = await requireActiveSession();
-  if (!session) redirect("/auth/signin?callbackUrl=/me");
-
   const { roleId } = await params;
+
+  // Worship surface living under /me: the setlist-proposal editor. It fails
+  // closed for a non-Lead by data shape (the GROQ below requires the member in
+  // Lead[]._ref), but that is defence in depth, not a gate — a kids-only member
+  // must be blocked by the gate, not by the query happening to come back empty.
+  const session = await requireWorshipPage(`/me/propose/${roleId}`);
   const leadId = session.user.sanityId;
 
   const roleDoc = await getRoleDoc(roleId, leadId);
