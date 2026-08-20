@@ -11,6 +11,14 @@ export function revalidateServiceViews() {
   revalidatePath("/posts/[slug]", "page");
 }
 
+// Kids pair / schedule / availability changes → the member view, the planner,
+// and `/me` (which carries the member's own upcoming kids assignments).
+export function revalidateKidsViews() {
+  revalidatePath("/kids");
+  revalidatePath("/kids/admin");
+  revalidatePath("/me");
+}
+
 // Song content changes → home song list, song pages, tag listings.
 export function revalidateSongViews() {
   revalidatePath("/");
