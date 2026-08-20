@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { pairUnavailable } from "@/app/utils/kidsRotation";
+import { useCallback, useMemo, useState } from "react";
+import { buildPlannerView, type PlannerView } from "@/app/utils/kidsPlannerView";
 import {
-  KIDS_SEATS,
   KIDS_SEAT_LABELS,
+  type KidsAssignment,
   type KidsRoom,
   type KidsSeat,
   type RotationDiagnostic,
@@ -13,6 +13,11 @@ import {
   type RotationWarning,
 } from "@/app/utils/kidsTypes";
 import { useTransientValue } from "@/app/utils/useTransientValue";
+import { KidsRotationBoard, type DragSource } from "./KidsRotationBoard";
+import { KidsSundayCards } from "./KidsSundayCards";
+import { SeatPicker } from "./SeatPicker";
+import { canPlace, HISTORY_MONTHS } from "./kidsPlannerLabels";
+import type { KidsSundayState } from "./kidsBoardProps";
 
 // ─── Shapes the page hands down (mirrors what /api/kids/* answers) ────────────
 
@@ -42,6 +47,12 @@ interface Props {
   initialPairs: PlannerPair[];
   initialMembers: PlannerMember[];
   initialSchedules: PlannerSchedule[];
+  /**
+   * Sundays BEFORE the visible month. Not decoration: every "hace 3 semanas" and
+   * every "le toca" is measured from it, so without it the board opens claiming
+   * that all twelve pairs have never served.
+   */
+  initialHistory?: PlannerSchedule[];
 }
 
 // ─── Pure helpers (exported for the unit tests) ───────────────────────────────
@@ -92,71 +103,9 @@ export function formatSunday(iso: string): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-const asRotationPair = (pair: PlannerPair): RotationPair => ({
-  id: pair.id,
-  name: pair.name,
-  room: pair.room,
-  memberIds: [pair.memberIds[0], pair.memberIds[1]],
-});
-
-export interface SeatOption {
-  id: string;
-  label: string;
-  disabled: boolean;
-}
-
-/**
- * The options one seat offers on one Sunday.
- *
- * The pool is the seat's own (every active pair for enseñanza, that room's pairs
- * for a room seat), and an option is DISABLED rather than hidden when the pair is
- * unavailable or already sitting in another seat that Sunday — the planner should
- * show why a pair is not pickable, and the server refuses both cases anyway.
- * Availability is judged by `pairUnavailable`, the same function the rotation
- * engine uses; a second copy of "either member is out" would drift from it.
- *
- * A pair that is stored in the seat but no longer belongs to the pool (retired,
- * moved room, or left with a single member) is kept as an option so the select
- * cannot silently drop what Sanity holds.
- */
-export function seatOptions(args: {
-  seat: KidsSeat;
-  pairs: PlannerPair[];
-  date: string;
-  unavailable: Record<string, string[]>;
-  seats: Partial<Record<KidsSeat, string>>;
-}): SeatOption[] {
-  const { seat, pairs, date, unavailable, seats } = args;
-  const current = seats[seat];
-
-  const pool = pairs.filter(
-    (pair) =>
-      pair.active &&
-      pair.memberIds.length === 2 &&
-      (seat === "ensenanza" || pair.room === seat),
-  );
-
-  const options = pool.map((pair) => {
-    const out = pairUnavailable(asRotationPair(pair), date, unavailable);
-    const elsewhere = KIDS_SEATS.some((other) => other !== seat && seats[other] === pair.id);
-    const suffix = out
-      ? " — no disponible"
-      : elsewhere
-        ? " — ya asignada este domingo"
-        : "";
-    return { id: pair.id, label: `${pair.name}${suffix}`, disabled: out || elsewhere };
-  });
-
-  if (current && !options.some((option) => option.id === current)) {
-    const stored = pairs.find((pair) => pair.id === current);
-    options.unshift({
-      id: current,
-      label: `${stored?.name ?? "Pareja"} — fuera de la rotación`,
-      disabled: false,
-    });
-  }
-
-  return options;
+/** The months whose saved Sundays feed the wait clocks, most recent first. */
+export function historyMonthsFor(month: string): string[] {
+  return Array.from({ length: HISTORY_MONTHS }, (_, i) => shiftMonth(month, -(i + 1)));
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -170,11 +119,30 @@ const displayName = (member: PlannerMember) => member.alias?.trim() || member.me
 const asMap = (rows: PlannerSchedule[]): Record<string, PlannerSchedule> =>
   Object.fromEntries(rows.map((row) => [row.date, row]));
 
+/**
+ * The Kids planner.
+ *
+ * WHAT CHANGED, AND WHY IT IS NOT COSMETIC. This surface used to be a `<select>`
+ * per seat — sixteen dropdowns for a four-Sunday month. A dropdown lists names in
+ * arbitrary order and can show exactly one fact: the name. The three facts a
+ * rotation tool exists for — who is overdue, who is away that Sunday and why,
+ * which Sunday nobody can cover — were all invisible, which is another way of
+ * saying the tool was worth about as much as a shell script.
+ *
+ * So the reads all come from `buildPlannerView` (pure, tested, and the ONLY place
+ * any of it is derived), and this component spends its budget on showing them:
+ * a drag-and-drop board on desktop, tappable Sunday cards on the phone, and a
+ * bench per room ordered longest-waiting first.
+ *
+ * The WRITES are untouched — same endpoints, same debounce-free "nothing reaches
+ * Sanity until Guardar or Publicar" contract, same per-Sunday publish.
+ */
 export default function KidsPlanner({
   initialMonth,
   initialPairs,
   initialMembers,
   initialSchedules,
+  initialHistory = [],
 }: Props) {
   const [month, setMonth] = useState(initialMonth);
   const [pairs, setPairs] = useState<PlannerPair[]>(initialPairs);
@@ -182,6 +150,7 @@ export default function KidsPlanner({
   const [schedules, setSchedules] = useState<Record<string, PlannerSchedule>>(() =>
     asMap(initialSchedules),
   );
+  const [history, setHistory] = useState<PlannerSchedule[]>(initialHistory);
   // Which Sundays already exist as documents — an untouched, seatless Sunday must
   // not be created in Sanity just because "Guardar borradores" swept the month.
   const [stored, setStored] = useState<Set<string>>(
@@ -196,26 +165,114 @@ export default function KidsPlanner({
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busyDate, setBusyDate] = useState<string | null>(null);
+  const [picking, setPicking] = useState<{ date: string; seat: KidsSeat } | null>(null);
 
   const [toast, showToast] = useTransientValue<Toast>(null, 5000);
 
-  const sundays = sundaysOfMonth(month);
-  const unavailable: Record<string, string[]> = {};
-  for (const member of members) unavailable[member._id] = member.unavailableDates ?? [];
-  const memberName = (id: string) => {
-    const member = members.find((m) => m._id === id);
-    return member ? displayName(member) : "Alguien de la pareja";
-  };
-  const pairName = (id: string) => pairs.find((pair) => pair.id === id)?.name ?? "Pareja";
+  const sundays = useMemo(() => sundaysOfMonth(month), [month]);
+
+  const view: PlannerView = useMemo(() => {
+    const unavailable: Record<string, string[]> = {};
+    for (const member of members) unavailable[member._id] = member.unavailableDates ?? [];
+
+    const memberNames: Record<string, string> = {};
+    for (const member of members) memberNames[member._id] = displayName(member);
+
+    // A pair that is not exactly two people cannot be seated by the engine and has
+    // no meaningful availability — it is dropped from the POOL here, exactly as the
+    // old dropdown dropped it, while `pairName` below still resolves its name so a
+    // seat already holding it never renders blank.
+    const viewPairs: (RotationPair & { active: boolean })[] = pairs
+      .filter((pair) => pair.memberIds.length === 2)
+      .map((pair) => ({
+        id: pair.id,
+        name: pair.name,
+        room: pair.room,
+        memberIds: [pair.memberIds[0], pair.memberIds[1]],
+        active: pair.active,
+      }));
+
+    const assignments: KidsAssignment[] = sundays.map((date) => ({
+      date,
+      seats: schedules[date]?.seats ?? {},
+    }));
+
+    // The generator's worship warnings ARE the overlap facts, one row per member,
+    // so they fold straight back into the view's input rather than being rendered
+    // as a second list underneath the board. Before "Generar mes" there are none,
+    // and the board simply shows no amber marks — which is honest: nothing has
+    // been checked yet.
+    const worshipAssignments: Record<string, string[]> = {};
+    for (const warning of warnings) {
+      (worshipAssignments[warning.date] ??= []).push(warning.memberId);
+    }
+
+    return buildPlannerView({
+      sundays,
+      pairs: viewPairs,
+      assignments,
+      unavailable,
+      memberNames,
+      history: history
+        .filter((row) => row.date < `${month}-01`)
+        .map((row) => ({ date: row.date, seats: row.seats }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
+      worshipAssignments,
+    });
+  }, [members, pairs, sundays, schedules, history, month, warnings]);
+
+  const seatIndex = useMemo(() => {
+    const index = new Map<string, (typeof view.seats)[number]>();
+    for (const seatView of view.seats) index.set(`${seatView.date}::${seatView.seat}`, seatView);
+    return index;
+  }, [view]);
+
+  const seatOf = useCallback(
+    (date: string, seat: KidsSeat) => seatIndex.get(`${date}::${seat}`)!,
+    [seatIndex],
+  );
+
+  const pairName = useCallback(
+    (id: string) => pairs.find((pair) => pair.id === id)?.name ?? "Pareja",
+    [pairs],
+  );
+
+  const noteFor = useCallback(
+    (date: string, seat: KidsSeat): string | null => {
+      const seatView = seatOf(date, seat);
+      if (seatView?.unfillableReason) return seatView.unfillableReason;
+      // The engine's own `reason` interpolates the raw ISO date, which the column
+      // header already renders in Spanish — so the seat says only what it must.
+      const diagnostic = diagnostics.find((d) => d.date === date && d.seat === seat);
+      return diagnostic ? "El generador no pudo llenar este lugar." : null;
+    },
+    [diagnostics, seatOf],
+  );
+
+  const sundayStates: KidsSundayState[] = useMemo(
+    () =>
+      sundays.map((date) => ({
+        date,
+        label: formatSunday(date),
+        published: schedules[date]?.published ?? false,
+        filled: Object.keys(schedules[date]?.seats ?? {}).length,
+        publishing: busyDate === date,
+      })),
+    [sundays, schedules, busyDate],
+  );
 
   const loadMonth = useCallback(
     async (next: string) => {
       setLoadingMonth(true);
       try {
-        const [schedRes, pairsRes, membersRes] = await Promise.all([
+        // The three preceding months ride along on the SAME endpoint the month
+        // itself uses — no new API surface, and the wait clocks are real from the
+        // first paint rather than after a second round trip.
+        const [schedRes, pairsRes, membersRes, ...historyRes] = await Promise.all([
           fetch(`/api/kids/schedules?month=${next}`),
           fetch("/api/kids/pairs"),
           fetch("/api/kids/members"),
+          ...historyMonthsFor(next).map((m) => fetch(`/api/kids/schedules?month=${m}`)),
         ]);
         if (!schedRes.ok || !pairsRes.ok || !membersRes.ok) {
           throw new Error(`respuesta ${schedRes.status}/${pairsRes.status}/${membersRes.status}`);
@@ -223,12 +280,30 @@ export default function KidsPlanner({
         const rows = (await schedRes.json()) as PlannerSchedule[];
         setPairs((await pairsRes.json()) as PlannerPair[]);
         setMembers((await membersRes.json()) as PlannerMember[]);
+
+        const past: PlannerSchedule[] = [];
+        for (const res of historyRes) {
+          if (!res.ok) continue;
+          past.push(...((await res.json()) as PlannerSchedule[]));
+        }
+        setHistory(past);
+
         setSchedules(asMap(rows));
         setStored(new Set(rows.map((row) => row.date)));
         setWarnings([]);
         setDiagnostics([]);
         setDirty(false);
         setMonth(next);
+
+        // A failed history read is NOT a failed month: the board is correct, only
+        // the clocks are blind, and they would read "nunca" — a confident wrong
+        // answer. So it is said out loud rather than swallowed.
+        if (historyRes.some((res) => !res.ok)) {
+          showToast({
+            kind: "error",
+            text: "El mes se cargó, pero no su historial: las esperas pueden leerse como «nunca».",
+          });
+        }
       } catch (err) {
         // The month stays where it was: moving the label while the data below it
         // belongs to another month is the one failure mode worth avoiding here.
@@ -274,7 +349,8 @@ export default function KidsPlanner({
     }
   }
 
-  function chooseSeat(date: string, seat: KidsSeat, pairId: string) {
+  /** Set or clear ONE seat. The picker's only write, on both layouts. */
+  function chooseSeat(date: string, seat: KidsSeat, pairId: string | null) {
     setSchedules((prev) => {
       const row = prev[date] ?? { date, seats: {}, published: false };
       const seats = { ...row.seats };
@@ -285,6 +361,52 @@ export default function KidsPlanner({
     // The diagnostic for this seat described the generated proposal, not the
     // admin's override — leaving it up would accuse a filled seat of being empty.
     setDiagnostics((prev) => prev.filter((d) => !(d.date === date && d.seat === seat)));
+    setDirty(true);
+  }
+
+  /**
+   * A drag that landed. Refused rather than silently corrected when the target
+   * blocks the pair — the server refuses it too, and bouncing off a 400 is how
+   * the old surface taught its rules.
+   *
+   * Dropping onto an OCCUPIED cell replaces the occupant, which is safe here in a
+   * way it would not be on the worship grid: a Kids pair's home is the bench, so
+   * a displaced pair is not lost, it is simply back in the pool it came from.
+   */
+  function movePair(source: DragSource, to: { date: string; seat: KidsSeat }) {
+    if (source.from && source.from.date === to.date && source.from.seat === to.seat) return;
+
+    const verdict = canPlace(seatOf(to.date, to.seat), source.pairId, source.from);
+    if (!verdict.ok) {
+      showToast({
+        kind: "error",
+        text: `${pairName(source.pairId)} no puede tomar ${KIDS_SEAT_LABELS[to.seat]}: ${verdict.reason.toLowerCase()}.`,
+      });
+      return;
+    }
+
+    const from = source.from;
+    setSchedules((prev) => {
+      const next = { ...prev };
+      const edit = (date: string, mutate: (seats: Partial<Record<KidsSeat, string>>) => void) => {
+        const row = next[date] ?? { date, seats: {}, published: false };
+        const seats = { ...row.seats };
+        mutate(seats);
+        next[date] = { ...row, seats };
+      };
+      if (from) edit(from.date, (seats) => delete seats[from.seat]);
+      edit(to.date, (seats) => {
+        seats[to.seat] = source.pairId;
+      });
+      return next;
+    });
+    setDiagnostics((prev) =>
+      prev.filter(
+        (d) =>
+          !(d.date === to.date && d.seat === to.seat) &&
+          !(from !== null && d.date === from.date && d.seat === from.seat),
+      ),
+    );
     setDirty(true);
   }
 
@@ -356,6 +478,19 @@ export default function KidsPlanner({
 
   const busy = loadingMonth || generating || saving || busyDate !== null;
 
+  const boardProps = {
+    sundays: sundayStates,
+    seatOf,
+    pairName,
+    monthLoad: view.monthLoad,
+    noteFor,
+    busy,
+    onOpenSeat: (date: string, seat: KidsSeat) => setPicking({ date, seat }),
+    onTogglePublish: setPublished,
+  };
+
+  const pickingView = picking ? seatOf(picking.date, picking.seat) : null;
+
   return (
     <div className="space-y-5">
       {/* Month picker + actions */}
@@ -366,7 +501,7 @@ export default function KidsPlanner({
             onClick={() => loadMonth(shiftMonth(month, -1))}
             disabled={busy}
             aria-label="Mes anterior"
-            className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest text-mono-500 transition-colors hover:text-accent disabled:opacity-40"
+            className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest text-mono-500 transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
           >
             ←
           </button>
@@ -378,7 +513,7 @@ export default function KidsPlanner({
             onClick={() => loadMonth(shiftMonth(month, 1))}
             disabled={busy}
             aria-label="Mes siguiente"
-            className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest text-mono-500 transition-colors hover:text-accent disabled:opacity-40"
+            className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest text-mono-500 transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
           >
             →
           </button>
@@ -389,7 +524,7 @@ export default function KidsPlanner({
             type="button"
             onClick={generate}
             disabled={busy}
-            className="min-h-[44px] rounded-lg border border-accent/30 px-4 font-label text-xs uppercase tracking-widest text-accent transition-colors hover:border-accent disabled:opacity-40"
+            className="min-h-[44px] rounded-lg border border-accent/30 px-4 font-label text-xs uppercase tracking-widest text-accent transition-colors hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
           >
             {generating ? "Generando…" : "Generar mes"}
           </button>
@@ -397,7 +532,7 @@ export default function KidsPlanner({
             type="button"
             onClick={saveDrafts}
             disabled={busy || !dirty}
-            className="min-h-[44px] rounded-lg bg-surface-accent-solid px-4 font-label text-xs uppercase tracking-widest text-on-fill transition-colors disabled:opacity-40"
+            className="min-h-[44px] rounded-lg bg-surface-accent-solid px-4 font-label text-xs uppercase tracking-widest text-on-fill transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
           >
             {saving ? "Guardando…" : "Guardar borradores"}
           </button>
@@ -428,11 +563,13 @@ export default function KidsPlanner({
         </p>
       )}
 
-      {/* Sundays */}
       {loadingMonth ? (
         <div className="space-y-3">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-32 animate-pulse rounded-xl bg-surface-accent-wash" />
+            <div
+              key={i}
+              className="h-32 animate-pulse rounded-xl bg-surface-accent-wash motion-reduce:animate-none"
+            />
           ))}
         </div>
       ) : sundays.length === 0 ? (
@@ -440,120 +577,30 @@ export default function KidsPlanner({
           Este mes no tiene domingos que planear.
         </p>
       ) : (
-        <div className="space-y-4">
-          {sundays.map((date) => {
-            const row = schedules[date];
-            const seats = row?.seats ?? {};
-            const published = row?.published ?? false;
-            const dayWarnings = warnings.filter((w) => w.date === date);
-            const filled = Object.keys(seats).length;
+        <>
+          <KidsRotationBoard
+            {...boardProps}
+            bench={view.bench}
+            benchAnchorLabel={sundays[0] ? formatSunday(sundays[0]) : null}
+            onMove={movePair}
+          />
+          <KidsSundayCards {...boardProps} />
+        </>
+      )}
 
-            return (
-              <div
-                key={date}
-                className="space-y-3 rounded-xl border border-accent/15 bg-surface-accent-wash p-4"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="font-display text-base uppercase tracking-wide text-ink">
-                      {formatSunday(date)}
-                    </p>
-                    <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">
-                      {filled} de {KIDS_SEATS.length} lugares asignados
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`rounded-full px-2 py-0.5 font-label text-[11px] uppercase tracking-widest ${
-                        published
-                          ? "bg-positive-deep/10 text-positive-strong"
-                          : "bg-surface-sunken text-mono-500"
-                      }`}
-                    >
-                      {published ? "Publicado" : "Borrador"}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setPublished(date, !published)}
-                      disabled={busy || (!published && filled === 0)}
-                      title={
-                        !published && filled === 0
-                          ? "Asigna al menos una pareja antes de publicar"
-                          : undefined
-                      }
-                      className="min-h-[44px] rounded-lg border border-accent/25 px-3 font-label text-xs uppercase tracking-widest text-accent transition-colors hover:border-accent disabled:opacity-40"
-                    >
-                      {busyDate === date ? "…" : published ? "Despublicar" : "Publicar"}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {KIDS_SEATS.map((seat) => {
-                    const options = seatOptions({ seat, pairs, date, unavailable, seats });
-                    const diagnostic = diagnostics.find(
-                      (d) => d.date === date && d.seat === seat,
-                    );
-                    const id = `kids-seat-${date}-${seat}`;
-                    return (
-                      <div key={seat} className="space-y-1">
-                        <label
-                          htmlFor={id}
-                          className="block font-label text-[11px] uppercase tracking-widest text-mono-500"
-                        >
-                          {KIDS_SEAT_LABELS[seat]}
-                        </label>
-                        <select
-                          id={id}
-                          value={seats[seat] ?? ""}
-                          onChange={(e) => chooseSeat(date, seat, e.target.value)}
-                          disabled={busy}
-                          className="w-full rounded-lg border border-surface-accent-l40-d20 bg-surface-lift/5 px-3 py-2 font-body text-sm text-ink focus:border-accent/50 focus:outline-none dark:focus:border-surface-accent-l40-d20"
-                        >
-                          <option value="" className="bg-surface-base">
-                            — Sin asignar —
-                          </option>
-                          {options.map((option) => (
-                            <option
-                              key={option.id}
-                              value={option.id}
-                              disabled={option.disabled}
-                              className="bg-surface-base"
-                            >
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                        {diagnostic && (
-                          // The engine's `reason` interpolates the raw ISO date, which
-                          // this row already renders in Spanish — so the seat says only
-                          // what the seat needs to say.
-                          <p className="font-body text-xs text-negative-fg">
-                            Sin parejas disponibles para este lugar.
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {dayWarnings.length > 0 && (
-                  <ul className="space-y-1 rounded-lg border border-warning-fg/30 bg-warning-fg/10 px-3 py-2">
-                    {dayWarnings.map((warning) => (
-                      <li
-                        key={`${warning.seat}-${warning.pairId}-${warning.memberId}`}
-                        className="font-body text-xs text-warning-soft"
-                      >
-                        {KIDS_SEAT_LABELS[warning.seat]}: {memberName(warning.memberId)} (
-                        {pairName(warning.pairId)}) también sirve en alabanza ese domingo.
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            );
-          })}
-        </div>
+      {picking && pickingView && (
+        <SeatPicker
+          seatView={pickingView}
+          seatLabel={KIDS_SEAT_LABELS[picking.seat]}
+          dateLabel={formatSunday(picking.date)}
+          monthLoad={view.monthLoad}
+          assignedName={pickingView.assignedPairId ? pairName(pickingView.assignedPairId) : null}
+          onChoose={(pairId) => {
+            chooseSeat(picking.date, picking.seat, pairId);
+            setPicking(null);
+          }}
+          onClose={() => setPicking(null)}
+        />
       )}
     </div>
   );

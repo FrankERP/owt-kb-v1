@@ -22,8 +22,9 @@ import { THEMES } from "../layout";
 import { SwatchesFixture } from "./fixtures/SwatchesFixture";
 import { DialogFixture } from "./fixtures/DialogFixture";
 import { PlannerFixture } from "./fixtures/PlannerFixture";
+import { KidsPlannerFixture } from "./fixtures/KidsPlannerFixture";
 
-const FIXTURES = ["swatches", "dialog", "planner"] as const;
+const FIXTURES = ["swatches", "dialog", "planner", "kids-planner"] as const;
 type Fixture = (typeof FIXTURES)[number];
 
 /**
@@ -57,6 +58,7 @@ export default async function ThemeGalleryFixture({
       {fixture === "swatches" && <SwatchesFixture />}
       {fixture === "dialog" && <DialogFixture />}
       {fixture === "planner" && <PlannerFixture />}
+      {fixture === "kids-planner" && <KidsPlannerFixture />}
     </main>
   );
 }

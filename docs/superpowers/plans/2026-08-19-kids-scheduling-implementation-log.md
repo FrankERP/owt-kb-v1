@@ -17,6 +17,7 @@ that diff review the primary gate rather than a secondary one.
 | P1 | 5 | `dfa7e2d9` | Admin ministry editing — touched-field-only, normalized seeding, `handleAdd` wiring, zero-ministry block (24 new tests) |
 | P2 | 1 | `40a1afcd`, `34c61a3c` | `kidsPair` + `kidsSchedule` schemas, registered; validation callbacks typed |
 | P2 | 2+3 | `30453dab` | Kids domain types + deterministic rotation engine (9 tests) |
+| P2 | 6-UI | `7a394ef0`, `e4c20233` | `buildPlannerView` (the view layer), then the planner rebuilt on it: desktop rotation board + bench, phone Sunday cards + seat picker, `kids-planner` theme-gallery fixture |
 
 ## Plan defects the implementers caught
 
@@ -44,6 +45,34 @@ review rounds kept surfacing, which is evidence the class outlived the review.
   would need `new Date(iso)`, which the timezone invariant forbids in that layer. If the
   planner wants a Spanish long date, **format at render time** from the `date` field.
 - Fairness category keys are `"ensenanza"` and `` `room:${seat}` ``, keyed off the SEAT.
+
+## Planner UI rebuild (`e4c20233`) — three things for the code review
+
+1. **It is not purely presentational, and the two exceptions are deliberate.** The
+   admin page's GROQ gained a `history` field and `loadMonth` now also fetches
+   `HISTORY_MONTHS` (3) preceding months through the SAME `?month=` endpoint. Every
+   "hace 3 semanas" and every "le toca" is measured from prior Sundays; with
+   `history: []` the board opens asserting that all twelve pairs have never served,
+   which is a confident wrong answer rather than a missing one. A failed history
+   read does **not** fail the month — it shows a toast, because the degraded state
+   is invisible otherwise.
+2. **`canPlace` deliberately overrides one of `SeatView`'s own verdicts.** A drag
+   that moves a pair out of another seat on the SAME Sunday reads as
+   `{ kind: "seated" }`, because the view is built from pre-move state. The same
+   update vacates the source seat, so the server's "one seat per pair per Sunday"
+   invariant still holds after it. Pinned by a test that also asserts the same drag
+   from the BENCH stays refused.
+3. **The gallery fixture uses PLACEHOLDER pair names, against the brief's request
+   for the real twelve.** `/theme-gallery/**` is public and prerendered (ADR-0017);
+   twelve pairs is twenty-four real first names published to the anonymous
+   internet, and the repo already removed six from `PlannerFixture` for exactly this
+   reason. `themeGallery.test.ts` now pins the kids placeholder set the same way. If
+   Frank wants the real roster there, it is one edit in two files — but it should be
+   a decision, not a default.
+
+Colour inventory regenerated after this landed: the ONLY diff is
+`filesScanned: 237 → 243` (six new `app/components/kids/**` files). `literalRows`
+held at 316 — the rebuild introduced no literal colour.
 
 ## Repo guards that caught the plan being wrong
 

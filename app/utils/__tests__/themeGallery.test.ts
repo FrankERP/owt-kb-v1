@@ -131,9 +131,9 @@ describe("theme gallery — segment validation", () => {
     expect(page).toContain("generateStaticParams");
   });
 
-  it("enumerates exactly two themes and three fixtures", () => {
+  it("enumerates exactly two themes and four fixtures", () => {
     expect(read(`${GALLERY}/layout.tsx`)).toContain('["dark", "light"] as const');
-    expect(page).toContain('["swatches", "dialog", "planner"] as const');
+    expect(page).toContain('["swatches", "dialog", "planner", "kids-planner"] as const');
   });
 
   it("also calls notFound() for an unknown value reaching the component", () => {
@@ -142,7 +142,12 @@ describe("theme gallery — segment validation", () => {
 });
 
 describe("theme gallery — the fixtures are hermetic", () => {
-  const names = ["SwatchesFixture", "DialogFixture", "PlannerFixture"] as const;
+  const names = [
+    "SwatchesFixture",
+    "DialogFixture",
+    "PlannerFixture",
+    "KidsPlannerFixture",
+  ] as const;
   const files = names.map((f) => read(`${GALLERY}/[fixture]/fixtures/${f}.tsx`));
   const codes = names.map((f) => code(`${GALLERY}/[fixture]/fixtures/${f}.tsx`));
 
@@ -205,6 +210,47 @@ describe("theme gallery — the fixtures are hermetic", () => {
           `placeholder set is genuinely changing, change it here deliberately.`,
       ).toBe(true);
     }
+  });
+
+  it("the KIDS fixture carries PLACEHOLDER pair names, not the real roster", () => {
+    // Same rule as the planner fixture above, and a bigger exposure: twelve pairs
+    // is twenty-four real people. The route is PUBLIC and prerendered (ADR-0017),
+    // so "make the kids board realistic" — the exact edit this repo already made
+    // once, at 2183b3d — would publish the whole Oasis Kids roster to the
+    // anonymous internet with nothing to stop it.
+    const PLACEHOLDERS = new Set([
+      "Bere", "Tania", "Iván", "Rocío", "Nadia", "Beto", "Pili", "Quique",
+      "Rosa", "Julio", "Tere", "Uri", "Mafer", "Hugo", "Gaby", "Otto",
+      "Vero", "Santi", "Wendy", "Nico", "Lupe", "Darío", "Zaira", "Lalo",
+    ]);
+    const src = read(`${GALLERY}/[fixture]/fixtures/KidsPlannerFixture.tsx`);
+    // Every row of PAIR_NAMES: ["<pair>", "<room>", "<first>", "<second>"].
+    const rows = [
+      ...src.matchAll(/\["([^"]+)",\s*"(?:chiquitos|medianos|grandes)",\s*"([^"]+)",\s*"([^"]+)"\]/g),
+    ];
+    expect(rows.length, "the fixture must still carry pairs").toBe(12);
+    for (const [, pairName, first, second] of rows) {
+      for (const name of [first, second]) {
+        expect(
+          PLACEHOLDERS.has(name),
+          `"${name}" is not one of the agreed placeholders. If the placeholder set ` +
+            `is genuinely changing, change it here deliberately — a real member's ` +
+            `name on this route is world-readable and not retractable.`,
+        ).toBe(true);
+      }
+      expect(pairName).toBe(`${first} y ${second}`);
+    }
+  });
+
+  it("the KIDS fixture hosts the LAYOUTS, never the planner shell", () => {
+    // `KidsPlanner` owns the four mutation handlers. On a public, prerendered
+    // route its "Publicar" button would be one click away from anybody who
+    // happens to be signed in; the two layout components take every handler as a
+    // prop, so the fixture can pass inert ones.
+    const src = code(`${GALLERY}/[fixture]/fixtures/KidsPlannerFixture.tsx`);
+    expect(src).toContain("KidsRotationBoard");
+    expect(src).toContain("KidsSundayCards");
+    expect(src).not.toMatch(/from ["']@\/app\/components\/kids\/KidsPlanner["']/);
   });
 
   it("the planner fixture ACTIVATES full screen — it is not a prop", () => {

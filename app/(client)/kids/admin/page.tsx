@@ -3,6 +3,7 @@ import Navbar from "@/app/components/Navbar";
 import KidsPlanner from "@/app/components/kids/KidsPlanner";
 import PairRoster from "@/app/components/kids/PairRoster";
 import KidsAvailabilityPanel from "@/app/components/kids/KidsAvailabilityPanel";
+import { HISTORY_MONTHS } from "@/app/components/kids/kidsPlannerLabels";
 import { requireMinistryManager } from "@/app/utils/authGuards";
 import { serverClient } from "@/sanity/lib/serverClient";
 import { KIDS_SEATS, type KidsRoom, type KidsSeat } from "@/app/utils/kidsTypes";
@@ -20,6 +21,14 @@ const PAGE_QUERY = `{
     "memberIds": coalesce(members[]._ref, [])
   },
   "schedules": *[_type == "kidsSchedule" && date >= $from && date <= $to] | order(date asc) {
+    date,
+    "published": coalesce(published, false),
+    "ensenanza": ensenanza._ref,
+    "chiquitos": chiquitos._ref,
+    "medianos": medianos._ref,
+    "grandes": grandes._ref
+  },
+  "history": *[_type == "kidsSchedule" && date >= $historyFrom && date < $from] | order(date asc) {
     date,
     "published": coalesce(published, false),
     "ensenanza": ensenanza._ref,
@@ -46,6 +55,7 @@ interface ScheduleRow {
 interface PageData {
   pairs: { id: string; name: string; room: KidsRoom; active: boolean; memberIds: string[] }[];
   schedules: ScheduleRow[];
+  history: ScheduleRow[];
   members: {
     _id: string;
     // The availability panel sends this back as an `ifRevisionId` precondition —
@@ -72,21 +82,35 @@ export default async function KidsAdminPage() {
   const today = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
   const month = today.slice(0, 7);
 
+  // The planner's "hace 3 semanas" / "le toca" clocks are measured from prior
+  // Sundays, so the first paint carries HISTORY_MONTHS of them. The bound is built
+  // on a noon-UTC anchor — the same trick `sundaysOfMonth` uses — because
+  // `Date.UTC` normalises a negative month index without any local-midnight edge
+  // for the timezone to fall off.
+  const historyFrom = new Date(
+    Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1 - HISTORY_MONTHS, 1, 12),
+  )
+    .toISOString()
+    .slice(0, 10);
+
   const data = await serverClient.fetch<PageData>(PAGE_QUERY, {
     from: `${month}-01`,
     to: `${month}-31`,
+    historyFrom,
   });
 
   const pairs = data?.pairs ?? [];
   const members = data?.members ?? [];
-  const schedules = (data?.schedules ?? []).map((row) => {
+  const toSchedule = (row: ScheduleRow) => {
     const seats: Partial<Record<KidsSeat, string>> = {};
     for (const seat of KIDS_SEATS) {
       const pairId = row[seat];
       if (pairId) seats[seat] = pairId;
     }
     return { date: row.date, seats, published: row.published };
-  });
+  };
+  const schedules = (data?.schedules ?? []).map(toSchedule);
+  const history = (data?.history ?? []).map(toSchedule);
 
   return (
     <>
@@ -117,6 +141,7 @@ export default async function KidsAdminPage() {
               initialPairs={pairs}
               initialMembers={members}
               initialSchedules={schedules}
+              initialHistory={history}
             />
           </section>
 
