@@ -4,6 +4,7 @@ import { writeClient } from "@/sanity/lib/serverClient";
 import { revalidateServiceViews } from "@/app/utils/revalidate";
 import { revalidatePath } from "next/cache";
 import { NOTIFY_PREF_FIELD, wantsNotification, type NotifyKind } from "@/app/utils/notifyPrefs";
+import { validateMinistryWrite } from "@/app/ministries";
 
 const EMAIL_KINDS = Object.keys(NOTIFY_PREF_FIELD) as NotifyKind[];
 
@@ -27,6 +28,8 @@ export async function PATCH(
     email?: string;
     role?: string;
     memberType?: string[];
+    ministries?: string[];
+    managesMinistries?: string[];
     // Legacy fallback field. No UI writes it any more (§5 of the notification
     // design takes it out of both panels); it stays accepted because it is what
     // an unset per-type field falls back to.
@@ -52,6 +55,20 @@ export async function PATCH(
   if (body.role) patch.role = body.role;
   // Keep only recognised member types (drops unknown values rather than storing them).
   if (Array.isArray(body.memberType)) patch.memberType = body.memberType.filter(t => VALID_MEMBER_TYPES.includes(t));
+
+  // Ministry membership/management. The guard is `!== undefined`, so a body that
+  // never mentions a field leaves the stored value ALONE — the form sends only
+  // what the admin touched, and an unconditional write here would let an
+  // unrelated typo fix hand a kids-only volunteer the whole worship catalog
+  // (`ministries: []` reads back as `["worship"]`) and wipe a Kids leader's
+  // management. Must stay ABOVE the "Nothing to update" check, or a
+  // ministries-only PATCH 400s as an empty update.
+  for (const field of ["ministries", "managesMinistries"] as const) {
+    if (body[field] === undefined) continue;
+    const error = validateMinistryWrite(field, body[field]);
+    if (error) return NextResponse.json({ error }, { status: 400 });
+    patch[field] = body[field];
+  }
 
   // The five per-type email toggles, keyed off the same map every sender uses.
   const notifPatch: Record<string, unknown> = {};
