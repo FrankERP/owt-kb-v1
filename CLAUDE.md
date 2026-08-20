@@ -108,7 +108,11 @@ several exist precisely to stop a plausible-looking change.
   `special_role`): `Lead[]._ref`, `BGVs[]._ref`, `Chorus[]._ref`,
   `instruments[].person._ref`, `foh_team[].person._ref`. Any "who serves" query
   must cover all five — reuse `assignedMemberRefsQuery()` in `app/utils/notifyTargets.ts`.
-- Member-facing reads must filter `published != false` (draft/publish gating).
+- Member-facing reads must filter `published != false` (draft/publish gating) for the
+  **worship** types, whose documents predate the field — an absent `published` there
+  must mean "visible". **Kids reads use the stricter `published == true`** instead
+  (`kidsSchedule` is minted with the field by its write route, so a field-less doc is a
+  bug, not a legacy row). Copy the rule that matches the type you are reading.
 - **Sanity array-of-object writes need a `_key` per item.**
 - **Cache:** admin/API routes that mutate content must call the matching
   `revalidate*` util in `app/utils/revalidate.ts` (or `revalidatePath`), or the

@@ -13,11 +13,16 @@ const pairRef = (name: string, title: string) => ({
  * concurrent saves cannot fork the same Sunday. Draft until published —
  * member-facing reads filter `published == true`, NOT the worship types'
  * `published != false`. The worship convention exists because those documents
- * predate the field, so an absent `published` must mean "visible"; a
- * `kidsSchedule` carries the field from birth (`initialValue: false`), so the
- * strict test is the safe one — `null == true` is false, which excludes a
- * field-less document instead of publishing it by accident. Any new kids type or
- * new member-facing kids read copies THIS rule, not the worship one.
+ * predate the field, so an absent `published` must mean "visible"; every
+ * `kidsSchedule` is minted with `published: false` by
+ * `createIfNotExists` in /api/kids/schedules — that write, NOT the
+ * `initialValue` below, is what guarantees the field is present, since
+ * `initialValue` only applies to documents authored in Studio and Studio can no
+ * longer author this type at all (`PROTECTED_STUDIO_TYPES`). The strict test is
+ * therefore the safe one: in GROQ `null == true` evaluates to `null`, which is
+ * not true, so a field-less document is excluded rather than published by
+ * accident. Any new kids type or new member-facing kids read copies THIS rule,
+ * not the worship one.
  * A seat may be empty: unfillable weeks stay honest (spec §7.6).
  */
 export const kidsSchedule = defineType({

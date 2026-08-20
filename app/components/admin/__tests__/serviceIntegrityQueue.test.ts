@@ -661,7 +661,7 @@ describe("entry presentation", () => {
     expect(q2.entries[0].action).toBe("discard_draft_via_operator");
   });
 
-  // Studio is read-only for all eight protected types (A2 §8), so no queue entry
+  // Studio is read-only for every protected type (A2 §8), so no queue entry
   // may send an admin there to mutate — the guarded operator command is the route.
   it("never directs cleanup to Studio", () => {
     for (const copy of Object.values(INTEGRITY_ACTION_COPY)) {

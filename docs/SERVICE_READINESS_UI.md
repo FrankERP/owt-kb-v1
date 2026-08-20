@@ -199,7 +199,7 @@ never silently disappear from the queue.
 
 ### Cleanup is never "go fix it in Studio"
 
-A2 made all eight protected types read-only in Studio (see
+A2 made the protected types read-only in Studio (eight then, thirteen since the kids types joined them) (see
 [`AUTH_AND_SECURITY.md`](AUTH_AND_SECURITY.md#studio-write-protection)), so the queue's
 action copy directs operators to the guarded operator command
 (`scripts/service-readiness-cleanup.mjs`) with explicit ids — never to a Studio URL that
