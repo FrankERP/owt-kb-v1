@@ -10,7 +10,11 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-19-kids-ministry-scheduling-design.md` (§3, §5, §5.1)
 
-**RISK TIER: CRITICAL** — auth/trust boundary. This plan requires adversarial plan review (two sequential fresh `APPROVED` on byte-identical text) **before implementation**. P2 (`2026-08-19-kids-scheduling-p2-kids-vertical.md`) is standard and does not.
+**RISK TIER: CRITICAL by the ladder, LOWERED TO STANDARD by Frank's explicit decision on 2026-08-19** — one fresh cold `APPROVED` instead of two on byte-identical text.
+
+This is a **judgment call against the ladder, not a derivation from it**, and it is recorded here so no later reader mistakes it for a rule: the artifact does change an auth/trust boundary, which the ladder classifies as critical. The decision was taken after three substantive review rounds (blockers 3 → 2 → 1, every one of them in the admin UI or page gating, none in the guards or schema), on the reasoning that the loop had extracted its value and the remaining bar is better spent on the post-implementation review of the actual diff. The churn-cap escalation and this re-tier are both in the worklog for `feat/kids-scheduling`.
+
+P2 (`2026-08-19-kids-scheduling-p2-kids-vertical.md`) is standard by the ladder and needs no plan review.
 
 ## Global Constraints
 
