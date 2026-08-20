@@ -1,6 +1,6 @@
 ---
 name: adversarial-plan-review
-description: Harden a substantial plan, spec, design, or migration before implementation through risk-tiered sequential fresh skeptical reviews. Use for "$adversarial-plan-review", adversarial or skeptical review requests, "vet this plan", or consequential multi-step work. Standard-risk artifacts need one cold approval; critical writer, serializer, security, migration, concurrency, recovery, or irreversible-remote artifacts need two approvals on unchanged bytes. Skip trivial, easily reversible changes.
+description: Harden a plan, spec, design, or migration before implementation through risk-tiered sequential fresh skeptical reviews. Use for "$adversarial-plan-review", adversarial or skeptical review requests, "vet this plan", or artifacts that own a critical contract. Critical writer, serializer, security, migration, concurrency, recovery, or irreversible-remote artifacts need two approvals on unchanged bytes; standard-risk artifacts need one cold approval and run only when explicitly requested. Skip trivial, easily reversible changes — and routine standard-risk work, which relies on spec review plus post-implementation diff review instead.
 ---
 
 # Adversarial Plan Review
@@ -53,11 +53,16 @@ from a rule.
 
 ## When to use
 
-- About to implement a substantial spec, design, migration, or multi-step plan with
-  non-obvious premises.
-- The user asks for skeptical or adversarial review, or to vet a plan.
+- About to implement an artifact that owns a **critical contract** (see the ladder above).
+- The user explicitly asks for skeptical or adversarial review, or to vet a plan — any tier.
 
-Skip it for trivial, easily reversible changes.
+Skip it for trivial, easily reversible changes — and for **routine standard-risk
+work**, which relies on spec self-review, the user's review, and the
+post-implementation fresh code review of the diff instead (retiered 2026-08-19:
+a 19-round critical loop still left three control-flow bugs for the diff review
+to find — the diff review is the layer that catches implementation bugs, so
+standard work spends its budget there). When only a slice of a larger spec owns
+the critical contract, review that slice's plan, not the whole spec.
 
 ## Prepare the review
 
@@ -100,6 +105,7 @@ Maintain an approval streak for the current digest, initially zero.
    - reset the streak if either digest differs;
    - otherwise set the streak to one for a new digest, or increment it when it matches the preceding approved round's digest.
 7. Stop a standard-risk review after one valid fresh `APPROVED`. Stop a critical-risk review only after two sequential fresh reviewers return `APPROVED` for the same immutable snapshot digest. Any edit, invalid verdict, ambiguous verdict, or `CHANGES_REQUIRED` resets critical approval credit.
+8. `NON-BLOCKING` items never trigger a fresh round on their own: adopt or decline each one, record the disposition in the ledger, and — when adopted after the final approval — list it in the log's post-approval section as un-reviewed.
 
 Do not manufacture changes to satisfy an unsupported objection, dilute the requirement, or accept an approval without checking byte identity.
 
@@ -152,7 +158,17 @@ State in the log that approval is not authorization to implement.
 ## Escalate instead of looping
 
 - If successive reviewers demand materially opposite changes, verify both positions. Escalate to the user only when both remain evidence-supported judgment calls; otherwise refute the disproven position in the private ledger and continue.
-- **Churn cap.** After two substantive `CHANGES_REQUIRED` rounds for one artifact, do not start another round. Stop and reassess scope or architecture with the user. Converging blocker counts are not a licence to keep going — the cap exists so that the continue-or-stop call is the user's, and telling them afterwards is too late.
+- **Churn cap.** A round is *substantive* when at least one blocker survives the
+  independent verification of step 4 as genuinely blocking — incorrect behaviour,
+  data loss, a material safety failure, or failure of the stated requirement. A
+  round whose blockers are all refuted, or all reclassified on verification as
+  non-blocking-class (stale prose, citation slips, wording), is fixed and recorded
+  but does **not** count toward the cap. After two substantive `CHANGES_REQUIRED`
+  rounds for one artifact, do not start another round — **continuing requires the
+  user's explicit go-ahead, obtained before round three and recorded in the
+  ledger.** Stop and reassess scope or architecture with the user. Converging
+  blocker counts are not a licence to keep going — the cap exists so that the
+  continue-or-stop call is the user's, and telling them afterwards is too late.
 - **Make the cap observable.** When it is reached, log a `coordinator-inline` worklog entry naming **the defect class the rounds keep finding** — before dispatching anything further. A cap that is only a rule gets passed silently: on 2026-08-12 one artifact ran 15 `CHANGES_REQUIRED` rounds and another ran 5, on the same day, with no escalation recorded. Both times the actual remedy turned out to be a rewrite of the artifact rather than another round, and writing the defect class down at round 3 is what surfaces that. **When consecutive rounds find the same class of defect, the defect is the method** — a reviewer that keeps finding a correction which reached one section but not its twin is telling you the artifact needs consolidating, not re-reviewing.
 - Do not treat style preferences, optional hardening, or speculative concerns as blockers. A blocker must make the plan likely to cause incorrect behavior, data loss, a material safety failure, or failure of the stated requirement. A verification gap blocks only when it prevents confirmation of core correctness or safety.
 
@@ -187,7 +203,9 @@ plan review is not a substitute for implementation review.
 | Running two reviewers at once | Sequential only |
 | Diluting the plan to force approval | Fix real blockers; refute wrong ones with evidence |
 | Accepting a reviewer's citation fix without checking it | Step 4 applies to non-blocking corrections too |
-| Blowing through the churn cap because it feels like progress | Two substantive `CHANGES_REQUIRED` and you stop, regardless of trend |
+| Blowing through the churn cap because it feels like progress | Two substantive `CHANGES_REQUIRED` and you stop — continuing is the user's call, obtained in advance |
+| Counting a trivia-only round toward the churn cap | The cap counts rounds with a verified substantive blocker; refuted or trivia-class rounds are fixed and logged, not counted |
+| Running the loop on routine standard-risk work | Standard work relies on spec review + the post-implementation diff review; the loop runs for critical contracts or on explicit request |
 | Looping forever on a judgment call | Escalate the disagreement to the user |
 | Recording the approval only as a status line | Commit a review log beside the artifact; a status line is unverifiable |
 | Keeping a second copy of the reviewer contract | `reviewer-brief.md` is the only copy — duplicates drift |

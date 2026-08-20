@@ -191,13 +191,16 @@ cadence.
 object per line; a gitignored symlink into the PRIVATE repo `FrankERP/owt-agent-logs`
 — never commit it here, because this repo is public and the log is agent-written free
 text covering incidents). Agents end their reports with
-a `WORKLOG:` trailer; the **coordinator appends** the line — including `no_result` for
-dispatches that crashed and `coordinator-inline` for specialist-shaped work done inline
-rather than dispatched.
-At the end of an implementation cycle, after the code review and before reporting
-completion, dispatch `hr-officer` to review the log and roster. The gate is
-**advisory** — it never blocks a delivery, and HR proposes roster changes rather than
-making them. See `docs/agents/worklog.md`.
+a `WORKLOG:` trailer; the **coordinator appends** the lines — **batched at cycle
+close is fine** (amended 2026-08-19; per-dispatch appends remain welcome) — including
+`no_result` for dispatches that crashed and `coordinator-inline` for specialist-shaped
+work done inline rather than dispatched.
+At cycle close, the code-review dispatch also carries the docs-audit and
+worklog-completeness checklists — one agent, one context read, three checklists
+(amended 2026-08-19; separate `docs-auditor` dispatches remain available for
+doc-heavy cycles). `hr-officer` runs **weekly** (or on demand via `/hr-report`),
+not per cycle. The gate is **advisory** — it never blocks a delivery, and HR
+proposes roster changes rather than making them. See `docs/agents/worklog.md`.
 
 ### Issue tracker
 
@@ -209,8 +212,19 @@ Default canonical labels: `needs-triage`, `needs-info`, `ready-for-agent`, `read
 
 ### Adversarial plan review
 
-Before implementing a substantial plan, use
-`.agents/skills/adversarial-plan-review/SKILL.md` and record its risk tier and rationale.
+**Reserved for critical contracts only** (retiered 2026-08-19). The evidence for the
+retier: Child E ran 19 plan-review rounds and the post-merge *code* review still found
+three control-flow bugs serving the team — the diff review is the layer that catches
+implementation bugs, so standard work spends its budget there instead.
+
+- **Standard work (the default): no adversarial plan review.** The pipeline is
+  spec (self-reviewed, then user-reviewed) → implement → gates → fresh code review
+  of the diff. Parent roadmaps and read/model/UI/cutover work are standard unless
+  they directly own a critical contract.
+- **Critical contracts keep the loop.** Use
+  `.agents/skills/adversarial-plan-review/SKILL.md` and record the risk tier and
+  rationale. When only a slice of a spec owns the critical contract, review that
+  slice's plan, not the whole spec.
 
 That directory is a **vendored copy** of the canonical skill at
 `~/.agents/skills/adversarial-plan-review/` (shared with Codex). The two must stay
@@ -221,8 +235,6 @@ copy changes without its digest being updated. Change both in the same delivery.
 `<plan-basename>-review-log.md`, written after the loop and never shown to a
 reviewer. See `docs/superpowers/plans/2026-08-06-grid-drag-and-drop-review-log.md`.
 
-- **Standard risk (default):** one fresh cold `APPROVED`. Parent roadmaps and
-  read/model/UI/cutover work stay standard unless they directly own a critical contract.
 - **Critical risk:** two sequential fresh `APPROVED` verdicts on byte-identical
   text. Critical means changing a production/server writer or mutation trust
   boundary, destructive/full-array serializer, auth/security/ACL/secret boundary,
@@ -234,8 +246,12 @@ reviewer. See `docs/superpowers/plans/2026-08-06-grid-drag-and-drop-review-log.m
   mid-fire. Under time pressure the bar drops to ONE fresh `APPROVED` on a
   one-paragraph hypothesis — no plan document — but never to zero. The 2026-08-07
   outbox incident shipped ten deploys with no round and paid for it twice.
-- Run reviewers **one at a time** and never expose prior findings. After two
-  substantive `CHANGES_REQUIRED` rounds for one artifact, stop and reassess with the user.
+- Run reviewers **one at a time** and never expose prior findings. **Non-blocking
+  findings never trigger a fresh round** — fix or decline them and record the
+  disposition. **The churn cap is binding:** after two rounds with *verified
+  substantive* blockers, stop; round three needs Frank's explicit go-ahead,
+  obtained in advance (the cap was passed silently on 2026-08-11/12 — 15- and
+  19-round loops whose real remedy was a rewrite, not another round).
 - After each implementation phase, run a fresh code review plus the documented
   test/browser gates. Plan approval never authorizes implementation.
 

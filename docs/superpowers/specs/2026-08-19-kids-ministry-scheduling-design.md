@@ -202,14 +202,16 @@ overlap warning.
 - Deploy per convention: feature branch → main (local merge, gates green) →
   preview push → **verify dev alias moved** → main push → verify prod alias.
 
-## 10. Risk tier
+## 10. Risk tier (under the 2026-08-19 retiered workflow)
 
-Under the current workflow rules: the **auth guard + mutation routes** slice
-changes a mutation trust boundary → **critical** tier for that slice; the
-rest (schemas, rotation pure functions, UI, member views) is **standard**.
-If the workflow amendment under discussion (2026-08-19) is adopted, re-tier
-accordingly; the split of this spec into review slices follows whichever
-regime is in force when implementation planning starts.
+- **Critical — adversarial plan review required:** the auth slice only
+  (`requireMinistryManager`, `managesMinistries`, and the `/api/kids/*`
+  mutation routes' guard wiring) — it changes an auth/mutation trust
+  boundary. Review that slice's implementation plan, not this whole spec.
+- **Standard — no adversarial plan review:** everything else (schemas,
+  rotation pure functions, planner UI, member-facing views, availability
+  override UI). Pipeline: this spec (user-reviewed) → implement → gates →
+  fresh code review of the diff.
 
 ## 11. Invariants checklist (CLAUDE.md)
 
