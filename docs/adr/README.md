@@ -60,3 +60,5 @@ real and load-bearing, but nobody wrote down why — a known gap, not a guess).
 - [ADR-0016: Revive light mode by tokenising colour](0016-light-mode-revived-by-tokenisation.md) — **supersedes ADR-0008**; why `dark:` variants and a partial-surface revival were both rejected
 - [ADR-0017: Serve the theme gallery without a session](0017-public-theme-gallery.md) — why an auth boundary moved, and why the `/auth/` placement that needs no matcher edit was rejected
 - [ADR-0018: Keep lyrics and chord charts as independent fields](0018-lyrics-and-charts-are-independent.md) — why `CHORD_MARKER_RE` must not route the song editor payload
+- [ADR-0019: Ship Kids as its own vertical; generalize at the third ministry](0019-generalize-at-the-third-ministry.md) — why `kidsPair`/`kidsSchedule` are Kids-specific and generic ministry schemas were deferred
+- [ADR-0020: Gate ministry isolation per page, not in the middleware](0020-ministry-isolation-gates-per-page.md) — **amends ADR-0007**; why seven worship pages became dynamic and their `revalidate` exports are now inert

@@ -160,6 +160,19 @@ Roles: `super-admin` > `admin` > `content-editor` > `member`. Gate via
 `requireActiveManager`; some actions are super-admin-only (checked in the route).
 Impersonation is super-admin-only, enforced server-side in `auth.ts`.
 
+**Ministries** (`worship`, `kids` — `app/ministries.ts`) are a SECOND axis, not a
+role tier. Gate with `requireMinistryMember(id)` / `requireMinistryManager(id)`
+(`app/utils/authGuards.ts`); worship pages call `requireWorshipPage`
+(`app/utils/worshipPageGate.ts`, which makes them dynamic — ADR-0020).
+- **Isolation is two-way:** a kids-only member reaches no worship surface, and a
+  worship `admin`/`content-editor` gets nothing in kids. Only `super-admin` spans
+  both. Role never implies ministry; management never implies membership.
+- **Storage contract:** **absent** `ministries` ⇒ worship (the legacy,
+  migration-free rule — `normalizeMinistries` + `WORSHIP_MEMBER_GROQ_FILTER` are
+  the only readers). **Explicitly empty** is rejected at every write boundary
+  (`validateMinistryWrite`) and never stored — stored `[]` reads back as worship
+  and would hand a kids volunteer the whole catalog.
+
 ## Continuous improvement
 Invoke `$improve-owt` from `.agents/skills/improve-owt/SKILL.md`. It performs
 one verified improvement per run with a priority ladder, verification gate, and
