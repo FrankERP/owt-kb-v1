@@ -81,8 +81,24 @@ describe("Miembros — ministry scope", () => {
   it("does not render the control when every member is worship-only", async () => {
     await mount([LEGACY, WORSHIP]);
     expect(screen.queryByRole("button", { name: /^Oasis Kids/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^Todos$/ })).toBeNull();
+    // NOT /^Todos$/ — the count span lives inside the button, so the accessible
+    // name is "Todos 4" and an end-anchored pattern can never match, making the
+    // assertion pass no matter what the component does.
+    expect(screen.queryByRole("button", { name: /^Todos/ })).toBeNull();
     expect(shownNames([LEGACY, WORSHIP])).toEqual(["Ana Legacy", "Beto Worship"]);
+  });
+
+  it("shows everyone when the control is hidden, even if no one is worship", async () => {
+    // The `visible &&` guard in resolveMinistryScope. Without it a list holding
+    // only kids members would render EMPTY under the "worship" default, with no
+    // control on screen to change the scope — hidden members and no way to
+    // reveal them. Unreachable with today's data (a super-admin's fetch always
+    // contains worship members), which is exactly why it needs a test rather
+    // than a reader's confidence.
+    await mount([KIDS]);
+    expect(screen.queryByRole("button", { name: /^Oasis Kids/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Alabanza/ })).toBeNull();
+    expect(shownNames([KIDS])).toEqual(["Cami Kids"]);
   });
 
   it("counts the filtered set against the whole list beside the heading", async () => {

@@ -886,7 +886,11 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
           <h1 className="font-display text-2xl uppercase tracking-wide">Miembros</h1>
           {!loading && (
             <p className="font-label text-xs uppercase tracking-widest text-mono-500 mt-0.5">
-              {(query.trim() || ministryScope !== "all") && filteredMembers.length !== members.length
+              {/* `filterValue` is in here deliberately: with scope "Todos", no query
+                  and a type/role filter active, the heading used to read "57 miembros"
+                  above a list of 5 — a silently shortened list is how someone concludes
+                  a member was deleted. Any narrowing input must make the count honest. */}
+              {(query.trim() || filterValue || ministryScope !== "all") && filteredMembers.length !== members.length
                 ? `${filteredMembers.length} de ${members.length} ${members.length === 1 ? "miembro" : "miembros"}`
                 : `${members.length} ${members.length === 1 ? "miembro" : "miembros"}`
               }
