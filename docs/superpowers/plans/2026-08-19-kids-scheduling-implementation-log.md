@@ -14,6 +14,45 @@ that diff review the primary gate rather than a secondary one.
 | P1 | 3 | `3a5d0ca2` | `getMemberAccess` carries both, fail-closed `[]` for a missing member |
 | P1 | 3b | `b26e36a9` | JWT/session carry ministries; `NavMenu` filters by ministry |
 | P1 | 4 | `7e69af57` | `requireMinistryMember` / `requireMinistryManager` + 10-case matrix |
+| P1 | 5 | `dfa7e2d9` | Admin ministry editing — touched-field-only, normalized seeding, `handleAdd` wiring, zero-ministry block (24 new tests) |
+| P2 | 1 | `40a1afcd`, `34c61a3c` | `kidsPair` + `kidsSchedule` schemas, registered; validation callbacks typed |
+| P2 | 2+3 | `30453dab` | Kids domain types + deterministic rotation engine (9 tests) |
+
+## Plan defects the implementers caught
+
+Worth recording separately from code observations: these are places the **plan itself**
+was wrong or self-contradictory, found by the worker executing it. Same defect class the
+review rounds kept surfacing, which is evidence the class outlived the review.
+
+- **P1 Task 5 Step 4 contradicted its own prose.** The sample code sent the ministry
+  arrays only when `touchedMinistryFields.has(...)`, while the paragraph below said
+  "On CREATE sending the arrays unconditionally is fine and desirable". Taken literally
+  the sample would have made Step 4b's `handleAdd` change dead code again — a create
+  where the admin accepts the default `["worship"]` touches nothing. The worker
+  implemented `!initial || touched`, which satisfies both statements, and pinned the
+  create path with a test.
+- **P1 Task 5's email-prefs line citations drifted by one** (`:242-248` / `:249-252`,
+  not `:242-247` / `:248-252`). Every other line number in that task verified correct.
+
+## Facts for the planner UI (P2 Tasks 5-6)
+
+- `planKidsMonth`'s base case yields `ensenanza = c1,c2,c3,c4` and
+  `chiquitos = c2,c1,c4,c3` over four Sundays — the enseñanza-first rule displacing each
+  room's next pair, which is the behaviour the Kids team described.
+- **The unfillable-seat diagnostic interpolates the RAW ISO date**
+  (`"Sin parejas disponibles para RG Chiquitos el 2026-09-06"`), because formatting it
+  would need `new Date(iso)`, which the timezone invariant forbids in that layer. If the
+  planner wants a Spanish long date, **format at render time** from the `date` field.
+- Fairness category keys are `"ensenanza"` and `` `room:${seat}` ``, keyed off the SEAT.
+
+## Operational note
+
+`node scripts/colour-inventory.mjs` regenerates the whole artifact, and while several
+workers are editing `app/components/**` it also rewrites `line` numbers in rows those
+workers own. Those columns are asserted nowhere (the guard excludes `line`), but
+committing them would fold someone else's pending work into your commit. The P2 worker
+hand-edited the `filesScanned` count instead — the right call. Expect this again if the
+fixture needs regenerating while other work is in flight.
 
 ## Carried into the code review
 
