@@ -374,8 +374,8 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
 ### Members — mostly **super-admin only**
 | Route | Methods | Auth | Notes |
 |-------|---------|------|-------|
-| `/api/admin/members` | GET, POST | GET admin/super-admin; **POST super-admin** | GET all members. POST create (name+email required), 201. |
-| `/api/admin/members/[id]` | PATCH, DELETE | **super-admin** | PATCH validates role/`memberType`, sets `notifPrefs.email` → `revalidateServiceViews()` + `revalidatePath("/me")`. DELETE removes. |
+| `/api/admin/members` | GET, POST | GET admin/super-admin; **POST super-admin** | GET is **ministry-scoped**: `admin`/`content-editor` receive worship members only (`WORSHIP_MEMBER_GROQ_FILTER`), while `super-admin` binds `$all` and receives everyone — they are the only role that can edit `ministries`, so filtering them would make a Kids-only member uneditable through the UI. The Miembros list then offers an Alabanza/Oasis Kids/Todos control, defaulting to Alabanza, filtering client-side. Absent `ministries` counts as worship, so no legacy member is ever hidden. POST create (name+email required), 201. |
+| `/api/admin/members/[id]` | PATCH, DELETE | **super-admin** | PATCH validates role/`memberType`/`ministries`/`managesMinistries` (each applied only when present, so an unrelated edit cannot wipe a privilege), sets `notifPrefs.email` → `revalidateServiceViews()` + `revalidatePath("/me")`. DELETE removes. |
 | `/api/admin/members/[id]/photo` | POST | **super-admin** | Same photo validation as `/api/me/photo`; sets target's `profilePhoto`. (No revalidation.) |
 | `/api/admin/set-password` | POST | **super-admin** | `{sanityMemberId, password}` (≥8) → sets `passwordHash` (cost 12). |
 | `/api/admin/login-events` | GET | admin/super-admin | Per-member last login/active, count, providers, recent 20 events. |

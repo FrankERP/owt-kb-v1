@@ -22,7 +22,13 @@ import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
 import EmailPrefToggles, { resolveEmailPrefs, type EmailPrefValues } from "../ui/EmailPrefToggles";
 import { useTransientValue } from "@/app/utils/useTransientValue";
-import { ALL_MINISTRY_IDS, MANAGEABLE_MINISTRY_IDS, MINISTRIES, normalizeMinistries } from "@/app/ministries";
+import {
+  ALL_MINISTRY_IDS,
+  MANAGEABLE_MINISTRY_IDS,
+  MINISTRIES,
+  normalizeMinistries,
+  type MinistryId,
+} from "@/app/ministries";
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
@@ -72,6 +78,80 @@ const TYPE_LABEL: Record<string, string> = {
 
 type FilterKey = "type" | "role";
 type SortDir  = "asc" | "desc";
+
+/** Which ministry's people the Miembros list is showing. */
+export type MinistryScope = MinistryId | "all";
+
+const MINISTRY_SCOPES: MinistryScope[] = [...ALL_MINISTRY_IDS, "all"];
+
+const MINISTRY_SCOPE_LABEL = (s: MinistryScope) => (s === "all" ? "Todos" : MINISTRIES[s].name);
+
+/**
+ * Per-ministry counts, whether the control is worth showing, and the scoped
+ * list — ONE derivation, read by both the control and the list, so the panel
+ * can never filter by a control the admin cannot see.
+ *
+ * `super-admin` is the only role whose `GET /api/admin/members` is unfiltered
+ * (they alone can edit `ministries`, so hiding a Kids-only member would leave
+ * them uneditable — see `WORSHIP_MEMBER_GROQ_FILTER`). Everyone else receives
+ * worship members only, where a ministry chooser is pure noise; `visible`
+ * therefore comes from the DATA, not the role.
+ *
+ * Membership goes through `normalizeMinistries`: an absent `ministries` means
+ * worship, which is every member predating Oasis Kids. Testing the raw array
+ * would empty the default view.
+ *
+ * When the control is hidden the scope is NOT applied — a single-ministry list
+ * would otherwise be filtered to nothing by a default the admin cannot change.
+ */
+export function resolveMinistryScope<T extends { ministries?: string[] }>(
+  members: T[],
+  scope: MinistryScope,
+): { counts: Record<MinistryId, number>; visible: boolean; scoped: T[] } {
+  const counts = Object.fromEntries(ALL_MINISTRY_IDS.map((id) => [id, 0])) as Record<MinistryId, number>;
+  for (const m of members) {
+    for (const id of normalizeMinistries(m.ministries)) counts[id] += 1;
+  }
+  const visible = ALL_MINISTRY_IDS.filter((id) => counts[id] > 0).length > 1;
+  const scoped = visible && scope !== "all"
+    ? members.filter((m) => normalizeMinistries(m.ministries).includes(scope))
+    : members;
+  return { counts, visible, scoped };
+}
+
+export function MinistryScopeBar({
+  counts,
+  total,
+  visible,
+  value,
+  onChange,
+}: {
+  counts: Record<MinistryId, number>;
+  total: number;
+  visible: boolean;
+  value: MinistryScope;
+  onChange: (next: MinistryScope) => void;
+}) {
+  if (!visible) return null;
+  return (
+    <div className="brand-search-console flex shrink-0 self-start overflow-hidden">
+      {MINISTRY_SCOPES.map((s) => (
+        <button
+          key={s}
+          type="button"
+          aria-pressed={value === s}
+          onClick={() => onChange(s)}
+          className={`px-3 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
+            value === s ? "bg-accent/15 text-accent" : "text-ink-dim hover:text-accent"
+          }`}
+        >
+          {MINISTRY_SCOPE_LABEL(s)}
+          <span className="ml-1.5 opacity-60">{s === "all" ? total : counts[s]}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 type ModalState =
   | { type: "add" }
@@ -563,6 +643,8 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
   const [filterKey, setFilterKey]   = useState<FilterKey>("type");
   const [filterValue, setFilterValue] = useState("");
   const [sortDir, setSortDir]       = useState<SortDir>("asc");
+  // Frank sees the whole church here; "Alabanza" is the view he actually works in.
+  const [ministryScope, setMinistryScope] = useState<MinistryScope>("worship");
   const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null);
   const [photoTarget, setPhotoTarget]       = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -573,13 +655,22 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
     router.refresh();
   };
 
+  // Ministry scope first, so the type/role filter and the Fuse index below both
+  // work on the visible ministry only — searching inside "Oasis Kids" searches
+  // Kids members, not the whole church.
+  const ministry = useMemo(
+    () => resolveMinistryScope(members, ministryScope),
+    [members, ministryScope],
+  );
+
   // Category filter — independent of the search query.
   const categoryFiltered = useMemo(() => {
-    if (!filterValue) return members;
+    const base = ministry.scoped;
+    if (!filterValue) return base;
     return filterKey === "type"
-      ? members.filter((m) => m.memberType?.includes(filterValue))
-      : members.filter((m) => m.role === filterValue);
-  }, [members, filterKey, filterValue]);
+      ? base.filter((m) => m.memberType?.includes(filterValue))
+      : base.filter((m) => m.role === filterValue);
+  }, [ministry, filterKey, filterValue]);
 
   // Build the Fuse index only when the filtered set changes — NOT on every
   // keystroke. Typing then just re-runs .search() against the existing index.
@@ -795,7 +886,11 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
           <h1 className="font-display text-2xl uppercase tracking-wide">Miembros</h1>
           {!loading && (
             <p className="font-label text-xs uppercase tracking-widest text-mono-500 mt-0.5">
-              {query.trim() && filteredMembers.length !== members.length
+              {/* `filterValue` is in here deliberately: with scope "Todos", no query
+                  and a type/role filter active, the heading used to read "57 miembros"
+                  above a list of 5 — a silently shortened list is how someone concludes
+                  a member was deleted. Any narrowing input must make the count honest. */}
+              {(query.trim() || filterValue || ministryScope !== "all") && filteredMembers.length !== members.length
                 ? `${filteredMembers.length} de ${members.length} ${members.length === 1 ? "miembro" : "miembros"}`
                 : `${members.length} ${members.length === 1 ? "miembro" : "miembros"}`
               }
@@ -813,6 +908,15 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
 
       {/* Filter + sort controls */}
       <div className="space-y-2">
+        {/* Row 0: ministry scope — hidden unless the list spans more than one */}
+        <MinistryScopeBar
+          counts={ministry.counts}
+          total={members.length}
+          visible={ministry.visible}
+          value={ministryScope}
+          onChange={setMinistryScope}
+        />
+
         {/* Row 1: filter key + filter value + sort direction */}
         <div className="flex gap-2 flex-wrap">
           {/* Filter by: type | role */}
@@ -917,7 +1021,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
           )}
           {members.length > 0 && filteredMembers.length === 0 && (
             <p className="font-body text-sm text-mono-500 text-center py-12">
-              Sin resultados para &ldquo;{query}&rdquo;
+              {query.trim() ? <>Sin resultados para &ldquo;{query}&rdquo;</> : "Sin resultados"}
             </p>
           )}
           {filteredMembers.map((m) => (

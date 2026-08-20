@@ -28,7 +28,7 @@
     },
     "compositingClasses": 17,
     "compositingSelectorOccurrences": 33,
-    "compositingClassNameOccurrences": 68,
+    "compositingClassNameOccurrences": 69,
     "compositingRuleBodies": 32,
     "lightCounterpartClasses": 15,
     "pairs": 14,
@@ -223,7 +223,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 347,
+      "line": 370,
       "disposition": "B",
       "reason": null
     },
@@ -235,7 +235,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 367,
+      "line": 390,
       "disposition": "B",
       "reason": null
     },
@@ -247,7 +247,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 379,
+      "line": 402,
       "disposition": "B",
       "reason": null
     },
@@ -259,7 +259,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 396,
+      "line": 419,
       "disposition": "B",
       "reason": null
     },
@@ -271,7 +271,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 426,
+      "line": 449,
       "disposition": "B",
       "reason": null
     },
@@ -283,7 +283,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 532,
+      "line": 555,
       "disposition": "B",
       "reason": null
     },
@@ -2323,7 +2323,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 106,
+      "line": 186,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2335,7 +2335,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 883,
+      "line": 983,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2347,7 +2347,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 145,
+      "line": 225,
       "disposition": "B",
       "reason": null
     },
@@ -2359,7 +2359,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 144,
+      "line": 224,
       "disposition": "B",
       "reason": null
     },
@@ -2371,7 +2371,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 878,
+      "line": 978,
       "disposition": "B",
       "reason": null
     },
@@ -2383,7 +2383,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1066,
+      "line": 1166,
       "disposition": "B",
       "reason": null
     },
@@ -2395,7 +2395,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1075,
+      "line": 1175,
       "disposition": "B",
       "reason": null
     },
@@ -2407,7 +2407,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1085,
+      "line": 1185,
       "disposition": "B",
       "reason": null
     },
@@ -2419,7 +2419,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1096,
+      "line": 1196,
       "disposition": "B",
       "reason": null
     },
@@ -2431,7 +2431,7 @@
       "alpha": null,
       "utility": "stroke",
       "carrier": null,
-      "line": 148,
+      "line": 228,
       "disposition": "C",
       "reason": null
     },
@@ -2443,7 +2443,7 @@
       "alpha": null,
       "utility": "text",
       "carrier": null,
-      "line": 143,
+      "line": 223,
       "disposition": "C",
       "reason": null
     },
@@ -2455,7 +2455,7 @@
       "alpha": null,
       "utility": "to",
       "carrier": null,
-      "line": 517,
+      "line": 597,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2923,7 +2923,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 412,
+      "line": 496,
       "disposition": "B",
       "reason": null
     },
@@ -2935,7 +2935,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 444,
+      "line": 528,
       "disposition": "B",
       "reason": null
     },
@@ -2947,7 +2947,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 458,
+      "line": 542,
       "disposition": "B",
       "reason": null
     },
@@ -2959,7 +2959,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 466,
+      "line": 550,
       "disposition": "B",
       "reason": null
     },
@@ -4305,7 +4305,7 @@
       "file": "app/components/admin/AdminPanel.tsx",
       "kind": "className",
       "class": "search-console",
-      "count": 6,
+      "count": 7,
       "disposition": "keep",
       "reason": "Usage site of a compositing class"
     },
