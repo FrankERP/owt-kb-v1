@@ -19,6 +19,7 @@ import SectionNav from "@/app/components/SectionNav";
 import ChordChart from "@/app/components/ChordChart";
 import EditSongButton from "@/app/components/EditSongButton";
 import SongAudioSection from "@/app/components/SongAudioSection";
+import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 
 interface Params {
   params: Promise<{ slug: string }>;
@@ -141,6 +142,7 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 
 const Page = async ({ params }: Params) => {
   const { slug } = await params;
+  await requireWorshipPage(`/posts/${slug}`);
   const post: Post = await getPost(slug);
 
   if (!post) notFound();

@@ -2,6 +2,7 @@ import Navbar from "@/app/components/Navbar";
 import AuthorSearchList from "@/app/components/AuthorSearchList";
 import { Author } from "@/app/utils/interface";
 import { client } from "@/sanity/lib/client";
+import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 
 async function getAuthorData(): Promise<{ authors: Author[]; totalSongs: number }> {
   // totalSongs is the distinct number of songs that have an author — NOT the sum
@@ -21,6 +22,7 @@ async function getAuthorData(): Promise<{ authors: Author[]; totalSongs: number 
 export const revalidate = 60;
 
 const page = async () => {
+  await requireWorshipPage("/author");
   const { authors, totalSongs } = await getAuthorData();
   return (
     <div>

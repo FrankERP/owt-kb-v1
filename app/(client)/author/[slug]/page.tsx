@@ -3,6 +3,7 @@ import Navbar from "@/app/components/Navbar";
 import SongSearchList from "@/app/components/SongSearchList";
 import { Post } from "@/app/utils/interface";
 import { client } from "@/sanity/lib/client";
+import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 
 async function getPostsByAuthor(slug: string) {
   const query = `
@@ -33,6 +34,7 @@ interface Params { params: Promise<{ slug: string }>; }
 
 const page = async ({ params }: Params) => {
   const { slug } = await params;
+  await requireWorshipPage(`/author/${slug}`);
   const [posts, name]: [Array<Post>, string | null] = await Promise.all([
     getPostsByAuthor(slug),
     getAuthorName(slug),

@@ -5,6 +5,7 @@ import CalendarView, { ActiveDay } from "@/app/components/CalendarView";
 import { SundayRole, SaturdayRole, Setlist, SpecialRole, SetlistSong } from "@/app/utils/interface";
 import { parseMonthParam, monthRangeLabel, windowBounds, WINDOW_MONTHS } from "@/app/utils/scheduleMonths";
 import { indexUniqueByKey, serviceDayKey } from "@/app/utils/serviceReadSelect";
+import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 
 export const metadata: Metadata = {
   title: "Calendario — Oasis Worship Team",
@@ -91,6 +92,7 @@ export default async function SchedulePage({
 }: {
   searchParams: Promise<{ m?: string }>;
 }) {
+  await requireWorshipPage("/schedule");
   const viewMonth = parseMonthParam((await searchParams).m);
   const { sundays, saturdays, sunSetlists, satSetlists, specials } = await getScheduleData(viewMonth);
 
