@@ -63,6 +63,10 @@ declare module "next-auth/jwt" {
       sanityId: string;
       name: string | null | undefined;
       alias: string | null | undefined;
+      /** Snapshotted so "stop impersonating" restores the admin's own nav, not
+       *  the target's. Optional for tokens minted before ministries shipped. */
+      ministries?: string[];
+      managesMinistries?: string[];
     };
   }
 }

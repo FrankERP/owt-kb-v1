@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { serverClient, writeClient } from "./sanity/lib/serverClient";
 import { verifyGoogleIdToken } from "@/app/utils/googleIdToken";
 import { isMemberActive, getMemberAccess } from "@/app/utils/memberAccess";
+import { normalizeMinistries, isMinistryId } from "@/app/ministries";
 import { createLoginEvent, resolveVerificationOwnership } from "@/app/utils/srVerificationLoginEvent";
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
@@ -163,8 +164,23 @@ export const authOptions: NextAuthOptions = {
           const realRole = token.__realAdmin?.role ?? token.role;
           if (realRole !== "super-admin") return token;
 
-          const target = await serverClient.fetch<{ _id: string; member_name: string; alias?: string | null; role: OWTRole | null } | null>(
-            `*[_type == "teamMembers" && _id == $id][0] { _id, member_name, alias, role }`,
+          // `ministries`/`managesMinistries` are projected because this branch
+          // RETURNS EARLY, before the refresh block below that normally sets
+          // them. Without them the token would carry the ADMIN's ministries
+          // beside the TARGET's sanityId: impersonating a Kids manager showed
+          // no "Planear Kids" link, because the nav asked a session that still
+          // described the admin. The server guards were unaffected (they re-read
+          // getMemberAccess by sanityId), so the page was reachable by URL — it
+          // was the entry point that vanished.
+          const target = await serverClient.fetch<{
+            _id: string;
+            member_name: string;
+            alias?: string | null;
+            role: OWTRole | null;
+            ministries?: string[] | null;
+            managesMinistries?: string[] | null;
+          } | null>(
+            `*[_type == "teamMembers" && _id == $id][0] { _id, member_name, alias, role, ministries, managesMinistries }`,
             { id: updatePayload.impersonating }
           );
           if (target) {
@@ -176,12 +192,18 @@ export const authOptions: NextAuthOptions = {
                 sanityId: token.sanityId ?? "",
                 name:     token.name,
                 alias:    token.alias ?? null,
+                ministries:        token.ministries,
+                managesMinistries: token.managesMinistries,
               };
             }
             token.role           = target.role ?? "member";
             token.sanityId       = target._id;
             token.name           = target.member_name;
             token.alias          = target.alias ?? null;
+            token.ministries        = normalizeMinistries(target.ministries);
+            token.managesMinistries = Array.isArray(target.managesMinistries)
+              ? target.managesMinistries.filter(isMinistryId)
+              : [];
             token.isImpersonating = true;
             token.realAdminName  = token.__realAdmin.name ?? undefined;
           }
@@ -190,6 +212,10 @@ export const authOptions: NextAuthOptions = {
           token.sanityId       = token.__realAdmin.sanityId;
           token.name           = token.__realAdmin.name;
           token.alias          = token.__realAdmin.alias;
+          // Restored from the snapshot, not recomputed: stopping must give the
+          // admin THEIR nav back, not leave the target's ministries behind.
+          token.ministries        = token.__realAdmin.ministries;
+          token.managesMinistries = token.__realAdmin.managesMinistries;
           token.isImpersonating = false;
           token.realAdminName  = undefined;
           token.__realAdmin    = undefined;
