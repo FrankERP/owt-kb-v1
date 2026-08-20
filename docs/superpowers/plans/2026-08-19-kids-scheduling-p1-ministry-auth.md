@@ -712,8 +712,25 @@ Replace an existing `requireActiveSession` call with it (the new guard subsumes 
   - `app/api/me/songs/route.ts`, `app/api/notifications/count/route.ts`, `app/api/me/proposals/route.ts` — gated in Step 5.
   - `app/components/BottomNav.tsx` (hardcoded `/schedule` + `/tag` tabs) and `app/components/Header.tsx` (`/tag` link) carry **unfiltered worship links but are mounted nowhere** — verified by grep across the tree, and `docs/superpowers/plans/2026-07-16-backstage-cue-system-dependencies.md:124` records BottomNav as deliberately unmounted. Not a hole today; they would ship ungated if revived, so name them here rather than leaving the next person to rediscover it.
 
-- [ ] **Step 6b: Two acknowledged, deliberately-unfixed bleeds** (record in the commit body so a later reader does not read silence as oversight):
-  - `GET /api/admin/members` **and `app/api/admin/login-events/route.ts:17`** (the Actividad tab) both fetch `*[_type == "teamMembers"]` unfiltered, so Kids-only volunteers appear in the worship `AvailabilityPanel`, Miembros list and activity view. A worship admin therefore sees Kids *people*, though no Kids scheduling. The solver is unaffected (its pools filter on `memberType`, `MonthGenerator.tsx:1329-1331`). Fixing it means ministry-filtering an admin read used by several worship panels — out of scope here; raise it if Frank considers member visibility part of "kids stuff".
+- [ ] **Step 6c: Filter Kids-only members out of worship admin reads** (Frank's decision, 2026-08-19: this *does* count as "kids stuff").
+
+  `GET /api/admin/members` (`route.ts:19-26`) and `app/api/admin/login-events/route.ts:17` both fetch `*[_type == "teamMembers"]` unfiltered.
+
+  **The rule is role-dependent, and getting it backwards locks the roster:**
+  - `admin` / `content-editor` → worship members only.
+  - `super-admin` → **everyone, unfiltered**. They are the only role that can edit `ministries` (Task 5), so filtering their view would make a Kids-only member uneditable and unrecoverable through the UI.
+
+  GROQ, mirroring the storage contract (absent ⇒ worship, so the `!defined` arm is required — a bare `"worship" in ministries` would hide every legacy member):
+
+```groq
+*[_type == "teamMembers" && ($all || !defined(ministries) || count(ministries) == 0 || "worship" in ministries)]
+```
+
+  with `$all = session.user.role === "super-admin"`. Apply the same predicate to both routes.
+
+  Tests: an `admin` GET omits a `ministries: ["kids"]` member; an `admin` GET **includes** a member with no `ministries` field (the legacy case — this is the assertion that catches a filter written against the wrong default); a `super-admin` GET returns both; the same pair for login-events.
+
+- [ ] **Step 6b: Acknowledged, deliberately-unfixed bleeds** (record in the commit body so a later reader does not read silence as oversight): A worship admin therefore sees Kids *people*, though no Kids scheduling. The solver is unaffected (its pools filter on `memberType`, `MonthGenerator.tsx:1329-1331`). Fixing it means ministry-filtering an admin read used by several worship panels — out of scope here; raise it if Frank considers member visibility part of "kids stuff".
   - `Navbar.tsx:22` links the brand lockup to `/` for everyone, so a kids-only member's most obvious click is a redirect bounce to `/kids`. Harmless with the loop-proof gate; fix it in P2's UI pass if it grates.
   - `/me`'s third query fetches every worship service date unfiltered (`app/(client)/me/page.tsx:170-176`) and feeds `AvailabilityCalendar`, so a kids-only member's availability calendar shows worship service dates. Cosmetic — the member's own assignments are `memberFilter`-scoped and render "Sin servicios asignados" — but it is worship information on a neutral page. P2 decides whether the calendar becomes ministry-aware.
   - **Worship setlist PUSH notifications reach Kids-only volunteers.** `notifySetlistSaved` (`app/utils/serviceMutationSideEffects.ts:671`) fetches every `teamMembers` document, and `setlistRecipientIds` treats an unset preference as `"all"` (`app/utils/notifyTargets.ts:40`). No page or API gate covers the push path. **Exposure is nil today** — the native apps are unshipped (CLAUDE.md landmines) — and spec §2 forbids touching notification code in this delivery, so this is recorded, not fixed. It must be resolved before the mobile app ships, or a Kids volunteer's phone will buzz about worship setlists. There is no equivalent all-members *email* audience (verified: every email path is id- or role-filtered).
