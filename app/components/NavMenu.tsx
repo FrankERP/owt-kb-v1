@@ -72,6 +72,15 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
     user?.role === "admin" ||
     user?.role === "content-editor";
 
+  // Ministry filtering is COSMETIC — the pages and APIs carry the enforcement.
+  // Without it, though, a dual-ministry member has no route to /kids and a
+  // kids-only member sees worship links that only bounce.
+  const isSuper = user?.role === "super-admin";
+  const ministries = user?.ministries ?? ["worship"];
+  const inWorship = isSuper || ministries.includes("worship");
+  const inKids = isSuper || ministries.includes("kids");
+  const managesKids = isSuper || (user?.managesMinistries ?? []).includes("kids");
+
   // While the session resolves on the client, reserve the avatar's space to
   // avoid layout shift and a flash of the sign-in link for logged-in users.
   if (status === "loading") {
@@ -149,9 +158,16 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
 
           {/* Navigation links */}
           <div className="py-1">
+            {/* /me is ministry-neutral, so it stays unconditional. */}
             <MenuItem href="/me">Mi perfil</MenuItem>
-            {showSchedule && <MenuItem href="/schedule">Calendario</MenuItem>}
-            {showTags && <MenuItem href="/tag">#Tags</MenuItem>}
+            {showSchedule && inWorship && <MenuItem href="/schedule">Calendario</MenuItem>}
+            {showTags && inWorship && <MenuItem href="/tag">#Tags</MenuItem>}
+            {inKids && <MenuItem href="/kids">Oasis Kids</MenuItem>}
+            {managesKids && <MenuItem href="/kids/admin">Planear Kids</MenuItem>}
+            {/* No `&& inWorship` here on purpose: the three manager roles are
+                worship-scoped by definition (requireActiveManager is role-only),
+                so the extra clause would be dead code or imply a non-worship
+                admin. Nav must agree with the page guard, not invent a rule. */}
             {isAdmin && <MenuItem href="/admin">Admin</MenuItem>}
           </div>
 

@@ -57,6 +57,7 @@ vi.mock("next/server", async (importOriginal) => {
 });
 
 import { payloadFingerprint, receiptIdForRequestId } from "@/app/utils/roleCreationReceipt";
+import { WORSHIP_MEMBER_GROQ_FILTER } from "@/app/ministries";
 import { GET as membersGET } from "@/app/api/admin/members/route";
 import { GET as rolesGET, POST as createPOST } from "@/app/api/admin/roles/route";
 import { PATCH as rolePATCH, DELETE as roleDELETE } from "@/app/api/admin/roles/[id]/route";
@@ -438,9 +439,13 @@ describe("GET /api/admin/members — canonical candidates", () => {
     expect(rawFetch).not.toHaveBeenCalled();
     expect(operationalFetch).toHaveBeenCalledOnce();
     const query = operationalFetch.mock.calls[0][0] as string;
-    expect(query).toContain('*[_type == "teamMembers"] | order(member_name asc)');
+    expect(query).toContain('*[_type == "teamMembers"');
+    expect(query).toContain("| order(member_name asc)");
     expect(query).toContain("_id, member_name, alias, email, role, memberType, notifPrefs");
     expect(query).toContain('"hasPassword": defined(passwordHash) && passwordHash != ""');
+    // Ministry-scoped since P1: worship admins see worship members only.
+    // Behaviour is covered in `adminMemberVisibility.test.ts`.
+    expect(query).toContain(WORSHIP_MEMBER_GROQ_FILTER);
   });
 
   it("still denies content-editors before reading candidates", async () => {

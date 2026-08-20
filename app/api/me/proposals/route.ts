@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 // (from Task 11) hosts a sweep; give it room to finish past the response.
 export const maxDuration = 60;
 
-import { requireActiveSession } from "@/app/utils/authGuards";
+import { requireMinistryMember } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import {
@@ -47,8 +47,9 @@ function storedContributors(value: unknown): StoredContributor[] {
 // GET /api/me/proposals — the shared proposal for every service the current user
 // is a Lead on (not only ones they authored). Mirrors the /me superset.
 export async function GET() {
-  const session = await requireActiveSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Setlist proposals are a worship surface; membership, not just a session.
+  const session = await requireMinistryMember("worship");
+  if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   // GET reads through the canonical (published-perspective) client so a
   // `drafts.*` proposal/role overlay can never surface in a member's list.
@@ -85,8 +86,11 @@ export async function GET() {
 export const POST = withVerificationRunContext(postHandler);
 
 async function postHandler(req: NextRequest) {
-  const session = await requireActiveSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Defence in depth — the canonical-role check below already requires the
+  // caller to be a Lead on the service — but a worship write stays behind
+  // worship membership regardless.
+  const session = await requireMinistryMember("worship");
+  if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   let raw: unknown;
   try {

@@ -6,6 +6,7 @@ import SongSearchList from "../components/SongSearchList";
 import { DayCard } from "../components/DayCard";
 import { publishedSetlist } from "../utils/draftGating";
 import { pickUnique } from "../utils/serviceReadSelect";
+import { requireWorshipPage } from "../utils/worshipPageGate";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -71,6 +72,7 @@ export const revalidate = 60;
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default async function Home() {
+  await requireWorshipPage("/");
   const { sat, sun } = getThisWeekend();
   const today = localToday();
 

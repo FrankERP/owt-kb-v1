@@ -22,6 +22,7 @@ import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
 import EmailPrefToggles, { resolveEmailPrefs, type EmailPrefValues } from "../ui/EmailPrefToggles";
 import { useTransientValue } from "@/app/utils/useTransientValue";
+import { ALL_MINISTRY_IDS, MANAGEABLE_MINISTRY_IDS, MINISTRIES, normalizeMinistries } from "@/app/ministries";
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
@@ -35,6 +36,10 @@ interface Member {
   hasPassword: boolean;
   photoUrl?: string;
   notifPrefs?: Record<string, unknown>;
+  /** Absent on every member predating Oasis Kids — read it through
+   *  `normalizeMinistries`, never raw (see `MemberForm`). */
+  ministries?: string[];
+  managesMinistries?: string[];
 }
 
 interface MemberFormData {
@@ -51,6 +56,13 @@ interface MemberFormData {
    * (the admin's member list can be stale relative to the member's own edits).
    */
   emailPrefs?: Partial<EmailPrefValues>;
+  /**
+   * Present when CREATING (there is no stored value to clobber), and when
+   * editing only if the admin actually touched that row — same rule, and same
+   * reason, as `emailPrefs` above.
+   */
+  ministries?: string[];
+  managesMinistries?: string[];
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -222,11 +234,40 @@ export function MemberForm({
   // never touches this section must PATCH none of the five fields, so the
   // route leaves whatever the member has since set alone.
   const [touchedPrefFields, setTouchedPrefFields] = useState<ReadonlySet<keyof EmailPrefValues>>(() => new Set());
+  // SEEDED THROUGH THE SHARED NORMALIZER, never `initial?.ministries ?? []`.
+  // The field is absent on every member predating Oasis Kids, so a raw seed
+  // would draw both boxes unticked for a full worship member — and the intended
+  // workflow (open a singer, tick "Oasis Kids", save) would then submit
+  // `["kids"]` and silently revoke their access to the whole worship app. The
+  // same call supplies the CREATE default, `["worship"]`.
+  const [ministries, setMinistries] = useState<string[]>(() => normalizeMinistries(initial?.ministries));
+  // Raw, because absent genuinely means "manages nothing" — no legacy value to infer.
+  const [managesMinistries, setManagesMinistries] = useState<string[]>(initial?.managesMinistries ?? []);
+  // Same discipline as `touchedPrefFields`: an edit that never touches a
+  // ministry row must PATCH neither key.
+  const [touchedMinistryFields, setTouchedMinistryFields] =
+    useState<ReadonlySet<"ministries" | "managesMinistries">>(() => new Set());
+  const [ministryError, setMinistryError] = useState<string | null>(null);
 
   const toggleType = (value: string) => {
     setMemberType(prev =>
       prev.includes(value) ? prev.filter(t => t !== value) : [...prev, value]
     );
+  };
+
+  const toggleMinistry = (value: string) => {
+    setMinistries(prev =>
+      prev.includes(value) ? prev.filter(m => m !== value) : [...prev, value]
+    );
+    setTouchedMinistryFields(prev => new Set(prev).add("ministries"));
+    setMinistryError(null);
+  };
+
+  const toggleManagedMinistry = (value: string) => {
+    setManagesMinistries(prev =>
+      prev.includes(value) ? prev.filter(m => m !== value) : [...prev, value]
+    );
+    setTouchedMinistryFields(prev => new Set(prev).add("managesMinistries"));
   };
 
   const handleTogglePref = (field: string, next: boolean) => {
@@ -239,6 +280,13 @@ export function MemberForm({
     <form
       onSubmit={(e) => {
         e.preventDefault();
+        // Belonging to NOTHING is not a state a member may be saved in, on
+        // either mode. Creating with no ministry would mint a Kids manager who
+        // is also a full worship member; unticking the last box on an edit
+        // would submit `[]`, which reads back as `["worship"]`. The route
+        // rejects both too — this is the friendly half, not the enforcement.
+        if (ministries.length === 0) { setMinistryError("Elige al menos un ministerio."); return; }
+        setMinistryError(null);
         // Only an edit carries preferences, and only the fields actually touched
         // this session — never the full resolved snapshot. That snapshot can be
         // stale (fetched before the member last changed their own preference),
@@ -246,9 +294,16 @@ export function MemberForm({
         // the moment an admin fixes an unrelated typo in the name.
         const touchedEmailPrefs: Partial<EmailPrefValues> = {};
         for (const field of touchedPrefFields) touchedEmailPrefs[field] = emailPrefs[field];
+        // On CREATE both arrays go unconditionally — there is no stored value to
+        // clobber, and a Kids volunteer must be created kids-only rather than
+        // existing as a worship member until someone remembers a second edit.
+        const touchedMinistries: Partial<Pick<MemberFormData, "ministries" | "managesMinistries">> = {};
+        if (!initial || touchedMinistryFields.has("ministries")) touchedMinistries.ministries = ministries;
+        if (!initial || touchedMinistryFields.has("managesMinistries")) touchedMinistries.managesMinistries = managesMinistries;
         onSubmit({
           member_name: name, alias, email, role, memberType,
           ...(initial && touchedPrefFields.size > 0 ? { emailPrefs: touchedEmailPrefs } : {}),
+          ...touchedMinistries,
         });
       }}
       className="space-y-4"
@@ -294,6 +349,58 @@ export function MemberForm({
             );
           })}
         </div>
+      </div>
+      <div className="space-y-2">
+        <label className="font-label text-xs uppercase tracking-widest text-mono-500">Ministerios</label>
+        <div className="flex gap-2">
+          {ALL_MINISTRY_IDS.map((id) => {
+            const active = ministries.includes(id);
+            return (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => toggleMinistry(id)}
+                className={`flex-1 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
+                  active
+                    ? "border-accent bg-accent/15 text-accent"
+                    : "border-accent/20 text-mono-500 hover:border-accent/50"
+                }`}
+              >
+                {MINISTRIES[id].name}
+              </button>
+            );
+          })}
+        </div>
+        {ministryError && (
+          <p className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-lg px-3 py-2">{ministryError}</p>
+        )}
+      </div>
+      <div className="space-y-2">
+        <label className="font-label text-xs uppercase tracking-widest text-mono-500">Administra ministerios</label>
+        <div className="flex gap-2">
+          {MANAGEABLE_MINISTRY_IDS.map((id) => {
+            const active = managesMinistries.includes(id);
+            return (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => toggleManagedMinistry(id)}
+                className={`flex-1 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
+                  active
+                    ? "border-accent bg-accent/15 text-accent"
+                    : "border-accent/20 text-mono-500 hover:border-accent/50"
+                }`}
+              >
+                {MINISTRIES[id].name}
+              </button>
+            );
+          })}
+        </div>
+        <p className="font-body text-xs text-mono-500">
+          Otorga administración del ministerio. No implica membresía.
+        </p>
       </div>
       {initial && (
         <div className="space-y-3 pt-1">
@@ -529,12 +636,16 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
   const handleAdd = async (data: MemberFormData) => {
     setSubmitting(true);
     try {
-      // A new member starts on the preference defaults; POST takes identity only.
-      const { member_name, alias, email, role, memberType } = data;
+      // A new member starts on the preference defaults; POST takes identity plus
+      // ministry membership. The ministries MUST be carried here: created
+      // without them, a Kids volunteer normalizes to `["worship"]` and holds the
+      // whole song catalog, schedule, tags and authors until someone remembers a
+      // second edit — with no signal to the admin that it happened.
+      const { member_name, alias, email, role, memberType, ministries, managesMinistries } = data;
       const res = await fetch("/api/admin/members", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ member_name, alias, email, role, memberType }),
+        body: JSON.stringify({ member_name, alias, email, role, memberType, ministries, managesMinistries }),
       });
       if (res.ok) { setModal(null); setModalError(null); fetchMembers(); showToast("Miembro agregado."); }
       else setModalError("Error al agregar miembro.");

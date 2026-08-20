@@ -4,10 +4,23 @@ import { useState, useEffect, useRef } from "react";
 import { useTransientValue } from "@/app/utils/useTransientValue";
 
 interface Props {
+  /** The revision this page was rendered at — the save's `ifRevisionId` guard. */
+  initialRev: string;
   initialDates: string[];
   serviceDates?: string[];
   initialNotes?: { date: string; note: string }[];
 }
+
+/** What the PATCH reports as the member's stored state — on 200 and on 409 alike. */
+interface ServerState {
+  _rev: string | null;
+  unavailableDates: string[];
+  unavailabilityNotes: { date: string; note: string }[];
+}
+
+const CONFLICT_MSG =
+  "Tu disponibilidad cambió mientras esta página estaba abierta — tus cambios NO se guardaron. " +
+  "El calendario ya muestra las fechas actuales: vuelve a marcarlas y guarda otra vez.";
 
 const MONTHS_ES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -50,12 +63,17 @@ function snapshot(dates: Set<string>, notes: Map<string, string>): string {
 
 interface Popover { iso: string; x: number; y: number; above: boolean }
 
-export default function AvailabilityCalendar({ initialDates, serviceDates = [], initialNotes = [] }: Props) {
+export default function AvailabilityCalendar({ initialRev, initialDates, serviceDates = [], initialNotes = [] }: Props) {
   const [dates, setDates]   = useState<Set<string>>(new Set(initialDates));
   const serviceSet = new Set(serviceDates);
   const [saving, setSaving] = useState(false);
   const [saved, flashSaved, clearSaved] = useTransientValue(false, 2500);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // The conflict notice is HELD, never flashed: it reports a write that did NOT
+  // land, and it must outlive the seconds a toast gets.
+  const [conflict, , clearConflict, holdConflict] = useTransientValue<string | null>(null, 2500);
+  // The revision every save is written against; refreshed from each reply.
+  const [rev, setRev]       = useState(initialRev);
   const [page, setPage]     = useState(0);
 
   const [notes, setNotes]   = useState<Map<string, string>>(
@@ -155,25 +173,82 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
     setRecurOpen(false);
   }
 
+  /** Adopt the server's arrays, dropping the pending edits with them. */
+  function adopt(server: ServerState) {
+    const serverDates = new Set(server.unavailableDates ?? []);
+    const serverNotes = new Map((server.unavailabilityNotes ?? []).map(n => [n.date, n.note]));
+    setDates(serverDates);
+    setNotes(serverNotes);
+    setInitialSnap(snapshot(serverDates, serverNotes));
+    if (server._rev) setRev(server._rev);
+    setPopover(null);
+    clearSaved();
+  }
+
+  /**
+   * The PATCH replaces BOTH arrays wholesale from a snapshot this page took when
+   * it loaded, so it carries the revision it read at and the server refuses a
+   * stale one. On that 409 the pending edits are DISCARDED, not retried:
+   * re-sending a stale set against a fresh revision is the very deletion the
+   * guard just stopped — the member re-marks the dates against real state.
+   *
+   * The one exception is a conflict where the server's availability is
+   * BYTE-IDENTICAL to the base these edits were built on. That is not the race;
+   * it is a sibling write to the same `teamMembers` document — `ProfilePanel`
+   * sits on this same page and saves alias, email, photo, password and
+   * notification prefs. Re-issuing the edits against the fresh revision then
+   * cannot delete anything, so it happens once, silently, instead of throwing
+   * the member's work away for a field they changed themselves seconds ago.
+   */
   async function save() {
     setSaving(true);
     setSaveError(null);
+    clearConflict();
     try {
       const notesPayload = Array.from(notes.entries())
         .filter(([d, n]) => dates.has(d) && n.trim())
         .map(([date, note]) => ({ date, note: note.trim() }));
+      const baseSnap = initialSnap;
 
-      const res = await fetch("/api/me/availability", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          unavailableDates: Array.from(dates),
-          unavailabilityNotes: notesPayload,
-        }),
-      });
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      setInitialSnap(snapshot(dates, notes));
-      flashSaved(true);
+      let attemptRev = rev;
+      // At most two attempts: the second can only be the sibling-write rebase,
+      // and its own conflict is treated as a real one.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const res = await fetch("/api/me/availability", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            _rev: attemptRev,
+            unavailableDates: Array.from(dates),
+            unavailabilityNotes: notesPayload,
+          }),
+        });
+
+        if (res.ok) {
+          const server = (await res.json()) as ServerState;
+          // Only the revision is adopted, not the arrays: the reply echoes what
+          // was just sent, and overwriting local state here would delete a date
+          // toggled while the request was in flight.
+          if (server._rev) setRev(server._rev);
+          setInitialSnap(snapshot(dates, notes));
+          flashSaved(true);
+          return;
+        }
+        if (res.status !== 409) throw new Error(`Server returned ${res.status}`);
+
+        const server = (await res.json()) as ServerState;
+        const serverSnap = snapshot(
+          new Set(server.unavailableDates ?? []),
+          new Map((server.unavailabilityNotes ?? []).map(n => [n.date, n.note])),
+        );
+        if (attempt === 0 && server._rev && serverSnap === baseSnap) {
+          attemptRev = server._rev;
+          continue;
+        }
+        adopt(server);
+        holdConflict(CONFLICT_MSG);
+        return;
+      }
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Error al guardar");
     } finally {
@@ -285,6 +360,15 @@ export default function AvailabilityCalendar({ initialDates, serviceDates = [], 
       {saveError && (
         <p className="font-label text-[11px] uppercase tracking-widest text-negative-fg">
           No se pudo guardar — {saveError}
+        </p>
+      )}
+
+      {conflict && (
+        <p
+          role="status"
+          className="rounded-xl border border-negative-strong/25 bg-negative-strong/5 px-4 py-2 font-body text-sm text-negative-fg"
+        >
+          {conflict}
         </p>
       )}
 

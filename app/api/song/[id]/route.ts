@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireActiveSession } from "@/app/utils/authGuards";
+import { requireMinistryMember } from "@/app/utils/authGuards";
 import { serverClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { canonicalizePlayHistory, playHistoryTargetKey } from "@/app/utils/serviceReadSelect";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await requireActiveSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Worship membership, not just an active session: the song catalog is a
+  // worship surface and a kids-only member must not reach it by typed URL.
+  const worship = await requireMinistryMember("worship");
+  if (!worship) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
   const today = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });

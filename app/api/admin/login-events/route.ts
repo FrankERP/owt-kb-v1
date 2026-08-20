@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { serverClient } from "@/sanity/lib/serverClient";
+import { WORSHIP_MEMBER_GROQ_FILTER } from "@/app/ministries";
 
 export async function GET() {
   const session = await requireActiveManager();
@@ -13,8 +14,11 @@ export async function GET() {
   }
 
   const [members, events] = await Promise.all([
+    // Same ministry scoping as GET /api/admin/members: worship admins see
+    // worship members only, super-admins see everyone.
     serverClient.fetch<Array<{ _id: string; member_name: string; alias?: string; lastSeen?: string }>>(
-      `*[_type == "teamMembers"] | order(member_name asc) { _id, member_name, alias, lastSeen }`
+      `*[_type == "teamMembers" && ${WORSHIP_MEMBER_GROQ_FILTER}] | order(member_name asc) { _id, member_name, alias, lastSeen }`,
+      { all: session.user.role === "super-admin" }
     ),
     serverClient.fetch<Array<{ _id: string; memberId: string; email: string; provider: string; timestamp: string }>>(
       `*[_type == "loginEvent"] | order(timestamp desc) {

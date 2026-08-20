@@ -3,6 +3,7 @@ import Navbar from "@/app/components/Navbar";
 import TagSearchList from "@/app/components/TagSearchList";
 import { Tag } from "@/app/utils/interface";
 import { client } from "@/sanity/lib/client";
+import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 
 export const metadata: Metadata = {
   title: "Etiquetas — Oasis Worship Team",
@@ -27,6 +28,7 @@ async function getTagData(): Promise<{ tags: Tag[]; totalSongs: number }> {
 export const revalidate = 60;
 
 const page = async () => {
+  await requireWorshipPage("/tag");
   const { tags, totalSongs } = await getTagData();
 
   return (

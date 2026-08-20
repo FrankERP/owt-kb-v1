@@ -12,7 +12,7 @@ import {structureTool} from 'sanity/structure'
 import {apiVersion, dataset, projectId} from './sanity/env'
 import {schema} from './sanity/schema'
 import {serviceReadinessStructure} from './sanity/structure'
-// Service Readiness A2 §8 — Studio protection for the eight protected types.
+// Service Readiness A2 §8 — Studio protection for the thirteen protected types.
 // The policy itself lives in `app/utils/studioProtection.ts` so it can be
 // asserted without a browser (app/utils/__tests__/studioProtection.test.ts).
 // NOTE: `__experimental_actions` was REMOVED in Sanity v5 and is inert there, so

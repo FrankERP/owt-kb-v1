@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireActiveSession } from "@/app/utils/authGuards";
+import { requireMinistryMember } from "@/app/utils/authGuards";
 import { serverClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { buildPreviousKeysBySong, type SongPlayHistorySet } from "@/app/utils/songPlayHistory";
@@ -14,8 +14,10 @@ interface SongSearchResult {
 }
 
 export async function GET(req: NextRequest) {
-  const session = await requireActiveSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // The single largest worship read a kids-only member could otherwise make:
+  // this returns the ENTIRE song catalog, and no UI change hides a typed URL.
+  const worship = await requireMinistryMember("worship");
+  if (!worship) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const q = req.nextUrl.searchParams.get("q")?.trim() ?? "";
 

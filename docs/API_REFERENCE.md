@@ -225,7 +225,7 @@ super-admin-only impersonation and live role/revocation refresh. Full detail in
 | Route | Methods | Purpose & side effects |
 |-------|---------|------------------------|
 | `/api/me` | GET, PATCH | GET own member doc (incl. `hasPassword`). PATCH `{alias?, email?}` (email regex-validated) → `revalidateServiceViews()` + `revalidatePath("/me")`. |
-| `/api/me/availability` | GET, PATCH | GET/PATCH `{unavailableDates[], unavailabilityNotes[]}`; validates ISO dates, unique per date (`_key`=date). No revalidation. |
+| `/api/me/availability` | GET, PATCH | GET returns `{_rev, unavailableDates[], unavailabilityNotes[]}`. PATCH **requires `_rev`** (400 if missing — never a fallback to an unconditional write) and commits under `ifRevisionId`; **409 `{error:"stale_revision", _rev, …}` means the write did NOT land** and carries the winner's state, 200 returns the new `_rev`. Validates ISO dates, unique per date (`_key`=date). No revalidation. **`unavailableDates` has exactly two writers — this route and `/api/kids/members/[id]/availability` — and both are now revision-guarded;** before that, whichever saved second silently deleted the other's dates. The client rebases **once** when the conflicting state's base is byte-identical (a sibling `/api/me*` write from the same page, where re-issuing cannot delete anything) and discards on any further conflict. |
 | `/api/me/notif-prefs` | PATCH | `{email?, assignments?, proposals?, reminders?, setlist?}` (booleans; `setlist` bool → `"all"`/`"off"`). Writes `notifPrefs.*`. |
 | `/api/me/theme` | PATCH | `{theme: "dark" \| "light" \| "system"}` → writes `themePref`. **403 while impersonating — deliberately stricter than `PATCH /api/me`, do not "harmonise" it:** impersonation rewrites `session.user.sanityId` to the target, so without the guard a super-admin would persist their theme onto someone else's record from a UI action that looks local. A name correction is plausibly made on a member's behalf; a theme is not. `"system"` became legal at Child F, together with the `enableSystem` flip that makes it resolvable — the two are one change, and the 400 body is derived from the accepted set so it cannot drift. No `revalidate*` — per-member chrome, no ISR page renders it. |
 | `/api/me/password` | POST | `{currentPassword?, newPassword}` (≥8 chars). Verifies current via bcrypt if a hash exists; sets `passwordHash` (cost 12). |
@@ -233,6 +233,25 @@ super-admin-only impersonation and live role/revocation refresh. Full detail in
 | `/api/me/proposals` | GET, POST | GET proposals for every service the user Leads (incl. `_rev`). POST creates/updates the **one shared proposal** (Leads only): `{roleId, observed, songs, leadNotes?, teamNotes?, status: "draft"\|"pending"}`. Resolution uses A1's **two** indexes (`service_ref` + target key), never an arbitrary `[0]`; deterministic `_id` `setlistProposal.<roleId>` is the first-create mutex (`tx.create`, so a co-lead race is a real conflict); `observed` gates every update; the weekend lock or the special-role revision is asserted in the same transaction; `service_type`/`service_date` are **refreshed from the authorized canonical role**, never accepted from the client. Fires `notifyProposalSubmitted` when `status="pending"`. |
 | `/api/me/push-token` | POST, DELETE | Register/remove an FCM `deviceToken` (token validated against `/^[A-Za-z0-9_:.-]{1,4096}$/`, GROQ-injection guard). |
 | `/api/me/songs` | GET | `?q=` search of `post` by title/author (prefix); up to 30/50 results. |
+
+---
+
+## Oasis Kids
+
+Every route below is gated by `requireMinistryManager("kids")` → **403** when it
+returns null. That guard passes for `super-admin` or a member whose
+`managesMinistries` includes `"kids"` — **plain `admin` does NOT pass**, which is the
+two-way isolation rule (see `CLAUDE.md` § Auth). All mutating routes call
+`revalidateKidsViews()`.
+
+| Route | Methods | Purpose & side effects |
+|-------|---------|------------------------|
+| `/api/kids/pairs` | GET, POST | GET every pair (`active` coalesced, so a field-less doc is not silently dropped from rotations). POST `{name, room, memberIds:[a,b]}` — `members[]` written with `_key = _ref`; `memberIds` must resolve to `teamMembers` whose normalized `ministries` include `kids` (shared `validatePairMembers`). |
+| `/api/kids/pairs/[id]` | PATCH | `{name?, room?, memberIds?, active?}`, each applied only when present (the field is `memberIds`, matching POST — a body sending `members` matches no arm and 400s as "Nothing to update"). **Fetches the target's `_type` first and 404s anything that is not a `kidsPair`** — without it the route patched whatever id the path named, and `tag`/`author` both have a real `name` field. A non-existent id is a 404, not a 500. |
+| `/api/kids/schedules` | GET, PUT | GET `?month=YYYY-MM` (string bounds, no `Date` math; `published` projected through `coalesce(…, false)` because GROQ has no boolean default). PUT `{date, seats, published?}` upserts at the deterministic `_id` `kidsSchedule-<YYYY-MM-DD>` via `createIfNotExists` + `patch`, so a re-generate updates in place and two concurrent saves cannot fork a Sunday. Re-validates room-vs-seat, retired pairs and one-seat-per-pair server-side rather than trusting the dropdown. `.unset()` is skipped when nothing is being cleared. |
+| `/api/kids/generate` | POST | `{month}` → `RotationResult`. **Read-only, writes nothing.** Reads the month's worship assignments through `operationalClient` with `published != false` (a Kids planner must never be the surface that reveals a draft worship roster) purely to emit overlap **warnings** — never a block. |
+| `/api/kids/members` | GET | Members whose `ministries` include `kids`, with `_rev`, `unavailableDates` and `unavailabilityNotes`. `_rev` is **contract, not debug clutter** — the availability PATCH requires it. |
+| `/api/kids/members/[id]/availability` | PATCH | `{_rev, unavailableDates[], unavailabilityNotes[]}` — the admin-side override for volunteers who never sign in, writing the **same fields the member's own `/me` calendar writes**. 404 unless the target's normalized ministries include `kids` (checked before anything else, so a Kids manager learns nothing about a worship member). **`_rev` is mandatory — a missing one is 400, never an unconditional write**, because the fallback would preserve the lost-update bug for any stale client bundle. The commit runs under `ifRevisionId`; a **409 `{error:"stale_revision", …}` means the write did NOT land** and carries the winner's current arrays. The client adopts that state and holds (not flashes) a Spanish message telling the manager to re-mark and save. |
 
 ---
 
@@ -434,7 +453,7 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   as a non-editable `targetState`, `/api/song/[id]` and `/api/me/songs` drop it from play
   history, and `notifyProposalSubmitted` sends nothing.
 - **Protected mutations have no alternate path:** the API routes above are the only writers. The
-  embedded Studio strips every mutating action from all eleven protected types, and the five historical
+  embedded Studio strips every mutating action from all thirteen protected types, and the five historical
   one-shot scripts fail closed before constructing a client — see
   [DATA_MODEL → Studio](DATA_MODEL.md#studio) and
   [SOLVER_AND_INFRA §3](SOLVER_AND_INFRA.md#3-scripts--one-off-migrations-imports--ops).

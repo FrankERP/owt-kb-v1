@@ -1,0 +1,48 @@
+import { defineType, type Rule } from "sanity";
+
+const pairRef = (name: string, title: string) => ({
+  name,
+  title,
+  type: "reference" as const,
+  to: [{ type: "kidsPair" as const }],
+});
+
+/**
+ * One document per Sunday, at the DETERMINISTIC id `kidsSchedule-<YYYY-MM-DD>`
+ * (minted by /api/kids/schedules): a regenerate updates in place and two
+ * concurrent saves cannot fork the same Sunday. Draft until published —
+ * member-facing reads filter `published == true`, NOT the worship types'
+ * `published != false`. The worship convention exists because those documents
+ * predate the field, so an absent `published` must mean "visible"; every
+ * `kidsSchedule` is minted with `published: false` by
+ * `createIfNotExists` in /api/kids/schedules — that write, NOT the
+ * `initialValue` below, is what guarantees the field is present, since
+ * `initialValue` only applies to documents authored in Studio and Studio can no
+ * longer author this type at all (`PROTECTED_STUDIO_TYPES`). The strict test is
+ * therefore the safe one: in GROQ `null == true` evaluates to `null`, which is
+ * not true, so a field-less document is excluded rather than published by
+ * accident. Any new kids type or new member-facing kids read copies THIS rule,
+ * not the worship one.
+ * A seat may be empty: unfillable weeks stay honest (spec §7.6).
+ */
+export const kidsSchedule = defineType({
+  name: "kidsSchedule",
+  title: "Kids — Rol del domingo",
+  type: "document",
+  // Studio protection (PROTECTED_STUDIO_TYPES in app/utils/studioProtection.ts):
+  // read-only in the embedded Studio. The create affordance is what matters most
+  // here — it mints a RANDOM `_id`, and a second document for a Sunday that
+  // already has `kidsSchedule-<date>` would show that Sunday twice in /kids.
+  // `document.actions` in `sanity.config.ts` also removes every mutating action
+  // (even by direct URL). `__experimental_actions` is NOT used — inert in v5.
+  readOnly: true,
+  fields: [
+    { name: "date", title: "Domingo", type: "date", validation: (r: Rule) => r.required() },
+    pairRef("ensenanza", "Enseñanza"),
+    pairRef("chiquitos", "RG Chiquitos"),
+    pairRef("medianos", "RG Medianos"),
+    pairRef("grandes", "RG Grandes"),
+    { name: "published", title: "Publicado", type: "boolean", initialValue: false },
+  ],
+  preview: { select: { title: "date" } },
+});

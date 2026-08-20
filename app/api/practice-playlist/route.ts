@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireActiveSession } from "@/app/utils/authGuards";
+import { requireMinistryMember } from "@/app/utils/authGuards";
 import { client } from "@/sanity/lib/client";
 import { pickPracticeVideoUrl, extractYouTubeId } from "@/app/utils/practiceVideo";
 
@@ -7,8 +7,9 @@ import { pickPracticeVideoUrl, extractYouTubeId } from "@/app/utils/practiceVide
 // can practice the whole set in one tap. Uses YouTube's no-auth watch_videos URL.
 
 export async function POST(req: NextRequest) {
-  const session = await requireActiveSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Worship membership: this reads the worship song catalog by id.
+  const worship = await requireMinistryMember("worship");
+  if (!worship) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { ids, mode } = (await req.json()) as { ids?: string[]; mode?: "musica" | "letras" };
   const pickMode: "musica" | "letras" = mode === "letras" ? "letras" : "musica";

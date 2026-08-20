@@ -370,7 +370,7 @@ the load-bearing shapes are:
   unchanged, no side effects, but the lock and advanced role revision persist.
 - **Post-commit side effects are centralized** in
   [`app/utils/serviceMutationSideEffects.ts`](../app/utils/serviceMutationSideEffects.ts) — see §9.
-- **Alternate write paths are closed:** the Studio strips every mutating action from all **eleven**
+- **Alternate write paths are closed:** the Studio strips every mutating action from all **thirteen**
   protected types (→ [DATA_MODEL → Studio](DATA_MODEL.md#studio)) and the five historical one-shot
   scripts fail closed (→ [SOLVER_AND_INFRA §3](SOLVER_AND_INFRA.md#3-scripts--one-off-migrations-imports--ops)).
 

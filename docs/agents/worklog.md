@@ -1,9 +1,9 @@
 # Agent worklog
 
 Every subagent dispatch in this repository is recorded in `.agents/log/worklog.jsonl`.
-The log is the evidence base for the `hr-officer` review that closes each
-implementation cycle: without it, HR can only audit agent definitions, not whether
-the agents actually did their jobs.
+The log is the evidence base for the **weekly** `hr-officer` review (per-cycle until
+the 2026-08-19 workflow amendment): without it, HR can only audit agent definitions,
+not whether the agents actually did their jobs.
 
 ## The file
 
@@ -67,14 +67,19 @@ Two entries agents cannot report for themselves, and the coordinator must write:
   the recruiting signal: recurring inline work with no owner is how `hr-officer` spots
   a role the roster is missing. Do not omit these to keep the log tidy.
 
-**The entry is appended when the work happens.** Never stage it in `owt-kb-v1` — the
-gitignore makes that a no-op anyway. It is committed and pushed in `owt-agent-logs`.
-The old "ships in the same commit" rule is how the log landed on the remote; it is
-retired. Append immediately so "I'll log it at the end" cannot skip a dispatch.
+**Entries are appended in one batch at cycle close** (amended 2026-08-19;
+per-dispatch appends remain welcome). Never stage them in `owt-kb-v1` — the
+gitignore makes that a no-op anyway. They are committed and pushed in
+`owt-agent-logs`. The old "append immediately" rule existed so "I'll log it at the
+end" could not skip a dispatch; that safeguard now lives in the finish-cycle
+completeness checklist, where the cycle-closing code-review dispatch lists every
+entry the cycle owes before the batch is written. A batched entry's `ts` is derived
+the same way a backfilled one is — from the commit the dispatch produced or the
+commit that closes its findings — never from recollection.
 
 **Incidents and firefights count as cycles.** Nobody logs mid-fire, and nobody is
-expected to — backfill the entries once the fire is out and dispatch `hr-officer` over
-the incident window like any other cycle. Incident work runs with the least scrutiny,
+expected to — backfill the entries once the fire is out; the weekly `hr-officer`
+review covers the incident window like any other work. Incident work runs with the least scrutiny,
 which makes it the cycle most worth closing properly. The 2026-08-07 SMTP incident (an
 afternoon of production commits, zero entries) is the case this rule exists for.
 
@@ -125,11 +130,11 @@ its `ts` is 8h27m before the artifact it cites, and the line itself is unchanged
 
 ## The HR gate
 
-At the end of an implementation cycle — after the post-phase code review, before the
-completion report — dispatch `hr-officer`. It reviews entries since its own last log
-entry **in file order** (not timestamp order — backfilled entries carry older
-timestamps but land later in the file) and returns `STAFF REVIEW` / `FINDINGS` /
-`PROPOSALS`.
+`hr-officer` runs on a **weekly cadence** (amended 2026-08-19; previously per
+cycle): dispatch it when a week or more has passed since its own last log entry, or
+on demand via `/hr-report`. It reviews entries since its own last log entry **in
+file order** (not timestamp order — backfilled entries carry older timestamps but
+land later in the file) and returns `STAFF REVIEW` / `FINDINGS` / `PROPOSALS`.
 
 The gate is **advisory**: HR findings never block a delivery, and HR proposes roster
 changes (new agents, retirements, merges) as drafts for the user to approve. It never

@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
-const requireActiveSessionMock = vi.fn();
+const requireMinistryMemberMock = vi.fn();
 const fetchMock = vi.fn();       // serverClient — the post/song read
 const opFetchMock = vi.fn();     // operationalClient — the canonical history read
 
 vi.mock("server-only", () => ({}));
 
 vi.mock("@/app/utils/authGuards", () => ({
-  requireActiveSession: () => requireActiveSessionMock(),
+  requireMinistryMember: () => requireMinistryMemberMock(),
 }));
 
 vi.mock("@/sanity/lib/serverClient", () => ({
@@ -23,14 +23,14 @@ vi.mock("@/sanity/lib/operationalClient", () => ({
 import { GET } from "@/app/api/song/[id]/route";
 
 beforeEach(() => {
-  requireActiveSessionMock.mockReset();
+  requireMinistryMemberMock.mockReset();
   fetchMock.mockReset();
   opFetchMock.mockReset();
 });
 
 describe("/api/song/[id]", () => {
   it("keeps SongSheet history past-only in America/Mexico_City", async () => {
-    requireActiveSessionMock.mockResolvedValue({ user: { sanityId: "member-1" } });
+    requireMinistryMemberMock.mockResolvedValue({ user: { sanityId: "member-1" } });
     fetchMock.mockResolvedValueOnce({ _id: "song-1", title: "Sólo en Jesús" });
     opFetchMock.mockResolvedValueOnce([{ week: "2026-07-12", _type: "featuredSongs" }]);
 
@@ -49,7 +49,7 @@ describe("/api/song/[id]", () => {
   });
 
   it("drops an ambiguous (duplicate-week) setlist from history — no double count", async () => {
-    requireActiveSessionMock.mockResolvedValue({ user: { sanityId: "member-1" } });
+    requireMinistryMemberMock.mockResolvedValue({ user: { sanityId: "member-1" } });
     fetchMock.mockResolvedValueOnce({ _id: "song-1", title: "Sólo en Jesús" });
     opFetchMock.mockResolvedValueOnce([
       { week: "2026-07-12", _type: "featuredSongs", play_key: "G" },
@@ -60,5 +60,16 @@ describe("/api/song/[id]", () => {
     const response = await GET({} as NextRequest, { params: Promise.resolve({ id: "song-1" }) });
     const body = await response.json();
     expect(body.history).toEqual([{ week: "2026-06-21", _type: "featuredSongs", play_key: "C" }]);
+  });
+
+  // ADR-0007 names this handler as the REAL gate behind `EditSongButton`'s
+  // cosmetic `useSession()` check; it now requires worship MEMBERSHIP, so a
+  // kids-only member gets nothing from a typed URL and nothing is read.
+  it("403s a caller who is not a worship member, before any read", async () => {
+    requireMinistryMemberMock.mockResolvedValue(null);
+    const response = await GET({} as NextRequest, { params: Promise.resolve({ id: "song-1" }) });
+    expect(response.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(opFetchMock).not.toHaveBeenCalled();
   });
 });

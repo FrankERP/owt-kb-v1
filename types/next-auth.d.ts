@@ -15,6 +15,13 @@ declare module "next-auth" {
       alias?: string | null;
       isImpersonating?: boolean;
       realAdminName?: string;
+      /**
+       * Ministry membership/management, refreshed with the role on every token
+       * refresh (same 30s TTL). RENDER-ONLY — nav filtering. Server-side
+       * authorization re-reads `getMemberAccess`; never authorize off these.
+       */
+      ministries: string[];
+      managesMinistries: string[];
     };
   }
   interface User {
@@ -48,6 +55,9 @@ declare module "next-auth/jwt" {
     alias?: string | null;
     isImpersonating?: boolean;
     realAdminName?: string;
+    /** Optional: tokens minted before ministries shipped carry neither key. */
+    ministries?: string[];
+    managesMinistries?: string[];
     __realAdmin?: {
       role: OWTRole;
       sanityId: string;

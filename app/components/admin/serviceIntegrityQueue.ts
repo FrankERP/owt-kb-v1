@@ -107,7 +107,7 @@ function widenSources(sources: IntegritySourceStates): ServiceSourceStates {
  * this view never writes, and the plan forbids free-form Studio mutation from it.
  *
  * The named route is A2's guarded operator command
- * (`scripts/service-readiness-cleanup.mjs`), NOT Studio. A2 §8 made all eight
+ * (`scripts/service-readiness-cleanup.mjs`), NOT Studio. A2 §8 made the
  * protected types read-only in Studio with their document actions removed, so
  * telling an admin to "fix it in Studio" would send them somewhere they cannot
  * act. The operator command is dry-run by default, takes an exact id and
