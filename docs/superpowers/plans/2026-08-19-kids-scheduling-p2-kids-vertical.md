@@ -440,21 +440,27 @@ Fetch initial pairs + current-month schedules server-side (via `serverClient`) a
 
 ---
 
-### Task 7: `/kids` member view + landing + nav
+### Task 7: `/kids` member view + landing
 
 **Files:**
 - Create: `app/(client)/kids/page.tsx`
 - Modify: `app/(client)/me/page.tsx` (add the member's upcoming Kids assignments section when their ministries include kids)
 
-**Interfaces:**
-- Consumes: `requireMinistryMember("kids")`, `getMemberAccess`, published-filtered GROQ.
+(Nav filtering is **not** here — it belongs to P1 Task 3b, which puts `ministries` on the session and gates every menu item, worship and kids alike, in one place.)
 
-- [ ] **Step 1: `/kids` page** (server component):
+**Interfaces:**
+- Consumes: `requireMinistryMember("kids")`, `requireActiveSession`, `getMemberAccess`, published-filtered GROQ.
+
+- [ ] **Step 1: `/kids` page** (server component). **Split the two failure cases, exactly as P1's `requireWorshipPage` does** — this is the other half of the same contract, and getting it wrong is what turns a disabled member's visit into an infinite `/` ⇄ `/kids` redirect loop:
 
 ```ts
-const session = await requireMinistryMember("kids");
-if (!session) redirect("/");
+const session = await requireActiveSession();
+if (!session) redirect("/auth/signin?callbackUrl=/kids");
+const kids = await requireMinistryMember("kids");
+if (!kids) redirect("/");
 ```
+
+A member with no active session (disabled, deleted, or tokenless) goes to sign-in and never to `/`, whose own gate would send them back here.
 
 Query (published only, next 8 Sundays from local today):
 
@@ -473,7 +479,7 @@ Render the schedule table (dates at local noon per the timezone invariant), high
 Note the read filter uses `published == true` (stricter than `published != false`): `kidsSchedule` is a NEW type whose every document carries the field from birth, so the absent-field leniency the worship types need does not apply.
 
 - [ ] **Step 2: `/me` addition** — server-side: `getMemberAccess(sanityId)`; if `ministries` includes `"kids"`, fetch the member's next published kids assignments (same query + a client-side filter on `memberIds`) and render a "Mis roles en Oasis Kids" card linking to `/kids`. Worship-only members see nothing new.
-- [ ] **Step 3: Landing** — P1's worship-page gates already redirect kids-only members to `/kids`; verify by test that `/kids` itself never redirects a kids member (no loop).
+- [ ] **Step 3: Landing + loop regression test** — P1's worship-page gates redirect kids-only members to `/kids`. Add a test asserting (a) an active kids member reaching `/kids` is never redirected, and (b) a **disabled** member reaching `/kids` goes to `/auth/signin`, not `/` — the pair of assertions that proves the `/` ⇄ `/kids` loop cannot form from either side.
 - [ ] **Step 4: Gates; commit** — `feat(kids): member-facing /kids view and /me kids card`
 
 ---
