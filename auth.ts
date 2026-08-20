@@ -282,13 +282,27 @@ export const authOptions: NextAuthOptions = {
       // is the TARGET, and the UI must reflect the effective identity's
       // ministries, not the admin's.
       //
-      // Staleness note: the `trigger === "update"` branch above returns the token
-      // early (auth.ts:197), so for exactly ONE request after starting or stopping
-      // impersonation `token.ministries` can still describe the previous identity
-      // while `token.sanityId` already describes the new one. That is tolerable
-      // ONLY because this copy is render-only — every server-side authorization
-      // decision re-reads getMemberAccess. If anything ever authorizes off the
-      // session copy, this one-request lag becomes a privilege bug.
+      // Staleness note — READ THIS BEFORE GATING ANYTHING ON THE SESSION COPY.
+      //
+      // The impersonation branch above returns early, so it must set every
+      // identity-derived claim itself. It sets `ministries`/`managesMinistries`
+      // from the TARGET on start and from the `__realAdmin` snapshot on stop, so
+      // there is no lag on either transition. An earlier version set neither and
+      // the token carried the admin's ministries beside the target's `sanityId`:
+      // impersonating a Kids manager rendered no "Planear Kids" link.
+      //
+      // What survives: `__realAdmin.ministries` is snapshotted once at
+      // impersonation start and never refreshed (the line below refreshes only
+      // `__realAdmin.role`). So if the admin's OWN ministries change while they
+      // are impersonating, the first request after stopping restores the
+      // snapshot's older values, and the next non-`update` jwt call overwrites
+      // them from `getMemberAccess`. One request, self-healing, and it can only
+      // ever show the admin a stale nav.
+      //
+      // All of that is tolerable ONLY because this copy is render-only — every
+      // server-side authorization decision re-reads `getMemberAccess` by the
+      // effective `sanityId`. The day something authorizes off the session copy,
+      // this stops being cosmetic. `NavMenu` is currently the only reader.
       if (eff) {
         token.role              = (eff.role ?? "member") as OWTRole;
         token.ministries        = eff.ministries;

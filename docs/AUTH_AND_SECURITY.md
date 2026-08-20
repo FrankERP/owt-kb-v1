@@ -68,8 +68,19 @@ Triggered by `trigger === "update"` with an `impersonating` / `stopImpersonating
   **not `super-admin`**, the token is returned unchanged — a crafted `session.update()` from a
   lesser role **cannot escalate**. Otherwise it snapshots the original admin identity into
   `token.__realAdmin` **once** (guarded so switching targets doesn't clobber it), overwrites
-  `role/sanityId/name/alias` with the target's, and sets `isImpersonating = true`.
-- **Stop:** restores identity from `__realAdmin` and clears the impersonation fields.
+  `role/sanityId/name/alias` **and `ministries`/`managesMinistries`** with the target's
+  (normalized through `normalizeMinistries` / `isMinistryId`, so the rules match storage), and
+  sets `isImpersonating = true`.
+- **Stop:** restores identity **and both ministry fields** from `__realAdmin`, then clears the
+  impersonation fields.
+
+> **Why the ministry fields are in this branch at all.** It returns early, before the refresh
+> block that normally assigns them, so anything it omits keeps the *admin's* value beside the
+> *target's* `sanityId`. That shipped once: impersonating a Kids manager rendered no
+> "Planear Kids" link, because `NavMenu` reads the session rather than the database. The guards
+> were never affected — they re-read `getMemberAccess` by the effective `sanityId` — so the page
+> stayed reachable by URL. **Any claim derived from identity that is added to the token must be
+> set in this branch too, or it silently describes the wrong person.**
 
 > **Invariant:** impersonation authority is enforced in exactly this one trusted place. Never
 > move it client-side, and never trust `isImpersonating` from the client. Impersonation UI lives
