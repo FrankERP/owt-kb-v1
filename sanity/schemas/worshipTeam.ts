@@ -54,6 +54,34 @@ export const teamMembers = defineType({
       description: "Si está activo, este miembro pierde el acceso a la app en segundos (kill switch). Reversible.",
     },
     {
+      name: "ministries",
+      title: "Ministerios (membresía)",
+      type: "array",
+      of: [{ type: "string" }],
+      options: {
+        list: [
+          { title: "Alabanza", value: "worship" },
+          { title: "Oasis Kids", value: "kids" },
+        ],
+      },
+      description:
+        "Ministerios a los que pertenece este miembro. VACÍO o ausente = solo Alabanza (comportamiento legado; NO rellenar en masa).",
+    },
+    {
+      // `worship` is deliberately NOT offered here — worship management stays with the
+      // legacy `admin`/`content-editor` roles, and no guard reads a "worship" entry in
+      // this field. Offering it would create a second worship-admin path nothing honours.
+      name: "managesMinistries",
+      title: "Administra ministerios",
+      type: "array",
+      of: [{ type: "string" }],
+      options: {
+        list: [{ title: "Oasis Kids", value: "kids" }],
+      },
+      description:
+        "Otorga administración del ministerio nombrado (p. ej. planear el rol de Kids). NO implica membresía ni acceso de Alabanza. Solo super-admin edita este campo.",
+    },
+    {
       // NO `initialValue` — deliberate, and the neighbouring prefs below all have one.
       // An unset `themePref` is the load-bearing signal Child F's staged rollout reads:
       // "this member has never chosen", as distinct from "this member chose dark". An
