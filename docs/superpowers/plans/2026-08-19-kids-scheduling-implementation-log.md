@@ -45,6 +45,36 @@ review rounds kept surfacing, which is evidence the class outlived the review.
   planner wants a Spanish long date, **format at render time** from the `date` field.
 - Fairness category keys are `"ensenanza"` and `` `room:${seat}` ``, keyed off the SEAT.
 
+## Repo guards that caught the plan being wrong
+
+These are the strongest evidence that the repo's own invariant tests are doing real
+work — each one blocked a defect the plan would otherwise have shipped:
+
+- **`protectedReadAudit.ts`** — the plan told the Kids generate route to read worship
+  roles through `serverClient`; role types must go through `operationalClient`.
+- **`draftGatingCoverage.test.ts`** — the plan's `assignedMemberRefsQuery` call omitted
+  `published != false`. Without it the Kids planner would have been the surface that
+  revealed a DRAFT worship roster.
+- **GROQ has no boolean default** — `"published": published` projects `null`, not
+  `false`, for a document lacking the field, handing the UI a third state. The routes
+  use `coalesce(published, false)`; the plan was corrected before Task 7 was dispatched
+  (`32d976ae`) so the mistake could not repeat.
+- **`agentDocsParity.test.ts`** caught `AGENTS.md` drifting from `CLAUDE.md` when the
+  workflow amendments landed, and again constrained the Task 8 auth-section edit.
+
+## Pre-existing doc drift, NOT fixed here
+
+`CLAUDE.md`'s Domain-docs line and `docs/agents/domain.md` both point at a root
+`CONTEXT.md` that **does not exist**. Unrelated to this delivery and deliberately left
+alone rather than fixed mid-cycle; worth a decision (write it, or drop the reference).
+
+## Coverage gap recorded in ADR-0020
+
+Nothing enumerates which pages must call `requireWorshipPage`. `worshipPageGate.test.ts`
+tests the gate's behaviour, not its adoption, so a NEW worship page added later is
+ungated by default and no test complains. ADR-0020 states this in its Consequences. A
+route-inventory guard would close it; out of scope for this delivery.
+
 ## Operational note
 
 `node scripts/colour-inventory.mjs` regenerates the whole artifact, and while several
