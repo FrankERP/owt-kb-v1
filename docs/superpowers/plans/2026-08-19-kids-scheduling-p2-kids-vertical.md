@@ -490,10 +490,13 @@ Note the read filter uses `published == true` (stricter than `published != false
 
 **Files:**
 - Create: `docs/adr/0019-generalize-at-the-third-ministry.md` (follow `docs/adr/TEMPLATE.md`)
+- Create: `docs/adr/0020-ministry-isolation-gates-per-page.md` (follow the same template)
 - Modify: `CLAUDE.md` + `AGENTS.md` (parity!): add `/kids` + ministry guards to the auth section one-liners; `CONTEXT.md` if it indexes routes.
 
 - [ ] **Step 1: ADR-0019** — Decision: Kids ships as a Kids-specific vertical (`kidsPair`/`kidsSchedule`, own rotation) instead of generic ministry-scheduling schemas; generalization is deferred until a THIRD ministry exists so the abstraction is extracted from two real examples, not speculated from one. Alternatives rejected: generic schemas now (wrong-abstraction risk, migration cost with n=1 exemplars), separate app (roster/maintenance split). Consequences: a third ministry pays an extraction cost; until then Kids code stays boring and greppable. Link the ADR from `app/ministries.ts` (comment already references it) and from the spec.
-- [ ] **Step 2: CLAUDE.md/AGENTS.md** — in `## Auth`, add: ministry guards (`requireMinistryMember`/`requireMinistryManager`), the two-way isolation rule, and that absent `ministries` ⇒ worship. Keep the parity test green (`app/utils/__tests__/agentDocsParity.test.ts`).
+- [ ] **Step 1b: ADR-0020 — why isolation is gated per page, not in middleware.** P1 turns seven ISR pages dynamic, including the app's hottest ones, and that cost needs a recorded reason or the next reader will "fix" it. Decision: gate in each page via `requireWorshipPage`. Rejected alternative: `proxy.ts` middleware gating, which was genuinely available once the JWT carries `ministries` at the same 30s freshness the guards use, and would have preserved ISR. Rejected because the middleware reads token claims refreshed on NextAuth's schedule rather than the per-request member snapshot the guards use, and because a matcher list is a second place for route coverage to drift — the repo already carries a byte-identical-matcher guard (`app/utils/routeMatcher.ts` + `routeMatcher.test.ts`) for exactly that reason. Consequence: `revalidate` on those seven pages no longer means what it says; note it in the ADR so nobody reads the surviving exports as live.
+
+- [ ] **Step 2: CLAUDE.md/AGENTS.md** — in `## Auth`, add: ministry guards (`requireMinistryMember`/`requireMinistryManager`), the two-way isolation rule, and the storage contract in both halves (**absent** `ministries` ⇒ worship; **explicitly empty** ⇒ rejected at every write boundary, never stored). Keep the parity test green (`app/utils/__tests__/agentDocsParity.test.ts`).
 - [ ] **Step 3: Gates; commit** — `docs(kids): ADR-0019 + auth section updates`
 
 ---

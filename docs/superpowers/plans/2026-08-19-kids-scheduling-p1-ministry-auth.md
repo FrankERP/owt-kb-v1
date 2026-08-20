@@ -20,7 +20,10 @@ P2 (`2026-08-19-kids-scheduling-p2-kids-vertical.md`) is standard by the ladder 
 
 - Spanish-language UI copy; dark and light themes.
 - Gates before done: `npx tsc --noEmit`, `npm test`, `npx eslint .` with 0 errors.
-- Absent or empty `ministries` ⇒ `["worship"]` (legacy members keep exactly today's access; **no migration**).
+- **The storage contract for `ministries`, in one line each — the two cases are NOT the same and conflating them fails open:**
+  - **Absent** ⇒ read as `["worship"]`. This is the legacy rule that makes the change migration-free: every member predating Kids is a worship member.
+  - **Explicitly empty (`[]`)** ⇒ **rejected at every write boundary, never stored.** A read that meets one anyway still yields `["worship"]` (defence in depth), but no writer may create that state. Storing `[]` would mean "belongs to nothing" while *reading* as full worship access — the UI would show zero ticked boxes for someone holding the entire catalog.
+  - Every read goes through `normalizeMinistries`; every write goes through the shared validator. Neither rule is restated anywhere else.
 - Plain `admin`/`content-editor` are worship-scoped; they get NOTHING in kids. Only `super-admin` spans ministries.
 - `managesMinistries` grants management of the named ministry only; it does not imply membership.
 - Guards compose with `isMemberActive`/`disabled` (never bypass them).
@@ -42,7 +45,7 @@ P2 (`2026-08-19-kids-scheduling-p2-kids-vertical.md`) is standard by the ladder 
 ```ts
 // app/utils/__tests__/ministries.test.ts
 import { describe, it, expect } from "vitest";
-import { MINISTRIES, ALL_MINISTRY_IDS, isMinistryId } from "@/app/ministries";
+import { MINISTRIES, ALL_MINISTRY_IDS, isMinistryId, normalizeMinistries, validateMinistryWrite } from "@/app/ministries";
 
 describe("ministry registry", () => {
   it("registers worship and kids with Spanish display names", () => {
@@ -70,6 +73,17 @@ describe("ministry registry", () => {
     for (const key of ["constructor", "toString", "__proto__", "hasOwnProperty", "valueOf"]) {
       expect(isMinistryId(key), `${key} must not validate`).toBe(false);
     }
+  });
+  it("rejects an explicitly empty ministries array at the write boundary", () => {
+    // `[].every(isMinistryId)` is vacuously true, so a naive validator accepts
+    // it and normalizeMinistries reads it back as full worship access.
+    expect(validateMinistryWrite("ministries", [])).toBe("Elige al menos un ministerio.");
+    expect(validateMinistryWrite("ministries", ["kids"])).toBeNull();
+    expect(validateMinistryWrite("ministries", ["youth"])).toBe("Invalid ministry");
+    expect(validateMinistryWrite("ministries", "kids")).toBe("Invalid ministry");
+    // "manages nothing" is a real state — the only way to revoke management.
+    expect(validateMinistryWrite("managesMinistries", [])).toBeNull();
+    expect(validateMinistryWrite("managesMinistries", ["worship"])).toBe("Invalid ministry");
   });
 });
 ```
@@ -287,7 +301,7 @@ if (eff) {
 }
 ```
 
-Place it inside the existing `if (eff)` block so impersonation keeps working: the effective identity's ministries are what the UI must reflect.
+`auth.ts:253` is currently a **brace-less single-statement `if`** (`if (eff) token.role = …`); convert it to a block before adding the two assignments. Keeping them inside that `if` is what makes impersonation work — the effective identity's ministries are what the UI must reflect.
 
 Add a comment at the assignment site noting that `auth.ts:197` returns the token early on `trigger === "update"`, so for exactly one request after starting or stopping impersonation `token.ministries` can lag `token.sanityId`. That is tolerable **only** because this copy is render-only — every server-side authorization decision re-reads `getMemberAccess`. If anything ever authorizes off the session copy, this staleness becomes a privilege bug.
 
@@ -486,7 +500,7 @@ Note both call `requireActiveSession()` first, so `disabled`/kill-switch and imp
 
 - [ ] **Step 2: Route changes**
 
-`GET` projection in `app/api/admin/members/route.ts` — add both fields to the existing projection:
+`GET` projection in `app/api/admin/members/route.ts` — **edit line 21 only**, appending two names to it. Do not replace the projection block: lines 22-24 carry `unavailableDates`, `unavailabilityNotes`, `hasPassword` and `photoUrl`, and dropping them would break the Disponibilidad and Miembros panels.
 
 ```
 _id, member_name, alias, email, role, memberType, notifPrefs, ministries, managesMinistries,
@@ -507,7 +521,7 @@ Validate both with the helper below and include them in the create payload only 
 
 Add `ministries?: string[]` and `managesMinistries?: string[]` to the route's inline body type (`app/api/admin/members/[id]/route.ts:24-39`) or `tsc` rejects the reads below.
 
-`MANAGEABLE` lives in `app/ministries.ts` beside `ALL_MINISTRY_IDS`, **not** in a route file — the POST validation in `route.ts` needs the same list, and two copies of an auth allowlist is exactly the source-of-truth drift this repo already guards elsewhere:
+**One shared validator, in `app/ministries.ts`** — POST and PATCH both call it, so the two copies cannot drift, and the allowlist lives beside `ALL_MINISTRY_IDS` rather than in a route file:
 
 ```ts
 // app/ministries.ts
@@ -515,24 +529,42 @@ Add `ministries?: string[]` and `managesMinistries?: string[]` to the route's in
  *  in the legacy admin/content-editor roles, and NO guard reads a "worship"
  *  entry here — storing one would be a lie in the data. */
 export const MANAGEABLE_MINISTRY_IDS: MinistryId[] = ["kids"];
+
+/**
+ * Validates a ministry array arriving at a WRITE boundary. Returns an error
+ * string, or null when the value may be stored.
+ *
+ * An explicitly EMPTY `ministries` array is rejected, and that is the whole
+ * point of this function. `[].every(isMinistryId)` is vacuously `true`, so a
+ * naive check accepts it; `normalizeMinistries` then reads `[]` back as
+ * `["worship"]`. The net effect of unticking every box on a Kids volunteer —
+ * the natural gesture for "take them out of Kids" — would be to hand them the
+ * entire worship catalog while the form shows nothing ticked. Absent means
+ * worship because of history; empty must never be stored at all.
+ */
+export function validateMinistryWrite(
+  field: "ministries" | "managesMinistries",
+  value: unknown,
+): string | null {
+  if (!Array.isArray(value)) return "Invalid ministry";
+  const allowed = field === "ministries" ? ALL_MINISTRY_IDS : MANAGEABLE_MINISTRY_IDS;
+  if (!value.every((m): m is MinistryId => allowed.includes(m as MinistryId))) return "Invalid ministry";
+  if (field === "ministries" && value.length === 0) return "Elige al menos un ministerio.";
+  return null;
+}
 ```
 
-```ts
-// app/api/admin/members/[id]/route.ts
-import { isMinistryId, MANAGEABLE_MINISTRY_IDS } from "@/app/ministries";
+`managesMinistries: []` stays legal — "manages nothing" is a real, safe state and the only way to revoke management.
 
-if (body.ministries !== undefined) {
-  if (!Array.isArray(body.ministries) || !body.ministries.every(isMinistryId)) {
-    return NextResponse.json({ error: "Invalid ministry" }, { status: 400 });
-  }
-  patch.ministries = body.ministries;
-}
-if (body.managesMinistries !== undefined) {
-  if (!Array.isArray(body.managesMinistries) ||
-      !body.managesMinistries.every((m: unknown) => MANAGEABLE_MINISTRY_IDS.includes(m as MinistryId))) {
-    return NextResponse.json({ error: "Invalid ministry" }, { status: 400 });
-  }
-  patch.managesMinistries = body.managesMinistries;
+```ts
+// app/api/admin/members/[id]/route.ts — and the same two blocks in POST
+import { validateMinistryWrite } from "@/app/ministries";
+
+for (const field of ["ministries", "managesMinistries"] as const) {
+  if (body[field] === undefined) continue;          // absent ⇒ leave stored value alone
+  const error = validateMinistryWrite(field, body[field]);
+  if (error) return NextResponse.json({ error }, { status: 400 });
+  patch[field] = body[field];
 }
 ```
 
@@ -575,7 +607,15 @@ body: JSON.stringify({ member_name, alias, email, role, memberType }),
 
 Without editing this, Step 2's POST change is dead code: a Kids volunteer created through the UI is stored with no `ministries`, normalizes to `["worship"]`, and has the full song catalog, schedule, tags and authors until someone remembers a second edit — precisely the state the requirement forbids, with no signal to the admin. Add both fields to the destructure and the POST body, and verify `handleEdit` (`:548-560`) forwards them too.
 
-- [ ] **Step 4c: Require at least one ministry on create.** With the "empty ⇒ worship" normalization applying to new documents as well, an admin who ticks only "Administra ministerios: Kids" creates a Kids manager who is also a full worship member — contradicting spec §5.1's "Kids manager → worship surfaces: none". Block submission in `MemberForm` when creating with zero ministries ticked (Spanish validation message: `"Elige al menos un ministerio."`). The create default is already `["worship"]` — Step 3's `normalizeMinistries(initial?.ministries)` returns it for the `initial === undefined` create case too, which is exactly why both modes must share the helper rather than each carrying its own default. Add a test asserting a create with every box unticked is rejected client-side.
+- [ ] **Step 4c: Require at least one ministry on BOTH create and edit.** Block submission in `MemberForm` whenever zero ministries are ticked — not only when creating (Spanish message: `"Elige al menos un ministerio."`). The server rejects it too (Step 2's `validateMinistryWrite`); this is the friendly half of the same rule, and the server half is the enforcement.
+
+  Two distinct failures this closes, one in each direction:
+  - **Create:** an admin who ticks only "Administra ministerios: Kids" would otherwise mint a Kids manager who is also a full worship member — contradicting spec §5.1's "Kids manager → worship surfaces: none".
+  - **Edit:** unticking "Oasis Kids" on a Kids-only volunteer — the natural gesture for "remove them from Kids" — would otherwise submit `[]`, which reads back as `["worship"]` and silently grants `/`, `/schedule`, `/tag`, `/author`, `/posts/*` and the whole catalog via `/api/me/songs`. To actually remove someone from a ministry the admin must say which ministry remains.
+
+  The create default is already `["worship"]` — Step 3's `normalizeMinistries(initial?.ministries)` returns it for the `initial === undefined` case too, which is why both modes share the helper rather than each carrying its own default.
+
+  Tests: create with every box unticked is rejected client-side; **edit** with every box unticked is rejected client-side; and `PATCH { ministries: [] }` returns 400 (the server-side twin — a form fix alone is not a trust boundary).
 
 - [ ] **Step 5: UI — the controls.** Two labelled checkbox rows in the Miembros editor: "Ministerios" over `ALL_MINISTRY_IDS` (labels from `MINISTRIES[id].name`) and "Administra ministerios" over `["kids"]` only. Follow the section's existing input styling and the client-mutation invariant (try/catch/finally, `res.ok`, loading reset).
 - [ ] **Step 6: Gates** — `npx tsc --noEmit && npm test && npx eslint .`
@@ -588,7 +628,7 @@ Without editing this, Step 2's POST change is dead code: a Kids volunteer create
 **Files:**
 - Modify — **seven** worship pages: `app/(client)/page.tsx`, `app/(client)/schedule/page.tsx`, `app/(client)/tag/page.tsx`, `app/(client)/tag/[slug]/page.tsx`, `app/(client)/author/page.tsx`, `app/(client)/author/[slug]/page.tsx`, `app/(client)/posts/[slug]/page.tsx`
 - Create: `app/utils/worshipPageGate.ts` (one shared gate, so seven copies cannot drift)
-- (Untouched: `app/(client)/me/**` — ministry-neutral, and its nav links are ministry-filtered in Task 3b; `app/(client)/admin/page.tsx` — already worship-scoped via `requireActiveManager`; `/studio` — super-admin surface with its own protection; `app/(client)/auth/**` — pre-session.)
+- (Untouched: `app/(client)/me/**` — ministry-neutral, and its nav links are ministry-filtered in Task 3b; `app/(client)/admin/page.tsx` — already worship-scoped via `requireActiveManager`; `app/(client)/auth/**` — pre-session; `/studio` — **admin AND super-admin** (`proxy.ts:15-19`, not super-admin-only), and note that `teamMembers` is **not** in `PROTECTED_STUDIO_TYPES` (`app/utils/studioProtection.ts:45-58`), so Task 2's two fields are Studio-editable by anyone with Sanity project write access. That is a second write path around spec §5's "editing `managesMinistries` is super-admin only". It is **not a regression** — `role` itself already has exactly this property — but it is a real limit on the guarantee, and Studio access is Sanity project membership rather than an app role. Record it; adding `teamMembers` to the protected set is a separate decision with its own blast radius.)
 
 **Interfaces:**
 - Consumes: `requireActiveSession`, `requireMinistryMember("worship")` (Task 4).
@@ -638,7 +678,7 @@ export async function requireWorshipPage(callbackPath: string): Promise<void> {
   - no active session → redirect target starts with `/auth/signin`, **never** `/kids`;
   - **disabled member** (active session null, even though a token exists) → sign-in, not `/kids` — the anti-loop regression test;
   - active kids-only member → `/kids`;
-  - **active member of NO known ministry** (e.g. a document holding `ministries: ["youth"]` written before that ministry was registered) → `/me`, never `/kids` — the second anti-loop test, because `/kids` would send them back here;
+  - **active member of NO known ministry** → `/me`, never `/kids` — the second anti-loop test, because `/kids` would send them back here. Mock `getMemberAccess` to return `ministries: []` **directly**; do not try to reach it through a document. With the write boundary rejecting `[]` and `normalizeMinistries` mapping unknown ids back to `["worship"]`, this state is unreachable through any current path — the branch is deliberate defence in depth against a future third ministry or a hand-edited document, and the test documents that intent;
   - active worship member → no redirect called.
 
 - [ ] **Step 3: Apply to all seven pages** — first line of each async server component, before any data fetch, with that page's own path as the callback (e.g. `await requireWorshipPage("/tag")`). Keep the rendering below untouched.
@@ -674,6 +714,7 @@ Also gate `app/api/me/proposals/**` if present. Confirm each by reading the hand
   - `GET /api/admin/members` returns all `teamMembers`, so Kids-only volunteers appear in the worship `AvailabilityPanel` and Miembros list. A worship admin therefore sees Kids *people*, though no Kids scheduling. The solver is unaffected (its pools filter on `memberType`, `MonthGenerator.tsx:1329-1331`). Fixing it means ministry-filtering an admin read used by several worship panels — out of scope here; raise it if Frank considers member visibility part of "kids stuff".
   - `Navbar.tsx:22` links the brand lockup to `/` for everyone, so a kids-only member's most obvious click is a redirect bounce to `/kids`. Harmless with the loop-proof gate; fix it in P2's UI pass if it grates.
   - `/me`'s third query fetches every worship service date unfiltered (`app/(client)/me/page.tsx:170-176`) and feeds `AvailabilityCalendar`, so a kids-only member's availability calendar shows worship service dates. Cosmetic — the member's own assignments are `memberFilter`-scoped and render "Sin servicios asignados" — but it is worship information on a neutral page. P2 decides whether the calendar becomes ministry-aware.
+  - **Worship setlist PUSH notifications reach Kids-only volunteers.** `notifySetlistSaved` (`app/utils/serviceMutationSideEffects.ts:671`) fetches every `teamMembers` document, and `setlistRecipientIds` treats an unset preference as `"all"` (`app/utils/notifyTargets.ts:40`). No page or API gate covers the push path. **Exposure is nil today** — the native apps are unshipped (CLAUDE.md landmines) — and spec §2 forbids touching notification code in this delivery, so this is recorded, not fixed. It must be resolved before the mobile app ships, or a Kids volunteer's phone will buzz about worship setlists. There is no equivalent all-members *email* audience (verified: every email path is id- or role-filtered).
 
 - [ ] **Step 7: Gates** — all three.
 - [ ] **Step 8: Commit** — `feat(auth): worship pages and member APIs require worship membership`
@@ -694,4 +735,4 @@ P1 alone leaves `/kids` redirects pointing at a route that does not exist yet. *
   3. every `page.tsx` under `app/(client)` is enumerated as gated or deliberately neutral (Task 6 Step 6) — the check that finds a page nobody remembered, which a grep for an absent symbol cannot.
 - Spec §5.1's three layers each have an owner: **nav** = Task 3b, **pages** = Task 6, **APIs** = Task 6 Step 5 (+ P2's `/api/kids/*` guards). Nav is cosmetic; the page and API layers are the enforcement.
 - **Run `npx next build` before the merge and read the ROUTE LEGEND, not the exit code.** A passing build proves nothing here: the enforcement claim of Task 6 is that these pages render per-request, and a page that still prerenders would serve cached HTML straight past the gate — a silent auth hole of exactly the shape this repo keeps paying for. Confirm all seven appear as `ƒ (Dynamic)` in the build output and paste that fragment into the commit body. `/me` already proves `revalidate` + `getServerSession` builds fine, so failure is unlikely; a page still marked `○ (Static)` is the finding to look for.
-- **Record the rejected alternative in P2 Task 8's ADR** (CLAUDE.md's decision-records rule asks for exactly this): gating worship paths in `proxy.ts` instead of per-page. After Task 3b the JWT carries `ministries` at the same 30s freshness the guards use, so middleware gating was genuinely available and would have kept ISR on the app's hottest pages. It was rejected because the middleware runs on a token whose claims are refreshed on NextAuth's schedule rather than read per request, and because one matcher list is a second place for route coverage to drift out of sync (the repo already carries a byte-identical-matcher guard for this exact reason). Say so in the ADR rather than leaving the dynamic-rendering cost unexplained.
+- **The per-page-vs-middleware decision is recorded in ADR-0020**, written in P2 Task 8 Step 1b. (It is a separate ADR from 0019, which covers the kids-vertical-vs-generic-schemas choice — one ADR cannot carry both, and the dynamic-rendering cost must not ship unexplained.)
