@@ -81,8 +81,11 @@ export default async function MePage() {
   const { sanityId } = session.user;
 
   const member = await serverClient.fetch(
+    // `_rev` feeds the availability calendar's save precondition: the PATCH
+    // requires the revision this page was rendered at, because a Kids manager
+    // can write the same two fields while this tab sits open.
     `*[_type == "teamMembers" && _id == $id][0] {
-      _id, member_name, alias, email, role, memberType, notifPrefs,
+      _id, _rev, member_name, alias, email, role, memberType, notifPrefs,
       unavailableDates, unavailabilityNotes,
       "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl),
       "hasPassword": defined(passwordHash) && passwordHash != ""
@@ -540,6 +543,7 @@ export default async function MePage() {
         {/* Availability */}
         {member && (
           <AvailabilityCalendar
+            initialRev={member._rev}
             initialDates={member.unavailableDates ?? []}
             initialNotes={member.unavailabilityNotes ?? []}
             serviceDates={calendarServiceDates}
