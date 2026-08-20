@@ -138,7 +138,7 @@ export function SeatPicker({
                     </span>
                   )}
                   {!blocked && overlapText && (
-                    <span className="block font-label text-[11px] leading-tight text-warning-strong">
+                    <span className="block font-label text-[11px] leading-tight text-warning-fg">
                       {overlapText}
                     </span>
                   )}

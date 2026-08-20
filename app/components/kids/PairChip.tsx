@@ -55,9 +55,9 @@ export function PairChip({
         title={overlapText ?? undefined}
         className={`inline-flex max-w-full items-center gap-1 rounded-full border px-1.5 py-0.5 font-label text-xs ${
           blocked
-            ? "border-edge-accent-subtle bg-surface-sunken text-ink-dim"
+            ? "border-edge-accent-subtle bg-surface-sunken text-ink-muted"
             : overlapped
-              ? "border-warning-fg/40 bg-warning-fg/10 text-warning-strong"
+              ? "border-warning-fg/40 bg-warning-fg/10 text-warning-fg"
               : "border-accent/25 bg-accent/10 text-ink-muted"
         } ${nextUp ? "ring-2 ring-accent" : ""} ${draggable ? "cursor-grab" : ""} ${
           dragging ? "opacity-30" : ""
@@ -75,7 +75,7 @@ export function PairChip({
       )}
 
       {overlapText && (
-        <span className="font-label text-[11px] leading-tight text-warning-strong">
+        <span className="font-label text-[11px] leading-tight text-warning-fg">
           {overlapText}
         </span>
       )}
