@@ -468,7 +468,7 @@ Query (published only, next 8 Sundays from local today):
 
 ```groq
 *[_type == "kidsSchedule" && published == true && date >= $today] | order(date asc) [0...8] {
-  date, published,
+  date, "published": coalesce(published, false),
   "ensenanza": ensenanza->{ _id, name, "memberIds": members[]._ref },
   "chiquitos": chiquitos->{ _id, name, "memberIds": members[]._ref },
   "medianos":  medianos->{ _id, name, "memberIds": members[]._ref },
@@ -478,7 +478,10 @@ Query (published only, next 8 Sundays from local today):
 
 Render the schedule table (dates at local noon per the timezone invariant), highlighting rows where the signed-in member's `sanityId` appears in any seat's `memberIds` ("Te toca — <seat label>"). If the member also manages kids, show a link to `/kids/admin`.
 
-Note the read filter uses `published == true` (stricter than `published != false`): `kidsSchedule` is a NEW type whose every document carries the field from birth, so the absent-field leniency the worship types need does not apply.
+Two notes on `published`, both learned from Task 5's implementation:
+
+- The **filter** uses `published == true` (stricter than `published != false`): `kidsSchedule` is a NEW type whose every document carries the field from birth, so the absent-field leniency the worship types need does not apply. As a filter this is also correct for a field-less document — `null == true` is false, so it is excluded, which is the safe direction.
+- The **projection** must be `coalesce(published, false)`, not a bare `published`. In GROQ a missing field projects as `null`, not `false`, so a bare projection hands the UI a third state it will treat as neither published nor draft. Task 5's schedules GET already does this, with a test asserting a field-less document reads as a draft.
 
 - [ ] **Step 2: `/me` addition** — server-side: `getMemberAccess(sanityId)`; if `ministries` includes `"kids"`, fetch the member's next published kids assignments (same query + a client-side filter on `memberIds`) and render a "Mis roles en Oasis Kids" card linking to `/kids`. Worship-only members see nothing new.
 - [ ] **Step 3: Landing + loop regression test** — P1's worship-page gates redirect kids-only members to `/kids`. Add a test asserting (a) an active kids member reaching `/kids` is never redirected, and (b) a **disabled** member reaching `/kids` goes to `/auth/signin`, not `/` — the pair of assertions that proves the `/` ⇄ `/kids` loop cannot form from either side.
