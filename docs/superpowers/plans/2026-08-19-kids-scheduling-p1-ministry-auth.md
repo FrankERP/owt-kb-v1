@@ -38,7 +38,7 @@ P2 (`2026-08-19-kids-scheduling-p2-kids-vertical.md`) is standard by the ladder 
 - Test: `app/utils/__tests__/ministries.test.ts`
 
 **Interfaces:**
-- Produces: `MINISTRIES` const, `MinistryId` type (`"worship" | "kids"`), `isMinistryId(x: unknown): x is MinistryId`, `ALL_MINISTRY_IDS: MinistryId[]`.
+- Produces, **all five in this task** (Task 1's test asserts each): `MINISTRIES` const, `MinistryId` type (`"worship" | "kids"`), `ALL_MINISTRY_IDS: MinistryId[]`, `isMinistryId(x: unknown): x is MinistryId`, `normalizeMinistries(v: unknown): MinistryId[]` (the one READ rule), `MANAGEABLE_MINISTRY_IDS: MinistryId[]`, and `validateMinistryWrite(field, value): string | null` (the one WRITE rule).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -138,9 +138,41 @@ export function normalizeMinistries(v: unknown): MinistryId[] {
   const known = Array.isArray(v) ? v.filter(isMinistryId) : [];
   return known.length > 0 ? known : ["worship"];
 }
+
+/** Ministries a member can be granted management of. Worship management lives
+ *  in the legacy admin/content-editor roles, and NO guard reads a "worship"
+ *  entry here — storing one would be a lie in the data. */
+export const MANAGEABLE_MINISTRY_IDS: MinistryId[] = ["kids"];
+
+/**
+ * Validates a ministry array arriving at a WRITE boundary. Returns an error
+ * string, or null when the value may be stored. Both member routes call it, so
+ * POST and PATCH cannot drift apart.
+ *
+ * An explicitly EMPTY `ministries` array is rejected, and that is the whole
+ * point of this function. `[].every(isMinistryId)` is vacuously `true`, so a
+ * naive check accepts it; `normalizeMinistries` then reads `[]` back as
+ * `["worship"]`. The net effect of unticking every box on a Kids volunteer —
+ * the natural gesture for "take them out of Kids" — would be to hand them the
+ * entire worship catalog while the form shows nothing ticked. Absent means
+ * worship because of history; empty must never be stored at all.
+ *
+ * `managesMinistries: []` stays legal: "manages nothing" is a real, safe state
+ * and the only way to revoke management.
+ */
+export function validateMinistryWrite(
+  field: "ministries" | "managesMinistries",
+  value: unknown,
+): string | null {
+  if (!Array.isArray(value)) return "Invalid ministry";
+  const allowed = field === "ministries" ? ALL_MINISTRY_IDS : MANAGEABLE_MINISTRY_IDS;
+  if (!value.every((m): m is MinistryId => allowed.includes(m as MinistryId))) return "Invalid ministry";
+  if (field === "ministries" && value.length === 0) return "Elige al menos un ministerio.";
+  return null;
+}
 ```
 
-Declaration order matters: `ALL_MINISTRY_IDS` above `isMinistryId` above `normalizeMinistries`.
+Declaration order matters: `ALL_MINISTRY_IDS` → `isMinistryId` → `normalizeMinistries` → `MANAGEABLE_MINISTRY_IDS` → `validateMinistryWrite`. **All five exports land in this task**, because Task 1's own test file asserts every one of them — a validator defined later would leave this task's "expect PASS" gate unpassable, and the tempting fix at a red gate is to delete the assertions that cover the plan's central data-safety rule.
 
 - [ ] **Step 4: Run test — expect PASS**
 - [ ] **Step 5: Commit** — `feat(auth): ministry registry (worship, kids)`
@@ -481,7 +513,7 @@ Note both call `requireActiveSession()` first, so `disabled`/kill-switch and imp
 **Files:**
 - Modify: `app/api/admin/members/route.ts` (GET projection **and** POST body destructure)
 - Modify: `app/api/admin/members/[id]/route.ts` (PATCH allowlist — route is already super-admin-only for PATCH)
-- Modify: `app/components/admin/AdminPanel.tsx` (`Member` interface ~line 28, `MemberFormData` ~line 40, **`handleAdd` ~line 528-537**, `handleEdit` ~line 548-560, `MemberForm` state + `onSubmit` ~line 240-252, Miembros editor ~line 684)
+- Modify: `app/components/admin/AdminPanel.tsx` (`Member` interface ~line 28, `MemberFormData` ~line 40, **`handleAdd` destructure `:534` / POST body `:538`**, `handleEdit` from `:547` — it forwards via `...rest`, so new keys flow automatically — `MemberForm` state + `onSubmit` ~line 240-252, Miembros editor ~line 684). Treat every line number as approximate and confirm by reading.
 - Test: `app/api/__tests__/membersMinistries.test.ts` following the repo's route-test pattern.
 
 **Interfaces:**
@@ -521,40 +553,9 @@ Validate both with the helper below and include them in the create payload only 
 
 Add `ministries?: string[]` and `managesMinistries?: string[]` to the route's inline body type (`app/api/admin/members/[id]/route.ts:24-39`) or `tsc` rejects the reads below.
 
-**One shared validator, in `app/ministries.ts`** — POST and PATCH both call it, so the two copies cannot drift, and the allowlist lives beside `ALL_MINISTRY_IDS` rather than in a route file:
+**Wiring only — `validateMinistryWrite` and `MANAGEABLE_MINISTRY_IDS` already exist from Task 1.** Do not redefine them here.
 
-```ts
-// app/ministries.ts
-/** Ministries a member can be granted management of. Worship management lives
- *  in the legacy admin/content-editor roles, and NO guard reads a "worship"
- *  entry here — storing one would be a lie in the data. */
-export const MANAGEABLE_MINISTRY_IDS: MinistryId[] = ["kids"];
-
-/**
- * Validates a ministry array arriving at a WRITE boundary. Returns an error
- * string, or null when the value may be stored.
- *
- * An explicitly EMPTY `ministries` array is rejected, and that is the whole
- * point of this function. `[].every(isMinistryId)` is vacuously `true`, so a
- * naive check accepts it; `normalizeMinistries` then reads `[]` back as
- * `["worship"]`. The net effect of unticking every box on a Kids volunteer —
- * the natural gesture for "take them out of Kids" — would be to hand them the
- * entire worship catalog while the form shows nothing ticked. Absent means
- * worship because of history; empty must never be stored at all.
- */
-export function validateMinistryWrite(
-  field: "ministries" | "managesMinistries",
-  value: unknown,
-): string | null {
-  if (!Array.isArray(value)) return "Invalid ministry";
-  const allowed = field === "ministries" ? ALL_MINISTRY_IDS : MANAGEABLE_MINISTRY_IDS;
-  if (!value.every((m): m is MinistryId => allowed.includes(m as MinistryId))) return "Invalid ministry";
-  if (field === "ministries" && value.length === 0) return "Elige al menos un ministerio.";
-  return null;
-}
-```
-
-`managesMinistries: []` stays legal — "manages nothing" is a real, safe state and the only way to revoke management.
+Placement matters: the loop below reads `patch`, which is declared at `[id]/route.ts:48`, and it must land **between `:48` and the `Nothing to update` check at `:65`**. Putting it after `:65` would 400 a ministries-only PATCH as an empty update.
 
 ```ts
 // app/api/admin/members/[id]/route.ts — and the same two blocks in POST
@@ -698,7 +699,7 @@ Replace an existing `requireActiveSession` call with it (the new guard subsumes 
 - `app/api/me/songs/route.ts` — returns the **entire song catalog** (title, author, key, slug). This is the single largest worship read a kids-only member could otherwise still make, and no UI change hides it from a typed URL.
 - `app/api/notifications/count/route.ts` — returns worship proposal counts.
 
-Also gate `app/api/me/proposals/**` if present. Confirm each by reading the handler, not by assuming.
+- `app/api/me/proposals/route.ts` — **it exists** (GET `:49`, POST `:87`); gate both. Its POST already authorizes on `canonicalLeadRefs(role).includes(leadId)`, so this is defence in depth rather than the only check — gate it anyway.
 
 **Existing route tests will break — expect it, don't debug it from scratch.** `app/api/__tests__/songRoute.test.ts:10-12` mocks `@/app/utils/authGuards` with a factory exporting only `requireActiveSession`; once `app/api/song/[id]/route.ts` calls `requireMinistryMember`, the mock returns `undefined` and the suite fails. Add the new export to that factory in the same commit. Check the other 15 files in `app/api/__tests__/` for the same pattern.
 
@@ -708,16 +709,26 @@ Also gate `app/api/me/proposals/**` if present. Confirm each by reading the hand
 
   Name these explicitly rather than covering them with a wildcard:
   - `app/(client)/me/propose/[roleId]/page.tsx` — a worship setlist-proposal surface living inside the "`me/**` is neutral" exclusion. It is closed today only because its GROQ requires `$leadId in Lead[]._ref` and it `notFound()`s otherwise. That is defence in depth, not a gate; decide explicitly whether to add `requireWorshipPage` and record the choice.
-  - `app/api/me/songs/route.ts`, `app/api/notifications/count/route.ts` — gated in Step 5.
+  - `app/api/me/songs/route.ts`, `app/api/notifications/count/route.ts`, `app/api/me/proposals/route.ts` — gated in Step 5.
+  - `app/components/BottomNav.tsx` (hardcoded `/schedule` + `/tag` tabs) and `app/components/Header.tsx` (`/tag` link) carry **unfiltered worship links but are mounted nowhere** — verified by grep across the tree, and `docs/superpowers/plans/2026-07-16-backstage-cue-system-dependencies.md:124` records BottomNav as deliberately unmounted. Not a hole today; they would ship ungated if revived, so name them here rather than leaving the next person to rediscover it.
 
 - [ ] **Step 6b: Two acknowledged, deliberately-unfixed bleeds** (record in the commit body so a later reader does not read silence as oversight):
-  - `GET /api/admin/members` returns all `teamMembers`, so Kids-only volunteers appear in the worship `AvailabilityPanel` and Miembros list. A worship admin therefore sees Kids *people*, though no Kids scheduling. The solver is unaffected (its pools filter on `memberType`, `MonthGenerator.tsx:1329-1331`). Fixing it means ministry-filtering an admin read used by several worship panels — out of scope here; raise it if Frank considers member visibility part of "kids stuff".
+  - `GET /api/admin/members` **and `app/api/admin/login-events/route.ts:17`** (the Actividad tab) both fetch `*[_type == "teamMembers"]` unfiltered, so Kids-only volunteers appear in the worship `AvailabilityPanel`, Miembros list and activity view. A worship admin therefore sees Kids *people*, though no Kids scheduling. The solver is unaffected (its pools filter on `memberType`, `MonthGenerator.tsx:1329-1331`). Fixing it means ministry-filtering an admin read used by several worship panels — out of scope here; raise it if Frank considers member visibility part of "kids stuff".
   - `Navbar.tsx:22` links the brand lockup to `/` for everyone, so a kids-only member's most obvious click is a redirect bounce to `/kids`. Harmless with the loop-proof gate; fix it in P2's UI pass if it grates.
   - `/me`'s third query fetches every worship service date unfiltered (`app/(client)/me/page.tsx:170-176`) and feeds `AvailabilityCalendar`, so a kids-only member's availability calendar shows worship service dates. Cosmetic — the member's own assignments are `memberFilter`-scoped and render "Sin servicios asignados" — but it is worship information on a neutral page. P2 decides whether the calendar becomes ministry-aware.
   - **Worship setlist PUSH notifications reach Kids-only volunteers.** `notifySetlistSaved` (`app/utils/serviceMutationSideEffects.ts:671`) fetches every `teamMembers` document, and `setlistRecipientIds` treats an unset preference as `"all"` (`app/utils/notifyTargets.ts:40`). No page or API gate covers the push path. **Exposure is nil today** — the native apps are unshipped (CLAUDE.md landmines) — and spec §2 forbids touching notification code in this delivery, so this is recorded, not fixed. It must be resolved before the mobile app ships, or a Kids volunteer's phone will buzz about worship setlists. There is no equivalent all-members *email* audience (verified: every email path is id- or role-filtered).
 
-- [ ] **Step 7: Gates** — all three.
-- [ ] **Step 8: Commit** — `feat(auth): worship pages and member APIs require worship membership`
+- [ ] **Step 7: Amend ADR-0007 — it currently forbids this exact change.**
+
+  `docs/adr/0007-client-side-auth-keeps-pages-static.md` is **Accepted** (`docs/adr/README.md:50`) and its Consequences say verbatim: *"Don't 'harden' it by moving the gate server-side — that would undo this ADR and make the page dynamic again"*, naming `app/api/song/[id]/route.ts`'s `requireActiveSession()` as the real gate — the very call Step 5 replaces. `docs/adr/README.md:20` lists 0007 under "code that looks like a bug but isn't". Ship Task 6 without touching it and the repository carries a live, Accepted instruction to revert the isolation gates; here reverting is not a performance regression, it deletes the enforcement. This repo has already blocked a plan for the same trade (`docs/superpowers/specs/2026-08-07-light-mode-member-first-scope-review-log.md:155`, "despite ADR-0007 forbidding exactly this"), and CLAUDE.md requires stale statements removed in the same delivery.
+
+  Amend, do not delete:
+  - Status → `Accepted, amended by ADR-0020 (2026-08-19)`; update the status cell in `docs/adr/README.md`.
+  - Add an **Amendment** section: ministry isolation is a *security* requirement, not a hardening preference. A statically-rendered page cannot refuse a typed URL, so the seven pages listed in ADR-0020 now gate server-side and are dynamic by design. The performance trade 0007 made is knowingly reversed **for those seven pages only**.
+  - State what **still holds**: `Navbar` stays a plain non-async component, and session state (now including `ministries`) still resolves client-side in `NavMenu` — Task 3b follows 0007's pattern rather than breaking it. `EditSongButton`'s `useSession()` check remains cosmetic, with `app/api/song/[id]/route.ts` still the real gate (now `requireMinistryMember`).
+
+- [ ] **Step 8: Gates** — all three.
+- [ ] **Step 9: Commit** — `feat(auth): worship pages and member APIs require worship membership`
 
 ---
 
