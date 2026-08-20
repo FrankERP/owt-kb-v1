@@ -60,10 +60,22 @@ place the claims are set:
 > `getMemberAccess`. **If anything ever authorizes off the session copy, this
 > one-request lag becomes a privilege bug.**
 
-Middleware gating is precisely "authorizing off the session copy". The lag is
-documented at that site for impersonation (one request where `ministries` still
-describes the previous identity while `sanityId` describes the new one), and it
-is the same mechanism for a ministry that was just revoked.
+Middleware gating is precisely "authorizing off the session copy".
+
+The original worked example here was impersonation, where `ministries` described
+the previous identity while `sanityId` already described the new one. That
+particular lag was **fixed on 2026-08-20** — it had shipped as a real bug, an
+impersonated Kids manager showing no "Planear Kids" link — and the impersonation
+branch now sets both fields on start and on stop. It is quoted here as history,
+not as a live example.
+
+The argument is unaffected, because the mechanism is not specific to
+impersonation: the token copy is refreshed on NextAuth's schedule rather than
+read per request, so any change to a member's ministries — a revocation, a
+grant, an admin's own ministries changing mid-impersonation — is visible to the
+guards immediately and to the token only at its next refresh. A gate in
+middleware would read the older of the two. That is the reason to gate per page,
+and it does not depend on which example currently demonstrates it.
 
 **2. A matcher list is a second place for route coverage to drift.** The
 middleware matcher is a regex that must be maintained alongside the routes it
