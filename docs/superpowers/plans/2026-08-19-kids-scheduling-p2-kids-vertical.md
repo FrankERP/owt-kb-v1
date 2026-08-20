@@ -353,7 +353,7 @@ export function revalidateKidsViews() {
   - `GET /api/kids/schedules?month=YYYY-MM` → `{ date, seats, published }[]`
   - `PUT /api/kids/schedules` body `{ date, seats: Partial<Record<KidsSeat, string>>, published?: boolean }`
   - `POST /api/kids/generate` body `{ month: "YYYY-MM" }` → `RotationResult`
-  - `GET /api/kids/members` → `{ _id, member_name, alias, unavailableDates }[]` of members whose normalized `ministries` includes `"kids"` (`*[_type == "teamMembers" && "kids" in ministries]`; normalization note: absent means worship, so the filter needs no coalesce)
+  - `GET /api/kids/members` → `{ _id, member_name, alias, unavailableDates }[]` of members whose normalized `ministries` includes `"kids"`. GROQ filters `*[_type == "teamMembers" && "kids" in ministries]` — safe without a coalesce **because** absent/empty normalizes to worship-only, never to kids, so no member the helper would exclude can match. Where TypeScript re-checks membership, call P1's `normalizeMinistries`; do not restate the rule.
 
 **Every handler starts with:**
 
@@ -405,8 +405,10 @@ Availability override (PATCH) — clone the validation/set logic of `app/api/me/
 const target = await serverClient.fetch(
   `*[_type == "teamMembers" && _id == $id][0]{ _id, ministries }`, { id }
 );
-const ministries = target?.ministries?.length ? target.ministries : ["worship"];
-if (!target || !ministries.includes("kids")) {
+// normalizeMinistries is P1's SHARED rule (app/ministries.ts) — never re-derive
+// "absent means worship" here; a fourth open-coded copy is how the admin form
+// came to disagree with storage.
+if (!target || !normalizeMinistries(target.ministries).includes("kids")) {
   return NextResponse.json({ error: "Not a kids member" }, { status: 404 });
 }
 ```
