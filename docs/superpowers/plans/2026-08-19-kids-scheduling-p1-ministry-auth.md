@@ -513,7 +513,7 @@ Note both call `requireActiveSession()` first, so `disabled`/kill-switch and imp
 **Files:**
 - Modify: `app/api/admin/members/route.ts` (GET projection **and** POST body destructure)
 - Modify: `app/api/admin/members/[id]/route.ts` (PATCH allowlist — route is already super-admin-only for PATCH)
-- Modify: `app/components/admin/AdminPanel.tsx` (`Member` interface ~line 28, `MemberFormData` ~line 40, **`handleAdd` destructure `:534` / POST body `:538`**, `handleEdit` from `:547` — it forwards via `...rest`, so new keys flow automatically — `MemberForm` state + `onSubmit` ~line 240-252, Miembros editor ~line 684). Treat every line number as approximate and confirm by reading.
+- Modify: `app/components/admin/AdminPanel.tsx` (`Member` interface ~line 28, `MemberFormData` ~line 40, **`handleAdd` destructure `:533` / POST body `:537`**, `handleEdit` from `:548` — it forwards via `...rest`, so new keys flow automatically — `MemberForm` state + `onSubmit` ~line 240-252, Miembros editor ~line 684). Treat every line number as approximate and confirm by reading.
 - Test: `app/api/__tests__/membersMinistries.test.ts` following the repo's route-test pattern.
 
 **Interfaces:**
