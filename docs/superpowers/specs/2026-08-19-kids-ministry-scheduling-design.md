@@ -103,7 +103,11 @@ Mutation routes call `revalidatePath` for the Kids views (`/kids`, `/me`, and
 any member-facing schedule page) — add a `revalidateKidsViews` util in
 `app/utils/revalidate.ts` beside the existing ones.
 
-## 5. Auth: ministry-scoped management
+## 5. Auth: ministry-scoped management and two-way isolation
+
+**Isolation ruling (Frank, 2026-08-19): ministries are mutually invisible.
+Kids-only people see no worship surfaces; worship admins see no Kids
+surfaces. Only `super-admin` spans both.**
 
 New server-side guard in the same family as `requireActiveManager`:
 
@@ -111,9 +115,13 @@ New server-side guard in the same family as `requireActiveManager`:
 requireMinistryManager(ministry: MinistryId)
 ```
 
-Passes for `super-admin`, `admin`, or any active member whose
-`managesMinistries` includes the ministry. Built generic from day one — this
-is the one piece every future ministry needs identically.
+Passes for `super-admin`, or any active member whose `managesMinistries`
+includes the ministry. **Plain `admin` does NOT pass for ministries it
+doesn't manage** — a worship admin has no Kids access. The legacy roles
+(`admin`, `content-editor`) are worship-scoped: existing worship surfaces
+keep their current `requireActiveManager` gates unchanged, and those gates
+grant nothing in Kids. Built generic from day one — this is the one piece
+every future ministry needs identically.
 
 - All `/api/kids/*` mutation routes use `requireMinistryManager("kids")`.
 - The existing `isMemberActive` 30s-TTL gate and `disabled` kill switch apply
@@ -121,10 +129,34 @@ is the one piece every future ministry needs identically.
 - Kids leaders get app role `member` + `managesMinistries: ["kids"]` — they
   run Kids scheduling and **cannot** touch setlists, songs, worship roles, or
   member app-role fields.
-- Editing `managesMinistries` itself is **admin-and-above only** (a ministry
-  manager must not be able to mint managers).
+- Editing `managesMinistries` itself is **super-admin only** (neither a
+  ministry manager nor a worship admin may mint or alter Kids managers).
 - Studio protection (`studioProtection.ts`) posture for the new types follows
   the existing pattern: app is the writer, Studio is not the editing surface.
+
+### 5.1 Member-facing visibility
+
+Membership (`ministries`) gates what a logged-in member can *see*, enforced
+server-side at three layers — nav rendering, page guards, and API/read
+guards — so a direct URL is blocked, not merely unlinked:
+
+| Who | Worship surfaces | Kids surfaces |
+|---|---|---|
+| Kids-only member (`ministries: ["kids"]`) | none | own schedule + availability |
+| Worship member (absent field ⇒ `["worship"]`) | unchanged | none |
+| Member in both ministries | member views | member views |
+| Kids manager (`managesMinistries: ["kids"]`) | none (unless also a worship member) | full Kids admin |
+| `admin` / `content-editor` | unchanged | none |
+| `super-admin` | everything | everything |
+
+- Worship member pages (songs, setlists, services, participation) require
+  `ministries` to include `worship`. Because an absent field means
+  `["worship"]`, every existing member keeps exactly today's access — no
+  migration, no regression.
+- A Kids-only member's landing page is the Kids member view, not the worship
+  home.
+- Management rights do not imply membership: a Kids manager who also sings
+  needs `ministries: ["worship", "kids"]` like anyone else.
 
 ## 6. Availability: self-serve + admin override
 
@@ -184,8 +216,9 @@ overlap warning.
     toast/flash — not the worship components themselves.
 - **Member-facing:** Kids assignments appear in the member's upcoming-
   services view ("mi rol"), reading only `published != false` schedules.
-  Members whose `ministries` is `["kids"]` see Kids content and not
-  worship-only surfaces.
+  Visibility follows the §5.1 matrix: a Kids-only member lands on the Kids
+  member view and every worship surface is server-side blocked for them;
+  a dual-ministry member sees both; worship-only members see no Kids UI.
 - All client mutation handlers follow the invariant: try/catch/finally,
   check `res.ok`, reset loading, never close-as-success on failure.
 
@@ -197,8 +230,11 @@ overlap warning.
   scoping, member-facing read filters (`published != false` present in every
   Kids member-facing query).
 - Browser verification on preview: Kids manager sees `/kids` and cannot
-  reach worship admin; worship member does not see Kids nav; generate →
-  override → publish → member view round-trip.
+  reach worship admin; **worship `admin` gets blocked from `/kids` and its
+  APIs**; **Kids-only member gets blocked from worship pages by direct URL**,
+  lands on the Kids member view, and sees no worship nav; worship member
+  does not see Kids nav; super-admin reaches both; generate → override →
+  publish → member view round-trip.
 - Deploy per convention: feature branch → main (local merge, gates green) →
   preview push → **verify dev alias moved** → main push → verify prod alias.
 
