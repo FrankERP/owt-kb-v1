@@ -596,8 +596,14 @@ describe("KidsPlanner — «Otra opción»", () => {
     await waitFor(() => expect(screen.getByText("Opción 1")).toBeTruthy());
 
     fireEvent.click(screen.getByRole("button", { name: "Otra opción" }));
+    // Matching the SECOND sentence too, not just "no hay más opciones": this
+    // message already shipped once as "Muévela a mano" — a pronoun whose only
+    // candidate antecedent was the plural "opciones". A regex that stops at the
+    // first sentence would let that back in without a word of complaint.
     await waitFor(() =>
-      expect(screen.getByRole("status").textContent).toMatch(/No hay más opciones distintas/),
+      expect(screen.getByRole("status").textContent).toMatch(
+        /No hay más opciones distintas.*Mueve una pareja a mano/,
+      ),
     );
     // An empty proposal must NOT wipe the board: the counter stays where it was
     // and the seated pair is still seated.
