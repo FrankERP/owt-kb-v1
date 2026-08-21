@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { planKidsMonth, pairUnavailable } from "../kidsRotation";
+import { planKidsMonth, pairUnavailable, proposalFingerprint } from "../kidsRotation";
 import type { RotationInput, RotationPair } from "../kidsTypes";
 
 const P = (id: string, room: RotationPair["room"], a: string, b: string): RotationPair =>
@@ -87,5 +87,124 @@ describe("planKidsMonth", () => {
     if (Object.values(first.seats).includes("c1")) {
       expect(r.warnings.some(w => w.date === "2026-09-06" && w.pairId === "c1")).toBe(true);
     }
+  });
+});
+
+describe("planKidsMonth — seeded alternatives", () => {
+  it("seed 0 and no seed are the same plan: the fairest one is what you see first", () => {
+    expect(planKidsMonth({ ...base, seed: 0 })).toEqual(planKidsMonth(base));
+  });
+
+  it("a seed is still deterministic: same seed, same plan", () => {
+    expect(planKidsMonth({ ...base, seed: 7 })).toEqual(planKidsMonth({ ...base, seed: 7 }));
+  });
+
+  it("different seeds give different plans when the roster has no history", () => {
+    // The state the app is actually in today: 12 pairs, zero saved Sundays, so
+    // every pair sits on the NEVER sentinel and the whole month is one big tie.
+    const seen = new Set<string>();
+    for (let seed = 0; seed < 6; seed++) {
+      seen.add(proposalFingerprint(planKidsMonth({ ...base, seed }).proposal));
+    }
+    expect(seen.size).toBeGreaterThan(1);
+  });
+
+  it("still produces different plans once a SATURATED history leaves no ties at all", () => {
+    // The regression a ties-only shuffle would have: once the rotation has run a
+    // while there is nothing left tied, and "otra opción" hands back the same
+    // month forever.
+    //
+    // Saturating it takes twelve Sundays, not four. Enseñanza draws from all 12
+    // pairs, so a shorter history leaves some of them never-served and TIED —
+    // and because the teaching pair leaves its own room's pool that Sunday, that
+    // leftover tie leaks into the room seats too and supplies variety all on its
+    // own. Both of those masked this test until the history got this long.
+    //
+    // Here every pair carries a distinct last-served date in every category it
+    // can hold. Zero ties. Any variety below is the slack and nothing else.
+    const priorSundays = [
+      "2026-06-07", "2026-06-14", "2026-06-21", "2026-06-28",
+      "2026-07-05", "2026-07-12", "2026-07-19", "2026-07-26",
+      "2026-08-02", "2026-08-09", "2026-08-16", "2026-08-23",
+    ];
+    // The +1 offset keeps a pair from teaching and holding its own room on the
+    // same Sunday, which the real writer forbids and the engine would never emit.
+    const history = priorSundays.map((date, i) => ({
+      date,
+      seats: {
+        ensenanza: pairs[i].id,
+        chiquitos: `c${((i + 1) % 4) + 1}`,
+        medianos: `d${((i + 1) % 4) + 1}`,
+        grandes: `g${((i + 1) % 4) + 1}`,
+      },
+    }));
+    for (const row of history) {
+      expect(new Set(Object.values(row.seats)).size).toBe(4); // no pair twice in a Sunday
+    }
+
+    const withHistory = { ...base, history };
+    const seen = new Set<string>();
+    for (let seed = 0; seed < 6; seed++) {
+      seen.add(proposalFingerprint(planKidsMonth({ ...withHistory, seed }).proposal));
+    }
+    expect(seen.size).toBeGreaterThan(1);
+  });
+
+  it("never seats the most recently served pair while a more rested one exists", () => {
+    // The bound on the slack. A variant may reach one generation back, never to
+    // the pair that served last Sunday — that is the line between "another
+    // option" and "the rotation stopped meaning anything".
+    for (let seed = 0; seed < 12; seed++) {
+      const r = planKidsMonth({ ...base, seed });
+      for (let i = 1; i < r.proposal.length; i++) {
+        const prev = r.proposal[i - 1].seats;
+        const now = r.proposal[i].seats;
+        for (const seat of ["chiquitos", "medianos", "grandes"] as const) {
+          // 4 pairs per room, all available, so repeating last Sunday's pair is
+          // never forced by a shortage.
+          expect(now[seat]).not.toBe(prev[seat]);
+        }
+      }
+    }
+  });
+
+  it("keeps every hard rule under a seed: one seat per pair, correct room, availability", () => {
+    const unavailable = { m1: ["2026-09-06"], m9: ["2026-09-13"] };
+    for (let seed = 0; seed < 12; seed++) {
+      const r = planKidsMonth({ ...base, seed, unavailable });
+      for (const a of r.proposal) {
+        const ids = Object.values(a.seats);
+        expect(new Set(ids).size).toBe(ids.length);
+        for (const seat of ["chiquitos", "medianos", "grandes"] as const) {
+          const id = a.seats[seat];
+          if (id) expect(pairs.find(p => p.id === id)!.room).toBe(seat);
+        }
+        for (const id of ids) {
+          expect(pairUnavailable(pairs.find(p => p.id === id)!, a.date, unavailable)).toBe(false);
+        }
+      }
+    }
+  });
+});
+
+describe("proposalFingerprint", () => {
+  it("is equal for identical plans and different for a single changed seat", () => {
+    const a = planKidsMonth(base).proposal;
+    const b = planKidsMonth(base).proposal;
+    expect(proposalFingerprint(a)).toBe(proposalFingerprint(b));
+
+    const changed = a.map((row, i) =>
+      i === 0 ? { ...row, seats: { ...row.seats, ensenanza: "g4" } } : row,
+    );
+    expect(proposalFingerprint(changed)).not.toBe(proposalFingerprint(a));
+  });
+
+  it("ignores seat key order, so it fingerprints the plan and not the object", () => {
+    const [row] = planKidsMonth(base).proposal;
+    const reordered = {
+      date: row.date,
+      seats: Object.fromEntries(Object.entries(row.seats).reverse()),
+    };
+    expect(proposalFingerprint([reordered])).toBe(proposalFingerprint([row]));
   });
 });

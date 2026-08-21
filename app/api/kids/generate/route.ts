@@ -3,7 +3,7 @@ import { requireMinistryManager } from "@/app/utils/authGuards";
 import { serverClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { assignedMemberRefsQuery } from "@/app/utils/notifyTargets";
-import { planKidsMonth } from "@/app/utils/kidsRotation";
+import { planKidsMonth, proposalFingerprint } from "@/app/utils/kidsRotation";
 import {
   KIDS_SEATS,
   type KidsAssignment,
@@ -12,6 +12,24 @@ import {
 } from "@/app/utils/kidsTypes";
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/**
+ * How many seeds "otra opción" may burn looking for a month the planner has not
+ * already shown and rejected.
+ *
+ * The search runs entirely on the ALREADY-FETCHED data — `planKidsMonth` is pure
+ * and costs microseconds — so this is bounded CPU inside one request, never
+ * extra Sanity reads or extra round trips. Once the roster is small enough that
+ * the distinct arrangements run out, the loop ends and the response says so
+ * instead of silently handing back a month the admin just said no to.
+ */
+const MAX_SEED_ATTEMPTS = 12;
+
+/** A seed the client did not choose, so successive asks do not repeat a cycle. */
+const clampSeed = (value: unknown): number =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? Math.min(Math.floor(value), Number.MAX_SAFE_INTEGER)
+    : 0;
 
 /** How much prior history seeds the fairness clock — a quarter of Sundays. */
 const HISTORY_WEEKS = 16;
@@ -50,10 +68,14 @@ export async function POST(req: NextRequest) {
   const session = await requireMinistryManager("kids");
   if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const body = (await req.json()) as { month?: string };
+  const body = (await req.json()) as { month?: string; seed?: number; exclude?: string[] };
   if (typeof body.month !== "string" || !MONTH_RE.test(body.month)) {
     return NextResponse.json({ error: "month must be YYYY-MM" }, { status: 400 });
   }
+  const requestedSeed = clampSeed(body.seed);
+  const exclude = new Set(
+    Array.isArray(body.exclude) ? body.exclude.filter((f) => typeof f === "string") : [],
+  );
 
   const sundays = sundaysOfMonth(body.month);
   const firstSunday = sundays[0] ?? `${body.month}-01`;
@@ -128,7 +150,40 @@ export async function POST(req: NextRequest) {
     }),
   );
 
-  return NextResponse.json(
-    planKidsMonth({ sundays, pairs, unavailable, history, worshipAssignments }),
-  );
+  const plan = (seed: number) =>
+    planKidsMonth({ sundays, pairs, unavailable, history, worshipAssignments, seed });
+
+  // Seed 0 is the strict least-recently-served month and is never "searched for":
+  // asking for the first proposal must always give the fairest one, even if the
+  // admin has already seen it.
+  if (requestedSeed === 0) {
+    const result = plan(0);
+    return NextResponse.json({
+      ...result,
+      seed: 0,
+      fingerprint: proposalFingerprint(result.proposal),
+      exhausted: false,
+    });
+  }
+
+  for (let attempt = 0; attempt < MAX_SEED_ATTEMPTS; attempt++) {
+    const seed = requestedSeed + attempt;
+    const result = plan(seed);
+    const fingerprint = proposalFingerprint(result.proposal);
+    if (!exclude.has(fingerprint)) {
+      return NextResponse.json({ ...result, seed, fingerprint, exhausted: false });
+    }
+  }
+
+  // Every arrangement within the fairness slack is one the admin has already
+  // seen. Say so and send no proposal: replacing the board with a month they
+  // just rejected would read as the button doing nothing.
+  return NextResponse.json({
+    proposal: [],
+    warnings: [],
+    diagnostics: [],
+    seed: requestedSeed,
+    fingerprint: null,
+    exhausted: true,
+  });
 }

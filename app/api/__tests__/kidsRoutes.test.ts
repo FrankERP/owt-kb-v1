@@ -551,6 +551,76 @@ describe("POST /api/kids/generate", () => {
     expect((await generatePOST(req({ month: "septiembre" }))).status).toBe(400);
     expect((await generatePOST(req({}))).status).toBe(400);
   });
+
+  // "Otra opción". The rotation is deterministic by design, so without a seed the
+  // planner shows one month and no amount of clicking ever shows a second one.
+  type Proposal = {
+    proposal: { date: string; seats: Record<string, string> }[];
+    seed: number;
+    fingerprint: string | null;
+    exhausted: boolean;
+  };
+  const propose = async (body: Record<string, unknown>) =>
+    (await (await generatePOST(req({ month: "2026-09", ...body }))).json()) as Proposal;
+
+  it("carries the seed, the plan's fingerprint and the exhausted flag", async () => {
+    const body = await propose({});
+    expect(body.seed).toBe(0);
+    expect(typeof body.fingerprint).toBe("string");
+    expect(body.exhausted).toBe(false);
+  });
+
+  it("seed 0 is the strict plan and is served even when already rejected", async () => {
+    // The FAIREST month is what "Generar mes" means. Asking for it again must
+    // return it, never search past it — only "otra opción" searches.
+    const first = await propose({});
+    const again = await propose({ seed: 0, exclude: [first.fingerprint] });
+    expect(again.exhausted).toBe(false);
+    expect(again.fingerprint).toBe(first.fingerprint);
+  });
+
+  it("an alternative never hands back a month the admin already rejected", async () => {
+    const seen: string[] = [(await propose({})).fingerprint!];
+    for (let ask = 1; ask <= 4; ask++) {
+      const next = await propose({ seed: ask, exclude: seen });
+      if (next.exhausted) {
+        // Honest exhaustion: no proposal at all, so the board is left alone
+        // rather than being redrawn with something already declined.
+        expect(next.proposal).toEqual([]);
+        expect(next.fingerprint).toBeNull();
+        break;
+      }
+      expect(seen).not.toContain(next.fingerprint);
+      expect(next.proposal.map((p) => p.date)).toEqual([
+        "2026-09-06",
+        "2026-09-13",
+        "2026-09-20",
+        "2026-09-27",
+      ]);
+      seen.push(next.fingerprint!);
+    }
+  });
+
+  it("reports exhaustion rather than repeating itself once the options run out", async () => {
+    // Exclude everything the seed search can reach, so the only honest answer
+    // left is "there is nothing new".
+    const seen = new Set<string>();
+    for (let seed = 0; seed <= 24; seed++) {
+      const body = await propose({ seed, exclude: [] });
+      if (body.fingerprint) seen.add(body.fingerprint);
+    }
+    const body = await propose({ seed: 1, exclude: [...seen] });
+    expect(body.exhausted).toBe(true);
+    expect(body.proposal).toEqual([]);
+  });
+
+  it("writes nothing under a seed either — the alternative is still a proposal", async () => {
+    await propose({ seed: 3, exclude: [] });
+    expect(h.created).toHaveLength(0);
+    expect(h.createdIfNotExists).toHaveLength(0);
+    expect(h.patches).toHaveLength(0);
+    expect(h.revalidateKidsViews).not.toHaveBeenCalled();
+  });
 });
 
 describe("GET /api/kids/members", () => {

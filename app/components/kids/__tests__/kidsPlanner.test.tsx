@@ -496,3 +496,145 @@ describe("KidsPlanner — a failed save never reads as success", () => {
     expect(screen.getByText("Cambios sin guardar")).toBeTruthy();
   });
 });
+
+describe("KidsPlanner — «Otra opción»", () => {
+  const proposal = (chiquitos: string) => ({
+    proposal: [{ date: "2026-09-06", seats: { chiquitos } }],
+    warnings: [],
+    diagnostics: [],
+  });
+
+  const board = () => (
+    <KidsPlanner
+      initialMonth="2026-09"
+      initialPairs={PAIRS}
+      initialMembers={MEMBERS}
+      initialSchedules={[]}
+    />
+  );
+
+  it("is hidden until there is a proposal to be dissatisfied with", () => {
+    render(board());
+    expect(screen.queryByRole("button", { name: "Otra opción" })).toBeNull();
+  });
+
+  it("asks for a NEW plan: a seed, and every plan already shown", async () => {
+    // The bug this guards is the whole reason the feature exists — a second
+    // click that re-runs the same deterministic query and redraws the same month.
+    const fetchMock = vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(init.body as string) as { seed: number };
+      return {
+        ok: true,
+        json: async () => ({
+          ...proposal(body.seed === 0 ? "c1" : "c2"),
+          seed: body.seed === 0 ? 0 : 4, // the server skipped ahead to find something new
+          fingerprint: body.seed === 0 ? "fp-0" : "fp-4",
+          exhausted: false,
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(board());
+
+    fireEvent.click(screen.getByRole("button", { name: "Generar mes" }));
+    await waitFor(() => expect(screen.getByText("Opción 1")).toBeTruthy());
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      month: "2026-09",
+      seed: 0,
+      exclude: [],
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Otra opción" }));
+    await waitFor(() => expect(screen.getByText("Opción 2")).toBeTruthy());
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+      month: "2026-09",
+      seed: 1,
+      exclude: ["fp-0"],
+    });
+
+    // Resumes from the seed the server LANDED on, not the one asked for, so the
+    // third ask does not retrace seeds 1-4 that produced nothing new.
+    fireEvent.click(screen.getByRole("button", { name: "Otra opción" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({
+      month: "2026-09",
+      seed: 5,
+      exclude: ["fp-0", "fp-4"],
+    });
+  });
+
+  it("leaves the board alone when there is nothing new, and says so", async () => {
+    const fetchMock = vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(init.body as string) as { seed: number };
+      return body.seed === 0
+        ? {
+            ok: true,
+            json: async () => ({
+              ...proposal("c1"),
+              seed: 0,
+              fingerprint: "fp-0",
+              exhausted: false,
+            }),
+          }
+        : {
+            ok: true,
+            json: async () => ({
+              proposal: [],
+              warnings: [],
+              diagnostics: [],
+              seed: 1,
+              fingerprint: null,
+              exhausted: true,
+            }),
+          };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(board());
+
+    fireEvent.click(screen.getByRole("button", { name: "Generar mes" }));
+    await waitFor(() => expect(screen.getByText("Opción 1")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: "Otra opción" }));
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toMatch(/No hay más opciones distintas/),
+    );
+    // An empty proposal must NOT wipe the board: the counter stays where it was
+    // and the seated pair is still seated.
+    expect(screen.getByText("Opción 1")).toBeTruthy();
+    expect(
+      within(screen.getByLabelText("Domingo, 6 de septiembre")).getByRole("button", {
+        name: /^RG Chiquitos:/,
+      }).textContent,
+    ).toMatch(/C1/);
+  });
+
+  it("«Generar mes» goes back to the fairest plan and forgets the rejections", async () => {
+    const fetchMock = vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(init.body as string) as { seed: number };
+      return {
+        ok: true,
+        json: async () => ({
+          ...proposal(body.seed === 0 ? "c1" : "c2"),
+          seed: body.seed,
+          fingerprint: `fp-${body.seed}`,
+          exhausted: false,
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(board());
+
+    fireEvent.click(screen.getByRole("button", { name: "Generar mes" }));
+    await waitFor(() => expect(screen.getByText("Opción 1")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Otra opción" }));
+    await waitFor(() => expect(screen.getByText("Opción 2")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: "Generar mes" }));
+    await waitFor(() => expect(screen.getByText("Opción 1")).toBeTruthy());
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({
+      month: "2026-09",
+      seed: 0,
+      exclude: [],
+    });
+  });
+});
