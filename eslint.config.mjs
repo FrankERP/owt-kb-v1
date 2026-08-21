@@ -6,6 +6,22 @@ export default defineConfig([
   globalIgnores([
     ".next/**",
     ".remember/**",
+    // Agent tooling and local session state, none of it app source — but the
+    // reason it must be IGNORED rather than merely uninteresting is
+    // `.claude/worktrees/`, where the repo's own worktree flow checks out full
+    // copies of this repository. Those copies are real `.ts` files, so eslint
+    // walks them, and every `files:` override below is matched against a path
+    // relative to THIS config's directory. `e2e/**` therefore does not match
+    // `.claude/worktrees/<name>/e2e/**`, and the Playwright-fixture exemption
+    // silently stops applying: on 2026-08-21 the gate reported 4
+    // `react-hooks/rules-of-hooks` errors in a worktree copy of
+    // `e2e/service-readiness/fixtures.ts` while the canonical file linted clean.
+    //
+    // That is worse than noise. It reports errors in a file nobody edited, which
+    // either blocks a good release or invites a "fix" to source that was never
+    // broken. Linting a second checkout of the same tree can only ever produce a
+    // duplicate verdict or a wrong one.
+    ".claude/**",
     "out/**",
     "ios/**",
     "android/**",
