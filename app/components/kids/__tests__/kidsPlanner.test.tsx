@@ -24,7 +24,14 @@ import KidsPlanner, {
   sundaysOfMonth,
   type PlannerPair,
 } from "../KidsPlanner";
-import { blockLabel, canPlace, loadLabel, overlapLabel } from "../kidsPlannerLabels";
+import {
+  absenceLabel,
+  blockLabel,
+  canPlace,
+  loadLabel,
+  monthSeatsLabel,
+  overlapLabel,
+} from "../kidsPlannerLabels";
 import { buildPlannerView } from "@/app/utils/kidsPlannerView";
 
 afterEach(() => {
@@ -119,6 +126,26 @@ describe("the words a blocked row carries", () => {
     expect(loadLabel(0)).toBeNull();
     expect(loadLabel(1)).toBe("1 domingo este mes");
     expect(loadLabel(2)).toBe("2 domingos este mes");
+    expect(monthSeatsLabel([])).toBeNull();
+    expect(absenceLabel(0, 4)).toBeNull();
+  });
+
+  it("names the Sundays a pair already holds, and the seat on each", () => {
+    expect(monthSeatsLabel([{ date: "2026-09-06", seat: "ensenanza" }])).toBe(
+      "Dom 6 (Enseñanza)",
+    );
+    expect(
+      monthSeatsLabel([
+        { date: "2026-09-06", seat: "ensenanza" },
+        { date: "2026-09-20", seat: "chiquitos" },
+      ]),
+    ).toBe("Dom 6 (Enseñanza) · Dom 20 (RG Chiquitos)");
+  });
+
+  it("counts absences on the bench, and says so plainly when there are none left", () => {
+    expect(absenceLabel(1, 4)).toBe("No disponible 1 domingo");
+    expect(absenceLabel(2, 4)).toBe("No disponible 2 domingos");
+    expect(absenceLabel(4, 4)).toBe("No disponible este mes");
   });
 });
 
@@ -247,6 +274,55 @@ describe("KidsPlanner — the board shows what a dropdown hid", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(seatRow("RG Chiquitos", "Domingo, 6 de septiembre").textContent).toContain("C2");
     expect(screen.getByText("Cambios sin guardar")).toBeTruthy();
+  });
+
+  /**
+   * The bench used to be measured at the FIRST Sunday, so a pair placed on any
+   * other one still read as free — with 12 pairs and 16 seats, the list Niza
+   * scans for "who is left" was wrong for most of the month.
+   */
+  it("moves a placed pair out of «Disponibles» whichever Sunday it lands on", () => {
+    renderPlanner({
+      initialSchedules: [
+        { date: "2026-09-13", published: false, seats: { chiquitos: "c1" } },
+      ],
+    });
+    const room = within(screen.getByRole("region", { name: "Banca" })).getByRole("group", {
+      name: "RG Chiquitos",
+    });
+    const text = room.textContent!;
+    expect(text.indexOf("Disponibles")).toBeLessThan(text.indexOf("C2"));
+    expect(text.indexOf("Ya en el mes")).toBeLessThan(text.indexOf("C1"));
+    expect(text.indexOf("C2")).toBeLessThan(text.indexOf("Ya en el mes"));
+    // …and it says WHICH Sunday, so the correction is obvious without hunting.
+    expect(text).toContain("Dom 13 (RG Chiquitos)");
+  });
+
+  /**
+   * The same anchor froze a pair for the whole month over one Sunday's absence.
+   * Luis is out on the 6th only; c1 must still be draggable onto the 13th, and
+   * the drop is what checks the day.
+   */
+  it("keeps a pair away on one Sunday draggable, and says how many", () => {
+    renderPlanner();
+    const room = within(screen.getByRole("region", { name: "Banca" })).getByRole("group", {
+      name: "RG Chiquitos",
+    });
+    expect(room.textContent).toContain("No disponible 1 domingo");
+
+    // The attribute, not just the handler: `draggable` is what the browser reads,
+    // and it is exactly what the first-Sunday block used to switch off.
+    const chip = within(room).getByText("C1").closest("[draggable]");
+    expect(chip).not.toBeNull();
+    const cell = screen.getByLabelText(/^RG Chiquitos, Domingo, 13 de septiembre/);
+    const dataTransfer = { setData: vi.fn(), effectAllowed: "", dropEffect: "" };
+    fireEvent.dragStart(chip!, { dataTransfer });
+    fireEvent.dragOver(cell, { dataTransfer });
+    fireEvent.drop(cell, { dataTransfer });
+
+    expect(
+      screen.getByLabelText(/^RG Chiquitos, Domingo, 13 de septiembre/).textContent,
+    ).toContain("C1");
   });
 
   it("drops a bench pair into a board cell", () => {

@@ -1,5 +1,5 @@
 import { KIDS_SEAT_LABELS, type KidsSeat } from "@/app/utils/kidsTypes";
-import type { PairBlock, SeatView } from "@/app/utils/kidsPlannerView";
+import type { BenchSeat, PairBlock, SeatView } from "@/app/utils/kidsPlannerView";
 
 /**
  * How far back the wait clocks can see, in months.
@@ -59,6 +59,33 @@ export function overlapLabel(memberNames: string[]): string | null {
 export function loadLabel(count: number): string | null {
   if (count <= 0) return null;
   return count === 1 ? "1 domingo este mes" : `${count} domingos este mes`;
+}
+
+/**
+ * What "ya en el mes" means for one pair, concretely: "Dom 13 (Enseñanza)".
+ *
+ * The day comes off the ISO string by slice, not from `Date` — the repo's
+ * timezone invariant, and here it also keeps a pure label module pure. The seat
+ * is named because holding enseñanza and holding your own room are different
+ * facts to the planner, and the count alone hides which.
+ */
+export function monthSeatsLabel(seats: BenchSeat[]): string | null {
+  if (seats.length === 0) return null;
+  return seats
+    .map((held) => `Dom ${Number(held.date.slice(8, 10))} (${KIDS_SEAT_LABELS[held.seat]})`)
+    .join(" · ");
+}
+
+/**
+ * Absence on the month-scoped bench, where it is a FACT and not a refusal: the
+ * pair may still be dropped on any Sunday it is free, and the drop validates the
+ * day. "No disponible este mes" is worth its own sentence — a pair that cannot
+ * serve at all is the one the planner has to work around.
+ */
+export function absenceLabel(count: number, totalSundays: number): string | null {
+  if (count <= 0) return null;
+  if (totalSundays > 0 && count >= totalSundays) return "No disponible este mes";
+  return count === 1 ? "No disponible 1 domingo" : `No disponible ${count} domingos`;
 }
 
 /**

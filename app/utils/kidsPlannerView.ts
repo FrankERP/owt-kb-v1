@@ -59,16 +59,37 @@ export interface SeatView {
   unfillableReason: string | null;
 }
 
+/** One seat a pair holds somewhere in the current window. */
+export interface BenchSeat {
+  date: string;                    // YYYY-MM-DD
+  seat: KidsSeat;
+}
+
 export interface BenchEntry extends PairOption {
-  /** True for the longest-waiting selectable pair in its room — "le toca". */
+  /** True for the longest-waiting placeable pair that has NO seat yet — "le toca". */
   nextUp: boolean;
+  /** Every seat this pair holds across the window, ascending. Empty ⇒ still to place. */
+  monthSeats: BenchSeat[];
+  /** Sundays of the window at least one member is away. A FACT, never a block. */
+  unavailableSundays: number;
+}
+
+/**
+ * One room's bench, split by the only question the planner is actually asking:
+ * who is still to place this month.
+ */
+export interface RoomBench {
+  /** No seat anywhere in the window. Ordered longest-waiting first. */
+  disponibles: BenchEntry[];
+  /** Already holds at least one seat, and says which. Still draggable — corrections happen. */
+  colocadas: BenchEntry[];
 }
 
 export interface PlannerView {
   sundays: string[];
   seats: SeatView[];                              // sundays × KIDS_SEATS
-  /** Per room, that room's four pairs ordered longest-waiting first. */
-  bench: Record<KidsRoom, BenchEntry[]>;
+  /** Per room, that room's pairs split into still-to-place and already-in-the-month. */
+  bench: Record<KidsRoom, RoomBench>;
   /** Per pair id, how many seats it holds across the whole month — for load balance. */
   monthLoad: Record<string, number>;
 }
@@ -245,22 +266,83 @@ export function buildPlannerView(input: PlannerViewInput): PlannerView {
     for (const seat of KIDS_SEATS) seats.push(buildSeatView(date, seat));
   }
 
-  // The bench is anchored to the FIRST Sunday of the window: "as this month
-  // opens, who has waited longest and who is free". It reuses that Sunday's seat
-  // view so the bench and the seat's own list can never disagree about a clock.
+  /**
+   * The bench is scoped to the WHOLE month, not to one Sunday.
+   *
+   * It used to be built from the first Sunday's seat view, and that was wrong in
+   * both directions: a pair the generator placed on the 20th still read as free,
+   * and a pair whose member was away on the 1st carried a `block` that made the
+   * chip un-draggable for all four Sundays. The bench answers one question —
+   * "who is still to place?" — which no single Sunday can answer.
+   *
+   * So a bench entry carries only what holds all month: is the pair retired, how
+   * many Sundays is it away, and which seats does it already hold. Anything
+   * per-Sunday (busy elsewhere, away THAT day) is decided where it belongs, at the
+   * drop, by `canPlace` against the target seat's own view.
+   */
   const anchor = sundays[0] ?? null;
-  const bench = Object.fromEntries(
-    KIDS_ROOMS.map((room) => {
-      if (anchor === null) return [room, [] as BenchEntry[]];
-      const roomOptions = buildSeatView(anchor, room).options.filter(
-        (option) => option.room === room,
-      );
-      const nextUpId = roomOptions.find((option) => option.block === null)?.pairId ?? null;
-      return [room, roomOptions.map((option) => ({ ...option, nextUp: option.pairId === nextUpId }))];
-    }),
-  ) as Record<KidsRoom, BenchEntry[]>;
-
   const monthWindow = new Set(sundays);
+
+  /** Every seat this pair holds in the window, ascending by Sunday then seat order. */
+  const monthSeatsOf = (pairId: string): BenchSeat[] => {
+    const held: BenchSeat[] = [];
+    for (const date of sundays) {
+      const seatsToday = seatsByDate.get(date) ?? {};
+      for (const seat of KIDS_SEATS) {
+        if (seatsToday[seat] === pairId) held.push({ date, seat });
+      }
+    }
+    return held;
+  };
+
+  const benchEntry = (pair: ViewPair, anchorDate: string): BenchEntry => {
+    // The clock is read as the month OPENS. What the planner is arranging right
+    // now shows up as `monthSeats`, so a placement never silently resets a wait
+    // the bench is there to display.
+    const last = lastServedBefore(pair.room, pair.id, anchorDate);
+    const weeks = last === null ? null : weeksBetween(last, anchorDate);
+    return {
+      pairId: pair.id,
+      name: pair.name,
+      room: pair.room,
+      memberIds: pair.memberIds,
+      weeksSince: weeks,
+      weeksSinceLabel: weeksSinceLabel(weeks),
+      // Month-invariant reasons only — and inside a room's own pool, that leaves
+      // exactly one: the pair is retired.
+      block: pair.active ? null : { kind: "retired" },
+      // A worship overlap belongs to a Sunday, and this list belongs to a month.
+      // The seat cells and the picker still carry it where it means something.
+      worshipOverlap: [],
+      nextUp: false,
+      monthSeats: monthSeatsOf(pair.id),
+      unavailableSundays: sundays.filter((date) => pairUnavailable(pair, date, unavailable)).length,
+    };
+  };
+
+  const bench = Object.fromEntries(
+    KIDS_ROOMS.map((room): [KidsRoom, RoomBench] => {
+      // No Sunday, nothing to drag onto: a roster with no destination is noise.
+      if (anchor === null) return [room, { disponibles: [], colocadas: [] }];
+      const entries = pairs
+        .filter((pair) => pair.room === room)
+        .map((pair) => benchEntry(pair, anchor))
+        .sort(compare);
+      const disponibles = entries.filter((entry) => entry.monthSeats.length === 0);
+      const nextUpId = disponibles.find((entry) => entry.block === null)?.pairId ?? null;
+      return [
+        room,
+        {
+          disponibles: disponibles.map((entry) => ({
+            ...entry,
+            nextUp: entry.pairId === nextUpId,
+          })),
+          colocadas: entries.filter((entry) => entry.monthSeats.length > 0),
+        },
+      ];
+    }),
+  ) as Record<KidsRoom, RoomBench>;
+
   const monthLoad: Record<string, number> = Object.fromEntries(
     pairs.map((pair) => [pair.id, 0]),
   );

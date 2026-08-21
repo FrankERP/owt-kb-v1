@@ -74,7 +74,7 @@ const SUNDAYS = ["2026-09-06", "2026-09-13", "2026-09-20", "2026-09-27"];
 
 // Prior turns, so the wait clocks read as real numbers rather than a wall of
 // "nunca" — including two rooms whose last turn is far enough back to put a
-// different pair at the top of the bench.
+// different pair at the top of "Disponibles".
 const HISTORY = [
   { date: "2026-08-09", seats: { ensenanza: "p1", chiquitos: "p2", medianos: "p5", grandes: "p9" } },
   { date: "2026-08-16", seats: { ensenanza: "p5", chiquitos: "p3", medianos: "p6", grandes: "p10" } },
@@ -92,11 +92,11 @@ const ASSIGNMENTS = [
 
 // State 1 — a pair whose half is away, in BOTH places it can show.
 //
-// Quique is out on the 6th, which is the Sunday `PlannerView` anchors the bench
-// to, so "Pili y Quique — Quique no disponible" is on screen in a STATIC capture
-// with no interaction at all. Tania is out on the 20th, which surfaces the same
-// state inside the seat picker. Without the first of those, the whole point of
-// the redesign would only be provable by opening a modal.
+// The bench is month-scoped, so it carries the absence as a COUNT ("No disponible
+// 1 domingo") on a chip that stays draggable; the named, per-Sunday form
+// ("Quique no disponible") belongs to the seat picker and the cell. Quique is out
+// on the 6th and Tania on the 20th, so both readings are reachable from this one
+// fixture — the count in a STATIC capture, the name by opening the picker.
 //
 // State 3 — an UNFILLABLE seat. Every medianos pair loses a member on the 13th,
 // so RG Medianos that Sunday can say "Sin parejas disponibles para RG Medianos"
@@ -180,7 +180,6 @@ export function KidsPlannerFixture() {
       <KidsRotationBoard
         {...boardProps}
         bench={view.bench}
-        benchAnchorLabel={label(SUNDAYS[0])}
         onMove={noop}
       />
       <KidsSundayCards {...boardProps} />

@@ -581,7 +581,6 @@ export default function KidsPlanner({
           <KidsRotationBoard
             {...boardProps}
             bench={view.bench}
-            benchAnchorLabel={sundays[0] ? formatSunday(sundays[0]) : null}
             onMove={movePair}
           />
           <KidsSundayCards {...boardProps} />
