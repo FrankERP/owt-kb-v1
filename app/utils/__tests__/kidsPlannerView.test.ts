@@ -273,9 +273,27 @@ describe("buildPlannerView — bench", () => {
     expect(v.bench.chiquitos.disponibles.find((e) => e.pairId === "c2")!.unavailableSundays).toBe(0);
   });
 
-  it("still counts a pair away every Sunday of the month", () => {
-    const v = view({ unavailable: { m3: sundays } });
-    expect(v.bench.chiquitos.disponibles.find((e) => e.pairId === "c2")!.unavailableSundays).toBe(4);
+  /**
+   * Away on EVERY Sunday is month-invariant, so it BLOCKS: no drop can succeed,
+   * and the room's real next pair must not lose "le toca" to one that cannot
+   * serve at all. The first cut of the month-scoped bench got this wrong — it
+   * blocked only on `retired` — and recommended the pair that was away all month.
+   */
+  it("blocks a pair away every Sunday, and never calls it next up", () => {
+    const v = view({ history: augustChiquitos, unavailable: { m1: sundays } });
+    const c1 = v.bench.chiquitos.disponibles.find((e) => e.pairId === "c1")!;
+    expect(c1.unavailableSundays).toBe(4);
+    expect(c1.block).toEqual({ kind: "away-all-month" });
+    expect(c1.nextUp).toBe(false);
+    // c1 is the longest-waiting pair in the room; the turn passes to the next one.
+    expect(v.bench.chiquitos.disponibles.find((e) => e.nextUp)!.pairId).toBe("c2");
+  });
+
+  it("leaves a partial absence unblocked — that is a count, not a refusal", () => {
+    const v = view({ unavailable: { m1: sundays.slice(0, 3) } });
+    const c1 = v.bench.chiquitos.disponibles.find((e) => e.pairId === "c1")!;
+    expect(c1.unavailableSundays).toBe(3);
+    expect(c1.block).toBeNull();
   });
 
   it("keeps a retired pair visible, blocked and last", () => {
@@ -360,7 +378,12 @@ describe("buildPlannerView — worship overlap", () => {
     expect(c1.block).toBeNull();
     expect(optOf(v, "2026-09-06", "medianos", "d1").worshipOverlap).toEqual(["Miembro 9"]);
     expect(optOf(v, "2026-09-06", "chiquitos", "c2").worshipOverlap).toEqual([]);
-    // Warning only: still the room's pick.
+  });
+
+  it("keeps the overlap OFF the bench, which is month-scoped and cannot mean it", () => {
+    const v = view({ worshipAssignments: { "2026-09-06": ["m2", "m9"] } });
+    expect(v.bench.chiquitos.disponibles.every((e) => e.worshipOverlap.length === 0)).toBe(true);
+    // Warning only, and it never was a block: c1 is still the room's pick.
     expect(v.bench.chiquitos.disponibles.find((e) => e.nextUp)!.pairId).toBe("c1");
   });
 

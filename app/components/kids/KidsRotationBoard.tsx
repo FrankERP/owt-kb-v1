@@ -31,12 +31,19 @@ export interface DragSource {
  * that opens the same picker the phone uses, so mouse, keyboard and assistive
  * tech reach every move without a second mechanism to keep in sync.
  *
- * Below the board, one bench per room, split into "Disponibles" — nobody has
- * placed them this month, longest-waiting first, "le toca" on the first — and
- * "Ya en el mes", which names the Sundays each pair already holds. Both groups
- * drag: the second is how a wrong placement gets corrected, not a read-only
- * record. That split and its ordering are `PlannerView.bench`'s, not this
- * component's — the board explains the rotation, it does not compute it.
+ * Below the board, one bench per room, split into "Falta colocar" — no seat
+ * anywhere this month, longest-waiting first, "le toca" on the first — and "Ya en
+ * el mes", which names the Sundays each pair already holds. That split and its
+ * ordering are `PlannerView.bench`'s, not this component's — the board explains
+ * the rotation, it does not compute it.
+ *
+ * A "ya en el mes" chip drags as a MOVE, carrying the seat it already holds, so
+ * the ordinary correction — "no, put them on the 20th" — works from the list
+ * where the mistake is visible. That needs an unambiguous referent, so it applies
+ * only while the pair holds ONE seat; a pair holding two has no single seat to
+ * move and is corrected from the board cell, which names its Sunday. Dragging it
+ * from the bench would silently ADD a third turn, which is what the cell's own
+ * chip is for.
  */
 export function KidsRotationBoard({
   sundays,
@@ -86,8 +93,13 @@ export function KidsRotationBoard({
     onDrop: (e: React.DragEvent) => {
       e.preventDefault();
       const source = drag;
+      // Re-checked here, not only in `onDragOver`. A browser will not fire `drop`
+      // on a target that never cancelled its `dragover`, so this is belt and
+      // braces — but the bench is now a much wider drag source than it was, and
+      // `onMove` is a prop: the board must not hand a consumer a move it refused.
+      const ok = allowed(date, seat);
       endDrag();
-      if (!source) return;
+      if (!source || !ok) return;
       onMove(source, { date, seat });
     },
   });
@@ -211,12 +223,14 @@ export function KidsRotationBoard({
         </table>
       </div>
 
-      <section aria-label="Banca" className="mt-6 space-y-4">
+      <section aria-labelledby="banca" className="mt-6 space-y-4">
         <div>
-          <h3 className="font-display text-sm uppercase tracking-wide text-ink">Banca</h3>
+          <h3 id="banca" className="font-display text-sm uppercase tracking-wide text-ink">
+            Banca
+          </h3>
           <p className="font-body text-xs text-mono-500">
-            Quién falta por colocar en cada sala. Arrastra una pareja a un domingo, o toca un
-            lugar del tablero para elegir.
+            Quién falta por colocar en cada sala, y quién ya tiene domingo. Arrastra una pareja
+            a un domingo, o toca un lugar del tablero para elegir.
           </p>
         </div>
         <div className="grid gap-4 lg:grid-cols-3">
@@ -241,8 +255,13 @@ export function KidsRotationBoard({
                 ) : (
                   <>
                     <div className="space-y-2">
+                      {/* "Falta colocar", not "Disponibles": a retired pair and a
+                          pair away all month have no seat either, and belong on
+                          this list carrying their reason rather than vanishing
+                          from it. Calling the list "Disponibles" would contradict
+                          the very rows it exists to keep visible. */}
                       <p className="font-label text-[11px] uppercase tracking-widest text-ink-dim">
-                        Disponibles
+                        Falta colocar
                       </p>
                       <ul className="space-y-2">
                         {disponibles.map((entry: BenchEntry) => (
@@ -254,7 +273,7 @@ export function KidsRotationBoard({
                               note={
                                 entry.block
                                   ? blockLabel(entry.block)
-                                  : absenceLabel(entry.unavailableSundays, sundays.length)
+                                  : absenceLabel(entry.unavailableSundays)
                               }
                               blocked={entry.block !== null}
                               draggable={entry.block === null && !busy}
@@ -281,26 +300,40 @@ export function KidsRotationBoard({
                           Ya en el mes
                         </p>
                         <ul className="space-y-2">
-                          {colocadas.map((entry: BenchEntry) => (
-                            <li
-                              key={entry.pairId}
-                              className="flex items-start justify-between gap-2"
-                            >
-                              <PairChip
-                                name={entry.name}
-                                note={
-                                  entry.block
-                                    ? blockLabel(entry.block)
-                                    : monthSeatsLabel(entry.monthSeats)
-                                }
-                                blocked={entry.block !== null}
-                                draggable={entry.block === null && !busy}
-                                dragging={drag?.pairId === entry.pairId && drag.from === null}
-                                onDragStart={startDrag({ pairId: entry.pairId, from: null })}
-                                onDragEnd={endDrag}
-                              />
-                            </li>
-                          ))}
+                          {colocadas.map((entry: BenchEntry) => {
+                            // Exactly one seat ⇒ that seat is what the chip means,
+                            // and dragging it moves it. More than one ⇒ no single
+                            // referent, so the board cell is the handle.
+                            const only =
+                              entry.monthSeats.length === 1 ? entry.monthSeats[0] : null;
+                            return (
+                              <li
+                                key={entry.pairId}
+                                className="flex items-start justify-between gap-2"
+                              >
+                                <PairChip
+                                  name={entry.name}
+                                  note={
+                                    entry.block
+                                      ? blockLabel(entry.block)
+                                      : monthSeatsLabel(entry.monthSeats)
+                                  }
+                                  blocked={entry.block !== null}
+                                  draggable={entry.block === null && only !== null && !busy}
+                                  dragging={
+                                    drag?.pairId === entry.pairId &&
+                                    drag.from?.date === only?.date &&
+                                    drag.from?.seat === only?.seat
+                                  }
+                                  onDragStart={startDrag({
+                                    pairId: entry.pairId,
+                                    from: only,
+                                  })}
+                                  onDragEnd={endDrag}
+                                />
+                              </li>
+                            );
+                          })}
                         </ul>
                       </div>
                     )}

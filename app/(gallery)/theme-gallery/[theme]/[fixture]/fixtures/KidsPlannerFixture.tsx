@@ -73,8 +73,9 @@ const MEMBER_NAMES: Record<string, string> = Object.fromEntries(
 const SUNDAYS = ["2026-09-06", "2026-09-13", "2026-09-20", "2026-09-27"];
 
 // Prior turns, so the wait clocks read as real numbers rather than a wall of
-// "nunca" — including two rooms whose last turn is far enough back to put a
-// different pair at the top of "Disponibles".
+// "nunca". The bench is month-scoped, so what this history orders is "Falta
+// colocar" — visible in RG Grandes, the one room this fixture leaves with more
+// than one pair still to place.
 const HISTORY = [
   { date: "2026-08-09", seats: { ensenanza: "p1", chiquitos: "p2", medianos: "p5", grandes: "p9" } },
   { date: "2026-08-16", seats: { ensenanza: "p5", chiquitos: "p3", medianos: "p6", grandes: "p10" } },
@@ -92,11 +93,12 @@ const ASSIGNMENTS = [
 
 // State 1 — a pair whose half is away, in BOTH places it can show.
 //
-// The bench is month-scoped, so it carries the absence as a COUNT ("No disponible
-// 1 domingo") on a chip that stays draggable; the named, per-Sunday form
-// ("Quique no disponible") belongs to the seat picker and the cell. Quique is out
-// on the 6th and Tania on the 20th, so both readings are reachable from this one
-// fixture — the count in a STATIC capture, the name by opening the picker.
+// The bench is month-scoped, so it carries the absence as a COUNT on a chip that
+// stays draggable; the named, per-Sunday form belongs to the seat picker and the
+// cell. Tania (p1b) is out on the 20th and p1 holds no seat, so "Bere y Tania —
+// No disponible 1 domingo" is in a STATIC capture of "Falta colocar". Quique
+// (p4b) is out on the 6th, and p4 DOES hold the 20th, so that pair renders under
+// "Ya en el mes"; his name surfaces by opening the 6th's RG Chiquitos picker.
 //
 // State 3 — an UNFILLABLE seat. Every medianos pair loses a member on the 13th,
 // so RG Medianos that Sunday can say "Sin parejas disponibles para RG Medianos"

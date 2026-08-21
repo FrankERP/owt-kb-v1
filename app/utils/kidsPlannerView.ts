@@ -28,10 +28,13 @@ import {
 
 /** Why a pair cannot take a seat on a given Sunday, in the UI's own words. */
 export type PairBlock =
-  | { kind: "unavailable"; memberNames: string[] }   // one or both are away
+  | { kind: "unavailable"; memberNames: string[] }   // one or both are away THAT Sunday
   | { kind: "seated"; seat: KidsSeat }               // already has a seat that Sunday
   | { kind: "wrong-room"; room: KidsRoom }           // room seat, pair belongs elsewhere
-  | { kind: "retired" };                             // active === false
+  | { kind: "retired" }                              // active === false
+  // Away on EVERY Sunday of the window. Only the month-scoped bench produces it —
+  // a seat view is about one Sunday and says `unavailable` instead.
+  | { kind: "away-all-month" };
 
 export interface PairOption {
   pairId: string;
@@ -301,6 +304,9 @@ export function buildPlannerView(input: PlannerViewInput): PlannerView {
     // the bench is there to display.
     const last = lastServedBefore(pair.room, pair.id, anchorDate);
     const weeks = last === null ? null : weeksBetween(last, anchorDate);
+    const unavailableSundays = sundays.filter((date) =>
+      pairUnavailable(pair, date, unavailable),
+    ).length;
     return {
       pairId: pair.id,
       name: pair.name,
@@ -308,15 +314,23 @@ export function buildPlannerView(input: PlannerViewInput): PlannerView {
       memberIds: pair.memberIds,
       weeksSince: weeks,
       weeksSinceLabel: weeksSinceLabel(weeks),
-      // Month-invariant reasons only — and inside a room's own pool, that leaves
-      // exactly one: the pair is retired.
-      block: pair.active ? null : { kind: "retired" },
+      // Month-invariant reasons ONLY, which inside a room's own pool leaves two:
+      // the pair is retired, or it is away every Sunday of the window. Both are
+      // true of the month rather than of a day, so both belong here — and a pair
+      // that cannot serve any Sunday must not be told "le toca" or handed a drag
+      // that every cell will refuse. Anything narrower than the whole window is a
+      // COUNT (`unavailableSundays`), decided at the drop.
+      block: !pair.active
+        ? { kind: "retired" }
+        : unavailableSundays === sundays.length
+          ? { kind: "away-all-month" }
+          : null,
       // A worship overlap belongs to a Sunday, and this list belongs to a month.
       // The seat cells and the picker still carry it where it means something.
       worshipOverlap: [],
       nextUp: false,
       monthSeats: monthSeatsOf(pair.id),
-      unavailableSundays: sundays.filter((date) => pairUnavailable(pair, date, unavailable)).length,
+      unavailableSundays,
     };
   };
 

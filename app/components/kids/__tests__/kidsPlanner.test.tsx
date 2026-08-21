@@ -127,7 +127,7 @@ describe("the words a blocked row carries", () => {
     expect(loadLabel(1)).toBe("1 domingo este mes");
     expect(loadLabel(2)).toBe("2 domingos este mes");
     expect(monthSeatsLabel([])).toBeNull();
-    expect(absenceLabel(0, 4)).toBeNull();
+    expect(absenceLabel(0)).toBeNull();
   });
 
   it("names the Sundays a pair already holds, and the seat on each", () => {
@@ -142,10 +142,10 @@ describe("the words a blocked row carries", () => {
     ).toBe("Dom 6 (Enseñanza) · Dom 20 (RG Chiquitos)");
   });
 
-  it("counts absences on the bench, and says so plainly when there are none left", () => {
-    expect(absenceLabel(1, 4)).toBe("No disponible 1 domingo");
-    expect(absenceLabel(2, 4)).toBe("No disponible 2 domingos");
-    expect(absenceLabel(4, 4)).toBe("No disponible este mes");
+  it("counts a partial absence on the bench — a full one is a block, not a count", () => {
+    expect(absenceLabel(1)).toBe("No disponible 1 domingo");
+    expect(absenceLabel(2)).toBe("No disponible 2 domingos");
+    expect(blockLabel({ kind: "away-all-month" })).toBe("No disponible este mes");
   });
 });
 
@@ -291,7 +291,7 @@ describe("KidsPlanner — the board shows what a dropdown hid", () => {
       name: "RG Chiquitos",
     });
     const text = room.textContent!;
-    expect(text.indexOf("Disponibles")).toBeLessThan(text.indexOf("C2"));
+    expect(text.indexOf("Falta colocar")).toBeLessThan(text.indexOf("C2"));
     expect(text.indexOf("Ya en el mes")).toBeLessThan(text.indexOf("C1"));
     expect(text.indexOf("C2")).toBeLessThan(text.indexOf("Ya en el mes"));
     // …and it says WHICH Sunday, so the correction is obvious without hunting.
@@ -323,6 +323,63 @@ describe("KidsPlanner — the board shows what a dropdown hid", () => {
     expect(
       screen.getByLabelText(/^RG Chiquitos, Domingo, 13 de septiembre/).textContent,
     ).toContain("C1");
+  });
+
+  /** Helper: the desktop bench card for one room. */
+  const benchRoom = (label: string) =>
+    within(screen.getByRole("region", { name: "Banca" })).getByRole("group", { name: label });
+
+  /**
+   * The correction the "Ya en el mes" group exists for: the chip carries the seat
+   * the pair already holds, so dragging it MOVES that turn instead of adding a
+   * second one. Without `from`, `movePair` never vacates the source.
+   */
+  it("moves — not duplicates — when a placed pair is dragged off the bench", () => {
+    renderPlanner({
+      initialSchedules: [
+        { date: "2026-09-13", published: false, seats: { chiquitos: "c1" } },
+      ],
+    });
+    const chip = within(benchRoom("RG Chiquitos")).getByText("C1").closest("[draggable]");
+    expect(chip).not.toBeNull();
+
+    const dataTransfer = { setData: vi.fn(), effectAllowed: "", dropEffect: "" };
+    const target = screen.getByLabelText(/^RG Chiquitos, Domingo, 20 de septiembre/);
+    fireEvent.dragStart(chip!, { dataTransfer });
+    fireEvent.dragOver(target, { dataTransfer });
+    fireEvent.drop(target, { dataTransfer });
+
+    expect(
+      screen.getByLabelText(/^RG Chiquitos, Domingo, 20 de septiembre/).textContent,
+    ).toContain("C1");
+    // The 13th was VACATED — a duplicate here is the whole failure mode. Asserted
+    // on the accessible name, which spells the empty state out ("sin asignar")
+    // where the visible cell only shows "+ Asignar".
+    expect(
+      screen.getByLabelText("RG Chiquitos, Domingo, 13 de septiembre: sin asignar"),
+    ).toBeTruthy();
+  });
+
+  it("will not drag a pair that holds two Sundays — no single seat to move", () => {
+    renderPlanner({
+      initialSchedules: [
+        { date: "2026-09-13", published: false, seats: { chiquitos: "c1" } },
+        { date: "2026-09-27", published: false, seats: { ensenanza: "c1" } },
+      ],
+    });
+    const room = benchRoom("RG Chiquitos");
+    expect(room.textContent).toContain("Dom 13 (RG Chiquitos) · Dom 27 (Enseñanza)");
+    expect(within(room).getByText("C1").closest("[draggable]")).toBeNull();
+  });
+
+  it("says so when a room has nobody left to place", () => {
+    renderPlanner({
+      initialSchedules: [
+        { date: "2026-09-13", published: false, seats: { chiquitos: "c1" } },
+        { date: "2026-09-20", published: false, seats: { chiquitos: "c2" } },
+      ],
+    });
+    expect(benchRoom("RG Chiquitos").textContent).toContain("Todas colocadas este mes");
   });
 
   it("drops a bench pair into a board cell", () => {

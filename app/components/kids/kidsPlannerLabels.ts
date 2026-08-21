@@ -42,6 +42,10 @@ export function blockLabel(block: PairBlock): string {
       return `Es de ${KIDS_SEAT_LABELS[block.room]}`;
     case "retired":
       return "Pareja retirada";
+    case "away-all-month":
+      // No name: the bench is month-scoped, and WHO is away varies by Sunday.
+      // The picker names the person on the Sunday it matters.
+      return "No disponible este mes";
   }
 }
 
@@ -77,14 +81,13 @@ export function monthSeatsLabel(seats: BenchSeat[]): string | null {
 }
 
 /**
- * Absence on the month-scoped bench, where it is a FACT and not a refusal: the
- * pair may still be dropped on any Sunday it is free, and the drop validates the
- * day. "No disponible este mes" is worth its own sentence — a pair that cannot
- * serve at all is the one the planner has to work around.
+ * A PARTIAL absence on the month-scoped bench, where it is a fact and not a
+ * refusal: the pair may still be dropped on any Sunday it is free, and the drop
+ * validates the day. Away on EVERY Sunday is a different thing — a block the view
+ * itself sets (`away-all-month`), because no drop can succeed.
  */
-export function absenceLabel(count: number, totalSundays: number): string | null {
+export function absenceLabel(count: number): string | null {
   if (count <= 0) return null;
-  if (totalSundays > 0 && count >= totalSundays) return "No disponible este mes";
   return count === 1 ? "No disponible 1 domingo" : `No disponible ${count} domingos`;
 }
 
