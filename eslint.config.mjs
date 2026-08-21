@@ -21,6 +21,18 @@ export default defineConfig([
     // either blocks a good release or invites a "fix" to source that was never
     // broken. Linting a second checkout of the same tree can only ever produce a
     // duplicate verdict or a wrong one.
+    //
+    // ESLint is the ONLY gate that was exposed, which is worth writing down
+    // because `tsconfig.json` looks like it should be — `include: ["**/*.ts"]`
+    // with only `node_modules` excluded. It is not: TypeScript's wildcards skip
+    // directories whose names begin with a dot, which is also why
+    // `.next/types/**/*.ts` has to be listed there explicitly. Vitest and
+    // Tailwind are safe for a different reason (root-anchored globs: `app/**`
+    // cannot match `.claude/worktrees/<name>/app/**`), and the repo's
+    // directory-walking guard tests all start from a named subtree, never the
+    // repo root. All four verified by canary on 2026-08-21. Flat config reaches
+    // dot-directories because its only default ignores are `node_modules` and
+    // `.git` — so do NOT "fix" the sibling configs to match this one.
     ".claude/**",
     "out/**",
     "ios/**",
