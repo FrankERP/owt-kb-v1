@@ -19,12 +19,15 @@ that diff review the primary gate rather than a secondary one.
 | P2 | 2+3 | `30453dab` | Kids domain types + deterministic rotation engine (9 tests) |
 | P2 | 6-UI | `7a394ef0`, `af977ae2` | `buildPlannerView` (the view layer), then the planner rebuilt on it: desktop rotation board + bench, phone Sunday cards + seat picker, `kids-planner` theme-gallery fixture |
 | P2 | 6-UI | `f79749c0` | Planner amber and blocked states raised to WCAG AA |
-| P2 | 6-UI | `d86a41ce`, `b51823b2` | Bench scoped to the MONTH, not to its first Sunday — two groups per room, plus the fix for the two findings that review raised (see below) |
+| P2 | 6-UI | `d86a41ce`, `b51823b2`, `5072e490` | Bench scoped to the MONTH, not to its first Sunday — two groups per room, then the fix for the two findings that review raised, then its own review's LOW items (see below) |
 
-Two of those hashes moved after the fact. The row above cited `e4c20233` for the
+One of those hashes moved after the fact. The row above cited `e4c20233` for the
 planner rebuild; that commit was rewritten and is no longer an ancestor of `main`
-— `af977ae2` is the same work. Worth stating rather than silently correcting: a
-commit table nobody re-derives is a table that quietly stops being true.
+— `af977ae2` is the same work, and the only difference between the two is this
+file. Every other hash in the table was re-derived against the object database and
+is an ancestor of `main`. Worth stating rather than silently correcting: a commit
+table nobody re-derives is a table that quietly stops being true — which this one
+proved twice, since the heading below kept citing the dead hash for weeks.
 
 ### The bench, and why the first cut of it was wrong
 
@@ -74,7 +77,7 @@ review rounds kept surfacing, which is evidence the class outlived the review.
   planner wants a Spanish long date, **format at render time** from the `date` field.
 - Fairness category keys are `"ensenanza"` and `` `room:${seat}` ``, keyed off the SEAT.
 
-## Planner UI rebuild (`e4c20233`) — three things for the code review
+## Planner UI rebuild (`af977ae2`) — three things for the code review
 
 1. **It is not purely presentational, and the two exceptions are deliberate.** The
    admin page's GROQ gained a `history` field and `loadMonth` now also fetches

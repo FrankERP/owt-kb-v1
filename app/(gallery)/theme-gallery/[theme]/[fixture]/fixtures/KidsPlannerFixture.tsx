@@ -116,8 +116,9 @@ const UNAVAILABLE: Record<string, string[]> = {
   p8b: ["2026-09-13"],
 };
 
-// State 2 — a worship overlap. Amber and informational, never a block: Rosa is on
-// the worship roster the same Sunday she teaches.
+// State 2 — a worship overlap. Amber and informational, never a block. Two chips
+// on the 6th: Tere (p6a), whose pair teaches that Sunday, and Rosa (p5a), whose
+// pair has RG Medianos.
 const WORSHIP: Record<string, string[]> = {
   "2026-09-06": ["p5a", "p6a"],
 };
