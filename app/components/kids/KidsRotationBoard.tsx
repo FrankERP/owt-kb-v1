@@ -8,10 +8,10 @@ import {
   type KidsSeat,
 } from "@/app/utils/kidsTypes";
 import type { KidsRoom } from "@/app/utils/kidsTypes";
-import type { BenchEntry } from "@/app/utils/kidsPlannerView";
+import type { BenchEntry, RoomBench } from "@/app/utils/kidsPlannerView";
 import type { KidsBoardProps } from "./kidsBoardProps";
 import { PairChip } from "./PairChip";
-import { blockLabel, canPlace, loadLabel } from "./kidsPlannerLabels";
+import { absenceLabel, blockLabel, canPlace, monthSeatsLabel } from "./kidsPlannerLabels";
 
 /** Where a drag started: a bench chip (`from === null`) or a filled cell. */
 export interface DragSource {
@@ -31,27 +31,39 @@ export interface DragSource {
  * that opens the same picker the phone uses, so mouse, keyboard and assistive
  * tech reach every move without a second mechanism to keep in sync.
  *
- * Below the board, one bench per room, longest-waiting first, with "le toca" on
- * the pair whose turn it is. That ordering is `PlannerView.bench`'s, not this
- * component's — the board explains the rotation, it does not compute it.
+ * Below the board, one bench per room, split into "Falta colocar" — no seat
+ * anywhere this month, longest-waiting first, "le toca" on the first — and "Ya en
+ * el mes", which names the Sundays each pair already holds. That split and its
+ * ordering are `PlannerView.bench`'s, not this component's — the board explains
+ * the rotation, it does not compute it.
+ *
+ * A "ya en el mes" chip drags as a MOVE, carrying the seat it already holds, so
+ * the ordinary correction — "no, put them on the 20th" — works from the list
+ * where the mistake is visible. That needs an unambiguous referent, so it applies
+ * only while the pair holds ONE seat; a pair holding two has no single seat to
+ * move and is corrected from the board cell, which names its Sunday. Dragging it
+ * from the bench would silently ADD a third turn, which is what the cell's own
+ * chip is for.
  */
 export function KidsRotationBoard({
   sundays,
   seatOf,
   pairName,
-  monthLoad,
   noteFor,
   busy,
   onOpenSeat,
   onTogglePublish,
   bench,
-  benchAnchorLabel,
   onMove,
 }: KidsBoardProps & {
-  bench: Record<KidsRoom, BenchEntry[]>;
-  /** The Sunday the bench's clocks and blocks are measured at — `PlannerView` anchors
-   *  them to the first Sunday of the window, so saying so beats implying "always". */
-  benchAnchorLabel: string | null;
+  bench: Record<KidsRoom, RoomBench>;
+  /**
+   * A drop that landed. The CONSUMER validates it — with `canPlace` against the
+   * target seat, exactly as `allowed()` does here — and is the one that tells the
+   * user when it refuses. The board gates the drag (`onDragOver`), so in a browser
+   * an invalid move never reaches this; the contract is what keeps that true for a
+   * consumer that reaches it another way.
+   */
   onMove: (source: DragSource, to: { date: string; seat: KidsSeat }) => void;
 }) {
   const [drag, setDrag] = useState<DragSource | null>(null);
@@ -85,6 +97,11 @@ export function KidsRotationBoard({
       setOver(cellKey(date, seat));
     },
     onDragLeave: () => setOver((current) => (current === cellKey(date, seat) ? null : current)),
+    // Deliberately NOT re-checked here. `onDragOver` above is what makes this cell
+    // a drop target at all, and a browser fires no `drop` on a target that never
+    // cancelled its `dragover`. A second silent guard would only make the
+    // consumer's REFUSAL unreachable — and a refusal that explains itself beats a
+    // drop that quietly does nothing. See `onMove`'s contract.
     onDrop: (e: React.DragEvent) => {
       e.preventDefault();
       const source = drag;
@@ -186,7 +203,11 @@ export function KidsRotationBoard({
                             overlap={option?.worshipOverlap ?? []}
                             note={option ? null : "Fuera de la rotación"}
                             draggable
-                            dragging={drag?.pairId === assignedId && drag.from?.seat === seat}
+                            dragging={
+                              drag?.pairId === assignedId &&
+                              drag.from?.date === sunday.date &&
+                              drag.from?.seat === seat
+                            }
                             onDragStart={startDrag({
                               pairId: assignedId,
                               from: { date: sunday.date, seat },
@@ -213,51 +234,140 @@ export function KidsRotationBoard({
         </table>
       </div>
 
-      <div className="mt-6 space-y-4">
+      <section aria-labelledby="banca" className="mt-6 space-y-4">
         <div>
-          <h3 className="font-display text-sm uppercase tracking-wide text-ink">Banca</h3>
+          <h3 id="banca" className="font-display text-sm uppercase tracking-wide text-ink">
+            Banca
+          </h3>
           <p className="font-body text-xs text-mono-500">
-            {/* One expression, not JSX siblings: a line break between text and a
-                `{…}` renders as a space, which would put one before the comma. */}
-            {`Quién lleva más tiempo esperando en cada sala${
-              benchAnchorLabel ? `, al ${benchAnchorLabel.toLowerCase()}` : ""
-            }. Arrastra una pareja a un domingo, o toca un lugar del tablero para elegir.`}
+            Quién falta por colocar en cada sala, y quién ya tiene domingo. Arrastra una pareja
+            a un domingo, o toca un lugar del tablero para elegir.
           </p>
         </div>
         <div className="grid gap-4 lg:grid-cols-3">
-          {KIDS_ROOMS.map((room) => (
-            <div
-              key={room}
-              className="space-y-2 rounded-xl border border-accent/15 bg-surface-accent-wash p-3"
-            >
-              <h4 className="font-label text-[11px] uppercase tracking-widest text-mono-500">
-                {KIDS_SEAT_LABELS[room]}
-              </h4>
-              <ul className="space-y-2">
-                {bench[room].map((entry: BenchEntry) => (
-                  <li key={entry.pairId} className="flex items-start justify-between gap-2">
-                    <PairChip
-                      name={entry.name}
-                      weeksSinceLabel={entry.weeksSinceLabel}
-                      overlap={entry.worshipOverlap}
-                      nextUp={entry.nextUp}
-                      note={entry.block ? blockLabel(entry.block) : loadLabel(monthLoad[entry.pairId] ?? 0)}
-                      blocked={entry.block !== null}
-                      draggable={entry.block === null && !busy}
-                      dragging={drag?.pairId === entry.pairId && drag.from === null}
-                      onDragStart={startDrag({ pairId: entry.pairId, from: null })}
-                      onDragEnd={endDrag}
-                    />
-                  </li>
-                ))}
-                {bench[room].length === 0 && (
-                  <li className="font-body text-xs text-mono-500">Sin parejas registradas.</li>
+          {KIDS_ROOMS.map((room) => {
+            const { disponibles, colocadas } = bench[room];
+            return (
+              <div
+                key={room}
+                role="group"
+                aria-labelledby={`banca-${room}`}
+                className="space-y-3 rounded-xl border border-accent/15 bg-surface-accent-wash p-3"
+              >
+                <h4
+                  id={`banca-${room}`}
+                  className="font-label text-[11px] uppercase tracking-widest text-mono-500"
+                >
+                  {KIDS_SEAT_LABELS[room]}
+                </h4>
+
+                {disponibles.length + colocadas.length === 0 ? (
+                  <p className="font-body text-xs text-mono-500">Sin parejas registradas.</p>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      {/* "Falta colocar", not "Disponibles": a retired pair and a
+                          pair away all month have no seat either, and belong on
+                          this list carrying their reason rather than vanishing
+                          from it. Calling the list "Disponibles" would contradict
+                          the very rows it exists to keep visible. */}
+                      <p className="font-label text-[11px] uppercase tracking-widest text-ink-dim">
+                        Falta colocar
+                      </p>
+                      <ul className="space-y-2">
+                        {disponibles.map((entry: BenchEntry) => (
+                          <li key={entry.pairId} className="flex items-start justify-between gap-2">
+                            <PairChip
+                              name={entry.name}
+                              weeksSinceLabel={entry.weeksSinceLabel}
+                              nextUp={entry.nextUp}
+                              note={
+                                entry.block
+                                  ? blockLabel(entry.block)
+                                  : absenceLabel(entry.unavailableSundays)
+                              }
+                              blocked={entry.block !== null}
+                              draggable={entry.block === null && !busy}
+                              dragging={drag?.pairId === entry.pairId && drag.from === null}
+                              onDragStart={startDrag({ pairId: entry.pairId, from: null })}
+                              onDragEnd={endDrag}
+                            />
+                          </li>
+                        ))}
+                        {disponibles.length === 0 && (
+                          <li className="font-body text-xs text-mono-500">
+                            Todas colocadas este mes.
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+
+                    {colocadas.length > 0 && (
+                      /* Separated by a rule and a heading rather than dimmed: these
+                         chips are still drag handles, and an opacity that reads as
+                         "secondary" also drops their contrast below AA. */
+                      <div className="space-y-2 border-t border-edge-accent-subtle pt-3">
+                        <p className="font-label text-[11px] uppercase tracking-widest text-ink-dim">
+                          Ya en el mes
+                        </p>
+                        <ul className="space-y-2">
+                          {colocadas.map((entry: BenchEntry) => {
+                            // Exactly one seat ⇒ that seat is what the chip means,
+                            // and dragging it moves it. More than one ⇒ no single
+                            // referent, so the board cell is the handle.
+                            const only =
+                              entry.monthSeats.length === 1 ? entry.monthSeats[0] : null;
+                            return (
+                              <li
+                                key={entry.pairId}
+                                className="flex items-start justify-between gap-2"
+                              >
+                                <PairChip
+                                  name={entry.name}
+                                  // Both, never one or the other: a pair that went
+                                  // unavailable AFTER being placed is exactly the
+                                  // one whose Sunday the planner has to go find.
+                                  note={[
+                                    entry.block && blockLabel(entry.block),
+                                    monthSeatsLabel(entry.monthSeats),
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                  hint={
+                                    only === null && entry.block === null
+                                      ? "Tiene más de un domingo — muévela desde el tablero"
+                                      : null
+                                  }
+                                  blocked={entry.block !== null}
+                                  draggable={entry.block === null && only !== null && !busy}
+                                  // Compared to `only` explicitly: two `undefined`s
+                                  // are equal, so the loose form would degenerate to
+                                  // a pair-id match for a bench-origin drag.
+                                  dragging={
+                                    drag?.pairId === entry.pairId &&
+                                    only !== null &&
+                                    drag.from?.date === only.date &&
+                                    drag.from?.seat === only.seat
+                                  }
+                                  onDragStart={startDrag({
+                                    pairId: entry.pairId,
+                                    from: only,
+                                  })}
+                                  onDragEnd={endDrag}
+                                />
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
+                  </>
                 )}
-              </ul>
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

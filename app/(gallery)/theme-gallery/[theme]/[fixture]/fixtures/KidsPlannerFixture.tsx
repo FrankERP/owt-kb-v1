@@ -73,8 +73,9 @@ const MEMBER_NAMES: Record<string, string> = Object.fromEntries(
 const SUNDAYS = ["2026-09-06", "2026-09-13", "2026-09-20", "2026-09-27"];
 
 // Prior turns, so the wait clocks read as real numbers rather than a wall of
-// "nunca" — including two rooms whose last turn is far enough back to put a
-// different pair at the top of the bench.
+// "nunca". The bench is month-scoped, so what this history orders is "Falta
+// colocar" — visible in RG Grandes, the one room this fixture leaves with more
+// than one pair still to place.
 const HISTORY = [
   { date: "2026-08-09", seats: { ensenanza: "p1", chiquitos: "p2", medianos: "p5", grandes: "p9" } },
   { date: "2026-08-16", seats: { ensenanza: "p5", chiquitos: "p3", medianos: "p6", grandes: "p10" } },
@@ -85,18 +86,23 @@ const HISTORY = [
 const ASSIGNMENTS = [
   { date: "2026-09-06", seats: { ensenanza: "p6", chiquitos: "p2", medianos: "p5", grandes: "p9" } },
   // The 13th deliberately leaves RG Medianos empty — see UNAVAILABLE below.
-  { date: "2026-09-13", seats: { ensenanza: "p10", chiquitos: "p3", grandes: "p10" } },
+  // p2 teaches here and has RG Chiquitos on the 6th: two Sundays, so the bench
+  // renders it as a chip that names both and does NOT drag. (This seat used to be
+  // p10, which already had RG Grandes the same Sunday — a state the server
+  // refuses, and one the month-scoped bench put on screen as "Dom 13 · Dom 13".)
+  { date: "2026-09-13", seats: { ensenanza: "p2", chiquitos: "p3", grandes: "p10" } },
   { date: "2026-09-20", seats: { ensenanza: "p3", chiquitos: "p4", medianos: "p7" } },
   { date: "2026-09-27", seats: {} as Partial<Record<KidsSeat, string>> },
 ];
 
 // State 1 — a pair whose half is away, in BOTH places it can show.
 //
-// Quique is out on the 6th, which is the Sunday `PlannerView` anchors the bench
-// to, so "Pili y Quique — Quique no disponible" is on screen in a STATIC capture
-// with no interaction at all. Tania is out on the 20th, which surfaces the same
-// state inside the seat picker. Without the first of those, the whole point of
-// the redesign would only be provable by opening a modal.
+// The bench is month-scoped, so it carries the absence as a COUNT on a chip that
+// stays draggable; the named, per-Sunday form belongs to the seat picker and the
+// cell. Tania (p1b) is out on the 20th and p1 holds no seat, so "Bere y Tania —
+// No disponible 1 domingo" is in a STATIC capture of "Falta colocar". Quique
+// (p4b) is out on the 6th, and p4 DOES hold the 20th, so that pair renders under
+// "Ya en el mes"; his name surfaces by opening the 6th's RG Chiquitos picker.
 //
 // State 3 — an UNFILLABLE seat. Every medianos pair loses a member on the 13th,
 // so RG Medianos that Sunday can say "Sin parejas disponibles para RG Medianos"
@@ -110,8 +116,9 @@ const UNAVAILABLE: Record<string, string[]> = {
   p8b: ["2026-09-13"],
 };
 
-// State 2 — a worship overlap. Amber and informational, never a block: Rosa is on
-// the worship roster the same Sunday she teaches.
+// State 2 — a worship overlap. Amber and informational, never a block. Two chips
+// on the 6th: Tere (p6a), whose pair teaches that Sunday, and Rosa (p5a), whose
+// pair has RG Medianos.
 const WORSHIP: Record<string, string[]> = {
   "2026-09-06": ["p5a", "p6a"],
 };
@@ -180,7 +187,6 @@ export function KidsPlannerFixture() {
       <KidsRotationBoard
         {...boardProps}
         bench={view.bench}
-        benchAnchorLabel={label(SUNDAYS[0])}
         onMove={noop}
       />
       <KidsSundayCards {...boardProps} />

@@ -215,45 +215,131 @@ describe("buildPlannerView — ordering", () => {
 });
 
 describe("buildPlannerView — bench", () => {
-  it("lists each room's own pairs, longest-waiting first", () => {
+  it("lists each room's own pairs as unplaced, longest-waiting first", () => {
     const v = view({ history: augustChiquitos });
     for (const room of KIDS_ROOMS) {
-      expect(v.bench[room]).toHaveLength(4);
-      expect(v.bench[room].every((e) => e.room === room)).toBe(true);
+      expect(v.bench[room].disponibles).toHaveLength(4);
+      expect(v.bench[room].colocadas).toEqual([]);
+      expect(v.bench[room].disponibles.every((e) => e.room === room)).toBe(true);
     }
-    expect(v.bench.chiquitos.map((e) => e.pairId)).toEqual(["c1", "c2", "c3", "c4"]);
+    expect(v.bench.chiquitos.disponibles.map((e) => e.pairId)).toEqual(["c1", "c2", "c3", "c4"]);
   });
 
-  it("marks exactly one nextUp per room", () => {
-    const v = view({ history: augustChiquitos });
-    for (const room of KIDS_ROOMS) {
-      expect(v.bench[room].filter((e) => e.nextUp)).toHaveLength(1);
-    }
-    expect(v.bench.chiquitos.find((e) => e.nextUp)!.pairId).toBe("c1");
-  });
-
-  it("never marks a blocked pair nextUp — it skips to the next one who can serve", () => {
-    const v = view({ history: augustChiquitos, unavailable: { m1: ["2026-09-06"] } });
-    const c1 = v.bench.chiquitos.find((e) => e.pairId === "c1")!;
-    expect(c1.block).toEqual({ kind: "unavailable", memberNames: ["Linnette"] });
-    expect(c1.nextUp).toBe(false);
-    const up = v.bench.chiquitos.filter((e) => e.nextUp);
-    expect(up).toHaveLength(1);
-    expect(up[0].pairId).toBe("c2");
-    expect(up[0].block).toBeNull();
-  });
-
-  it("marks nobody when the whole room is blocked", () => {
+  /**
+   * The bug this split exists for: the bench used to be measured at the FIRST
+   * Sunday, so a pair the generator placed on any later one still read as free.
+   */
+  it("moves a pair to «ya en el mes» for ANY Sunday of the window, not just the first", () => {
     const v = view({
-      unavailable: { m1: ["2026-09-06"], m3: ["2026-09-06"], m5: ["2026-09-06"], m7: ["2026-09-06"] },
+      history: augustChiquitos,
+      assignments: [{ date: "2026-09-27", seats: { chiquitos: "c1" } }],
     });
-    expect(v.bench.chiquitos.filter((e) => e.nextUp)).toHaveLength(0);
+    expect(v.bench.chiquitos.disponibles.map((e) => e.pairId)).toEqual(["c2", "c3", "c4"]);
+    expect(v.bench.chiquitos.colocadas.map((e) => e.pairId)).toEqual(["c1"]);
+    expect(v.bench.chiquitos.colocadas[0].monthSeats).toEqual([
+      { date: "2026-09-27", seat: "chiquitos" },
+    ]);
   });
 
-  it("is empty when there is no Sunday to anchor it to", () => {
+  it("counts an enseñanza turn as placed — the pair is busy that Sunday either way", () => {
+    const v = view({ assignments: [{ date: "2026-09-13", seats: { ensenanza: "c2" } }] });
+    expect(v.bench.chiquitos.colocadas.map((e) => e.pairId)).toEqual(["c2"]);
+    expect(v.bench.chiquitos.disponibles.map((e) => e.pairId)).toEqual(["c1", "c3", "c4"]);
+  });
+
+  it("names every seat a pair holds, in Sunday order", () => {
+    const v = view({
+      assignments: [
+        { date: "2026-09-20", seats: { chiquitos: "c1" } },
+        { date: "2026-09-06", seats: { ensenanza: "c1" } },
+      ],
+    });
+    expect(v.bench.chiquitos.colocadas[0].monthSeats).toEqual([
+      { date: "2026-09-06", seat: "ensenanza" },
+      { date: "2026-09-20", seat: "chiquitos" },
+    ]);
+  });
+
+  /**
+   * The second half of the same bug: a Sunday-1 absence used to set a `block`
+   * that made the chip un-draggable for the WHOLE month. Absence is a month fact
+   * here; the drop is what validates a day, against the target seat's own view.
+   */
+  it("counts the Sundays a pair is away without blocking it", () => {
+    const v = view({ unavailable: { m1: ["2026-09-06", "2026-09-20"] } });
+    const c1 = v.bench.chiquitos.disponibles.find((e) => e.pairId === "c1")!;
+    expect(c1.block).toBeNull();
+    expect(c1.unavailableSundays).toBe(2);
+    expect(v.bench.chiquitos.disponibles.find((e) => e.pairId === "c2")!.unavailableSundays).toBe(0);
+  });
+
+  /**
+   * Away on EVERY Sunday is month-invariant, so it BLOCKS: no drop can succeed,
+   * and the room's real next pair must not lose "le toca" to one that cannot
+   * serve at all. The first cut of the month-scoped bench got this wrong — it
+   * blocked only on `retired` — and recommended the pair that was away all month.
+   */
+  it("blocks a pair away every Sunday, and never calls it next up", () => {
+    const v = view({ history: augustChiquitos, unavailable: { m1: sundays } });
+    const c1 = v.bench.chiquitos.disponibles.find((e) => e.pairId === "c1")!;
+    expect(c1.unavailableSundays).toBe(4);
+    expect(c1.block).toEqual({ kind: "away-all-month" });
+    expect(c1.nextUp).toBe(false);
+    // c1 is the longest-waiting pair in the room; the turn passes to the next one.
+    expect(v.bench.chiquitos.disponibles.find((e) => e.nextUp)!.pairId).toBe("c2");
+  });
+
+  it("leaves a partial absence unblocked — that is a count, not a refusal", () => {
+    const v = view({ unavailable: { m1: sundays.slice(0, 3) } });
+    const c1 = v.bench.chiquitos.disponibles.find((e) => e.pairId === "c1")!;
+    expect(c1.unavailableSundays).toBe(3);
+    expect(c1.block).toBeNull();
+  });
+
+  it("keeps a retired pair visible, blocked and last", () => {
+    const retired = pairs.map((p) => (p.id === "c1" ? { ...p, active: false } : p));
+    const v = view({ pairs: retired, history: augustChiquitos });
+    const ids = v.bench.chiquitos.disponibles.map((e) => e.pairId);
+    expect(ids).toEqual(["c2", "c3", "c4", "c1"]);
+    expect(v.bench.chiquitos.disponibles.at(-1)!.block).toEqual({ kind: "retired" });
+  });
+
+  it("marks nextUp on the longest-waiting pair still to place", () => {
+    const v = view({ history: augustChiquitos });
+    for (const room of KIDS_ROOMS) {
+      expect(v.bench[room].disponibles.filter((e) => e.nextUp)).toHaveLength(1);
+    }
+    expect(v.bench.chiquitos.disponibles.find((e) => e.nextUp)!.pairId).toBe("c1");
+  });
+
+  it("passes nextUp to the next pair once the first one is placed", () => {
+    const v = view({
+      history: augustChiquitos,
+      assignments: [{ date: "2026-09-06", seats: { chiquitos: "c1" } }],
+    });
+    expect(v.bench.chiquitos.disponibles.find((e) => e.nextUp)!.pairId).toBe("c2");
+    expect(v.bench.chiquitos.colocadas.some((e) => e.nextUp)).toBe(false);
+  });
+
+  it("marks nobody when the whole room is already in the month", () => {
+    const v = view({
+      assignments: sundays.map((date, i) => ({
+        date,
+        seats: { chiquitos: ["c1", "c2", "c3", "c4"][i] },
+      })),
+    });
+    expect(v.bench.chiquitos.disponibles).toEqual([]);
+    expect(v.bench.chiquitos.colocadas.filter((e) => e.nextUp)).toHaveLength(0);
+  });
+
+  it("is empty when there is no Sunday to place anyone on", () => {
     const v = view({ sundays: [] });
     expect(v.seats).toEqual([]);
-    expect(v.bench).toEqual({ chiquitos: [], medianos: [], grandes: [] });
+    expect(v.bench).toEqual({
+      chiquitos: { disponibles: [], colocadas: [] },
+      medianos: { disponibles: [], colocadas: [] },
+      grandes: { disponibles: [], colocadas: [] },
+    });
   });
 });
 
@@ -292,8 +378,13 @@ describe("buildPlannerView — worship overlap", () => {
     expect(c1.block).toBeNull();
     expect(optOf(v, "2026-09-06", "medianos", "d1").worshipOverlap).toEqual(["Miembro 9"]);
     expect(optOf(v, "2026-09-06", "chiquitos", "c2").worshipOverlap).toEqual([]);
-    // Warning only: still the room's pick.
-    expect(v.bench.chiquitos.find((e) => e.nextUp)!.pairId).toBe("c1");
+  });
+
+  it("keeps the overlap OFF the bench, which is month-scoped and cannot mean it", () => {
+    const v = view({ worshipAssignments: { "2026-09-06": ["m2", "m9"] } });
+    expect(v.bench.chiquitos.disponibles.every((e) => e.worshipOverlap.length === 0)).toBe(true);
+    // Warning only, and it never was a block: c1 is still the room's pick.
+    expect(v.bench.chiquitos.disponibles.find((e) => e.nextUp)!.pairId).toBe("c1");
   });
 
   it("only warns on the Sunday the member serves", () => {

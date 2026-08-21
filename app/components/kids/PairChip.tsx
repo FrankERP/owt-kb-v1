@@ -22,6 +22,7 @@ export function PairChip({
   overlap = [],
   nextUp = false,
   note = null,
+  hint = null,
   blocked = false,
   draggable = false,
   dragging = false,
@@ -34,6 +35,9 @@ export function PairChip({
   nextUp?: boolean;
   /** Anything extra worth saying under the chip — the block reason, the load, etc. */
   note?: string | null;
+  /** Hover text. Use it to explain a chip that deliberately will NOT drag; a chip
+   *  that refuses to lift with no reason reads as broken. */
+  hint?: string | null;
   /** Muted, and the note reads as a refusal. The bench's "why not" state. */
   blocked?: boolean;
   draggable?: boolean;
@@ -51,8 +55,9 @@ export function PairChip({
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
         // The person is named on the accessible name too, so the amber mark is not
-        // the only carrier of the warning.
-        title={overlapText ?? undefined}
+        // the only carrier of the warning. An explicit `hint` wins: it explains an
+        // interaction, which beats restating a warning the chip already shows.
+        title={hint ?? overlapText ?? undefined}
         className={`inline-flex max-w-full items-center gap-1 rounded-full border px-1.5 py-0.5 font-label text-xs ${
           blocked
             ? "border-edge-accent-subtle bg-surface-sunken text-ink-muted"

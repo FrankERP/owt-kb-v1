@@ -1,5 +1,5 @@
 import { KIDS_SEAT_LABELS, type KidsSeat } from "@/app/utils/kidsTypes";
-import type { PairBlock, SeatView } from "@/app/utils/kidsPlannerView";
+import type { BenchSeat, PairBlock, SeatView } from "@/app/utils/kidsPlannerView";
 
 /**
  * How far back the wait clocks can see, in months.
@@ -42,6 +42,10 @@ export function blockLabel(block: PairBlock): string {
       return `Es de ${KIDS_SEAT_LABELS[block.room]}`;
     case "retired":
       return "Pareja retirada";
+    case "away-all-month":
+      // No name: the bench is month-scoped, and WHO is away varies by Sunday.
+      // The picker names the person on the Sunday it matters.
+      return "No disponible este mes";
   }
 }
 
@@ -59,6 +63,32 @@ export function overlapLabel(memberNames: string[]): string | null {
 export function loadLabel(count: number): string | null {
   if (count <= 0) return null;
   return count === 1 ? "1 domingo este mes" : `${count} domingos este mes`;
+}
+
+/**
+ * What "ya en el mes" means for one pair, concretely: "Dom 13 (Enseñanza)".
+ *
+ * The day comes off the ISO string by slice, not from `Date` — the repo's
+ * timezone invariant, and here it also keeps a pure label module pure. The seat
+ * is named because holding enseñanza and holding your own room are different
+ * facts to the planner, and the count alone hides which.
+ */
+export function monthSeatsLabel(seats: BenchSeat[]): string | null {
+  if (seats.length === 0) return null;
+  return seats
+    .map((held) => `Dom ${Number(held.date.slice(8, 10))} (${KIDS_SEAT_LABELS[held.seat]})`)
+    .join(" · ");
+}
+
+/**
+ * A PARTIAL absence on the month-scoped bench, where it is a fact and not a
+ * refusal: the pair may still be dropped on any Sunday it is free, and the drop
+ * validates the day. Away on EVERY Sunday is a different thing — a block the view
+ * itself sets (`away-all-month`), because no drop can succeed.
+ */
+export function absenceLabel(count: number): string | null {
+  if (count <= 0) return null;
+  return count === 1 ? "No disponible 1 domingo" : `No disponible ${count} domingos`;
 }
 
 /**
