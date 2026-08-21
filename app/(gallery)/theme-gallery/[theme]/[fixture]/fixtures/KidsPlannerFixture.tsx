@@ -86,7 +86,11 @@ const HISTORY = [
 const ASSIGNMENTS = [
   { date: "2026-09-06", seats: { ensenanza: "p6", chiquitos: "p2", medianos: "p5", grandes: "p9" } },
   // The 13th deliberately leaves RG Medianos empty — see UNAVAILABLE below.
-  { date: "2026-09-13", seats: { ensenanza: "p10", chiquitos: "p3", grandes: "p10" } },
+  // p2 teaches here and has RG Chiquitos on the 6th: two Sundays, so the bench
+  // renders it as a chip that names both and does NOT drag. (This seat used to be
+  // p10, which already had RG Grandes the same Sunday — a state the server
+  // refuses, and one the month-scoped bench put on screen as "Dom 13 · Dom 13".)
+  { date: "2026-09-13", seats: { ensenanza: "p2", chiquitos: "p3", grandes: "p10" } },
   { date: "2026-09-20", seats: { ensenanza: "p3", chiquitos: "p4", medianos: "p7" } },
   { date: "2026-09-27", seats: {} as Partial<Record<KidsSeat, string>> },
 ];

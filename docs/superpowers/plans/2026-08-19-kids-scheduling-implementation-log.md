@@ -17,7 +17,35 @@ that diff review the primary gate rather than a secondary one.
 | P1 | 5 | `dfa7e2d9` | Admin ministry editing — touched-field-only, normalized seeding, `handleAdd` wiring, zero-ministry block (24 new tests) |
 | P2 | 1 | `40a1afcd`, `34c61a3c` | `kidsPair` + `kidsSchedule` schemas, registered; validation callbacks typed |
 | P2 | 2+3 | `30453dab` | Kids domain types + deterministic rotation engine (9 tests) |
-| P2 | 6-UI | `7a394ef0`, `e4c20233` | `buildPlannerView` (the view layer), then the planner rebuilt on it: desktop rotation board + bench, phone Sunday cards + seat picker, `kids-planner` theme-gallery fixture |
+| P2 | 6-UI | `7a394ef0`, `af977ae2` | `buildPlannerView` (the view layer), then the planner rebuilt on it: desktop rotation board + bench, phone Sunday cards + seat picker, `kids-planner` theme-gallery fixture |
+| P2 | 6-UI | `f79749c0` | Planner amber and blocked states raised to WCAG AA |
+| P2 | 6-UI | `d86a41ce`, `b51823b2` | Bench scoped to the MONTH, not to its first Sunday — two groups per room, plus the fix for the two findings that review raised (see below) |
+
+Two of those hashes moved after the fact. The row above cited `e4c20233` for the
+planner rebuild; that commit was rewritten and is no longer an ancestor of `main`
+— `af977ae2` is the same work. Worth stating rather than silently correcting: a
+commit table nobody re-derives is a table that quietly stops being true.
+
+### The bench, and why the first cut of it was wrong
+
+The rebuild shipped a bench anchored to `sundays[0]` — every fact on it described
+the first Sunday while the list read as month-wide. It survived the plan review, the
+code review of the rebuild, and three weeks of use, because nothing about it looks
+wrong in a diff: `buildSeatView(anchor, room)` is a correct call to a correct
+function. It went wrong at the seam between what the function answers (one Sunday)
+and what the surface claims (a month).
+
+What it cost, once someone actually planned a month on it: a pair the generator
+placed on the 20th still read as free, and a pair away on the 1st was un-draggable
+for all four Sundays. Both were reported as "la banca no funciona".
+
+The fix (`d86a41ce`) makes the bench month-scoped and splits each room into "Falta
+colocar" and "Ya en el mes". Its own review (`b51823b2`) then caught the same class
+of error one level down — a pair away EVERY Sunday kept `block: null`, so the
+month-scoped list recommended a pair that could not serve any Sunday, and a placed
+chip dragged with `from: null`, which ADDED a second turn instead of moving one.
+Three passes, each finding the previous one's blind spot, none of them findable by
+reading the plan.
 
 ## Plan defects the implementers caught
 

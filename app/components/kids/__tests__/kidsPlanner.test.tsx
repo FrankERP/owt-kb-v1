@@ -372,6 +372,60 @@ describe("KidsPlanner — the board shows what a dropdown hid", () => {
     expect(within(room).getByText("C1").closest("[draggable]")).toBeNull();
   });
 
+  /**
+   * The bench got much wider as a drag source when its per-Sunday blocks were
+   * dropped, so the refusal has to hold from the OTHER side: the consumer, not the
+   * chip. Luis is away on the 6th; the drop is refused, out loud, and nothing moves.
+   */
+  it("refuses an invalid drop out loud, and moves nothing", () => {
+    renderPlanner();
+    const chip = within(benchRoom("RG Chiquitos")).getByText("C1").closest("[draggable]");
+    const cell = screen.getByLabelText(/^RG Chiquitos, Domingo, 6 de septiembre/);
+
+    const dataTransfer = { setData: vi.fn(), effectAllowed: "", dropEffect: "" };
+    fireEvent.dragStart(chip!, { dataTransfer });
+    fireEvent.drop(cell, { dataTransfer });
+
+    expect(screen.getByRole("status").textContent).toContain("no puede tomar RG Chiquitos");
+    expect(
+      screen.getByLabelText("RG Chiquitos, Domingo, 6 de septiembre: sin asignar"),
+    ).toBeTruthy();
+    expect(screen.queryByText("Cambios sin guardar")).toBeNull();
+  });
+
+  it("does not mark the month dirty when a placed pair lands back on its own cell", () => {
+    renderPlanner({
+      initialSchedules: [
+        { date: "2026-09-13", published: false, seats: { chiquitos: "c1" } },
+      ],
+    });
+    const chip = within(benchRoom("RG Chiquitos")).getByText("C1").closest("[draggable]");
+    const cell = screen.getByLabelText(/^RG Chiquitos, Domingo, 13 de septiembre/);
+
+    const dataTransfer = { setData: vi.fn(), effectAllowed: "", dropEffect: "" };
+    fireEvent.dragStart(chip!, { dataTransfer });
+    fireEvent.dragOver(cell, { dataTransfer });
+    fireEvent.drop(cell, { dataTransfer });
+
+    expect(screen.queryByText("Cambios sin guardar")).toBeNull();
+  });
+
+  it("keeps a blocked placed pair's Sunday on screen — that is where the problem is", () => {
+    renderPlanner({
+      initialSchedules: [
+        { date: "2026-09-13", published: false, seats: { chiquitos: "c1" } },
+      ],
+      initialMembers: MEMBERS.map((m) =>
+        m._id === "m2"
+          ? { ...m, unavailableDates: ["2026-09-06", "2026-09-13", "2026-09-20", "2026-09-27"] }
+          : m,
+      ),
+    });
+    const room = benchRoom("RG Chiquitos");
+    expect(room.textContent).toContain("No disponible este mes");
+    expect(room.textContent).toContain("Dom 13 (RG Chiquitos)");
+  });
+
   it("says so when a room has nobody left to place", () => {
     renderPlanner({
       initialSchedules: [

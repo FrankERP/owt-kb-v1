@@ -57,6 +57,13 @@ export function KidsRotationBoard({
   onMove,
 }: KidsBoardProps & {
   bench: Record<KidsRoom, RoomBench>;
+  /**
+   * A drop that landed. The CONSUMER validates it — with `canPlace` against the
+   * target seat, exactly as `allowed()` does here — and is the one that tells the
+   * user when it refuses. The board gates the drag (`onDragOver`), so in a browser
+   * an invalid move never reaches this; the contract is what keeps that true for a
+   * consumer that reaches it another way.
+   */
   onMove: (source: DragSource, to: { date: string; seat: KidsSeat }) => void;
 }) {
   const [drag, setDrag] = useState<DragSource | null>(null);
@@ -90,16 +97,16 @@ export function KidsRotationBoard({
       setOver(cellKey(date, seat));
     },
     onDragLeave: () => setOver((current) => (current === cellKey(date, seat) ? null : current)),
+    // Deliberately NOT re-checked here. `onDragOver` above is what makes this cell
+    // a drop target at all, and a browser fires no `drop` on a target that never
+    // cancelled its `dragover`. A second silent guard would only make the
+    // consumer's REFUSAL unreachable — and a refusal that explains itself beats a
+    // drop that quietly does nothing. See `onMove`'s contract.
     onDrop: (e: React.DragEvent) => {
       e.preventDefault();
       const source = drag;
-      // Re-checked here, not only in `onDragOver`. A browser will not fire `drop`
-      // on a target that never cancelled its `dragover`, so this is belt and
-      // braces — but the bench is now a much wider drag source than it was, and
-      // `onMove` is a prop: the board must not hand a consumer a move it refused.
-      const ok = allowed(date, seat);
       endDrag();
-      if (!source || !ok) return;
+      if (!source) return;
       onMove(source, { date, seat });
     },
   });
@@ -196,7 +203,11 @@ export function KidsRotationBoard({
                             overlap={option?.worshipOverlap ?? []}
                             note={option ? null : "Fuera de la rotación"}
                             draggable
-                            dragging={drag?.pairId === assignedId && drag.from?.seat === seat}
+                            dragging={
+                              drag?.pairId === assignedId &&
+                              drag.from?.date === sunday.date &&
+                              drag.from?.seat === seat
+                            }
                             onDragStart={startDrag({
                               pairId: assignedId,
                               from: { date: sunday.date, seat },
@@ -313,17 +324,30 @@ export function KidsRotationBoard({
                               >
                                 <PairChip
                                   name={entry.name}
-                                  note={
-                                    entry.block
-                                      ? blockLabel(entry.block)
-                                      : monthSeatsLabel(entry.monthSeats)
+                                  // Both, never one or the other: a pair that went
+                                  // unavailable AFTER being placed is exactly the
+                                  // one whose Sunday the planner has to go find.
+                                  note={[
+                                    entry.block && blockLabel(entry.block),
+                                    monthSeatsLabel(entry.monthSeats),
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                  hint={
+                                    only === null && entry.block === null
+                                      ? "Tiene más de un domingo — muévela desde el tablero"
+                                      : null
                                   }
                                   blocked={entry.block !== null}
                                   draggable={entry.block === null && only !== null && !busy}
+                                  // Compared to `only` explicitly: two `undefined`s
+                                  // are equal, so the loose form would degenerate to
+                                  // a pair-id match for a bench-origin drag.
                                   dragging={
                                     drag?.pairId === entry.pairId &&
-                                    drag.from?.date === only?.date &&
-                                    drag.from?.seat === only?.seat
+                                    only !== null &&
+                                    drag.from?.date === only.date &&
+                                    drag.from?.seat === only.seat
                                   }
                                   onDragStart={startDrag({
                                     pairId: entry.pairId,
