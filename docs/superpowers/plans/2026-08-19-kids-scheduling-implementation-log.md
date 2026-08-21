@@ -20,6 +20,7 @@ that diff review the primary gate rather than a secondary one.
 | P2 | 6-UI | `7a394ef0`, `af977ae2` | `buildPlannerView` (the view layer), then the planner rebuilt on it: desktop rotation board + bench, phone Sunday cards + seat picker, `kids-planner` theme-gallery fixture |
 | P2 | 6-UI | `f79749c0` | Planner amber and blocked states raised to WCAG AA |
 | P2 | 6-UI | `d86a41ce`, `b51823b2`, `5072e490` | Bench scoped to the MONTH, not to its first Sunday — two groups per room, then the fix for the two findings that review raised, then its own review's LOW items (see below) |
+| — | follow-up | `faff6660` | **«Otra opción»** — an optional `seed` on `RotationInput` with a bounded fairness slack, `proposalFingerprint`, a seed/`exclude` search in `POST /api/kids/generate`, and the planner button. Seed 0 stays byte-identical to the prior behaviour. **ADR-0021.** Not a planned task: the engine is deterministic by design, so the planner had exactly one answer per month and no way to ask for a second |
 
 One of those hashes moved after the fact. The row above cited `e4c20233` for the
 planner rebuild; that commit was rewritten and is no longer an ancestor of `main`

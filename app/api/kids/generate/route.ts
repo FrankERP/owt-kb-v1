@@ -25,11 +25,25 @@ const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
  */
 const MAX_SEED_ATTEMPTS = 12;
 
-/** A seed the client did not choose, so successive asks do not repeat a cycle. */
-const clampSeed = (value: unknown): number =>
-  typeof value === "number" && Number.isFinite(value) && value >= 0
-    ? Math.min(Math.floor(value), Number.MAX_SAFE_INTEGER)
-    : 0;
+/**
+ * Leaves room for `requestedSeed + MAX_SEED_ATTEMPTS` to stay on distinct
+ * integers. Past 2^53 the spacing between doubles is 2, so a seed at the ceiling
+ * would collapse the search window onto ~6 values, silently re-testing duplicates
+ * and reporting exhaustion while alternatives remain.
+ */
+const MAX_SEED = Number.MAX_SAFE_INTEGER - MAX_SEED_ATTEMPTS;
+
+/**
+ * An ABSENT seed means "the fairest month" and is the documented default. A seed
+ * that is present but malformed is a caller bug, and coercing it would land on 0
+ * — the one value with special meaning — handing back the board the admin is
+ * already looking at, labelled as a fresh success. Loud beats plausible.
+ */
+const readSeed = (value: unknown): number | null => {
+  if (value === undefined || value === null) return 0;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
+  return Math.min(Math.floor(value), MAX_SEED);
+};
 
 /** How much prior history seeds the fairness clock — a quarter of Sundays. */
 const HISTORY_WEEKS = 16;
@@ -72,7 +86,10 @@ export async function POST(req: NextRequest) {
   if (typeof body.month !== "string" || !MONTH_RE.test(body.month)) {
     return NextResponse.json({ error: "month must be YYYY-MM" }, { status: 400 });
   }
-  const requestedSeed = clampSeed(body.seed);
+  const requestedSeed = readSeed(body.seed);
+  if (requestedSeed === null) {
+    return NextResponse.json({ error: "seed must be a non-negative number" }, { status: 400 });
+  }
   const exclude = new Set(
     Array.isArray(body.exclude) ? body.exclude.filter((f) => typeof f === "string") : [],
   );
@@ -175,14 +192,19 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Every arrangement within the fairness slack is one the admin has already
-  // seen. Say so and send no proposal: replacing the board with a month they
-  // just rejected would read as the button doing nothing.
+  // Every arrangement in the SEARCHED WINDOW is one the admin has already seen —
+  // not every arrangement that exists. Say so and send no proposal: replacing the
+  // board with a month they just rejected would read as the button doing nothing.
+  //
+  // `seed` is where the NEXT search should start, so asking again continues past
+  // this window instead of re-testing it. Without that, one exhausted answer would
+  // make «Otra opción» permanently dead for the month — the same dead-button
+  // symptom, arrived at from the other side.
   return NextResponse.json({
     proposal: [],
     warnings: [],
     diagnostics: [],
-    seed: requestedSeed,
+    seed: Math.min(requestedSeed + MAX_SEED_ATTEMPTS, MAX_SEED),
     fingerprint: null,
     exhausted: true,
   });

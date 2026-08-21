@@ -70,6 +70,11 @@ enough to catch it:
 Two plausible tests that proved nothing. Anyone re-opening this decision should
 re-run that mutation before trusting a green suite.
 
+A third one proved nothing either, and it is the reason the *Consequences* section
+below names a specific test rather than gesturing at the suite: the guard everyone
+would assume bounds `SLACK_GENERATIONS` from above does not. That was also caught
+by measurement, in the code review of this commit, not by reading.
+
 **Unbounded shuffling of the whole pool** was rejected in the other direction: it
 makes the seat a lottery and the rotation stops meaning anything. `SLACK_GENERATIONS
 = 2` is the smallest value that still produces distinct months against a saturated
@@ -84,9 +89,17 @@ history.
   Same input plus same seed still gives the same month, so regenerate-and-diff
   still works and the engine stays free of `Date`/`Math.random` per the timezone
   invariant.
-- `SLACK_GENERATIONS` is the fairness dial. Raising it buys variety with
-  fairness; the "never seats the most recently served pair while a more rested one
-  exists" test is what stops it going all the way.
+- `SLACK_GENERATIONS` is the fairness dial, and it is pinned in **both**
+  directions — but only because a test was added for the upper bound after the
+  first review of this work measured that it was missing. The obvious candidate,
+  "never seats the most recently served pair while a more rested one exists",
+  cannot bound it: that guarantee lives in the `- 1` of
+  `Math.min(SLACK_GENERATIONS, generations.length - 1)`, so it holds at 2, at 999
+  and at `Infinity` — the reviewer set the constant to 999 and the full suite
+  stayed 4062/4062 green. The test that actually bounds it is **"reaches exactly
+  ONE generation back — never two, whatever the constant says"**, which isolates a
+  single room's four distinct rest generations and asserts only the top two are
+  ever reachable. It fails at 1, at 3 and at 999.
 - Exhaustion is reported, never papered over. If someone later "simplifies" the
   `exhausted` branch into redrawing the board anyway, «Otra opción» starts looking
   like a dead button.

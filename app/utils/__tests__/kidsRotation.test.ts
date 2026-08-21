@@ -168,6 +168,49 @@ describe("planKidsMonth — seeded alternatives", () => {
     }
   });
 
+  it("reaches exactly ONE generation back — never two, whatever the constant says", () => {
+    // The ceiling on SLACK_GENERATIONS, which nothing pinned until this test: the
+    // `- 1` in `eligibleUnderSlack` is what excludes the most recent generation,
+    // so every "never re-seats last Sunday's pair" assertion passes at 2, at 999
+    // and at Infinity. Only this one fails when the dial is turned up.
+    //
+    // The fixture isolates ONE room's rotation. Enseñanza is seated first and
+    // would otherwise pull a chiquitos pair out of the room pool, shifting the
+    // generations underneath the assertion — so every medianos/grandes pair is
+    // given an OLDER enseñanza date than every chiquitos pair, which keeps the
+    // teaching seat's own two generations free of chiquitos entirely.
+    const d = (n: number) => `2026-0${n < 4 ? 6 : n < 8 ? 7 : 8}-${String(n * 2 + 1).padStart(2, "0")}`;
+    const prior = Array.from({ length: 12 }, (_, i) => d(i));
+    // Enseñanza: the 8 room-other pairs oldest, the 4 chiquitos pairs newest.
+    const ensenanzaOrder = ["d1", "d2", "d3", "d4", "g1", "g2", "g3", "g4", "c4", "c3", "c2", "c1"];
+    // Chiquitos: c1 rested longest, then c2, c3, c4 — four distinct generations.
+    const chiquitosOn: Record<number, string> = { 8: "c1", 9: "c2", 10: "c3", 11: "c4" };
+
+    const history = prior.map((date, i) => ({
+      date,
+      seats: {
+        ensenanza: ensenanzaOrder[i],
+        ...(chiquitosOn[i] ? { chiquitos: chiquitosOn[i] } : {}),
+      },
+    }));
+    for (const row of history) {
+      expect(new Set(Object.values(row.seats)).size).toBe(Object.keys(row.seats).length);
+    }
+
+    const firstSundayChiquitos = new Set<string>();
+    for (let seed = 0; seed <= 20; seed++) {
+      const r = planKidsMonth({ ...base, history, seed });
+      // Enseñanza must never take a chiquitos pair, or the room's generations
+      // shift and this test stops measuring what it claims to.
+      expect(r.proposal[0].seats.ensenanza?.startsWith("c")).toBe(false);
+      firstSundayChiquitos.add(r.proposal[0].seats.chiquitos!);
+    }
+
+    // Only the two most-rested pairs are reachable. c3 appearing means the slack
+    // reached two generations back; c4 means it reached the pair that served last.
+    expect([...firstSundayChiquitos].sort()).toEqual(["c1", "c2"]);
+  });
+
   it("keeps every hard rule under a seed: one seat per pair, correct room, availability", () => {
     const unavailable = { m1: ["2026-09-06"], m9: ["2026-09-13"] };
     for (let seed = 0; seed < 12; seed++) {

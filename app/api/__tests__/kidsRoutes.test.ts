@@ -601,9 +601,11 @@ describe("POST /api/kids/generate", () => {
     }
   });
 
-  it("reports exhaustion rather than repeating itself once the options run out", async () => {
-    // Exclude everything the seed search can reach, so the only honest answer
-    // left is "there is nothing new".
+  it("reports exhaustion, and says where to resume rather than dying there", async () => {
+    // Named honestly: excluding seeds 0..24 is a SUPERSET of the window the route
+    // walks, so reaching the exhausted branch here is arranged, not discovered.
+    // What it pins is the branch's contract — no proposal, no fingerprint, and a
+    // resume point past the searched window so a second ask is not the same ask.
     const seen = new Set<string>();
     for (let seed = 0; seed <= 24; seed++) {
       const body = await propose({ seed, exclude: [] });
@@ -612,6 +614,19 @@ describe("POST /api/kids/generate", () => {
     const body = await propose({ seed: 1, exclude: [...seen] });
     expect(body.exhausted).toBe(true);
     expect(body.proposal).toEqual([]);
+    expect(body.fingerprint).toBeNull();
+    expect(body.seed).toBeGreaterThan(1);
+  });
+
+  it("refuses a malformed seed instead of quietly serving the fairest month", async () => {
+    // Coercing to 0 would hand back the board the admin is already looking at,
+    // labelled `exhausted: false` — a dead button that reports success.
+    for (const seed of ["3", -1, Number.NaN, Number.POSITIVE_INFINITY, {}]) {
+      const res = await generatePOST(req({ month: "2026-09", seed }));
+      expect(res.status).toBe(400);
+    }
+    // An ABSENT seed keeps meaning "the fairest month".
+    expect((await generatePOST(req({ month: "2026-09" }))).status).toBe(200);
   });
 
   it("writes nothing under a seed either — the alternative is still a proposal", async () => {

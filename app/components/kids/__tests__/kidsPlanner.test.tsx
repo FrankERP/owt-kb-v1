@@ -582,7 +582,8 @@ describe("KidsPlanner — «Otra opción»", () => {
               proposal: [],
               warnings: [],
               diagnostics: [],
-              seed: 1,
+              // Where the route says to resume: past the window it just searched.
+              seed: body.seed + 12,
               fingerprint: null,
               exhausted: true,
             }),
@@ -606,6 +607,12 @@ describe("KidsPlanner — «Otra opción»", () => {
         name: /^RG Chiquitos:/,
       }).textContent,
     ).toMatch(/C1/);
+
+    // …and the NEXT ask continues past the exhausted window instead of re-asking
+    // it. Without this the button is dead for the rest of the session.
+    fireEvent.click(screen.getByRole("button", { name: "Otra opción" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body).seed).toBe(1 + 12);
   });
 
   it("«Generar mes» goes back to the fairest plan and forgets the rejections", async () => {

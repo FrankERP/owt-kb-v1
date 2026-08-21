@@ -358,9 +358,13 @@ export default function KidsPlanner({
       // Nothing new to show. Leave the board exactly as it is — redrawing it with
       // a month already rejected is indistinguishable from the button not working.
       if (result.exhausted) {
+        // Adopt the resume point so a second ask searches PAST the exhausted
+        // window rather than re-testing it — otherwise one exhausted answer
+        // kills the button for the rest of the session.
+        if (Number.isFinite(result.seed)) setNextSeed(result.seed);
         showToast({
           kind: "error",
-          text: "No hay más opciones distintas para este mes. Mueve una pareja a mano o cambia disponibilidades.",
+          text: "No hay más opciones distintas por ahora. Muévela a mano, cambia disponibilidades, o inténtalo otra vez.",
         });
         return;
       }
@@ -382,11 +386,16 @@ export default function KidsPlanner({
       setDiagnostics(result.diagnostics);
       setDirty(true);
 
-      const shown = mode === "fresh" ? 1 : option + 1;
-      setOption(shown);
+      // Functional form, matching `setRejected` below: the two must agree about
+      // how many options have been shown, or two different boards both read
+      // «Opción 2».
+      setOption((prev) => (mode === "fresh" ? 1 : prev + 1));
       // The server may have skipped several seeds to find something new; resume
-      // from the one it landed on so the next ask does not retrace them.
-      setNextSeed(result.seed + 1);
+      // from the one it landed on so the next ask does not retrace them. A
+      // response without a usable seed must not poison the cursor with NaN —
+      // that serialises as `null`, reads back as seed 0, and would redraw the
+      // fairest month while announcing a new option.
+      if (Number.isFinite(result.seed)) setNextSeed(result.seed + 1);
       setRejected((prev) => {
         const base = mode === "fresh" ? [] : prev;
         return result.fingerprint ? [...base, result.fingerprint] : base;
@@ -395,9 +404,9 @@ export default function KidsPlanner({
       showToast({
         kind: "ok",
         text:
-          shown === 1
+          mode === "fresh"
             ? "Propuesta lista. Revísala y guarda los borradores."
-            : `Opción ${shown}. Si no te convence, pide otra.`,
+            : "Otra opción lista. Si no te convence, pide una más.",
       });
     } catch (err) {
       showToast({ kind: "error", text: `No se pudo generar el mes — ${errText(err)}` });
@@ -612,10 +621,12 @@ export default function KidsPlanner({
       </div>
 
       <p className="font-body text-xs text-mono-500">
-        «Generar mes» solo propone: reemplaza lo que ves en pantalla y nada llega a Sanity hasta que
-        guardas o publicas. Publicar un domingo también guarda sus parejas. «Generar mes» siempre da
-        el reparto más justo; «Otra opción» propone un acomodo distinto entre parejas que llevan un
-        descanso parecido, sin adelantar a la que sirvió el domingo pasado.
+        «Generar mes» y «Otra opción» solo proponen: <strong>ambas reemplazan todo lo que ves en
+        pantalla</strong>, incluidos los cambios que hayas hecho a mano, y nada llega a Sanity hasta
+        que guardas o publicas. Publicar un domingo también guarda sus parejas. «Generar mes» siempre
+        da el reparto más justo; «Otra opción» acomoda distinto a las parejas que llevan un descanso
+        parecido, y solo repite a la que sirvió el domingo pasado cuando no queda nadie más
+        disponible en esa sala.
       </p>
 
       {dirty && !saving && (
