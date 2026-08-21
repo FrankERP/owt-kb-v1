@@ -119,10 +119,25 @@ export async function POST(req: NextRequest) {
     ),
     // Prior Sundays only — the month being planned is regenerated from scratch,
     // so its own saved rows must not seed their successors' fairness clock.
+    //
+    // PUBLISHED ONLY. An unpublished Sunday is a proposal, not a fact: it was
+    // never announced, `/kids` and `/me` never showed it, and nobody was asked to
+    // serve it. Counting a drafted-then-abandoned month would penalise every pair
+    // named in it for months, with nothing on screen to explain why they keep
+    // getting skipped. Drafts are the DEFAULT (the schedules writer mints
+    // `published: false`), so that is the ordinary case, not a corner.
+    //
+    // This MUST match the planner page's `history` read — the labels the admin
+    // reads and the plan the generator produces come from two different queries,
+    // and if they disagree the board promises a pair the generator will not pick.
+    // ADR-0022.
+    //
+    // It also makes the `[0...N]` slice honest: an abandoned draft used to consume
+    // a history slot and push a real prior Sunday out of the window.
     serverClient.fetch<ScheduleRow[]>(
       // The slice bound is interpolated because GROQ slices take literals, not
       // params; it is a code constant, never user input.
-      `*[_type == "kidsSchedule" && date < $firstSunday] | order(date desc) [0...${HISTORY_WEEKS}] {
+      `*[_type == "kidsSchedule" && published == true && date < $firstSunday] | order(date desc) [0...${HISTORY_WEEKS}] {
         date,
         "ensenanza": ensenanza._ref,
         "chiquitos": chiquitos._ref,

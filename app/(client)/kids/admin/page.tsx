@@ -14,6 +14,25 @@ export const metadata = { title: "Oasis Kids — Planeación" };
 // projections of `/api/kids/pairs`, `/api/kids/schedules` and `/api/kids/members`
 // (which the client components then use for every refresh), so the first paint
 // carries real data instead of three loading skeletons.
+//
+// TWO kinds of read live here and they gate DIFFERENTLY on purpose.
+//
+// `schedules` is the month being EDITED. It must show drafts — showing an admin
+// only their published Sundays would hide the very work the planner exists to do,
+// and it projects `published` so the board can render the per-Sunday toggle.
+//
+// `history` is the FAIRNESS CLOCK — it answers "how long since this pair served
+// this seat", which drives every «le toca» and «hace 3 semanas» label. It filters
+// `published == true` because an unpublished Sunday is a PROPOSAL, not a fact:
+// nothing was announced, `/kids` and `/me` never showed it to anybody, and the
+// pairs on it were never asked to serve. Counting a month somebody drafted and
+// abandoned would silently penalise every pair named in it, forever, with no
+// visible cause. Drafts are also the DEFAULT state — the schedules writer mints
+// `published: false` — so the abandoned draft is the likely case, not the exotic one.
+//
+// This filter MUST match the generator's history read in `/api/kids/generate`.
+// If the two disagree, the board says «le toca» for a pair the generator will not
+// pick, and the disagreement is invisible in both places. ADR-0022.
 const PAGE_QUERY = `{
   "pairs": *[_type == "kidsPair"] | order(name asc) {
     "id": _id, name, room,
@@ -28,7 +47,7 @@ const PAGE_QUERY = `{
     "medianos": medianos._ref,
     "grandes": grandes._ref
   },
-  "history": *[_type == "kidsSchedule" && date >= $historyFrom && date < $from] | order(date asc) {
+  "history": *[_type == "kidsSchedule" && published == true && date >= $historyFrom && date < $from] | order(date asc) {
     date,
     "published": coalesce(published, false),
     "ensenanza": ensenanza._ref,

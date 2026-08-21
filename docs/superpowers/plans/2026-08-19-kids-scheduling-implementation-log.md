@@ -262,16 +262,26 @@ without a fresh round, per the 2026-08-19 retier.
 
 ## Deferred, with a trigger
 
-- **The generate route's history read is not `published`-gated.**
-  `app/api/kids/generate/route.ts` selects prior Sundays on `date < $firstSunday`
-  alone, while CLAUDE.md requires kids reads to use the stricter `published ==
-  true`. **Pre-existing — «Otra opción» did not introduce it** — but that history
-  seeds the fairness clock, so an unpublished draft Sunday now also shapes every
-  seeded variant. Surfaced by the code review of `faff6660` and left out of that
-  diff on purpose: it is a draft-gating decision, not an alternatives one, and it
-  needs its own answer to "can a `kidsSchedule` draft exist at all, given the
-  write route mints `published`?" **Trigger: Frank's call, before the Kids team
-  starts publishing months.**
+- ~~**The generate route's history read is not `published`-gated.**~~ **CLOSED**
+  — both history reads now filter `published == true`. See **ADR-0022** for why
+  an unpublished Sunday is a proposal rather than a fact, and why the editing
+  grid beside it stays deliberately ungated.
+
+  Two things were worth more than the fix. First, there were **two** history
+  reads, not the one the review named: the generator's fairness clock and the
+  planner page's `history` projection, which feeds every «le toca» label. Gating
+  only the one the review found would have left the board promising a pair the
+  generator would not pick — a disagreement neither surface can display.
+
+  Second, and the real lesson: `draftGatingCoverage.test.ts` — the guard that
+  exists *because* "eight correct call sites is a state, not a mechanism" — scanned
+  only `sunday_role|saturday_role|special_role`. The entire kids vertical sat in
+  its blind spot, which is exactly how two ungated reads shipped past a repo that
+  had already built the machine to prevent this. The guard now scans
+  `kidsSchedule` too, requiring the stricter `published == true` spelling, with
+  exemptions keyed by file **and by projection name** — the planner page holds one
+  group that must see drafts and one that must not, so a file-level exemption
+  would have shielded both and quietly re-opened the bug.
 
 - **Worship setlist PUSH notifications reach Kids-only volunteers.**
   `serviceMutationSideEffects.ts:671` fetches every member; `notifyTargets.ts:40`
