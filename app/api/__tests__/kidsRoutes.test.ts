@@ -173,7 +173,11 @@ const DATASET = [
 import { GET as pairsGET, POST as pairsPOST } from "@/app/api/kids/pairs/route";
 import { PATCH as pairPATCH } from "@/app/api/kids/pairs/[id]/route";
 import { GET as schedulesGET, PUT as schedulesPUT } from "@/app/api/kids/schedules/route";
-import { POST as generatePOST } from "@/app/api/kids/generate/route";
+import {
+  POST as generatePOST,
+  MAX_SEED,
+  MAX_SEED_ATTEMPTS,
+} from "@/app/api/kids/generate/route";
 import { GET as membersGET } from "@/app/api/kids/members/route";
 import { PATCH as availabilityPATCH } from "@/app/api/kids/members/[id]/availability/route";
 
@@ -550,6 +554,112 @@ describe("POST /api/kids/generate", () => {
   it("rejects a malformed month", async () => {
     expect((await generatePOST(req({ month: "septiembre" }))).status).toBe(400);
     expect((await generatePOST(req({}))).status).toBe(400);
+  });
+
+  // "Otra opción". The rotation is deterministic by design, so without a seed the
+  // planner shows one month and no amount of clicking ever shows a second one.
+  type Proposal = {
+    proposal: { date: string; seats: Record<string, string> }[];
+    seed: number;
+    fingerprint: string | null;
+    exhausted: boolean;
+  };
+  const propose = async (body: Record<string, unknown>) =>
+    (await (await generatePOST(req({ month: "2026-09", ...body }))).json()) as Proposal;
+
+  it("carries the seed, the plan's fingerprint and the exhausted flag", async () => {
+    const body = await propose({});
+    expect(body.seed).toBe(0);
+    expect(typeof body.fingerprint).toBe("string");
+    expect(body.exhausted).toBe(false);
+  });
+
+  it("seed 0 is the strict plan and is served even when already rejected", async () => {
+    // The FAIREST month is what "Generar mes" means. Asking for it again must
+    // return it, never search past it — only "otra opción" searches.
+    const first = await propose({});
+    const again = await propose({ seed: 0, exclude: [first.fingerprint] });
+    expect(again.exhausted).toBe(false);
+    expect(again.fingerprint).toBe(first.fingerprint);
+  });
+
+  it("an alternative never hands back a month the admin already rejected", async () => {
+    const seen: string[] = [(await propose({})).fingerprint!];
+    for (let ask = 1; ask <= 4; ask++) {
+      const next = await propose({ seed: ask, exclude: seen });
+      if (next.exhausted) {
+        // Honest exhaustion: no proposal at all, so the board is left alone
+        // rather than being redrawn with something already declined.
+        expect(next.proposal).toEqual([]);
+        expect(next.fingerprint).toBeNull();
+        break;
+      }
+      expect(seen).not.toContain(next.fingerprint);
+      expect(next.proposal.map((p) => p.date)).toEqual([
+        "2026-09-06",
+        "2026-09-13",
+        "2026-09-20",
+        "2026-09-27",
+      ]);
+      seen.push(next.fingerprint!);
+    }
+  });
+
+  it("reports exhaustion, and says where to resume rather than dying there", async () => {
+    // Named honestly: excluding seeds 0..24 is a SUPERSET of the window the route
+    // walks, so reaching the exhausted branch here is arranged, not discovered.
+    // What it pins is the branch's contract — no proposal, no fingerprint, and a
+    // resume point past the searched window so a second ask is not the same ask.
+    const seen = new Set<string>();
+    for (let seed = 0; seed <= 24; seed++) {
+      const body = await propose({ seed, exclude: [] });
+      if (body.fingerprint) seen.add(body.fingerprint);
+    }
+    const body = await propose({ seed: 1, exclude: [...seen] });
+    expect(body.exhausted).toBe(true);
+    expect(body.proposal).toEqual([]);
+    expect(body.fingerprint).toBeNull();
+    // EXACTLY one past the window that was searched — not merely "further on".
+    // A resume that advances by less re-tests seeds already known to be excluded,
+    // and the admin gets "no hay más opciones" over and over while the search
+    // crawls forward one seat at a time.
+    expect(body.seed).toBe(1 + MAX_SEED_ATTEMPTS);
+  });
+
+  it("refuses a malformed seed instead of quietly serving the fairest month", async () => {
+    // Coercing to 0 would hand back the board the admin is already looking at,
+    // labelled `exhausted: false` — a dead button that reports success.
+    //
+    // `null` is in this list deliberately: it is the wire form of a client-side
+    // NaN cursor (`JSON.stringify({seed: NaN})` → `{"seed":null}`), so refusing
+    // it here is what makes this guard independent of the planner's own.
+    for (const seed of ["3", -1, Number.NaN, Number.POSITIVE_INFINITY, {}, null]) {
+      const res = await generatePOST(req({ month: "2026-09", seed }));
+      expect(res.status).toBe(400);
+    }
+    // An OMITTED seed keeps meaning "the fairest month".
+    expect((await generatePOST(req({ month: "2026-09" }))).status).toBe(200);
+  });
+
+  it("keeps the whole search window on distinct integers at the seed ceiling", async () => {
+    // Past 2^53 the spacing between doubles is 2, so an unclamped ceiling would
+    // collapse the 12-seed walk onto ~6 values: duplicates re-tested, and
+    // exhaustion reported while alternatives remain.
+    const window = Array.from({ length: MAX_SEED_ATTEMPTS }, (_, i) => MAX_SEED + i);
+    expect(new Set(window).size).toBe(MAX_SEED_ATTEMPTS);
+    expect(Number.isSafeInteger(MAX_SEED + MAX_SEED_ATTEMPTS)).toBe(true);
+
+    // And a seed above the ceiling is clamped rather than refused.
+    const body = await propose({ seed: Number.MAX_SAFE_INTEGER, exclude: [] });
+    expect(body.seed).toBeLessThanOrEqual(MAX_SEED);
+  });
+
+  it("writes nothing under a seed either — the alternative is still a proposal", async () => {
+    await propose({ seed: 3, exclude: [] });
+    expect(h.created).toHaveLength(0);
+    expect(h.createdIfNotExists).toHaveLength(0);
+    expect(h.patches).toHaveLength(0);
+    expect(h.revalidateKidsViews).not.toHaveBeenCalled();
   });
 });
 

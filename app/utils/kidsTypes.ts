@@ -43,6 +43,13 @@ export interface RotationInput {
   unavailable: Record<string, string[]>;      // memberId -> ISO dates
   history: KidsAssignment[];                  // prior assignments, ascending by date
   worshipAssignments?: Record<string, string[]>; // date -> memberIds serving worship
+  /**
+   * Which alternative to build. 0 or absent is the strict least-recently-served
+   * plan — the fairest one, and what "Generar mes" shows. A non-zero seed asks
+   * for a different arrangement of comparably-rested pairs; see
+   * `SLACK_GENERATIONS` in `kidsRotation.ts` for how far it is allowed to reach.
+   */
+  seed?: number;
 }
 
 export interface RotationResult {
