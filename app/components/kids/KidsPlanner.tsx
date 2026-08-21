@@ -364,7 +364,7 @@ export default function KidsPlanner({
         if (Number.isFinite(result.seed)) setNextSeed(result.seed);
         showToast({
           kind: "error",
-          text: "No hay más opciones distintas por ahora. Muévela a mano, cambia disponibilidades, o inténtalo otra vez.",
+          text: "No hay más opciones distintas por ahora. Mueve una pareja a mano, cambia disponibilidades o inténtalo otra vez.",
         });
         return;
       }

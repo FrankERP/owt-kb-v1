@@ -173,7 +173,11 @@ const DATASET = [
 import { GET as pairsGET, POST as pairsPOST } from "@/app/api/kids/pairs/route";
 import { PATCH as pairPATCH } from "@/app/api/kids/pairs/[id]/route";
 import { GET as schedulesGET, PUT as schedulesPUT } from "@/app/api/kids/schedules/route";
-import { POST as generatePOST } from "@/app/api/kids/generate/route";
+import {
+  POST as generatePOST,
+  MAX_SEED,
+  MAX_SEED_ATTEMPTS,
+} from "@/app/api/kids/generate/route";
 import { GET as membersGET } from "@/app/api/kids/members/route";
 import { PATCH as availabilityPATCH } from "@/app/api/kids/members/[id]/availability/route";
 
@@ -615,18 +619,39 @@ describe("POST /api/kids/generate", () => {
     expect(body.exhausted).toBe(true);
     expect(body.proposal).toEqual([]);
     expect(body.fingerprint).toBeNull();
-    expect(body.seed).toBeGreaterThan(1);
+    // EXACTLY one past the window that was searched — not merely "further on".
+    // A resume that advances by less re-tests seeds already known to be excluded,
+    // and the admin gets "no hay más opciones" over and over while the search
+    // crawls forward one seat at a time.
+    expect(body.seed).toBe(1 + MAX_SEED_ATTEMPTS);
   });
 
   it("refuses a malformed seed instead of quietly serving the fairest month", async () => {
     // Coercing to 0 would hand back the board the admin is already looking at,
     // labelled `exhausted: false` — a dead button that reports success.
-    for (const seed of ["3", -1, Number.NaN, Number.POSITIVE_INFINITY, {}]) {
+    //
+    // `null` is in this list deliberately: it is the wire form of a client-side
+    // NaN cursor (`JSON.stringify({seed: NaN})` → `{"seed":null}`), so refusing
+    // it here is what makes this guard independent of the planner's own.
+    for (const seed of ["3", -1, Number.NaN, Number.POSITIVE_INFINITY, {}, null]) {
       const res = await generatePOST(req({ month: "2026-09", seed }));
       expect(res.status).toBe(400);
     }
-    // An ABSENT seed keeps meaning "the fairest month".
+    // An OMITTED seed keeps meaning "the fairest month".
     expect((await generatePOST(req({ month: "2026-09" }))).status).toBe(200);
+  });
+
+  it("keeps the whole search window on distinct integers at the seed ceiling", async () => {
+    // Past 2^53 the spacing between doubles is 2, so an unclamped ceiling would
+    // collapse the 12-seed walk onto ~6 values: duplicates re-tested, and
+    // exhaustion reported while alternatives remain.
+    const window = Array.from({ length: MAX_SEED_ATTEMPTS }, (_, i) => MAX_SEED + i);
+    expect(new Set(window).size).toBe(MAX_SEED_ATTEMPTS);
+    expect(Number.isSafeInteger(MAX_SEED + MAX_SEED_ATTEMPTS)).toBe(true);
+
+    // And a seed above the ceiling is clamped rather than refused.
+    const body = await propose({ seed: Number.MAX_SAFE_INTEGER, exclude: [] });
+    expect(body.seed).toBeLessThanOrEqual(MAX_SEED);
   });
 
   it("writes nothing under a seed either — the alternative is still a proposal", async () => {

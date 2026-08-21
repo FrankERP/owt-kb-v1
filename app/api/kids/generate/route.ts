@@ -23,7 +23,7 @@ const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
  * the distinct arrangements run out, the loop ends and the response says so
  * instead of silently handing back a month the admin just said no to.
  */
-const MAX_SEED_ATTEMPTS = 12;
+export const MAX_SEED_ATTEMPTS = 12;
 
 /**
  * Leaves room for `requestedSeed + MAX_SEED_ATTEMPTS` to stay on distinct
@@ -31,7 +31,7 @@ const MAX_SEED_ATTEMPTS = 12;
  * would collapse the search window onto ~6 values, silently re-testing duplicates
  * and reporting exhaustion while alternatives remain.
  */
-const MAX_SEED = Number.MAX_SAFE_INTEGER - MAX_SEED_ATTEMPTS;
+export const MAX_SEED = Number.MAX_SAFE_INTEGER - MAX_SEED_ATTEMPTS;
 
 /**
  * An ABSENT seed means "the fairest month" and is the documented default. A seed
@@ -40,7 +40,14 @@ const MAX_SEED = Number.MAX_SAFE_INTEGER - MAX_SEED_ATTEMPTS;
  * already looking at, labelled as a fresh success. Loud beats plausible.
  */
 const readSeed = (value: unknown): number | null => {
-  if (value === undefined || value === null) return 0;
+  // Only an OMITTED seed defaults. An explicit `null` is refused, because that is
+  // exactly the wire form of a client-side `NaN` cursor —
+  // `JSON.stringify({seed: NaN})` emits `{"seed":null}`. Mapping it to 0 here
+  // would make this guard depend on the planner's own `Number.isFinite` check
+  // rather than back it up, and the failure it lets through is the silent one:
+  // the fairest month redrawn over the board the admin is already looking at,
+  // announced as a new option.
+  if (value === undefined) return 0;
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
   return Math.min(Math.floor(value), MAX_SEED);
 };
