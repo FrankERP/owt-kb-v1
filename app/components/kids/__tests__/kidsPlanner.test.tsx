@@ -1,22 +1,31 @@
 /** @vitest-environment jsdom */
-// The planner's two failure modes worth guarding:
-//   1. A dropdown that offers a pair the server will refuse (wrong room, absent
-//      member, or already seated that Sunday) — the admin picks it, gets a 400,
-//      and learns the rules by bouncing off them.
-//   2. A save that fails and looks like it worked. The repo's client-handler
+// The planner's failure modes worth guarding, after the board rebuild:
+//
+//   1. A BLOCKED PAIR THAT VANISHES. The whole point of the redesign is that
+//      "Carlos y Paola — Luis no disponible" is on screen. A future "tidy the list"
+//      change would silently restore the dropdown's information content, and
+//      nothing else in the suite would notice.
+//   2. A seat nobody can fill that renders as a blank slot.
+//   3. A touch target below the ADR-0012 floor, on the layout Niza actually uses.
+//   4. A save that fails and looks like it worked. The repo's client-handler
 //      invariant exists because of exactly that, so the failing PUT is asserted
 //      end to end: error surfaced, loading flag reset, nothing marked clean.
+//
+// Both layouts render at once (one is CSS-hidden), so every query here is
+// deliberately scoped by the accessible name each layout gives its controls.
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import KidsPlanner, {
   formatSunday,
+  historyMonthsFor,
   monthLabel,
-  seatOptions,
   shiftMonth,
   sundaysOfMonth,
   type PlannerPair,
 } from "../KidsPlanner";
+import { blockLabel, canPlace, loadLabel, overlapLabel } from "../kidsPlannerLabels";
+import { buildPlannerView } from "@/app/utils/kidsPlannerView";
 
 afterEach(() => {
   cleanup();
@@ -36,6 +45,17 @@ const PAIRS: PlannerPair[] = [
   pair("c2", "chiquitos", "m3", "m4"),
   pair("d1", "medianos", "m5", "m6"),
   pair("g1", "grandes", "m7", "m8"),
+];
+
+const MEMBERS = [
+  { _id: "m1", member_name: "Ana", unavailableDates: [] as string[] },
+  { _id: "m2", member_name: "Luis", unavailableDates: ["2026-09-06"] },
+  { _id: "m3", member_name: "Sofía", unavailableDates: [] as string[] },
+  { _id: "m4", member_name: "Jona", unavailableDates: [] as string[] },
+  // Both halves of the only medianos pair are out on the 6th, so that seat is
+  // genuinely unfillable — the state that used to render as an empty select.
+  { _id: "m5", member_name: "Elvira", unavailableDates: ["2026-09-06"] },
+  { _id: "m6", member_name: "Benji", unavailableDates: ["2026-09-06"] },
 ];
 
 describe("month + date helpers", () => {
@@ -72,105 +92,206 @@ describe("month + date helpers", () => {
     expect(formatSunday("2026-09-06")).toContain("6 de septiembre");
     expect(formatSunday("2026-09-06").startsWith("Domingo")).toBe(true);
   });
+
+  it("asks for the months BEFORE the one on screen, and crosses the year", () => {
+    expect(historyMonthsFor("2026-09")).toEqual(["2026-08", "2026-07", "2026-06"]);
+    expect(historyMonthsFor("2026-01")).toEqual(["2025-12", "2025-11", "2025-10"]);
+  });
 });
 
-describe("seatOptions", () => {
-  const base = { pairs: PAIRS, date: "2026-09-06", unavailable: {}, seats: {} };
-
-  it("offers only the room's pairs to a room seat, and every pair to enseñanza", () => {
-    expect(seatOptions({ ...base, seat: "chiquitos" }).map((o) => o.id)).toEqual(["c1", "c2"]);
-    expect(seatOptions({ ...base, seat: "ensenanza" }).map((o) => o.id)).toEqual([
-      "c1",
-      "c2",
-      "d1",
-      "g1",
-    ]);
+describe("the words a blocked row carries", () => {
+  it("names WHO is away — one name, or both", () => {
+    expect(blockLabel({ kind: "unavailable", memberNames: ["Vale"] })).toBe("Vale no disponible");
+    expect(blockLabel({ kind: "unavailable", memberNames: ["Vale", "Luis"] })).toBe(
+      "Vale y Luis no disponibles",
+    );
   });
 
-  it("disables a pair whose EITHER member is unavailable, without hiding it", () => {
-    const options = seatOptions({
-      ...base,
-      seat: "chiquitos",
+  it("says what the pair is already doing, or where it belongs", () => {
+    expect(blockLabel({ kind: "seated", seat: "grandes" })).toBe("Ya tiene RG Grandes");
+    expect(blockLabel({ kind: "wrong-room", room: "chiquitos" })).toBe("Es de RG Chiquitos");
+    expect(blockLabel({ kind: "retired" })).toBe("Pareja retirada");
+  });
+
+  it("says nothing when there is nothing to say", () => {
+    expect(overlapLabel([])).toBeNull();
+    expect(overlapLabel(["Vale"])).toBe("También en alabanza: Vale");
+    expect(loadLabel(0)).toBeNull();
+    expect(loadLabel(1)).toBe("1 domingo este mes");
+    expect(loadLabel(2)).toBe("2 domingos este mes");
+  });
+});
+
+describe("canPlace — the one drag the view's own verdict would refuse", () => {
+  const viewPairs = PAIRS.map((p) => ({
+    id: p.id,
+    name: p.name,
+    room: p.room,
+    memberIds: [p.memberIds[0], p.memberIds[1]] as [string, string],
+    active: p.active,
+  }));
+
+  const build = (seats: Record<string, string>) =>
+    buildPlannerView({
+      sundays: ["2026-09-06"],
+      pairs: viewPairs,
+      assignments: [{ date: "2026-09-06", seats }],
       unavailable: { m2: ["2026-09-06"] },
+      memberNames: { m1: "Ana", m2: "Luis" },
+      history: [],
     });
-    expect(options.map((o) => o.id)).toEqual(["c1", "c2"]);
-    expect(options.find((o) => o.id === "c1")).toMatchObject({ disabled: true });
-    expect(options.find((o) => o.id === "c1")!.label).toContain("no disponible");
-    expect(options.find((o) => o.id === "c2")).toMatchObject({ disabled: false });
-  });
 
-  it("disables a pair already seated elsewhere that Sunday, but not in its own seat", () => {
-    const seats = { ensenanza: "c1" } as const;
-    expect(
-      seatOptions({ ...base, seat: "chiquitos", seats }).find((o) => o.id === "c1"),
-    ).toMatchObject({ disabled: true });
-    expect(
-      seatOptions({ ...base, seat: "ensenanza", seats }).find((o) => o.id === "c1"),
-    ).toMatchObject({ disabled: false });
-  });
+  const seat = (view: ReturnType<typeof build>, name: string) =>
+    view.seats.find((s) => s.seat === name)!;
 
-  it("keeps a stored pair that left the pool, so the select cannot drop what Sanity holds", () => {
-    const retired: PlannerPair[] = [{ ...PAIRS[0], active: false }, ...PAIRS.slice(1)];
-    const options = seatOptions({
-      ...base,
-      pairs: retired,
-      seat: "chiquitos",
-      seats: { chiquitos: "c1" },
+  it("refuses an unavailable pair, and says who is away", () => {
+    const view = build({});
+    expect(canPlace(seat(view, "chiquitos"), "c1", null)).toEqual({
+      ok: false,
+      reason: "Luis no disponible",
     });
-    expect(options[0]).toMatchObject({ id: "c1", disabled: false });
-    expect(options[0].label).toContain("fuera de la rotación");
   });
 
-  it("drops a pair that is not exactly two people — the engine cannot seat it", () => {
-    const broken: PlannerPair[] = [{ ...PAIRS[0], memberIds: ["m1"] }, ...PAIRS.slice(1)];
-    expect(
-      seatOptions({ ...base, pairs: broken, seat: "chiquitos" }).map((o) => o.id),
-    ).toEqual(["c2"]);
+  it("refuses a pair that belongs to another room", () => {
+    const view = build({});
+    expect(canPlace(seat(view, "chiquitos"), "g1", null)).toMatchObject({ ok: false });
+  });
+
+  it("ALLOWS a move out of another seat on the SAME Sunday — the ordinary correction", () => {
+    // c2 sits in enseñanza; dragging it to its own room reads as "already seated"
+    // because the view is built from the state before the move. Refusing that would
+    // make the most common fix impossible by drag while the picker allowed it.
+    const view = build({ ensenanza: "c2" });
+    expect(canPlace(seat(view, "chiquitos"), "c2", { date: "2026-09-06", seat: "ensenanza" })).toEqual(
+      { ok: true },
+    );
+    // From the BENCH, with nothing being vacated, it stays refused.
+    expect(canPlace(seat(view, "chiquitos"), "c2", null)).toMatchObject({ ok: false });
   });
 });
 
-describe("KidsPlanner — a failed save never reads as success", () => {
-  const renderPlanner = () =>
+describe("KidsPlanner — the board shows what a dropdown hid", () => {
+  const renderPlanner = (over: Partial<Parameters<typeof KidsPlanner>[0]> = {}) =>
     render(
       <KidsPlanner
         initialMonth="2026-09"
         initialPairs={PAIRS}
-        initialMembers={[
-          { _id: "m1", member_name: "Ana", unavailableDates: [] },
-          { _id: "m2", member_name: "Luis", unavailableDates: ["2026-09-06"] },
-        ]}
+        initialMembers={MEMBERS}
+        initialSchedules={[]}
+        initialHistory={[]}
+        {...over}
+      />,
+    );
+
+  /** The phone layout's seat row — the primary target, opened by tap. */
+  const seatRow = (seatLabel: string, sundayLabel: string) =>
+    within(screen.getByLabelText(sundayLabel)).getByRole("button", {
+      name: new RegExp(`^${seatLabel}:`),
+    });
+
+  it("LISTS the unavailable pair in the picker, disabled, with the reason", () => {
+    renderPlanner();
+    fireEvent.click(seatRow("RG Chiquitos", "Domingo, 6 de septiembre"));
+
+    const dialog = screen.getByRole("dialog", { name: /RG Chiquitos/ });
+    // Not filtered out — that is the entire redesign.
+    const blocked = within(dialog).getByRole("button", { name: /C1/ });
+    expect((blocked as HTMLButtonElement).disabled).toBe(true);
+    expect(blocked.textContent).toContain("Luis no disponible");
+    // …and the pair that CAN serve is enabled, above it.
+    const free = within(dialog).getByRole("button", { name: /C2/ });
+    expect((free as HTMLButtonElement).disabled).toBe(false);
+    expect(dialog.textContent!.indexOf("C2")).toBeLessThan(dialog.textContent!.indexOf("C1"));
+  });
+
+  it("marks the longest-waiting selectable pair «le toca» and dates the others", () => {
+    renderPlanner({
+      // c2 served chiquitos two Sundays before the 6th; c1 never has.
+      initialHistory: [{ date: "2026-08-23", seats: { chiquitos: "c2" }, published: true }],
+    });
+    fireEvent.click(seatRow("RG Chiquitos", "Domingo, 6 de septiembre"));
+
+    const dialog = screen.getByRole("dialog", { name: /RG Chiquitos/ });
+    expect(within(dialog).getByRole("button", { name: /C2/ }).textContent).toContain(
+      "hace 2 semanas",
+    );
+    expect(within(dialog).getByText("le toca")).toBeTruthy();
+  });
+
+  it("says a seat is unfillable instead of rendering a blank slot", () => {
+    renderPlanner();
+    // Both halves of the only medianos pair are out on the 6th.
+    expect(
+      within(screen.getByLabelText("Domingo, 6 de septiembre")).getByText(
+        "Sin parejas disponibles para RG Medianos",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("keeps every seat row at or above the ADR-0012 touch floor", () => {
+    renderPlanner();
+    const card = screen.getByLabelText("Domingo, 6 de septiembre");
+    const rows = within(card).getAllByRole("button", { name: /Cambiar$/ });
+    expect(rows).toHaveLength(4);
+    for (const row of rows) expect(row.className).toMatch(/min-h-\[(4[4-9]|[5-9]\d|\d{3,})px\]/);
+  });
+
+  it("assigns from the picker and marks the month dirty", () => {
+    renderPlanner();
+    fireEvent.click(seatRow("RG Chiquitos", "Domingo, 6 de septiembre"));
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: /RG Chiquitos/ })).getByRole("button", {
+        name: /C2/,
+      }),
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(seatRow("RG Chiquitos", "Domingo, 6 de septiembre").textContent).toContain("C2");
+    expect(screen.getByText("Cambios sin guardar")).toBeTruthy();
+  });
+
+  it("drops a bench pair into a board cell", () => {
+    renderPlanner();
+    // The bench is the only place an unassigned pair's name appears.
+    const chip = screen.getByText("C2");
+    const cell = screen.getByLabelText(/^RG Chiquitos, Domingo, 13 de septiembre/);
+
+    const dataTransfer = { setData: vi.fn(), effectAllowed: "", dropEffect: "" };
+    fireEvent.dragStart(chip, { dataTransfer });
+    fireEvent.dragOver(cell, { dataTransfer });
+    fireEvent.drop(cell, { dataTransfer });
+
+    expect(
+      screen.getByLabelText(/^RG Chiquitos, Domingo, 13 de septiembre/).textContent,
+    ).toContain("C2");
+    expect(screen.getByText("Cambios sin guardar")).toBeTruthy();
+  });
+});
+
+describe("KidsPlanner — a failed save never reads as success", () => {
+  it("surfaces the failure, resets the loading flag and keeps the changes dirty", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 500 });
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <KidsPlanner
+        initialMonth="2026-09"
+        initialPairs={PAIRS}
+        initialMembers={MEMBERS}
         initialSchedules={[]}
       />,
     );
 
-  it("greys out the unavailable pair in the rendered dropdown", () => {
-    renderPlanner();
-    const select = screen.getByLabelText("RG Chiquitos", {
-      selector: "#kids-seat-2026-09-06-chiquitos",
-    }) as HTMLSelectElement;
-    const c1 = Array.from(select.options).find((o) => o.value === "c1")!;
-    expect(c1.disabled).toBe(true);
-    // The same pair is pickable on a Sunday its member is available.
-    const later = screen.getByLabelText("RG Chiquitos", {
-      selector: "#kids-seat-2026-09-13-chiquitos",
-    }) as HTMLSelectElement;
-    expect(Array.from(later.options).find((o) => o.value === "c1")!.disabled).toBe(false);
-  });
-
-  it("surfaces the failure, resets the loading flag and keeps the changes dirty", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 500 });
-    vi.stubGlobal("fetch", fetchMock);
-    renderPlanner();
-
-    fireEvent.change(
-      screen.getByLabelText("RG Chiquitos", {
-        selector: "#kids-seat-2026-09-13-chiquitos",
+    fireEvent.click(
+      within(screen.getByLabelText("Domingo, 13 de septiembre")).getByRole("button", {
+        name: /^RG Chiquitos:/,
       }),
-      { target: { value: "c1" } },
+    );
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: /RG Chiquitos/ })).getByRole("button", {
+        name: /C1/,
+      }),
     );
 
-    const save = screen.getByRole("button", { name: "Guardar borradores" });
-    fireEvent.click(save);
+    fireEvent.click(screen.getByRole("button", { name: "Guardar borradores" }));
 
     await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/No se guardaron/));
     // ONE Sunday was touched, so exactly one PUT went out — the untouched,
