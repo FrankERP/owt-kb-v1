@@ -58,8 +58,23 @@ export function normalizeMinistries(v: unknown): MinistryId[] {
  * storage contract (absent ⇒ worship). A bare `"worship" in ministries` would
  * hide every member who predates the kids feature — which is all of them.
  */
-export const WORSHIP_MEMBER_GROQ_FILTER =
-  '($all || !defined(ministries) || count(ministries) == 0 || "worship" in ministries)';
+/**
+ * "Is this member part of the worship team", with NO super-admin bypass.
+ *
+ * Use this for a NOTIFICATION AUDIENCE. `WORSHIP_MEMBER_GROQ_FILTER` below adds
+ * an `$all` arm so a super-admin can SEE every member in an admin list; being
+ * able to see someone is not a reason to email or push at them, and binding
+ * `$all: true` on an audience would mail the whole Kids roster about worship
+ * setlists.
+ *
+ * Same storage contract as everywhere else: absent or empty `ministries` means
+ * worship, because that is every member who predates the Kids feature. A bare
+ * `"worship" in ministries` here would silence the entire existing team.
+ */
+export const WORSHIP_AUDIENCE_GROQ_FILTER =
+  '(!defined(ministries) || count(ministries) == 0 || "worship" in ministries)';
+
+export const WORSHIP_MEMBER_GROQ_FILTER = `($all || ${WORSHIP_AUDIENCE_GROQ_FILTER.slice(1, -1)})`;
 
 /** Ministries a member can be granted management of. Worship management lives
  *  in the legacy admin/content-editor roles, and NO guard reads a "worship"

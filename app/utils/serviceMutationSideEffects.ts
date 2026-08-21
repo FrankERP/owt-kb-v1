@@ -53,6 +53,7 @@ import { revalidatePath } from "next/cache";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { revalidateServiceViews } from "./revalidate";
+import { WORSHIP_AUDIENCE_GROQ_FILTER } from "@/app/ministries";
 import { sendPush } from "./push";
 import {
   rolesForMember,
@@ -667,8 +668,17 @@ export function queueLeadNotesNotice(input: QueueLeadNotesNoticeInput): void {
  */
 export async function notifySetlistSaved(week: string): Promise<void> {
   await attempt("setlist push", async () => {
+    // MINISTRY-SCOPED. This is the only worship audience in the codebase that is
+    // not already narrowed to specific ids or to an admin role, so it is the only
+    // one a Kids-only member could fall into — and they would, because
+    // `setlistRecipientIds` reads an unset preference as "all". A Kids volunteer
+    // has no reason to be pushed "Ya están las canciones de este servicio".
+    //
+    // The filter deliberately has no `$all` arm: `WORSHIP_MEMBER_GROQ_FILTER`'s
+    // super-admin bypass is for SEEING people in an admin list, and being able to
+    // see someone is not a reason to notify them.
     const members = await operationalClient.fetch<{ _id: string; setlist?: SetlistPref }[]>(
-      `*[_type == "teamMembers"]{ _id, "setlist": notifPrefs.setlist }`,
+      `*[_type == "teamMembers" && ${WORSHIP_AUDIENCE_GROQ_FILTER}]{ _id, "setlist": notifPrefs.setlist }`,
     );
     // `published != false` matches the sibling audience in `api/cron/service-reminders`.
     // Without it, a member whose preference is `assigned` and who serves only on a
