@@ -89,3 +89,11 @@ __pycache__/
 
 # Local email template previews (scripts/preview-emails.mts)
 .preview-emails/
+
+# Agent worktrees. `EnterWorktree` checks out full copies of this repository
+# here, so each one contains a `.git` FILE — and `git add -A` against a directory
+# like that can stage it as a gitlink, committing a submodule-shaped reference to
+# a path that exists on exactly one machine. Until now the only thing preventing
+# that was `.git/info/exclude`, which is per-clone and shared with nobody.
+# `.claude/commands/` stays tracked; only the worktrees are ignored.
+.claude/worktrees/

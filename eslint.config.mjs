@@ -6,6 +6,34 @@ export default defineConfig([
   globalIgnores([
     ".next/**",
     ".remember/**",
+    // Agent tooling and local session state, none of it app source — but the
+    // reason it must be IGNORED rather than merely uninteresting is
+    // `.claude/worktrees/`, where the repo's own worktree flow checks out full
+    // copies of this repository. Those copies are real `.ts` files, so eslint
+    // walks them, and every `files:` override below is matched against a path
+    // relative to THIS config's directory. `e2e/**` therefore does not match
+    // `.claude/worktrees/<name>/e2e/**`, and the Playwright-fixture exemption
+    // silently stops applying: on 2026-08-21 the gate reported 4
+    // `react-hooks/rules-of-hooks` errors in a worktree copy of
+    // `e2e/service-readiness/fixtures.ts` while the canonical file linted clean.
+    //
+    // That is worse than noise. It reports errors in a file nobody edited, which
+    // either blocks a good release or invites a "fix" to source that was never
+    // broken. Linting a second checkout of the same tree can only ever produce a
+    // duplicate verdict or a wrong one.
+    //
+    // ESLint is the ONLY gate that was exposed, which is worth writing down
+    // because `tsconfig.json` looks like it should be — `include: ["**/*.ts"]`
+    // with only `node_modules` excluded. It is not: TypeScript's wildcards skip
+    // directories whose names begin with a dot, which is also why
+    // `.next/types/**/*.ts` has to be listed there explicitly. Vitest and
+    // Tailwind are safe for a different reason (root-anchored globs: `app/**`
+    // cannot match `.claude/worktrees/<name>/app/**`), and the repo's
+    // directory-walking guard tests all start from a named subtree, never the
+    // repo root. All four verified by canary on 2026-08-21. Flat config reaches
+    // dot-directories because its only default ignores are `node_modules` and
+    // `.git` — so do NOT "fix" the sibling configs to match this one.
+    ".claude/**",
     "out/**",
     "ios/**",
     "android/**",
