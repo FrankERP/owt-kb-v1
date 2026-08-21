@@ -103,17 +103,30 @@ const KIDS_MAY_SEE_DRAFTS: Record<string, string> = {
     "The planner's own data source and its writer, both behind " +
     "`requireMinistryManager('kids')`. The GET backs the editing grid, which must " +
     "show drafts or the planner cannot show the work it exists to do; the PUT must " +
-    "read a draft in order to publish it.",
+    "read a draft in order to publish it. CAVEAT, and it is why this exemption " +
+    "looked safer than it was: `KidsPlanner.loadMonth` ALSO refills its history " +
+    "state from this GET, so the fairness clock passes through an exempt endpoint. " +
+    "The client re-filters on `published` at its `useMemo` (ADR-0022). Anything " +
+    "added here that a member or a clock consumes must be gated at the consumer.",
 };
 
 /**
- * …and by PROJECTION, which the planner page needs because it holds one group of
- * each kind. `"schedules"` is the month being edited and must see drafts;
- * `"history"` in the same query object is the fairness clock and must not. A
- * file-level exemption would shield both and quietly re-open the bug this scan
- * was extended to catch.
+ * …and by PROJECTION **within a named file**, which the planner page needs because
+ * it holds one group of each kind. `"schedules"` is the month being edited and must
+ * see drafts; `"history"` in the same query object is the fairness clock and must
+ * not. A file-level exemption would shield both and quietly re-open the bug this
+ * scan was extended to catch.
+ *
+ * Keyed by file rather than by bare label, because a bare label is an exemption
+ * ANY file can claim. A review of this guard proved it: adding
+ * `"schedules": *[_type == "kidsSchedule" && …]` to the member-facing
+ * `(client)/kids/page.tsx` — with no `published` clause — passed all nine tests,
+ * and `schedules` is the most natural key name for exactly that data. Narrower than
+ * a file exemption on one axis is not narrower overall.
  */
-const KIDS_LABELS_MAY_SEE_DRAFTS = new Set(["schedules"]);
+const KIDS_LABELS_MAY_SEE_DRAFTS: Record<string, Set<string>> = {
+  "(client)/kids/admin/page.tsx": new Set(["schedules"]),
+};
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
@@ -337,7 +350,10 @@ describe("unpublished kids Sundays stay out of members' views AND out of the clo
 
   it("filters `published == true` on every kids read outside the exempt paths", () => {
     const violations = unfilteredKidsReads()
-      .filter(({ rel, label }) => !kidsExemptionFor(rel) && !KIDS_LABELS_MAY_SEE_DRAFTS.has(label ?? ""))
+      .filter(
+        ({ rel, label }) =>
+          !kidsExemptionFor(rel) && !KIDS_LABELS_MAY_SEE_DRAFTS[rel]?.has(label ?? ""),
+      )
       .map(({ rel, line }) => `${rel}:${line} reads kidsSchedule without \`published == true\``);
     expect(violations).toEqual([]);
   });
@@ -378,7 +394,22 @@ describe("unpublished kids Sundays stay out of members' views AND out of the clo
     const shielding = new Set(unfilteredKidsReads().map(({ rel }) => kidsExemptionFor(rel)));
     expect(Object.keys(KIDS_MAY_SEE_DRAFTS).filter((p) => !shielding.has(p))).toEqual([]);
 
-    const labels = new Set(unfilteredKidsReads().map(({ label }) => label));
-    expect([...KIDS_LABELS_MAY_SEE_DRAFTS].filter((l) => !labels.has(l))).toEqual([]);
+    // Each label exemption must shield a real ungated group IN ITS OWN FILE.
+    const dead = Object.entries(KIDS_LABELS_MAY_SEE_DRAFTS).flatMap(([rel, labels]) =>
+      [...labels]
+        .filter((l) => !unfilteredKidsReads().some((r) => r.rel === rel && r.label === l))
+        .map((l) => `${rel} exempts "${l}", which shields nothing`),
+    );
+    expect(dead).toEqual([]);
+  });
+
+  it("does not let ANY file claim the exemption by naming a projection «schedules»", () => {
+    // The hole this scoping closed, pinned so it cannot reopen: the exemption is
+    // a property of one audited file, never of a key name.
+    const exemptFiles = Object.keys(KIDS_LABELS_MAY_SEE_DRAFTS);
+    expect(exemptFiles).toEqual(["(client)/kids/admin/page.tsx"]);
+    for (const rel of exemptFiles) {
+      expect(sourceFiles(APP_DIR).map((f) => path.relative(APP_DIR, f))).toContain(rel);
+    }
   });
 });

@@ -127,10 +127,13 @@ export async function POST(req: NextRequest) {
     // getting skipped. Drafts are the DEFAULT (the schedules writer mints
     // `published: false`), so that is the ordinary case, not a corner.
     //
-    // This MUST match the planner page's `history` read — the labels the admin
-    // reads and the plan the generator produces come from two different queries,
-    // and if they disagree the board promises a pair the generator will not pick.
-    // ADR-0022.
+    // This CLAUSE must match the planner page's `history` read (and the filter
+    // `KidsPlanner` re-applies client-side, because `loadMonth` refills that state
+    // from the editor's endpoint, which serves drafts on purpose). The labels the
+    // admin reads and the plan the generator produces come from different queries;
+    // if they gate differently the board promises a pair the generator will not
+    // pick. The WINDOWS deliberately still differ — 16 Sundays here, 3 months
+    // there. ADR-0022.
     //
     // It also makes the `[0...N]` slice honest: an abandoned draft used to consume
     // a history slot and push a real prior Sunday out of the window.

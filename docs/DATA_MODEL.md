@@ -375,8 +375,10 @@ The API routes generate keys with `Math.random().toString(36).slice(2,9)` and at
 
 ## Draft/publish gating
 
-The `published` boolean lives on **role docs only** (`sunday_role`/`saturday_role`/`special_role`),
-`initialValue: true`. The pattern:
+The `published` boolean lives on the three **role docs** (`sunday_role`/`saturday_role`/
+`special_role`, `initialValue: true`) and on **`kidsSchedule`** — where it is written by the
+schedules route, defaults to `false`, and is read with a **stricter operator**. The two spellings
+are not interchangeable; see "Kids gates on `published == true`" below. The pattern:
 
 - **Member-facing GROQ filters `published != false`.** The `!= false` form treats a **missing**
   `published` as published ("grandfathered"), while explicit `false` is a draft. Used in
@@ -397,6 +399,26 @@ The `published` boolean lives on **role docs only** (`sunday_role`/`saturday_rol
   `computePublishTransitions(current, target)` returns `{ toPatch, toNotify }`. Only a genuine
   `false → published` transition triggers notifications.
 - **New docs default to draft:** `/api/admin/roles` sets `published: body.published === true`.
+
+#### Kids gates on `published == true` — a different operator, on purpose
+
+`kidsSchedule` is **minted with the field** by `PUT /api/kids/schedules` (`published: false`), so a
+document without it is a bug rather than a legacy row. The worship `!= false` spelling exists to
+grandfather documents that predate the field, and applied here it would wave that bug through —
+so kids reads use `published == true`. `draftGatingCoverage.test.ts` scans `kidsSchedule`
+separately for exactly this spelling; the two exemption maps beside it (`KIDS_MAY_SEE_DRAFTS`,
+keyed by file, and `KIDS_LABELS_MAY_SEE_DRAFTS`, keyed by file **and** projection name) hold the
+editor-side reads.
+
+The gate is not only about visibility. Two reads feed the **fairness clock** — the generator's
+history in `api/kids/generate` and the `"history"` projection on the planner page — and both filter
+`published == true` because an unpublished Sunday is a proposal nobody was asked to serve
+([ADR-0022](adr/0022-unpublished-kids-sundays-do-not-count-as-served.md)). `KidsPlanner` re-applies
+the same filter client-side, which is **not** redundant: `loadMonth` refills that state from the
+editor's endpoint, which returns drafts by design.
+
+Deliberately ungated, both editor-side: the `"schedules"` projection on the planner page, and all of
+`api/kids/schedules` — the month being edited and its writer, which must read a draft to publish it.
 
 ### Canonical vs member-visible — two different gates
 

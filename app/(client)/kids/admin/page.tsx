@@ -30,7 +30,8 @@ export const metadata = { title: "Oasis Kids — Planeación" };
 // visible cause. Drafts are also the DEFAULT state — the schedules writer mints
 // `published: false` — so the abandoned draft is the likely case, not the exotic one.
 //
-// This filter MUST match the generator's history read in `/api/kids/generate`.
+// This filter must match the generator's history read in `/api/kids/generate`.
+// (The `published` CLAUSE, not the window — the two spans differ; see ADR-0022.)
 // If the two disagree, the board says «le toca» for a pair the generator will not
 // pick, and the disagreement is invisible in both places. ADR-0022.
 const PAGE_QUERY = `{

@@ -61,6 +61,24 @@ from two different queries. If they disagree, the board tells the admin «le toc
 a pair the generator will not pick, and neither surface can reveal the disagreement.
 Pinned by a test that asserts both carry the filter.
 
+**Gating only the server reads.** The first version of this change did exactly that
+and was wrong on the dominant path — caught in review, not by the tests. The planner's
+`history` state arrives gated from the page query but is **refilled by `loadMonth`
+from `GET /api/kids/schedules`**, the editor's endpoint, which returns drafts by
+design. The gate therefore survived until the first month navigation, which is the
+first thing an admin does, since the point is to plan an upcoming month. `KidsPlanner`
+now re-applies the filter at the single `useMemo` every path feeds through. The
+client-side check is not belt-and-braces; without it the server-side one is decorative.
+
+### What "the two agree" does and does not mean
+
+They agree on the `published` clause, which is what this ADR is about. They do **not**
+share a window: the generator reads `[0...HISTORY_WEEKS]` (16 Sundays, no lower bound),
+the planner page reads `HISTORY_MONTHS` (3, ~13 Sundays). A pair whose last turn was
+14–16 Sundays back has a real `lastServed` in the generator and reads «nunca» on the
+board. Pre-existing, low impact — both orderings put such a pair at the front — but it
+is a real difference, and the claim in the code comments is about the filter only.
+
 ## Consequences
 
 - A month must be **published** to affect fairness. Saving drafts forever leaves the
