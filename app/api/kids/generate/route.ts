@@ -3,7 +3,7 @@ import { requireMinistryManager } from "@/app/utils/authGuards";
 import { serverClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { assignedMemberRefsQuery } from "@/app/utils/notifyTargets";
-import { planKidsMonth } from "@/app/utils/kidsRotation";
+import { planKidsMonth, proposalFingerprint } from "@/app/utils/kidsRotation";
 import {
   KIDS_SEATS,
   type KidsAssignment,
@@ -12,6 +12,45 @@ import {
 } from "@/app/utils/kidsTypes";
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/**
+ * How many seeds "otra opción" may burn looking for a month the planner has not
+ * already shown and rejected.
+ *
+ * The search runs entirely on the ALREADY-FETCHED data — `planKidsMonth` is pure
+ * and costs microseconds — so this is bounded CPU inside one request, never
+ * extra Sanity reads or extra round trips. Once the roster is small enough that
+ * the distinct arrangements run out, the loop ends and the response says so
+ * instead of silently handing back a month the admin just said no to.
+ */
+export const MAX_SEED_ATTEMPTS = 12;
+
+/**
+ * Leaves room for `requestedSeed + MAX_SEED_ATTEMPTS` to stay on distinct
+ * integers. Past 2^53 the spacing between doubles is 2, so a seed at the ceiling
+ * would collapse the search window onto ~6 values, silently re-testing duplicates
+ * and reporting exhaustion while alternatives remain.
+ */
+export const MAX_SEED = Number.MAX_SAFE_INTEGER - MAX_SEED_ATTEMPTS;
+
+/**
+ * An ABSENT seed means "the fairest month" and is the documented default. A seed
+ * that is present but malformed is a caller bug, and coercing it would land on 0
+ * — the one value with special meaning — handing back the board the admin is
+ * already looking at, labelled as a fresh success. Loud beats plausible.
+ */
+const readSeed = (value: unknown): number | null => {
+  // Only an OMITTED seed defaults. An explicit `null` is refused, because that is
+  // exactly the wire form of a client-side `NaN` cursor —
+  // `JSON.stringify({seed: NaN})` emits `{"seed":null}`. Mapping it to 0 here
+  // would make this guard depend on the planner's own `Number.isFinite` check
+  // rather than back it up, and the failure it lets through is the silent one:
+  // the fairest month redrawn over the board the admin is already looking at,
+  // announced as a new option.
+  if (value === undefined) return 0;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
+  return Math.min(Math.floor(value), MAX_SEED);
+};
 
 /** How much prior history seeds the fairness clock — a quarter of Sundays. */
 const HISTORY_WEEKS = 16;
@@ -50,10 +89,17 @@ export async function POST(req: NextRequest) {
   const session = await requireMinistryManager("kids");
   if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const body = (await req.json()) as { month?: string };
+  const body = (await req.json()) as { month?: string; seed?: number; exclude?: string[] };
   if (typeof body.month !== "string" || !MONTH_RE.test(body.month)) {
     return NextResponse.json({ error: "month must be YYYY-MM" }, { status: 400 });
   }
+  const requestedSeed = readSeed(body.seed);
+  if (requestedSeed === null) {
+    return NextResponse.json({ error: "seed must be a non-negative number" }, { status: 400 });
+  }
+  const exclude = new Set(
+    Array.isArray(body.exclude) ? body.exclude.filter((f) => typeof f === "string") : [],
+  );
 
   const sundays = sundaysOfMonth(body.month);
   const firstSunday = sundays[0] ?? `${body.month}-01`;
@@ -128,7 +174,45 @@ export async function POST(req: NextRequest) {
     }),
   );
 
-  return NextResponse.json(
-    planKidsMonth({ sundays, pairs, unavailable, history, worshipAssignments }),
-  );
+  const plan = (seed: number) =>
+    planKidsMonth({ sundays, pairs, unavailable, history, worshipAssignments, seed });
+
+  // Seed 0 is the strict least-recently-served month and is never "searched for":
+  // asking for the first proposal must always give the fairest one, even if the
+  // admin has already seen it.
+  if (requestedSeed === 0) {
+    const result = plan(0);
+    return NextResponse.json({
+      ...result,
+      seed: 0,
+      fingerprint: proposalFingerprint(result.proposal),
+      exhausted: false,
+    });
+  }
+
+  for (let attempt = 0; attempt < MAX_SEED_ATTEMPTS; attempt++) {
+    const seed = requestedSeed + attempt;
+    const result = plan(seed);
+    const fingerprint = proposalFingerprint(result.proposal);
+    if (!exclude.has(fingerprint)) {
+      return NextResponse.json({ ...result, seed, fingerprint, exhausted: false });
+    }
+  }
+
+  // Every arrangement in the SEARCHED WINDOW is one the admin has already seen —
+  // not every arrangement that exists. Say so and send no proposal: replacing the
+  // board with a month they just rejected would read as the button doing nothing.
+  //
+  // `seed` is where the NEXT search should start, so asking again continues past
+  // this window instead of re-testing it. Without that, one exhausted answer would
+  // make «Otra opción» permanently dead for the month — the same dead-button
+  // symptom, arrived at from the other side.
+  return NextResponse.json({
+    proposal: [],
+    warnings: [],
+    diagnostics: [],
+    seed: Math.min(requestedSeed + MAX_SEED_ATTEMPTS, MAX_SEED),
+    fingerprint: null,
+    exhausted: true,
+  });
 }

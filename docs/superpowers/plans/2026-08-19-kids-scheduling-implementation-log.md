@@ -20,6 +20,7 @@ that diff review the primary gate rather than a secondary one.
 | P2 | 6-UI | `7a394ef0`, `af977ae2` | `buildPlannerView` (the view layer), then the planner rebuilt on it: desktop rotation board + bench, phone Sunday cards + seat picker, `kids-planner` theme-gallery fixture |
 | P2 | 6-UI | `f79749c0` | Planner amber and blocked states raised to WCAG AA |
 | P2 | 6-UI | `d86a41ce`, `b51823b2`, `5072e490` | Bench scoped to the MONTH, not to its first Sunday — two groups per room, then the fix for the two findings that review raised, then its own review's LOW items (see below) |
+| — | follow-up | `faff6660` | **«Otra opción»** — an optional `seed` on `RotationInput` with a bounded fairness slack, `proposalFingerprint`, a seed/`exclude` search in `POST /api/kids/generate`, and the planner button. Seed 0 stays byte-identical to the prior behaviour. **ADR-0021.** Not a planned task: the engine is deterministic by design, so the planner had exactly one answer per month and no way to ask for a second |
 
 One of those hashes moved after the fact. The row above cited `e4c20233` for the
 planner rebuild; that commit was rewritten and is no longer an ancestor of `main`
@@ -215,7 +216,62 @@ as non-blocking at the time, and deliberately not fixed in place.
    further count movement in this branch should be attributable the same way — a colour
    ROW moving would be a different thing entirely and is not expected from this work.
 
+## «Otra opción» (`faff6660` → `721062c4` → `4a69453b`) — the review chain
+
+The follow-up that gave the planner more than one answer per month. Recorded here
+because its lesson is not about the feature: **every substantive defect in this
+cycle was found by MEASUREMENT, and none by reading.**
+
+Five vacuous tests, in three separate discoveries:
+
+1. **Two of mine, before the first commit.** The test for "an alternative still
+   differs once history exists" passed against a ties-only implementation twice.
+   First fixture: 4 Sundays, which leaves 8 of the 12 pairs never-served and tied
+   in the enseñanza pool. Second: fingerprint only the room seats, where 4 pairs
+   over 4 Sundays *is* saturated — still passed, because the enseñanza-first rule
+   pulls the teaching pair out of its own room that Sunday, so a tied enseñanza
+   seat leaks variety into the rooms. It took twelve Sundays and zero ties
+   anywhere before `SLACK_GENERATIONS = 1` finally failed it.
+2. **One of mine, found by the fresh review.** ADR-0021 credited the "never
+   re-seats the most recently served pair" test with bounding `SLACK_GENERATIONS`
+   from above. It cannot: that guarantee lives in the `- 1` of
+   `Math.min(SLACK_GENERATIONS, generations.length - 1)`, so it holds at 2, at 999
+   and at `Infinity`. The reviewer did not argue this — they set the constant to
+   999 and reported the suite green at 4062/4062. A documented guard that does not
+   exist is worse than none: it invites the change it claims to prevent.
+3. **Two more, found by the re-verify.** The fix for the sticky-exhaustion finding
+   was correct and completely unpinned — the route test asserted only "greater
+   than 1" while the planner test hard-coded the offset in its own mock, so
+   `requestedSeed + MAX_SEED_ATTEMPTS → requestedSeed + 1` kept all 95 tests
+   green. Same for `MAX_SEED`.
+
+**The re-verify step earned its place again.** The fixing commit closed all seven
+findings *and* introduced a new defect on the feature's primary error path — the
+exhausted toast read "Muévela a mano", a pronoun whose only candidate antecedent
+was the plural "opciones". Written fast, under pressure, by the author the review
+had just corrected. Exactly the case CLAUDE.md's re-verify rule describes.
+
+Non-blocking findings from the re-verify were fixed inline and dispositioned
+without a fresh round, per the 2026-08-19 retier.
+
+### Left alone deliberately
+
+- At `requestedSeed === MAX_SEED` the exhausted resume clamps to itself, so
+  repeated asks re-search one window. Reaching it through the UI needs ~7.5e14
+  clicks; recorded, not guarded.
+
 ## Deferred, with a trigger
+
+- **The generate route's history read is not `published`-gated.**
+  `app/api/kids/generate/route.ts` selects prior Sundays on `date < $firstSunday`
+  alone, while CLAUDE.md requires kids reads to use the stricter `published ==
+  true`. **Pre-existing — «Otra opción» did not introduce it** — but that history
+  seeds the fairness clock, so an unpublished draft Sunday now also shapes every
+  seeded variant. Surfaced by the code review of `faff6660` and left out of that
+  diff on purpose: it is a draft-gating decision, not an alternatives one, and it
+  needs its own answer to "can a `kidsSchedule` draft exist at all, given the
+  write route mints `published`?" **Trigger: Frank's call, before the Kids team
+  starts publishing months.**
 
 - **Worship setlist PUSH notifications reach Kids-only volunteers.**
   `serviceMutationSideEffects.ts:671` fetches every member; `notifyTargets.ts:40`
