@@ -46,6 +46,13 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   The verify step is not optional and a green build does not satisfy it — confirm
   `dev-owt-backstage.vercel.app` is in the deployment's `alias` array and that its
   `githubCommitSha` is the commit you pushed.
+- **Worktrees only when two things must be in flight at once** — parallel agents
+  writing overlapping files (`Agent` with `isolation: "worktree"`) or protecting the
+  primary tree while gates/servers run elsewhere (`EnterWorktree`, never a hand-rolled
+  `git worktree add`). Code review is read-only — no worktree. Populate
+  `node_modules` with an APFS clone from the primary checkout (`cp -Rc`), never a
+  fresh install. `git worktree remove` is part of the merge step; `git worktree prune`
+  at cycle open.
 - Conventional commits (`fix(scope): …`), body explains the *why*.
 - **Never** add AI/Claude attribution or `Co-Authored-By` trailers.
 - **Keep documentation current in the same delivery.** Implementation, behavior,
