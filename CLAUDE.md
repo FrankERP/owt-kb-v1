@@ -90,6 +90,15 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   less than nothing — the app answers `302` to SSO. Query the deployment and
   confirm two fields: the target domain appears in `alias`, and `meta.githubCommitSha`
   equals the commit you pushed.
+- **Never hand-roll a bash deploy watcher** (`until … vercel inspect … grep …`).
+  Two in one day spun silently forever — one on a PATH miss (`vercel` is not
+  installed; only `npx vercel` works), one on a grep heuristic that never matched —
+  while the deploy had been READY in ~85 s. Builds here take ~90 s, so: push, then
+  verify with a direct `get_deployment(domain)` query (Vercel MCP) or dispatch the
+  `deploy-verifier` agent, retrying that same authoritative check a few times ≥30 s
+  apart. If something must genuinely block on the build, use the vendor's waiter —
+  `npx vercel inspect <domain> --wait --timeout 5m` — never a grep loop; then still
+  do the alias+SHA check, which `--wait` does not replace.
 - **`preview` writes to the real Sanity dataset and emails the real team.** It is a
   rehearsal of the UI, never a dry run of data or notifications.
 
