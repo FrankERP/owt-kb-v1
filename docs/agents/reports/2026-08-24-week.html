@@ -1,0 +1,262 @@
+<title>The Inspector's Week</title>
+<style>
+  :root {
+    --ground: #f7f8fa; --card: #ffffff; --ink: #151921; --ink-2: #4c5560;
+    --ink-3: #7d8794; --line: #dde2e9; --accent: #2a78d6; --accent-soft: #e8f0fb;
+    --gold: #b97b00; --gold-soft: #fdf3dd; --serious: #b3261e; --serious-soft: #fceceb;
+    --ok: #1baf7a; --findings: #2a78d6; --cr: #eb6834;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #16181c; --card: #1d2025; --ink: #e9ecf1; --ink-2: #aab3bf;
+      --ink-3: #7d8794; --line: #2e333b; --accent: #3987e5; --accent-soft: #1d2c40;
+      --gold: #eda100; --gold-soft: #2c2413; --serious: #ef6a5f; --serious-soft: #35201e;
+      --ok: #199e70; --findings: #3987e5; --cr: #d95926;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #16181c; --card: #1d2025; --ink: #e9ecf1; --ink-2: #aab3bf;
+    --ink-3: #7d8794; --line: #2e333b; --accent: #3987e5; --accent-soft: #1d2c40;
+    --gold: #eda100; --gold-soft: #2c2413; --serious: #ef6a5f; --serious-soft: #35201e;
+    --ok: #199e70; --findings: #3987e5; --cr: #d95926;
+  }
+  body { background: var(--ground); color: var(--ink); margin: 0;
+    font: 16px/1.6 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .page { max-width: 880px; margin: 0 auto; padding: 40px 20px 64px;
+    display: flex; flex-direction: column; gap: 28px; }
+  .masthead { border-bottom: 3px double var(--line); padding-bottom: 20px; }
+  .masthead .org { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+  .masthead h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 600;
+    font-size: clamp(28px, 5vw, 40px); margin: 6px 0 4px; text-wrap: balance; }
+  .masthead .meta { color: var(--ink-2); font-size: 14px; }
+  .masthead .meta code { font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+  h2 { font-family: Georgia, serif; font-weight: 600; font-size: 21px; margin: 0 0 4px; }
+  .eyebrow { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 6px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 20px 22px; }
+  .headline-award { border: 1px solid var(--gold); background: var(--gold-soft); text-align: center; padding: 28px 22px; }
+  .headline-award .badge { width: 64px; height: 64px; margin: 0 auto 10px; }
+  .headline-award .badge svg { width: 100%; height: 100%; }
+  .headline-award h2 { font-size: 26px; }
+  .headline-award .nick { color: var(--gold); }
+  .headline-award p { margin: 10px auto 0; max-width: 62ch; text-align: left; font-size: 15px; color: var(--ink-2); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; }
+  .tile .n { font-family: Georgia, serif; font-size: 30px; font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .tile .l { font-size: 12.5px; color: var(--ink-3); }
+  .tile .sub { font-size: 11.5px; color: var(--ink-3); }
+  .chart-note { font-size: 12.5px; color: var(--ink-3); margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 600; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--line); }
+  td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .table-scroll { overflow-x: auto; }
+  .staff { display: flex; flex-direction: column; gap: 14px; }
+  .member { display: flex; gap: 14px; align-items: flex-start; }
+  .member .badge { flex: 0 0 40px; width: 40px; height: 40px; }
+  .member .badge svg { width: 100%; height: 100%; }
+  .member .who { font-weight: 600; }
+  .member .who .nick { color: var(--ink-2); font-weight: 400; }
+  .member p { margin: 2px 0 0; font-size: 14.5px; color: var(--ink-2); }
+  .commend { border-left: 3px solid var(--gold); padding-left: 16px; }
+  .commend h3 { margin: 0; font-size: 16px; font-family: Georgia, serif; }
+  .commend p { margin: 4px 0 0; font-size: 14.5px; color: var(--ink-2); }
+  .commends { display: flex; flex-direction: column; gap: 16px; }
+  .pip { border: 1px solid var(--serious); background: var(--serious-soft); }
+  .pip h3 { margin: 0 0 4px; font-size: 16px; }
+  .pip p { margin: 4px 0 0; font-size: 14.5px; color: var(--ink-2); }
+  .roster-note { font-size: 13.5px; color: var(--ink-2); }
+  .footer { font-size: 12px; color: var(--ink-3); border-top: 1px solid var(--line); padding-top: 14px; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); margin-top: 10px; justify-content: center; }
+  .legend .sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .viz-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 720px) { .viz-row { grid-template-columns: 1fr; } }
+  .bar-label { font: 13px -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--ink-2); }
+  .bar-val { font: 600 13px -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--ink); font-variant-numeric: tabular-nums; }
+  .donut-label { font: 600 13px -apple-system, sans-serif; fill: var(--ink); }
+  .donut-sub { font: 12px -apple-system, sans-serif; fill: var(--ink-3); }
+</style>
+<div class="page">
+
+  <header class="masthead">
+    <div class="org">OWT-KB-V1 · Agent Workforce · Weekly Performance Report</div>
+    <h1>The Inspector&rsquo;s Week</h1>
+    <div class="meta">Week of 2026-08-17 &nbsp;·&nbsp; window <code>2026-08-17T17:01</code> → <code>2026-08-24T17:01</code> (America/Mexico_City) &nbsp;·&nbsp; 74 entries, 10 cycles, 0 unparseable</div>
+  </header>
+
+  <section class="card headline-award">
+    <div class="eyebrow">Agent of the Week</div>
+    <div class="badge"><svg viewBox='0 0 48 48' xmlns='http://www.w3.org/2000/svg'><rect width='48' height='48' rx='10' fill='#8a63d2'/><ellipse cx='24' cy='24' rx='13' ry='8.5' fill='none' stroke='#fff' stroke-width='3'/><circle cx='24' cy='24' r='3.5' fill='#fff'/></svg></div>
+    <h2>code-reviewer <span class="nick">&ldquo;Inspector&rdquo;</span></h2>
+    <p>Fourteen dispatches across six cycles and it never once accepted a fix on faith. The defining sequence: 2026-08-20 — &ldquo;FOUND THE FIX-OF-A-FIX DEFECT: the lost-update guard was one-directional — <code>/api/me/availability</code> still wrote wholesale with no <code>_rev</code>, so the mirror race still deleted data&rdquo; — followed on 2026-08-21 by correctly blocking <code>2f92100d</code> because the published-gating fix left the dominant client path unguarded, the exact bug <code>e636db69</code> then closed. On 2026-08-24 it also <em>disproved</em> the defect the coordinator flagged as most likely — finding what is wrong and clearing what is right, in the same dispatch.</p>
+  </section>
+
+  <section class="tiles">
+    <div class="tile"><div class="n">74</div><div class="l">dispatches logged</div><div class="sub">261 all-time</div></div>
+    <div class="tile"><div class="n">10</div><div class="l">cycles</div><div class="sub">7 agents active</div></div>
+    <div class="tile"><div class="n">78%</div><div class="l">outcome: ok</div><div class="sub">58 ok · 10 findings · 6 changes_required</div></div>
+    <div class="tile"><div class="n">3.49M</div><div class="l">metered tokens</div><div class="sub">36 of 74 entries metered</div></div>
+    <div class="tile"><div class="n">5.2h</div><div class="l">metered agent time</div><div class="sub">same 36-entry coverage</div></div>
+  </section>
+
+  <div class="viz-row">
+    <section class="card">
+      <div class="eyebrow">Dispatches per agent</div>
+      <svg viewBox="0 0 400 238" role="img" aria-label="Dispatches per agent: coordinator-inline 32, implementation-worker 19, code-reviewer 14, skeptical-reviewer 5, codebase-explorer 2, docs-auditor 1, hr-officer 1">
+        <g>
+          <text x="0" y="18" class="bar-label">coordinator-inline</text>
+          <rect x="150" y="8" width="200" height="14" rx="4" fill="var(--accent)"/>
+          <text x="356" y="20" class="bar-val">32</text>
+          <text x="0" y="50" class="bar-label">implementation-worker</text>
+          <rect x="150" y="40" width="119" height="14" rx="4" fill="var(--accent)"/>
+          <text x="275" y="52" class="bar-val">19</text>
+          <text x="0" y="82" class="bar-label">code-reviewer</text>
+          <rect x="150" y="72" width="88" height="14" rx="4" fill="var(--accent)"/>
+          <text x="244" y="84" class="bar-val">14</text>
+          <text x="0" y="114" class="bar-label">skeptical-reviewer</text>
+          <rect x="150" y="104" width="31" height="14" rx="4" fill="var(--accent)"/>
+          <text x="187" y="116" class="bar-val">5</text>
+          <text x="0" y="146" class="bar-label">codebase-explorer</text>
+          <rect x="150" y="136" width="13" height="14" rx="4" fill="var(--accent)"/>
+          <text x="169" y="148" class="bar-val">2</text>
+          <text x="0" y="178" class="bar-label">docs-auditor</text>
+          <rect x="150" y="168" width="7" height="14" rx="4" fill="var(--accent)"/>
+          <text x="163" y="180" class="bar-val">1</text>
+          <text x="0" y="210" class="bar-label">hr-officer</text>
+          <rect x="150" y="200" width="7" height="14" rx="4" fill="var(--accent)"/>
+          <text x="163" y="212" class="bar-val">1</text>
+        </g>
+      </svg>
+      <div class="chart-note">32 of 74 entries are coordinator-inline — the week&rsquo;s structural signal (see retrospective).</div>
+    </section>
+
+    <section class="card">
+      <div class="eyebrow">Outcome mix</div>
+      <svg viewBox="0 0 400 238" role="img" aria-label="Outcomes: 58 ok, 10 findings, 6 changes_required">
+        <g transform="translate(200,110)">
+          <circle r="72" fill="none" stroke="var(--card)" stroke-width="31"/>
+          <!-- C = 2π·72 = 452.4 · ok 58/74 → 354.6 · findings 10/74 → 61.1 · cr 6/74 → 36.7 · 2px surface gaps -->
+          <circle r="72" fill="none" stroke="var(--ok)" stroke-width="30" stroke-dasharray="352.6 99.8" stroke-dashoffset="-1" transform="rotate(-90)"/>
+          <circle r="72" fill="none" stroke="var(--findings)" stroke-width="30" stroke-dasharray="59.1 393.3" stroke-dashoffset="-355.6" transform="rotate(-90)"/>
+          <circle r="72" fill="none" stroke="var(--cr)" stroke-width="30" stroke-dasharray="34.7 417.7" stroke-dashoffset="-416.7" transform="rotate(-90)"/>
+          <text y="-2" text-anchor="middle" class="donut-label" style="font-size:26px">74</text>
+          <text y="18" text-anchor="middle" class="donut-sub">dispatches</text>
+          <text x="0" y="104" text-anchor="middle" class="donut-label" style="fill:var(--ok)">ok · 58</text>
+          <text x="-96" y="-48" text-anchor="end" class="donut-label" style="fill:var(--findings)">findings · 10</text>
+          <text x="-42" y="-96" text-anchor="end" class="donut-label" style="fill:var(--cr)">changes_required · 6</text>
+        </g>
+      </svg>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--ok)"></span>ok</span>
+        <span><span class="sw" style="background:var(--findings)"></span>findings</span>
+        <span><span class="sw" style="background:var(--cr)"></span>changes_required</span>
+      </div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="eyebrow">Cycles</div>
+    <div class="table-scroll">
+    <table>
+      <tr><th>Cycle</th><th class="num">Entries</th><th>Who worked it</th></tr>
+      <tr><td>feat/kids-scheduling</td><td class="num">35</td><td>implementation-worker ×19, coordinator-inline ×9, skeptical-reviewer ×5, code-reviewer ×2</td></tr>
+      <tr><td>feat/kids-alt-proposals</td><td class="num">9</td><td>coordinator-inline ×6, code-reviewer ×3</td></tr>
+      <tr><td>feat/proposal-email-setlist-summary</td><td class="num">8</td><td>coordinator-inline ×4, code-reviewer ×2, docs-auditor, hr-officer</td></tr>
+      <tr><td>fix-kids-history-gating</td><td class="num">7</td><td>coordinator-inline ×4, code-reviewer ×3</td></tr>
+      <tr><td>fix/kids-bench-month-scope</td><td class="num">5</td><td>code-reviewer ×3, coordinator-inline ×2</td></tr>
+      <tr><td>fix/eslint-ignore-claude</td><td class="num">4</td><td>coordinator-inline ×3, code-reviewer</td></tr>
+      <tr><td>feat/pastor-notes</td><td class="num">2</td><td>codebase-explorer, coordinator-inline</td></tr>
+      <tr><td>docs/worktree-convention</td><td class="num">2</td><td>coordinator-inline ×2</td></tr>
+      <tr><td>feat/whatsapp-admin-notes</td><td class="num">1</td><td>codebase-explorer</td></tr>
+      <tr><td>docs/deploy-watcher-ban</td><td class="num">1</td><td>coordinator-inline</td></tr>
+    </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="eyebrow">Metered tokens per agent · 36 of 74 entries carry usage data; coordinator-inline never does, by convention</div>
+    <svg viewBox="0 0 400 140" role="img" aria-label="Metered tokens: implementation-worker 1.58M over 19 entries, code-reviewer 1.24M over 11, skeptical-reviewer 0.60M over 5, codebase-explorer 0.07M over 1">
+      <g>
+        <text x="0" y="18" class="bar-label">implementation-worker</text>
+        <rect x="150" y="8" width="190" height="14" rx="4" fill="var(--accent)"/>
+        <text x="150" y="34" class="donut-sub">1,579,764 tk · 19 entries · 2.28 h</text>
+        <text x="346" y="20" class="bar-val">1.58M</text>
+        <text x="0" y="60" class="bar-label">code-reviewer</text>
+        <rect x="150" y="50" width="149" height="14" rx="4" fill="var(--accent)"/>
+        <text x="150" y="76" class="donut-sub">1,239,005 tk · 11 entries · 1.95 h</text>
+        <text x="305" y="62" class="bar-val">1.24M</text>
+        <text x="0" y="102" class="bar-label">skeptical-reviewer</text>
+        <rect x="150" y="92" width="72" height="14" rx="4" fill="var(--accent)"/>
+        <text x="150" y="118" class="donut-sub">602,285 tk · 5 entries · 0.97 h</text>
+        <text x="228" y="104" class="bar-val">0.60M</text>
+        <text x="0" y="136" class="bar-label" style="font-size:12px">codebase-explorer &nbsp; 66,721 tk · 1 of 2 entries · 0.05 h</text>
+      </g>
+    </svg>
+  </section>
+
+  <section class="card">
+    <div class="eyebrow">Staff review</div>
+    <div class="staff">
+      <div class="member"><div class="badge"><svg viewBox='0 0 48 48' xmlns='http://www.w3.org/2000/svg'><rect width='48' height='48' rx='10' fill='#8a63d2'/><ellipse cx='24' cy='24' rx='13' ry='8.5' fill='none' stroke='#fff' stroke-width='3'/><circle cx='24' cy='24' r='3.5' fill='#fff'/></svg></div>
+        <div><div class="who">code-reviewer <span class="nick">· Inspector · 14 dispatches (8 findings / 5 ok / 1 changes_required)</span></div>
+        <p>In charter throughout: file-level citations, severity ordering, independently reproduced claims. Its <code>changes_required</code> on 2026-08-21 blocked a fix that was &ldquo;decorative on the dominant path&rdquo;; its 2026-08-24 re-review re-derived every doc claim from primary sources before RELEASE.</p></div></div>
+      <div class="member"><div class="badge"><svg viewBox='0 0 48 48' xmlns='http://www.w3.org/2000/svg'><rect width='48' height='48' rx='10' fill='#1baf7a'/><rect x='13' y='14' width='15' height='8' rx='2' fill='#fff'/><line x1='24' y1='22' x2='33' y2='34' stroke='#fff' stroke-width='4' stroke-linecap='round'/></svg></div>
+        <div><div class="who">implementation-worker <span class="nick">· Builder · 19 dispatches, 19 ok</span></div>
+        <p>Carried the entire kids-scheduling build in charter and repeatedly testified against interest: caught a plan defect in P1 T5 (&ldquo;Step 4&rsquo;s sample contradicted its own prose&rdquo;), proved shared-tree failures were other workers&rsquo; on a detached worktree, and refused a review fix that &ldquo;would SHIP a new data-loss path&rdquo;.</p></div></div>
+      <div class="member"><div class="badge"><svg viewBox='0 0 48 48' xmlns='http://www.w3.org/2000/svg'><rect width='48' height='48' rx='10' fill='#d64545'/><path d='M24 9 l12 4.5 v9.5 c0 8 -5.5 12.5 -12 16 c-6.5 -3.5 -12 -8 -12 -16 v-9.5 z' fill='none' stroke='#fff' stroke-width='3' stroke-linejoin='round'/><line x1='20' y1='20' x2='28' y2='28' stroke='#fff' stroke-width='3' stroke-linecap='round'/><line x1='28' y1='20' x2='20' y2='28' stroke='#fff' stroke-width='3' stroke-linecap='round'/></svg></div>
+        <div><div class="who">skeptical-reviewer <span class="nick">· Red Team · 5 dispatches, 5 changes_required</span></div>
+        <p>All five rounds produced verified blockers (3→2→1→1→2); round 5 surfaced ADR-0007 forbidding the plan&rsquo;s approach, and it refuted a wrong citation in its own findings rather than passing it along. Churn-cap escalations were recorded before each continuation — the loop ran per the amended rule.</p></div></div>
+      <div class="member"><div class="badge"><svg viewBox='0 0 48 48' xmlns='http://www.w3.org/2000/svg'><rect width='48' height='48' rx='10' fill='#7d8794'/><text x='24' y='31' text-anchor='middle' font-family='Georgia,serif' font-size='18' fill='#fff'>CI</text></svg></div>
+        <div><div class="who">coordinator-inline <span class="nick">· 32 entries (31 ok / 1 findings)</span></div>
+        <p>Honest logging, including a self-filed <code>findings</code> entry for two hand-rolled deploy watchers that spun 30&ndash;40 minutes on deploys READY in ~85&thinsp;s. Two entries carry explicit null tokens/duration — a true &ldquo;usage unavailable&rdquo; record, noted, not a gap. The volume itself is the week&rsquo;s structural signal.</p></div></div>
+      <div class="member"><div class="badge"><svg viewBox='0 0 48 48' xmlns='http://www.w3.org/2000/svg'><rect width='48' height='48' rx='10' fill='#2a78d6'/><circle cx='21' cy='21' r='8' fill='none' stroke='#fff' stroke-width='3'/><line x1='27' y1='27' x2='35' y2='35' stroke='#fff' stroke-width='3' stroke-linecap='round'/></svg></div>
+        <div><div class="who">codebase-explorer <span class="nick">· Scout · 2 dispatches, 2 ok</span></div>
+        <p>First recorded flights. Both briefings (whatsapp-admin-notes; pastor-notes, 2026-08-18) fed specs directly; the pastor-notes one mapped auth, matcher-sync, and lifecycle facts in one pass.</p></div></div>
+      <div class="member"><div class="badge"><svg viewBox='0 0 48 48' xmlns='http://www.w3.org/2000/svg'><rect width='48' height='48' rx='10' fill='#1a9db0'/><rect x='14' y='10' width='20' height='28' rx='2' fill='none' stroke='#fff' stroke-width='3'/><line x1='19' y1='18' x2='29' y2='18' stroke='#fff' stroke-width='3' stroke-linecap='round'/><line x1='19' y1='24' x2='29' y2='24' stroke='#fff' stroke-width='3' stroke-linecap='round'/><path d='M19 31 l3 3 l7 -6' fill='none' stroke='#fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/></svg></div>
+        <div><div class="who">docs-auditor <span class="nick">· Fact Checker · 1 dispatch, ok</span></div>
+        <p>Clean audit against HEAD <code>9a24ede8</code> (2026-08-18); no stale claims found, none invented.</p></div></div>
+      <div class="member"><div class="badge"><svg viewBox='0 0 48 48' xmlns='http://www.w3.org/2000/svg'><rect width='48' height='48' rx='10' fill='#d55181'/><rect x='14' y='13' width='20' height='25' rx='2' fill='none' stroke='#fff' stroke-width='3'/><rect x='20' y='9' width='8' height='6' rx='1.5' fill='#fff'/><line x1='19' y1='22' x2='29' y2='22' stroke='#fff' stroke-width='3' stroke-linecap='round'/><line x1='19' y1='29' x2='29' y2='29' stroke='#fff' stroke-width='3' stroke-linecap='round'/></svg></div>
+        <div><div class="who">hr-officer <span class="nick">· The Department · 1 dispatch, findings</span></div>
+        <p>The 2026-08-18 cycle review; its &ldquo;implementation-worker skipped again&rdquo; flag was answered the very next cycle with 19 dispatches.</p></div></div>
+      <div class="member"><div class="badge"><svg viewBox='0 0 48 48' xmlns='http://www.w3.org/2000/svg'><rect width='48' height='48' rx='10' fill='#7d8794'/><text x='24' y='31' text-anchor='middle' font-family='Georgia,serif' font-size='15' fill='#fff'>&#8212;</text></svg></div>
+        <div><div class="who">Bench <span class="nick">· deploy-verifier, test-verifier, visual-verifier · 0 dispatches</span></div>
+        <p>Deploy-verifier&rsquo;s case is in the PIP section; the other two are noted for cadence-watch only.</p></div></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="eyebrow">Commendations</div>
+    <div class="commends">
+      <div class="commend"><h3>&ldquo;Catch of the Period&rdquo; — skeptical-reviewer</h3>
+        <p>Round 5 (2026-08-19T22:24): found that ADR-0007 (Accepted) explicitly forbade the plan&rsquo;s server-side gating and no plan had superseded it — after the coordinator&rsquo;s own ADR sweep had been skipped (admitted in the adjacent &ldquo;PROCESS FAILURE ON MY SIDE&rdquo; entry). A blocker no amount of code-tracing would have found; it came from reading the decisions.</p></div>
+      <div class="commend"><h3>&ldquo;Iron Desk&rdquo; — implementation-worker</h3>
+        <p>19 for 19 with zero <code>no_result</code>, roughly 2.3 hours of metered runtime, and the discipline held under load — &ldquo;9 tests TDD-first, nothing bent to pass&rdquo; (2026-08-20T11:01), a revision-enforcing fake Content Lake built to reproduce a race (2026-08-20T11:42), and a plan defect caught rather than implemented (P1 T5).</p></div>
+      <div class="commend"><h3>&ldquo;First Ascent&rdquo; — codebase-explorer</h3>
+        <p>After a roster file that read &ldquo;zero dispatches on record,&rdquo; two clean briefings in one day (2026-08-18T10:31 and 11:03), the second carrying full usage metrics (66,721 tk / 179,337 ms) and enough load-bearing detail that the pastor-notes spec went straight to READY_FOR_ADVERSARIAL_REVIEW.</p></div>
+    </div>
+  </section>
+
+  <section class="card pip">
+    <div class="eyebrow">Performance improvement plan</div>
+    <h3>deploy-verifier (&ldquo;Ground Control&rdquo;) — re-open trigger has fired</h3>
+    <p>The trigger HR named on 2026-08-12: if the next cycle again verifies inline, the retirement question returns. This window recorded <strong>seven alias verifications, all coordinator-inline, and zero dispatches</strong> (2026-08-18, 2026-08-21 ×3, 2026-08-24 ×2 &mdash; entries at 20:17/20:20, 11:14/15:15/15:45, 16:04/16:51). Played straight, this is not the agent&rsquo;s failure — it was never called — and the window also removed the root cause: the 2026-08-24 entry retired the stale never-delegate memory (&ldquo;the agent&rsquo;s MCP grant is now exercised live on both domains&rdquo;) after the inline substitute demonstrably failed (two silent watchers, 30&ndash;40 minutes each, on deploys READY in ~85&thinsp;s). <strong>The plan is one line: dispatch it on the next release.</strong> If the next release verifies inline again with the excuse gone, retirement is the honest answer — a role performed inline nine times in ten is a roster fiction.</p>
+    <h3 style="margin-top:14px">test-verifier (&ldquo;Test Pilot&rdquo;) — cadence watch, not a PIP</h3>
+    <p>No entries this window; the 4,000+-test suite&rsquo;s failures were triaged by implementation-worker and code-reviewer without it. No trigger set yet — one more silent review cycle and the question becomes whether its charter is fully covered by the pair that is doing the work.</p>
+  </section>
+
+  <section class="card">
+    <div class="eyebrow">HR retrospective</div>
+    <p style="margin:0; font-size:15px; color:var(--ink-2)">The week&rsquo;s pattern is a control that held and a habit that didn&rsquo;t. The merge-order control — last entry before a merge must be a verification, not a fix — is now visible in the log itself: fix-kids-history-gating closes with a <code>changes_required</code>, a fix, a scoped re-review, and only then the merge, and the churn cap on kids P1 was escalated in advance twice rather than passed silently. The habit is dispatch discipline: 32 of 74 entries are coordinator-inline, and while some are legitimately coordinator work (release mechanics, escalation records), the set includes an entire feature (feat/kids-alt-proposals, implemented, fixed, and re-fixed inline across six entries) and twice on 2026-08-24 deploy-verifier-shaped verification — the second of which is the window&rsquo;s only coordinator <code>findings</code> entry, recording 30&ndash;40 minutes lost to hand-rolled watchers doing badly what the specialist does in one authoritative call. The contrast is instructive: the one cycle that dispatched aggressively (kids-scheduling, 19 worker dispatches) produced the week&rsquo;s cleanest audit trail and its best against-interest catches. The lesson the log teaches is not &ldquo;hire more&rdquo; — it is that the roster already owns this work, and the stale reasons for not calling it were finally retired on 2026-08-24. Next week tests whether behavior follows the paperwork.</p>
+  </section>
+
+  <section class="card">
+    <div class="eyebrow">Roster proposals — applied by the coordinator, 2026-08-24</div>
+    <p class="roster-note">HR proposed personality-line revisions for four personnel files, grounded in this window&rsquo;s evidence: <strong>codebase-explorer</strong> (the &ldquo;zero dispatches on record&rdquo; line is now factually stale), <strong>deploy-verifier</strong> (record the fired trigger and the one-line plan: dispatch it, or retire it), <strong>implementation-worker</strong> (extend the against-interest record to the 19/19 kids build), and <strong>code-reviewer</strong> (add the fix-of-a-fix specialty). Applied to <code>~/.agents/roster.json</code>.</p>
+  </section>
+
+  <footer class="footer">
+    Deviations: 2 entries with explicit null <code>tokens</code>, 2 with null <code>duration_ms</code> (annotated, counted) · 0 unparseable lines · token/duration coverage 36 of 74 entries (coordinator-inline entries never carry usage, by convention) · outcome enum: 0 non-enum values · stats computed deterministically from <code>.agents/log/worklog.jsonl</code> lines 188&ndash;261; HR judgments by hr-officer dispatch (46,785 tk / 134 s) · generated 2026-08-24T17:05-06:00
+  </footer>
+
+</div>
