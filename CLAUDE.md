@@ -97,8 +97,10 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   verify with a direct `get_deployment(domain)` query (Vercel MCP) or dispatch the
   `deploy-verifier` agent, retrying that same authoritative check a few times ≥30 s
   apart. If something must genuinely block on the build, use the vendor's waiter —
-  `npx vercel inspect <domain> --wait --timeout 5m` — never a grep loop; then still
-  do the alias+SHA check, which `--wait` does not replace.
+  `npx vercel inspect <deployment-url> --wait --timeout 5m` — never a grep loop, and
+  never on the stable domain: an alias resolves to the OLD deployment until the new
+  one is ready, so `--wait` on it returns instantly with stale success (observed
+  2026-08-24). Then still do the alias+SHA check, which `--wait` does not replace.
 - **`preview` writes to the real Sanity dataset and emails the real team.** It is a
   rehearsal of the UI, never a dry run of data or notifications.
 
