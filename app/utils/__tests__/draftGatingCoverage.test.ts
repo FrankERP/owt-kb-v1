@@ -60,8 +60,34 @@ import { stripComments } from "../../../scripts/lib/strip-comments.mjs";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const APP_DIR = path.join(REPO_ROOT, "app");
 
-/** The three role document types that carry the `published` flag. */
-const ROLE_TYPES = /"(sunday_role|saturday_role|special_role)"/;
+/**
+ * The three role document types that carry the `published` flag.
+ *
+ * BOTH quote styles, because GROQ accepts either and a scan that knows only one is
+ * evaded by the shift key. The review of this cycle proved the hole was live, not
+ * theoretical: an ungated read written `_type == 'kidsSchedule'` passed all ten
+ * tests. Fixed here and in `KIDS_TYPE` together — the role scan had the identical
+ * hole and no reason to keep it.
+ */
+const ROLE_TYPES = /["'](sunday_role|saturday_role|special_role)["']/;
+
+/**
+ * `kidsSchedule`, which gates on the STRICTER `published == true`.
+ *
+ * The spelling difference is the whole point and is not stylistic. Worship types
+ * predate the field, so an ABSENT `published` there must read as visible, which is
+ * what `!= false` buys. `kidsSchedule` is minted with the field by its own writer,
+ * so a field-less doc is a bug rather than a legacy row — and `!= false` would wave
+ * exactly that bug through.
+ *
+ * Scanned separately from `ROLE_TYPES` for a reason worth stating: until this was
+ * added, the whole kids vertical sat in this guard's blind spot. The generator's
+ * fairness read and the planner's history read both shipped with no `published`
+ * clause at all, and the guard whose entire purpose is "nothing stopped the ninth
+ * call site from omitting the filter" had nothing to say about either, because it
+ * only ever looked for the three worship role types.
+ */
+const KIDS_TYPE = /["']kidsSchedule["']/;
 
 /**
  * Reads that legitimately see unpublished roles. Each entry is a structural
@@ -75,6 +101,39 @@ const MAY_SEE_DRAFTS: Record<string, string> = {
     "The admin/write read model. Its unfiltered queries are consumed by " +
     "`api/admin/setlists` and by `roleWriteOps` — the write path, which must " +
     "see a draft in order to publish it. Do NOT add a member-facing query here.",
+};
+
+/**
+ * Kids reads that legitimately see unpublished Sundays, keyed by FILE.
+ */
+const KIDS_MAY_SEE_DRAFTS: Record<string, string> = {
+  "api/kids/schedules/route.ts":
+    "The planner's own data source and its writer, both behind " +
+    "`requireMinistryManager('kids')`. The GET backs the editing grid, which must " +
+    "show drafts or the planner cannot show the work it exists to do; the PUT must " +
+    "read a draft in order to publish it. CAVEAT, and it is why this exemption " +
+    "looked safer than it was: `KidsPlanner.loadMonth` ALSO refills its history " +
+    "state from this GET, so the fairness clock passes through an exempt endpoint. " +
+    "The client re-filters on `published` at its `useMemo` (ADR-0022). Anything " +
+    "added here that a member or a clock consumes must be gated at the consumer.",
+};
+
+/**
+ * …and by PROJECTION **within a named file**, which the planner page needs because
+ * it holds one group of each kind. `"schedules"` is the month being edited and must
+ * see drafts; `"history"` in the same query object is the fairness clock and must
+ * not. A file-level exemption would shield both and quietly re-open the bug this
+ * scan was extended to catch.
+ *
+ * Keyed by file rather than by bare label, because a bare label is an exemption
+ * ANY file can claim. A review of this guard proved it: adding
+ * `"schedules": *[_type == "kidsSchedule" && …]` to the member-facing
+ * `(client)/kids/page.tsx` — with no `published` clause — passed all nine tests,
+ * and `schedules` is the most natural key name for exactly that data. Narrower than
+ * a file exemption on one axis is not narrower overall.
+ */
+const KIDS_LABELS_MAY_SEE_DRAFTS: Record<string, Set<string>> = {
+  "(client)/kids/admin/page.tsx": new Set(["schedules"]),
 };
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
@@ -189,6 +248,35 @@ function unfilteredBarePredicates(rel: string, src: string): string[] {
 const exemptionFor = (rel: string): string | undefined =>
   Object.keys(MAY_SEE_DRAFTS).find((prefix) => rel === prefix || rel.startsWith(prefix + "/"));
 
+/**
+ * The `"name":` a filter group is projected under, when it has one. Lets the kids
+ * scan exempt ONE group inside a multi-projection query object instead of the
+ * whole file.
+ */
+function projectionLabel(src: string, index: number): string | undefined {
+  const before = src.slice(Math.max(0, index - 60), index);
+  return before.match(/"([A-Za-z_]\w*)"\s*:\s*$/)?.[1];
+}
+
+function unfilteredKidsReads() {
+  return sourceFiles(APP_DIR).flatMap((file) => {
+    const rel = path.relative(APP_DIR, file);
+    const src = readFileSync(file, "utf8");
+    // Scanned with comments blanked, unlike the role scan: the kids reads carry
+    // long comments ABOUT their own gating, and prose quoting a query must not be
+    // mistaken for one. `stripComments` preserves byte offsets, so `index` still
+    // points at the real line.
+    const clean = stripComments(src);
+    return filterGroups(clean)
+      .filter((g) => KIDS_TYPE.test(g.text) && !/published\s*==\s*true/.test(g.text))
+      .map((g) => ({
+        rel,
+        line: clean.slice(0, g.index).split("\n").length,
+        label: projectionLabel(clean, g.index),
+      }));
+  });
+}
+
 function unfilteredRoleReads() {
   return sourceFiles(APP_DIR).flatMap((file) => {
     const rel = path.relative(APP_DIR, file);
@@ -253,5 +341,83 @@ describe("draft services stay invisible to members", () => {
     const shielding = new Set(unfilteredRoleReads().map(({ rel }) => exemptionFor(rel)));
     const dead = Object.keys(MAY_SEE_DRAFTS).filter((prefix) => !shielding.has(prefix));
     expect(dead).toEqual([]);
+  });
+});
+
+describe("unpublished kids Sundays stay out of members' views AND out of the clock", () => {
+  const kidsExemptionFor = (rel: string): string | undefined =>
+    Object.keys(KIDS_MAY_SEE_DRAFTS).find((p) => rel === p || rel.startsWith(p + "/"));
+
+  it("scans real queries (a scan matching nothing would pass forever)", () => {
+    const kidsReads = sourceFiles(APP_DIR).flatMap((file) =>
+      filterGroups(stripComments(readFileSync(file, "utf8"))).filter((g) => KIDS_TYPE.test(g.text)),
+    );
+    // Today: /kids, /me, the planner page's two, the schedules route, the generator.
+    expect(kidsReads.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("filters `published == true` on every kids read outside the exempt paths", () => {
+    const violations = unfilteredKidsReads()
+      .filter(
+        ({ rel, label }) =>
+          !kidsExemptionFor(rel) && !KIDS_LABELS_MAY_SEE_DRAFTS[rel]?.has(label ?? ""),
+      )
+      .map(({ rel, line }) => `${rel}:${line} reads kidsSchedule without \`published == true\``);
+    expect(violations).toEqual([]);
+  });
+
+  it("gates the FAIRNESS CLOCK, not just the member-facing views", () => {
+    // The specific regression this whole change exists to prevent, pinned by name
+    // rather than by scan. These two reads answer "how long since this pair
+    // served", and an unpublished Sunday is a proposal nobody was asked to serve —
+    // counting one penalises every pair on it with nothing on screen to say why.
+    //
+    // They must also AGREE. If the planner's labels and the generator's plan come
+    // from queries that gate differently, the board promises «le toca» for a pair
+    // the generator will not pick, and neither surface can show the disagreement.
+    const clocks = [
+      "(client)/kids/admin/page.tsx",
+      "api/kids/generate/route.ts",
+    ].map((rel) => {
+      const src = stripComments(readFileSync(path.join(APP_DIR, rel), "utf8"));
+      const groups = filterGroups(src).filter(
+        (g) => KIDS_TYPE.test(g.text) && projectionLabel(src, g.index) !== "schedules",
+      );
+      return { rel, groups };
+    });
+
+    for (const { rel, groups } of clocks) {
+      expect(groups.length, `${rel} should hold exactly one history read`).toBe(1);
+      expect(
+        /published\s*==\s*true/.test(groups[0].text),
+        `${rel}'s history read must filter \`published == true\``,
+      ).toBe(true);
+      // Prior Sundays only — a clock that swept forward would count the month
+      // being planned as already served.
+      expect(/date\s*<\s*\$/.test(groups[0].text), `${rel} must read PRIOR Sundays`).toBe(true);
+    }
+  });
+
+  it("keeps the kids exemptions honest — an entry that shields nothing is dead", () => {
+    const shielding = new Set(unfilteredKidsReads().map(({ rel }) => kidsExemptionFor(rel)));
+    expect(Object.keys(KIDS_MAY_SEE_DRAFTS).filter((p) => !shielding.has(p))).toEqual([]);
+
+    // Each label exemption must shield a real ungated group IN ITS OWN FILE.
+    const dead = Object.entries(KIDS_LABELS_MAY_SEE_DRAFTS).flatMap(([rel, labels]) =>
+      [...labels]
+        .filter((l) => !unfilteredKidsReads().some((r) => r.rel === rel && r.label === l))
+        .map((l) => `${rel} exempts "${l}", which shields nothing`),
+    );
+    expect(dead).toEqual([]);
+  });
+
+  it("does not let ANY file claim the exemption by naming a projection «schedules»", () => {
+    // The hole this scoping closed, pinned so it cannot reopen: the exemption is
+    // a property of one audited file, never of a key name.
+    const exemptFiles = Object.keys(KIDS_LABELS_MAY_SEE_DRAFTS);
+    expect(exemptFiles).toEqual(["(client)/kids/admin/page.tsx"]);
+    for (const rel of exemptFiles) {
+      expect(sourceFiles(APP_DIR).map((f) => path.relative(APP_DIR, f))).toContain(rel);
+    }
   });
 });

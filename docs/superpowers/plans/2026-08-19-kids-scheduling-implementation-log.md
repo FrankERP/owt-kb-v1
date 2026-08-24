@@ -262,16 +262,42 @@ without a fresh round, per the 2026-08-19 retier.
 
 ## Deferred, with a trigger
 
-- **The generate route's history read is not `published`-gated.**
-  `app/api/kids/generate/route.ts` selects prior Sundays on `date < $firstSunday`
-  alone, while CLAUDE.md requires kids reads to use the stricter `published ==
-  true`. **Pre-existing — «Otra opción» did not introduce it** — but that history
-  seeds the fairness clock, so an unpublished draft Sunday now also shapes every
-  seeded variant. Surfaced by the code review of `faff6660` and left out of that
-  diff on purpose: it is a draft-gating decision, not an alternatives one, and it
-  needs its own answer to "can a `kidsSchedule` draft exist at all, given the
-  write route mints `published`?" **Trigger: Frank's call, before the Kids team
-  starts publishing months.**
+- ~~**The generate route's history read is not `published`-gated.**~~ **CLOSED**
+  — both history reads now filter `published == true`. See **ADR-0022** for why
+  an unpublished Sunday is a proposal rather than a fact, and why the editing
+  grid beside it stays deliberately ungated.
+
+  Two things were worth more than the fix. First, there were **two** history
+  reads, not the one the review named: the generator's fairness clock and the
+  planner page's `history` projection, which feeds every «le toca» label. Gating
+  only the one the review found would have left the board promising a pair the
+  generator would not pick — a disagreement neither surface can display.
+
+  Second, and the real lesson: `draftGatingCoverage.test.ts` — the guard that
+  exists *because* "eight correct call sites is a state, not a mechanism" — scanned
+  only `sunday_role|saturday_role|special_role`. The entire kids vertical sat in
+  its blind spot, which is exactly how two ungated reads shipped past a repo that
+  had already built the machine to prevent this. The guard now scans
+  `kidsSchedule` too, requiring the stricter `published == true` spelling, with
+  exemptions keyed by file **and by projection name** — the planner page holds one
+  group that must see drafts and one that must not, so a file-level exemption
+  would have shielded both and quietly re-opened the bug.
+
+  Third, and the one the *first* fix got wrong: there are **three** gates, not two.
+  Gating the two server reads left the bug alive on the dominant path, because
+  `KidsPlanner.loadMonth` refills its `history` state from `GET /api/kids/schedules`
+  — the editor's endpoint, which serves drafts by design and is *exempt from the
+  guard*. So the server-side gate survived exactly until the first month navigation,
+  which is the first thing an admin does. `KidsPlanner` now re-applies the filter at
+  the single `useMemo` every path feeds through. ADR-0022 states it plainly: without
+  the client-side check the server-side one is decorative.
+
+  The review of that fix then found the corresponding test gap — the two new tests
+  pinned the server-rendered path only, so a change dropping `published` inside
+  `loadMonth` would leave them green. The navigation path is now covered by its own
+  pair, and both pairs were **mutation-tested**: removing the filter fails the drafts
+  assertions, and dropping `published` in `loadMonth` fails only the published-side
+  negative control, which is the assertion that exists for it.
 
 - **Worship setlist PUSH notifications reach Kids-only volunteers.**
   `serviceMutationSideEffects.ts:671` fetches every member; `notifyTargets.ts:40`
