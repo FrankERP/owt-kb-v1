@@ -60,8 +60,16 @@ import { stripComments } from "../../../scripts/lib/strip-comments.mjs";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const APP_DIR = path.join(REPO_ROOT, "app");
 
-/** The three role document types that carry the `published` flag. */
-const ROLE_TYPES = /"(sunday_role|saturday_role|special_role)"/;
+/**
+ * The three role document types that carry the `published` flag.
+ *
+ * BOTH quote styles, because GROQ accepts either and a scan that knows only one is
+ * evaded by the shift key. The review of this cycle proved the hole was live, not
+ * theoretical: an ungated read written `_type == 'kidsSchedule'` passed all ten
+ * tests. Fixed here and in `KIDS_TYPE` together — the role scan had the identical
+ * hole and no reason to keep it.
+ */
+const ROLE_TYPES = /["'](sunday_role|saturday_role|special_role)["']/;
 
 /**
  * `kidsSchedule`, which gates on the STRICTER `published == true`.
@@ -79,7 +87,7 @@ const ROLE_TYPES = /"(sunday_role|saturday_role|special_role)"/;
  * call site from omitting the filter" had nothing to say about either, because it
  * only ever looked for the three worship role types.
  */
-const KIDS_TYPE = /"kidsSchedule"/;
+const KIDS_TYPE = /["']kidsSchedule["']/;
 
 /**
  * Reads that legitimately see unpublished roles. Each entry is a structural

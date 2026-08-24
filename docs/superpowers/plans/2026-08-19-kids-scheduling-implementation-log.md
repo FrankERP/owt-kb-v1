@@ -283,6 +283,22 @@ without a fresh round, per the 2026-08-19 retier.
   group that must see drafts and one that must not, so a file-level exemption
   would have shielded both and quietly re-opened the bug.
 
+  Third, and the one the *first* fix got wrong: there are **three** gates, not two.
+  Gating the two server reads left the bug alive on the dominant path, because
+  `KidsPlanner.loadMonth` refills its `history` state from `GET /api/kids/schedules`
+  — the editor's endpoint, which serves drafts by design and is *exempt from the
+  guard*. So the server-side gate survived exactly until the first month navigation,
+  which is the first thing an admin does. `KidsPlanner` now re-applies the filter at
+  the single `useMemo` every path feeds through. ADR-0022 states it plainly: without
+  the client-side check the server-side one is decorative.
+
+  The review of that fix then found the corresponding test gap — the two new tests
+  pinned the server-rendered path only, so a change dropping `published` inside
+  `loadMonth` would leave them green. The navigation path is now covered by its own
+  pair, and both pairs were **mutation-tested**: removing the filter fails the drafts
+  assertions, and dropping `published` in `loadMonth` fails only the published-side
+  negative control, which is the assertion that exists for it.
+
 - **Worship setlist PUSH notifications reach Kids-only volunteers.**
   `serviceMutationSideEffects.ts:671` fetches every member; `notifyTargets.ts:40`
   defaults an unset preference to `"all"`. Zero exposure today (native apps unshipped)

@@ -400,7 +400,7 @@ are not interchangeable; see "Kids gates on `published == true`" below. The patt
   `false → published` transition triggers notifications.
 - **New docs default to draft:** `/api/admin/roles` sets `published: body.published === true`.
 
-#### Kids gates on `published == true` — a different operator, on purpose
+### Kids gates on `published == true` — a different operator, on purpose
 
 `kidsSchedule` is **minted with the field** by `PUT /api/kids/schedules` (`published: false`), so a
 document without it is a bug rather than a legacy row. The worship `!= false` spelling exists to

@@ -278,6 +278,63 @@ describe("KidsPlanner — the board shows what a dropdown hid", () => {
     ).toContain("hace 2 semanas");
   });
 
+  // The two tests above hand `initialHistory` straight to the component, which is
+  // the SERVER-RENDERED path — the one that was already gated when `e636db69` was
+  // written. The path that actually reintroduced the bug is this one: `loadMonth`
+  // refills `history` from `GET /api/kids/schedules`, the EDITOR's endpoint, which
+  // returns drafts on purpose (ADR-0022). It is also the dominant path, because
+  // navigating to an upcoming month is the first thing an admin does.
+  //
+  // Without a test here, a change that drops `published` on the way into
+  // `setHistory` — mapping the rows through a helper that keeps only
+  // `{date, seats}`, say — leaves both tests above green while the board silently
+  // reads «nunca» for every pair.
+  const navigateToSeptember = async (august: unknown[]) => {
+    const json = (body: unknown) => Promise.resolve({ ok: true, status: 200, json: async () => body });
+    const fetchMock = vi.fn((url: string) => {
+      if (url.startsWith("/api/kids/pairs")) return json(PAIRS);
+      if (url.startsWith("/api/kids/members")) return json(MEMBERS);
+      if (url === "/api/kids/schedules?month=2026-08") return json(august);
+      if (url.startsWith("/api/kids/schedules?month=")) return json([]);
+      throw new Error(`unstubbed fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <KidsPlanner
+        initialMonth="2026-08"
+        initialPairs={PAIRS}
+        initialMembers={MEMBERS}
+        initialSchedules={[]}
+        initialHistory={[]}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Mes siguiente"));
+    await waitFor(() => expect(screen.getByLabelText("Domingo, 6 de septiembre")).toBeTruthy());
+  };
+
+  it("does NOT count a draft that arrived via month navigation — the gate survives loadMonth", async () => {
+    // The editor's endpoint serves this draft on purpose; the clock must still
+    // refuse it, exactly as `/api/kids/generate` will.
+    await navigateToSeptember([{ date: "2026-08-23", seats: { chiquitos: "c2" }, published: false }]);
+    fireEvent.click(seatRow("RG Chiquitos", "Domingo, 6 de septiembre"));
+
+    const dialog = screen.getByRole("dialog", { name: /RG Chiquitos/ });
+    expect(within(dialog).getByRole("button", { name: /C2/ }).textContent).toContain("nunca");
+  });
+
+  it("still counts a PUBLISHED Sunday that arrived via month navigation", async () => {
+    // The negative control: proves the assertion above is about the flag, and not
+    // about `loadMonth` having quietly delivered nothing at all.
+    await navigateToSeptember([{ date: "2026-08-23", seats: { chiquitos: "c2" }, published: true }]);
+    fireEvent.click(seatRow("RG Chiquitos", "Domingo, 6 de septiembre"));
+
+    const dialog = screen.getByRole("dialog", { name: /RG Chiquitos/ });
+    expect(within(dialog).getByRole("button", { name: /C2/ }).textContent).toContain(
+      "hace 2 semanas",
+    );
+  });
+
   it("says a seat is unfillable instead of rendering a blank slot", () => {
     renderPlanner();
     // Both halves of the only medianos pair are out on the 6th.
