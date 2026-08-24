@@ -221,8 +221,23 @@ export default function KidsPlanner({
       assignments,
       unavailable,
       memberNames,
+      // PUBLISHED ONLY, and the `published` half of this filter is NOT redundant
+      // with the server read that already gates it (ADR-0022).
+      //
+      // `initialHistory` arrives gated from the page's `history` projection, but
+      // it survives only until the first month navigation: `loadMonth` refills
+      // this state from `GET /api/kids/schedules`, which is the EDITOR's endpoint
+      // and returns drafts on purpose. So from the first click of › onward — the
+      // very first thing an admin does, since the point is to plan an upcoming
+      // month — the clock would silently start counting drafts again while
+      // `/api/kids/generate` kept ignoring them. The board would label a pair
+      // «hace 4 semanas» and the generator would seat it as «nunca», and neither
+      // screen can show the disagreement because each is right about its own data.
+      //
+      // Filtering HERE rather than in `loadMonth` puts it at the single choke
+      // point every path feeds through, server-rendered and refetched alike.
       history: history
-        .filter((row) => row.date < `${month}-01`)
+        .filter((row) => row.published && row.date < `${month}-01`)
         .map((row) => ({ date: row.date, seats: row.seats }))
         .sort((a, b) => a.date.localeCompare(b.date)),
       worshipAssignments,

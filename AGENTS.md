@@ -113,6 +113,13 @@ several exist precisely to stop a plausible-looking change.
   must mean "visible". **Kids reads use the stricter `published == true`** instead
   (`kidsSchedule` is minted with the field by its write route, so a field-less doc is a
   bug, not a legacy row). Copy the rule that matches the type you are reading.
+  **For `kidsSchedule` the rule is wider than "member-facing":** every read under
+  `app/**` must carry `published == true`, manager-only ones included, because a
+  fairness clock asking "did this pair serve?" needs the same answer the members got
+  (ADR-0022). Two reads are exempt and both are editors of drafts —
+  `api/kids/schedules/route.ts` and the planner page's `"schedules"` projection.
+  `draftGatingCoverage.test.ts` enforces this, so a new manager-facing kids read that
+  omits the filter fails the suite rather than shipping.
 - **Sanity array-of-object writes need a `_key` per item.**
 - **Cache:** admin/API routes that mutate content must call the matching
   `revalidate*` util in `app/utils/revalidate.ts` (or `revalidatePath`), or the
