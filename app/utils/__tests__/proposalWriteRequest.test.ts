@@ -362,3 +362,61 @@ describe("decideTransitionRetry", () => {
     expect(record).not.toHaveProperty("_type");
   });
 });
+
+// ── Frozen digests (proposal message thread, R2 Phase 0) ────────────────────
+//
+// The two digests below are the idempotency keys behind `approval_receipt` and
+// `last_transition`. `transitionFingerprint` builds its digest from the SAME
+// `APPROVAL_RECEIPT_VERSION` / `APPROVAL_APP_MARKER` pair the approval receipt
+// records, and `decideApprovalReceipt` rejects a receipt outright when either of
+// those two values fails to match (`proposalWriteRequest.ts:302-303`) — an
+// `unverified` receipt on an approved proposal is `409 legacy_approval_unverified`.
+//
+// So the intuitive move while extending the stored proposal shape — "the shape
+// changed, bump the version" — would silently convert the 5 production proposals
+// that currently carry a VERIFIABLE receipt into permanent 409s, and would do it
+// from a file that never mentions approvals. Likewise, quietly adding a field to
+// `canonicalizeApprovalInput` (or to the transition intent) moves the digest for
+// content that was already published, so a lost-response retry stops matching the
+// record its own first attempt committed and re-runs the write.
+//
+// These fixtures are FROZEN. If one of these tests goes red, the correct response
+// is to undo the change that moved the digest — not to paste in the new hex.
+const FROZEN_APPROVAL: ApprovalInput = {
+  serviceType: "sunday",
+  serviceDate: "2026-08-09",
+  serviceRef: "role-frozen",
+  setlistTargetKey: "featuredSongs:2026-08-09",
+  songs: [
+    { songId: "song-a", playKey: "G", medleyTag: null },
+    { songId: "song-b", playKey: "A", medleyTag: "popurri" },
+  ],
+  teamNotes: "Salmo 100",
+};
+
+const FROZEN_INTENT: TransitionIntent = {
+  action: "request_changes",
+  proposalId: "setlistProposal.role-frozen",
+  toStatus: "changes_requested",
+  adminNotes: "Cambia la última",
+  targetIdentity: null,
+};
+
+describe("frozen approval/transition digests", () => {
+  it("pins the two shared constants byte for byte", () => {
+    expect(APPROVAL_RECEIPT_VERSION).toBe(1);
+    expect(APPROVAL_APP_MARKER).toBe("owt-kb-v1/a2-approval-1");
+  });
+
+  it("pins approvalInputFingerprint for a fixed approval input", () => {
+    expect(approvalInputFingerprint(FROZEN_APPROVAL)).toBe(
+      "1334033989224707622c767aabf4aa5b28b01681f2c6a95a21eafbce70077d4b",
+    );
+  });
+
+  it("pins transitionFingerprint for a fixed transition intent", () => {
+    expect(transitionFingerprint(FROZEN_INTENT)).toBe(
+      "91df6522dd5e8ae044945f22ca619a83363ff8510f7ce8e62f494ae68c118e2b",
+    );
+  });
+});
