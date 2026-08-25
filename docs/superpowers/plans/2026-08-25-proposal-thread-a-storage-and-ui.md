@@ -86,6 +86,12 @@ nothing. Correct for a notes *field*, wrong for a *chat*. The message is still
 stored and rendered; only the email is skipped. Child B's count-and-slice fixes it,
 because a count cannot collide the way a string can.
 
+**And two messages inside the debounce window produce one email carrying only the
+newest** — the flush re-reads live `lead_notes` (`outboxSweep.ts:390`), which holds
+the latest mirror. Identical to today's notes behaviour, so not a regression, but
+the thread now stores something the email silently drops. Named for the same
+reason as above; Child B's slice sends all of them.
+
 ## The submission note — why the legacy textarea survives Child A
 
 **`lead_notes` has a second consumer.** `notifyProposalSubmitted` re-reads it off
@@ -120,10 +126,33 @@ always sends it. So a lead with the page already open posts a note this child's
 save route would otherwise discard — behind a success toast, with no email, since
 `lead_notes` would not change.
 
-**Rule:** `POST /api/me/proposals` accepts a non-empty `request.leadNotes` on an
-existing proposal, **appends it as a `lead_note` message**, mirrors it into
-`lead_notes`, and queues the notice — the same treatment the pre-first-save
-textarea gets. This guard belongs to Child A because **Child A opens the window**;
+**Rule, and the condition is the whole rule:** `POST /api/me/proposals` appends a
+`lead_note` message, mirrors it into `lead_notes`, and queues the notice **only
+when `request.leadNotes` is non-empty AND differs (trimmed) from the stored
+`lead_notes`.** Otherwise it **omits `lead_notes` from the patch entirely** and
+appends nothing.
+
+**Why the condition, and why "omit" rather than "write the newest message body":**
+
+- `leadNotes` in the editor is a one-time initializer seeded from the stored value
+  (`ProposalEditor.tsx:121`) and is re-sent verbatim on **every** save (`:350`),
+  whether or not the lead touched it. Harmless for a `set`; with an unconditional
+  append, a lead with the page open who saves a draft three times mints **three
+  identical bubbles** — and §"Explicitly not in this delivery at all" rules out
+  editing or deleting a message, so that is unrepairable production data.
+- An unconditional mirror ("write the newest lead message body") **blanks** a
+  document that has a non-empty `lead_notes` and no `lead_note` message — the
+  newest body is `""`. That state is reachable through this plan's own release
+  window: `--apply` is Phase D step 4 and production runs old code until step 8, so
+  a note written in between lands in `lead_notes` with no message beside it. It is
+  also what a per-document migration abort leaves behind.
+- Worse, it **silently reverts**: if a lead updates `lead_notes` through old
+  production code after step 4, the migrated message is stale, and the first
+  new-bundle save would write the OLD message body over the NEWER note. Step 9's
+  reconcile compares `lead_notes` against its migrated message, finds them in
+  agreement, and reports clean. That class is undetectable by design.
+
+Omitting the field unless this request appends resolves all three at once. This guard belongs to Child A because **Child A opens the window**;
 scheduling it in Child B would put the fix a release after the loss, which is
 exactly the error corrected for the blanking hazard above. Child B keeps the same
 rule for bundles predating Child A.
@@ -154,7 +183,7 @@ half of it written irreversibly.
 | Route | Guard | Append |
 |---|---|---|
 | `POST /api/me/proposals/[id]/messages` | `requireMinistryMember("worship")`, caller ∈ `canonicalLeadRefs(role)`, **and** `role.published !== false` — both halves of `me/proposals/route.ts:127` | `setIfMissing({messages: []})` + `append`, **no `ifRevisionId`** |
-| `POST /api/admin/proposals/[id]/messages` | `requireActiveManager()` **and** `role !== "content-editor"` | same |
+| `POST /api/admin/proposals/[id]/messages` | `requireActiveManager()` **and** `role !== "content-editor"` — **no ministry check, inherited deliberately** from the sibling transition writer, so a kids-only `admin` can post into a worship thread. A new writer stricter than the route beside it would give two answers to "can this admin act on this proposal"; tightening both is `FrankERP/owt-kb-v1#8` | same |
 
 Both resolve through `loadCanonicalProposal`, are wrapped in
 `withVerificationRunContext`, declare `export const maxDuration = 60` like their
@@ -231,14 +260,36 @@ binding the decision to what was on screen.
   `compareObservedTarget` returns `null` (success) and the patch **overwrites B's
   setlist with no 409, no banner and no toast.** Today it 409s.
 
-**The cost of pinning, stated honestly:** a lead who posts mid-edit 409s on their
-next save and must use the existing "Recargar" banner, losing unsaved song
-changes. That is the correct trade — a 409 is visible and recoverable; a silent
-overwrite of a co-lead's setlist is neither. The composer should disable or warn
-while the editor has unsaved changes.
+**Pinning unconditionally is too blunt, because the lead's OWN post moves the
+revision.** A post patches the proposal (append + mirror), so `_rev` advances with
+no co-lead involved and the field it touched holds that same message. The dominant
+sequence is therefore *post (clean) → edit the setlist → save*, which under a
+blanket pin **guarantees a 409** and forces a reload that re-seeds `songs` from the
+server, discarding the drag-ordered setlist in progress. An earlier draft mitigated
+only *post-while-dirty*, which is the rarer half.
 
-**Response shape.** The appended message and the full `messages[]`, read back
-through `operationalClient`. **No optimistic append** — a failed post that had
+**Rule:** the lead messages route returns the fresh `_rev` **and the proposal's
+songs**. The editor adopts the returned `_rev` **only if those songs are identical
+to `proposal.songs`** — the prop it was last rendered from. Identical means the only
+mutation since render was the lead's own message, so the revision still attests the
+content on screen and adopting it is safe. Different means a co-lead wrote: the
+editor keeps its pinned `rev` and the next save 409s into the existing banner,
+exactly as today.
+
+This preserves the attestation argument rather than working around it: the client
+adopts a revision only when it can show the content that revision describes is what
+it is displaying. It also removes the need to disable the composer while dirty.
+
+**What still 409s, and should:** a genuine co-lead edit. That is the guard doing its
+job, it is non-destructive (the editor does not clear), and the banner already
+exists.
+
+**Response shape.** The appended message and the full `messages[]`, read back via
+**`canonicalProposalByIdQuery`** through `operationalClient` — the helper
+`app/api/me/proposals/route.ts:320` already uses, not an inline GROQ, so the
+protected-read classifier (`protectedReadAudit.ts:729`) sees a helper-sourced read.
+The lead route additionally returns the proposal's songs, per the revision rule
+above. **No optimistic append** — a failed post that had
 already rendered would leave a phantom message in a channel whose whole value is
 that nothing is lost.
 
@@ -253,6 +304,14 @@ only because approval writes the live setlist, which backs ISR pages.
 `scripts/migrate-proposal-messages.mjs` + `scripts/lib/proposalMessages.mjs`,
 dry-run by default, `--apply` to write, run as
 `node --env-file=.env.local scripts/migrate-proposal-messages.mjs [--apply]`.
+
+**Client configuration, stated because it is a one-shot production write:**
+`projectId`/`dataset` from `NEXT_PUBLIC_SANITY_PROJECT_ID` / `NEXT_PUBLIC_SANITY_DATASET`,
+token `SANITY_API_READ_TOKEN` for the dry run and `SANITY_WRITE_TOKEN` for
+`--apply`, `useCdn: false`, and **`perspective: "published"` with an explicit
+`!(_id in path("drafts.**"))` filter**. There are 0 draft proposals today, but a
+`raw` perspective would also patch a draft overlay if one appeared between now and
+cutover, and a draft is not a document this migration has any business writing.
 
 **The `--apply` runs at exactly one point: Phase D step 4.** Nowhere else.
 
@@ -317,8 +376,9 @@ the existing email.
 `app/components/ProposalThread.tsx`, shared by both surfaces:
 `{messages, viewerId, viewerRole, onPost, posting, error}`.
 
-- Chronological, sender-aligned, author name (or `Admin` when `author` is absent
-  on a migrated message), timestamp, `whitespace-pre-wrap` body, composer below.
+- Chronological, sender-aligned, author name (or `Admin` when `author_role === "admin"` and `author` is absent —
+  key the fallback label on the ROLE, not on the absence, or a `lead_note` minted
+  without an author would render as "Admin" in an audit-adjacent history), timestamp, `whitespace-pre-wrap` body, composer below.
 - **Timestamps follow the timezone invariant.** Any "Hoy"/"Ayer" is a calendar-day
   diff at local noon in `America/Mexico_City`; `message.at` is a full ISO datetime,
   so convert to a local calendar day first. Never bare `new Date(iso)`, never
@@ -390,9 +450,12 @@ moved; investigate. **No `--apply`.**
 - **Verification:** gate + the whole table below.
 - **Caveat:** e2e fixtures still assert `admin_notes` until Phase E, so this phase
   is deployable against vitest but not the e2e suites.
-- **The `preview` walkthrough writes REAL data.** No edit or delete path exists, so
-  every test message is permanent and visible to the team. Name the target
-  proposal in advance.
+- **The `preview` walkthrough happens at Phase D step 6**, not here — step 8's note
+  forbids exercising the thread until production has the code, and `preview` only
+  gets it at step 6. This phase's verification is the gate plus the table.
+- **That walkthrough writes REAL data.** No edit or delete path exists, so every
+  test message is permanent and visible to the team. Name the target proposal in
+  advance.
 
 ### Phase D — Release
 
@@ -477,8 +540,11 @@ against the same dataset.
 | **The existing email still fires** | `setlistNoticeQueueing.test.ts` — a lead message on a `pending` proposal produces an outbox document with the same shape as today's | Silently retiring the notification this child promises not to touch |
 | **`lead_notes` is never blanked** | `proposalWriteRoutes.test.ts` — a save from the new bundle writes the newest lead-message body, never `request.leadNotes` blindly; re-read a document with a pre-existing value and show it non-empty | The client stopping sending the field and the next save erasing the archive on all 8 documents — destroying Child A's own rollback path |
 | **The submit email still carries the note** | `proposalNotify.test.ts` — a first submission carrying the textarea's text produces an email whose notes block is that text | A first submission mailing admins with no notes, and the lead having no way to speak on their first submission |
-| **A pre-deploy bundle's note is not discarded** | `proposalWriteRoutes.test.ts` — a save carrying `leadNotes` on an existing proposal appends a `lead_note` message, mirrors it, and queues a notice | A lead with the page already open losing their note behind a success toast, with no email |
-| **No outbox module changed** | a test or CI check asserting `git diff --name-only` touches nothing under `app/utils/outbox*` or `proposalNotify.ts` | Scope leaking into Child B |
+| **A pre-deploy bundle's CHANGED note is not discarded** | `proposalWriteRoutes.test.ts` — a save carrying a `leadNotes` that DIFFERS from the stored value appends a `lead_note`, mirrors it, and queues a notice | A lead with the page already open losing their note behind a success toast, with no email |
+| **An UNCHANGED note appends nothing** | `proposalWriteRoutes.test.ts` — a repeated save carrying the same `leadNotes` appends no message and omits `lead_notes` from the patch | Three identical bubbles from three draft saves, permanently, since no delete path exists |
+| **The mirror never blanks or reverts** | `proposalWriteRoutes.test.ts` — a document with a non-empty `lead_notes` and an EMPTY `messages[]` comes back byte-unchanged after a save that appends nothing | Writing `""` over a real note, or writing a stale migrated body over a newer one — the second of which the Phase D reconcile cannot detect |
+| **A lead's own post does not 409 their next save** | mount test — post with no co-lead activity, then edit songs and save; the save must SUCCEED | The revision pin discarding the lead's in-progress setlist on the feature's own primary action |
+| **No outbox module changed** | a **checklist item on the Phase D step-1 diff review**, not a test — a vitest would need a base ref and would break outside the feature branch | Scope leaking into Child B |
 | A LEAD's post never enables a lost update | mount test — interleave a co-lead content edit between the lead's page render and the lead's post; the subsequent save must **409** | Adopting a revision without its content |
 | An ADMIN's post never enables an unreviewed approval | mount test — interleave a lead content edit between the admin's card render and the admin's post; approve must 409 or publish only what was shown | Re-authorizing against unseen content |
 | A post does not 409 the ADMIN's own next action | `proposalMessageRoutes.test.ts` — after `load()`, a transition succeeds | Locking the admin out of the card |
