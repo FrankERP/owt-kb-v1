@@ -128,8 +128,15 @@ messages: array of object `proposal_message`
 `contributor` (`app/api/me/proposals/route.ts:255`), both single-`of` arrays
 exactly like this one. The migration writes 11 items irreversibly; deviating
 from the house convention is a choice to make deliberately, not to discover in
-Studio afterwards. **Include `_type: "proposal_message"`**, in both the runtime
-builder and the migration script.
+Studio afterwards. **Include `_type: "proposal_message"`** — and note this is a
+change to ALREADY-SHIPPED code, so it is an explicit Phase 4 task rather than an
+assumption. `buildProposalMessage` shipped in Phase 1 returning
+`{_key, author?, author_role, kind, body, at}` with no `_type`, and
+`proposalMessageWrite.test.ts` pins that shape. Phase 4 must add the field to the
+builder AND update that test, alongside the migration script. Left as an earlier
+draft had it, the delivery would mint 11 migrated items WITH `_type` and every
+runtime message thereafter WITHOUT — permanently heterogeneous storage, half of
+it written irreversibly.
 
 **Reference, not snapshot, for `author` — and a snapshot alongside it.** Every person on a protected document in this repo is a reference (`sanity/schemas/setlistProposal.ts:42-88`: `lead`, `contributors[].person`, `submitted_by`, `last_edited_by`); display names are denormalized only at projection time (`app/api/admin/proposals/route.ts:35-37`: `"lead_name": coalesce(lead->alias, lead->member_name)`). Following that convention keeps a renamed member's history correct and costs one join the panel already pays.
 
@@ -177,7 +184,15 @@ debounced lead-notes email to admins would be **silently retired** as a side
 effect of a refactor. The requirement said no NEW emails; it did not say to kill
 the one that exists.
 
-Therefore: **`queueLeadNotesNotice` moves to `POST /api/me/proposals/[id]/messages`**,
+**The call moves to BOTH paths that can append a lead message.** Authoritatively,
+superseding any other sentence in this document: `queueLeadNotesNotice` is called
+from `POST /api/me/proposals/[id]/messages` **and** from the legacy `leadNotes`
+compat path in `POST /api/me/proposals` (§4), each snapshotting `previousStatus`
+and the lead-message count PRE-COMMIT in its own handler, and from nowhere else.
+An old-bundle save that lands as a message must produce the same notice a
+new-bundle post would, or the compat path is silent for the whole release.
+
+Concretely: **`queueLeadNotesNotice` moves to `POST /api/me/proposals/[id]/messages`**,
 in that route's post-commit `after()` block, with the count captured PRE-COMMIT in
 that route (CLAUDE.md's `before`-is-pre-commit invariant applies to the new writer
 exactly as it does to the old one — the new route must load the proposal, snapshot
@@ -349,10 +364,27 @@ append, no outbox notice. It vanishes on the next reload. In a delivery whose
 stated primary outcome is that nothing is ever overwritten, silently discarding a
 lead's note with a success toast is the worst possible failure mode.
 
-**Rule for Phase 4:** `POST /api/me/proposals` keeps accepting `leadNotes`, and
-when the value is non-empty and differs from the newest stored `lead_note`
-message body, it **appends it as a `lead_note` message** (and queues the notice)
-instead of writing the legacy field. Removing the field from the parser is a
+**Rule for Phase 4, and the unconditional half comes first.**
+
+1. **`POST /api/me/proposals` STOPS WRITING `lead_notes`, in BOTH branches** — the
+   patch at `app/api/me/proposals/route.ts:232` and the create at `:263`.
+   Unconditionally, with no "when non-empty" qualifier. The create branch mints
+   `messages: [msg]` instead when a note is present.
+
+   **This is data-loss prevention, not tidiness.** Both branches currently set
+   `lead_notes: request.leadNotes`, and `parseProposalSaveRequest` coerces an
+   absent value to `""` (`proposalWriteRequest.ts:116`). The new editor stops
+   *sending* `leadNotes`. If that line survives, **the first save from the new
+   bundle writes `lead_notes: ""` over each of the 7 production documents that
+   carry one** — erasing the frozen archive that §5's rollback and Phase 6 step 9's
+   reconciliation both depend on. Worse, step 9 compares each *non-empty*
+   `lead_notes`, so an emptied field is skipped and the reconcile reports clean
+   over the loss.
+
+2. **Only then the compat rule:** the route keeps *accepting* `leadNotes` for one
+   release, and when the value is non-empty and differs from the newest stored
+   `lead_note` message body, it **appends it as a `lead_note` message and queues
+   the notice**. Removing the field from the parser is a
 separate, later delivery. Add this to the Phase 4 test list: an old-shape save
 lands as a message, and an old-shape save whose text already matches the newest
 message appends nothing.
@@ -893,6 +925,8 @@ produces either a dead notification or a mass mis-send.
 - `app/utils/proposalNotify.ts:138-153`: newest `lead_note` body.
 - Notifications: the admin→lead push of §9.
 - Reads and UI: every site in §6; `app/components/ProposalThread.tsx`; the editor stops SENDING `leadNotes`; the `Comentarios del admin` banner is replaced by the thread.
+- **`app/api/me/proposals/route.ts` stops writing `lead_notes` in BOTH the patch (`:232`) and create (`:263`) branches** — unconditionally; the create branch mints `messages: [msg]` instead.
+- **`buildProposalMessage` gains `_type: "proposal_message"`** and `proposalMessageWrite.test.ts` is updated — a change to Phase 1's shipped code.
 - **`parseProposalSaveRequest` keeps ACCEPTING `leadNotes` for this one release** — see the in-flight-client rule below. It is removed in a later, separate delivery, once no old bundle can still be mounted.
 - **Deploy the Sanity schema again** — Phase 1 deployed `setlistProposal` only, and this phase adds `beforeMessageCount` to `notificationOutbox`. The Content Lake stores undeclared fields, so nothing breaks without it, but the deployed manifest would be stale and the MCP content tools would not see the field.
 - Register both new writers in `PROTECTED_RUNTIME_WRITERS` (`app/utils/protectedReadAudit.ts:177+`, exact `file + operation`) and the migration script in the operator registry — otherwise `protectedReadAudit.test.ts` reddens this phase's gate.
@@ -963,6 +997,9 @@ and unbounded if the review found anything.
 | Transition retries survive | `proposalWriteRequest.test.ts` — hard-coded `transitionFingerprint` digest | Any change to the transition digest input |
 | Replay appends no duplicate | `proposalWriteRoutes.test.ts` — replay a committed `request_changes`, assert `messages.length` unchanged | The append escaping the `no_write_retry` guard |
 | Concurrent posts both land | `proposalMessageRoutes.test.ts` | A revision precondition creeping into the append |
+| **The legacy archive is never overwritten** | `proposalWriteRoutes.test.ts` — assert the save mutation `set` has **no** `lead_notes` key, and re-read a document with a pre-existing `lead_notes` after a save to show it byte-unchanged | The new bundle writing `lead_notes: ""` over 7 production documents, erasing the archive the rollback and the reconcile depend on — and the reconcile skipping it because it compares only non-empty fields |
+| An old-shape save queues the notice | `setlistNoticeQueueing.test.ts` — a save carrying `leadNotes` from a pre-cutover bundle produces an outbox document | The compat path landing a message with no email, no push and no signal for the whole release |
+| Stored message shape is homogeneous | `proposalMessageWrite.test.ts` + `migrateProposalMessages.test.ts` assert the SAME field set including `_type` | Migrated items carrying `_type` and runtime items not |
 | **`setIfMissing` precedes every append** | `proposalMessageRoutes.test.ts` + `proposalWriteRoutes.test.ts` — assert on the MUTATION CHAIN, not just a 200 | The first message on a proposal with no `messages` array silently failing, and a first-time `request_changes` rolling back its status change |
 | An empty `reopen` note appends nothing | `proposalWriteRoutes.test.ts` | A blank bubble minted on every note-less reopen |
 | The `leadNotes` notice still queues | `setlistNoticeQueueing.test.ts` — post a lead message on a `pending` proposal, assert a notice document exists | The debounced admin email silently retired by the refactor |
