@@ -68,15 +68,32 @@ regression in both the notification and the interaction, and it would have
 violated invariant 8.
 
 **Therefore Child A keeps the textarea for the pre-first-save case only** (see its
-§"The submission note"). Its content is written to `lead_notes` — so the submit
-email is byte-identical to today — *and* appended as the first `lead_note`
-message. Once the proposal exists, the thread composer is the only path. Child B
-removes the textarea along with the mirror.
+§"The submission note"). Its content is written to `lead_notes` *and* appended as
+the first `lead_note` message. Once the proposal exists, the thread composer is
+the only path. Child B removes the textarea along with the mirror.
 
-**Scope of the property, stated precisely:** Child A changes no notification
-behaviour, and modifies no file under `app/utils/outbox*` or `proposalNotify.ts`.
-It achieves that for the outbox path via the mirror, and for the submit email by
-keeping the field the submission writes.
+**The submit email is byte-identical on a FIRST submission only, and that is a
+Child-A-owned behaviour change that must be named rather than glossed.**
+`notifyProposalSubmitted` is not first-submission-only: it fires on **every** save
+committed as `pending` (`app/api/me/proposals/route.ts:298-304`, with no
+`previousStatus` check), and a lead may re-save while `pending` or re-submit from
+`changes_requested` — the route refuses only `approved` (`:160-167`), and one
+production proposal is in `changes_requested` right now. On those later
+submissions the email carries the **mirror** — the newest thread message, possibly
+older than this submission — instead of what the lead attached to this one.
+
+Accepted, and named under invariant 8. The email still fires, to the same
+audience, with a populated notes block; what shifts is its *meaning*, from "the
+note attached to this submission" to "the lead's most recent word to the admins".
+A lead who posts before submitting gets the same result as today. The alternative
+— keeping the textarea alongside the thread composer on every save — would put two
+private-note inputs on one screen, which is worse.
+
+**Scope of the property, stated precisely:** Child A modifies no file under
+`app/utils/outbox*` or `proposalNotify.ts`, and **regresses no notification** —
+every signal that fires today still fires, to the same audience. It does not claim
+that every body is byte-identical: the submit email's body drifts as described
+above from the second submission onward.
 
 Child B then moves the call, changes the input shape, rewrites classification,
 adds the pushes, and stops the mirror — with the thread already populated,
@@ -169,8 +186,12 @@ The split is correct only if all of these hold after Child B:
 - A lead's message on an `approved` future-dated proposal reaches admins by push.
 - An admin's message reaches the lead by push, and a `request_changes` produces
   exactly one push, not two.
-- No message posted at any point between Child A's release and Child B's release
-  is lost, and none is notified twice.
+- No message posted between Child A's release and Child B's release is **lost**,
+  and none is **notified twice**. One narrow exception, by Child B's deliberate
+  design: an in-flight legacy `{beforeNotes}` outbox notice queued minutes before
+  B's deploy is dropped and consumed, so that one message is stored and rendered
+  but never emailed. Either accept that seam or have B drain the outbox before
+  cutover.
 - `lead_notes` and `admin_notes` are byte-identical to their pre-Child-A values
   on every document that is not touched by the mirror, and the mirror's writes
   are the only changes to them. **This check runs at the end of Child A, not
@@ -191,6 +212,7 @@ The split is correct only if all of these hold after Child B:
 | Debounced lead-notes email keeps firing, unchanged | **A** (via the mirror) | **B** (re-sources it) |
 | "Nueva propuesta" submit email keeps carrying the lead's note | **A** (via the retained submission textarea) | **B** (re-sources it) |
 | `lead_notes` is never blanked to `""` by a client that stopped sending it | **A** | **B** (removes the field write entirely) |
+| A pre-deploy bundle's `leadNotes` is not discarded | **A** — it opens the window, so it owns the guard | **B** (keeps the same rule for pre-A bundles) |
 | Outbox source moves from `lead_notes` to the thread | **B** | — |
 | lead→admin push on non-reviewable statuses | **B** | — |
 | admin→lead push for standalone messages | **B** | — |
@@ -221,7 +243,7 @@ Both need two sequential fresh `APPROVED` verdicts on byte-identical text.
 | # | Question | Recommendation | Blocking? |
 |---|---|---|---|
 | OQ-1 | ~~Should the admin notification audience be ministry-filtered?~~ | **RESOLVED 2026-08-25: an independent delivery**, tracked separately. Neither child owns it; both inherit the audience rule in force at the time. Tracked as FrankERP/owt-kb-v1#8 | Closed |
-| OQ-2 | Is Child B worth doing at all, or is the thread plus today's email good enough? | Do it. After Child A the email's body comes from a field nothing writes any more, so it would slowly describe stale text | No — decide before B |
+| OQ-2 | Is Child B worth doing at all, or is the thread plus today's email good enough? | Do it — but not for the reason an earlier draft of this table gave. After Child A the mirror *is* what keeps `lead_notes` current, so there is no staleness to fix. The real reasons are the three silences Child A leaves: an admin's standalone message notifies nobody, a lead's message on an `approved` proposal notifies nobody, and a repeated identical message sends no email because the outbox compares trimmed strings | No — decide before B |
 
 ## Terminal state
 

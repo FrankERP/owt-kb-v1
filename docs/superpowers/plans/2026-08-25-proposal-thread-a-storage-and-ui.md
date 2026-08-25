@@ -114,6 +114,29 @@ composer is the only path.
 Child B removes the textarea together with the mirror, and re-sources the submit
 email from the thread.
 
+**And a client loaded BEFORE this deploy still sends `leadNotes`.** The textarea
+renders whenever `!isApproved` today (`ProposalEditor.tsx:711-725`) and `:350`
+always sends it. So a lead with the page already open posts a note this child's
+save route would otherwise discard — behind a success toast, with no email, since
+`lead_notes` would not change.
+
+**Rule:** `POST /api/me/proposals` accepts a non-empty `request.leadNotes` on an
+existing proposal, **appends it as a `lead_note` message**, mirrors it into
+`lead_notes`, and queues the notice — the same treatment the pre-first-save
+textarea gets. This guard belongs to Child A because **Child A opens the window**;
+scheduling it in Child B would put the fix a release after the loss, which is
+exactly the error corrected for the blanking hazard above. Child B keeps the same
+rule for bundles predating Child A.
+
+**Consequence for the mirror's `afterNotes`:** the save route must pass the
+**mirrored value** (the newest lead-message body) to `queueLeadNotesNotice`, not
+`request.leadNotes`. Passing the raw request value from a new bundle sends `""`,
+which trips the equality guard (`serviceMutationSideEffects.ts:636`) on ordinary
+setlist saves and re-slides `notifyAfter` while resetting `servedRecipients` on an
+already-queued subject (`outboxNotice.ts:147-153`). No mis-send — `before` lives
+only in `createIfNotExists` — but it can delay a message email to the maximum
+window and re-attempt a recipient a limited sweep already served.
+
 ## Design
 
 ### Message shape
@@ -418,9 +441,11 @@ against the same dataset.
 1. Every message ever posted is retrievable; none is overwritten.
 2. The 8 documents carrying legacy notes have them as messages, with the count the
    pre-`--apply` re-measure predicted.
-3. **`lead_notes` is never blanked to `""`.** On every document — including the 8
-   the migration touches — its value is either its pre-migration value or a mirror
-   write carrying a real message body. Never the empty string, and never absent.
+3. **`lead_notes` is never blanked to `""` on a document that carried a value.**
+   On each such document — including the 8 the migration touches — its value is
+   either its pre-migration value or a mirror write carrying a real message body.
+   (A proposal created after this child whose lead writes nothing legitimately has
+   `""`; the criterion is about erasure, not about emptiness.)
    This is the criterion that guards the archive Child A's own rollback depends on,
    and it belongs here rather than in Child B because **this child is what makes
    the client stop sending the field**.
@@ -429,8 +454,14 @@ against the same dataset.
    behaviour rather than fixing it).
 5. **The existing debounced admin email fires on exactly the occasions it fires
    today**, same audience, same debounce, same preference key.
-6. **The "Nueva propuesta" submit email carries the lead's note exactly as today**,
-   via the retained submission textarea.
+6. **The "Nueva propuesta" submit email always fires with a populated notes
+   block**, to the same audience as today. On a **first** submission the body is
+   byte-identical, via the retained textarea. On **later** submissions — a re-save
+   while `pending`, or a re-submit from `changes_requested` — it carries the newest
+   thread message instead, because `notifyProposalSubmitted` fires on every save
+   committed as `pending` (`app/api/me/proposals/route.ts:298-304`), not only the
+   first. **That body drift is a Child-A-owned behaviour change, accepted and named
+   under invariant 8**, not a claim of byte-identity.
 7. No file under `app/utils/outbox*` or `proposalNotify.ts` is modified — **and
    neither has its INPUT changed**, which criteria 5 and 6 are what actually check.
    An unmodified file fed an emptied field is still a regression.
@@ -446,6 +477,7 @@ against the same dataset.
 | **The existing email still fires** | `setlistNoticeQueueing.test.ts` — a lead message on a `pending` proposal produces an outbox document with the same shape as today's | Silently retiring the notification this child promises not to touch |
 | **`lead_notes` is never blanked** | `proposalWriteRoutes.test.ts` — a save from the new bundle writes the newest lead-message body, never `request.leadNotes` blindly; re-read a document with a pre-existing value and show it non-empty | The client stopping sending the field and the next save erasing the archive on all 8 documents — destroying Child A's own rollback path |
 | **The submit email still carries the note** | `proposalNotify.test.ts` — a first submission carrying the textarea's text produces an email whose notes block is that text | A first submission mailing admins with no notes, and the lead having no way to speak on their first submission |
+| **A pre-deploy bundle's note is not discarded** | `proposalWriteRoutes.test.ts` — a save carrying `leadNotes` on an existing proposal appends a `lead_note` message, mirrors it, and queues a notice | A lead with the page already open losing their note behind a success toast, with no email |
 | **No outbox module changed** | a test or CI check asserting `git diff --name-only` touches nothing under `app/utils/outbox*` or `proposalNotify.ts` | Scope leaking into Child B |
 | A LEAD's post never enables a lost update | mount test — interleave a co-lead content edit between the lead's page render and the lead's post; the subsequent save must **409** | Adopting a revision without its content |
 | An ADMIN's post never enables an unreviewed approval | mount test — interleave a lead content edit between the admin's card render and the admin's post; approve must 409 or publish only what was shown | Re-authorizing against unseen content |
