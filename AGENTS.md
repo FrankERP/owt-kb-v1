@@ -46,6 +46,13 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   The verify step is not optional and a green build does not satisfy it — confirm
   `dev-owt-backstage.vercel.app` is in the deployment's `alias` array and that its
   `githubCommitSha` is the commit you pushed.
+- **Worktrees only when two things must be in flight at once** — parallel agents
+  writing overlapping files (`Agent` with `isolation: "worktree"`) or protecting the
+  primary tree while gates/servers run elsewhere (`EnterWorktree`, never a hand-rolled
+  `git worktree add`). Code review is read-only — no worktree. Populate
+  `node_modules` with an APFS clone from the primary checkout (`cp -Rc`), never a
+  fresh install. `git worktree remove` is part of the merge step; `git worktree prune`
+  at cycle open.
 - Conventional commits (`fix(scope): …`), body explains the *why*.
 - **Never** add AI/Claude attribution or `Co-Authored-By` trailers.
 - **Keep documentation current in the same delivery.** Implementation, behavior,
@@ -83,6 +90,17 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   less than nothing — the app answers `302` to SSO. Query the deployment and
   confirm two fields: the target domain appears in `alias`, and `meta.githubCommitSha`
   equals the commit you pushed.
+- **Never hand-roll a bash deploy watcher** (`until … vercel inspect … grep …`).
+  Two in one day spun silently forever — one on a PATH miss (`vercel` is not
+  installed; only `npx vercel` works), one on a grep heuristic that never matched —
+  while the deploy had been READY in ~85 s. Builds here take ~90 s, so: push, then
+  verify with a direct `get_deployment(domain)` query (Vercel MCP) or dispatch the
+  `deploy-verifier` agent, retrying that same authoritative check a few times ≥30 s
+  apart. If something must genuinely block on the build, use the vendor's waiter —
+  `npx vercel inspect <deployment-url> --wait --timeout 5m` — never a grep loop, and
+  never on the stable domain: an alias resolves to the OLD deployment until the new
+  one is ready, so `--wait` on it returns instantly with stale success (observed
+  2026-08-24). Then still do the alias+SHA check, which `--wait` does not replace.
 - **`preview` writes to the real Sanity dataset and emails the real team.** It is a
   rehearsal of the UI, never a dry run of data or notifications.
 

@@ -271,6 +271,11 @@ it so a remount cannot resurrect an obsolete filter.
 
 Outside a provider every handoff setter is a no-op, so a card renders standalone in tests.
 
+The handoff only adjusts `ProposalsPanel`'s **status** filter, and that panel also windows its
+`approved`/`draft` history by date (`proposalListView.ts`). So on every successful focus the
+panel widens that window through `widenStepsForTargets` before the scroll effect runs —
+otherwise a target older than the window would be consumed while its card was never rendered.
+
 ---
 
 ## 9. Two client-side correctness rules worth knowing
