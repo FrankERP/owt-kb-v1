@@ -178,7 +178,7 @@ Both need two sequential fresh `APPROVED` verdicts on byte-identical text.
 
 | # | Question | Recommendation | Blocking? |
 |---|---|---|---|
-| OQ-1 | Should the admin notification audience be ministry-filtered? A kids-only `admin` receives worship proposal notices today | Pre-existing; Child B widens the frequency. Fix separately or accept explicitly | No — Child B |
+| OQ-1 | ~~Should the admin notification audience be ministry-filtered?~~ | **RESOLVED 2026-08-25: an independent delivery**, tracked separately. Neither child owns it; both inherit the audience rule in force at the time. Tracked as FrankERP/owt-kb-v1#8 | Closed |
 | OQ-2 | Is Child B worth doing at all, or is the thread plus today's email good enough? | Do it. After Child A the email's body comes from a field nothing writes any more, so it would slowly describe stale text | No — decide before B |
 
 ## Terminal state

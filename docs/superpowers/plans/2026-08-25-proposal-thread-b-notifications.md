@@ -44,7 +44,8 @@ yet work.
 - `notificationOutbox.before` gaining `beforeMessageCount`.
 - `proposalNotify`'s "Nueva propuesta" body source.
 - The lead→admin push on non-reviewable statuses, and the admin→lead push for
-  standalone messages.
+  standalone messages. **Both inherit whatever admin audience exists at the time**
+  — this child does not own the ministry-scoping question (see OQ-1).
 - Exporting `REVIEWABLE_BEFORE_WRITE` and `ADMIN_RECIPIENTS_QUERY`.
 - **Removing the mirror** — `lead_notes` / `admin_notes` stop being written.
 
@@ -277,12 +278,15 @@ ships second: its worst case is a stale email, not missing history.
 
 | # | Question | Recommendation | Blocking? |
 |---|---|---|---|
-| OQ-1 | Ministry-filter the admin audience? A kids-only `admin` receives worship proposal notices today | Pre-existing; this child widens the frequency. Decide before Phase B | **Yes** |
+| OQ-1 | ~~Ministry-filter the admin audience?~~ | **RESOLVED 2026-08-25: its own independent delivery.** Frank's call. It is a pre-existing defect across every proposal notification, not something this child introduced, and scoping it correctly means touching `proposalNotify`, `outboxSweep` and the kids surfaces together. This child neither fixes nor worsens the rule; it inherits whatever the audience is at the time. Tracked as FrankERP/owt-kb-v1#8 | Closed |
 | OQ-2 | New admin-push helper, or inline `sendPush`? | Either; state which | No |
 | OQ-3 | Does the `leadNotes` email subject change to "Mensajes de la propuesta"? | Yes — "Notas del líder" is wrong once the thread carries admin replies | No |
 
 ## Terminal state
 
-`NEEDS_USER_DECISION` — OQ-1 is blocking for this child, and it is a product
-question about who should receive worship notifications, not one the code answers.
-Child A is unaffected and can proceed to review immediately.
+`READY_FOR_ADVERSARIAL_REVIEW` — OQ-1 was resolved on 2026-08-25 by making
+ministry-scoped notifications an independent delivery. This child inherits the
+audience rule rather than owning it.
+
+Review order: the parent, then Child A, then this. Plan approval is not
+authorization to implement.
