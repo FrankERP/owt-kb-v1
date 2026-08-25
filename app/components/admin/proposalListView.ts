@@ -41,7 +41,8 @@ export const PROPOSAL_STATUS_ORDER: readonly ProposalReviewStatus[] = [
 /** Statuses that are history rather than queue, and therefore date-windowed. */
 export const WINDOWED_STATUSES: readonly ProposalReviewStatus[] = ["approved", "draft"];
 
-/** Months a single `Ver 3 meses más` press adds to the window. */
+/** Months in one widen step. A press jumps by whatever multiple of this
+ *  reaches the newest hidden row, so the button reads `Ver N meses más`. */
 export const WIDEN_STEP_MONTHS = 3;
 
 export function isWindowedStatus(status: string | null | undefined): boolean {

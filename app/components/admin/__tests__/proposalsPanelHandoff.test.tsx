@@ -143,4 +143,37 @@ describe("ProposalsPanel — the archive window, mounted", () => {
     expect(screen.queryByText("Ana Pasada")).not.toBeNull();
     expect(screen.queryByText(/propuesta.* oculta/)).toBeNull();
   });
+
+  it("widens straight to the newest hidden row, and says how far it jumped", async () => {
+    // The button the whole window exists for. Both of its own lines were
+    // untested: reverting `setWindowSteps(stepsToShowMore)` to the original
+    // `s => s + 1` AND the label back to a fixed `Ver 3 meses más` left every
+    // admin test green, so the exact dead-button bug the review caught could be
+    // reintroduced without a gate noticing.
+    //
+    // 2026-01 is eight months behind the 2026-09 window start ⇒ three steps ⇒
+    // a nine-month jump. A `+ 1` press would land on 2026-06 and still hide it.
+    const OLD = row({
+      _id: "old-approved",
+      service_date: "2026-01-04",
+      status: "approved",
+      lead_name: "Ana Archivo",
+    });
+    stubApi([OLD]);
+
+    render(<ProposalsPanel />);
+    // The window is applied AFTER the status filter, so it hides nothing on the
+    // default Pendientes tab. Aprobadas is where the archive actually lives.
+    await waitFor(() => expect(screen.queryByText("Aprobadas")).not.toBeNull());
+    fireEvent.click(tab("Aprobadas"));
+
+    await waitFor(() => expect(screen.queryByText("1 propuesta anterior oculta")).not.toBeNull());
+    expect(screen.queryByText("Ana Archivo")).toBeNull();
+
+    // The label states the real jump, not the nominal 3-month step.
+    fireEvent.click(screen.getByRole("button", { name: "Ver 9 meses más" }));
+
+    await waitFor(() => expect(screen.queryByText("Ana Archivo")).not.toBeNull());
+    expect(screen.queryByText(/propuesta.* oculta/)).toBeNull();
+  });
 });

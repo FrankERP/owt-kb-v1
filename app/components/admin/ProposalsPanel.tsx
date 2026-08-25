@@ -647,13 +647,22 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
 
       {/* Archive window: what the date window is hiding, and how to see more.
           Only `approved` / `draft` can ever land here. */}
+      {/* The live region sits OUTSIDE the `canWiden` block on purpose. Inside
+          it, the press that reveals the last row unmounts the announcer before
+          it can announce — and with jump-to-newest that is the common case. */}
+      {!loading && !error && (
+        <p role="status" aria-live="polite" className="sr-only">
+          {hiddenCount === 0
+            ? "Todo el historial está visible."
+            : hiddenCount === 1
+              ? "1 propuesta anterior oculta."
+              : `${hiddenCount} propuestas anteriores ocultas.`}
+        </p>
+      )}
+
       {!loading && !error && canWiden && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-edge-accent-subtle px-4 py-3">
-          <p
-            role="status"
-            aria-live="polite"
-            className="font-label text-[11px] uppercase tracking-widest text-mono-500"
-          >
+          <p aria-hidden className="font-label text-[11px] uppercase tracking-widest text-mono-500">
             {hiddenCount === 1
               ? "1 propuesta anterior oculta"
               : `${hiddenCount} propuestas anteriores ocultas`}
