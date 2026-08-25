@@ -236,11 +236,43 @@ the code.
 **Response.** The appended message and the full `messages[]`, read back through
 `operationalClient`.
 
-**The client refreshes CONTENT AND REVISION TOGETHER — it must never adopt a bare
-`_rev`.** After a successful post, `ProposalsPanel` calls `await load()` and
-`ProposalEditor` calls `router.refresh()` alongside `setRev`.
+**The two surfaces get DIFFERENT treatment, and the difference is the point.**
 
-**Why a bare `_rev` is unsafe, and this is the subtlest hazard in the plan.**
+- **Admin panel: refresh content and revision together.** After a successful post,
+  `ProposalsPanel` calls `await load()` — which replaces the whole record
+  (`:508` → `:395` `setProposals`) and re-renders the card from props. Adopting a
+  revision is safe here only because the content arrives with it.
+- **Lead editor: adopt NOTHING. The route returns no `_rev` to it, and `rev` stays
+  pinned to what the editor was rendered from.** A concurrent co-lead save then
+  still 409s on the lead's next save, which is the safe, already-handled outcome.
+
+**Why the lead surface cannot use the same remedy.** `router.refresh()` re-seeds
+`rev` (`ProposalEditor.tsx:162-163`) and `_id` (`:168-169`) — those are the file's
+only prop-tracking effects. `songs` (`:109-119`) and `teamNotes` (`:122`) are
+one-time lazy initializers, and no `setSongs` call is driven by the prop (all six
+are user actions). `router.refresh()` preserves client state *by design* — the
+comment at `:158-161` exists because it does. So prescribing "`setRev` +
+`router.refresh()`" would advance the revision **without** the content, producing
+exactly the divergence this section forbids:
+
+> lead A opens at rev R1 → co-lead B saves a different setlist (legal while
+> `pending`/`changes_requested`) → R2 → A posts a message; the append has no
+> revision precondition, succeeds, returns R3 → A adopts R3 while songs stay A's
+> R1 copy → A saves → `compareObservedTarget` returns `null` (success) and the
+> patch commits `ifRevisionId(R3).set({songs, …})`, **overwriting B's setlist with
+> no 409, no banner and no toast.** Today that save 409s.
+
+Re-seeding `songs` from the prop instead is worse: it would clobber the lead's
+unsaved local edits.
+
+**The cost of pinning, stated honestly:** a lead who posts a message mid-edit will
+409 on their next save and must use the existing "Recargar" banner, losing unsaved
+song changes. That is a real annoyance and it is the correct trade — a 409 is
+visible and recoverable; a silent overwrite of a co-lead's setlist is neither. The
+composer should nudge: disable it, or warn, while the editor has unsaved changes.
+
+**Why a bare `_rev` is unsafe on the ADMIN surface too, and this is the subtlest
+hazard in the plan.**
 `_rev` on the admin transition is not a staleness token — it is an **attestation
 that the admin saw this content**. The route says so in as many words
 (`app/api/admin/proposals/[id]/route.ts:63-67`): *"`rev` is the proposal revision
@@ -382,8 +414,11 @@ helper** — this needs a small new one or an inline `sendPush`. Pick one in
 implementation and say which.
 
 **Exclude the author** from the recipient set: a lead who is also an `admin` would
-otherwise be pushed about their own message. The repo is inconsistent here
-(`notifyProposalSubmitted` does not exclude, `coLeads` does), so state the choice.
+otherwise be pushed about their own message. `notifyProposalReview(doc, push)` takes
+no exclusion parameter and `proposalReviewRecipients` does not filter, so **filter in
+the route** rather than changing that helper — altering it would change behaviour at
+its two existing transition call sites for no reason. The repo is inconsistent here
+(`notifyProposalSubmitted` does not exclude, `coLeads` does); this is the choice.
 
 `REVIEWABLE_BEFORE_WRITE` and `REVIEWABLE_STATUSES` are **unchanged** — the email
 keeps exactly today's audience and timing. The push is a separate additive call,
@@ -449,9 +484,12 @@ else.
    cannot fire in the intended run (0 documents carry `messages`), and if it ever
    does, something is wrong that a script must not paper over.
 2. Given that interlock, **`set` the whole `messages` array**: every target's array
-   is absent, so ordering the (at most two) minted messages in JS and writing one
-   `set` avoids relying on an `insert` anchor whose behaviour against a just-created
-   empty array this plan cannot verify read-only.
+   is absent or empty, so ordering the (at most two) minted messages in JS and
+   writing one `set` is the simplest correct thing and needs no anchor semantics at
+   all. (An earlier draft justified this by claiming `insert`-against-a-fresh-array
+   was unverifiable — §3 disproves that, citing the vendored README and the live
+   `push-token` precedent. The decision stands on simplicity; the old rationale was
+   wrong and is corrected here so nobody inherits a false belief about `append`.)
 3. Mint deterministic `_key`s `migleadnote01` / `migadminnote1` and **skip a
    document when ANY key it would mint is already present** — 3 production
    documents mint both, so a singular check would half-migrate one on a re-run.
@@ -551,7 +589,11 @@ data. One dataset, one shot.
   `Error al enviar el mensaje`. No unread badge in R2.
 - **The admin `request_changes` composer stays as it is** — it is a *decision*, not
   a chat message, keeps its own state and its `!adminNotes.trim()` disable. Its text
-  simply also lands in the thread.
+  simply also lands in the thread. **One change: branch on `data.idempotent`**,
+  which the route already returns (`admin/proposals/[id]/route.ts:437`). A repeat
+  with byte-identical `adminNotes` is a no-write retry (§2) — show "sin cambios"
+  rather than a success toast, or the admin believes a message was delivered that
+  was not.
 
 ---
 
@@ -684,7 +726,9 @@ measured 14 413 ms/send. Watch `report.lost` after the release.
 | An old-shape save lands and queues | `setlistNoticeQueueing.test.ts` — a save carrying `leadNotes` from a pre-cutover bundle appends a message and produces an outbox document | A lead's note discarded behind a success toast; a silent compat release |
 | Stored shape is homogeneous | `proposalMessageWrite.test.ts` + `migrateProposalMessages.test.ts` assert the same field set including `_type` | Migrated items carrying `_type` and runtime items not |
 | A post refreshes content, not just the revision | mount test — interleave a LEAD CONTENT EDIT between the admin's card render and the admin's post, then assert the subsequent approve either 409s or publishes only songs the admin was shown | An adopted bare `_rev` re-authorizing an approval against content the reviewer never saw — the property `admin/proposals/[id]/route.ts:63-67` exists to protect |
-| A post does not 409 the poster's own next action | `proposalMessageRoutes.test.ts` + `proposalWriteRoutes.test.ts` — after the client refresh, a transition and a save both succeed | The `_rev` bump locking the admin out of the card and the lead out of saving |
+| A post does not 409 the ADMIN's own next action | `proposalMessageRoutes.test.ts` — after `load()`, a transition succeeds | The `_rev` bump locking the admin out of the card |
+| A LEAD's post never enables a lost update | mount test — interleave a CO-LEAD content edit between the lead's page render and the lead's post, then assert the subsequent save **409s** rather than committing | Adopting a revision without its content, silently overwriting a co-lead's setlist where today it 409s |
+| A repeat identical `request_changes` is not shown as delivered | `proposalsPanel` mount test — a 200 carrying `idempotent: true` does not render a new bubble or a success toast | Presenting a no-write retry as a sent message |
 | The transition stops setting `admin_notes` | `proposalWriteRoutes.test.ts` — assert the transition mutation `set` has no `admin_notes` key | Silently blanking the frozen admin archive, which today an empty `reopen` already does (`route.ts:500`, `adminNotes` coerced to `""`) |
 | Concurrent posts both land | `proposalMessageRoutes.test.ts` | A revision precondition creeping into the append |
 | An empty `reopen` appends nothing | `proposalWriteRoutes.test.ts` | A blank bubble on every note-less reopen |
