@@ -432,7 +432,23 @@ New client component `app/components/ProposalThread.tsx`, shared by both surface
 - **Mutation handler** wraps `fetch` in try/catch/finally, checks `res.ok`, resets `posting` in `finally`, never clears the composer on failure (CLAUDE.md invariant; the existing failure modes at `ProposalsPanel.tsx:462-492` are the model).
 - **Spanish copy:** section title `Conversación con los admins` (lead side) / `Conversación con el líder` (admin side); empty state `Aún no hay mensajes.`; placeholder `Escribe un mensaje…`; button `Enviar`; posting `Enviando…`; failure `Error al enviar el mensaje`. No unread badge in R2.
 - **Admin side:** the `request_changes` composer (`ProposalsPanel.tsx:245-280`) stays exactly as it is — it is a *decision*, not a chat message, and it keeps its own `adminNotes` state and its `!adminNotes.trim()` disable. Its text simply also lands in the thread. The `reopen` composer (`:305-330`) behaves identically.
-- **Read-only when approved:** the thread renders but the composer is hidden once `status === "approved"`, matching the existing `!isApproved` gating at `ProposalEditor.tsx:693`, `:709`.
+- **The composer closes when the SERVICE has passed, not when the proposal is
+  approved.** Settled with Frank 2026-08-24: the conversation stays open while
+  the set has not yet happened, whatever its review status. Gating on `approved`
+  would have shipped a chat that is read-only on 12 of the 14 production
+  proposals — an admin could not ask about a published setlist without reopening
+  it, which is not a conversation.
+
+  The predicate is `service_date >= today`, computed as a **calendar-day
+  comparison in `America/Mexico_City`** — `serviceTodayIso()` for "today" and a
+  string compare on the `YYYY-MM-DD` date, never `new Date(iso)` and never
+  elapsed hours (CLAUDE.md). This is the same rule `outboxClassify.ts:101`
+  already applies when it drops a notice for a service in the past, so the UI and
+  the notification layer agree on what "past" means rather than each deciding.
+
+  After the service date the thread renders in full, read-only, with
+  `La conversación se cerró al pasar el servicio.` Both write routes enforce the
+  same predicate server-side — a hidden composer is not a guard.
 - **No proposal document yet ⇒ no thread.** `ProposalEditor` renders before the
   first save with `proposal` null (`:121` reads `proposal?.lead_notes ?? ""`).
   There is no `[id]` to post to, so the thread renders a disabled composer with
@@ -594,6 +610,7 @@ only in a field the new UI will not render.
 | An empty `reopen` note appends nothing | `proposalWriteRoutes.test.ts` | A blank bubble minted on every note-less reopen |
 | The `leadNotes` notice still queues | `setlistNoticeQueueing.test.ts` — post a lead message on a `pending` proposal, assert a notice document exists | The debounced admin email silently retired by the refactor |
 | Migration ABORTS on a live thread rather than overwriting it | `migrateProposalMessages.test.ts` — a proposal with an existing non-migration message and no migration `_key` is reported and NOT written | A whole-array `set` erasing real messages, unrecoverably, against the one production dataset |
+| The composer closes on the SERVICE DATE, not on approval | `proposalThread.test.ts` + `proposalMessageRoutes.test.ts` — an approved future service accepts a post; a past-dated one is rejected server-side | Shipping a chat that is read-only on 12 of 14 real proposals, or a client-only gate a request can bypass |
 | A post does not 409 the next action | `proposalMessageRoutes.test.ts` + `proposalWriteRoutes.test.ts` — transition (admin) and save (lead) immediately after a post both succeed | The `_rev` bump locking the admin out of the card and the lead out of saving |
 | Legacy outbox notice is dropped and consumed | `outboxSweep.test.ts` — a `{beforeNotes}` notice with no `beforeMessageCount` | An empty-body email to admins; a wedged claim |
 | Only lead messages queue a notice | `setlistNoticeQueueing.test.ts` | Admins mailed their own change-request |
