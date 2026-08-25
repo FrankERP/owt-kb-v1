@@ -10,6 +10,13 @@ import {
   type ProposalReviewStatus,
   type ProposalReviewTarget,
 } from "./proposalHandoff";
+import {
+  WIDEN_STEP_MONTHS,
+  applyProposalWindow,
+  sortProposals,
+  widenStepsForTargets,
+} from "./proposalListView";
+import { serviceTodayIso } from "./serviceReadiness";
 
 /** The four stored statuses, from the shared handoff contract. */
 type ProposalStatus = ProposalReviewStatus;
@@ -75,8 +82,6 @@ const STATUS_LABEL: Record<ProposalStatus, string> = {
   approved: "Aprobada",
   changes_requested: "Cambios",
 };
-
-const STATUS_ORDER: ProposalStatus[] = ["pending", "changes_requested", "approved", "draft"];
 
 // ─── ProposalCard ─────────────────────────────────────────────────────────────
 
@@ -371,6 +376,11 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
   const [highlightIds, setHighlightIds] = useState<string[]>([]);
   const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
   const [conflictKey, setConflictKey] = useState<string | null>(null);
+  // How far back the archive window reaches, in `WIDEN_STEP_MONTHS` steps. 0 is
+  // "this month onwards"; a handoff to an older proposal widens it on its own.
+  const [windowSteps, setWindowSteps] = useState(0);
+  // "Today" as a calendar day in the app timezone — never a bare `new Date()`.
+  const todayIso = useMemo(() => serviceTodayIso(), []);
   const cardRefs = useRef(new Map<string, HTMLDivElement | null>());
   const scrollTargetRef = useRef<string | null>(null);
 
@@ -426,6 +436,10 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
       return;
     }
     if (result.nextFilter !== filter) setFilter(result.nextFilter);
+    // The handoff only adjusts the STATUS filter, so an approved/draft target
+    // older than the window would be consumed while its card was never
+    // rendered. Widen far enough to render it BEFORE the scroll effect runs.
+    setWindowSteps((steps) => widenStepsForTargets(todayIso, steps, proposals, result.ids));
     setHighlightIds(result.ids);
     setConflictKey(result.conflictKey);
     setHandoffNotice(result.changed ? HANDOFF_NOTICE.changed : null);
@@ -449,12 +463,19 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
     scrollTargetRef.current = null;
     el.scrollIntoView({ block: "center", behavior: prefersReducedMotion() ? "auto" : "smooth" });
     el.focus({ preventScroll: true });
-  }, [highlightIds, filter, proposals]);
+  }, [highlightIds, filter, proposals, windowSteps]);
 
   const ACTION_TOAST: Record<ProposalAction, string> = {
     approve: "Setlist publicado",
     request_changes: "Cambios solicitados",
     reopen: "Propuesta reabierta",
+  };
+
+  /** The status each action commits — only `approved` is ever windowed. */
+  const ACTION_STATUS: Record<ProposalAction, ProposalStatus> = {
+    approve: "approved",
+    request_changes: "changes_requested",
+    reopen: "changes_requested",
   };
 
   const handleAction = async (
@@ -472,6 +493,18 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
       });
       if (res.ok) {
         showToast(ACTION_TOAST[action]);
+        // Approving a PAST-dated proposal moves it into a windowed status whose
+        // month may already be behind the window start — the card would vanish
+        // from under the admin right after the toast. Widen to keep it on
+        // screen, through the same mechanism the handoff uses.
+        setWindowSteps((steps) =>
+          widenStepsForTargets(
+            todayIso,
+            steps,
+            [{ _id: proposal._id, status: ACTION_STATUS[action], service_date: proposal.service_date }],
+            [proposal._id],
+          ),
+        );
         await load();
         return { ok: true, conflict: false };
       }
@@ -498,14 +531,18 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
     { id: "draft", label: "Borradores" },
   ];
 
-  const sorted = [...proposals].sort((a, b) => {
-    const oi = STATUS_ORDER.indexOf(a.status);
-    const oj = STATUS_ORDER.indexOf(b.status);
-    if (oi !== oj) return oi - oj;
-    return a.service_date.localeCompare(b.service_date);
-  });
+  const sorted = sortProposals(proposals);
 
-  const visible = filter === "all" ? sorted : sorted.filter(p => p.status === filter);
+  const inFilter = filter === "all" ? sorted : sorted.filter(p => p.status === filter);
+
+  // The window is applied AFTER the status filter, so the hidden count always
+  // describes the tab on screen. `pending` / `changes_requested` are never
+  // windowed (see `proposalListView.ts`), so the badge below can never disagree.
+  const { visible, hiddenCount, canWiden, stepsToShowMore } = applyProposalWindow(
+    inFilter,
+    todayIso,
+    windowSteps,
+  );
 
   const pendingCount = proposals.filter(p => p.status === "pending").length;
 
@@ -583,7 +620,7 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
         <p className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-xl px-4 py-3">{error}</p>
       )}
 
-      {!loading && !error && visible.length === 0 && (
+      {!loading && !error && visible.length === 0 && hiddenCount === 0 && (
         <div className="text-center py-12 space-y-1">
           <p className="font-body text-sm text-mono-500">
             {filter === "all" ? "No hay propuestas todavía." : `Sin propuestas en esta categoría.`}
@@ -605,6 +642,42 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
               register={(el) => cardRefs.current.set(p._id, el)}
             />
           ))}
+        </div>
+      )}
+
+      {/* Archive window: what the date window is hiding, and how to see more.
+          Only `approved` / `draft` can ever land here. */}
+      {/* The live region sits OUTSIDE the `canWiden` block on purpose. Inside
+          it, the press that reveals the last row unmounts the announcer before
+          it can announce — and with jump-to-newest that is the common case. */}
+      {!loading && !error && (
+        <p role="status" aria-live="polite" className="sr-only">
+          {hiddenCount === 0
+            ? "Todo el historial está visible."
+            : hiddenCount === 1
+              ? "1 propuesta anterior oculta."
+              : `${hiddenCount} propuestas anteriores ocultas.`}
+        </p>
+      )}
+
+      {!loading && !error && canWiden && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-edge-accent-subtle px-4 py-3">
+          <p aria-hidden className="font-label text-[11px] uppercase tracking-widest text-mono-500">
+            {hiddenCount === 1
+              ? "1 propuesta anterior oculta"
+              : `${hiddenCount} propuestas anteriores ocultas`}
+          </p>
+          <button
+            // Jump to the window that shows the NEWEST hidden row, not a blind
+            // `+ 1`: a press that changes nothing on screen reads as broken.
+            onClick={() => setWindowSteps(stepsToShowMore)}
+            className="px-4 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-mono-400 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent transition-colors"
+          >
+            {/* The jump is however far the newest hidden row is, so the label
+                has to state THAT, not the nominal step — promising "3 meses"
+                and moving 9 is the same broken-button feeling in reverse. */}
+            {`Ver ${(stepsToShowMore - windowSteps) * WIDEN_STEP_MONTHS} meses más`}
+          </button>
         </div>
       )}
 

@@ -102,7 +102,7 @@ const FOREGROUND_ON_FILL: ReadonlyArray<readonly [string, string, string]> = [
   ["surface-sunken", "accent", "ChordChart.tsx:183 — selected key"],
   ["surface-base", "warning-fg", "CalendarView.tsx:388, ImpersonationBanner.tsx:22"],
   ["surface-base", "info-fg", "CalendarView.tsx:390 — special service"],
-  ["scrim", "recency-fg", "ProposalsPanel.tsx:538 — pending count"],
+  ["scrim", "recency-fg", "ProposalsPanel.tsx:573 — pending count"],
 ];
 
 describe("light theme — WCAG AA contrast", () => {
