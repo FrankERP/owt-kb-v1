@@ -219,22 +219,42 @@ against the loaded document — **racy by construction** (two concurrent posts a
 199 both land) and accepted as a growth bound, not a security boundary. Say so in
 the code.
 
-**Response.** The appended message, the full `messages[]` read back through
-`operationalClient`, **and the proposal's fresh `_rev`** (the pattern
-`me/proposals/route.ts:320-328` already implements). `ProposalsPanel` adopts it
-into the cached proposal; `ProposalEditor` calls `setRev`.
+**Response.** The appended message and the full `messages[]`, read back through
+`operationalClient`.
 
-**Why the `_rev` is not optional:** posting bumps it, and `_rev` is the admin
-transition's authorization token and the lead save's `observed` guard. Without the
-refresh, an admin posts then clicks *Aprobar* → 409 → the whole card disables; a
-lead posts then saves → `staleReload` and they cannot save without discarding
-edits.
+**The client refreshes CONTENT AND REVISION TOGETHER — it must never adopt a bare
+`_rev`.** After a successful post, `ProposalsPanel` calls `await load()` and
+`ProposalEditor` calls `router.refresh()` alongside `setRev`.
 
-**What the fresh `_rev` does NOT solve:** it refreshes the *poster's* client, not
-the counterparty's. An admin's post still 409s a lead who was already editing, and
-vice versa. Same class as today's request-changes-during-edit collision and
-equally non-destructive, but this feature makes mid-review posting the *expected*
-interaction. Accepted for R2; live refresh is R3 alongside read marks.
+**Why a bare `_rev` is unsafe, and this is the subtlest hazard in the plan.**
+`_rev` on the admin transition is not a staleness token — it is an **attestation
+that the admin saw this content**. The route says so in as many words
+(`app/api/admin/proposals/[id]/route.ts:63-67`): *"`rev` is the proposal revision
+the admin ACTUALLY reviewed — a freshly fetched server revision is never a
+substitute, because it would re-authorize a decision made against content the
+reviewer never saw."* Approve then publishes the **stored** songs (`:164`,
+`storedProposalSongRows(doc.songs)`); there is no client-supplied content
+fingerprint, so the revision is the only thing binding the decision to what was on
+screen.
+
+Adopting a `_rev` from a message-post response breaks that binding, because the
+response carries no songs. The sequence: the admin renders the card at rev A → the
+lead saves a different setlist (permitted while `pending`/`changes_requested`) →
+rev B → the admin, seeing the old card, posts a question → the append has no
+revision precondition, succeeds, returns rev C → the panel adopts C → *Aprobar*
+**passes** the staleness check and publishes songs the admin never reviewed.
+Today that sequence 409s. `await load()` refreshes rev and content together, which
+is why it is the only thing that may set `proposal._rev` in the panel
+(`ProposalsPanel.tsx:508` is the sole such call; there is no polling).
+
+The `me/proposals:320-328` precedent does **not** transfer: there the client's
+content *is* what it just wrote, so rev and content cannot diverge. Here they can.
+
+**What the refresh does NOT solve:** it refreshes the *poster's* client, not the
+counterparty's. An admin's post still 409s a lead who was already editing, and
+vice versa — non-destructive, the editor does not clear, and it is the same class
+as today's request-changes-during-edit collision. Accepted for R2; live refresh is
+R3 alongside read marks.
 
 **No optimistic append.** A failed post that had already rendered would leave a
 phantom message in a channel whose whole value is that nothing is lost.
@@ -330,7 +350,8 @@ submission".
 | lead → admin, `pending`/`changes_requested` | a `lead_note` message | the existing debounced `leadNotes` outbox email |
 | lead → admin, `approved` | a `lead_note` message | **push to ADMINS** — `sendPush(adminIds, "proposals", …)`, `adminIds` from the exported `ADMIN_RECIPIENTS_QUERY` |
 | lead → admin, `draft` | — | **nothing** — a draft is not in front of admins yet |
-| admin → lead | an `admin_change_request` message, standalone or via a transition | push via `notifyProposalReview(doc, push)` |
+| admin → lead, **standalone message only** | an `admin_change_request` posted through `POST /api/admin/proposals/[id]/messages` | push via `notifyProposalReview(doc, push)` with the NEW message copy |
+| admin → lead, **via a transition** | `request_changes` / `reopen` | **unchanged** — the transition already calls `notifyProposalReview(doc, REVIEW_PUSH[action])` at `admin/proposals/[id]/route.ts:527`. Do not add a second call, and do not replace `Cambios solicitados` with `Nuevo mensaje`: the decision signal outranks the message signal |
 | lead → admin, first submission | unchanged | `notifyProposalPending` |
 
 **The `approved` row exists because the composer stays open there** (decision 5)
@@ -338,8 +359,11 @@ while both outbox gates are `{pending, changes_requested}`. Without it, a lead
 could post on a proposal the admin never learns about — and most proposals are
 approved.
 
-**Do not reach for `notifyProposalReview` for the admin direction.** Its audience
-is lead + contributors; admins are not in it. There is **no reusable admin-push
+**Do not reach for `notifyProposalReview` when the recipients are ADMINS** — that
+is the `lead → admin, approved` row. Its audience is lead + contributors; admins
+are not in it. (It *is* the right helper for the two rows whose recipient is the
+lead, which is why both directions appear in one table: read the RECIPIENT column,
+not the arrow.) There is **no reusable admin-push
 helper** — this needs a small new one or an inline `sendPush`. Pick one in
 implementation and say which.
 
