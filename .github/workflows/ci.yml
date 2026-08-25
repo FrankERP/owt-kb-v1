@@ -1,0 +1,55 @@
+# The three gates CLAUDE.md names, run by a machine instead of asserted by a
+# human. Before this existed, "gates green" was a claim in a chat log: `main`
+# auto-deploys to production, so nothing mechanical stood between a red test
+# suite and the team's app. This is that thing.
+#
+# Deliberately NOT here: Playwright e2e (needs live Sanity credentials and the
+# real dataset — see e2e/service-readiness/) and `next build` (Vercel already
+# builds every push, and a second build would double CI time to re-prove it).
+name: CI
+
+on:
+  push:
+    branches: [main, preview]
+  pull_request:
+    branches: [main, preview]
+  workflow_dispatch:
+
+# A newer push to the same branch makes an in-flight run obsolete. PR runs are
+# keyed separately so a PR and its branch push do not cancel each other.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    name: gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # `ci` not `install`: fails on a lockfile that drifted from package.json
+      # rather than silently resolving something new.
+      - name: Install
+        run: npm ci
+
+      - name: Types
+        run: npx tsc --noEmit
+
+      - name: Tests
+        run: npm test
+
+      # Warnings are a deliberate backlog (eslint.config.mjs); errors are not.
+      # `--max-warnings` is intentionally absent so the backlog does not fail
+      # the gate, matching what CLAUDE.md asks of a local run.
+      - name: Lint
+        run: npx eslint .
