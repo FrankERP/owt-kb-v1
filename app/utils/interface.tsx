@@ -1,4 +1,8 @@
 import type { PortableTextBlock } from "@portabletext/react";
+import type {
+  ProposalAuthorRole,
+  ProposalMessageKind,
+} from "@/app/utils/proposalMessageWrite";
 
 /**
  * A rich-text body as it comes out of Sanity, and the one source of truth for
@@ -143,6 +147,19 @@ export interface SetlistProposal {
     _key: string;
     song: { _ref: string };
     play_key: string;
+  }>;
+  /**
+   * Private lead <-> admin thread. Append-only; `author` is absent on migrated
+   * admin notes with no attributable author. Distinct from `team_notes`, which
+   * is the single message published to the whole team on approval.
+   */
+  messages?: Array<{
+    _key: string;
+    author?: { _ref: string };
+    author_role: ProposalAuthorRole;
+    kind: ProposalMessageKind;
+    body: string;
+    at: string;
   }>;
 }
 

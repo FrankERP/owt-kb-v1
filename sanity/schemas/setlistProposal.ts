@@ -161,6 +161,74 @@ export const setlistProposal = defineType({
       type: "text",
       rows: 3,
     },
+    // ── Private lead <-> admin thread (Release 2) ──────────────────────────
+    // Append-only conversation, replacing the single-value `lead_notes` /
+    // `admin_notes` fields (which stay above as a frozen archive). Declared
+    // here only: the document is `readOnly: true`, so Studio never writes it —
+    // every message is appended by a guarded API route.
+    {
+      name: "messages",
+      title: "Conversación (líder ↔ admins)",
+      description:
+        "Historial privado. Se agrega, nunca se sobrescribe. Distinto de «Mensaje para el equipo».",
+      type: "array",
+      of: [
+        {
+          type: "object",
+          name: "proposal_message",
+          fields: [
+            {
+              name: "author",
+              title: "Autor",
+              // OPTIONAL on purpose: migrated admin notes with no attributable
+              // author are minted WITHOUT one and render as "Admin". A
+              // fabricated attribution in an audit-adjacent history is worse
+              // than an absent one.
+              type: "reference",
+              to: [{ type: "teamMembers" }],
+            },
+            {
+              name: "author_role",
+              title: "Rol del autor",
+              // Denormalized on purpose: a fact about the message at the moment
+              // it was posted. If an admin later becomes a member, their
+              // historical change-request must not re-render as a lead note.
+              type: "string",
+              options: {
+                list: [
+                  { title: "Líder", value: "lead" },
+                  { title: "Admin", value: "admin" },
+                  { title: "Pastor", value: "pastor" },
+                  { title: "Sistema", value: "system" },
+                ],
+              },
+            },
+            {
+              name: "kind",
+              title: "Tipo",
+              // `author_role` is WHO spoke; `kind` is WHAT KIND of speech act.
+              // `pastor_note` and `system` are reserved from day one so routing
+              // pastor notes here later is a write-path change with no schema
+              // migration; nothing mints them yet.
+              type: "string",
+              options: {
+                list: [
+                  { title: "Nota del líder", value: "lead_note" },
+                  { title: "Cambios solicitados", value: "admin_change_request" },
+                  { title: "Nota del pastor", value: "pastor_note" },
+                  { title: "Sistema", value: "system" },
+                ],
+              },
+            },
+            { name: "body", title: "Mensaje", type: "text", rows: 3 },
+            { name: "at", title: "Enviado", type: "datetime" },
+          ],
+          preview: {
+            select: { title: "body", subtitle: "at" },
+          },
+        },
+      ],
+    },
     {
       name: "admin_notes",
       title: "Notas del admin",
