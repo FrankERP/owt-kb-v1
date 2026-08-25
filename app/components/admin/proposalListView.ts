@@ -66,7 +66,12 @@ export function compareProposals(a: ProposalListItem, b: ProposalListItem): numb
   if (bucket !== 0) return bucket;
   const byDate = (a.service_date ?? "").localeCompare(b.service_date ?? "");
   if (byDate !== 0) return a.status === "approved" ? -byDate : byDate;
-  return (a._id ?? "").localeCompare(b._id ?? "");
+  // Codepoint order, NOT `localeCompare`: a collator is locale-sensitive and may
+  // call two distinct ids equal, which would hand the tie back to API order —
+  // the exact instability this tie-break exists to remove.
+  const ida = a._id ?? "";
+  const idb = b._id ?? "";
+  return ida < idb ? -1 : ida > idb ? 1 : 0;
 }
 
 /** A sorted COPY — the caller's array (React state) is never mutated. */
@@ -120,6 +125,18 @@ export interface ProposalWindow<T extends ProposalListItem> {
   hiddenCount: number;
   /** True when there is older history left to reveal. */
   canWiden: boolean;
+  /**
+   * The step count the widen button must jump to so the press REVEALS AT LEAST
+   * ONE ROW — the smallest window containing the newest hidden row.
+   *
+   * A fixed `steps + 1` reads as a broken button whenever history has a gap
+   * bigger than one step: today `2027-06-15` with one hidden row on
+   * `2026-07-05` leaves presses 1, 2 and 3 changing nothing at all — same
+   * label, same count, same list. In the common case (the newest hidden row is
+   * inside the next step) this IS `steps + 1`, so the 3-month feel is unchanged.
+   * Equal to `steps` when nothing is hidden, where the button is not rendered.
+   */
+  stepsToShowMore: number;
 }
 
 /** Split an already-sorted, already-filtered list into shown and hidden. */
@@ -128,18 +145,30 @@ export function applyProposalWindow<T extends ProposalListItem>(
   todayIso: string,
   steps: number,
 ): ProposalWindow<T> {
+  const current = Math.max(0, Math.trunc(steps || 0));
   const visible: T[] = [];
   let hiddenCount = 0;
+  let stepsToShowMore = current;
   for (const item of items ?? []) {
-    if (isWithinWindow(item, todayIso, steps)) visible.push(item);
-    else hiddenCount += 1;
+    if (isWithinWindow(item, todayIso, current)) {
+      visible.push(item);
+      continue;
+    }
+    hiddenCount += 1;
+    // A hidden row always needs at least one more step (see `stepsToReveal`),
+    // so the smallest of them is the nearest window that shows something new.
+    const needed = stepsToReveal(todayIso, current, item.service_date);
+    if (hiddenCount === 1 || needed < stepsToShowMore) stepsToShowMore = needed;
   }
-  return { visible, hiddenCount, canWiden: hiddenCount > 0 };
+  return { visible, hiddenCount, canWiden: hiddenCount > 0, stepsToShowMore };
 }
 
 // ── Widening to include a handoff target ─────────────────────────────────────
 
-/** Smallest step count whose window contains `dateIso`, never below `steps`. */
+/**
+ * Smallest step count whose window contains `dateIso`, never below `steps`.
+ * Shared with `applyProposalWindow` above, which uses it to size a widen press.
+ */
 function stepsToReveal(todayIso: string, steps: number, dateIso: string): number {
   const current = Math.max(0, Math.trunc(steps || 0));
   const day = typeof dateIso === "string" ? dateIso.slice(0, 10) : "";

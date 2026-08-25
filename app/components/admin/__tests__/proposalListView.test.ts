@@ -100,6 +100,15 @@ describe("sortProposals: direction inside a bucket", () => {
     ).toEqual(["a", "z"]);
   });
 
+  it("tie-breaks by CODEPOINT, so a collator can never call two ids equal", () => {
+    // `"Z".localeCompare("a")` is positive under ICU and negative by codepoint:
+    // the comparator must be the locale-independent one.
+    expect(compareProposals(p("Z", "pending", "2026-08-16"), p("a", "pending", "2026-08-16")))
+      .toBeLessThan(0);
+    expect(compareProposals(p("a", "pending", "2026-08-16"), p("a", "pending", "2026-08-16")))
+      .toBe(0);
+  });
+
   it("is antisymmetric across the approved flip", () => {
     const older = p("a", "approved", "2026-06-28");
     const newer = p("b", "approved", "2026-08-16");
@@ -203,6 +212,45 @@ describe("applyProposalWindow: the default window", () => {
   it("preserves the incoming order", () => {
     const sorted = sortProposals(history);
     expect(ids(applyProposalWindow(sorted, TODAY, 5).visible)).toEqual(ids(sorted));
+  });
+
+  it("sizes a widen press at one step while history is contiguous", () => {
+    // The common case must feel exactly like the old fixed `+ 1`.
+    expect(applyProposalWindow(history, TODAY, 0).stepsToShowMore).toBe(1);
+    expect(applyProposalWindow(history, TODAY, 1).stepsToShowMore).toBe(2);
+    expect(applyProposalWindow(history, TODAY, 2).stepsToShowMore).toBe(3);
+  });
+
+  it("reports the current steps when nothing is hidden", () => {
+    expect(applyProposalWindow(history, TODAY, 3).stepsToShowMore).toBe(3);
+  });
+
+  it("jumps over a gap so the FIRST press always reveals a row", () => {
+    // The broken-button case: a lone approved row almost a year back. A fixed
+    // `+ 1` leaves presses 1, 2 and 3 changing nothing at all.
+    const far = "2027-06-15";
+    const lone = [p("old", "approved", "2026-07-05")];
+
+    const win = applyProposalWindow(lone, far, 0);
+    expect(win.hiddenCount).toBe(1);
+    expect(win.canWiden).toBe(true);
+    expect(applyProposalWindow(lone, far, 1).visible).toEqual([]);
+
+    const after = applyProposalWindow(lone, far, win.stepsToShowMore);
+    expect(ids(after.visible)).toEqual(["old"]);
+    expect(after.hiddenCount).toBe(0);
+  });
+
+  it("jumps to the NEWEST hidden row, not the oldest", () => {
+    const far = "2027-06-15";
+    const gapped = [p("mid", "approved", "2026-12-06"), p("old", "approved", "2026-07-05")];
+    const steps = applyProposalWindow(gapped, far, 0).stepsToShowMore;
+    const after = applyProposalWindow(gapped, far, steps);
+    expect(ids(after.visible)).toEqual(["mid"]);
+    expect(after.hiddenCount).toBe(1);
+    // And the next press keeps making progress until the list is exhausted.
+    expect(ids(applyProposalWindow(gapped, far, after.stepsToShowMore).visible))
+      .toEqual(["mid", "old"]);
   });
 
   it("shows a row with an unusable date rather than hiding it", () => {

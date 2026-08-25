@@ -471,6 +471,13 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
     reopen: "Propuesta reabierta",
   };
 
+  /** The status each action commits — only `approved` is ever windowed. */
+  const ACTION_STATUS: Record<ProposalAction, ProposalStatus> = {
+    approve: "approved",
+    request_changes: "changes_requested",
+    reopen: "changes_requested",
+  };
+
   const handleAction = async (
     proposal: Proposal,
     action: ProposalAction,
@@ -486,6 +493,18 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
       });
       if (res.ok) {
         showToast(ACTION_TOAST[action]);
+        // Approving a PAST-dated proposal moves it into a windowed status whose
+        // month may already be behind the window start — the card would vanish
+        // from under the admin right after the toast. Widen to keep it on
+        // screen, through the same mechanism the handoff uses.
+        setWindowSteps((steps) =>
+          widenStepsForTargets(
+            todayIso,
+            steps,
+            [{ _id: proposal._id, status: ACTION_STATUS[action], service_date: proposal.service_date }],
+            [proposal._id],
+          ),
+        );
         await load();
         return { ok: true, conflict: false };
       }
@@ -519,7 +538,11 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
   // The window is applied AFTER the status filter, so the hidden count always
   // describes the tab on screen. `pending` / `changes_requested` are never
   // windowed (see `proposalListView.ts`), so the badge below can never disagree.
-  const { visible, hiddenCount, canWiden } = applyProposalWindow(inFilter, todayIso, windowSteps);
+  const { visible, hiddenCount, canWiden, stepsToShowMore } = applyProposalWindow(
+    inFilter,
+    todayIso,
+    windowSteps,
+  );
 
   const pendingCount = proposals.filter(p => p.status === "pending").length;
 
@@ -626,13 +649,19 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
           Only `approved` / `draft` can ever land here. */}
       {!loading && !error && canWiden && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-edge-accent-subtle px-4 py-3">
-          <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">
+          <p
+            role="status"
+            aria-live="polite"
+            className="font-label text-[11px] uppercase tracking-widest text-mono-500"
+          >
             {hiddenCount === 1
               ? "1 propuesta anterior oculta"
               : `${hiddenCount} propuestas anteriores ocultas`}
           </p>
           <button
-            onClick={() => setWindowSteps(s => s + 1)}
+            // Jump to the window that shows the NEWEST hidden row, not a blind
+            // `+ 1`: a press that changes nothing on screen reads as broken.
+            onClick={() => setWindowSteps(stepsToShowMore)}
             className="px-4 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-mono-400 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent transition-colors"
           >
             {`Ver ${WIDEN_STEP_MONTHS} meses más`}
