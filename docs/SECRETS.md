@@ -188,8 +188,92 @@ npx vercel env rm NOTIFY_FLUSH_EMAIL_LIMIT production --yes
 
 **Blast radius.** While it is low, a service whose fan-out exceeds it is split across sweeps — some members hear now and the rest on a later flush. That is the deliberate trade: slower, but nothing is deleted unsent. Leaving it low permanently is not harmful, only slow; raising it above what the send path can actually service in `NOTIFY_SEND_BUDGET_MS` is what silently loses mail.
 
+## Sanity CLI session token (`~/.config/sanity/config.json`)
+
+**Not an environment variable, and not a project token.** This is the credential
+`npx sanity login` writes to your machine. It authenticates as *you*, so its
+reach is every project and organization your Sanity account can see — wider than
+any of the project API tokens below, which are scoped to `ebb8vcnk` alone.
+
+- **Where it lives:** `~/.config/sanity/config.json` on each machine you have run
+  `sanity login` from. Nowhere else. **It is not set on Vercel, not in GitHub
+  Actions, not in `.env.local`, and no application code reads it** — only the
+  `sanity` CLI does, for `schema deploy`, `schema list`, `deploy`, `dataset`, etc.
+- **Where it came from:** `npx sanity login`, browser SSO.
+- **How to rotate:** `npx sanity logout` (invalidates the session server-side),
+  then `npx sanity login`. Repeat per machine. There is no dashboard entry for
+  it — revoking project API tokens does *not* touch it.
+- **Blast radius of rotation: none for the running app.** Production, preview,
+  the cron workflows and every script keep working, because none of them use it.
+  What breaks is only the `sanity` CLI on the machine you logged out of, until
+  you log back in.
+- **Never run `sanity debug --secrets`.** Plain `sanity debug` prints the same
+  diagnostics without the token. The `--secrets` flag prints the value to stdout,
+  which on 2026-08-25 put it into an agent session transcript and forced a
+  rotation. That is the whole reason this section exists.
+
+## Sanity project API tokens
+
+Three separate tokens, created at **sanity.io/manage → project `ebb8vcnk` → API →
+Tokens**. All are `Sensitive` in Vercel, so they read back as a placeholder and
+cannot be recovered — see [Retrievability](#retrievability-assume-nothing-is-recoverable).
+
+### `SANITY_WRITE_TOKEN`
+
+- **Purpose:** every server-side mutation — proposal writes, role and setlist
+  writes, the notification outbox sweep, and the `--apply` half of one-off
+  scripts in `scripts/`. Without it, all writes fail and the app is read-only.
+- **Role needed:** Editor.
+- **Platforms:** Vercel **twice** — once for `Preview, Production`, and once
+  branch-scoped to `Preview (verify/service-readiness)`. Also local `.env.local`.
+  **Not** in GitHub Actions (the cron workflows authenticate with `CRON_SECRET`
+  against the app, and never touch Sanity directly).
+- **Observed by the delivery firewall:** `app/utils/deliveryFirewall.ts:148` lists
+  it in `OBSERVED_ENVS` — it must stay SET on the verification deployment. Read
+  the comment at `:126-148` before changing anything about it.
+
+### `SANITY_API_READ_TOKEN`
+
+- **Purpose:** authenticated reads that must bypass the CDN — NextAuth member
+  lookups (`sanity/lib/serverClient.ts:10`), `operationalClient`, and the
+  dry-run half of `scripts/` migrations.
+- **Role needed:** Viewer.
+- **Platforms:** same two Vercel scopes as above, plus local `.env.local`. **Not**
+  in GitHub Actions.
+
+### `SR_VERIFY_SANITY_TOKEN`
+
+- **Purpose:** the service-readiness e2e harness only
+  (`scripts/lib/sr-verification.mjs:40`, `e2e/service-readiness/lib/harnessGuards.ts:332`).
+  The harness refuses to run without it and will not fall back to the other two.
+- **Platforms:** **local `.env.local` only.** Deliberately **not** in Vercel and
+  **not** in GitHub Actions — do not add it "to be safe"; the harness is run by
+  hand against a seeded slice, and giving a deployment a token that can write the
+  verification fixtures is exactly what its guards exist to prevent.
+
+### Rotating a project API token
+
+1. Create the **new** token first (same role) at sanity.io/manage → `ebb8vcnk` →
+   API → Tokens. Do not revoke the old one yet.
+2. Update every platform that holds it. For `SANITY_WRITE_TOKEN` and
+   `SANITY_API_READ_TOKEN` that is **four Vercel entries** — the `Preview,
+   Production` pair and the `Preview (verify/service-readiness)` pair — plus your
+   local `.env.local`. Missing the branch-scoped pair is the easy mistake: the
+   app keeps working and only the verification deployment breaks, later, in a
+   way that looks unrelated.
+3. **Redeploy.** Vercel bakes env vars at build time, so an updated variable does
+   nothing until the next deployment. Push `preview`, verify the alias, then
+   `main` through the PR gate.
+4. Only after the new value is live everywhere, revoke the old token.
+
+**Blast radius if you revoke first:** between the revoke and the last redeploy,
+every authenticated read and every write fails — members cannot sign in
+(NextAuth reads through `SANITY_API_READ_TOKEN`), proposals cannot be saved or
+approved, and the outbox sweep cannot flush. Create-then-swap-then-revoke, in
+that order, and the window is zero.
+
 ## Not yet documented
 
-Other variables in use — `SANITY_API_*`, `NEXTAUTH_*`, SMTP credentials for `contacto@oasis.mx`, `EMAIL_ALLOWLIST`, FCM push credentials, the solver's Secret Manager key — predate this file. Add each one here as it is next touched or rotated.
+Other variables in use — `NEXTAUTH_*`, SMTP credentials for `contacto@oasis.mx`, `EMAIL_ALLOWLIST`, FCM push credentials, the solver's Secret Manager key — predate this file. Add each one here as it is next touched or rotated.
 
 Notification-outbox tuning knobs (`NOTIFY_DEBOUNCE_MINUTES`, `NOTIFY_MAX_WINDOW_MINUTES`, `NOTIFY_CLAIM_TTL_MINUTES`, `NOTIFY_SEND_BUDGET_MS`, `NOTIFY_FLUSH_EMAIL_LIMIT`, `NOTIFY_STALE_ALERT_HOURS`) are configuration, not secrets, and all have code defaults. They are specified in `docs/superpowers/specs/2026-07-27-service-notification-emails-design.md` §9.
