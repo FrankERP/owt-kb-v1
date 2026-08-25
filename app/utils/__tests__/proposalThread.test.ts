@@ -42,6 +42,11 @@ describe("orderedMessages", () => {
   });
 
   it("never relocates or drops a message with an unusable timestamp", () => {
+    // `b` is the OLDER of the two datable messages, so oldest-first must put it
+    // first. An earlier version of this test asserted ["a","broken","missing","b"]
+    // — it had been read off the buggy output rather than derived from the
+    // contract, and it went green on exactly the 4-element shape where the bad
+    // comparator happened to return the identity.
     expect(
       orderedMessages([
         msg("a", "2026-08-24T12:00:00.000Z"),
@@ -49,7 +54,27 @@ describe("orderedMessages", () => {
         msg("missing", null),
         msg("b", "2026-08-23T09:00:00.000Z"),
       ]).map((m) => m._key),
-    ).toEqual(["a", "broken", "missing", "b"]);
+    ).toEqual(["b", "broken", "missing", "a"]);
+  });
+
+  it("keeps the datable messages in order when broken ones are interleaved", () => {
+    // The property the 4-element case is too small to see: with a NaN in the
+    // array, the old comparator was intransitive and V8 scrambled the VALID
+    // entries — a thread came back newest-first. Sizes above ~10 change sort
+    // strategy, so this fixture is deliberately larger than the one above.
+    const input = [];
+    for (let i = 0; i < 12; i += 1) {
+      // Descending timestamps: every one is out of order on input.
+      input.push(msg(`v${i}`, `2026-08-${String(24 - i).padStart(2, "0")}T12:00:00.000Z`));
+      if (i % 4 === 0) input.push(msg(`x${i}`, "no soy una fecha"));
+    }
+    const out = orderedMessages(input).map((m) => m._key);
+    const datable = out.filter((k) => k.startsWith("v"));
+    expect(datable).toEqual(["v11", "v10", "v9", "v8", "v7", "v6", "v5", "v4", "v3", "v2", "v1", "v0"]);
+    // …and every broken message is still exactly where it was stored.
+    input.forEach((m, i) => {
+      if (m._key.startsWith("x")) expect(out[i]).toBe(m._key);
+    });
   });
 
   it("tolerates an absent array and drops non-object entries", () => {

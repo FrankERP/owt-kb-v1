@@ -402,10 +402,57 @@ const FROZEN_INTENT: TransitionIntent = {
   targetIdentity: null,
 };
 
+// A SECOND frozen pair, whose only job is to exercise the parts of
+// `normalizeText` the pair above cannot reach:
+//
+//   * `teamNotes` / `adminNotes` carry a DECOMPOSED accent (u + U+0301). Every
+//     other fixture in this file uses precomposed characters, which makes
+//     `.normalize("NFC")` an identity — delete that call and the whole suite
+//     stays green while the digest moves for any decomposed input, which is
+//     exactly what a phone keyboard or a paste from macOS can produce.
+//   * `songs` is EMPTY, and `targetIdentity` is non-null — the two branches the
+//     first pair leaves untouched.
+//
+// Frozen on the same terms: if this goes red, undo the change, do not repaste.
+const FROZEN_APPROVAL_NFC: ApprovalInput = {
+  serviceType: "sunday",
+  serviceDate: "2026-08-09",
+  serviceRef: "role-nfc",
+  setlistTargetKey: "featuredSongs:2026-08-09",
+  songs: [],
+  teamNotes: "Salmo 100 u\u0301ltima",
+};
+
+const FROZEN_INTENT_NFC: TransitionIntent = {
+  action: "approve",
+  proposalId: "setlistProposal.role-nfc",
+  toStatus: "approved",
+  adminNotes: "u\u0301ltima revisio\u0301n",
+  targetIdentity: "sunday_role:role-nfc",
+};
+
 describe("frozen approval/transition digests", () => {
   it("pins the two shared constants byte for byte", () => {
     expect(APPROVAL_RECEIPT_VERSION).toBe(1);
     expect(APPROVAL_APP_MARKER).toBe("owt-kb-v1/a2-approval-1");
+  });
+
+  it("pins a decomposed-accent, empty-songs pair so NFC normalization is guarded", () => {
+    expect(approvalInputFingerprint(FROZEN_APPROVAL_NFC)).toBe(
+      "f601b556e83e56506805e34a6047ad0441c6055a047584dddded54e0791adbf0",
+    );
+    expect(transitionFingerprint(FROZEN_INTENT_NFC)).toBe(
+      "ff98adf2c4e7c63cb26a6f1ae6b6ab2c25e566f0b7495262efe7b55002172a54",
+    );
+  });
+
+  it("proves the NFC fixture is actually decomposed", () => {
+    // Guards the guard: if someone "tidies" the escape into a literal á, the
+    // digest test above would still pass while silently ceasing to exercise
+    // normalization at all.
+    expect(FROZEN_APPROVAL_NFC.teamNotes).not.toBe(
+      FROZEN_APPROVAL_NFC.teamNotes.normalize("NFC"),
+    );
   });
 
   it("pins approvalInputFingerprint for a fixed approval input", () => {

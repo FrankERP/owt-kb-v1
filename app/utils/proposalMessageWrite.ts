@@ -6,7 +6,7 @@
 // routes that append these objects live elsewhere and own the guards, the
 // canonical-proposal resolution and the `setIfMissing` + `append` patch.
 
-import { PROPOSAL_NOTES_MAX } from "./proposalWriteRequest";
+import { PROPOSAL_NOTES_MAX } from "./proposalNotesLimit";
 import type { ParseResult } from "./roleWriteRequest";
 
 function isObj(v: unknown): v is Record<string, unknown> {

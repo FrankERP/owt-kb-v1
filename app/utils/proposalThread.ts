@@ -34,22 +34,37 @@ function isObj(v: unknown): v is Record<string, unknown> {
  * rule CLAUDE.md pins to local noon — that one is `isThreadOpen` below, and it
  * never parses a datetime.
  *
- * The sort is stable and falls back to stored order for an unparseable or
- * missing `at`, so a malformed timestamp never silently relocates or drops a
- * message. Non-object entries ARE dropped: there is nothing to render.
+ * A message with an unparseable or missing `at` is PINNED at its stored index
+ * and the datable ones are sorted into the slots that remain. This is done by
+ * partition rather than by one comparator, because a comparator that returns
+ * stored order whenever either side is NaN is not a valid ordering: with
+ * `A(t=10,i=0)`, `B(NaN,i=1)`, `C(t=5,i=2)` it says A<B and B<C but A>C, and V8
+ * then scrambles the DATABLE entries too — a 40-message thread with a few
+ * broken timestamps came back newest-first with the broken ones flung to the
+ * tail, which is the exact opposite of what this function promises. Partition
+ * is a total order and makes the paragraph above literally true.
+ *
+ * Non-object entries ARE dropped: there is nothing to render.
  */
 export function orderedMessages<T extends ThreadMessage>(
   messages: readonly T[] | null | undefined,
 ): T[] {
   if (!Array.isArray(messages)) return [];
-  return messages
+  const entries = messages
     .filter((m): m is T => isObj(m))
-    .map((message, index) => ({ message, index, at: Date.parse(message.at ?? "") }))
-    .sort((a, b) => {
-      if (Number.isNaN(a.at) || Number.isNaN(b.at) || a.at === b.at) return a.index - b.index;
-      return a.at - b.at;
-    })
-    .map((entry) => entry.message);
+    .map((message, index) => ({ message, index, at: Date.parse(message.at ?? "") }));
+
+  const datable = entries.filter((e) => !Number.isNaN(e.at));
+  // The positions the datable messages occupy: they get reshuffled among these
+  // and nowhere else, so an undatable neighbour never moves.
+  const slots = datable.map((e) => e.index);
+  datable.sort((a, b) => a.at - b.at || a.index - b.index);
+
+  const out = entries.slice();
+  datable.forEach((entry, i) => {
+    out[slots[i]] = entry;
+  });
+  return out.map((entry) => entry.message);
 }
 
 /**
@@ -63,8 +78,12 @@ export function orderedMessages<T extends ThreadMessage>(
  *
  * The comparison is a CALENDAR-DAY string compare in America/Mexico_City
  * (`serviceTodayIso()` for "today"), never `new Date(iso)` and never elapsed
- * hours — CLAUDE.md's timezone invariant. It is deliberately the exact negation
- * of `outboxClassify.ts`'s `isPast(serviceDate, today) => serviceDate < today`,
+ * hours — CLAUDE.md's timezone invariant. For the `YYYY-MM-DD` service dates
+ * this field actually holds it is deliberately the negation of
+ * `outboxClassify.ts`'s `isPast(serviceDate, today) => serviceDate < today`,
+ * (this one additionally slices to 10 chars, so the two would diverge on a full
+ * datetime — unreachable while `service_date` is a Sanity `date`, and the
+ * divergence favours refusing the write),
  * so the UI, the write routes and the notification layer all agree on what
  * "past" means instead of each deciding for itself.
  *
