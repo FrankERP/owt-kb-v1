@@ -50,8 +50,33 @@ current signature** (`app/utils/serviceMutationSideEffects.ts:614`, `:629`).
 So Child A's new lead-messages route can call the *existing, unmodified*
 notification function with its *existing* string-based contract — provided Child A
 also keeps `lead_notes` written as a mirror of the newest lead message. The
-result: **Child A changes no notification behaviour whatsoever and touches no
-module under `app/utils/outbox*`.**
+result for the **debounced `leadNotes` outbox path**: Child A changes nothing and
+touches no module under `app/utils/outbox*`.
+
+**`lead_notes` has a SECOND consumer, and the mirror alone does not cover it.**
+`notifyProposalSubmitted` re-reads `lead_notes` off the committed proposal and puts
+it in the "Nueva propuesta" admin email (`app/utils/proposalNotify.ts:145`, `:153`).
+Today that value is what the lead typed into the "Notas privadas para revisión"
+textarea **with that submission** (`ProposalEditor.tsx:714-720` → `:350` →
+`route.ts:232`/`:264`).
+
+If Child A simply deleted that textarea, a first submission would commit
+`lead_notes = ""` and mail admins a submission with no notes — and the lead would
+have **no way at all** to say something with their first submission, because the
+thread composer needs a proposal document that does not exist yet. That is a
+regression in both the notification and the interaction, and it would have
+violated invariant 8.
+
+**Therefore Child A keeps the textarea for the pre-first-save case only** (see its
+§"The submission note"). Its content is written to `lead_notes` — so the submit
+email is byte-identical to today — *and* appended as the first `lead_note`
+message. Once the proposal exists, the thread composer is the only path. Child B
+removes the textarea along with the mirror.
+
+**Scope of the property, stated precisely:** Child A changes no notification
+behaviour, and modifies no file under `app/utils/outbox*` or `proposalNotify.ts`.
+It achieves that for the outbox path via the mirror, and for the submit email by
+keeping the field the submission writes.
 
 Child B then moves the call, changes the input shape, rewrites classification,
 adds the pushes, and stops the mirror — with the thread already populated,
@@ -75,8 +100,21 @@ alongside".
    appends is preceded by `setIfMissing`.
 6. `before` for any outbox notice is captured PRE-COMMIT and threaded into
    `after()`.
-7. `lead_notes` and `admin_notes` are never unset by either child. They remain a
-   byte-exact archive; unsetting them is a third, separately consented delivery.
+7. **Neither child may blank `lead_notes` or `admin_notes`** — not by `unset` and
+   not by writing `""` over a value. This is stated as blanking rather than
+   unsetting because the live hazard is the latter: `parseProposalSaveRequest`
+   coerces an absent `leadNotes` to `""` (`proposalWriteRequest.ts:117`) and both
+   save branches write it unconditionally (`app/api/me/proposals/route.ts:232`,
+   `:264`), so the moment a client stops sending the field, the next save erases
+   the archive. Removing the fields entirely is a third, separately consented
+   delivery.
+
+   *Known exception, pre-existing:* the transition writes
+   `admin_notes: request.adminNotes` unconditionally (`admin/proposals/[id]/route.ts:500`),
+   so an empty `reopen` blanks it **today**. Child A preserves that behaviour
+   verbatim rather than fixing it; it becomes harmless once the content also lives
+   in `messages[]`. Do not read invariant 7 as a claim that the field is
+   append-only today.
 8. **Neither child may regress an existing notification.** A *new* gap in a *new*
    feature is acceptable and must be named; silently retiring something that
    fires today is not.
@@ -135,7 +173,9 @@ The split is correct only if all of these hold after Child B:
   is lost, and none is notified twice.
 - `lead_notes` and `admin_notes` are byte-identical to their pre-Child-A values
   on every document that is not touched by the mirror, and the mirror's writes
-  are the only changes to them.
+  are the only changes to them. **This check runs at the end of Child A, not
+  after Child B** — the blanking hazard is created by Child A's client change, so
+  its guard cannot be scheduled a release later.
 
 ## Requirement-to-plan coverage
 
@@ -148,7 +188,9 @@ The split is correct only if all of these hold after Child B:
 | Thread UI on both surfaces, service-date composer gate | **A** | — |
 | Reads/projections carry `messages` | **A** | B (adds none) |
 | Revision handling (`_rev` attestation, per-surface) | **A** | — |
-| Existing lead-notes email keeps firing, unchanged | **A** (via the mirror) | **B** (re-sources it) |
+| Debounced lead-notes email keeps firing, unchanged | **A** (via the mirror) | **B** (re-sources it) |
+| "Nueva propuesta" submit email keeps carrying the lead's note | **A** (via the retained submission textarea) | **B** (re-sources it) |
+| `lead_notes` is never blanked to `""` by a client that stopped sending it | **A** | **B** (removes the field write entirely) |
 | Outbox source moves from `lead_notes` to the thread | **B** | — |
 | lead→admin push on non-reviewable statuses | **B** | — |
 | admin→lead push for standalone messages | **B** | — |

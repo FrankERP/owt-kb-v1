@@ -78,6 +78,42 @@ stated.
 message. That is precisely what it holds today, which is why the notification is
 unchanged. The thread is the record; the mirror is a shim with one release to live.
 
+**A repeated identical message produces no email — a new gap, named per invariant 8.**
+Both the queue-time guard (`serviceMutationSideEffects.ts:636`) and the flush
+classifier (`outboxClassify.ts:105`) compare *trimmed strings*, so a lead who posts
+a body identical to their previous one — "¿Alguna noticia?" twice, a bump — queues
+nothing. Correct for a notes *field*, wrong for a *chat*. The message is still
+stored and rendered; only the email is skipped. Child B's count-and-slice fixes it,
+because a count cannot collide the way a string can.
+
+## The submission note — why the legacy textarea survives Child A
+
+**`lead_notes` has a second consumer.** `notifyProposalSubmitted` re-reads it off
+the committed proposal and puts it in the "Nueva propuesta" admin email
+(`app/utils/proposalNotify.ts:145`, `:153`). Today that value is what the lead
+typed into "Notas privadas para revisión" **with that submission**
+(`ProposalEditor.tsx:714-720` → `:350` → `route.ts:232`/`:264`).
+
+Deleting that textarea in this child would break two things at once:
+
+1. A first submission would commit `lead_notes = ""`, and admins would get a
+   "Nueva propuesta" email with no notes where today it carries them — a
+   regression, forbidden by parent invariant 8.
+2. Worse, **the lead would have no way at all to say anything with their first
+   submission.** The thread composer needs a proposal document, and on a first
+   submission none exists yet — which is exactly why §UI disables it with
+   `Guarda la propuesta para empezar la conversación.`
+
+**Rule:** the "Notas privadas para revisión" textarea is rendered **only while no
+proposal document exists** — the pre-first-save case. Its content is sent as
+`leadNotes` exactly as today, written to `lead_notes` (so the submit email is
+byte-identical), **and** appended as the first `lead_note` message so the thread
+starts complete. Once the proposal exists the textarea is gone and the thread
+composer is the only path.
+
+Child B removes the textarea together with the mirror, and re-sources the submit
+email from the thread.
+
 ## Design
 
 ### Message shape
@@ -242,7 +278,7 @@ asserts against *that*.
 | `app/api/admin/proposals/route.ts:20-49` | Add the projection with a resolved author name, following `"lead_name": coalesce(lead->alias, lead->member_name)` (`:35`) |
 | `ProposalsPanel.tsx:43-45, 106, 225-237` | Type gains `messages`; the `lead_notes` and `admin_notes` blocks become `<ProposalThread>`; `team_notes` untouched. **`:106` seeds the change-request composer from `proposal.admin_notes` — seed it empty** |
 | `me/propose/[roleId]/page.tsx:40-56` | Add messages with resolved author names |
-| `ProposalEditor.tsx` | Type gains `messages`; the "Notas privadas" textarea and the approved-state echo become `<ProposalThread>`; the `admin_notes` banner is subsumed. **`teamNotes` untouched.** The editor stops sending `leadNotes`; `parseProposalSaveRequest` keeps accepting it |
+| `ProposalEditor.tsx` | Type gains `messages`; the approved-state echo and the `admin_notes` banner become `<ProposalThread>`. **`teamNotes` untouched.** The "Notas privadas" textarea is **retained but conditioned on `!proposalId`** — see §"The submission note"; it still sends `leadNotes` on that first save and nowhere else |
 | `app/api/me/proposals/route.ts:56-62` | GET projection gains `messages` (no in-app consumer today; e2e only) |
 | `app/(client)/me/page.tsx` | **Drop `admin_notes`** — projected and never rendered |
 | `protectedReadAudit.ts` | **No change.** `messages` is deliberately not in `PROTECTED_FIELDS`: word-boundary regex (`:729`), and the list's own comment (`:34-38`) excludes ambiguous names |
@@ -269,10 +305,13 @@ the existing email.
   compare, failing closed on an unusable date because it authorizes a write.
   **Both routes enforce it server-side** — a hidden composer is not a guard. Past
   the date: read-only with `La conversación se cerró al pasar el servicio.`
-- **No proposal document yet ⇒ disabled composer** with
-  `Guarda la propuesta para empezar la conversación.` A real narrowing (today a
-  lead can type notes before the first save), accepted because buffering an unsent
-  message client-side is the phantom failure the response shape rejects.
+- **No proposal document yet ⇒ the thread composer is absent, and the legacy
+  submission textarea stands in its place** (§"The submission note"). The thread
+  renders empty with `Aún no hay mensajes.` This is why the earlier framing —
+  "disabled composer, accepted narrowing" — was wrong: it would have taken away
+  the lead's only way to speak on a first submission and emptied the submit
+  email. Nothing is buffered client-side; the note travels with the save that
+  creates the proposal, exactly as today.
 - **Colour:** lead bubbles `border-surface-accent-30` / `bg-accent/5` /
   `text-mono-300`; admin bubbles `border-negative-strong/30` /
   `bg-negative-strong/10` / `text-negative-muted`; timestamps
@@ -379,14 +418,25 @@ against the same dataset.
 1. Every message ever posted is retrievable; none is overwritten.
 2. The 8 documents carrying legacy notes have them as messages, with the count the
    pre-`--apply` re-measure predicted.
-3. `lead_notes` and `admin_notes` on every other document are byte-identical to
-   their pre-migration values.
-4. **The existing debounced admin email fires on exactly the occasions it fires
+3. **`lead_notes` is never blanked to `""`.** On every document — including the 8
+   the migration touches — its value is either its pre-migration value or a mirror
+   write carrying a real message body. Never the empty string, and never absent.
+   This is the criterion that guards the archive Child A's own rollback depends on,
+   and it belongs here rather than in Child B because **this child is what makes
+   the client stop sending the field**.
+4. `admin_notes` likewise, with the one pre-existing exception the parent's
+   invariant 7 records (an empty `reopen` blanks it today; Child A preserves that
+   behaviour rather than fixing it).
+5. **The existing debounced admin email fires on exactly the occasions it fires
    today**, same audience, same debounce, same preference key.
-5. No file under `app/utils/outbox*` or `proposalNotify.ts` is modified.
-6. A post never enables an approval or a save against content the actor was not
+6. **The "Nueva propuesta" submit email carries the lead's note exactly as today**,
+   via the retained submission textarea.
+7. No file under `app/utils/outbox*` or `proposalNotify.ts` is modified — **and
+   neither has its INPUT changed**, which criteria 5 and 6 are what actually check.
+   An unmodified file fed an emptied field is still a regression.
+8. A post never enables an approval or a save against content the actor was not
    shown.
-7. `team_notes` behaviour is unchanged end to end.
+9. `team_notes` behaviour is unchanged end to end.
 
 ## Verification
 
@@ -394,6 +444,8 @@ against the same dataset.
 |---|---|---|
 | **`setIfMissing` precedes every append** | `proposalMessageRoutes.test.ts` + `proposalWriteRoutes.test.ts` — assert the MUTATION CHAIN, not a 200 | The first message failing silently; a first-time `request_changes` rolling back its status change |
 | **The existing email still fires** | `setlistNoticeQueueing.test.ts` — a lead message on a `pending` proposal produces an outbox document with the same shape as today's | Silently retiring the notification this child promises not to touch |
+| **`lead_notes` is never blanked** | `proposalWriteRoutes.test.ts` — a save from the new bundle writes the newest lead-message body, never `request.leadNotes` blindly; re-read a document with a pre-existing value and show it non-empty | The client stopping sending the field and the next save erasing the archive on all 8 documents — destroying Child A's own rollback path |
+| **The submit email still carries the note** | `proposalNotify.test.ts` — a first submission carrying the textarea's text produces an email whose notes block is that text | A first submission mailing admins with no notes, and the lead having no way to speak on their first submission |
 | **No outbox module changed** | a test or CI check asserting `git diff --name-only` touches nothing under `app/utils/outbox*` or `proposalNotify.ts` | Scope leaking into Child B |
 | A LEAD's post never enables a lost update | mount test — interleave a co-lead content edit between the lead's page render and the lead's post; the subsequent save must **409** | Adopting a revision without its content |
 | An ADMIN's post never enables an unreviewed approval | mount test — interleave a lead content edit between the admin's card render and the admin's post; approve must 409 or publish only what was shown | Re-authorizing against unseen content |
