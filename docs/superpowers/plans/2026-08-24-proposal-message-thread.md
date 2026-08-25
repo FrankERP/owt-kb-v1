@@ -1,5 +1,16 @@
 # Implementation Plan: Proposal message thread (R2)
 
+> **SUPERSEDED as a delivery plan on 2026-08-25.** The cutover it describes was
+> split into two separately-scoped deliveries after five adversarial rounds
+> without an approval — six of nine blockers were on the notification surface. See
+> [the roadmap](2026-08-25-proposal-thread-roadmap.md),
+> [Child A](2026-08-25-proposal-thread-a-storage-and-ui.md) and
+> [Child B](2026-08-25-proposal-thread-b-notifications.md).
+>
+> **This file remains normative for ONE thing:** the "Contracts of what this plan
+> reuses" section below, which both children cite rather than restate so a
+> correction lands in one place. Everything else here is historical.
+
 **Every rule in this document is stated once, in one place.** An earlier revision
 stated several of them in three places, and three of its blockers were
 corrections that reached one copy and not its twins. The narrative of what
