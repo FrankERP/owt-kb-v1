@@ -13,7 +13,13 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
 
 ## Conventions
 - Work on a branch, **merge to `main` periodically** (don't commit routine work
-  straight to `main`). **Direct push, no PRs.**
+  straight to `main`). **`main` is protected and takes NO direct pushes** — it is
+  reached through a PR whose `gates` check is green (`.github/workflows/ci.yml`:
+  `tsc --noEmit`, `vitest`, `eslint` with 0 errors). `preview` still takes direct
+  pushes; CI runs there too, but does not block. Protection applies to admins as
+  well, so there is no silent bypass: an emergency override means deliberately
+  turning protection off, doing the push, and turning it back on. See
+  `docs/CI.md`.
 - **A MERGE TO `main` IS A RELEASE, SO IT NEEDS A FRESH CODE REVIEW FIRST.** Not the
   plan review — a review of the *diff*. Children E and F were both adversarially reviewed
   as plans (19 rounds and 2), merged, and deployed; the code review ran afterwards and
@@ -39,13 +45,16 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   Pushing it before dev has seen the change means the team gets it first and dev
   becomes the rehearsal you already skipped. The order is:
 
-      feature branch → main (local merge, gates green)
-      → merge main into preview, push preview, VERIFY the dev alias moved
-      → only then push main
+      feature branch (local gates green)
+      → merge the feature branch into preview, push preview, VERIFY the dev alias moved
+      → open a PR from the feature branch to main, WAIT for the `gates` check
+      → merge the PR — that is the production release
 
   The verify step is not optional and a green build does not satisfy it — confirm
   `dev-owt-backstage.vercel.app` is in the deployment's `alias` array and that its
-  `githubCommitSha` is the commit you pushed.
+  `githubCommitSha` is the commit you pushed. **`preview` still goes first**: the
+  PR gate proves the code compiles and passes, never that it looks right to a
+  human on dev. Then verify the production alias the same way after the merge.
 - **Worktrees only when two things must be in flight at once** — parallel agents
   writing overlapping files (`Agent` with `isolation: "worktree"`) or protecting the
   primary tree while gates/servers run elsewhere (`EnterWorktree`, never a hand-rolled
