@@ -177,11 +177,25 @@ strictly inside the branch that guard protects.
 
 | Route | Guard | Append |
 |---|---|---|
-| `POST /api/me/proposals/[id]/messages` | `requireMinistryMember("worship")`, caller ∈ `canonicalLeadRefs(role)`, **and** `role.published !== false` — both halves of `me/proposals/route.ts:126` | `setIfMissing({messages: []})` + `append`, **no `ifRevisionId`** |
+| `POST /api/me/proposals/[id]/messages` | `requireMinistryMember("worship")`, caller ∈ `canonicalLeadRefs(role)`, **and** `role.published !== false` — both halves of `me/proposals/route.ts:127` | `setIfMissing({messages: []})` + `append`, **no `ifRevisionId`** |
 | `POST /api/admin/proposals/[id]/messages` | `requireActiveManager()` **and** `role !== "content-editor"` | same |
 
 Both resolve through `loadCanonicalProposal`, are wrapped in
 `withVerificationRunContext`, and share the pure `app/utils/proposalMessageWrite.ts`.
+**Both declare `export const maxDuration = 60`**, like their siblings
+(`me/proposals/route.ts:5`, `admin/proposals/[id]/route.ts:5`) — the lead route
+hosts the same `after()` fan-out, and §5 notes queuing runs an inline sweep at
+roughly 14 s per send.
+
+**Ministry gate — a decision, not an inheritance.** `requireActiveManager()` has
+no ministry check, so a kids-only `admin` could write to a worship proposal. This
+mirrors the sibling transition route exactly and grants that actor nothing they do
+not already have, so it is not an escalation. But CLAUDE.md's two-way isolation
+rule says a worship surface gates with `requireMinistryManager("worship")`, and
+this is a **new** writer. **Decision: mirror the sibling.** A new writer stricter
+than the route beside it gives two different answers to "can this admin act on
+this proposal", which is worse than one consistent wrong answer. Tightening both
+together is OQ-1's business.
 
 **`setIfMissing` is mandatory on every patch that appends.** Sanity requires the
 array to exist; the vendored client says so (`README.md:1213-1218`) and the repo's
@@ -325,9 +339,9 @@ in-flight documents for no benefit. Only the meaning changes.
 **In-flight legacy notices:** `typeof notice.before?.beforeMessageCount !== "number"`
 ⇒ **drop** (return `[]`). The test must be `typeof`, not truthiness —
 `beforeMessageCount: 0` is the legitimate first-message case. Dropping is safe and
-verified: `classifiedIds.add` precedes classification (`outboxSweep.ts:766`),
+verified: `classifiedIds.add` precedes classification (`outboxSweep.ts:734`),
 `partitionClaimed` routes a classified notice with no pending recipients to
-`toConsume` (`:506-535`), and the `finally` deletes it (`:877-884`). It does not
+`toConsume` (`:506-535`), and the `finally` deletes it (`:886-890`). It does not
 crash, wedge or re-pend.
 
 **Knowing what queuing costs:** `commitUpserts` also runs `sweepOutbox`
@@ -405,6 +419,13 @@ Two designs are ruled out on hard evidence, and these are R3's binding constrain
   `publishReadyTransaction.ts:26-32` documents that an unrelated member write causes
   conservative false conflicts in the publish-ready transaction.
 
+**The same mechanism applies, weakly, to messages themselves:** the publish-ready
+transaction asserts the shared proposal's revision (`publishReadyTransaction.ts:21-22`),
+so a message posted mid-publish causes a conservative false conflict. It fails
+closed, and it is far rarer than a read mark on every card open — a message is a
+deliberate act, a read is not. That difference is why messages are acceptable
+where read marks are not; recorded so the distinction is explicit.
+
 A derived, storage-free indicator was considered and declined: it never clears by
 reading, only by acting.
 
@@ -432,7 +453,8 @@ else.
    `set` avoids relying on an `insert` anchor whose behaviour against a just-created
    empty array this plan cannot verify read-only.
 3. Mint deterministic `_key`s `migleadnote01` / `migadminnote1` and **skip a
-   document when the `_key` it would mint is present** — so a re-run is a no-op.
+   document when ANY key it would mint is already present** — 3 production
+   documents mint both, so a singular check would half-migrate one on a re-run.
 
 **Field mapping:**
 
@@ -636,6 +658,18 @@ finding cannot extend the window in which production still writes the legacy fie
 **The residual window is step 4 → step 8**: a preview verification and a PR gate,
 roughly ten to twenty minutes. It is not zero, which is why step 9 exists.
 
+**Two things live inside it.** `preview` runs the new code and production the old,
+against the same dataset, and both sweep the outbox — a new-shape notice queued
+from preview and classified by production's old `classifyLeadNotesNotice` compares
+`before: ""` against the frozen live `lead_notes` and could mail admins stale text
+as new. So **do not exercise the thread on `preview` until step 8 completes**,
+including the walkthrough's message posts.
+
+**Volume, named rather than assumed:** the debounced admin email moves from "the
+notes field changed on a save" to "a lead posted a message", and chat invites far
+more frequent posting. Production runs `NOTIFY_FLUSH_EMAIL_LIMIT=2` against a
+measured 14 413 ms/send. Watch `report.lost` after the release.
+
 ---
 
 ## Verification
@@ -649,7 +683,9 @@ roughly ten to twenty minutes. It is not zero, which is why step 9 exists.
 | **`setIfMissing` precedes every append** | `proposalMessageRoutes.test.ts` + `proposalWriteRoutes.test.ts` — assert the MUTATION CHAIN, not a 200 | The first message failing silently, and a first-time `request_changes` rolling back its status change |
 | An old-shape save lands and queues | `setlistNoticeQueueing.test.ts` — a save carrying `leadNotes` from a pre-cutover bundle appends a message and produces an outbox document | A lead's note discarded behind a success toast; a silent compat release |
 | Stored shape is homogeneous | `proposalMessageWrite.test.ts` + `migrateProposalMessages.test.ts` assert the same field set including `_type` | Migrated items carrying `_type` and runtime items not |
-| A post does not 409 the next action | `proposalMessageRoutes.test.ts` + `proposalWriteRoutes.test.ts` — a transition and a save immediately after a post both succeed | The `_rev` bump locking the admin out of the card and the lead out of saving |
+| A post refreshes content, not just the revision | mount test — interleave a LEAD CONTENT EDIT between the admin's card render and the admin's post, then assert the subsequent approve either 409s or publishes only songs the admin was shown | An adopted bare `_rev` re-authorizing an approval against content the reviewer never saw — the property `admin/proposals/[id]/route.ts:63-67` exists to protect |
+| A post does not 409 the poster's own next action | `proposalMessageRoutes.test.ts` + `proposalWriteRoutes.test.ts` — after the client refresh, a transition and a save both succeed | The `_rev` bump locking the admin out of the card and the lead out of saving |
+| The transition stops setting `admin_notes` | `proposalWriteRoutes.test.ts` — assert the transition mutation `set` has no `admin_notes` key | Silently blanking the frozen admin archive, which today an empty `reopen` already does (`route.ts:500`, `adminNotes` coerced to `""`) |
 | Concurrent posts both land | `proposalMessageRoutes.test.ts` | A revision precondition creeping into the append |
 | An empty `reopen` appends nothing | `proposalWriteRoutes.test.ts` | A blank bubble on every note-less reopen |
 | The composer closes on the SERVICE DATE | `proposalThread.test.ts` (shipped) + `proposalMessageRoutes.test.ts` — an approved future service accepts a post; a past-dated one is rejected server-side | A chat read-only on most real proposals, or a client-only gate a request bypasses |
