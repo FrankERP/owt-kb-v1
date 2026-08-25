@@ -4,6 +4,8 @@
 
 > Release 2 of the setlist-proposal feature. The private lead↔admin channel becomes a **message thread** with persisted history, because today each new note overwrites the last. Settled: (1) a new `messages[]` array REPLACES `lead_notes` and `admin_notes`, migrating existing values in as the first message(s) with authorship and a best-available timestamp; (2) `team_notes` is untouched — separate single field, still copied onto the live setlist on approval, still rendered to the whole team; (3) participants are only the proposal's lead and `admin`/`super-admin` — design author/kind fields so "notas del pastor" can later be routed here, but do not build it; (4) no new emails, no new `notificationOutbox` kind — show an unread indicator instead.
 
+**Amended 2026-08-24, after the open questions were answered.** OQ-1 was resolved *against* the derived indicator this plan originally recommended: read state must be tracked properly, by a `proposalReadMark` document type with its own guarded route. That is its own critical-contract delivery. **R2 therefore ships the thread with no unread indicator at all**, and the badge becomes R3. OQ-2 was resolved as recommended: migrated admin notes with no attributable author are minted with no `author` field and render as "Admin".
+
 ## Status and contract
 
 - Document status: **Draft — not approved, not authorization to implement**
@@ -55,7 +57,6 @@ Every row below was read from the repository or from the production dataset on 2
 - `proposalNotify`'s "Nueva propuesta" body source.
 - A `--apply`-guarded migration script populating `messages[]` from the two legacy fields.
 - Thread UI in `ProposalsPanel` (admin) and `ProposalEditor` (lead), Spanish, existing tokens.
-- A derived unread indicator with no new storage.
 - Docs + two ADRs.
 
 ### Non-goals
@@ -65,7 +66,7 @@ Every row below was read from the repository or from the production dataset on 2
 - **System/transition messages.** `kind` reserves `system`; no code mints it in R2.
 - **Unsetting `lead_notes` / `admin_notes`.** Deferred to a separate consented cleanup.
 - **A new `notificationOutbox` kind or any new email.**
-- **Per-message read receipts / a `proposalReadMark` document type.**
+- **Any unread indicator, derived or stored.** Resolved by OQ-1: read state gets a `proposalReadMark` document type in R3. R2 renders the thread with no badge. See §7.
 - Repairing the `request_changes` revalidation gap.
 
 ### Preserved invariants
@@ -213,12 +214,18 @@ Ordering within a document: sort the (at most two) minted messages by the resolv
 | `app/(client)/me/propose/[roleId]/page.tsx:40-56` (`:43`) | Add messages to `getSharedProposal`'s projection, with resolved author names. |
 | `app/(client)/me/propose/[roleId]/ProposalEditor.tsx:34-40, 121, 350, 446-450, 693-740` | Type gains `messages`; drop `leadNotes` state (`:121`) and the `leadNotes` key from the save body (`:350`); replace the "Notas privadas para revisión" textarea (`:709-731`) and the approved-state echo (`:734-739`) with `<ProposalThread>`; replace the `admin_notes` banner (`:446-450`) — the thread subsumes it. **`teamNotes` at `:122`, `:351`, `:693-708`, `:728-733` is untouched.** |
 | `app/api/me/proposals/route.ts:56-62` (`:58`) | GET projection: `messages` in, `lead_notes`/`admin_notes` out. |
-| `app/(client)/me/page.tsx:231-236, 267-287` | **Drop `admin_notes` from the projection and the two type literals.** It is projected and never rendered (the card at `:382-423` uses only `status` and `hint`). Replace with the derived unread count if the indicator ships here. |
+| `app/(client)/me/page.tsx:231-236, 267-287` | **Drop `admin_notes` from the projection and the two type literals.** It is projected and never rendered (the card at `:382-423` uses only `status` and `hint`). Nothing replaces it in R2; the R3 read-mark delivery is what will put a badge here. |
 | `app/utils/interface.tsx:132-141` | `SetlistProposal` gains `messages?`. |
 | `app/utils/protectedReadAudit.ts:40-53` | **Add `messages` to `PROTECTED_FIELDS` — but the honest framing is that this is optional.** `PROTECTED_FIELDS` today lists `team_notes` and **not** `lead_notes`/`admin_notes`, so the audit does not currently depend on the fields being replaced and nothing breaks if `messages` is omitted. It *should* be added because it satisfies the module's own stated criterion at `:34-38` (a field that exists only on the protected document, unambiguous against `post`/`teamMembers`), and adding it will cause `protectedReadAudit.test.ts` to flag any new query site that reads it through a non-operational client — which is exactly the point. |
 | `e2e/service-readiness/lib/dataset.ts:390-403` | `StoredProposal` and `PROPOSAL_PROJECTION` gain `messages`. |
 
-### 7. Unread indicator — the weakest part of this design
+### 7. Read state — deferred to R3, with the design space already narrowed
+
+**Decision (OQ-1, answered 2026-08-24): R2 ships no unread indicator.** The derived, storage-free indicator this plan originally recommended was rejected because it never clears by reading — only by acting — and in a two-person channel "read and deliberately not replied to" is a meaningful state it cannot represent. Rather than ship a badge that lies, R2 ships the thread alone and read state becomes **R3: a `proposalReadMark` document type, one document per (viewer, proposal), written by its own guarded route** — a new document type, a new writer and a new lifecycle, therefore its own critical-contract plan with its own adversarial review.
+
+What R2 owes R3: nothing structural. `messages[].at` is server-minted and the array is strictly append-only, so a read mark is a timestamp comparison against data R2 already stores. No schema change in R2 anticipates it.
+
+The two rejections below are recorded here because they are the binding constraints on that R3 plan, and because both look like obvious shortcuts to anyone who has not read this. They are the substance of ADR-0024.
 
 **Two storage designs are ruled out on hard evidence, not preference.**
 
@@ -226,30 +233,9 @@ Ordering within a document: sort the (at most two) minted messages by the resolv
 
 *Read marks on `teamMembers`*: avoids the proposal `_rev` problem, but bumps the **member** `_rev`, and `app/utils/publishReadyTransaction.ts:26-32` documents in so many words that an unrelated member write (it names `lastSeen`) causes conservative false conflicts in the publish-ready transaction. Making readiness publishes flakier to render a dot is a bad trade.
 
-*A new `proposalReadMark` document type* is the actually-correct design — a document per (viewer, proposal), written by its own guarded route. It is also a new document type, a new writer, a new lifecycle with no owner for cleanup, and therefore **its own critical-contract delivery**. Out of scope for R2.
+*A new `proposalReadMark` document type* is what survives — a document per (viewer, proposal), written by its own guarded route, keeping every write off both `setlistProposal` and `teamMembers`. That is the R3 delivery. It needs its own answers for lifecycle and cleanup (nothing currently owns deleting marks for proposals that are gone), which is exactly why it is not bolted onto this plan.
 
-**Recommended for R2: a derived, storage-free indicator.** Pure function in `app/utils/proposalThread.ts`:
-
-```
-unreadCount(messages, viewerId, floorIso) =
-  count of m where m.author !== viewerId and m.at > max(
-      at of viewer's own most recent message,
-      floorIso
-  )
-```
-
-`floorIso` is an activity floor: `last_edited_at` / `submitted_at` for a lead, `reviewed_at` / `last_transition.at` for an admin — all fields the projections already carry.
-
-Zero writes, zero new documents, works across devices, no `_rev` churn anywhere.
-
-**And here is what is wrong with it, stated plainly rather than buried:**
-
-1. **It never clears by reading — only by acting.** A viewer who reads the thread and does nothing still sees the badge.
-2. It is per-thread, not per-message. There is no "3 new since you last looked", only "there is something newer than your last action".
-3. The activity floor is a proxy. An admin who reviews without transitioning, or a lead who reads without saving, gets a stale floor.
-4. It cannot distinguish "unread" from "read and deliberately not replied to", which in a two-person channel is a meaningful difference.
-
-If a reviewer judges (1) unacceptable, the honest answer is **not** to bolt read-marks onto the proposal — it is to promote `proposalReadMark` into its own R3 plan. This section should be the first thing a reviewer attacks.
+**Rejected for R2: a derived, storage-free indicator** of the form "count messages from the other party newer than the viewer's last *action* (`last_edited_at` / `submitted_at` for a lead, `reviewed_at` / `last_transition.at` for an admin)". It costs nothing and works across devices, but it never clears by reading, it is per-thread rather than per-message, and its activity floor is a proxy that goes stale for anyone who reviews without transitioning. Recorded here so a later reader knows it was considered and declined on the merits, not overlooked.
 
 ### 8. UI
 
@@ -260,7 +246,7 @@ New client component `app/components/ProposalThread.tsx`, shared by both surface
 - **Colour tokens, reusing what these two files already use:** lead messages `border-surface-accent-30` / `bg-accent/5` and `text-mono-300` (mirroring the team-message block at `ProposalsPanel.tsx:212-218`); admin messages `border-negative-strong/30` / `bg-negative-strong/10` and `text-negative-muted` (mirroring the admin-notes block at `ProposalEditor.tsx:446-450`). Timestamps `font-label text-[11px] uppercase tracking-widest text-mono-500`, matching the existing section labels. No inline colour; if one becomes necessary, `themeColour(rgbVar, alpha)` — **never** string concatenation (CLAUDE.md).
 - **Toasts** via `useTransientValue` — `showToast(msg, false)` on failure, matching `ProposalEditor.tsx:126` and `ProposalsPanel.tsx:4`. Never a bare `setTimeout`.
 - **Mutation handler** wraps `fetch` in try/catch/finally, checks `res.ok`, resets `posting` in `finally`, never clears the composer on failure (CLAUDE.md invariant; the existing failure modes at `ProposalsPanel.tsx:462-492` are the model).
-- **Spanish copy:** section title `Conversación con los admins` (lead side) / `Conversación con el líder` (admin side); empty state `Aún no hay mensajes.`; placeholder `Escribe un mensaje…`; button `Enviar`; posting `Enviando…`; failure `Error al enviar el mensaje`; unread badge `N nuevo` / `N nuevos`.
+- **Spanish copy:** section title `Conversación con los admins` (lead side) / `Conversación con el líder` (admin side); empty state `Aún no hay mensajes.`; placeholder `Escribe un mensaje…`; button `Enviar`; posting `Enviando…`; failure `Error al enviar el mensaje`. No unread badge in R2.
 - **Admin side:** the `request_changes` composer (`ProposalsPanel.tsx:245-280`) stays exactly as it is — it is a *decision*, not a chat message, and it keeps its own `adminNotes` state and its `!adminNotes.trim()` disable. Its text simply also lands in the thread. The `reopen` composer (`:305-330`) behaves identically.
 - **Read-only when approved:** the thread renders but the composer is hidden once `status === "approved"`, matching the existing `!isApproved` gating at `ProposalEditor.tsx:693`, `:709`.
 
@@ -282,7 +268,7 @@ Every phase ends with the same gate: **`npx tsc --noEmit`, `npm test`, `npx esli
 
 - `sanity/schemas/setlistProposal.ts`: `messages[]` (after `team_notes`, `:163`).
 - `app/utils/proposalMessageWrite.ts`: `parseProposalMessageRequest`, `buildProposalMessage`, `PROPOSAL_MESSAGE_KINDS`, `PROPOSAL_AUTHOR_ROLES`, `PROPOSAL_MESSAGES_MAX`.
-- `app/utils/proposalThread.ts`: `orderedMessages`, `unreadCount` — pure.
+- `app/utils/proposalThread.ts`: `orderedMessages` — pure. (`unreadCount` is not built in R2; see §7.)
 - `app/utils/interface.tsx:132-141`: `messages?`.
 - Deploy the schema (`sanity:deploy-schema`).
 - **Verification:** gate + new unit tests. Nothing reads or writes the field.
@@ -317,13 +303,12 @@ Every phase ends with the same gate: **`npx tsc --noEmit`, `npm test`, `npx esli
 - **Verification:** gate + `scripts/__tests__/migrateProposalMessages.test.ts` (mapping, timestamp fallback chain, ordering, idempotent skip). Dry-run output must report exactly the measured counts.
 - **State after:** deployable; no production write has occurred.
 
-### Phase 5 — Reads, UI, unread indicator (single-read cutover)
+### Phase 5 — Reads and UI (single-read cutover)
 
 - All read sites from §6.
 - `app/components/ProposalThread.tsx`.
 - `ProposalsPanel.tsx` + `ProposalEditor.tsx` integration; `leadNotes` leaves `parseProposalSaveRequest` (`proposalWriteRequest.ts:105-131`) and the editor save body (`ProposalEditor.tsx:350`).
 - Drop the `admin_notes` dual-write from the admin transition.
-- Unread badge on `/admin` and `/me`.
 - **Verification:** gate + updated `proposalWriteRequest.test.ts`, `proposalWriteRoutes.test.ts`; manual walkthrough on `preview`.
 - **State after:** deployable **only after the Phase 7 migration `--apply`** — otherwise 8 documents show an empty thread. This ordering constraint is binding.
 
@@ -332,7 +317,7 @@ Every phase ends with the same gate: **`npx tsc --noEmit`, `npm test`, `npx esli
 - `docs/DATA_MODEL.md:166-200` (the field table at `:184`/`:186`); `docs/API_REFERENCE.md:233`, `:327-328`, `:351` (state explicitly that the transition-fingerprint field list is unchanged) + new rows for the two message routes; `docs/UTILITIES_AND_COMPONENTS.md:287` + a `ProposalThread` row; `docs/NOTIFICATIONS.md:61`; a forward pointer added to `docs/superpowers/specs/2026-07-03-shared-setlist-proposals-design.md:83`.
 - **ADRs — yes, two.** Both meet the `docs/adr/README.md` bar ("code that looks like a bug but isn't"; "something deliberately not done"):
   - `docs/adr/0023-proposal-thread-keeps-the-approval-marker.md` — why `APPROVAL_RECEIPT_VERSION` / `APPROVAL_APP_MARKER` were deliberately **not** bumped despite the stored transition shape changing. Without this, a future reader bumps them "for correctness" and manufactures `legacy_approval_unverified` on live approvals. Link it from `proposalWriteRequest.ts:173-176`.
-  - `docs/adr/0024-proposal-read-state-is-derived-not-stored.md` — why read state is not persisted anywhere, citing the proposal-`_rev`-as-auth-token and `publishReadyTransaction.ts:26-32` arguments. Without this, "just add a readBy array" is an obvious-looking improvement that breaks admin review.
+  - `docs/adr/0024-proposal-read-state-is-not-stored-on-the-proposal.md` — why read state is deferred to R3 and, when it lands, must not live on `setlistProposal` or on `teamMembers`, citing the proposal-`_rev`-as-auth-token and `publishReadyTransaction.ts:26-32` arguments. Without this, "just add a readBy array" is an obvious-looking improvement that breaks admin review.
 - e2e: `e2e/service-readiness/proposal-lifecycle.spec.ts:104` (`admin_notes` contains "apertura" → assert the appended message), `zero-delivery.spec.ts:64` (fixture; wire contract unchanged, so likely unaffected — verify), `lib/dataset.ts:390-403`, `scripts/lib/sr-verification.mjs:938`.
 - **Verification:** gate + the e2e suites.
 
@@ -387,8 +372,8 @@ Every phase ends with the same gate: **`npx tsc --noEmit`, `npm test`, `npx esli
 
 | # | Question | Why it matters | Recommendation | Blocking? |
 |---|---|---|---|---|
-| OQ-1 | Does the unread indicator's "never clears by reading" limitation need fixing in R2? | It is the design's weakest property and the only settled requirement not fully satisfied. | Ship derived-unread in R2; if unacceptable, promote `proposalReadMark` to its own R3 critical plan. Do **not** bolt read-marks onto the proposal or onto `teamMembers`. | **Yes** |
-| OQ-2 | For the 2 migrated `admin_notes` with no `last_transition.by`, mint with no `author`, or attribute to a fallback admin? | Fabricated attribution in an audit-adjacent history is worse than an absent one. | Absent `author`, `author_role: "admin"`, rendered as "Admin". Requires `author` optional in the schema. | **Yes** |
+| OQ-1 | ~~Does the unread indicator's "never clears by reading" limitation need fixing in R2?~~ | — | **RESOLVED 2026-08-24: yes.** Derived-unread is dropped from R2 entirely; `proposalReadMark` is promoted to its own R3 critical plan. R2 ships the thread with no badge. | Closed |
+| OQ-2 | ~~For the 2 migrated `admin_notes` with no `last_transition.by`, mint with no `author`, or attribute to a fallback admin?~~ | Fabricated attribution in an audit-adjacent history is worse than an absent one. | **RESOLVED 2026-08-24 as recommended:** absent `author`, `author_role: "admin"`, rendered as "Admin". Requires `author` optional in the schema. | Closed |
 | OQ-3 | Should the standalone admin chat route also assert `ifRevisionId`? | Two different concurrency models on one array looks like an inconsistency. | No — chat is append-only and must not 409; the transition's message inherits the precondition because it is a decision. Document the asymmetry in code. | No |
 | OQ-4 | One ADR or two? | Reviewer preference. | Two — the constants decision and the read-state decision have different audiences and different "don't fix this" triggers. | No |
 | OQ-5 | Does the `leadNotes` email subject copy change? | Cosmetic; touches two more test files. | Yes, `"Mensajes de la propuesta"`. Cheap, and "Notas del líder" becomes wrong once the thread carries admin replies. | No |
@@ -399,6 +384,7 @@ Every phase ends with the same gate: **`npx tsc --noEmit`, `npm test`, `npx esli
 
 - **Prerequisites supplied to later plans:** the `kind`/`author_role` enums reserve `pastor_note` and `system`, so a pastor-note delivery is a write-path change with no migration.
 - **Outputs promised:** a populated `messages[]` on all 14 production proposals; `lead_notes`/`admin_notes` intact for a later cleanup delivery.
+- **Handed to R3:** read state (`proposalReadMark`), which R2 deliberately does not build. R2 leaves it nothing to undo — `messages[].at` is server-minted and the array is append-only, so a read mark is a timestamp comparison against data R2 already stores.
 - **Adversarial review order:** this plan is a single artifact — two sequential fresh reviews on byte-identical text.
 - **Implementation authorization: not granted by this plan.**
 
