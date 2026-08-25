@@ -182,6 +182,16 @@ strictly inside the branch that guard protects.
 
 Both resolve through `loadCanonicalProposal`, are wrapped in
 `withVerificationRunContext`, and share the pure `app/utils/proposalMessageWrite.ts`.
+
+**On duplicates, the message routes are deliberately laxer than the save path.**
+The save path refuses an ambiguous group via `loadProposalGroup`
+(`me/proposals/route.ts:138-145`); `loadCanonicalProposal` does no
+duplicate-per-service detection, and the composer's id comes from
+`getSharedProposal`'s `order(_createdAt asc)[0]`. **Decision: accept it.** A message
+landing on the same document the composer is rendering is self-consistent, and
+refusing to let someone talk because a duplicate exists elsewhere would block the
+channel exactly when a duplicate needs discussing. The save path stays strict
+because a write to the wrong document is a lost setlist; a message is not.
 **Both declare `export const maxDuration = 60`**, like their siblings
 (`me/proposals/route.ts:5`, `admin/proposals/[id]/route.ts:5`) — the lead route
 hosts the same `after()` fan-out, and §5 notes queuing runs an inline sweep at
@@ -232,6 +242,11 @@ standalone routes**. Thread capped at `PROPOSAL_MESSAGES_MAX = 200`, checked
 against the loaded document — **racy by construction** (two concurrent posts at
 199 both land) and accepted as a growth bound, not a security boundary. Say so in
 the code.
+
+**The cap applies to the two standalone routes ONLY.** The transition must never
+be blocked by it: a full thread refusing a `request_changes` would turn a growth
+bound into a review outage. If the cap is reached, the transition commits its
+status change and appends nothing.
 
 **Response.** The appended message and the full `messages[]`, read back through
 `operationalClient`.
@@ -430,6 +445,15 @@ message, never both.**
 propuesta y pidieron cambios" when an admin merely asked a question. Say a message
 arrived: `Nuevo mensaje` / `<Autor> escribió en la propuesta del <fecha>`.
 
+**A lead message can be silently unsignalled across an approval, and that is
+accepted.** A lead posts while `pending` → a notice is queued and no push fires
+(the email covers that status). If an admin approves inside the 15–60 min debounce,
+the flush finds `REVIEWABLE_STATUSES.has("approved") === false`
+(`outboxSweep.ts:393`), classifies to `null`, and consumes the notice. No email, no
+push; the message is visible only if an admin opens the card. Rare, non-destructive,
+and closing it would mean either firing a push the email was meant to cover or
+widening the flush gate. Named rather than fixed.
+
 **These pushes are not debounced.** N messages, N pushes. Acceptable at this team's
 volume; if it becomes noise the fix is a push debounce, not a wider email.
 
@@ -540,9 +564,9 @@ data. One dataset, one shot.
 
 | Site | Change |
 |---|---|
-| `serviceReadQueries.ts:33-43` (`PROPOSAL_PROJECTION`) | Add `messages[]{_key, "author": author._ref, author_role, kind, body, at}`. Keep the legacy fields — frozen archive |
+| `serviceReadQueries.ts:33-43` (`PROPOSAL_PROJECTION`) | Add `messages[]{_key, "author": author._ref, author_role, kind, body, at}`. Keep the legacy fields — frozen archive. **Payload note:** this projection also backs `canonicalProposalsQuery()`, an all-proposals read; at 4000 chars × 200 messages the worst case adds ~800 KB per document. Irrelevant at 14 documents, worth revisiting before the catalog grows |
 | `app/api/admin/proposals/route.ts:20-49` | Add the projection with a resolved author name, following `"lead_name": coalesce(lead->alias, lead->member_name)` (`:35`) |
-| `ProposalsPanel.tsx:36-38, 106, 225-237` | Type gains `messages`; the `lead_notes` (`:225-229`) and `admin_notes` (`:233-237`) blocks become `<ProposalThread>`; `team_notes` (`:212-218`) untouched. **`:106` seeds the change-request composer from `proposal.admin_notes` — seed it empty**, or an admin re-sends a stale legacy note as a new message |
+| `ProposalsPanel.tsx:36-38, 106, 225-237` | Type gains `messages`; the `lead_notes` (`:225-229`) and `admin_notes` (`:233-237`) blocks become `<ProposalThread>`; `team_notes` (`:212-218`) untouched. **`:106` seeds the change-request composer from `proposal.admin_notes` — seed it empty**, or an admin re-sends a stale legacy note as a new message. Symmetric compat gap: during the one-release window an OLD admin bundle still seeds from `admin_notes` and would append it as a duplicate message. Unlike the lead side (§4 rule 2) this is cosmetic rather than lossy — a duplicate bubble, not a discarded note — so it is accepted rather than handled |
 | `me/propose/[roleId]/page.tsx:40-56` | Add messages with resolved author names |
 | `ProposalEditor.tsx:34-40, 121, 350, 446-450, 693-740` | Type gains `messages`; drop `leadNotes` state and the save-body key; the "Notas privadas" textarea and the approved-state echo become `<ProposalThread>`; the `admin_notes` banner is subsumed. **`teamNotes` untouched** |
 | `app/api/me/proposals/route.ts:56-62` | GET projection: `messages` in, `lead_notes`/`admin_notes` out |
