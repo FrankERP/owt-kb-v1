@@ -15,6 +15,8 @@
 //     committed can be replayed without writing twice.
 
 import { createHash } from "node:crypto";
+
+import { PROPOSAL_NOTES_MAX } from "./proposalNotesLimit";
 import { PROPOSAL_STATUSES, SERVICE_KINDS, isValidServiceDate } from "./serviceReadModel";
 import {
   isCanonicalDocumentId,
@@ -83,7 +85,7 @@ export function deterministicProposalId(roleId: unknown): string | null {
 export const PROPOSAL_SAVE_STATUSES = ["draft", "pending"] as const;
 export type ProposalSaveStatus = (typeof PROPOSAL_SAVE_STATUSES)[number];
 
-export const PROPOSAL_NOTES_MAX = 4000;
+export { PROPOSAL_NOTES_MAX } from "./proposalNotesLimit";
 
 export interface ParsedProposalSaveRequest {
   roleId: string;
