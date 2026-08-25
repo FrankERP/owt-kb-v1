@@ -217,6 +217,13 @@ Consequence for phasing: the queue call must move in the SAME phase that
 introduces the lead messages route AND removes the `lead_notes` textarea — that
 is Phase 4, and it is why Phase 4 is indivisible.
 
+**And know what queuing costs.** `commitUpserts` (`serviceMutationSideEffects.ts:481`)
+does not only write the outbox document — it then runs `sweepOutbox` at half
+budget, unconditionally. So posting a message can send *another* member's pending
+email inline, on the poster's request. That is pre-existing behaviour for every
+queued notice and is not changed here, but it makes the lead messages route a
+latency-variable path, and the Phase 4 tests must not assume queuing is cheap.
+
 `notificationOutbox.before` (`sanity/schemas/notificationOutbox.ts:77-112`) gains `beforeMessageCount: number`. `beforeNotes` (`:110`) **stays in the schema** — removing it would make in-flight legacy documents unreadable.
 
 **Only lead-authored messages queue a notice.** The `leadNotes` audience is admins (`outboxSweep.ts:193`, `ADMIN_RECIPIENTS_QUERY`); mailing admins their own change-request is noise. After the call site moves (above) this is a property of WHERE the call lives — the lead messages route and the legacy `leadNotes` acceptance path — and the admin routes still never call it.
@@ -438,6 +445,9 @@ point of Phase 6 step 2.
 | Source | `kind` | `author_role` | `author` | `at`, first available |
 |---|---|---|---|---|
 | `lead_notes` | `lead_note` | `lead` | `lead._ref` | `last_edited_at` → `submitted_at` → `_createdAt` |
+<!-- These fallback fields are NOT in PROPOSAL_PROJECTION (Contracts §Reads).
+     The migration issues its own query, so it is fine — but a runtime read that
+     needs them must add them rather than assume the shared projection has them. -->
 | `admin_notes` | `admin_change_request` | `admin` | `last_transition.by` when present, else **absent** | `last_transition.at` → `reviewed_at` → `_updatedAt` |
 
 Ordering within a document: sort the (at most two) minted messages by the resolved `at` ascending; tie-break lead-first. Measured 2026-08-25: 2 of 14 documents have `last_transition`, but of the **4** carrying `admin_notes`, **2 have no `last_transition.by` at all** — so 2 of the 4 admin messages resolve to `reviewed_at` and are minted without an author. Do not infer this from the `last_transition` count; the two sets do not coincide. See OQ-2.
@@ -631,8 +641,15 @@ email fire on approved proposals changes when an existing email sends, which is
 a new email in everything but name, and it would inherit the debounce and the
 SMTP send budget for a case that is not a review action. A **push** is the
 consistent answer: it is the same instrument Frank already accepted for
-admin→lead (settled decision 4), it costs no SMTP send, and it respects the
-`"proposals"` preference key the fan-out already honours.
+admin→lead (settled decision 4), it costs no SMTP send, and it is gated by the
+member's push preference.
+
+**Know which preference gates a push.** `sendPush` filters on
+`optedIn(notifPrefs, category)` (`push.ts:22`), which reads `notifPrefs.proposals`
+— **not** `wantsNotification`, which reads `emailProposals`. The two axes are
+independent: a member opted out of proposal *emails* still receives proposal
+*pushes*, and vice versa. CLAUDE.md's "`wantsNotification` is the ONLY per-type
+resolver" is scoped to email. Do not "unify" them here.
 
 **Export `REVIEWABLE_BEFORE_WRITE`.** The route has to decide push-vs-email, and
 `queueLeadNotesNotice` returns `void` and swallows through `attemptSync`, so it
@@ -650,7 +667,9 @@ never both.
 **A push is not an email**, so this satisfies settled decision (4) — no new
 `notificationOutbox` kind, no new SMTP send, and no interaction with the send
 budget (`MEASURED_MS_PER_SEND`, `docs/NOTIFICATIONS.md`). It reuses a fan-out
-that already exists and already respects the `"proposals"` preference key.
+that already exists. Note the preference axis: `sendPush` gates on
+`notifPrefs.proposals` via `optedIn`, not on the email resolver — see the
+Contracts section.
 
 Two consequences to implement deliberately:
 
