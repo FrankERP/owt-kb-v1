@@ -29,8 +29,11 @@ that slice, not the whole spec*:
 - **Phase 1 is an unreferenced schema declaration plus two unreferenced pure
   modules.** Nothing reads or writes `messages`. A code reviewer verified this
   independently by grep across `app/`, `sanity/` and `scripts/`, and confirmed
-  that all six GROQ projections on `setlistProposal` are explicit field lists
-  with no spread, so no read payload changed.
+  that every GROQ projection on `setlistProposal` in `app/` and `scripts/` is an
+  explicit field list with no spread, so no read payload changed. (An earlier
+  version of this log said "all six"; a later reviewer counted eight under
+  `app/` alone and re-verified the conclusion. The count was wrong; the
+  conclusion was not.)
 
 Neither phase touches a critical trigger. They were therefore treated as
 **standard tier**, which needs no plan-review approval at all under the

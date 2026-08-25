@@ -9,7 +9,10 @@ import {
   buildProposalMessage,
   parseProposalMessageRequest,
 } from "@/app/utils/proposalMessageWrite";
-import { PROPOSAL_NOTES_MAX } from "@/app/utils/proposalWriteRequest";
+// Imported from the LEAF on purpose: this is the one place a future author
+// copies from, and routing it through `proposalWriteRequest` would quietly make
+// the `node:crypto` re-export the canonical source again.
+import { PROPOSAL_NOTES_MAX } from "@/app/utils/proposalNotesLimit";
 
 describe("thread enums and bounds", () => {
   it("reserves pastor and system from day one, so routing them later needs no migration", () => {

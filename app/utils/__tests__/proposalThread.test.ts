@@ -101,7 +101,9 @@ describe("isThreadOpen", () => {
     expect(isThreadOpen({ serviceDate: "2026-08-23", today })).toBe(false);
   });
 
-  it("is the exact negation of the outbox `isPast` rule (serviceDate < today)", () => {
+  it("agrees with the outbox `isPast` rule on every YYYY-MM-DD date", () => {
+    // Scoped to date-shaped input on purpose: the two predicates part company on
+    // an UNUSABLE date, where this one fails closed and `isPast` reports false.
     const isPast = (serviceDate: string, day: string) => serviceDate < day;
     for (const serviceDate of ["2026-08-22", "2026-08-23", "2026-08-24", "2026-08-25"]) {
       expect(isThreadOpen({ serviceDate, today })).toBe(!isPast(serviceDate, today));

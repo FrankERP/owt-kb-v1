@@ -81,9 +81,9 @@ export function orderedMessages<T extends ThreadMessage>(
  * hours — CLAUDE.md's timezone invariant. For the `YYYY-MM-DD` service dates
  * this field actually holds it is deliberately the negation of
  * `outboxClassify.ts`'s `isPast(serviceDate, today) => serviceDate < today`,
- * (this one additionally slices to 10 chars, so the two would diverge on a full
- * datetime — unreachable while `service_date` is a Sanity `date`, and the
- * divergence favours refusing the write),
+ * (this one additionally fails CLOSED on an unusable date, where `isPast`
+ * returns false and would read as open — that branch, not datetime handling, is
+ * where the two differ, and the difference favours refusing the write),
  * so the UI, the write routes and the notification layer all agree on what
  * "past" means instead of each deciding for itself.
  *
