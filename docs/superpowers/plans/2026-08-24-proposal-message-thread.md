@@ -677,6 +677,134 @@ deferring read state to R3 (§7), and it is accepted rather than overlooked.
 
 ---
 
+## Contracts of everything this plan reuses
+
+**Why this section exists.** Three of this plan's blockers were introduced by its
+own author reaching for an existing helper *by name* and not checking what it
+actually does — most sharply `notifyProposalReview`, which reads as "notify the
+review's participants" and whose audience is the lead plus contributors, with the
+admin being the one party guaranteed **not** to be notified. A reviewer should be
+able to check a stated contract rather than discover an assumed one.
+
+Extracted from the code on 2026-08-25 by an independent read-only pass. Anything
+below that a later reader finds false is a defect in this plan, not a surprise.
+
+### Symbols this plan needs that are NOT exported today
+
+Ten of the identifiers this plan reasons about are **module-private**. A phase
+that imports them will not compile, so each must either be exported in the same
+phase or re-derived deliberately:
+
+| Symbol | Module | This plan's need |
+|---|---|---|
+| `REVIEWABLE_BEFORE_WRITE` | `serviceMutationSideEffects.ts:612` | **Export it** — the lead messages route needs it to pick push-vs-email (§9) |
+| `REVIEWABLE_STATUSES` | `outboxSweep.ts:218` | Identical set, second copy, no sync guard. Collapse to one export and have both read it |
+| `ADMIN_RECIPIENTS_QUERY` | `outboxSweep.ts:193` | **Export it** — §9's lead→admin push needs the same audience. It is currently duplicated verbatim as an inline string at `proposalNotify.ts:143` with a comment claiming they are "deliberately identical" and **nothing enforcing it** |
+| `PROPOSAL_QUERY` | `outboxSweep.ts:203` | Modified in place by §3; no export needed |
+| `classifyLeadNotesNotice`, `classifyNotice` | `outboxSweep.ts:381`, `:400` | Modified in place; no export needed |
+| `isPast` | `outboxClassify.ts:34` | Not needed — `isThreadOpen` already owns the UI/route side |
+| `attempt`, `attemptSync`, `fireAndForget` | `serviceMutationSideEffects.ts:77,93,106` | New side-effect code must live in that module to use them, or wrap its own |
+
+### Notification and delivery
+
+| Helper | Actual contract | Where the name misleads |
+|---|---|---|
+| `notifyProposalReview(doc, push)` | `serviceMutationSideEffects.ts:740`. Push only, no email. Audience is `proposalReviewRecipients(doc)` = `doc.lead` + `contributors[].person`. `path` hardcoded `/me`. Empty list → silent no-op | **Admins are NOT in the audience.** Do not use it for anything admin-facing (§9) |
+| `notifyProposalPending` | `:712`. Delegates to `notifyProposalSubmitted`. Its only caller guards on `request.status === "pending"` — the status this save COMMITTED | **Fires on every save that commits `pending`**, not only `draft → pending`. A co-lead re-saving re-mails admins |
+| `notifyProposalSubmitted` | `proposalNotify.ts:111`. THREE signals: push→admins (inline GROQ `:143`), push→co-leads, email→the same admins filtered by `isEmailAllowed` + `wantsNotification` | Sends **nothing at all** if the ROLE fails canonical resolution (`:133-135`) — a proposal-side reader will not find that gate |
+| `sendPush(ids, category, payload)` | `push.ts:32`. Returns `{sent, pruned}`, never throws. **Also a WRITER** — prunes dead FCM tokens | **Gated by `optedIn(notifPrefs, category)` (`push.ts:22`), NOT by `wantsNotification`.** Push reads `notifPrefs.proposals`; email reads `emailProposals`. A member can be opted out of one and not the other |
+| `wantsNotification(prefs, kind)` | `notifyPrefs.ts:25`. Absent prefs → `true` | **EMAIL only.** CLAUDE.md's "the ONLY per-type resolver" is email-scoped; push has its own |
+| `queueLeadNotesNotice(input)` | `:629`. Synchronous, returns `void`. Registers an `after()` block. No-ops on `!proposalId`, `previousStatus` outside `REVIEWABLE_BEFORE_WRITE`, or trimmed-equal notes | Queues `knownRecipients: []` deliberately — **the admin audience is resolved at FLUSH**, 15–60 min later, so it is whatever the roster looks like then |
+| `commitUpserts(label, upserts)` | `:481`. One transaction, **no revision precondition**, then unconditionally runs `sweepOutbox` at half budget | **It does two things.** Queuing a notice can send *someone else's* email inline |
+| `sweepOutbox(opts)` | `outboxSweep.ts:559`. Returns `{claimed, emailed, consumed, deferred, unserved, repended, lost}` | **Stage 8 consumes claimed notices UNCONDITIONALLY** — a failed send still deletes. `emailed` counts sends, `consumed` counts deletions; a green report can coexist with `lost > 0` |
+| `classifyLeadNotes({...})` | `outboxClassify.ts:97`. Pure, `null` on past/not-reviewable/equal | Takes `reviewable` as a **boolean the caller computed**; it knows nothing about statuses |
+| `classifyLeadNotesNotice` | `outboxSweep.ts:381`. Re-reads the proposal live | **The live `service_date` WINS over the queued snapshot** — a proposal whose date moved into the past drops the notice |
+| `outboxId(kind, key)` | `outboxNotice.ts:29` | `NoticeKind` is a closed union `"role"｜"setlist"｜"leadNotes"`. A new kind needs the union widened — which is why §3 keeps `"leadNotes"` |
+| `buildUpsert(...)` | `outboxNotice.ts:119`. Pure, **commits nothing**. `before` only in `createIfNotExists` | Reads `process.env` at import for its default windows, so it is not a pure function of its arguments unless you pass `windows`. (The `createIfNotExists`-only `before` is what makes §3's count-and-slice survive a debounce burst.) |
+
+### Write path and auth
+
+| Helper | Actual contract | Where the name misleads |
+|---|---|---|
+| `loadCanonicalProposal(id, tolerate?)` | `serviceWriteTargets.ts:392`. Sentinel result, never throws. Fails closed on 0 rows, >1, any raw draft overlay, missing `service_ref`, unresolvable role | **It loads the ROLE too**, and will fail a valid proposal whose target role is ambiguous or draft-overlaid |
+| `canonicalLeadRefs(role)` | `serviceReadSelect.ts:138`. Deduped `Lead[]._ref` | **Only the `Lead` seat** — not "who serves" (that is `assignedMemberRefsQuery`). Meaningful only after `validateRole` |
+| `requireMinistryMember(id)` | `authGuards.ts:34`. `null` on no session / inactive / non-member. `super-admin` bypasses | **Membership only.** A worship `admin` who is not a worship member gets `null` |
+| `requireActiveManager()` | `authGuards.ts:22`. Passes `super-admin`/`admin`/`content-editor` | **`content-editor` counts**, and there is **no ministry check** — hence the explicit exclusion both message routes must carry |
+| `withVerificationRunContext(handler)` | `srVerificationRunContext.ts:170`. Fully transparent | **Not a guard.** Omitting it is safe; it only costs run markers for delivery evidence |
+| `parseProposalSaveRequest(body)` | `proposalWriteRequest.ts:107`. Sentinel, never throws. `observed` REQUIRED | Ignores unknown keys — the reason §4 keeps accepting `leadNotes` for one release. `status` limited to `draft｜pending` |
+| `compareObservedTarget(observed, server)` | `setlistWriteRequest.ts:117` | **`null` means SUCCESS.** Inverted truthiness, easy to read backwards |
+
+### Idempotency — all pure, none throw
+
+`canonicalizeApprovalInput` normalizes every field and turns `medleyTag: null`
+into `""`; song ORDER is significant. `approvalInputFingerprint` **excludes the
+timestamp** — that omission is what makes replay detection work.
+`transitionFingerprint` excludes the SOURCE status and includes `adminNotes`, so
+changed notes are a genuinely new transition rather than a retry.
+`decideApprovalReceipt` returns `"unverified"` meaning **"approved but
+unprovable"**, not "not approved". `APPROVAL_RECEIPT_VERSION` and
+`APPROVAL_APP_MARKER` are **not approval-specific despite their names** — both are
+reused verbatim inside `transitionFingerprint`, which is the whole reason §2
+freezes them.
+
+### Reads
+
+**`PROPOSAL_PROJECTION` (`serviceReadQueries.ts:33`) does NOT project
+`submitted_by`, `submitted_at`, `reviewed_at`, `last_edited_by`, or
+`last_edited_at`** — and §5's migration timestamp fallback chain reads four of
+them. The migration script issues its own query and is unaffected, but **any
+runtime read that needs those fields must add them**, and a reader who assumes
+this projection is "the proposal read model" will get `undefined`. It also does
+not project `messages`; §6 adds that.
+
+`PROPOSAL_QUERY` in `outboxSweep.ts:203` is a **different, module-private
+four-field probe** (`_id, status, lead_notes, service_date`), not a relative of
+`PROPOSAL_PROJECTION`.
+
+`operationalClient` is `perspective: "published"`, `useCdn: false`, `server-only`
+— **drafts are invisible through it by construction**.
+
+### Audit registries
+
+`OPERATOR_TOOLING_ALLOWLIST` (`protectedReadAudit.ts:346`) satisfies both reads
+and writes — the right home for the migration script while it is live.
+`PROTECTED_RUNTIME_WRITERS` (`:177`) satisfies **only** `protected-write` sites; a
+non-canonical READ inside a listed file is still a violation.
+`RETIRED_ONE_SHOT_WRITERS` (`:293`) is where the script moves after Phase 6, and
+`assertRetiredWriter` (`scripts/lib/sr-retired-writer.mjs:139`) **always
+`process.exit`s — it never returns and cannot be caught**, so a script moved there
+is permanently dead, not merely discouraged.
+
+### Cache — nothing applies, and here is why
+
+`app/utils/revalidate.ts` exports exactly three helpers
+(`revalidateServiceViews`, `revalidateKidsViews`, `revalidateSongViews`), plus
+four proposal/role wrappers in `serviceMutationSideEffects.ts:755-777`. **None
+applies to a message write.** Both surfaces that render a thread are already
+uncached: `app/(client)/me/propose/[roleId]/page.tsx:8` declares
+`export const revalidate = 0`, and `/admin` is forced dynamic by
+`requireActiveManager()` reading cookies, with the panel fetching client-side.
+The precedent is exact: `app/api/me/proposals/route.ts` calls no `revalidate*`
+at all, while the admin route calls `revalidateProposalApproval()` only because
+**approval writes the live setlist**, which does back ISR pages. A message write
+does not.
+
+### Two duplications with no sync guard — do not make them worse
+
+The admin-audience GROQ exists twice (`outboxSweep.ts:193`,
+`proposalNotify.ts:143`) and the reviewable-status set exists twice
+(`serviceMutationSideEffects.ts:612`, `outboxSweep.ts:218`). Neither pair has a
+guard test, unlike the `proxy.ts` / `routeMatcher.ts` pair. §9 adds a **third**
+consumer of the admin audience; export the constant and have all three read it
+rather than inlining a fourth copy.
+
+**Open product question, unresolved from code or docs:** the admin audience is
+role-based with **no ministry filter**, so a kids-only `admin` currently receives
+worship proposal notices. This plan does not change that, but §9 widens how often
+it happens. Flagged for Frank rather than decided here.
+
+---
+
 ## Ordered changes
 
 Every phase ends with the same gate: **`npx tsc --noEmit`, `npm test`, `npx eslint .` with 0 errors.** Plus the per-phase check named below.
