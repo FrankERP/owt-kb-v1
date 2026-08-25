@@ -664,7 +664,10 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
             onClick={() => setWindowSteps(stepsToShowMore)}
             className="px-4 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-mono-400 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent transition-colors"
           >
-            {`Ver ${WIDEN_STEP_MONTHS} meses más`}
+            {/* The jump is however far the newest hidden row is, so the label
+                has to state THAT, not the nominal step — promising "3 meses"
+                and moving 9 is the same broken-button feeling in reverse. */}
+            {`Ver ${(stepsToShowMore - windowSteps) * WIDEN_STEP_MONTHS} meses más`}
           </button>
         </div>
       )}
