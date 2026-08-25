@@ -284,7 +284,7 @@ Legend: **[C]** client, **[S]** server.
 | `SetlistEditor` | Inline setlist builder (reorder/remove, play-key, medley via `normalizeMedleyTags`). |
 | `SongFormModal` | Song create/edit form + reusable `Modal`. Exports `Modal`, `SongForm`, `blankForm`, `songToForm`, `buildPayload`. Charts are edited via `ChordChartsFields` ([ADR-0018](adr/0018-lyrics-and-charts-are-independent.md)). |
 | `ContentPanel` | Song-library CRUD (via `SongForm`). |
-| `ProposalsPanel` | Admin review of lead proposals (approve / request changes / reopen). |
+| `ProposalsPanel` | Admin review of lead proposals (approve / request changes / reopen). Order and date window come from `proposalListView.ts`: buckets stay `pending → changes_requested → approved → draft`, `approved` reads newest-first (archive) and every other status soonest-first (queue); `approved`/`draft` older than the current month are hidden behind `Ver 3 meses más`, while `pending`/`changes_requested` are never windowed out. A handoff to an older proposal widens the window before the card is scrolled to. |
 | `AvailabilityPanel` | Team availability vs. scheduled services. |
 | `ActivityPanel` | Member activity / last-login ("Hoy"/"Ayer" calendar-day labels). |
 | `ParticipationSidebar` | Participation bar chart (`computeParticipation`); Voces/Instrumentos toggle. Header is a stacked block with a `w-full` select — beside the title the select's longest option ("Instrumentos") overflowed the 216px chart column onto the grid. |
