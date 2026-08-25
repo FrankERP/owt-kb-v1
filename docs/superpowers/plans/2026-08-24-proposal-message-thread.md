@@ -30,10 +30,10 @@ things changed:
 
 ## Status and contract
 
-- Document status: **Draft — not approved, not authorization to implement**
-- Risk tier: **CRITICAL** (see [Risk tier](#risk-tier))
+- Document status: **Draft. Phases 2, 4 and 6 are NOT approved and NOT authorized.** Phases 0 and 1 were implemented as **standard tier** — Phase 0 is tests only and Phase 1 is an unreferenced schema declaration plus two unreferenced pure modules, so neither touches a critical trigger. That reconciliation, and the evidence a code reviewer used to confirm `messages` is inert, are recorded in the [review log](2026-08-24-proposal-message-thread-review-log.md).
+- Risk tier: **CRITICAL** for Phases 2/4/6 (see [Risk tier](#risk-tier)); standard for Phases 0–1, per the review log.
 - Primary outcome: the private lead↔admin channel on a `setlistProposal` is an append-only, attributed, timestamped thread; no message is ever overwritten.
-- Preconditions: `claude/proposal-filters-history-3a759b` branched from `main` at `9fd3b6c7`; production dataset measured 2026-08-24 (below).
+- Preconditions: Phases 0–1 implemented on `feat/proposal-thread-foundation` (branched from `main` at `c0bf364f`); production dataset measured 2026-08-24 and independently re-measured by two reviewers (below).
 - Safe ending state: every phase boundary is independently deployable **except inside Phase 4, which is one indivisible deploy by design** (see the amendment note). `lead_notes` / `admin_notes` survive as a frozen archive through the entire delivery and are unset only by a separate, later, separately-consented cleanup run.
 
 ---
@@ -499,14 +499,14 @@ deferring read state to R3 (§7), and it is accepted rather than overlooked.
 
 Every phase ends with the same gate: **`npx tsc --noEmit`, `npm test`, `npx eslint .` with 0 errors.** Plus the per-phase check named below.
 
-### Phase 0 — Pin the fingerprints (no behaviour change)
+### Phase 0 — Pin the fingerprints (no behaviour change) — ✅ SHIPPED
 
 - **Purpose:** make it *impossible* for any later phase to silently move a digest that authorizes production idempotency.
 - **Change:** in `app/utils/__tests__/proposalWriteRequest.test.ts`, add two tests asserting `approvalInputFingerprint(FIXED_INPUT)` and `transitionFingerprint(FIXED_INTENT)` equal hard-coded hex digests, plus assertions that `APPROVAL_RECEIPT_VERSION === 1` and `APPROVAL_APP_MARKER === "owt-kb-v1/a2-approval-1"`.
 - **Verification:** gate. Then temporarily add a field to `canonicalizeApprovalInput` locally, confirm the test goes red, and revert.
 - **State after:** deployable, zero runtime change. Ships alone.
 
-### Phase 1 — Schema + pure model
+### Phase 1 — Schema + pure model — ✅ SHIPPED (schema not yet deployed to Sanity)
 
 - `sanity/schemas/setlistProposal.ts`: `messages[]` (after `team_notes`, `:163`), `author` optional.
 - `app/utils/proposalMessageWrite.ts`: `parseProposalMessageRequest`, `buildProposalMessage`, `PROPOSAL_MESSAGE_KINDS`, `PROPOSAL_AUTHOR_ROLES`, `PROPOSAL_MESSAGES_MAX`.
@@ -651,8 +651,10 @@ therefore restarts at zero on this revision. Per CLAUDE.md this change is a sche
 - **Outputs promised:** a populated `messages[]` on all 14 production proposals; `lead_notes`/`admin_notes` intact for a later cleanup delivery.
 - **Handed to R3:** read state (`proposalReadMark`), which R2 deliberately does not build. R2 leaves it nothing to undo — `messages[].at` is server-minted and the array is append-only, so a read mark is a timestamp comparison against data R2 already stores.
 - **Adversarial review order:** this plan is a single artifact — two sequential fresh reviews on byte-identical text.
-- **Implementation authorization: not granted by this plan.**
+- **Implementation authorization: not granted by this plan** for Phases 2, 4 and 6. Phases 0–1 proceeded under the standard-tier reconciliation recorded in the review log.
 
 ## Terminal state
 
-`READY_FOR_ADVERSARIAL_REVIEW`
+`PHASES_0_1_SHIPPED — PHASES_2_4_6_AWAIT_ADVERSARIAL_REVIEW`
+
+Three rounds have run on earlier digests; all three returned `CHANGES_REQUIRED`. See the [review log](2026-08-24-proposal-message-thread-review-log.md).
