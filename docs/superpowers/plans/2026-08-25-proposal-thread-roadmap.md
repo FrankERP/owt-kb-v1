@@ -256,12 +256,17 @@ cannot be scheduled a release later.
 - A lead's message on an `approved` future-dated proposal reaches admins by push.
 - An admin's message reaches the lead by push, and a `request_changes` produces
   exactly one push, not two.
-- **No stale content is emailed during Child B's own deploy window.** A new route
-  queuing `{beforeMessageCount}` against a still-warm OLD `classifyLeadNotesNotice`
-  yields `before = ""` against a now-unmirrored stale `lead_notes`, which classifies
-  as changed and mails it. Neither "lost" nor "notified twice", so the bullet below
-  does not reach it — Child B names and owns it, and it is listed here so the parent's
-  acceptance set is actually complete rather than patched by a child.
+- **No stale content is emailed during Child B's release window** — and the window is
+  the whole `preview`→`main` release, not a deploy: the two versions share one dataset
+  and `commitUpserts` sweeps unconditionally over an unscoped `DUE_NOTICES_QUERY`.
+  An earlier version of this bullet described the new route "yielding `before = ""`
+  against a now-unmirrored stale `lead_notes`, which classifies as changed and mails
+  it". **Child B closes that**: it keeps writing `beforeNotes`, so the old sweep
+  compares equal values and mails nothing. **The residual is silence, not staleness** —
+  that message goes unemailed, and what prevents it is Child B's release procedure
+  (no writes through `preview` until production serves the new code), not the
+  mechanism. Named here rather than left to a child, so the parent's acceptance set is
+  complete.
 - No message posted between Child A's release and Child B's release is **lost**,
   and none is **notified twice** — **with no exception.** An earlier version of this
   bullet accepted one: an in-flight legacy `{beforeNotes}` notice "queued minutes
