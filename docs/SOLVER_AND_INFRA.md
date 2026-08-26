@@ -123,6 +123,14 @@ import with `--apply`.**
 
 ### Migrations (one-off)
 - `migrate-authors.mjs` — free-text authors → canonical `author` references (`lib/author-canon.mjs`).
+- `migrate-proposal-messages.mjs` — folds `setlistProposal.lead_notes` / `.admin_notes` into the
+  append-only `messages[]` thread (Release 2, Child A). The legacy fields are **left in place** as a
+  frozen archive. Pure mapping in `lib/proposalMessages.mjs` (unit-tested in
+  `scripts/__tests__/migrateProposalMessages.test.ts`); the two `_key`s it mints are deterministic,
+  so a re-run skips its own work, and it hard-aborts rather than overwriting a live thread.
+  **STATE: dry-run only — `--apply` has NEVER been run.** It runs at exactly one point (Child A
+  Phase D step 4, after explicit consent) and this line is removed when it does. A reported patch
+  failure does not prove the write did not land: re-run the dry-run before any repair.
 
 ### ⛔ Retired writers — five one-shots that now **fail closed**
 

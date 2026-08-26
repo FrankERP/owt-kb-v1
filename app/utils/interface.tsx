@@ -152,9 +152,13 @@ export interface SetlistProposal {
    * Private lead <-> admin thread. Append-only; `author` is absent on migrated
    * admin notes with no attributable author. Distinct from `team_notes`, which
    * is the single message published to the whole team on approval.
+   *
+   * Both writers store `_type: "proposal_message"` (the schema's item name); it
+   * is optional HERE because a projection is free not to select it.
    */
   messages?: Array<{
     _key: string;
+    _type?: string;
     author?: { _ref: string };
     author_role: ProposalAuthorRole;
     kind: ProposalMessageKind;

@@ -395,6 +395,13 @@ export const OPERATOR_TOOLING_ALLOWLIST: readonly AuditExemption[] = [
       "one-off A2 §1 rollout: creates the claimed weekend roleTargetLock for each pre-A2 weekend role. Reads through the canonical published client and the raw client for draft evidence; each lock is created at its deterministic id (a concurrent create loses rather than overwriting) paired with a revision-asserting no-op patch on the role's own unchanged week field, which is the protected write this entry covers. Refuses a duplicate target, a draft overlay, a malformed role, or an existing lock",
     removalOwner: "one-off migration tooling (never A2 — retire alongside the other one-shot writers)",
   },
+  {
+    file: "scripts/migrate-proposal-messages.mjs",
+    operation: "module",
+    reason:
+      "one-shot Release 2 migration: reads every published setlistProposal (its own query, because PROPOSAL_PROJECTION omits the timestamp fallbacks) and folds lead_notes/admin_notes into messages[] under two deterministic _keys. Dry-run by default; --apply asserts the exact revision it read and aborts that document rather than retrying. Refuses to touch a document whose messages[] already holds a real thread. Not yet retired — assertRetiredWriter and the move to RETIRED_ONE_SHOT_WRITERS are Child A Phase E, after the single --apply",
+    removalOwner: "one-off migration tooling (never A2 — retire alongside the other one-shot writers)",
+  },
 ];
 
 /**
