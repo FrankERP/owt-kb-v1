@@ -202,10 +202,10 @@ alongside".
 | | |
 |---|---|
 | Phases 0–1 (schema + pure modules) | **Shipped to production**; the `setlistProposal` schema is deployed to the Content Lake |
-| Child A, Phase A (migration script, dry-run) | **Implemented and on `preview`** — `f1ebdf13`. Two code reviews. Dry-run: 8 documents / 10 messages / 0 aborts. **`--apply` has NEVER run; no production document has been written** |
-| Child A, Phases B–E | **APPROVED** — two sequential fresh verdicts on digest `5713a9cc…`; see its [review log](2026-08-25-proposal-thread-a-storage-and-ui-review-log.md). Not authorized to implement |
+| Child A, Phase A (migration script, dry-run) | **Implemented and on `preview`** — delivery commits `f67ece4a` / `96b5b66f` / `3da64786`, merged at `314c0a0b`; `f1ebdf13` is the current `preview` tip. Two code reviews. Dry-run: 8 documents / 10 messages / 0 aborts. **`--apply` has NEVER run; no production document has been written** |
+| Child A, Phases B–E | **APPROVED** — two sequential fresh verdicts on digest `5713a9cc…`. **The file has since diverged from that digest**, adopting non-blocking items from the approving rounds; those edits are **un-reviewed** and listed in its [review log](2026-08-25-proposal-thread-a-storage-and-ui-review-log.md). Not authorized to implement |
 | Child B | Not yet reviewed |
-| `FrankERP/owt-kb-v1#8` | Ministry-scoping the notification audience — open, owned by neither child |
+| `FrankERP/owt-kb-v1#8` | Ministry scoping — open, owned by neither child. **Covers two things, not one:** the notification *audience* (a kids-only `admin` receives worship notices) **and the write-route ACL** — Child A §4 defers to it the fact that its new admin message route carries no ministry check, mirroring the sibling transition writer (`admin/proposals/[id]/route.ts:85-90`). CLAUDE.md's two-way isolation is binding and a NEW production writer is being registered against it, so the deferral is deliberate rather than overlooked |
 
 ## Sequencing
 
@@ -252,6 +252,12 @@ cannot be scheduled a release later.
 - A lead's message on an `approved` future-dated proposal reaches admins by push.
 - An admin's message reaches the lead by push, and a `request_changes` produces
   exactly one push, not two.
+- **No stale content is emailed during Child B's own deploy window.** A new route
+  queuing `{beforeMessageCount}` against a still-warm OLD `classifyLeadNotesNotice`
+  yields `before = ""` against a now-unmirrored stale `lead_notes`, which classifies
+  as changed and mails it. Neither "lost" nor "notified twice", so the bullet below
+  does not reach it — Child B names and owns it, and it is listed here so the parent's
+  acceptance set is actually complete rather than patched by a child.
 - No message posted between Child A's release and Child B's release is **lost**,
   and none is **notified twice**. One narrow exception, by Child B's deliberate
   design: an in-flight legacy `{beforeNotes}` outbox notice queued minutes before
@@ -265,8 +271,11 @@ cannot be scheduled a release later.
   so the looser wording would make the blanking write pass by construction, which is
   exactly the check failing to check.
 - **`admin_notes` likewise, except for the note-less-`reopen` trigger invariant 7
-  names.** At the end-of-Child-A check that count is necessarily zero, since no
-  reopen has happened yet — so the check there is that it IS zero. The ongoing
+  names.** At the end-of-Child-A check the count is **expected** zero, not necessarily —
+  step 8 puts the new panel into production and step 9 is the reconcile, so a
+  note-less `reopen` in that gap makes it non-zero. **A non-zero count is the
+  invariant-7 trigger, not damage**: step 9 declines to top up when a message
+  already carries the legacy text, so it fails safe. The ongoing
   guard is the Verification row in Child A asserting the standalone admin route
   never writes `admin_notes`; blanking may only ever come from a transition.
 - **Both checks run at the end of Child A, not after Child B** — the hazard is
@@ -278,19 +287,20 @@ cannot be scheduled a release later.
 | Requirement | Primary | Dependent |
 |---|---|---|
 | `messages[]` schema and pure model | **shipped** (Phases 0–1) | — |
-| Deploy the `setlistProposal` schema (the `proposal_message` type) to the Content Lake | **done** with Phases 0–1 — recorded here because `docs/DATA_MODEL.md:611-614` makes it a required step and Child B owns the equivalent for `notificationOutbox`, so its absence would read as an omission | — |
+| Deploy the `setlistProposal` schema (the `proposal_message` type) to the Content Lake | **done** with Phases 0–1 — recorded here because `docs/DATA_MODEL.md:611-613` makes it a required step and Child B owns the equivalent for `notificationOutbox`, so its absence would read as an omission | — |
 | Migrate `lead_notes`/`admin_notes` into the thread | **A** | — |
 | Lead and admin message write routes | **A** | — |
 | Transition appends its change-request as a message | **A** | — |
 | Thread UI on both surfaces, service-date composer gate | **A** | — |
-| Reads/projections carry `messages` | **A** | B (adds none) |
+| Reads/projections carry `messages` — **the app-surface ones** | **A** | — |
+| `outboxSweep`'s `PROPOSAL_QUERY` projects `messages[]` | **B** | — Child A **cannot**: its criterion 7 forbids modifying any file under `app/utils/outbox*`. The query today projects `_id, status, lead_notes, service_date` (`outboxSweep.ts:203-205`), and `classifyProposalMessages` needs the post-commit array — so if this is not done, `afterMessages` is `undefined`, the classifier returns `null`, and the debounced admin email silently stops |
 | Revision handling (`_rev` attestation, per-surface) | **A** | — |
 | Debounced lead-notes email keeps firing, **with one named exception** | **A** (via the mirror; the exception is a pre-deploy client CLEARING the note, which stops queuing — an existing signal retired, recorded against invariant 8 in Child A criterion 5) | **B** (re-sources it) |
 | "Nueva propuesta" submit email keeps carrying the lead's note | **A** (via the retained submission textarea) | **B** (re-sources it) |
 | `lead_notes` is never blanked to `""` by a client that stopped sending it | **A** | **B** (removes the field write entirely) |
 | A pre-deploy bundle's `leadNotes` is not discarded | **A** — it opens the window, so it owns the guard | **B** (keeps the same rule for pre-A bundles) |
 | Outbox source moves from `lead_notes` to the thread | **B** | — |
-| lead→admin push on non-reviewable statuses | **B** | — |
+| lead→admin push on **`approved`** proposals | **B** | — `draft` deliberately gets nothing (Child B): a draft is not in front of admins yet |
 | admin→lead push for standalone messages | **B** | — |
 | Stop mirroring `lead_notes`/`admin_notes` | **B** | — |
 | `proposalNotify` body source | **B** | — |
@@ -298,11 +308,16 @@ cannot be scheduled a release later.
 | Read marks / unread indicator | *neither* — later delivery | — |
 | Unset the legacy fields | *neither* — later delivery | — |
 
-Every requirement has exactly one primary owner. The only intentionally
-cross-cutting row is the existing email: **A** must keep it firing byte-for-byte,
-**B** changes where its body comes from. That is stated in both children's
-acceptance criteria on purpose, because it is the seam where a regression would
-hide.
+Every requirement has exactly one primary owner. **Two rows are intentionally
+cross-cutting**, and both are on the same seam — the one where a regression would
+hide:
+
+- **The existing email.** A must keep it firing (subject to the one exception
+  invariant 7 and Child A criterion 5 name); B changes where its body comes from.
+- **The reads it depends on.** A adds `messages` to the app-surface projections and
+  is forbidden from touching `outboxSweep`; B adds it to `PROPOSAL_QUERY`, which is
+  what its own classifier reads. Split across the children by necessity, not by
+  oversight.
 
 ## Risk tiers
 
