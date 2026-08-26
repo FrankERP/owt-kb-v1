@@ -114,8 +114,9 @@ independent delivery (`FrankERP/owt-kb-v1#8`).
 Adopted from the two approving rounds' non-blocking sections, **after** digest
 `a489d135…`:
 
-- The A→B seam is now **decided** (accept it; Child B drop-and-consumes) rather
-  than left as an either/or in an acceptance list.
+- ~~The A→B seam is now **decided** (accept it; Child B drop-and-consumes) rather
+  than left as an either/or in an acceptance list.~~ **SUPERSEDED 2026-08-26** — see
+  the section below.
 - `report.lost` got a checkpoint in Integration acceptance. It had been asserted in
   parent prose while Child A — already approved — has no step for it, making it an
   instruction with nowhere to happen.
@@ -132,3 +133,51 @@ Plan approval is not authorization to implement. Each child's phases need their 
 fresh code review of the diff plus the gates, and Child A's Phase D `--apply` is a
 one-shot irreversible write to the only production dataset requiring Frank's
 explicit consent at the moment it runs.
+
+## Corrections made during Child B's review (2026-08-26) — NOT covered by the approval
+
+Child B's review found three statements in this approved parent that were wrong, and
+they were corrected in the same delivery rather than left contradicting the child. All
+three are **un-reviewed text** by the same standard as the section above.
+
+### 1. Both in-flight-notice seam bullets
+
+The parent described the release window as "minutes before B's deploy" and decided
+**accept the seam; Child B drop-and-consumes**. The premise is false. CLAUDE.md's
+mandated release runs `preview` on the new code and production on the old **against one
+shared Sanity dataset** for as long as the PR takes, and a write that commits an outbox
+upsert sweeps inline over a `DUE_NOTICES_QUERY` with no environment scoping. The window
+is hours, and it is entered by the walkthrough the plan itself schedules.
+
+Dropping is also **unobservable** — a notice classified to `[]` contributes no pending
+recipients, so `countLost` reports nothing. Child B therefore classifies legacy notices
+instead of dropping them, **against the thread rather than the frozen `lead_notes`**
+(classifying against the field would swallow every message appended onto a pre-cutover
+notice, since `before` is `createIfNotExists`-only on a deterministic id).
+
+The two directions are **not** symmetric, and an intermediate correction wrongly said
+they were:
+
+| Direction | Closed by | Residual |
+|---|---|---|
+| OLD route queues → NEW sweep flushes | **Mechanism** — classify against the thread | none |
+| NEW route queues → OLD sweep flushes | **Procedure only** — release step 3 | the message is **silent**: no stale text, but no email and `report.lost` at 0 |
+
+The unconditional "with no exception … nothing is lost in either direction" is gone.
+The parent now claims only the first row, and names the second's residual.
+
+### 2. The coverage table's export row
+
+It assigned `REVIEWABLE_BEFORE_WRITE` to Child B. B's resolved push gate is
+`status === "approved"`, which retired that export's only proposed consumer, so B
+declines it and exports `ADMIN_RECIPIENTS_QUERY`, `PROPOSAL_QUERY` and `fireAndForget`
+instead. The table also called the classifier's parameter `afterMessages`; it is
+`leadMessages`, and the name carries the "do not re-filter" rule.
+
+### 3. Why this is recorded here rather than only in the child
+
+CLAUDE.md's rule is that a child may not silently outperform **or undershoot** an
+invariant its parent declares. Child B does both — better than the parent on the
+mechanism direction, worse on the procedure one — so the parent had to move. A reviewer
+of Child B was pointed at this log for the record and found the superseded decision
+still standing; that gap is what this section closes.

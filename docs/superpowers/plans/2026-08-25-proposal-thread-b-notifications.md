@@ -44,7 +44,9 @@ yet work.
 ### In
 
 - `queueLeadNotesNotice`'s input shape and both its call sites.
-- `classifyProposalMessages` replacing `classifyLeadNotes` as the sweep's classifier;
+- `classifyProposalMessages` as the sweep's classifier for `{beforeMessageCount}`
+  notices. **`classifyLeadNotes` is NOT removed** — it keeps the sweep's legacy branch
+  (§Outbox) and leaves with it in a follow-up;
   `PROPOSAL_QUERY` narrowed and exported.
 - `notificationOutbox.before` gaining `beforeMessageCount`.
 - `proposalNotify`'s "Nueva propuesta" body source.
@@ -114,8 +116,17 @@ shape; the Verification rows **execute** the query rather than quoting it.
   **The queue side is not a consumer of this projection** and does apply the predicate
   itself, in JS, over `PROPOSAL_PROJECTION`'s full `messages` array (§Outbox). Two
   sides, one predicate each, neither re-applying the other's.
+- **Because the predicate IS written twice, it is CROSS-PINNED.** Export one
+  `kind === "lead_note"` test, have the queue side call it, and assert in one place
+  that filtering a mixed fixture with it yields exactly what the `groq-js`-executed
+  projection returns. Child A recorded why: "Two suites each pinning their own
+  hardcoded list is what let `_type` ship on one side only with `npm test` green" (§3),
+  and the fix was comparing the two writers directly rather than pinning each. A
+  queue side that drifts to counting the whole array kills the debounced email
+  silently — see the Verification row.
 - **GROQ returns `null`, not `[]`,** when `messages` is absent. Coerce at each call
-  site, as `outboxSweep.ts:390` does today.
+  site. (`outboxSweep.ts:390` coerces the same GROQ `null` for a *string* field — the
+  same reflex, not the same type.)
 
 **The guard is execution, not this paragraph.** `outboxSweep.test.ts:244` routes the
 proposal query to a hand-written literal (`:1143`) and nothing compares the two, so a
@@ -254,10 +265,12 @@ be stale.
 versions share one dataset.** CLAUDE.md mandates: merge to `preview`, push, verify the
 dev alias, *then* open the PR, wait for `gates`, merge. For that entire span `preview`
 runs Child B while production runs the old code, and **`preview` writes the REAL Sanity
-dataset**, which is where `notificationOutbox` lives. `commitUpserts` runs
-`sweepOutbox` on every write (`serviceMutationSideEffects.ts:491`) and
-`DUE_NOTICES_QUERY` (`outboxSweep.ts:178`) selects every due notice in the dataset with
-no environment scoping — so **any write through `preview` runs B's sweep over
+dataset**, which is where `notificationOutbox` lives. `commitUpserts` sweeps inline
+(`serviceMutationSideEffects.ts:491`) and `DUE_NOTICES_QUERY` (`outboxSweep.ts:178`)
+selects every due notice in the dataset with no environment scoping. **Precisely:** a
+write reaches `commitUpserts` only through a `queue*Notice` `after()` block, so it is a
+write that *commits an outbox upsert* that sweeps — narrower than "every write", and
+still enough, because the walkthrough Phase B schedules is exactly such a write — so **any write through `preview` runs B's sweep over
 production's outbox.** Reasoning about "a still-warm instance" would understate this by
 orders of magnitude.
 
@@ -274,7 +287,7 @@ mirror** — not because production is still mirroring — so `classifyLeadNotes
 
 **That is a real loss, and the plan does not pretend otherwise.** The notice yields no
 pairs, `partitionClaimed` routes it to `toConsume` (`:506-535`), the `finally` deletes
-it (`:887`), and `countLost` (`:541`, called at `:890`) counts nothing because no
+it (`:886-890`), and `countLost` (`:541`, called at `:890`) counts nothing because no
 pending entry exists for it. No email, notice destroyed, `report.lost` silent — the
 exact property §Outbox calls unacceptable when it rejects drop-and-consume. The parent
 names it in the same terms (roadmap, "the residual is silence, not staleness").
@@ -293,9 +306,11 @@ messages appended onto a legacy notice after the release.
 **This supersedes a decision in the approved parent.** The parent's two seam bullets
 accepted the seam and specified drop-and-consume, justified by a notice "queued
 minutes before B's deploy". The window is not minutes, so that premise is false and
-**both** bullets were corrected in the same delivery (line numbers moved; see the
-parent's review log) — a child may not silently outperform, or silently undershoot, an
-invariant its parent declares.
+**both** bullets were corrected in the same delivery, and the corrections are recorded
+in the parent's review log under "Corrections made during Child B's review", replacing
+its standing "Child B drop-and-consumes" entry. A child may not silently outperform
+**or silently undershoot** an invariant its parent declares — and this child does both:
+better than the parent on the mechanism direction, worse on the procedure one.
 
 ### Release procedure (Phase B)
 
@@ -309,7 +324,10 @@ that meets production's outbox.
    before a merge must be a verification, not a fix. Child A's Phase D carries the
    same step; an earlier draft of this list restated CLAUDE.md's alias checks and
    dropped this one.
-1. Pre-check the outbox count above. Wait for the sweep if it is non-zero.
+1. **Pre-check:** `count(*[_type == "notificationOutbox" && kind == "leadNotes"])`
+   must be `0`. If it is not, wait for the sweep to drain it — do not proceed, and do
+   NOT delete notices by hand. Production holds zero at rest, so this is normally a
+   no-op; it bounds the pre-cutover backlog, a different hazard from the window.
 2. Merge into `preview`, push, and **verify the dev alias moved** — the target domain
    in the deployment's `alias` array and `meta.githubCommitSha` equal to the pushed
    commit. A green build is not this check.
@@ -319,7 +337,8 @@ that meets production's outbox.
    `report.lost` stays 0. The pre-check cannot see a notice this window has not created
    yet. A write through `preview` also sweeps the production outbox, which is why Child
    A defers its own walkthrough. Phase B's walkthrough runs *after* step 5.
-4. Re-run the pre-check, open the PR, wait for `gates`, merge.
+4. Re-run the same pre-check — same query, same `0`, same "wait, never delete" — then
+   open the PR, wait for `gates`, merge.
 5. Verify the production alias the same way as step 2.
 6. Walkthrough on `preview`, which writes REAL data and emails the REAL team.
 
@@ -579,7 +598,7 @@ marked delivered.
 |---|---|---|
 | **Neither branch of `POST /api/me/proposals` writes `lead_notes`, and the stored value survives** | `proposalWriteRoutes.test.ts` — assert absence of the key on BOTH the patch and the **create** payload, then re-read a document that has a value and show it byte-unchanged. The create branch is exercised (`:425`, `:458`, `:495`) but only through `toMatchObject`, which cannot see a surviving field — it needs an explicit `expect(created).not.toHaveProperty("lead_notes")`, the form `:703` already uses on the setlist create | A half-removed mirror: the create path still seeding a field nothing maintains |
 | **The transition stops setting `admin_notes`** | `proposalWriteRoutes.test.ts` — the transition `set` has no `admin_notes` key | Silently blanking the admin archive, which an empty `reopen` does today |
-| **The notice carries BOTH snapshot fields, on BOTH call sites** | `setlistNoticeQueueing.test.ts` — same id, kind and timing as today, **and `before` asserted explicitly**: `beforeNotes` equal to the stored pre-commit `lead_notes`, `beforeMessageCount` equal to the pre-commit `kind == "lead_note"` count. On the compat path (`:717` already pins `beforeNotes`) **and on the lead messages route, which has no such pin today**. Not audience — not assertable at queue time (criterion 1). **This row is what protects the cutover seam**, because the seam is closed by the queue writing `beforeNotes` | Retiring the debounced email by refactor; or a later cleanup dropping `beforeNotes` as dead weight because nothing pinned it |
+| **The notice carries BOTH snapshot fields, on BOTH call sites** | `setlistNoticeQueueing.test.ts` — same id, kind and timing as today, **and `before` asserted explicitly**: `beforeNotes` equal to the stored pre-commit `lead_notes`, `beforeMessageCount` equal to the pre-commit `kind == "lead_note"` count — **on a fixture whose thread carries at least one `admin_change_request`.** Without that the row passes by construction: on an all-lead-note thread `count(all) === count(lead_note)`, so a queue side counting the whole array satisfies it. The failure it must catch is total: with `T` total and `L` lead notes pre-commit, `leadMessages.slice(T)` over a post-commit array of length `L+1` is **empty whenever `T > L`** — every admin stops receiving the debounced email on exactly the proposals that have been through a review cycle, `null` classification, notice consumed, `countLost` (`outboxSweep.ts:890`) at 0, every test green. Mixed threads are the NORMAL shape of a `changes_requested` proposal: Child A's migration mints an `admin_change_request` for every document carrying `admin_notes`, and the transition appends one on each `request_changes`/`reopen`. On the compat path (`:717` already pins `beforeNotes`) **and on the lead messages route, which has no such pin today**. Not audience — not assertable at queue time (criterion 1). **This row is what protects the cutover seam**, because the seam is closed by the queue writing `beforeNotes` | Retiring the debounced email by refactor; or a later cleanup dropping `beforeNotes` as dead weight because nothing pinned it |
 | **The cutover seam end-to-end** | `setlistNoticeQueueing.test.ts` — queue through the **new** route, then pass the resulting notice's `before.beforeNotes` and the unchanged stored `lead_notes` to `classifyLeadNotes`, expecting `null`. **The fixture's stored `lead_notes` must be NON-EMPTY** (`setlistNoticeQueueing.test.ts` already uses `"Nota original"`) — with an empty one both sides are `""` and the row passes whether or not the route wrote anything. Composes the row above with the surviving pure function, so it fails if the route stops writing the field. **A bare `classifyLeadNotes({before:"x", after:"  x  "}) === null` is NOT this row** — `outboxClassify.test.ts:123-125` already makes it, and it passes whether or not the route writes anything | Criterion 7 regressing to a stale-content email during a deploy |
 | An old-shape save lands and queues | `setlistNoticeQueueing.test.ts` — a save carrying `leadNotes` appends a message and produces an outbox document | A pre-Child-A bundle's note discarded behind a success toast |
 | **A `{beforeMessageCount}` notice classifies and emails** | `outboxSweep.test.ts` — **execute the exported `PROPOSAL_QUERY` with `groq-js`** over a `setlistProposal` carrying both `lead_note` and `admin_change_request` messages, feed the result to `classifyProposalMessages`, and **assert the resulting `notes` equals the lead bodies exactly** — not merely "non-empty", which still passes if someone drops the `[kind == "lead_note"]` filter, misaligning `slice(beforeCount)` and mailing admins their own change-request text | The flush path silently classifying to `null` — the debounced email dying with every other check green |

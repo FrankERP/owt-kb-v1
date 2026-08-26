@@ -267,20 +267,21 @@ cannot be scheduled a release later.
   (no writes through `preview` until production serves the new code), not the
   mechanism. Named here rather than left to a child, so the parent's acceptance set is
   complete.
-- No message posted between Child A's release and Child B's release is **lost**,
-  and none is **notified twice** — **with no exception.** An earlier version of this
-  bullet accepted one: an in-flight legacy `{beforeNotes}` notice "queued minutes
-  before B's deploy", dropped and consumed, stored and rendered but never emailed.
-  **That decision is superseded, because its premise was false.** The window is not
-  minutes and not a deploy: this repo's mandated release runs `preview` on the new
-  code and production on the old, against **one shared dataset**, for as long as the
-  PR takes — and `commitUpserts` sweeps unconditionally
-  (`serviceMutationSideEffects.ts:491`) over a `DUE_NOTICES_QUERY` with no environment
-  scoping (`outboxSweep.ts:178`). Dropping is also **unobservable**: a notice
-  classified to `[]` contributes no pending recipients, so `countLost`
-  (`outboxSweep.ts:890`) reports nothing. Child B therefore **classifies** a legacy
-  notice through the surviving `classifyLeadNotes` instead of dropping it, and carries
-  a release procedure. Nothing is lost in either direction.
+- **No message queued by PRODUCTION's route is lost, and none is notified twice.**
+  Scoped to that direction deliberately — the other one is the bullet above, and its
+  residual is silence closed by procedure, not by mechanism. An earlier version claimed
+  "no exception … nothing is lost in either direction", which this delivery does not
+  achieve and Child B's criterion 6 explicitly declines to claim.
+  **A separate earlier decision — accept the seam, Child B drop-and-consumes — is also
+  superseded, because its premise was false.** The window is not "minutes before B's
+  deploy": this repo's mandated release runs `preview` on the new code and production
+  on the old, against **one shared dataset**, for as long as the PR takes, and a write
+  that commits an outbox upsert sweeps inline (`serviceMutationSideEffects.ts:491`)
+  over a `DUE_NOTICES_QUERY` with no environment scoping (`outboxSweep.ts:178`).
+  Dropping is also **unobservable**: a notice classified to `[]` contributes no pending
+  recipients, so `countLost` (`outboxSweep.ts:890`) reports nothing. Child B therefore
+  **classifies** a legacy notice through the surviving `classifyLeadNotes`, against the
+  thread rather than the frozen field, and carries a release procedure.
 - **`lead_notes` is byte-identical to its pre-Child-A value on every document the
   mirror did not write, and every mirror write carries a real non-empty message
   body.** Stated as "non-empty body" rather than "the mirror's writes are the only
