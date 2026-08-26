@@ -234,10 +234,16 @@ function canonicalRead(query: string, params: Record<string, unknown>): unknown 
     // `_id == $id` branch below. `THREAD_AFTER_APPEND_QUERY` contains both
     // `setlistProposal` and `_id == $id`, so without this it fell into the array
     // branch and the route received `[{doc}]` — truthy, `.messages` undefined —
-    // making `freshMessages` `[]` on every save in this suite. A test asserting
-    // the returned thread would then have passed with or without the code that
-    // produces it.
-    if (query.includes("author_name")) {
+    // making `freshMessages` `[]` on every save in this suite — so a test
+    // asserting `[]` would have passed with or without the code that produces it.
+    // (A test asserting a NON-empty thread would have failed either way; only the
+    // empty assertion was unfalsifiable.)
+    //
+    // `_id == $id` is part of the predicate because `THREAD_MESSAGES` is also
+    // interpolated into the GET list query, which is keyed on the member instead.
+    // Without it, a future GET test would silently get `null` where the route
+    // expects an array, rather than the loud `unmocked canonical query` throw.
+    if (query.includes("author_name") && query.includes("_id == $id")) {
       const doc = store.proposals.find((p) => p._id === params.id);
       if (!doc) return null;
       const rows = Array.isArray(doc.messages) ? (doc.messages as Record<string, unknown>[]) : [];
@@ -542,6 +548,45 @@ describe("POST /api/me/proposals — first create", () => {
     // With the author name RESOLVED — a bare `_ref` would re-render the thread
     // unattributed on a feature whose whole point is an attributed conversation.
     expect(data.messages![0].author_name).toBe("Ana");
+  });
+
+  it("keeps a good revision when only the THREAD read fails", async () => {
+    // Under `Promise.all` one rejection zeroed both, so a slow author-name join
+    // discarded a perfectly good `_rev` and drove the editor into "Otro líder
+    // actualizó esta propuesta compartida" — a banner that would be false, and
+    // that contradicts what `messages: null` is for.
+    seed();
+    operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) => {
+      if (q.includes("author_name")) throw new Error("author join timeout");
+      return canonicalRead(q, p);
+    });
+    const res = await POST(req(saveBody({ leadNotes: "Mi primera nota" })));
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { _rev: string | null; messages: unknown };
+    expect(data.messages).toBeNull();  // keep what you are rendering
+    expect(data._rev).toBeTruthy();    // …and keep editing
+  });
+
+  it("still answers 200 when BOTH post-commit reads fail", async () => {
+    seed();
+    const committedBefore = committedTransactions().length;
+    // Fail only reads issued AFTER the commit. A blanket failure would kill the
+    // role resolution instead and 403 before anything was written, testing
+    // nothing about the post-commit path.
+    operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) => {
+      if (committedTransactions().length > committedBefore && q.includes("setlistProposal")) {
+        throw new Error("content lake down");
+      }
+      return canonicalRead(q, p);
+    });
+    const res = await POST(req(saveBody({ leadNotes: "Mi primera nota" })));
+    // The write committed. Reporting it as a failure invites a second save.
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { _rev: string | null };
+    // `_rev: null` forces a reload rather than a save against an unguarded
+    // observation — degraded, but fail-closed.
+    expect(data._rev).toBeNull();
+    expect(committedTransactions().length).toBeGreaterThan(committedBefore);
   });
 
   it("creates NO messages array when the submission carried no note", async () => {

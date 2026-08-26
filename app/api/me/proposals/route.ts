@@ -389,28 +389,41 @@ async function postHandler(req: NextRequest) {
   // A guard defeated by the line above it is worse than no guard, because it
   // reads as protection.
   //
-  // In parallel: two sequential round trips on every save — draft or submit, note
-  // or none — is latency this path does not need. They are separate queries
-  // because the surfaces need author names resolved and `PROPOSAL_PROJECTION`
-  // deliberately carries bare refs (§5).
+  // **`allSettled`, not `all`.** Each read degrades on its own terms. Under
+  // `Promise.all` one rejection zeroed both, so a slow author-name join — the
+  // heavier query, it dereferences per message — would discard a perfectly good
+  // revision and send `_rev: null`, which drives the editor into "Otro líder
+  // actualizó esta propuesta compartida". That banner would be false, and it
+  // contradicts the whole point of `messages: null`, which is "keep rendering,
+  // nothing is lost".
+  //
+  // **Why this is TWO queries and must stay two.** Not merely because the
+  // surfaces need author names — `THREAD_AFTER_APPEND_QUERY` projects `_rev`
+  // too, so merging them looks free. It is not: that query ends in `[0]`, an
+  // arbitrary pick, while `canonicalProposalByIdQuery` + `pickUnique` returns
+  // NULL on a duplicate group. Collapsing them would hand the lead a revision
+  // from an arbitrary member of an ambiguous group and silently retire the
+  // fail-closed check this repo built `pickUnique` for.
   const bound = canonicalProposalByIdQuery(proposalId);
   let fresh: { _rev?: string } | null = null;
   let freshMessages: ThreadMessageRow[] | null = null;
-  try {
-    const [rows, thread] = await Promise.all([
-      operationalClient.fetch<{ _rev?: string }[]>(bound.query, bound.params),
-      operationalClient.fetch<{ messages?: ThreadMessageRow[] | null } | null>(
-        THREAD_AFTER_APPEND_QUERY,
-        { id: proposalId },
-      ),
-    ]);
-    fresh = pickUnique(rows);
-    freshMessages = thread ? (thread.messages ?? []) : null;
-  } catch (err) {
-    // The write already committed. Reporting it as a failure would invite a
-    // retry, and `_rev: null` already degrades correctly — the editor forces a
-    // reload rather than saving again against an unguarded observation.
-    console.error("[proposals] post-commit read failed:", err);
+  const [revRead, threadRead] = await Promise.allSettled([
+    operationalClient.fetch<{ _rev?: string }[]>(bound.query, bound.params),
+    operationalClient.fetch<{ messages?: ThreadMessageRow[] | null } | null>(
+      THREAD_AFTER_APPEND_QUERY,
+      { id: proposalId },
+    ),
+  ]);
+  // The write already committed; neither failure may be reported as one, because
+  // the obvious retry is a second save. `_rev: null` degrades correctly on its
+  // own — the editor forces a reload rather than saving against an unguarded
+  // observation — and `messages: null` means "keep what you are rendering".
+  if (revRead.status === "fulfilled") fresh = pickUnique(revRead.value);
+  else console.error("[proposals] post-commit revision read failed:", revRead.reason);
+  if (threadRead.status === "fulfilled") {
+    freshMessages = threadRead.value ? (threadRead.value.messages ?? []) : null;
+  } else {
+    console.error("[proposals] post-commit thread read failed:", threadRead.reason);
   }
   return NextResponse.json({
     _id: proposalId,

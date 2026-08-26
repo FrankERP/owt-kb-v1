@@ -296,6 +296,16 @@ writes the live setlist, which backs ISR pages.
 
 ## 5. Revision handling
 
+**`POST /api/me/proposals` returns the thread as well** — added in Phase C
+because the editor swaps its textarea for the thread the moment it has a
+`proposalId`, and its `messages` state predates that write, so a first
+submission's note rendered "Aún no hay mensajes." until a hard reload. Its two
+post-commit reads use `Promise.allSettled`, **not** `all`: they must degrade
+independently, or a slow author-name join discards a good revision and raises a
+false "otro líder actualizó" banner. And they stay TWO queries —
+`canonicalProposalByIdQuery` + `pickUnique` returns null on a duplicate group,
+while `THREAD_AFTER_APPEND_QUERY` ends in `[0]` and would pick one arbitrarily.
+
 **Both routes return `observedRev`** — the revision read immediately **before**
 their own append — alongside the fresh `_rev`.
 
@@ -303,9 +313,11 @@ their own append — alongside the fresh `_rev`.
 names resolved** — **or `messages: null`**, which is NOT an empty thread but
 "the write committed and the read-back did not". Both clients treat `null` as
 "keep what you are already rendering"; treating it as `[]` would blank a thread
-on a transient read error. Added during Phase C, because the unguarded version
-reported a landed message as a failure and the obvious retry minted a permanent
-duplicate — this delivery ships no delete path. The projection is the same one
+on a transient read error. Added during Phase C: the unguarded version would have
+reported a landed message as a failure, and the obvious retry would have minted a
+permanent duplicate, since this delivery ships no delete path. It never reached
+`preview` or `main` — the code review caught it on the branch, so no duplicate was
+ever created. The projection is the same one
 the surfaces use — not
 `PROPOSAL_PROJECTION`'s bare `"author": author._ref`. The lead surface has no other
 path to its own message (optimistic append is forbidden below, and
@@ -322,8 +334,10 @@ phantom message in a channel whose whole value is that nothing is lost.
 ### Admin panel
 
 **A post does NOT call `load()`.** It patches that one record in `proposals` state
-from the response, which already carries the fresh `_rev`, `observedRev` and the
-full resolved `messages[]` — everything a re-render needs.
+from the response, which carries the fresh `_rev`, `observedRev` and the resolved
+`messages[]` — or `messages: null`, meaning the write committed and the read-back
+did not, in which case the card keeps what it is already rendering. Everything a
+re-render needs, including the case where there is nothing new to render.
 
 **Why not `load()`, which an earlier draft prescribed:** `load()` begins with
 `setLoading(true)` (`ProposalsPanel.tsx:389-390`) and the card list renders only
