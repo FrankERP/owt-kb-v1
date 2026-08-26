@@ -44,8 +44,8 @@ established from the code and confirmed below.
 
 ## The property that makes the split safe
 
-**`queueLeadNotesNotice` and `QueueLeadNotesNoticeInput` are exported with their
-current signature** (`app/utils/serviceMutationSideEffects.ts:636` and `:651`).
+**`queueLeadNotesNotice` (`app/utils/serviceMutationSideEffects.ts:651`) and
+`QueueLeadNotesNoticeInput` (`:636`) are exported with their current signature**.
 
 So Child A's new lead-messages route can call the *existing, unmodified*
 notification function with its *existing* string-based contract — provided Child A

@@ -295,7 +295,7 @@ mirror** — not because production is still mirroring — so `classifyLeadNotes
 `null` (`outboxClassify.ts:103`).
 
 **That is a real loss, and the plan does not pretend otherwise.** The notice yields no
-pairs, `partitionClaimed` routes it to `toConsume` (`:506-535`), the `finally` deletes
+pairs, `partitionClaimed` routes it to `toConsume` (`:500-532`), the `finally` deletes
 it (the `finally` at `:871`, via `consume` at `:882`), and `countLost` (`:535`, called at `:884`) counts nothing because no
 pending entry exists for it. No email, notice destroyed, `report.lost` silent — the
 exact property §Outbox calls unacceptable when it rejects drop-and-consume. The parent
@@ -378,8 +378,8 @@ sendPush(adminIds, "proposals", {
 })
 ```
 
-- **Disposal: `fireAndForget`** — module-private today
-  (`serviceMutationSideEffects.ts:128`) — **Phase A has already exported it** — as
+- **Disposal: `fireAndForget`** — exported by Phase A
+  (`serviceMutationSideEffects.ts:128`; it was module-private) — **Phase A has already exported it** — as
   `notifyProposalReview` uses it (`serviceMutationSideEffects.ts:770`), not a bare `void` like
   `proposalNotify.ts:150`. **The reason is rejection handling, not latency:** the push
   fires only on `approved`, where `queueLeadNotesNotice` returns on the `REVIEWABLE_BEFORE_WRITE` guard and no sweep
@@ -484,8 +484,8 @@ Every phase ends with `npx tsc --noEmit`, `npm test`, `npx eslint .` at 0 errors
 
 - Export, in one place each: the **`LEAD_NOTE_MESSAGES` GROQ fragment** and the **JS
   `kind === "lead_note"` predicate** (§The projection cross-pins them);
-  `PROPOSAL_QUERY`; `ADMIN_RECIPIENTS_QUERY`; `fireAndForget` (module-private today,
-  `serviceMutationSideEffects.ts:128`, needed by the inline push); and
+  `PROPOSAL_QUERY`; `ADMIN_RECIPIENTS_QUERY`; `fireAndForget` (was module-private;
+  **exported by Phase A**, `serviceMutationSideEffects.ts:128`, for the inline push); and
   **`proposalNotify`'s proposal read**, today an inline composite template literal
   — **DONE in Phase A**: extracted as `SUBMITTED_NOTIFY_QUERY`
   (`proposalNotifyQueries.ts:54`) and already executed with `groq-js` by
@@ -567,7 +567,7 @@ marked delivered.
    rather than "never notified twice", because the outbox's re-pend path can
    legitimately re-send a joined body. **Three exceptions, all named:**
 
-   **(a) The send-budget re-pend** (`outboxSweep.ts:851-861` with `:531-534`) — not
+   **(a) The send-budget re-pend** (`outboxSweep.ts:851-861` with `:525-528`) — not
    `emailLimit`; an oversized notice is selected alone and deliberately exceeds the
    budget rather than splitting (`outboxSweep.ts:619`). Across those sweeps a new message clears
    `servedRecipients` (`outboxNotice.ts:152`) while `before.beforeMessageCount` is
