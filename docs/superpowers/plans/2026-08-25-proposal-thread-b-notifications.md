@@ -389,8 +389,8 @@ sendPush(adminIds, "proposals", {
   response (Child A §5) — **not a second read**.
 - **`adminIds`** from the exported `ADMIN_RECIPIENTS_QUERY`, author filtered out.
   That query carries no ministry or active-member filter, and Phase B makes this its
-  third consumer. **Inherited unfiltered, identical to the two existing copies, not
-  introduced here** — it is part of FrankERP/owt-kb-v1#8 (OQ-1), and is recorded so a
+  third consumer. **Inherited unfiltered — the rule, not a copy of it: Phase A collapsed the two
+  copies into this one constant — and not introduced here** — it is part of FrankERP/owt-kb-v1#8 (OQ-1), and is recorded so a
   later reviewer does not re-litigate it as new.
 - **`path: "/admin"`**, matching the existing admin push (`proposalNotify.ts:153`).
   `notifyProposalReview` hardcodes `/me`, which is the lead's surface and wrong here.

@@ -67,9 +67,9 @@ for a helper by name without checking what it does.
 
 | Symbol | Module | Disposition |
 |---|---|---|
-| `REVIEWABLE_BEFORE_WRITE` | `serviceMutationSideEffects.ts:634` | **Export.** The lead messages route needs it to choose push-vs-email |
-| `REVIEWABLE_STATUSES` | `outboxSweep.ts:212` | Identical set, second copy, no sync guard. **Do not collapse into the side-effects module** — it already imports `sweepOutbox` (`:71`), so that direction closes an import cycle. Put the shared set in a leaf, or export from `outboxSweep`. They are semantically different predicates (status *before the write* vs status *at flush*) that coincide today |
-| `ADMIN_RECIPIENTS_QUERY` | **now `proposalNotifyQueries.ts:32`, exported by Child B Phase A** (it was `outboxSweep.ts:193`) | **Export.** §6 adds a third consumer; it is currently duplicated verbatim at `proposalNotify.ts:143` with nothing enforcing the match |
+| `REVIEWABLE_BEFORE_WRITE` | `serviceMutationSideEffects.ts:634` | **REFUSED (Child B Phase A) — stays module-private.** This contract assumed the lead messages route would import it to choose push-vs-email; the resolved gate is `status === "approved"`, so nothing consumes it. The lead messages route needs it to choose push-vs-email |
+| `REVIEWABLE_STATUSES` | `outboxSweep.ts:212` | **Also stays module-private (Child B Phase A)** — with the push gate resolved, nothing imports it and the cycle never arises. Identical set, second copy, no sync guard. **Do not collapse into the side-effects module** — it already imports `sweepOutbox` (`:71`), so that direction closes an import cycle. Put the shared set in a leaf, or export from `outboxSweep`. They are semantically different predicates (status *before the write* vs status *at flush*) that coincide today |
+| `ADMIN_RECIPIENTS_QUERY` | **now `proposalNotifyQueries.ts:32`, exported by Child B Phase A** (it was `outboxSweep.ts:193`) | **DONE (Child B Phase A).** Exported. The second copy in `proposalNotify.ts` is **deleted**: `SUBMITTED_NOTIFY_QUERY` (`proposalNotifyQueries.ts:54`) interpolates this constant, and `leadNoteProjection.test.ts` executes both and compares the people they select. One definition, not two |
 | `PROPOSAL_QUERY`, `classifyLeadNotesNotice`, `classifyNotice` | `proposalNotifyQueries.ts:42` (**moved and exported by Child B Phase A**), `outboxSweep.ts:375`, `:394` | Modified in place; no export needed |
 | `attempt`, `attemptSync`, `fireAndForget` | `serviceMutationSideEffects.ts:77`, `:93`, `:128` (**`fireAndForget` exported by Child B Phase A**) | New side-effect code lives in that module, or wraps its own |
 
@@ -89,12 +89,12 @@ for a helper by name without checking what it does.
 | `classifyLeadNotesNotice` | `outboxSweep.ts:375`. Re-reads live | **The live `service_date` wins over the queued snapshot** — a date moved into the past drops the notice |
 | `buildUpsert` | `outboxNotice.ts:119`. Pure, commits nothing. `before` only in `createIfNotExists` | That `createIfNotExists`-only `before` is what makes the count-and-slice survive a debounce burst |
 | `outboxId` | `outboxNotice.ts:29` | `NoticeKind` is a closed union `"role"｜"setlist"｜"leadNotes"` — hence keeping `"leadNotes"` |
-| `loadCanonicalProposal(id, tolerate?)` | `serviceWriteTargets.ts:392`. Sentinel, never throws. Fails closed on 0 rows, >1, raw draft overlay, missing `service_ref`, unresolvable role | **It loads the ROLE too**, and fails a valid proposal whose role is ambiguous. It does **not** do duplicate-per-service detection — that is `loadProposalGroup`. A third selection exists: `getSharedProposal` (`me/propose/[roleId]/page.tsx:41`) picks `order(_createdAt asc)[0]`, and that is the id the composer posts to |
+| `loadCanonicalProposal(id, tolerate?)` | `serviceWriteTargets.ts:392`. Sentinel, never throws. Fails closed on 0 rows, >1, raw draft overlay, missing `service_ref`, unresolvable role | **It loads the ROLE too**, and fails a valid proposal whose role is ambiguous. It does **not** do duplicate-per-service detection — that is `loadProposalGroup`. A third selection exists: `getSharedProposal` (`app/(client)/me/propose/[roleId]/page.tsx:40`) picks `order(_createdAt asc)[0]`, and that is the id the composer posts to |
 | `canonicalLeadRefs(role)` | `serviceReadSelect.ts:138` | **Only the `Lead` seat**, and meaningful only after `validateRole` |
 | `requireMinistryMember(id)` | `authGuards.ts:34`. `super-admin` bypasses | **Membership only.** A worship `admin` who is not a worship member gets `null` |
 | `requireActiveManager()` | `authGuards.ts:22` | **`content-editor` passes**, and there is **no ministry check** |
 | `withVerificationRunContext` | `srVerificationRunContext.ts:170`. Transparent | **Not a guard.** Omitting it costs only run markers |
-| `parseProposalSaveRequest` | `proposalWriteRequest.ts:107`. Sentinel, never throws | **Ignores unknown keys**, and coerces an absent `leadNotes` to `""` (`:116`) |
+| `parseProposalSaveRequest` | `proposalWriteRequest.ts:107`. Sentinel, never throws | **Ignores unknown keys**, and coerces an absent `leadNotes` to `""` (`:117`) |
 | `compareObservedTarget` | `setlistWriteRequest.ts:117` | **`null` means SUCCESS** |
 | `PROPOSAL_PROJECTION` | `serviceReadQueries.ts:33` | Does **not** project `submitted_by`, `submitted_at`, `reviewed_at`, `last_edited_by/at` — four of which the migration's fallback chain reads. The migration issues its own query; a runtime read must add them |
 | `operationalClient` | `sanity/lib/operationalClient.ts:16` | `published` perspective — **drafts are invisible by construction** |
@@ -114,7 +114,7 @@ reused verbatim inside `transitionFingerprint`.
 ### Cache — nothing applies
 
 `app/utils/revalidate.ts` exports three helpers; four more wrap them in
-`serviceMutationSideEffects.ts:755-777`. **None applies to a message write.**
+`serviceMutationSideEffects.ts:777-801`. **None applies to a message write.**
 `me/propose/[roleId]/page.tsx:8` declares `revalidate = 0`; `/admin` is forced
 dynamic by `requireActiveManager()` reading cookies and its panel fetches
 client-side. The precedent is exact: `app/api/me/proposals/route.ts` calls no
