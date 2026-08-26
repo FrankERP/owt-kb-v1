@@ -20,7 +20,7 @@ render the full history and can post to it.
 
 ## Current behaviour and the gap
 
-Three independent `text` fields hold notes (`sanity/schemas/setlistProposal.ts:151-169`).
+Three independent `text` fields hold notes (`sanity/schemas/setlistProposal.ts:151-163` and `~:231`; `messages[]` was inserted between them in Phase 1, so they are no longer contiguous).
 `lead_notes` and `admin_notes` are single-valued, so each new note **destroys the
 previous one** — the history the user asked for does not exist. `team_notes` is a
 different thing (the whole team sees it) and is out of scope.
@@ -92,7 +92,9 @@ because a count cannot collide the way a string can.
 
 **A pre-deploy client that deliberately CLEARS the textarea is silently ignored** —
 an empty value fails the non-empty half of the server rule, so the erasure does not
-propagate. A new gap under invariant 8: the lead believes they removed their note
+propagate. **It is a notification gap as well as a UI one:** today `leadNotes: ""`
+over a stored value queues a notice, because `classifyLeadNotes` compares trimmed
+values (`outboxClassify.ts:103`); under the server rule it queues nothing. A new gap under invariant 8: the lead believes they removed their note
 and the thread still shows it. Accepted, because the alternative is letting an
 empty payload field blank the archive, which is the failure criterion 3 exists to
 prevent.
@@ -268,15 +270,25 @@ a message is not.
 
 **Admin panel: refresh content and revision together.** After a successful post,
 `ProposalsPanel` calls `await load()`, which replaces the whole record
-(`:508` → `:395`) and re-renders the card from props. **If the reloaded `_rev`
-differs from the one the card held, surface the existing "Propuesta actualizada —
-recarga" banner** (`ProposalsPanel.tsx:239-245`) rather than swapping the content
-silently — today a lead's concurrent edit produces that banner, and `load()` would
-otherwise replace the card under the admin with no signal.
+(`:508` → `:395`) and re-renders the card from props. **The admin route returns `observedRev` too, and the banner is gated on THAT.**
+Surface the existing "Propuesta actualizada — recarga" banner
+(`ProposalsPanel.tsx:239-245`) only when `observedRev !== the _rev the card held`;
+otherwise adopt the reload silently.
 
-**Lead editor: adopt nothing.** The route returns no `_rev` to it; `rev` stays
-pinned to what the editor rendered from, so a concurrent co-lead save still 409s
-into the existing reload banner.
+**Gating it on the reloaded `_rev` instead would lock the admin out of the card.**
+The admin's own append always moves `_rev`, so that condition is true after *every*
+admin message. The banner is the `conflict` flag, and `conflict` disables Aprobar
+(`:289`), Solicitar cambios (`:274`) and Reabrir (`:331`); cards are keyed by `_id`
+(`:638`) so `load()` does not remount them and the flag persists until the panel
+itself does. An admin who asks a question in the thread could no longer review that
+proposal. This is the same reasoning the lead surface uses — the actor's own post
+moves the revision — and an earlier draft applied it to one surface and not the
+other. Note also that today this banner appears only after a rejected action, never
+proactively from a `load()` diff.
+
+**Lead editor: adopt conditionally, on `observedRev`** — the full rule is below
+under "Rule". In one line: the editor keeps its pinned `rev` unless the route can
+prove nothing moved between the editor's render and its own append.
 
 **Why the surfaces differ.** `_rev` on the admin transition is not a staleness
 token — it is an **attestation that the admin saw this content**. The route says
@@ -332,7 +344,17 @@ posts, adopts, presses "Guardar borrador", and silently reverts
 `changes_requested → draft`.
 
 `observedRev` establishes the property directly — *nothing at all moved between the
-editor's render and my own append* — rather than inferring it from one field. It
+editor's render and the route's read* —
+
+**and that is slightly weaker than "before my append".** The append carries no
+revision precondition (deliberately, so concurrent posts both land), so a co-lead
+commit inside the route's read→commit window would still let the editor adopt a
+revision whose parent it never saw. The window is milliseconds and the alternative
+— conditioning the append on `observedRev` — would reintroduce the 409 the
+unconditioned append exists to avoid. Accepted and named rather than hidden; if it
+ever matters, the fix is a bounded re-read-and-retry, not a precondition. It is
+also strictly better than the songs comparison it replaced, which proved nothing
+about three of the four fields the save writes — rather than inferring it from one field. It
 also sidesteps a shape mismatch the comparison would have needed to resolve: the
 route's projection emits `song{_type,_ref}` (`serviceReadQueries.ts:15`) while the
 editor's prop is `"song_id": song._ref, title, author, key`
@@ -344,12 +366,23 @@ It also removes any need to disable the composer while dirty.
 job, it is non-destructive (the editor does not clear), and the banner already
 exists.
 
+**An admin's standalone post also 409s every open lead editor**, with no content
+change behind it. The mechanism is pre-existing — the "Recargar" path calls
+`router.refresh()`, which re-seeds `rev` (`ProposalEditor.tsx:162-163`) but not
+`songs`/`status`/`teamNotes`, so the lead's next save can commit against content
+they were never shown — but this child adds a new and, in a chat, frequent trigger
+for it. Criterion 8 does not cover it. Accepted for Child A and named; the real fix
+is prop-seeding the editor's content on revision change, which is the same work a
+live thread refresh needs and belongs with read marks.
+
 **Response shape.** The appended message and the full `messages[]`, read back via
 **`canonicalProposalByIdQuery`** through `operationalClient` — the helper
 `app/api/me/proposals/route.ts:320` already uses, not an inline GROQ, so the
 protected-read classifier (`protectedReadAudit.ts:729`) sees a helper-sourced read.
-The lead route additionally returns the proposal's songs, per the revision rule
-above. **No optimistic append** — a failed post that had
+The lead route additionally returns **`observedRev`** — the revision it read
+immediately before appending — per the revision rule above. It does **not** need to
+return the songs; an earlier draft's content comparison was replaced precisely
+because it could not prove what it claimed. **No optimistic append** — a failed post that had
 already rendered would leave a phantom message in a channel whose whole value is
 that nothing is lost.
 
@@ -383,11 +416,25 @@ cutover, and a draft is not a document this migration has any business writing.
 3. Mint deterministic `_key`s `migleadnote01` / `migadminnote1` and **skip a
    document when ANY key it would mint is present** — 3 production documents mint
    both, so a singular check would half-migrate one on a re-run.
+4. **Assert the `_rev` the script read** (`ifRevisionId`) on each patch. No message
+   writer exists in production at step 4, so this cannot fire — but it costs one
+   line on a one-shot irreversible production write, and it turns "nothing else was
+   writing" from an assumption into a precondition.
 
 | Source | `kind` | `author_role` | `author` | `at`, first available |
 |---|---|---|---|---|
 | `lead_notes` | `lead_note` | `lead` | `lead._ref` | `last_edited_at` → `submitted_at` → `_createdAt` |
-| `admin_notes` | `admin_change_request` | `admin` | `last_transition.by` when present, else **absent** | `last_transition.at` → `reviewed_at` → `_updatedAt` |
+| `admin_notes` | `admin_change_request` | `admin` | `last_transition.by` **only when `last_transition.action` is `request_changes` or `reopen`**, else **absent** | `last_transition.at` (same condition) → `reviewed_at` → `_updatedAt` |
+
+**Why the action condition.** `reconcile_target` writes `last_transition`
+(`admin/proposals/[id]/route.ts:491-497`) while never touching `admin_notes`, so a
+retarget after a change request would attribute X's note to Y with Y's timestamp —
+permanently, with no edit path. The schema's own comment says a fabricated
+attribution is worse than an absent one (`setlistProposal.ts:183-186`). `approve`
+does not write `last_transition` at all, so the fallback is narrower than it looks.
+**The dry-run must print the resolved `action` per document** so this is auditable
+before the write. Same class, lower stakes and accepted: a lead note is attributed
+to `lead._ref` even when a co-lead wrote it, because nothing records which.
 
 Those fallback fields are **not** in `PROPOSAL_PROJECTION`; the script issues its
 own query. Order by resolved `at` ascending, lead-first on a tie.
@@ -431,10 +478,13 @@ asserts against *that*.
 | `protectedReadAudit.ts` | **No change.** `messages` is deliberately not in `PROTECTED_FIELDS`: word-boundary regex (`:729`), and the list's own comment (`:34-38`) excludes ambiguous names |
 | `e2e/service-readiness/lib/dataset.ts:390-403` | `StoredProposal` and its projection gain `messages` |
 
-**`POST /api/me/proposals` keeps writing `lead_notes` — the mirror.** It writes the
-newest lead message body rather than a removed form field. It does **not** stop
-writing it in this child; that is Child B, and doing it here would silently retire
-the existing email.
+**`POST /api/me/proposals` keeps the `lead_notes` mirror — conditionally.** When
+the request appends a message it writes **that appended body**; when it does not,
+it **omits the field from the patch entirely** (§"The submission note"). It never
+writes "the newest lead message body" unconditionally — on a document with a note
+and an empty `messages[]` that value is `""` and the save would blank the archive.
+It does **not** stop writing the field in this child; that is Child B, and doing it
+here would silently retire the existing email.
 
 ### UI
 
@@ -515,9 +565,12 @@ moved; investigate. **No `--apply`.**
 - **Verification:** gate + the whole table below.
 - **Caveat:** e2e fixtures still assert `admin_notes` until Phase E, so this phase
   is deployable against vitest but not the e2e suites.
-- **The `preview` walkthrough happens at Phase D step 6**, not here — step 8's note
-  forbids exercising the thread until production has the code, and `preview` only
-  gets it at step 6. This phase's verification is the gate plus the table.
+- **The `preview` walkthrough happens AFTER Phase D step 8**, never here and never
+  at step 6. Step 8's rule is the binding one: until production has the code,
+  `preview` runs new code against the same dataset while production runs old, and a
+  walkthrough there writes permanent messages and moves `lead_notes` through the
+  mirror where production's old code can revert it. This phase's verification is
+  the gate plus the table.
 - **That walkthrough writes REAL data.** No edit or delete path exists, so every
   test message is permanent and visible to the team. Name the target proposal in
   advance.
@@ -582,9 +635,15 @@ against the same dataset.
    This is the criterion that guards the archive Child A's own rollback depends on,
    and it belongs here rather than in Child B because **this child is what makes
    the client stop sending the field**.
-4. `admin_notes` likewise, with the one pre-existing exception the parent's
-   invariant 7 records (an empty `reopen` blanks it today; Child A preserves that
-   behaviour rather than fixing it).
+4. `admin_notes` likewise, **with one behaviour change this child does make and
+   accepts.** Seeding the change-request composer empty (§Reads, `:106`) means a
+   note-less `reopen` now sends `undefined` → `""` → blanks `admin_notes`, where
+   today the composer re-sends the stored value and nothing is blanked. The empty
+   seed is right — it stops a stale legacy note being re-minted as a fresh bubble —
+   and the blanking is harmless because the content lives in `messages[]` and
+   `admin_notes` has no notification consumer. Stated because the parent's
+   invariant 7 called this pre-existing, and with the empty seed it becomes the
+   default rather than the exception.
 5. **The existing debounced admin email fires on exactly the occasions it fires
    today**, same audience, same debounce, same preference key.
 6. **The "Nueva propuesta" submit email always fires**, to the same audience as
@@ -609,7 +668,7 @@ against the same dataset.
 |---|---|---|
 | **`setIfMissing` precedes every append** | `proposalMessageRoutes.test.ts` + `proposalWriteRoutes.test.ts` — assert the MUTATION CHAIN, not a 200 | The first message failing silently; a first-time `request_changes` rolling back its status change |
 | **The existing email still fires** | `setlistNoticeQueueing.test.ts` — a lead message on a `pending` proposal produces an outbox document with the same shape as today's | Silently retiring the notification this child promises not to touch |
-| **`lead_notes` is never blanked** | `proposalWriteRoutes.test.ts` — a save from the new bundle writes the newest lead-message body, never `request.leadNotes` blindly; re-read a document with a pre-existing value and show it non-empty | The client stopping sending the field and the next save erasing the archive on all 8 documents — destroying Child A's own rollback path |
+| **`lead_notes` is never blanked** | `proposalWriteRoutes.test.ts` — a save from the new bundle (no `leadNotes` in the payload) **omits `lead_notes` from the patch entirely** and appends nothing; re-read a document with a pre-existing value and show it byte-unchanged. A save that DOES append writes the appended body | The client stopping sending the field and the next save erasing the archive — and, equally, a test written to "write the newest body" going green while encoding that blanking |
 | **The submit email still carries the note** | `proposalNotify.test.ts` — a first submission carrying the textarea's text produces an email whose notes block is that text | A first submission mailing admins with no notes, and the lead having no way to speak on their first submission |
 | **A pre-deploy bundle's CHANGED note is not discarded** | `proposalWriteRoutes.test.ts` — a save carrying a `leadNotes` that DIFFERS from the stored value appends a `lead_note`, mirrors it, and queues a notice | A lead with the page already open losing their note behind a success toast, with no email |
 | **An UNCHANGED note appends nothing** | `proposalWriteRoutes.test.ts` — a repeated save carrying the same `leadNotes` appends no message and omits `lead_notes` from the patch | Three identical bubbles from three draft saves, permanently, since no delete path exists |
@@ -653,6 +712,12 @@ behaviour. No data is destroyed and nothing needs a recovery script.
 **Partial failure:** the transition's `set` + `append` are one patch in one
 transaction. A standalone post is one patch. The migration aborts per document
 rather than half-writing.
+
+**A message append can 409 an in-flight publish-ready transaction**, which asserts
+the shared proposal's revision (`publishReadyTransaction.ts:70-72`). It fails
+closed, like the documented member-availability false conflict, and is far rarer
+than the read-mark case that argument was originally used to rule out — a message
+is a deliberate act, a read is not.
 
 ## Outputs for Child B
 
