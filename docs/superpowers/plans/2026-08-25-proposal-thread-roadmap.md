@@ -263,13 +263,19 @@ cannot be scheduled a release later.
   does not reach it — Child B names and owns it, and it is listed here so the parent's
   acceptance set is actually complete rather than patched by a child.
 - No message posted between Child A's release and Child B's release is **lost**,
-  and none is **notified twice**. One narrow exception, by Child B's deliberate
-  design: an in-flight legacy `{beforeNotes}` outbox notice queued minutes before
-  B's deploy is dropped and consumed, so that one message is stored and rendered
-  but never emailed. **Decided: accept the seam.** Child B's disposition is
-  drop-and-consume on a missing `beforeMessageCount` — verified safe (the notice is
-  consumed, not re-pended or wedged) and narrow, since production holds zero outbox
-  documents at rest. Draining before cutover is not required.
+  and none is **notified twice** — **with no exception.** An earlier version of this
+  bullet accepted one: an in-flight legacy `{beforeNotes}` notice "queued minutes
+  before B's deploy", dropped and consumed, stored and rendered but never emailed.
+  **That decision is superseded, because its premise was false.** The window is not
+  minutes and not a deploy: this repo's mandated release runs `preview` on the new
+  code and production on the old, against **one shared dataset**, for as long as the
+  PR takes — and `commitUpserts` sweeps unconditionally
+  (`serviceMutationSideEffects.ts:491`) over a `DUE_NOTICES_QUERY` with no environment
+  scoping (`outboxSweep.ts:178`). Dropping is also **unobservable**: a notice
+  classified to `[]` contributes no pending recipients, so `countLost`
+  (`outboxSweep.ts:890`) reports nothing. Child B therefore **classifies** a legacy
+  notice through the surviving `classifyLeadNotes` instead of dropping it, and carries
+  a release procedure. Nothing is lost in either direction.
 - **`lead_notes` is byte-identical to its pre-Child-A value on every document the
   mirror did not write, and every mirror write carries a real non-empty message
   body.** Stated as "non-empty body" rather than "the mirror's writes are the only
