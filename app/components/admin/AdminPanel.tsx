@@ -601,7 +601,8 @@ function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) =>
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
 export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole }) {
-  const { update } = useSession();
+  const { data: session, update } = useSession();
+  const viewerId = session?.user?.sanityId ?? null;
   const router = useRouter();
   const firstTab = ALL_TABS.filter((t) => t.roles.includes(role))[0]?.id ?? "content";
   // `{ tab, target }` in ONE reducer: a manual tab change always clears the
@@ -847,7 +848,7 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
       <div className="brand-admin-workspace space-y-6">
         <TabBar active={tab} onChange={setTab} role={role} />
         <div className="brand-surface rounded-2xl p-4 sm:p-6">
-          <ProposalsPanel target={proposalTarget} onResolved={onReviewResolved} />
+          <ProposalsPanel target={proposalTarget} onResolved={onReviewResolved} viewerId={viewerId} />
         </div>
       </div>
     </ServiceHandoffProvider>

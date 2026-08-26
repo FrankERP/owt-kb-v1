@@ -7,6 +7,7 @@ import { normalizeMedleyTags } from "@/app/utils/medley";
 import { useFocusTrap } from "@/app/utils/useFocusTrap";
 import { ChainLinkIcon } from "@/app/components/ChainLinkIcon";
 import { useTransientValue } from "@/app/utils/useTransientValue";
+import ProposalThread, { type ThreadMessage } from "@/app/components/ProposalThread";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
@@ -36,6 +37,7 @@ interface SharedProposal {
   lead_notes?: string;
   team_notes?: string;
   admin_notes?: string;
+  messages?: ThreadMessage[] | null;
   createdById?: string;
   contributors?: Array<{ id: string; name: string }>;
   songs?: Array<{
@@ -118,6 +120,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
     }));
   });
 
+  const [messages, setMessages] = useState<ThreadMessage[]>(proposal?.messages ?? []);
   const [leadNotes, setLeadNotes] = useState(proposal?.lead_notes ?? "");
   const [teamNotes, setTeamNotes] = useState(proposal?.team_notes ?? "");
   const [status, setStatus]       = useState<ProposalStatus>(proposal?.status ?? "draft");
@@ -387,6 +390,41 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
     }
   };
 
+  /**
+   * Post one message into the thread.
+   *
+   * Rethrows on failure so `<ProposalThread>` keeps the composer's text — its
+   * own catch is what shows the error. Clearing on failure would lose what the
+   * lead wrote, which is the one thing this channel promises not to do.
+   *
+   * **Adopts the fresh revision only when `observedRev` matches the pin.** The
+   * lead's OWN post moves `_rev`, so a blanket pin guarantees a 409 on their
+   * next save and a reload that discards the in-progress setlist — on the
+   * feature's primary action. And a content comparison is not a substitute:
+   * `POST /api/me/proposals` writes `songs`, `status`, `lead_notes` AND
+   * `team_notes` in one patch, so "identical songs" proves only that songs did
+   * not move; adopting on that would let this editor's stale `teamNotes`
+   * initializer destroy a co-lead's message with no 409 and no banner.
+   *
+   * Residual, named not closed: the append carries no revision precondition, so
+   * a co-lead commit inside the route's read→commit window still lets this
+   * editor adopt a revision whose parent it never saw. Milliseconds, and
+   * conditioning the append would reintroduce the 409 it exists to avoid.
+   */
+  const postMessage = useCallback(async (body: string) => {
+    if (!proposalId) throw new Error("no proposal");
+    const res = await fetch(`/api/me/proposals/${encodeURIComponent(proposalId)}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body }),
+    });
+    if (!res.ok) throw new Error("post failed");
+    const data: { messages?: ThreadMessage[]; rev?: string | null; observedRev?: string | null } =
+      await res.json();
+    setMessages(data.messages ?? []);
+    if (data.rev && data.observedRev && data.observedRev === rev) setRev(data.rev);
+  }, [proposalId, rev]);
+
   const isApproved  = status === "approved";
   const serviceLabel =
     roleDoc.service_type === "sunday"   ? "Domingo" :
@@ -452,12 +490,22 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
         </div>
       )}
 
-      {/* Admin notes banner (changes requested) */}
-      {status === "changes_requested" && proposal?.admin_notes && (
-        <div className="rounded-xl border border-negative-strong/30 bg-negative-strong/10 p-4 space-y-1">
-          <p className="font-label text-xs uppercase tracking-widest text-negative-fg">Comentarios del admin</p>
-          <p className="font-body text-sm text-negative-muted whitespace-pre-wrap">{proposal.admin_notes}</p>
-        </div>
+      {/* The private lead ↔ admin conversation, replacing the old "Comentarios
+          del admin" banner. Rendered whenever a document exists and NOT gated on
+          status or on a field being non-empty: the block it replaces was gated on
+          `changes_requested && admin_notes`, and inheriting that would hide the
+          thread on a `pending` proposal, which is where the conversation happens.
+
+          Before the document exists there is no composer — the "Notas privadas"
+          textarea below stands in, and nothing is buffered client-side. */}
+      {proposalId && (
+        <ProposalThread
+          messages={messages}
+          viewerId={currentUserId}
+          viewerRole="lead"
+          serviceDate={roleDoc.service_date}
+          onPost={postMessage}
+        />
       )}
 
       {/* Song list */}
@@ -745,12 +793,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
         </div>
       )}
 
-      {isApproved && leadNotes && (
-        <div className="space-y-1">
-          <p className="font-label text-xs uppercase tracking-widest text-mono-500">Tus notas privadas para revisión</p>
-          <p className="font-body text-sm text-mono-300 whitespace-pre-wrap">{leadNotes}</p>
-        </div>
-      )}
+
 
       {/* Approved banner */}
       {isApproved && (
