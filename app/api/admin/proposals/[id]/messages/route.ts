@@ -1,0 +1,139 @@
+import { NextRequest, NextResponse } from "next/server";
+
+// Kept at 60 s to match its sibling writers, though this route registers no
+// `after()` fan-out of its own: an admin message notifies nobody in this
+// delivery (Child A §1's named gap; Child B's push closes it).
+export const maxDuration = 60;
+
+import { requireActiveManager } from "@/app/utils/authGuards";
+import { writeClient } from "@/sanity/lib/serverClient";
+import { operationalClient } from "@/sanity/lib/operationalClient";
+import { serviceError } from "@/app/utils/serviceMutation";
+import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
+import { nextKey, nowIso } from "@/app/utils/roleWriteOps";
+import { loadCanonicalProposal } from "@/app/utils/serviceWriteTargets";
+import {
+  buildProposalMessage,
+  parseProposalMessageRequest,
+  PROPOSAL_MESSAGES_MAX,
+} from "@/app/utils/proposalMessageWrite";
+import { isThreadOpen } from "@/app/utils/proposalThread";
+import { THREAD_AFTER_APPEND_QUERY, type ThreadMessageRow } from "@/app/utils/proposalMessageRead";
+import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
+
+function reject(res: { status: number; body: unknown }) {
+  return NextResponse.json(res.body, { status: res.status });
+}
+
+// Declared BEFORE the handler on purpose, matching `app/api/me/proposals/route.ts`.
+// `protectedReadAudit`'s `operationRegions` treats `export const POST =` as the
+// START of the POST region, so declaring it at the bottom files every mutation in
+// this file under `module` and the writer entry reads as dead. Hoisting makes it
+// work at runtime either way; the audit is what fixes the order.
+export const POST = withVerificationRunContext(postHandler);
+
+/**
+ * POST /api/admin/proposals/[id]/messages — an admin posts into the private thread.
+ *
+ * **This route does NOT touch `admin_notes`.** The transition mirrors that field
+ * and only the transition does: `admin_notes` is the change-request archive the
+ * rollback leans on, and letting ordinary admin chatter overwrite it would make a
+ * question indistinguishable from a review decision. It also has no notification
+ * consumer, so there is nothing to keep in sync.
+ *
+ * **`kind` is `admin_change_request`** because that is the only admin-facing value
+ * the enum offers — `pastor_note` and `system` are reserved and unminted (§3). The
+ * consequence is real and accepted for this child: an admin's *question* is stored
+ * as a change request, and Studio labels it "Cambios solicitados". A distinct
+ * `admin_note` kind is a schema change and belongs with pastor notes.
+ *
+ * **No ministry check, inherited deliberately** from the sibling transition writer
+ * (`admin/proposals/[id]/route.ts`), so a kids-only `admin` can post into a worship
+ * thread. A new writer stricter than the route beside it would give two answers to
+ * "can this admin act on this proposal"; tightening both is FrankERP/owt-kb-v1#8.
+ */
+async function postHandler(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await requireActiveManager();
+  if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Restricted to admin and super-admin (not content-editor), matching the
+  // transition route this one sits beside.
+  if (session.user.role === "content-editor") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const adminId = session.user.sanityId ?? null;
+
+  const { id } = await params;
+  let raw: unknown;
+  try {
+    raw = await req.json();
+  } catch {
+    return reject(serviceError("invalid_request", { details: { issues: ["json"] } }));
+  }
+  const parsed = parseProposalMessageRequest(raw);
+  if (!parsed.ok) {
+    return reject(serviceError("invalid_request", { details: { issues: parsed.issues } }));
+  }
+
+  const load = await loadCanonicalProposal(id);
+  if (!load.ok) {
+    return reject(serviceError(load.failure.code, { details: load.failure.details }));
+  }
+  const { doc } = load.proposal;
+
+  // Server-side, not a UI state. See the lead route.
+  if (!isThreadOpen({ serviceDate: doc.service_date })) {
+    return reject(serviceError("invalid_request", { details: { issues: ["thread_closed"] } }));
+  }
+
+  const stored = Array.isArray(doc.messages) ? (doc.messages as unknown[]) : [];
+  // Racy by construction; a growth bound, not a boundary. The TRANSITION is exempt
+  // from this cap — a full thread must never block a review decision — but a chat
+  // message is not a decision.
+  if (stored.length >= PROPOSAL_MESSAGES_MAX) {
+    return reject(serviceError("invalid_request", { details: { issues: ["messages_full"] } }));
+  }
+
+  const message = buildProposalMessage({
+    authorId: adminId,
+    authorRole: "admin",
+    kind: "admin_change_request",
+    body: parsed.value.body,
+    now: nowIso(),
+    key: nextKey(),
+  });
+  if (!message) {
+    return reject(serviceError("invalid_request", { details: { issues: ["body"] } }));
+  }
+
+  const observedRev = typeof doc._rev === "string" ? doc._rev : null;
+
+  try {
+    // No `ifRevisionId`, and `setIfMissing` before `append` — both for the same
+    // reasons as the lead route, which documents them.
+    await writeClient
+      .patch(id)
+      .setIfMissing({ messages: [] })
+      .append("messages", [message])
+      .commit();
+  } catch (err) {
+    // With no `ifRevisionId` a 409 is not a stale-revision race — the patch
+    // asserts nothing — so this is a genuine Sanity write conflict. Mapped onto
+    // the registered code rather than re-exposing `sanityConflictKind`'s own
+    // union, exactly as the save route does.
+    if (!sanityConflictKind(err)) throw err;
+    return reject(serviceError("stale_revision", { details: { id } }));
+  }
+
+  const fresh = await operationalClient.fetch<{
+    _rev?: string;
+    messages?: ThreadMessageRow[] | null;
+  } | null>(THREAD_AFTER_APPEND_QUERY, { id });
+
+  return NextResponse.json({
+    ok: true,
+    message,
+    messages: fresh?.messages ?? [],
+    rev: fresh?._rev ?? null,
+    observedRev,
+  });
+}

@@ -384,7 +384,7 @@ describe("A2 handoff allowlist", () => {
     expect(A2_HANDOFF_ALLOWLIST).toEqual([]);
   });
 
-  it("licenses the fourteen permanent runtime writers for WRITES ONLY, never reads", () => {
+  it("licenses the sixteen permanent runtime writers for WRITES ONLY, never reads", () => {
     expect(PROTECTED_RUNTIME_WRITERS.map((e) => `${e.file}#${e.operation}`).sort()).toEqual(
       [
         "app/utils/outboxSweep.ts#module",
@@ -401,6 +401,8 @@ describe("A2 handoff allowlist", () => {
         "app/utils/roleWriteOps.ts#module",
         "app/api/admin/setlists/route.ts#PUT",
         "app/api/me/proposals/route.ts#POST",
+        "app/api/me/proposals/[id]/messages/route.ts#POST",
+        "app/api/admin/proposals/[id]/messages/route.ts#POST",
       ].sort(),
     );
     // Nothing removes a writer: item 12 must never be "satisfied" by moving reads here.

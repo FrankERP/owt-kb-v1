@@ -253,6 +253,20 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — the proposal save surface itself)",
   },
   {
+    file: "app/api/me/proposals/[id]/messages/route.ts",
+    operation: "POST",
+    reason:
+      "guarded lead thread writer: resolves the setlistProposal through `loadCanonicalProposal`, then appends one message and mirrors `lead_notes` in a single UNCONDITIONED patch. It carries no `ifRevisionId` ON PURPOSE — two co-leads posting at once must both land — so the usual observed-revision assertion is deliberately absent here and the entry exists to say so out loud (Child A §4)",
+    removalOwner: "permanent runtime writer (never removed — the lead side of the thread)",
+  },
+  {
+    file: "app/api/admin/proposals/[id]/messages/route.ts",
+    operation: "POST",
+    reason:
+      "guarded admin thread writer: same shape as the lead route, and deliberately does NOT touch `admin_notes` — that field is the change-request archive the rollback leans on and only the transition mirrors it (Child A §1, §4)",
+    removalOwner: "permanent runtime writer (never removed — the admin side of the thread)",
+  },
+  {
     file: "app/api/admin/proposals/[id]/route.ts",
     operation: "PATCH",
     reason:
