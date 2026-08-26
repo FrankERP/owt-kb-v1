@@ -15,9 +15,10 @@ Contracts of reused helpers:
 | | |
 |---|---|
 | Phase A (migration script, dry-run) | **Implemented and on `preview`** — `f1ebdf13`. Verified: dry-run reports 8 documents / 10 messages / 0 aborts |
-| Phases B–E | **Not approved, not authorized.** Risk tier CRITICAL |
-| Approval required | Two sequential fresh `APPROVED` verdicts on byte-identical text |
-| Review history | 4 rounds on the pre-consolidation shape, all `CHANGES_REQUIRED`, 9 blockers, all fixed and **every one an internal contradiction rather than a design fault** |
+| Phases B–E | **APPROVED for implementation planning, still NOT authorized to implement.** Risk tier CRITICAL |
+| Approval | **Met** — two sequential fresh `APPROVED` verdicts on digest `5713a9cc…`. See the [review log](2026-08-25-proposal-thread-a-storage-and-ui-review-log.md) |
+| Review history | 6 rounds. Blockers per round: 3 → 3 → 2 → 1 → 0 → 0; the step down happens at the consolidation |
+| **Post-approval edits** | This file has been edited SINCE the approved digest, adopting non-blocking items from the two approving rounds. They are listed in the review log and are **un-reviewed** |
 
 **Approval is not authorization to implement.** Each phase additionally requires a
 fresh code review of its diff plus the documented gates.
@@ -82,6 +83,14 @@ Child B's to close. **The last one IS a regression** — an existing signal reti
 which parent invariant 8 does not permit silently, so it is also carried in
 acceptance criterion 5 and in the parent's coverage table.
 
+- **A lead's message on an `approved` or `draft` proposal notifies nobody** —
+  `queueLeadNotesNotice` requires `previousStatus ∈ {pending, changes_requested}`
+  (`serviceMutationSideEffects.ts:632`). **This is the dominant real-world case, not
+  an edge:** at the last measurement 13 of 14 production proposals were `approved`,
+  1 was `draft`, and **zero** were pending or changes_requested. Two consequences
+  worth stating plainly: Child B's `approved` push exists precisely to close it, and
+  **the Phase D walkthrough cannot exercise the mirror→email path at all**, so §1's
+  central promise rests entirely on `setlistNoticeQueueing.test.ts`.
 - **An admin's standalone message notifies nobody.** No such feature exists today.
 - **A repeated identical message sends no email.** The queue guard
   (`serviceMutationSideEffects.ts:636`) and the flush classifier
@@ -159,7 +168,9 @@ Shipped in Phase 1 on `setlistProposal`, after `team_notes`:
 
 ```
 messages: array of object `proposal_message`
-  _key        string    nextKey() — 12 hex chars
+  _key        string    12 hex chars at runtime (`nextKey()`); the migration mints
+                        `migleadnote01`/`migadminnote1` and a step-9 repair mints
+                        `topup<n>` — deliberately non-hex, so they cannot collide
   _type       "proposal_message"
   author      reference → teamMembers, OPTIONAL
   author_role "lead" | "admin" | "pastor" | "system"
@@ -192,8 +203,11 @@ that arrangement is not a guard and is not used.
 
 | Route | Guard | Append |
 |---|---|---|
-| `POST /api/me/proposals/[id]/messages` | `requireMinistryMember("worship")`, caller ∈ `canonicalLeadRefs(role)`, **and** `role.published !== false` — both halves of `me/proposals/route.ts:127` | `setIfMissing({messages: []})` + `append`, **no `ifRevisionId`** |
-| `POST /api/admin/proposals/[id]/messages` | `requireActiveManager()` **and** `role !== "content-editor"` | same |
+| `POST /api/me/proposals/[id]/messages` | `requireMinistryMember("worship")`, caller ∈ `canonicalLeadRefs(role)`, **and** `role.published !== false` — both halves of `me/proposals/route.ts:127` — **plus `isThreadOpen(service_date)`** | `setIfMissing({messages: []})` + `append`, **no `ifRevisionId`** |
+| `POST /api/admin/proposals/[id]/messages` | `requireActiveManager()`, `role !== "content-editor"`, **plus `isThreadOpen(service_date)`** | same |
+
+**`isThreadOpen` is a GUARD, not just a UI state** (§7) — listed here so it is
+implemented as one. A hidden composer is not a guard.
 
 **The admin route mints `kind: "admin_change_request"`** — the only admin-facing
 value the enum offers, since `pastor_note` and `system` are reserved and unminted
@@ -311,18 +325,25 @@ Three consequences, all disqualifying:
 - The whole list would flash to skeletons (`:610-616`) on every chat message.
 
 **The banner.** Surface the existing "Propuesta actualizada — recarga"
-(`:239-245`) only when `observedRev !== the _rev the card held` — i.e. something
+(`:240-250`) only when `observedRev !== the _rev the card held` — i.e. something
 other than this post moved the document between the card's render and the route's
 read. Otherwise adopt silently. **Gating on the reloaded `_rev` would lock the
 admin out of the card**, because the admin's own append always moves `_rev`, so
 that condition is true after every admin message. The `conflict` flag disables
-Aprobar (`:289`), Solicitar cambios (`:274`) and Reabrir (`:331`), and with the
+Aprobar (`:291`), Solicitar cambios (`:274`) and Reabrir (`:331`), and with the
 patch-in-place approach it now genuinely persists until the panel unmounts.
 
 **The justification is narrower than it looks.** With the record patched in place
 the admin *is* looking at current content, so the lock is not "you were not shown
 this" — it is a deliberate fail-closed on the fact that something else moved while
 they were composing. Correct, but do not defend it with the stale-content argument.
+
+**Residual, named not closed: `handleAction` still calls `load()` on a successful
+transition** (`:508`), which remounts every card. Today that discards a half-typed
+`adminNotes` in other open cards; with a composer in every card it now also
+discards half-typed **thread** text. Pre-existing mechanism, newly widened by this
+child. Closing it is the same work as making the refresh non-blanking, and it is
+not in this delivery.
 
 ### Lead editor
 
@@ -347,6 +368,16 @@ keep the pin; the next save 409s into the existing reload banner.
 unconditionally guarantees a 409 on their next save and a reload that discards the
 in-progress setlist — on the feature's primary action.
 
+**The same residual applies to the admin card, and there the consequence is an
+approval.** Card at R1 → route reads R1 → a lead saves (R2) → the append commits
+(R3) → `observedRev` R1 matches, so the card adopts R3 silently → *Aprobar* at R3
+succeeds and publishes a setlist the reviewer never saw. Sub-second, and it needs a
+concurrent lead save — but `parseProposalTransitionRequest`'s own doc-comment says a
+server-fetched revision "would re-authorize a decision made against content the
+reviewer never saw", so criterion 8's promise about approvals must be read with this
+named. Closing it means conditioning the append, which reintroduces the 409 the
+protocol exists to avoid.
+
 `observedRev` establishes *nothing moved between the editor's render and the
 route's read*. **That is slightly weaker than "before my append":** the append
 carries no precondition, so a co-lead commit inside the read→commit window still
@@ -366,9 +397,9 @@ child makes it frequent. Closing it is the same work a live thread refresh needs
 |---|---|
 | `serviceReadQueries.ts:33-43` (`PROPOSAL_PROJECTION`) | Add `messages[]{_key, _type, "author": author._ref, author_role, kind, body, at}`. Keep the legacy fields. **Payload note:** also backs `canonicalProposalsQuery()` → `publishReadyBundle.ts:147`, an ALL-proposals read on the service-readiness surface, so the worst case is ~800 KB × the catalog, not × 1. Nothing hashes or digests the projection, so it is payload-only. Irrelevant at 14 documents; revisit before the catalog grows |
 | `app/api/admin/proposals/route.ts:20-49` | Add the projection **with a resolved author name**, following `"lead_name": coalesce(lead->alias, lead->member_name)` (`:35`) |
-| `ProposalsPanel.tsx:43-45, 106, 225-237` | Type gains `messages`; the `lead_notes` and `admin_notes` blocks become `<ProposalThread>`; `team_notes` untouched. **`:106` seeds the change-request composer from `proposal.admin_notes` — seed it empty**, or an admin re-sends a stale legacy note as a new message |
+| `ProposalsPanel.tsx:43-45, 106, 225-237` | Type gains `messages`; the `lead_notes` and `admin_notes` blocks are **replaced by** `<ProposalThread>`. **Do NOT inherit their render conditions** (`{proposal.lead_notes && …}`, `{status === "changes_requested" && proposal.admin_notes && …}`) — the thread renders **unconditionally**, empty state included, or it would be invisible on a `pending` proposal, which is where the conversation actually happens. `team_notes` untouched. **`:106` seeds the change-request composer from `proposal.admin_notes` — seed it empty**, or an admin re-sends a stale legacy note as a new message |
 | `me/propose/[roleId]/page.tsx:40-56` | Add messages with resolved author names |
-| `ProposalEditor.tsx` | Type gains `messages`; the approved-state echo and the `admin_notes` banner become `<ProposalThread>`. **`teamNotes` untouched.** The "Notas privadas" textarea is retained but conditioned on `!proposalId` (§2) |
+| `ProposalEditor.tsx` | Type gains `messages`; the approved-state echo (`:734`, gated on `isApproved && leadNotes`) and the `admin_notes` banner (`:446`, gated on `changes_requested`) are **replaced by** an **unconditionally rendered** `<ProposalThread>` — same reason as above. **`teamNotes` untouched.** The "Notas privadas" textarea is retained but conditioned on `!proposalId` (§2) |
 | `app/api/me/proposals/route.ts:56-62` | GET projection gains `messages` (no in-app consumer today; e2e only) |
 | `app/(client)/me/page.tsx` | **Drop `admin_notes`** — projected and never rendered |
 | `app/utils/interface.tsx` | Already carries `messages?` with optional `_type` (Phase A) |
@@ -524,13 +555,15 @@ plus the check named.
 
 Script, pure lib, `OPERATOR_TOOLING_ALLOWLIST` registration (`protectedReadAudit.ts:346`,
 exact list pinned at `protectedReadAudit.test.ts:484-497`) — **not**
-`RETIRED_ONE_SHOT_WRITERS`, which fails closed. 34 unit tests plus the cross-writer
+`RETIRED_ONE_SHOT_WRITERS`, which fails closed. 30 unit tests plus the cross-writer
 comparison. Two code reviews; the second confirmed no data-safety blocker.
 
 ### Phase B — Rehearsal
 
-Re-run the dry-run and diff against Phase A's output. Any change means production
-moved; investigate. **No `--apply`.**
+Re-run the dry-run and diff against Phase A's output. **Expect a difference** —
+production moved across all three prior readings (§8), so a change is routine and
+the check is that it is *explicable* (a note edited, a proposal transitioned), not
+that it is absent. A change you cannot explain is the stop signal. **No `--apply`.**
 
 ### Phase C — The cutover (one deploy)
 
@@ -562,7 +595,10 @@ moved; investigate. **No `--apply`.**
 4. **Frank's explicit consent in chat**, then `--apply`. **The only `--apply`.**
 5. Re-read the patched documents and confirm the count step 2 predicted — never a
    hard-coded number — with correct `_key`, `_type`, `kind`, `author_role`, `at`,
-   and a resolvable `author` where present.
+   and a resolvable `author` where present. **If it does not match, STOP: do not
+   proceed to step 6.** The legacy fields are untouched, so the safe response is to
+   leave production on the old code and diagnose. Shipping the cutover over a
+   partial migration is what makes step 9 a repair job instead of a check.
 6. Merge into `preview`, push, **verify the dev alias and `githubCommitSha`**.
 7. PR to `main`, wait for `gates`, merge.
 8. Verify the production alias.
@@ -591,9 +627,17 @@ moved; investigate. **No `--apply`.**
 
 **The residual window is step 4 → step 8**: a preview verification and a PR gate,
 roughly ten to twenty minutes. **Do not exercise the thread on `preview` until step
-8 completes** — during that window `preview` runs new code and production old code
-against the same dataset, and a new-shape notice classified by production's old
-sweep could mail admins stale text. That includes the walkthrough below.
+8 completes** — because posting there writes REAL production data through code the
+team is not yet running, so a message would appear in a thread nobody can see and
+`lead_notes` would move under the old UI.
+
+*(The stale-notice hazard an earlier draft gave as the reason does NOT apply to this
+child: §1 modifies no `app/utils/outbox*` file and the mirror is exactly what keeps
+the old notice shape valid. That hazard is Child B's.)*
+
+**Consequence to accept deliberately: the only end-to-end human walkthrough happens
+AFTER the production release**, since steps 7–8 are the release. The gates, the
+Verification table and the dry-run are what stand between the code and the team.
 
 **The `preview` walkthrough happens after step 8**, and it writes REAL data: no
 edit or delete path exists, so every test message is permanent and visible to the
@@ -654,8 +698,10 @@ disabled.
 6. **The "Nueva propuesta" submit email always fires**, to the same audience, with
    the notes block it would have had — subject to the first-submission scope in §2.
 7. No file under `app/utils/outbox*` or `proposalNotify.ts` is modified, **and
-   neither has its INPUT changed** — criteria 5 and 6 are what actually check that.
-   An unmodified file fed an emptied field is still a regression.
+   neither's INPUT changes except as criteria 5 and 6 name.** An unmodified file
+   fed an emptied field is still a regression — but `proposalNotify`'s input *does*
+   change from the second submission onward (§2), and that is the accepted,
+   named exception rather than a violation. Read 7 through 5 and 6, never alone.
 8. **A post never enables an approval or a save against content the actor was not
    shown, on the paths the Verification table exercises.** Two residual windows are
    named in §5 and deliberately not closed here.
@@ -686,7 +732,9 @@ what let four rounds of contradictions through.
 | §7 service-date gate | `proposalThread.test.ts` (shipped) + `proposalMessageRoutes.test.ts` — an approved future service accepts; a past-dated one is rejected server-side | A chat read-only on most real proposals, or a client-only gate |
 | §3 one shape | `migrateProposalMessages.test.ts` — imports `buildProposalMessage` and compares key sets directly, and pins `_type` to the schema's item name | The two writers diverging with both suites green, as `_type` already did |
 | §8 interlocks | `migrateProposalMessages.test.ts` — a live thread aborts; a partial migration aborts; a re-run patches nothing | A whole-array `set` erasing real messages |
-| §4 guards | `proposalMessageRoutes.test.ts` — non-lead and `content-editor` rejected | An ACL hole on a new writer |
+| §4 guards | `proposalMessageRoutes.test.ts` — non-lead, `content-editor`, **and a lead whose role is `published: false`** all rejected | An ACL hole on a new writer; the `published` half silently dropped |
+| §6 the thread renders at all | mount tests, both surfaces — a `pending` proposal with an empty `messages[]` shows the thread and its empty state | Inheriting the old blocks' render conditions and leaving the thread invisible in the status where the conversation happens |
+| §1 the standalone admin route leaves `admin_notes` alone | `proposalMessageRoutes.test.ts` — an admin message's patch has no `admin_notes` key | Admin chatter overwriting the change-request archive the rollback leans on |
 | §4 replay | `proposalWriteRoutes.test.ts` — replay a committed `request_changes`, `messages.length` unchanged | The append escaping the `no_write_retry` guard |
 | Frozen digests | `proposalWriteRequest.test.ts` (shipped) | Any change to the fingerprints or their constants |
 | roadmap invariant 4 (`team_notes`) | existing approval assertions | Folding team notes into the thread |
@@ -742,5 +790,8 @@ is an independent delivery this child neither fixes nor worsens.
 
 ## Terminal state
 
-`AWAITING_ADVERSARIAL_REVIEW` — Phases B–E. Plan approval is not authorization to
-implement.
+`APPROVED — NOT AUTHORIZED TO IMPLEMENT`. Phases B–E have their two sequential
+approvals on digest `5713a9cc…`; the text has since gained un-reviewed non-blocking
+edits (see the review log). Each phase still needs its own fresh code review of the
+diff plus the gates, and Phase D's `--apply` needs Frank's explicit consent at the
+moment it runs.
