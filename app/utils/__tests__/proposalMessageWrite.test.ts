@@ -1,11 +1,18 @@
 // Pure request parsing and message construction for the private lead ↔ admin
 // thread on a `setlistProposal` (Release 2 §4).
+//
+// The stored shape is pinned field-by-field, `_type` included, and cross-checked
+// against the OTHER writer of the same array: the one-shot migration re-derives
+// it in `scripts/lib/proposalMessages.mjs`, nothing makes the two agree at
+// compile time, and a migrated item carrying a field a runtime item lacks would
+// leave `messages[]` permanently heterogeneous — half of it written irreversibly.
 
 import { describe, expect, it } from "vitest";
 import {
   PROPOSAL_AUTHOR_ROLES,
   PROPOSAL_MESSAGES_MAX,
   PROPOSAL_MESSAGE_KINDS,
+  PROPOSAL_MESSAGE_TYPE,
   buildProposalMessage,
   parseProposalMessageRequest,
 } from "@/app/utils/proposalMessageWrite";
@@ -71,15 +78,28 @@ describe("buildProposalMessage", () => {
     key: "abc123def456",
   };
 
-  it("builds the stored shape, with its own _key and a reference author", () => {
+  it("builds the stored shape, with its own _key, its _type and a reference author", () => {
     expect(buildProposalMessage(base)).toEqual({
       _key: "abc123def456",
+      _type: "proposal_message",
       author: { _ref: "member-1", _type: "reference" },
       author_role: "lead",
       kind: "lead_note",
       body: "Propongo esta lista",
       at: "2026-08-24T18:00:00.000Z",
     });
+  });
+
+  it("stores the SAME field set the one-shot migration mints", () => {
+    // The reciprocal of `scripts/__tests__/migrateProposalMessages.test.ts`.
+    // Two writers, one array, no compile-time link between them: each side pins
+    // the same field names so a divergence fails a suite instead of landing in
+    // production as a permanently heterogeneous array.
+    expect(Object.keys(buildProposalMessage(base) ?? {}).sort()).toEqual(
+      ["_key", "_type", "at", "author", "author_role", "body", "kind"].sort(),
+    );
+    expect(PROPOSAL_MESSAGE_TYPE).toBe("proposal_message");
+    expect(buildProposalMessage(base)?._type).toBe(PROPOSAL_MESSAGE_TYPE);
   });
 
   it("omits `author` entirely when there is nobody to attribute it to", () => {

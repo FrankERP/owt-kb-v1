@@ -80,9 +80,13 @@ export function storedMessageKeys(doc) {
 /**
  * How many items `messages[]` holds.
  *
- * `count(messages)` is projected alongside the keys and preferred, because
- * `messages[]._key` drops nulls: a single stored item that somehow lacks a
- * `_key` would project as `[]` and read as "empty array, safe to overwrite".
+ * `count(messages)` is projected alongside the keys and preferred because the
+ * key list cannot be trusted to reveal a keyless item. GROQ does NOT compact
+ * nulls — `messages[]._key` over `[{_key:"a"},{x:1},{_key:"b"}]` really does
+ * return `["a", null, "b"]` (verified against the live API) — but
+ * `storedMessageKeys` drops every non-string, so a lone keyless item arrives
+ * here as `[]` and would read as "empty array, safe to overwrite". The count is
+ * what makes the abort fire on it.
  */
 export function storedMessageCount(doc) {
   if (typeof doc?.messageCount === "number" && Number.isFinite(doc.messageCount)) {
@@ -110,9 +114,10 @@ export function transitionAction(doc) {
  *
  *  1. A non-empty `messages[]` carrying NO migration `_key` is a live thread: a
  *     whole-array `set` would erase real conversation. Hard abort.
- *  2. Skip when ANY key this document would mint is already present. Three
- *     production documents mint both keys, so a singular check would
- *     half-migrate one of them on a re-run.
+ *  2. Skip when ANY key this document would mint is already present. MORE THAN
+ *     ONE production document carries both notes and so mints both keys (two at
+ *     the last dry run; the exact number is not the point), so a singular check
+ *     would half-migrate them on a re-run.
  *  3. Only then is the whole-array `set` sound, because the array is now known
  *     to be absent or empty — which the final `partial_migration` abort below
  *     enforces rather than assumes.
@@ -123,7 +128,18 @@ export function planProposalMessages(doc) {
   const migrationKeysPresent = existingKeys.filter((key) => MIGRATION_KEYS.includes(key));
   const action = transitionAction(doc);
   const attributing = ATTRIBUTING_TRANSITION_ACTIONS.includes(action);
-  const context = { existingCount, existingKeys, migrationKeysPresent, action, attributing };
+  // Resolved ONCE and surfaced on every decision, not just `patch`: the minted
+  // admin message and the dry run's printed attribution must be the same value,
+  // and the dry run has to print it for the documents it refuses too.
+  const adminAuthorId = attributing ? refId(doc?.last_transition?.by) : "";
+  const context = {
+    existingCount,
+    existingKeys,
+    migrationKeysPresent,
+    action,
+    attributing,
+    adminAuthorId,
+  };
 
   // 1. A live thread. Report it; never overwrite it.
   if (existingCount > 0 && migrationKeysPresent.length === 0) {
@@ -151,7 +167,7 @@ export function planProposalMessages(doc) {
   if (adminBody) {
     minted.push({
       key: ADMIN_MESSAGE_KEY,
-      authorId: attributing ? refId(doc?.last_transition?.by) : "",
+      authorId: adminAuthorId,
       authorRole: "admin",
       kind: "admin_change_request",
       body: adminBody,
@@ -189,8 +205,15 @@ export function planProposalMessages(doc) {
 
   // Chronological, lead-first on a tie: on a tie the lead's note is the one the
   // admin was replying to.
+  //
+  // `at` is compared as an INSTANT, never as a string — the same rule
+  // `app/utils/proposalThread.ts` states for this field. It is a full ISO
+  // datetime that may carry an offset, so a lexicographic compare orders
+  // `…T10:00:00-06:00` after `…T11:00:00Z` when it is in fact an hour earlier.
+  // Every resolved value is `Z` today; a wrong order would be stored forever.
   const ordered = [...minted].sort((a, b) => {
-    if (a.at !== b.at) return a.at < b.at ? -1 : 1;
+    const delta = Date.parse(a.at) - Date.parse(b.at);
+    if (delta) return delta;
     return a.key === LEAD_MESSAGE_KEY ? -1 : 1;
   });
 

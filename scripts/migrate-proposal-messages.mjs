@@ -90,9 +90,12 @@ for (const doc of docs) {
   const notes = [hasLead ? "lead_notes" : null, hasAdmin ? "admin_notes" : null]
     .filter(Boolean)
     .join("+") || "none";
+  // The value the MAPPING resolved, never `doc.last_transition?.by ?? …`: `??`
+  // lets an empty string through and would print `author=` for a message the
+  // mapping correctly minted with no author at all.
   const attribution = hasAdmin
     ? plan.attributing
-      ? `author=${doc.last_transition?.by ?? "(action ok, but `by` absent)"}`
+      ? `author=${plan.adminAuthorId || "(action ok, but `by` absent)"}`
       : "author=ABSENT"
     : "";
 
@@ -150,23 +153,43 @@ if (APPLY) {
       await client.patch(doc._id).ifRevisionId(doc._rev).set({ messages: plan.messages }).commit();
       console.log(`  patched ${doc._id} — ${plan.messages.length} message(s)`);
     } catch (err) {
-      revisionAborts.push(doc._id);
-      console.log(`  ABORT ${doc._id} — patch refused: ${err?.message ?? err}`);
+      // NOT necessarily a revision conflict: an expired token, a 5xx, a socket
+      // timeout and a rejected reference all land here, and a timeout AFTER the
+      // mutation was accepted lands here for a document that WAS written. Print
+      // what the error actually was so the operator can tell them apart.
+      const detail = [err?.name, err?.statusCode].filter(Boolean).join(" ");
+      revisionAborts.push({ id: doc._id, detail, message: err?.message ?? String(err) });
+      console.log(
+        `  ABORT ${doc._id} — patch failed${detail ? ` [${detail}]` : ""}: ${err?.message ?? err}`,
+      );
     }
   }
   console.log(
     `\nApplied ${toPatch.length - revisionAborts.length} of ${toPatch.length} document(s); ` +
-      `${revisionAborts.length} revision abort(s).`,
+      `${revisionAborts.length} failed patch(es).`,
   );
 }
 
 if (aborts.length || revisionAborts.length) {
   console.log("\nDocuments needing a human:");
   for (const a of aborts) console.log(`  ${a.id} — ${a.reason}`);
-  for (const id of revisionAborts) console.log(`  ${id} — revision moved between read and write`);
+  for (const a of revisionAborts) {
+    console.log(`  ${a.id} — patch failed${a.detail ? ` [${a.detail}]` : ""}: ${a.message}`);
+  }
+  if (revisionAborts.length) {
+    console.log(
+      "\n  A failed patch does NOT prove the write did not land — a timeout can\n" +
+        "  follow an accepted mutation. RE-RUN THE DRY-RUN before any repair: a\n" +
+        "  document that was written reports `skip (already_migrated)`, and the\n" +
+        "  repair path (a top-up with a distinct `_key`) would duplicate its\n" +
+        "  message permanently.",
+    );
+  }
 }
 
 if (!APPLY) console.log("\nRe-run with --apply to write (prod).\n");
 else console.log("");
 
-process.exit(aborts.length || revisionAborts.length ? 1 : 0);
+// `process.exitCode`, never `process.exit()`: this log is the ONLY record of an
+// irreversible write, and an explicit exit can truncate a buffered stdout.
+process.exitCode = aborts.length || revisionAborts.length ? 1 : 0;

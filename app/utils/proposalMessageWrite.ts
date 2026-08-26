@@ -78,9 +78,20 @@ export function parseProposalMessageRequest(
   return { ok: true, value: { body: trimmed } };
 }
 
+/**
+ * The stored array-item type. Every array-of-object field on this document
+ * carries one (`proposal_song`, `contributor`), and the schema names this item
+ * `proposal_message` — so both writers of `messages[]` must emit it. The
+ * one-shot migration re-derives the same shape in
+ * `scripts/lib/proposalMessages.mjs`; nothing makes the two agree at compile
+ * time, so both test files pin the same field set from their own side.
+ */
+export const PROPOSAL_MESSAGE_TYPE = "proposal_message";
+
 /** One stored item of `setlistProposal.messages[]`. */
 export interface ProposalMessage {
   _key: string;
+  _type: typeof PROPOSAL_MESSAGE_TYPE;
   /**
    * OPTIONAL: migrated admin notes with no attributable author are minted
    * without one and render as "Admin". A fabricated attribution in an
@@ -119,6 +130,7 @@ export function buildProposalMessage(input: {
   if (body.length > PROPOSAL_NOTES_MAX) return null;
   return {
     _key: input.key,
+    _type: PROPOSAL_MESSAGE_TYPE,
     ...(typeof input.authorId === "string" && input.authorId
       ? { author: { _ref: input.authorId, _type: "reference" as const } }
       : {}),

@@ -7,11 +7,12 @@
 // hard abort on a live thread.
 //
 // The stored shape is asserted field-by-field on purpose. `buildProposalMessage`
-// (`app/utils/proposalMessageWrite.ts`) re-derives the same six fields in
-// TypeScript and nothing makes the two agree at compile time, so
-// `proposalMessageWrite.test.ts` pins the same set from the other side. A
-// migrated item carrying `_type` while a runtime item does not would leave the
-// array permanently heterogeneous, half of it written irreversibly.
+// (`app/utils/proposalMessageWrite.ts`) re-derives the same fields in TypeScript
+// and nothing makes the two agree at compile time, so
+// `proposalMessageWrite.test.ts` pins the same set — `_type` included — from the
+// other side. A migrated item carrying `_type` while a runtime item does not
+// would leave the array permanently heterogeneous, half of it written
+// irreversibly.
 
 import { describe, expect, it } from "vitest";
 
@@ -239,6 +240,24 @@ describe("ordering", () => {
     ]);
   });
 
+  it("compares `at` as an INSTANT, so a mixed offset does not order lexicographically", () => {
+    // 10:00-06:00 is 16:00Z — an hour AFTER the admin note, though it sorts
+    // before it as a string. Every resolved value is `Z` today; the order is
+    // stored permanently, so the compare must be the one `proposalThread.ts`
+    // documents for this field.
+    const plan = planProposalMessages({
+      ...BASE,
+      lead_notes: "lead",
+      admin_notes: "admin",
+      last_edited_at: "2026-08-06T10:00:00-06:00",
+      reviewed_at: "2026-08-06T11:00:00Z",
+    });
+    expect(plan.messages.map((m: { _key: string }) => m._key)).toEqual([
+      ADMIN_MESSAGE_KEY,
+      LEAD_MESSAGE_KEY,
+    ]);
+  });
+
   it("puts the lead first on a tie", () => {
     const plan = planProposalMessages({
       ...BASE,
@@ -274,17 +293,20 @@ describe("safety", () => {
   });
 
   it("counts a keyless stored item through count(messages), not through the key list", () => {
-    // `messages[]._key` drops nulls, so a single stored item without a `_key`
-    // projects as [] and would read as "empty array, safe to overwrite".
-    expect(storedMessageCount({ messageCount: 1, messageKeys: [] })).toBe(1);
+    // GROQ does NOT compact nulls: `messages[]._key` over a keyless item really
+    // projects `[null]`. It is `storedMessageKeys` that drops the non-string,
+    // leaving an empty key list that would read as "empty array, safe to
+    // overwrite" — so `count(messages)` is what makes the abort fire.
+    expect(storedMessageCount({ messageCount: 1, messageKeys: [null] })).toBe(1);
     const plan = planProposalMessages({
       ...BASE,
       lead_notes: "n",
       messageCount: 1,
-      messageKeys: [],
+      messageKeys: [null],
     });
     expect(plan.decision).toBe("abort");
     expect(plan.reason).toBe("live_thread");
+    expect(plan.existingKeys).toEqual([]);
   });
 
   it("is idempotent: a second pass over its own output patches nothing", () => {
@@ -357,6 +379,38 @@ describe("reporting helpers", () => {
     expect(transitionAction({ last_transition: { action: "reopen" } })).toBe("reopen");
     expect(transitionAction({})).toBe("");
     expect(transitionAction(null)).toBe("");
+  });
+
+  it("resolves the admin author ONCE, for the printed line and the minted message alike", () => {
+    const transition = { action: "request_changes", by: "member-admin", at: "2026-08-06T09:00:00Z" };
+    const attributed = planProposalMessages({
+      ...BASE,
+      admin_notes: "nota",
+      last_transition: transition,
+    });
+    expect(attributed.adminAuthorId).toBe("member-admin");
+    expect(attributed.messages[0].author).toEqual({ _ref: "member-admin", _type: "reference" });
+
+    // A blank `by` is NOT an author. The dry run reads this field rather than
+    // `doc.last_transition?.by ?? …`, which would print `author=` here.
+    const blank = planProposalMessages({
+      ...BASE,
+      admin_notes: "nota",
+      last_transition: { ...transition, by: "   " },
+    });
+    expect(blank.adminAuthorId).toBe("");
+    expect(blank.messages[0]).not.toHaveProperty("author");
+
+    // Reported on a REFUSED document too, which mints no message to read it off.
+    const refused = planProposalMessages({
+      ...BASE,
+      admin_notes: "nota",
+      last_transition: transition,
+      messageCount: 1,
+      messageKeys: ["live99"],
+    });
+    expect(refused.decision).toBe("abort");
+    expect(refused.adminAuthorId).toBe("member-admin");
   });
 
   it("reports the migration keys already present on the document", () => {
