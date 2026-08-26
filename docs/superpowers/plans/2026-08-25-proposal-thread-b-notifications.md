@@ -379,7 +379,7 @@ sendPush(adminIds, "proposals", {
 ```
 
 - **Disposal: `fireAndForget`** — exported by Phase A
-  (`serviceMutationSideEffects.ts:128`; it was module-private) — **Phase A has already exported it** — as
+  (`serviceMutationSideEffects.ts:128`; it was module-private) — as
   `notifyProposalReview` uses it (`serviceMutationSideEffects.ts:770`), not a bare `void` like
   `proposalNotify.ts:150`. **The reason is rejection handling, not latency:** the push
   fires only on `approved`, where `queueLeadNotesNotice` returns on the `REVIEWABLE_BEFORE_WRITE` guard and no sweep

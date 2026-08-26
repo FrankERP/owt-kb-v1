@@ -59,28 +59,34 @@ for a helper by name without checking what it does.
 
 ### Not exported today — a phase that imports these will not compile
 
+> **Coordinates re-derived 2026-08-26** against Child B Phase A, which moved
+> `ADMIN_RECIPIENTS_QUERY` and `PROPOSAL_QUERY` into `proposalNotifyQueries.ts`
+> and exported `fireAndForget`. This section is the one part of this superseded
+> plan that all three live plans still cite as normative, so its coordinates are
+> maintained; the rest of the file is a historical record and is not.
+
 | Symbol | Module | Disposition |
 |---|---|---|
-| `REVIEWABLE_BEFORE_WRITE` | `serviceMutationSideEffects.ts:612` | **Export.** The lead messages route needs it to choose push-vs-email |
-| `REVIEWABLE_STATUSES` | `outboxSweep.ts:218` | Identical set, second copy, no sync guard. **Do not collapse into the side-effects module** — it already imports `sweepOutbox` (`:71`), so that direction closes an import cycle. Put the shared set in a leaf, or export from `outboxSweep`. They are semantically different predicates (status *before the write* vs status *at flush*) that coincide today |
-| `ADMIN_RECIPIENTS_QUERY` | `outboxSweep.ts:193` | **Export.** §6 adds a third consumer; it is currently duplicated verbatim at `proposalNotify.ts:143` with nothing enforcing the match |
-| `PROPOSAL_QUERY`, `classifyLeadNotesNotice`, `classifyNotice` | `outboxSweep.ts:203,381,400` | Modified in place; no export needed |
-| `attempt`, `attemptSync`, `fireAndForget` | `serviceMutationSideEffects.ts:77,93,106` | New side-effect code lives in that module, or wraps its own |
+| `REVIEWABLE_BEFORE_WRITE` | `serviceMutationSideEffects.ts:634` | **Export.** The lead messages route needs it to choose push-vs-email |
+| `REVIEWABLE_STATUSES` | `outboxSweep.ts:212` | Identical set, second copy, no sync guard. **Do not collapse into the side-effects module** — it already imports `sweepOutbox` (`:71`), so that direction closes an import cycle. Put the shared set in a leaf, or export from `outboxSweep`. They are semantically different predicates (status *before the write* vs status *at flush*) that coincide today |
+| `ADMIN_RECIPIENTS_QUERY` | **now `proposalNotifyQueries.ts:32`, exported by Child B Phase A** (it was `outboxSweep.ts:193`) | **Export.** §6 adds a third consumer; it is currently duplicated verbatim at `proposalNotify.ts:143` with nothing enforcing the match |
+| `PROPOSAL_QUERY`, `classifyLeadNotesNotice`, `classifyNotice` | `proposalNotifyQueries.ts:42` (**moved and exported by Child B Phase A**), `outboxSweep.ts:375`, `:394` | Modified in place; no export needed |
+| `attempt`, `attemptSync`, `fireAndForget` | `serviceMutationSideEffects.ts:77`, `:93`, `:128` (**`fireAndForget` exported by Child B Phase A**) | New side-effect code lives in that module, or wraps its own |
 
 ### Behaviour the name does not tell you
 
 | Helper | Contract | The trap |
 |---|---|---|
-| `notifyProposalReview(doc, push)` | `serviceMutationSideEffects.ts:740`. Push only. Audience `proposalReviewRecipients` = `doc.lead` + `contributors[].person`. `path` fixed `/me` | **Admins are NOT in the audience.** Never use it for anything admin-facing |
-| `notifyProposalPending` | `:712` → `notifyProposalSubmitted`. Caller guards on the status this save *committed* | Fires on **every** save committing `pending`, not only `draft → pending` |
-| `notifyProposalSubmitted` | `proposalNotify.ts:111`. Three signals: push→admins (inline GROQ `:143`), push→co-leads, email→same admins filtered by `isEmailAllowed` + `wantsNotification` | Sends **nothing at all** if the ROLE fails canonical resolution (`:133-135`) |
+| `notifyProposalReview(doc, push)` | `serviceMutationSideEffects.ts:762`. Push only. Audience `proposalReviewRecipients` = `doc.lead` + `contributors[].person`. `path` fixed `/me` | **Admins are NOT in the audience.** Never use it for anything admin-facing |
+| `notifyProposalPending` | `serviceMutationSideEffects.ts:734` → `notifyProposalSubmitted`. Caller guards on the status this save *committed* | Fires on **every** save committing `pending`, not only `draft → pending` |
+| `notifyProposalSubmitted` | `proposalNotify.ts:112`. Three signals: push→admins (GROQ now in `proposalNotifyQueries.ts:54`, `SUBMITTED_NOTIFY_QUERY`), push→co-leads, email→same admins filtered by `isEmailAllowed` + `wantsNotification` | Sends **nothing at all** if the ROLE fails canonical resolution (`:133-135`) |
 | `sendPush(ids, category, payload)` | `push.ts:32`. Returns `{sent, pruned}`, never throws. **Also a writer** — prunes dead tokens | Gated by `optedIn(notifPrefs, category)` (`:22`) reading `notifPrefs.proposals` — **not** `wantsNotification`, which reads `emailProposals`. Independent axes |
 | `wantsNotification` | `notifyPrefs.ts:25`. Absent prefs → `true` | **Email only.** CLAUDE.md's "the ONLY per-type resolver" is email-scoped |
-| `queueLeadNotesNotice` | `:629`. Synchronous, `void`, registers an `after()`. No-ops on `!proposalId`, status outside `REVIEWABLE_BEFORE_WRITE`, or trimmed-equal notes | Queues `knownRecipients: []`; **the admin audience resolves at FLUSH**, 15–60 min later |
-| `commitUpserts` | `:481`. One transaction, no revision precondition | **Then runs `sweepOutbox` unconditionally.** Queuing a notice can send another member's email inline, on the poster's request |
-| `sweepOutbox` | `outboxSweep.ts:559` | **Stage 8 consumes claimed notices unconditionally** — a failed send still deletes. `emailed` counts sends, `consumed` counts deletions; only `report.lost` reveals the gap |
+| `queueLeadNotesNotice` | `serviceMutationSideEffects.ts:651`. Synchronous, `void`, registers an `after()`. No-ops on `!proposalId`, status outside `REVIEWABLE_BEFORE_WRITE`, or trimmed-equal notes | Queues `knownRecipients: []`; **the admin audience resolves at FLUSH**, 15–60 min later |
+| `commitUpserts` | `serviceMutationSideEffects.ts:503`. One transaction, no revision precondition | **Then runs `sweepOutbox` unconditionally.** Queuing a notice can send another member's email inline, on the poster's request |
+| `sweepOutbox` | `outboxSweep.ts:553` | **Stage 8 consumes claimed notices unconditionally** — a failed send still deletes. `emailed` counts sends, `consumed` counts deletions; only `report.lost` reveals the gap |
 | `classifyLeadNotes` | `outboxClassify.ts:97`. Pure, `null` on past / not-reviewable / equal | Takes `reviewable` as a **boolean the caller computed** |
-| `classifyLeadNotesNotice` | `outboxSweep.ts:381`. Re-reads live | **The live `service_date` wins over the queued snapshot** — a date moved into the past drops the notice |
+| `classifyLeadNotesNotice` | `outboxSweep.ts:375`. Re-reads live | **The live `service_date` wins over the queued snapshot** — a date moved into the past drops the notice |
 | `buildUpsert` | `outboxNotice.ts:119`. Pure, commits nothing. `before` only in `createIfNotExists` | That `createIfNotExists`-only `before` is what makes the count-and-slice survive a debounce burst |
 | `outboxId` | `outboxNotice.ts:29` | `NoticeKind` is a closed union `"role"｜"setlist"｜"leadNotes"` — hence keeping `"leadNotes"` |
 | `loadCanonicalProposal(id, tolerate?)` | `serviceWriteTargets.ts:392`. Sentinel, never throws. Fails closed on 0 rows, >1, raw draft overlay, missing `service_ref`, unresolvable role | **It loads the ROLE too**, and fails a valid proposal whose role is ambiguous. It does **not** do duplicate-per-service detection — that is `loadProposalGroup`. A third selection exists: `getSharedProposal` (`me/propose/[roleId]/page.tsx:41`) picks `order(_createdAt asc)[0]`, and that is the id the composer posts to |
