@@ -103,3 +103,82 @@ export function classifyLeadNotes(i: {
   if (i.before.trim() === i.after.trim()) return null;
   return { kind: "leadNotes", serviceDate: i.serviceDate, roleType: null, before: [], after: [], notes: i.after };
 }
+
+/** The shape `LEAD_NOTE_MESSAGES` projects. Deliberately minimal: this
+ *  classifier reads bodies and nothing else. */
+export interface LeadNoteMessage {
+  kind?: unknown;
+  body?: unknown;
+}
+
+/**
+ * The thread-sourced replacement for `classifyLeadNotes` (Child B §Outbox).
+ *
+ * Where `classifyLeadNotes` diffed one string against another, this diffs a
+ * COUNT against an array: `beforeCount` is the number of `lead_note` messages
+ * the proposal had when the notice was queued, and everything after that index
+ * is what the admins have not been told about. The body is every appended
+ * message joined, not just the newest, because the debounce deliberately
+ * collapses a burst into one email and dropping the middle of a conversation is
+ * worse than a longer one.
+ *
+ * `leadMessages` arrives ALREADY FILTERED by `LEAD_NOTE_MESSAGES` and must not
+ * be re-filtered here — hence the parameter name. Re-filtering was the failure
+ * mode that made the projection carry `kind`: if a caller narrows the query to
+ * `{body}` and this function still filters, every element lacks `kind`, nothing
+ * matches, and the debounced email dies silently with every test green.
+ *
+ * A count-and-slice is sound because `messages[]` is append-only and the
+ * migration runs once, before any notice can be queued against a migrated
+ * document, so no prepend shifts indices under a notice already in flight.
+ *
+ * "Append-only" is a property of the WRITE PATHS, not something the schema
+ * enforces: no route deletes or reorders a message, but a write token or Vision
+ * still can. Deleting an old lead note shifts every in-flight `beforeCount` and
+ * re-sends the tail. An operational constraint, not a proven invariant.
+ */
+export function classifyProposalMessages(i: {
+  beforeCount: number;
+  leadMessages: readonly LeadNoteMessage[] | null | undefined;
+  serviceDate: string;
+  today: string;
+  reviewable: boolean;
+}): Line | null {
+  if (isPast(i.serviceDate, i.today)) return null;
+  if (!i.reviewable) return null;
+
+  // GROQ hands back `null` (not `[]`) for a document with no `messages`.
+  const messages = Array.isArray(i.leadMessages) ? i.leadMessages : [];
+
+  // A non-integer or negative count is an upstream bug. `slice` reads a
+  // negative as an offset from the END, so the batch would silently become the
+  // last |n| messages — a re-send whose SIZE depends on the corrupt value, and
+  // which looks like a plausible email. Clamping to 0 re-sends everything
+  // instead — never fewer than the negative slice would, and more whenever
+  // `|n| < length` — so the mistake is obvious rather than plausible. Both
+  // re-send already-delivered content; only one of them is loud about it.
+  //
+  // `NaN` is handled here rather than upstream because it survives a
+  // `typeof === "number"` check. Whether Child B's caller lets one through
+  // depends on a guard that does not exist yet — this is total either way.
+  const beforeCount = Number.isInteger(i.beforeCount) ? Math.max(0, i.beforeCount) : 0;
+
+  const appended = messages.slice(beforeCount);
+  // Defensive: `buildProposalMessage` cannot store a non-string or empty body,
+  // so this only fires on hand-edited data. Dropping such an entry is right —
+  // there is no text to send — and if that empties the batch we say nothing
+  // rather than mail a blank section.
+  const bodies = appended
+    .map((m) => m.body)
+    .filter((b): b is string => typeof b === "string" && b.trim() !== "");
+  if (bodies.length === 0) return null;
+
+  return {
+    kind: "leadNotes",
+    serviceDate: i.serviceDate,
+    roleType: null,
+    before: [],
+    after: [],
+    notes: bodies.join("\n\n"),
+  };
+}

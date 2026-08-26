@@ -36,6 +36,7 @@
 import "server-only";
 
 import { operationalClient } from "@/sanity/lib/operationalClient";
+import { ADMIN_RECIPIENTS_QUERY, PROPOSAL_QUERY } from "./proposalNotifyQueries";
 import { writeClient } from "@/sanity/lib/serverClient";
 
 import { getAllowlist, isEmailAllowed, rolesForMember } from "./assignmentEmail";
@@ -189,9 +190,6 @@ const SETLIST_RECIPIENTS_QUERY = assignedMemberRefsQuery(
   "_type == $roleType && _id == $roleId && published != false",
 );
 
-/** The admin audience `proposalNotify.ts` already uses — deliberately identical. */
-const ADMIN_RECIPIENTS_QUERY = `*[_type == "teamMembers" && role in ["super-admin","admin"]]._id`;
-
 /** One projection for both role-shaped notices: seats for `role`, songs for a
  * special-service `setlist`, and the publication/date state both classify on. */
 const ROLE_QUERY = `*[_type == $roleType && _id == $roleId][0]{
@@ -199,10 +197,6 @@ const ROLE_QUERY = `*[_type == $roleType && _id == $roleId][0]{
 }`;
 
 const WEEKEND_SONGS_QUERY = `*[_type == $setlistType && week == $week][0].songs`;
-
-const PROPOSAL_QUERY = `*[_type == "setlistProposal" && _id == $proposalId][0]{
-  _id, status, lead_notes, service_date
-}`;
 
 const SONG_TITLES_QUERY = `*[_type == "post" && _id in $ids]{ _id, title }`;
 
