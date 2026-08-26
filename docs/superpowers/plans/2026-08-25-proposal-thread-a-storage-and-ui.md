@@ -555,9 +555,12 @@ moved; investigate. **No `--apply`.**
   `withVerificationRunContext`, `maxDuration`, and the per-surface revision rule.
 - The transition appends its message; `reopen`-empty and `reconcile_target` append
   nothing.
-- **The mirror**: both routes and the transition keep `lead_notes` / `admin_notes`
-  current, and the lead route calls `queueLeadNotesNotice` with its **existing**
-  signature.
+- **The mirror**, exactly as §"The mirror" and §"The submission note" state it:
+  the lead messages route and the save route's compat path mirror `lead_notes`
+  (conditionally — omit the field when nothing is appended); **the transition, and
+  only the transition, mirrors `admin_notes`**; the standalone admin route mirrors
+  nothing. The lead route calls `queueLeadNotesNotice` with its **existing**
+  signature, and only when it appended.
 - `buildProposalMessage` gains `_type`; its test updated.
 - Reads and UI.
 - Register both writers in `PROTECTED_RUNTIME_WRITERS`, and move the count test's
