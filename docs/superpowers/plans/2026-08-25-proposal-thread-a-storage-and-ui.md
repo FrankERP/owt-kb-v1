@@ -669,7 +669,26 @@ that it is absent. A change you cannot explain is the stop signal. **No `--apply
 - **Caveat:** e2e fixtures still assert `admin_notes` until Phase E, so this phase
   is deployable against vitest but not the e2e suites.
 
-### Phase D — Release
+### Phase D — Release — **steps 1–5 DONE 2026-08-26; the `--apply` HAS RUN**
+
+**Step 4 ran once, with Frank's explicit consent in chat, and will never run
+again.** 8 of 8 documents patched, 10 messages, 0 failed patches, exit 0.
+
+**Step 5 verified against the PREDICTION, not a hard-coded number** — the
+documents and messages the legacy fields imply were recomputed from the live
+data and compared to what is stored: 8 documents / 10 messages, matching. Also
+checked per message: `_key` from the migration set, `_type: proposal_message`,
+`kind` and `author_role` agreeing, a parseable `at`, a non-empty body, stored
+order chronological, and the TRIMMED legacy value present as its message body.
+Two messages carry no `author` — the two whose `last_transition.by` is absent,
+expected and named in Phase B.
+
+`lead_notes` / `admin_notes` were not touched, so a code rollback remains
+available.
+
+Steps 6–9 (preview, PR to `main`, production alias, reconcile) remain.
+
+### Phase D — Release (the standing procedure)
 
 1. Gates green, then a **fresh code review of `main...feature`** — the range the PR
    merges. Do not "merge to `main` locally": it is protected with
