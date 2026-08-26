@@ -90,7 +90,7 @@ before Child A may still post it. The route appends it as a `lead_note` message
 body** — both halves, exactly as Child A §2 states them. The comparison target
 changes (the newest message rather than the frozen `lead_notes`); the non-empty half
 does not. `buildProposalMessage` returns `null` on an empty body
-(`proposalMessageWrite.ts:112`) so `tsc` backstops it, but the rule is stated rather
+(`proposalMessageWrite.ts:118`) so `tsc` backstops it, but the rule is stated rather
 than left to the type. **Keep Child A's negative test too**, not only the positive
 one: a save carrying no `leadNotes` appends nothing. Removing the field from the
 parser is a later, separate delivery.
@@ -119,13 +119,32 @@ readable.
 **Classification** replaces `classifyLeadNotes`:
 
 ```
-classifyProposalMessages({ beforeCount, afterMessages, serviceDate, today, reviewable })
+classifyProposalMessages({ beforeCount, leadMessages, serviceDate, today, reviewable })
   isPast(serviceDate, today)  -> null   (unchanged)
   !reviewable                 -> null   (unchanged)
-  appended = afterMessages.filter(kind === "lead_note").slice(beforeCount)
+  appended = leadMessages.slice(beforeCount)      // ALREADY filtered — see below
   appended.length === 0       -> null
   -> { kind: "leadNotes", …, notes: appended.map(m => m.body).join("\n\n") }
 ```
+
+**The `kind` predicate is applied ONCE per side, and on the flush side it lives in
+GROQ.** `PROPOSAL_QUERY` projects `messages[kind == "lead_note"]{kind, body}`, so
+the classifier receives a pre-filtered array and **must not re-filter it** — hence
+the parameter is named `leadMessages`, not `afterMessages`.
+
+**Why this is spelled out:** an earlier draft narrowed the projection to
+`{body}` while leaving `.filter(kind === "lead_note")` in the classifier. Every
+element would then lack `kind`, the filter would match nothing, `appended.length`
+would be 0 for every notice, and **the debounced admin email would silently stop** —
+with every named verification green, because `outboxSweep.test.ts:244` routes the
+proposal query to a hand-written fixture (`:1143`) rather than executing GROQ, and a
+fixture written from the pseudo-code would carry `kind`. `kind` stays projected for
+exactly that reason: a fixture that mirrors the real query cannot drift from it
+silently.
+
+The queue side applies the same predicate independently, in JS, over
+`PROPOSAL_PROJECTION`'s full `messages` array. Two sides, one predicate each,
+neither re-applying the other's.
 
 A count-and-slice is sound because the array is append-only *and* Child A's
 migration already ran, so no prepend can shift indices under a queued notice.
@@ -143,7 +162,10 @@ rather than contradicted.
 `"leadNotes"` are **all unchanged** — renaming the wire value would orphan
 in-flight documents for no benefit. Only the meaning changes.
 
-**Close the legacy seam outright rather than accepting it.** Because `before` is
+**Drain the pre-cutover backlog — which shrinks the legacy seam but does not close
+it.** A warm pre-deploy route instance can still queue a `{beforeNotes}` notice
+*during* the deploy, and the new sweep drops it; that residual is the seam the
+parent already decided to accept. Because `before` is
 written only by `createIfNotExists`, a pre-cutover `{beforeNotes}` notice absorbs
 **every subsequent lead message on that proposal** until it flushes — up to its
 `deadline`, creation + `NOTIFY_MAX_WINDOW_MINUTES` (60), not just the deploy
@@ -205,7 +227,10 @@ approved, so without it a lead could post where the admin never learns.
 audience is lead + contributors. There is **no reusable admin-push helper** — this
 needs a small new one or an inline `sendPush`. Pick one and say which. (It *is* the
 right helper for the two rows whose recipient is the **lead** — read who receives,
-not the arrow's direction.)
+not the arrow's direction. Note its `path` is `/me`, the member home, not the
+proposal surface `/me/propose/[roleId]` that `proposalNotify.ts:169` uses for
+co-leads. Inherited and left as is, but it is looser than the `/admin` the
+lead→admin row specifies.)
 
 **Exclude the author from BOTH pushes — one stated mechanism each.** A lead who is
 also an `admin` would otherwise be pushed about their own message, and the hazard
@@ -213,9 +238,11 @@ exists in both directions: `proposalReviewRecipients` does not filter, and
 `ADMIN_RECIPIENTS_QUERY` has no author filter either.
 
 - **admin → lead:** add an **optional third parameter** to `notifyProposalReview`,
-  `excludeIds?: readonly string[]`, and pass the author. "Filter in the route" is
+  `excludeIds?: readonly string[]`, and pass the author. **Apply the filter BEFORE
+  the empty-audience guard** (`serviceMutationSideEffects.ts:746`) — otherwise a
+  proposal whose only recipient is the author passes the guard and pushes them. "Filter in the route" is
   not implementable — the helper resolves its own recipients internally and exposes
-  no hook (`serviceMutationSideEffects.ts:740-752`), so a route-side filter would
+  no hook (`serviceMutationSideEffects.ts:740-750`), so a route-side filter would
   mean re-implementing `proposalReviewRecipients` + `sendPush`, a second copy of the
   audience rule. **Adding the parameter changes neither existing call site**: both
   pass exactly two arguments (`admin/proposals/[id]/route.ts:379`, `:532`).
@@ -302,11 +329,12 @@ Splitting this produces either a dead notification or a mass mis-send.
    produces **exactly one** push.
 4. **No message produces both an email and a push.** Stated as email-XOR-push,
    not as "never notified twice": the outbox's re-pend path can legitimately re-send
-   a joined body. With 5 admins and `NOTIFY_FLUSH_EMAIL_LIMIT=2` a notice needs
-   three sweeps, and a new message in between clears `servedRecipients`
-   (`outboxNotice.ts:152`) while `before.beforeMessageCount` is preserved — so an
-   admin already served receives the joined body again, including a message they
-   had. Today they would receive only the newest note. Harmless, inherent to the
+   a joined body. The mechanism is the **send-budget re-pend** (`outboxSweep.ts:851-867`
+   with `:531-534`), not `emailLimit` — an oversized notice is selected alone and
+   deliberately exceeds the budget rather than splitting (`:625-631`). Across those
+   sweeps a new message clears `servedRecipients` (`outboxNotice.ts:152`) while
+   `before.beforeMessageCount` is preserved, so an admin already served receives the
+   joined body again, including a message they had. Today they would receive only the newest note. Harmless, inherent to the
    debounce, and not what this criterion is about.
 5. `lead_notes` and `admin_notes` are byte-identical to their values at the end of
    Child A. Nothing blanks them.
@@ -321,6 +349,7 @@ Splitting this produces either a dead notification or a mass mis-send.
 | **The transition stops setting `admin_notes`** | `proposalWriteRoutes.test.ts` — the transition `set` has no `admin_notes` key | Silently blanking the admin archive, which an empty `reopen` does today |
 | The email still fires, same audience and timing | `setlistNoticeQueueing.test.ts` — before/after Child B, a lead message on `pending` produces an outbox document with the **same id, kind, audience and timing**. Not "the same shape": `before` deliberately changes from `{beforeNotes}` to `{beforeMessageCount}` | Retiring the debounced email by refactor |
 | An old-shape save lands and queues | `setlistNoticeQueueing.test.ts` — a save carrying `leadNotes` appends a message and produces an outbox document | A pre-Child-A bundle's note discarded behind a success toast |
+| **A `{beforeMessageCount}` notice classifies and emails** | `outboxSweep.test.ts` — with the proposal fixture shaped **exactly as the new `PROPOSAL_QUERY` returns it** (`{kind, body}` items, already filtered), assert a non-empty line reaches the admin audience | The flush path silently classifying to `null` — the debounced email dying with every other check green |
 | Legacy notice is dropped and consumed | `outboxSweep.test.ts` — a `{beforeNotes}` notice with no `beforeMessageCount` | An empty-body email to admins; a wedged claim |
 | `beforeMessageCount: 0` is not dropped | `outboxSweep.test.ts` | A truthiness check killing the first-message case |
 | Only lead messages queue a notice | `setlistNoticeQueueing.test.ts` | Admins mailed their own change-request |
@@ -341,6 +370,9 @@ breaks it), and if the email subject changes, `emailTemplateGallery.test.ts` /
 `e2e/service-readiness/proposal-lifecycle.spec.ts:104` asserts
 `afterRequest?.admin_notes` contains the change-request note — this child removes
 that write — and `scripts/lib/sr-verification.mjs:938` seeds the same field.
+**Owner: Phase B**, alongside the write removal that breaks them. Child A's Phase E
+already edits `:104` for its own reason; if A has shipped, B is amending that edit
+rather than making it. Phase C is docs-only and must not inherit this.
 
 ## Safe ending state and rollback
 
@@ -360,7 +392,7 @@ ships second: its worst case is a stale email, not missing history.
 |---|---|---|---|
 | OQ-1 | ~~Ministry-filter the admin audience?~~ | **RESOLVED 2026-08-25: its own independent delivery.** Frank's call. It is a pre-existing defect across every proposal notification, not something this child introduced, and scoping it correctly means touching `proposalNotify`, `outboxSweep` and the kids surfaces together. This child neither fixes nor worsens the rule; it inherits whatever the audience is at the time. Tracked as FrankERP/owt-kb-v1#8 | Closed |
 | OQ-2 | ~~New admin-push helper, or inline `sendPush`?~~ | **DECIDED: inline `sendPush` in the lead messages route.** There is one caller, and a helper wrapping a one-line fan-out would be a third place the admin audience is written down — `ADMIN_RECIPIENTS_QUERY` and `proposalNotify.ts:143` already duplicate it with no sync guard. Exporting the query and calling `sendPush` directly adds no fourth copy | Closed |
-| OQ-3 | Does the `leadNotes` email subject change to "Mensajes de la propuesta"? | Yes — "Notas del líder" is wrong once the thread carries admin replies | No |
+| OQ-3 | Does the `leadNotes` email subject change to "Mensajes de la propuesta"? | **Yes**, and it is a **Phase B task** — an earlier draft recommended it, listed its blast radius under "Suites that will break", and put it in no phase. "Notas del líder" is wrong once the thread carries admin replies | Closed |
 
 ## Terminal state
 
