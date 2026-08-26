@@ -77,8 +77,10 @@ Child-A-owned behaviour change that must be named rather than glossed.**
 `notifyProposalSubmitted` is not first-submission-only: it fires on **every** save
 committed as `pending` (`app/api/me/proposals/route.ts:298-304`, with no
 `previousStatus` check), and a lead may re-save while `pending` or re-submit from
-`changes_requested` — the route refuses only `approved` (`:160-167`), and one
-production proposal is in `changes_requested` right now. On those later
+`changes_requested` — the route refuses only `approved` (`:160-167`). **Note the
+live dataset has ZERO proposals in `pending` or `changes_requested`** (13 `approved`,
+1 `draft`), so the drift is reachable but not currently exercised — and, as Child A
+§1 records, the Phase D walkthrough cannot exercise the mirror→email path at all. On those later
 submissions the email carries the **mirror** — the newest thread message, possibly
 older than this submission — instead of what the lead attached to this one.
 
@@ -89,11 +91,24 @@ A lead who posts before submitting gets the same result as today. The alternativ
 — keeping the textarea alongside the thread composer on every save — would put two
 private-note inputs on one screen, which is worse.
 
-**Scope of the property, stated precisely:** Child A modifies no file under
-`app/utils/outbox*` or `proposalNotify.ts`, and **regresses no notification** —
-every signal that fires today still fires, to the same audience. It does not claim
-that every body is byte-identical: the submit email's body drifts as described
-above from the second submission onward.
+**Scope of the property, stated precisely — and narrower than an earlier draft
+claimed:**
+
+- Child A **modifies no file** under `app/utils/outbox*` or `proposalNotify.ts`, and
+  the stored notice shape is unchanged.
+- It **regresses exactly one notification**, named in Child A criterion 5 and in the
+  coverage table below: a pre-deploy client that *clears* the textarea queues a
+  notice today and will not after. Every other signal still fires, to the same
+  audience. The earlier unqualified "regresses no notification" contradicted this
+  document's own coverage table.
+- It does **not** claim every body is byte-identical: the submit email drifts from
+  the second submission onward, as described above.
+- **The queuing OCCASIONS change, and that is Child A's risk, not Child B's.** The
+  debounced email moves from "the notes field changed on a save" to "a lead posted a
+  chat message", which multiplies entry points into `commitUpserts`' unconditional
+  inline `sweepOutbox` (`serviceMutationSideEffects.ts:492`) — measured at ~14.4 s
+  per send against `NOTIFY_FLUSH_EMAIL_LIMIT=2`. Child B names the volume shift, but
+  it lands with Child A. Watch `report.lost` after Child A's release, not Child B's.
 
 Child B then moves the call, changes the input shape, rewrites classification,
 adds the pushes, and stops the mirror — with the thread already populated,
@@ -126,12 +141,25 @@ alongside".
    the archive. Removing the fields entirely is a third, separately consented
    delivery.
 
-   *Known exception, pre-existing:* the transition writes
-   `admin_notes: request.adminNotes` unconditionally (`admin/proposals/[id]/route.ts:500`),
-   so an empty `reopen` blanks it **today**. Child A preserves that behaviour
-   verbatim rather than fixing it; it becomes harmless once the content also lives
-   in `messages[]`. Do not read invariant 7 as a claim that the field is
-   append-only today.
+   *Known exception, and Child A WIDENS it — read this before holding either child
+   to the rule.* The transition writes `admin_notes: request.adminNotes`
+   unconditionally (`admin/proposals/[id]/route.ts:500`), and an absent
+   `adminNotes` coerces to `""` (`proposalWriteRequest.ts:165`). **Today that
+   rarely bites**, because the composer is seeded from the stored value
+   (`ProposalsPanel.tsx:106`) and `handleReopen` sends `adminNotes.trim() || undefined`
+   (`:143`), so a note-less reopen re-sends the existing text and preserves it.
+
+   **Child A §6 seeds that composer EMPTY** — necessarily, or an admin re-sends a
+   stale legacy note as a fresh bubble — so a note-less reopen now sends `undefined`
+   and blanks the field. That is a **new trigger**, not the pre-existing one, and it
+   is reachable on real data: 4 published proposals carry non-empty `admin_notes`
+   and 13 are `approved`, which is where "Reabrir" is offered.
+
+   **Accepted, and Child A criterion 4 owns it.** The content lives in `messages[]`
+   and `admin_notes` has no notification consumer. But the shared rollback story is
+   correspondingly weaker for such a document: reverting the code leaves its
+   change-request text only in the now-inert `messages[]`. Do not read invariant 7
+   as a claim that either field is append-only today.
 8. **Neither child may regress an existing notification.** A *new* gap in a *new*
    feature is acceptable and must be named; silently retiring something that
    fires today is not.
@@ -143,6 +171,20 @@ alongside".
   `system`; neither child mints them.
 - Unsetting the legacy fields.
 - Editing or deleting a posted message. Every message is permanent.
+- **Any new email.** Settled decision 2, restated here so both children inherit it
+  from the parent rather than only from Child B's own scope section. The admin→lead
+  and lead→admin signals Child B adds are **pushes**, which is why they do not
+  breach it.
+
+## Status
+
+| | |
+|---|---|
+| Phases 0–1 (schema + pure modules) | **Shipped to production**; the `setlistProposal` schema is deployed to the Content Lake |
+| Child A, Phase A (migration script, dry-run) | **Implemented and on `preview`** — `f1ebdf13`. Two code reviews. Dry-run: 8 documents / 10 messages / 0 aborts. **`--apply` has NEVER run; no production document has been written** |
+| Child A, Phases B–E | **APPROVED** — two sequential fresh verdicts on digest `5713a9cc…`; see its [review log](2026-08-25-proposal-thread-a-storage-and-ui-review-log.md). Not authorized to implement |
+| Child B | Not yet reviewed |
+| `FrankERP/owt-kb-v1#8` | Ministry-scoping the notification audience — open, owned by neither child |
 
 ## Sequencing
 
@@ -192,17 +234,25 @@ The split is correct only if all of these hold after Child B:
   B's deploy is dropped and consumed, so that one message is stored and rendered
   but never emailed. Either accept that seam or have B drain the outbox before
   cutover.
-- `lead_notes` and `admin_notes` are byte-identical to their pre-Child-A values
-  on every document that is not touched by the mirror, and the mirror's writes
-  are the only changes to them. **This check runs at the end of Child A, not
-  after Child B** — the blanking hazard is created by Child A's client change, so
-  its guard cannot be scheduled a release later.
+- **`lead_notes` is byte-identical to its pre-Child-A value on every document the
+  mirror did not write, and every mirror write carries a real non-empty message
+  body.** Stated as "non-empty body" rather than "the mirror's writes are the only
+  changes", because Child A defines the transition **as** the `admin_notes` mirror —
+  so the looser wording would make the blanking write pass by construction, which is
+  exactly the check failing to check.
+- **`admin_notes` likewise, except for the note-less-`reopen` trigger invariant 7
+  names.** That one is expected; count it and confirm the count matches the number
+  of note-less reopens performed, rather than treating any blanking as fine.
+- **Both checks run at the end of Child A, not after Child B** — the hazard is
+  created by Child A's client change, so its guard cannot be scheduled a release
+  later.
 
 ## Requirement-to-plan coverage
 
 | Requirement | Primary | Dependent |
 |---|---|---|
 | `messages[]` schema and pure model | **shipped** (Phases 0–1) | — |
+| Deploy the `setlistProposal` schema (the `proposal_message` type) to the Content Lake | **done** with Phases 0–1 — recorded here because `docs/DATA_MODEL.md:611-614` makes it a required step and Child B owns the equivalent for `notificationOutbox`, so its absence would read as an omission | — |
 | Migrate `lead_notes`/`admin_notes` into the thread | **A** | — |
 | Lead and admin message write routes | **A** | — |
 | Transition appends its change-request as a message | **A** | — |
