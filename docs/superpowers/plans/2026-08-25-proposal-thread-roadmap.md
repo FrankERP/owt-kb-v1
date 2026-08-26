@@ -209,7 +209,7 @@ The split is correct only if all of these hold after Child B:
 | Thread UI on both surfaces, service-date composer gate | **A** | — |
 | Reads/projections carry `messages` | **A** | B (adds none) |
 | Revision handling (`_rev` attestation, per-surface) | **A** | — |
-| Debounced lead-notes email keeps firing, unchanged | **A** (via the mirror) | **B** (re-sources it) |
+| Debounced lead-notes email keeps firing, **with one named exception** | **A** (via the mirror; the exception is a pre-deploy client CLEARING the note, which stops queuing — an existing signal retired, recorded against invariant 8 in Child A criterion 5) | **B** (re-sources it) |
 | "Nueva propuesta" submit email keeps carrying the lead's note | **A** (via the retained submission textarea) | **B** (re-sources it) |
 | `lead_notes` is never blanked to `""` by a client that stopped sending it | **A** | **B** (removes the field write entirely) |
 | A pre-deploy bundle's `leadNotes` is not discarded | **A** — it opens the window, so it owns the guard | **B** (keeps the same rule for pre-A bundles) |
