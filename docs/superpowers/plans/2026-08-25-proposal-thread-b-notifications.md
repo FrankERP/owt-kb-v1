@@ -188,7 +188,7 @@ lead-message count PRE-COMMIT in its own handler, and from nowhere else.
 input and the stored notice; §The cutover seam is why.
 
 **Neither call site may queue when it appended nothing.** Losing `afterNotes` removes
-the function's own trimmed-equal early return (`serviceMutationSideEffects.ts:636`) —
+the function's own trimmed-equal early return (`serviceMutationSideEffects.ts:658`) —
 `beforeNotes` survives as a stored field but has no counterpart to compare against —
 so the callers now carry that responsibility alone. This matters for the compat path
 in particular, where an unchanged `leadNotes` appends nothing. A no-append queue still
@@ -210,7 +210,7 @@ A count-and-slice is sound because the array is append-only *and* Child A's
 migration already ran, so no prepend can shift indices under a queued notice.
 
 **This closes one of Child A's named gaps.** Today `queueLeadNotesNotice` returns
-early on `before.trim() === after.trim()` (`serviceMutationSideEffects.ts:636`), which
+early on `before.trim() === after.trim()` (`serviceMutationSideEffects.ts:658`), which
 is why Child A §1 lists "a repeated identical message sends no email" as an accepted
 gap. Dropping `afterNotes` removes that comparison, so a repeat now queues and emails.
 An improvement, and intended — but it is a behaviour change against a sibling's stated
@@ -232,7 +232,7 @@ the new path.
 `lead_notes`, so comparing against it compares a snapshot to a **frozen** value. That
 matters because `before` is written only by `createIfNotExists`
 (`outboxNotice.ts:127-146`) and the notice id is deterministic per proposal
-(`serviceMutationSideEffects.ts:639`): a notice minted by pre-B code keeps its legacy
+(`serviceMutationSideEffects.ts:661`): a notice minted by pre-B code keeps its legacy
 shape for its whole ≤60-minute window **even as B's route queues onto it**. Compared
 against a frozen field it would email the pre-release message and silently swallow
 every message appended after — the exact "loses a real message with no signal"
@@ -274,7 +274,7 @@ versions share one dataset.** CLAUDE.md mandates: merge to `preview`, push, veri
 dev alias, *then* open the PR, wait for `gates`, merge. For that entire span `preview`
 runs Child B while production runs the old code, and **`preview` writes the REAL Sanity
 dataset**, which is where `notificationOutbox` lives. `commitUpserts` sweeps inline
-(`serviceMutationSideEffects.ts:491`) and `DUE_NOTICES_QUERY` (`outboxSweep.ts:178`)
+(`serviceMutationSideEffects.ts:513`) and `DUE_NOTICES_QUERY` (`outboxSweep.ts:178`)
 selects every due notice in the dataset with no environment scoping. **Precisely:** a
 write reaches `commitUpserts` only through a `queue*Notice` `after()` block, so it is a
 write that *commits an outbox upsert* that sweeps — narrower than "every write", and
@@ -378,8 +378,8 @@ sendPush(adminIds, "proposals", {
 ```
 
 - **Disposal: `fireAndForget`** — module-private today
-  (`serviceMutationSideEffects.ts:106`), so Phase A exports it — as
-  `notifyProposalReview` uses it (`:748`), not a bare `void` like
+  (`serviceMutationSideEffects.ts:128`) — **Phase A has already exported it** — as
+  `notifyProposalReview` uses it (`serviceMutationSideEffects.ts:770`), not a bare `void` like
   `proposalNotify.ts:157`. **The reason is rejection handling, not latency:** the push
   fires only on `approved`, where `queueLeadNotesNotice` returns at `:632` and no sweep
   runs, so an earlier draft's "~14 s inline sweep" argument does not apply on this
@@ -396,7 +396,7 @@ sendPush(adminIds, "proposals", {
 - **`<fecha>` is rendered at local noon** — `new Date(iso.slice(0,10) + "T12:00:00")`,
   the CLAUDE.md invariant; a bare `new Date(iso)` day-flips in America/Mexico_City.
   There is no shared util. The formatting precedent to copy is `proposalNotify.ts:44`;
-  the precedent NOT to copy is `assignmentPush` (`serviceMutationSideEffects.ts:131`),
+  the precedent NOT to copy is `assignmentPush` (`serviceMutationSideEffects.ts:152`),
   which interpolates the raw stored value into a push body with no rendering at all.
   This is not the first push body to carry a service date — it is the first to render
   one correctly.
@@ -418,10 +418,10 @@ exists in both directions: `proposalReviewRecipients` does not filter, and
 
 - **admin → lead:** add an **optional third parameter** to `notifyProposalReview`,
   `excludeIds?: readonly string[]`, and pass the author. **Apply the filter BEFORE
-  the empty-audience guard** (`serviceMutationSideEffects.ts:746`) — otherwise a
+  the empty-audience guard** (`serviceMutationSideEffects.ts:768`) — otherwise a
   proposal whose only recipient is the author passes the guard and pushes them.
   "Filter in the route" is not implementable: the helper resolves its own recipients
-  internally and exposes no hook (`serviceMutationSideEffects.ts:740-750`), so a
+  internally and exposes no hook (`serviceMutationSideEffects.ts:762-771`), so a
   route-side filter would mean re-implementing `proposalReviewRecipients` +
   `sendPush`, a second copy of the audience rule. **Adding the parameter changes
   neither existing call site**: both pass exactly two arguments
@@ -484,7 +484,7 @@ Every phase ends with `npx tsc --noEmit`, `npm test`, `npx eslint .` at 0 errors
 - Export, in one place each: the **`LEAD_NOTE_MESSAGES` GROQ fragment** and the **JS
   `kind === "lead_note"` predicate** (§The projection cross-pins them);
   `PROPOSAL_QUERY`; `ADMIN_RECIPIENTS_QUERY`; `fireAndForget` (module-private today,
-  `serviceMutationSideEffects.ts:106`, needed by the inline push); and
+  `serviceMutationSideEffects.ts:128`, needed by the inline push); and
   **`proposalNotify`'s proposal read**, today an inline composite template literal
   (`proposalNotify.ts:142-147`) — extract it so its Verification row can execute it
   with `groq-js`, which an inline literal makes impossible.
@@ -612,14 +612,14 @@ marked delivered.
 | An old-shape save lands and queues | `setlistNoticeQueueing.test.ts` — a save carrying `leadNotes` appends a message and produces an outbox document | A pre-Child-A bundle's note discarded behind a success toast |
 | **A `{beforeMessageCount}` notice classifies and emails** | `outboxSweep.test.ts` — **execute the exported `PROPOSAL_QUERY` with `groq-js`** over a `setlistProposal` carrying both `lead_note` and `admin_change_request` messages, feed the result to `classifyProposalMessages`, and **assert the resulting `notes` equals the lead bodies exactly** — not merely "non-empty", which still passes if someone drops the `[kind == "lead_note"]` filter, misaligning `slice(beforeCount)` and mailing admins their own change-request text | The flush path silently classifying to `null` — the debounced email dying with every other check green |
 | **The submit email's body is the lead's last word, not the admin's** | `proposalNotify.test.ts` — **a fixture whose NEWEST message is an `admin_change_request`**: assert the notes block equals the lead's last `body` and does **not** contain the admin's text. `:186` alone is `expect(html).toContain("Notas del líder")` — the section label, rendered whenever `notes` is non-empty (`proposalNotify.ts:61`) — so on an all-lead-note fixture it passes even if the filter is missing entirely. **This is the twin of the count row's defect**, and this path is worse: `notifyProposalSubmitted` fires on every save committed `pending` (`me/proposals/route.ts:298-306`), so a re-submit from `changes_requested` is routine, and the newest message there IS the transition's change request. Execute the fragment with `groq-js` here too | Child A criterion 6's guarantee (the email "always fires … with the notes block it would have had") silently becoming an empty block |
-| **A legacy notice is CLASSIFIED against the THREAD** | `outboxSweep.test.ts` — a `{beforeNotes}`-only notice with no `beforeMessageCount`, on a proposal whose thread has gained messages **since** that notice was minted, emails the admin audience with the **newest `lead_note` body**. Two things must be asserted, and the second is the one an obvious implementation gets wrong: **(a)** an email is sent at all — a dropped notice contributes no pending recipients, so `countLost` (`outboxSweep.ts:890`) stays silent and an "it did not crash" assertion passes while a message vanishes; **(b)** the body is the newest message, **not** the frozen `lead_notes`. `before` is `createIfNotExists`-only (`outboxNotice.ts:127-146`) on a deterministic id (`serviceMutationSideEffects.ts:639`), so a pre-B notice keeps its legacy shape while B queues onto it — classify against the frozen field and every message appended after the release is swallowed | Losing a real message during the multi-hour preview→main window, with no signal anywhere |
+| **A legacy notice is CLASSIFIED against the THREAD** | `outboxSweep.test.ts` — a `{beforeNotes}`-only notice with no `beforeMessageCount`, on a proposal whose thread has gained messages **since** that notice was minted, emails the admin audience with the **newest `lead_note` body**. Two things must be asserted, and the second is the one an obvious implementation gets wrong: **(a)** an email is sent at all — a dropped notice contributes no pending recipients, so `countLost` (`outboxSweep.ts:890`) stays silent and an "it did not crash" assertion passes while a message vanishes; **(b)** the body is the newest message, **not** the frozen `lead_notes`. `before` is `createIfNotExists`-only (`outboxNotice.ts:127-146`) on a deterministic id (`serviceMutationSideEffects.ts:661`), so a pre-B notice keeps its legacy shape while B queues onto it — classify against the frozen field and every message appended after the release is swallowed | Losing a real message during the multi-hour preview→main window, with no signal anywhere |
 | `beforeMessageCount: 0` is not dropped | `outboxSweep.test.ts` | A truthiness check killing the first-message case |
 | Only lead messages queue a notice | `setlistNoticeQueueing.test.ts` | Admins mailed their own change-request |
 | **The email-XOR-push split, pinned on BOTH branches** (criteria 2 and 4) | `proposalMessageRoutes.test.ts` — a `lead_note` on `pending` **and** on `changes_requested` produces exactly one `leadNotes` outbox upsert and **zero** `sendPushMock` calls; the same post on an `approved` future-dated proposal produces **zero** outbox upserts and exactly one `sendPushMock` call to the admin id set. **Nothing else pins this.** The four rows below assert the recipient set, the author filter, the transition count and the `draft` case — a push gated on `status !== "draft"`, or on `!REVIEWABLE_BEFORE_WRITE.has(previousStatus)` — **both wrong, and the second wrongly appeared in an earlier draft of this row as the correct gate**: that set is `{pending, changes_requested}`, so its negation includes `draft`. The gate is `status === "approved"`, nothing else. Either mistake passes every one of the rows below while double-notifying admins on the two reviewable statuses, which is exactly what criterion 4 forbids. And there is no manual fallback: production holds zero proposals in either status | The delivery's headline invariant failing silently on the only branch no human can reach |
 | The admin push reaches ADMINS | `proposalMessageRoutes.test.ts` — assert the recipient set | Pushing the lead about their own message |
 | The author is excluded (lead→admin) | `proposalMessageRoutes.test.ts` — a lead who is also an admin | Self-notification |
 | **The admin→lead push exists, reaches the LEAD, and carries the new copy** (criterion 3) | `proposalMessageRoutes.test.ts` — an `admin_change_request` via the admin messages route calls `notifyProposalReview`, whose recipients are `doc.lead` + contributors, with title `Nuevo mensaje` — **assert the copy, not just the call**. Reusing `REVIEW_PUSH.request_changes` would push "Cambios solicitados — Revisaron la propuesta y pidieron cambios" when an admin merely asked a question, and no other row would notice | Half the conversation staying silent, or answering a question with a change-request alarm |
-| **`excludeIds` is applied BEFORE the empty-audience guard** | `proposalMessageRoutes.test.ts` — a fixture whose **only** review recipient is the posting admin: assert `sendPushMock` is NOT called. This is the one case that distinguishes filter-before-guard from filter-after-guard; `serviceMutationSideEffects.ts:745` resolves recipients and `:746` returns on empty, so a filter placed after it is a no-op precisely here. The "lead who is also an admin" row above cannot catch it — it exercises the route-side filter on the other direction | An admin pushed about their own message, on the single-recipient proposal |
+| **`excludeIds` is applied BEFORE the empty-audience guard** | `proposalMessageRoutes.test.ts` — a fixture whose **only** review recipient is the posting admin: assert `sendPushMock` is NOT called. This is the one case that distinguishes filter-before-guard from filter-after-guard; `serviceMutationSideEffects.ts:767` resolves recipients and `:768` returns on empty, so a filter placed after it is a no-op precisely here. The "lead who is also an admin" row above cannot catch it — it exercises the route-side filter on the other direction | An admin pushed about their own message, on the single-recipient proposal |
 | `request_changes` pushes exactly once | `proposalWriteRoutes.test.ts` — count **`sendPushMock`** calls on the transition, the mechanism the suite already uses (`:39` mocks `@/app/utils/push`; `:710` and `:946` assert on it). **Do NOT add a wholesale `serviceMutationSideEffects` mock** — no suite in the repo has one, `notifyProposalReview` runs through to `sendPush` for real, and mocking the module would make the existing negative assertions at `:796`, `:892` and `:969` pass vacuously, retiring three push guards on the delivery whose subject is push fan-out | A double push from adding a second call site — or the guards being silently vacated by the fix |
 | A `draft` message pushes nothing | `proposalMessageRoutes.test.ts` | Notifying admins about work not in front of them |
 

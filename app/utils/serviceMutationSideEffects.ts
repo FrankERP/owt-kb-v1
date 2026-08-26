@@ -107,17 +107,23 @@ function attemptSync(label: string, fn: () => void): void {
  * nobody awaits, so on a serverless runtime the delivery can be killed when the
  * response returns.
  *
- * Neither existing call site is inside `after()`: `notifySetlistSaved` (`:701`)
- * and `notifyProposalReview` (`:754`) are both awaited inline by their routes
+ * Neither of its two call sites is inside `after()`. Both `notifySetlistSaved`
+ * and `notifyProposalReview` are awaited inline by their routes
  * (`admin/setlists/route.ts:416`; `admin/proposals/[id]/route.ts:379`, `:532`),
- * which import no `after` at all. That is the deliberate trade in the paragraph
- * above — an editor's save never waits on FCM — and it means the exposure is
- * real on those paths today, not hypothetical. Note the contrast with this
- * module's OTHER push fan-outs (`:224`, `:248`, `:558`), which do wrap in
- * `after()` and `await sendPush` inside it.
+ * and neither route imports `after` at all. That is the deliberate trade in the
+ * paragraph above — an editor's save never waits on FCM — and it means the
+ * exposure is real on those paths today, not hypothetical.
+ *
+ * The contrast is `notifyRoleAssignments` and `notifyRolePublished`, this
+ * module's two other push fan-outs: both wrap in `after()` and `await sendPush`
+ * inside it.
  *
  * So: a new caller should be inside `after()`, and must not reach for the two
  * `fireAndForget` sites as precedent for skipping it.
+ *
+ * (Symbols, not same-file line numbers, on purpose — three successive reviews
+ * of this comment caught line references that had rotted, twice because they
+ * were computed against the buffer before the edit that moved them.)
  */
 export function fireAndForget(label: string, promise: unknown): void {
   void Promise.resolve(promise).catch((err) => {

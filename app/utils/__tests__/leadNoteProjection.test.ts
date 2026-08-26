@@ -231,9 +231,9 @@ describe("SUBMITTED_NOTIFY_QUERY", () => {
   });
 
   it("resolves the SAME admin set as the sweep's own audience query", async () => {
-    // The point is not that one string contains the other — that is true by
-    // construction one line from the definition. It is that the two queries
-    // select the same people, which is what a future edit could break.
+    // The real check: the two queries select the same PEOPLE. A textual
+    // containment assertion cannot do that, which is why it is not the primary
+    // one here (there is a narrower use for it at the end of this test).
     const dataset = [
       PROPOSAL,
       { _id: "sa", _type: "teamMembers", role: "super-admin" },
@@ -248,10 +248,11 @@ describe("SUBMITTED_NOTIFY_QUERY", () => {
     expect([...row.admins].sort()).toEqual([...sweepAudience].sort());
     expect([...row.admins].sort()).toEqual(["ad", "sa"]);
 
-    // Kept alongside, cheap, and NOT redundant: the assertion above stays green
-    // if someone replaces the interpolation with a byte-identical literal, and
-    // the shared constant then becomes decorative — the next role edit diverges
-    // silently. This is what pins that they are actually one definition.
+    // A textual tripwire for the divergences this fixture's three roles CANNOT
+    // express — a ministry or active-member filter added to one query and not
+    // the other (the gap tracked as FrankERP/owt-kb-v1#8), or a role nobody
+    // seeded here. It does NOT prove the two are one definition: a
+    // byte-identical literal pasted in place of the interpolation passes it.
     expect(SUBMITTED_NOTIFY_QUERY).toContain(ADMIN_RECIPIENTS_QUERY);
   });
 });
