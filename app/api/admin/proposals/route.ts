@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
+import { THREAD_MESSAGES } from "@/app/utils/proposalMessageRead";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 
 export async function GET() {
@@ -33,6 +34,7 @@ export async function GET() {
       last_transition,
       "service_ref": service_ref._ref,
       "lead_name": coalesce(lead->alias, lead->member_name),
+      ${THREAD_MESSAGES},
       "lead_id": lead->_id,
       "contributors": contributors[]{ "id": person->_id, "name": coalesce(person->alias, person->member_name) },
       songs[] {

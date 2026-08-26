@@ -25,6 +25,7 @@ import {
   targetFromCanonicalRole,
 } from "@/app/utils/proposalWriteRequest";
 import { buildProposalMessage } from "@/app/utils/proposalMessageWrite";
+import { THREAD_MESSAGES } from "@/app/utils/proposalMessageRead";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
 function reject(res: { status: number; body: unknown }) {
@@ -57,6 +58,7 @@ export async function GET() {
   const proposals = await operationalClient.fetch(
     `*[_type == "setlistProposal" && $id in service_ref->Lead[]._ref] | order(service_date asc) {
       _id, _rev, service_type, service_date, status, lead_notes, team_notes, admin_notes, submitted_at, reviewed_at,
+      ${THREAD_MESSAGES},
       "service_ref": service_ref._ref
     }`,
     { id: session.user.sanityId }

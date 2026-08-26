@@ -1,5 +1,6 @@
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 import { notFound } from "next/navigation";
+import { THREAD_MESSAGES } from "@/app/utils/proposalMessageRead";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import Navbar from "@/app/components/Navbar";
 import ProposalEditor from "./ProposalEditor";
@@ -41,6 +42,7 @@ async function getSharedProposal(roleId: string) {
   return operationalClient.fetch(
     `*[_type == "setlistProposal" && service_ref._ref == $roleId] | order(_createdAt asc)[0] {
       _id, _rev, status, lead_notes, team_notes, admin_notes,
+      ${THREAD_MESSAGES},
       "createdById": lead->_id,
       "contributors": contributors[]{ "id": person->_id, "name": coalesce(person->alias, person->member_name) },
       songs[] {

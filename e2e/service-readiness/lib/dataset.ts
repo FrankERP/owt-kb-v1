@@ -394,13 +394,14 @@ export interface StoredProposal {
   service_ref?: { _ref?: string } | null;
   songs?: Array<{ _key?: string; song?: { _ref?: string } }> | null;
   admin_notes?: string | null;
+  messages?: unknown[] | null;
   approval_receipt?: StoredApprovalReceipt | null;
   last_transition?: Record<string, unknown> | null;
 }
 
 const PROPOSAL_PROJECTION = `{
   _id, _rev, _type, status, service_type, service_date, service_ref, songs,
-  admin_notes, approval_receipt, last_transition
+  admin_notes, messages, approval_receipt, last_transition
 }`;
 
 /** Every `setlistProposal` for one service — the shared-singleton check. */
