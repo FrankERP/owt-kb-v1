@@ -45,7 +45,7 @@ established from the code and confirmed below.
 ## The property that makes the split safe
 
 **`queueLeadNotesNotice` and `QueueLeadNotesNoticeInput` are exported with their
-current signature** (`app/utils/serviceMutationSideEffects.ts:658`, `:629`).
+current signature** (`app/utils/serviceMutationSideEffects.ts:636` and `:651`).
 
 So Child A's new lead-messages route can call the *existing, unmodified*
 notification function with its *existing* string-based contract — provided Child A
@@ -55,7 +55,7 @@ touches no module under `app/utils/outbox*`.
 
 **`lead_notes` has a SECOND consumer, and the mirror alone does not cover it.**
 `notifyProposalSubmitted` re-reads `lead_notes` off the committed proposal and puts
-it in the "Nueva propuesta" admin email (`app/utils/proposalNotify.ts:146`, `:153`).
+it in the "Nueva propuesta" admin email (`app/utils/proposalNotify.ts:146`, emailed at `:184`).
 Today that value is what the lead typed into the "Notas privadas para revisión"
 textarea **with that submission** (`ProposalEditor.tsx:714-720` → `:350` →
 `route.ts:232`/`:264`).
@@ -92,7 +92,7 @@ scheduled.
 Child-A-owned behaviour change that must be named rather than glossed.**
 `notifyProposalSubmitted` is not first-submission-only: it fires on **every** save
 committed as `pending` (`app/api/me/proposals/route.ts:298-304` calls
-`notifyProposalPending`, which wraps it at `serviceMutationSideEffects.ts:713`, with
+`notifyProposalPending`, which wraps it at `serviceMutationSideEffects.ts:734`, with
 no `previousStatus` check), and a lead may re-save while `pending` or re-submit from
 `changes_requested` — the route refuses only `approved` (`:160-167`). **Note the
 live dataset has ZERO proposals in `pending` or `changes_requested`** (13 `approved`,
@@ -128,7 +128,7 @@ claimed:**
   it lands with Child A. Watch `report.lost` after Child A's release, not Child B's.
   **Conservative rather than currently firing:** `queueLeadNotesNotice` returns
   before `commitUpserts` unless the pre-write status is `pending`/`changes_requested`
-  (`:632`), and the dataset has zero such proposals today — so the mechanism is
+  (the `REVIEWABLE_BEFORE_WRITE` guard, `serviceMutationSideEffects.ts:654`), and the dataset has zero such proposals today — so the mechanism is
   reachable but dormant until a proposal is submitted.
 
 Child B then moves the call, changes the input shape, rewrites classification,
@@ -315,7 +315,7 @@ cannot be scheduled a release later.
 | Transition appends its change-request as a message | **A** | — |
 | Thread UI on both surfaces, service-date composer gate | **A** | — |
 | Reads/projections carry `messages` — **the app-surface ones** | **A** | — |
-| `outboxSweep`'s `PROPOSAL_QUERY` projects `messages[]` | **B** | — Child A **cannot**: its criterion 7 forbids modifying any file under `app/utils/outbox*`. The query today projects `_id, status, lead_notes, service_date` (`proposalNotifyQueries.ts:41-43`), and `classifyProposalMessages` needs the post-commit array — so if this is not done, `leadMessages` is `undefined`, the classifier returns `null`, and the debounced admin email silently stops |
+| `outboxSweep`'s `PROPOSAL_QUERY` projects `messages[]` | **B** | — Child A **cannot**: its criterion 7 forbids modifying any file under `app/utils/outbox*`. The query today projects `_id, status, lead_notes, service_date` (`proposalNotifyQueries.ts:42-44`), and `classifyProposalMessages` needs the post-commit array — so if this is not done, `leadMessages` is `undefined`, the classifier returns `null`, and the debounced admin email silently stops |
 | Revision handling (`_rev` attestation, per-surface) | **A** | — |
 | Debounced lead-notes email keeps firing, **with one named exception** | **A** (via the mirror; the exception is a pre-deploy client CLEARING the note, which stops queuing — an existing signal retired, recorded against invariant 8 in Child A criterion 5) | **B** (re-sources it) |
 | "Nueva propuesta" submit email keeps carrying the lead's note | **A** (via the retained submission textarea) | **B** (re-sources it) |

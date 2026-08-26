@@ -60,10 +60,10 @@ overwrite the change-request archive the rollback leans on, and `admin_notes` ha
 no notification consumer anyway.
 
 **The lead route calls `queueLeadNotesNotice` with its existing, unmodified
-signature** (`serviceMutationSideEffects.ts:658`, `:629` — both exported), passing
+signature** (`serviceMutationSideEffects.ts:636`, `:651` — both exported), passing
 `beforeNotes` = the stored `lead_notes` captured PRE-COMMIT, `afterNotes` = the
 appended body, and **`previousStatus`** = the status before this write, which the
-input requires (`:619`, `:632`). **It does not call it at all when nothing was
+input requires (`serviceMutationSideEffects.ts:641`, guarded at `:654`). **It does not call it at all when nothing was
 appended** — passing a mirrored value on such a save yields `""`, minting a
 spurious notice and resetting `servedRecipients` (`outboxNotice.ts:147-153`).
 
@@ -116,7 +116,7 @@ acceptance criterion 5 and in the parent's coverage table.
 
 `lead_notes` has a **second consumer**: `notifyProposalSubmitted` re-reads it off
 the committed proposal for the "Nueva propuesta" admin email (`proposalNotify.ts:146`,
-`:153`). Today that value is what the lead typed into "Notas privadas para
+`proposalNotify.ts:184`). Today that value is what the lead typed into "Notas privadas para
 revisión" with that submission (`ProposalEditor.tsx:714-720` → `:350` →
 `route.ts:232`/`:264`).
 
