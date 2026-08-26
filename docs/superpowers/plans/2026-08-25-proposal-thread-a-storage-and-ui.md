@@ -1,250 +1,214 @@
 # Child A — The thread: storage, migration and UI
 
+**Every rule here is stated once.** The predecessor stated several in three or
+four places, and nine of its eleven review blockers were corrections that reached
+one copy and not its twins. The narrative of what earlier drafts got wrong lives
+in [the review log](2026-08-24-proposal-message-thread-review-log.md).
+
 Parent: [`2026-08-25-proposal-thread-roadmap.md`](2026-08-25-proposal-thread-roadmap.md).
 Contracts of reused helpers:
 [`2026-08-24-proposal-message-thread.md`](2026-08-24-proposal-message-thread.md)
 §"Contracts of what this plan reuses" — **normative, cited not restated**.
 
-**Risk tier: CRITICAL.** Data migration against the single production dataset,
-two new production writers, and a concurrency-protocol change on an existing
-guarded writer. Two sequential fresh `APPROVED` verdicts required.
-**This document authorizes nothing.**
+## Status
+
+| | |
+|---|---|
+| Phase A (migration script, dry-run) | **Implemented and on `preview`** — `f1ebdf13`. Verified: dry-run reports 8 documents / 10 messages / 0 aborts |
+| Phases B–E | **Not approved, not authorized.** Risk tier CRITICAL |
+| Approval required | Two sequential fresh `APPROVED` verdicts on byte-identical text |
+| Review history | 4 rounds on the pre-consolidation shape, all `CHANGES_REQUIRED`, 9 blockers, all fixed and **every one an internal contradiction rather than a design fault** |
+
+**Approval is not authorization to implement.** Each phase additionally requires a
+fresh code review of its diff plus the documented gates.
 
 ## Outcome
 
 A `setlistProposal` carries an append-only, attributed, timestamped conversation
-between its lead and the admins. Nothing is ever overwritten. Both surfaces
-render the full history and can post to it.
+between its lead and the admins. Nothing is ever overwritten. Both surfaces render
+the full history and can post to it. **Users:** worship leads and
+`admin`/`super-admin` reviewers.
 
-**Operator/user:** worship leads and `admin`/`super-admin` reviewers.
-
-## Current behaviour and the gap
-
-Three independent `text` fields hold notes (`sanity/schemas/setlistProposal.ts:151-163` and `~:231`; `messages[]` was inserted between them in Phase 1, so they are no longer contiguous).
-`lead_notes` and `admin_notes` are single-valued, so each new note **destroys the
-previous one** — the history the user asked for does not exist. `team_notes` is a
-different thing (the whole team sees it) and is out of scope.
-
-`messages[]` is already declared and deployed to the Content Lake, and two pure
-modules exist, but nothing reads or writes the field.
+Today `lead_notes` and `admin_notes` are single-valued (`sanity/schemas/setlistProposal.ts:151-163`,
+`~:231` — `messages[]` was inserted between them in Phase 1), so each new note
+destroys the previous one. `team_notes`, the whole-team note, is a different thing
+and is out of scope.
 
 ## Scope
 
-### In
+**In:** the migration; both message routes; the transition appending its
+change-request; reads and projections; `ProposalThread.tsx`; and the **mirror**
+that keeps notifications unchanged.
 
-- Migration of `lead_notes` / `admin_notes` into `messages[]`.
-- `POST /api/me/proposals/[id]/messages` and `POST /api/admin/proposals/[id]/messages`.
-- The admin transition appends its change-request as a message.
-- `_type: "proposal_message"` added to `buildProposalMessage` and its test.
-- Reads and projections carrying `messages`.
-- `app/components/ProposalThread.tsx` on both surfaces.
-- **Mirroring `lead_notes` / `admin_notes` so that no notification changes.**
+**Out — Child B owns these:** any change to `app/utils/outbox*` or
+`proposalNotify.ts`, any change to `queueLeadNotesNotice`'s *signature*, any new
+push, and removing the mirror.
 
-### Out — and these belong to Child B
+**Not in this delivery at all:** unread indicators; pastor notes; unsetting the
+legacy fields; **editing or deleting a message** — which is why several rules
+below are about never writing the wrong thing in the first place.
 
-- Any change to `app/utils/outbox*`, `proposalNotify.ts`, or
-  `queueLeadNotesNotice`'s **signature**.
-- Any new push.
-- Removing the mirror.
+---
 
-### Explicitly not in this delivery at all
+## 1. The mirror
 
-Unread indicators; pastor notes; unsetting the legacy fields; editing or deleting
-a message.
+**Rule.** A write that appends a **lead** message also sets `lead_notes` to that
+message's body. **`admin_notes` is mirrored by the TRANSITION only** — the
+standalone admin route appends and leaves it alone, so admin chatter cannot
+overwrite the change-request archive the rollback leans on, and `admin_notes` has
+no notification consumer anyway.
 
-## The mirror — the device that keeps this child notification-free
-
-**Rule.** Every write that appends a lead message also `set`s `lead_notes` to that
-message's body. **`admin_notes` is mirrored by the TRANSITION only**, exactly as
-today — the standalone admin messages route appends its message and leaves
-`admin_notes` alone. Admin chatter must not overwrite the change-request archive
-that the rollback story leans on, and `admin_notes` has **no** notification
-consumer (verified by repo-wide grep: only projections and two UI blocks), so
-mirroring it from the chat route would buy nothing and cost the archive. The lead messages
-route then calls **`queueLeadNotesNotice` with its existing, unmodified signature**
-(`serviceMutationSideEffects.ts:614`, `:629` — both exported), passing
-`beforeNotes` = the stored `lead_notes` captured PRE-COMMIT and `afterNotes` = the
-new message body.
+**The lead route calls `queueLeadNotesNotice` with its existing, unmodified
+signature** (`serviceMutationSideEffects.ts:614`, `:629` — both exported), passing
+`beforeNotes` = the stored `lead_notes` captured PRE-COMMIT, `afterNotes` = the
+appended body, and **`previousStatus`** = the status before this write, which the
+input requires (`:619`, `:632`). **It does not call it at all when nothing was
+appended** — passing a mirrored value on such a save yields `""`, minting a
+spurious notice and resetting `servedRecipients` (`outboxNotice.ts:147-153`).
 
 **Consequence, which is the entire point:** the existing debounced admin email
-fires on exactly the occasions it fires today, to the same audience, with the same
-debounce and the same preference key, and **this child modifies no file under
-`app/utils/outbox*`**.
-
-**What is a new gap rather than a regression, and is accepted here:** an admin
-posting a *standalone* message notifies nobody. No such feature exists today, so
-nothing is lost — but the admin half of the conversation is invisible until the
-lead opens the proposal. Child B closes it with a push. This is named because
-invariant 8 of the parent forbids silent regressions and requires new gaps to be
-stated.
+fires on exactly the occasions it fires today, and **this child modifies no file
+under `app/utils/outbox*` or `proposalNotify.ts`**.
 
 **The mirror is lossy on purpose.** `lead_notes` holds only the newest lead
-message. That is precisely what it holds today, which is why the notification is
-unchanged. The thread is the record; the mirror is a shim with one release to live.
+message — precisely what it holds today, which is why the notification is
+unchanged.
 
-**A repeated identical message produces no email — a new gap, named per invariant 8.**
-Both the queue-time guard (`serviceMutationSideEffects.ts:636`) and the flush
-classifier (`outboxClassify.ts:103`) compare *trimmed strings*, so a lead who posts
-a body identical to their previous one — "¿Alguna noticia?" twice, a bump — queues
-nothing. Correct for a notes *field*, wrong for a *chat*. The message is still
-stored and rendered; only the email is skipped. Child B's count-and-slice fixes it,
-because a count cannot collide the way a string can.
+### New gaps, named because parent invariant 8 requires it
 
-**A pre-deploy client that deliberately CLEARS the textarea is silently ignored** —
-an empty value fails the non-empty half of the server rule, so the erasure does not
-propagate. **Two tabs — one pre-deploy, one post-deploy — are the sharpest variant:** the old
-tab's stale `leadNotes` can resurrect over a thread post, appending and mailing it,
-and server-side that is indistinguishable from a deliberate edit. Low probability
-and a short window, but it is the one case the non-empty-and-differs rule cannot
-tell apart.
+None is a regression; each is a new feature not signalling as richly as it could,
+and each is Child B's to close.
 
-**The cleared-textarea case is a notification gap as well as a UI one:** today `leadNotes: ""`
-over a stored value queues a notice, because `classifyLeadNotes` compares trimmed
-values (`outboxClassify.ts:103`); under the server rule it queues nothing. A new gap under invariant 8: the lead believes they removed their note
-and the thread still shows it. Accepted, because the alternative is letting an
-empty payload field blank the archive, which is the failure criterion 3 exists to
-prevent.
+- **An admin's standalone message notifies nobody.** No such feature exists today.
+- **A repeated identical message sends no email.** The queue guard
+  (`serviceMutationSideEffects.ts:636`) and the flush classifier
+  (`outboxClassify.ts:103`) both compare *trimmed strings*, so a bump — "¿Alguna
+  noticia?" twice — queues nothing. The message is still stored and rendered.
+- **Two messages inside the debounce window produce one email, carrying only the
+  newest**, because the flush re-reads live `lead_notes` (`outboxSweep.ts:390`).
+- **A pre-deploy client that deliberately CLEARS the textarea is ignored** — an
+  empty value fails the non-empty half of §2's server rule. This is a notification
+  gap too: today `leadNotes: ""` over a stored value queues a notice. Accepted,
+  because the alternative is letting an empty payload blank the archive.
+- **Two tabs, one pre-deploy and one post-deploy**, let the old tab's stale
+  `leadNotes` resurrect over a thread post — server-side indistinguishable from a
+  deliberate edit. Short window; the one case §2's rule cannot tell apart.
 
-**And two messages inside the debounce window produce one email carrying only the
-newest** — the flush re-reads live `lead_notes` (`outboxSweep.ts:390`), which holds
-the latest mirror. Identical to today's notes behaviour, so not a regression, but
-the thread now stores something the email silently drops. Named for the same
-reason as above; Child B's slice sends all of them.
+---
 
-## The submission note — why the legacy textarea survives Child A
+## 2. `POST /api/me/proposals` — the submission note, and the two-part rule
 
-**`lead_notes` has a second consumer.** `notifyProposalSubmitted` re-reads it off
-the committed proposal and puts it in the "Nueva propuesta" admin email
-(`app/utils/proposalNotify.ts:145`, `:153`). Today that value is what the lead
-typed into "Notas privadas para revisión" **with that submission**
-(`ProposalEditor.tsx:714-720` → `:350` → `route.ts:232`/`:264`).
+`lead_notes` has a **second consumer**: `notifyProposalSubmitted` re-reads it off
+the committed proposal for the "Nueva propuesta" admin email (`proposalNotify.ts:145`,
+`:153`). Today that value is what the lead typed into "Notas privadas para
+revisión" with that submission (`ProposalEditor.tsx:714-720` → `:350` →
+`route.ts:232`/`:264`).
 
-Deleting that textarea in this child would break two things at once:
+**The textarea therefore survives this child, rendered only while no proposal
+document exists.** Deleting it would empty that email *and* leave the lead with no
+way to say anything on a first submission at all, since the thread composer needs
+a document that does not exist yet.
 
-1. A first submission would commit `lead_notes = ""`, and admins would get a
-   "Nueva propuesta" email with no notes where today it carries them — a
-   regression, forbidden by parent invariant 8.
-2. Worse, **the lead would have no way at all to say anything with their first
-   submission.** The thread composer needs a proposal document, and on a first
-   submission none exists yet — which is exactly why §UI disables it with
-   `Guarda la propuesta para empezar la conversación.`
+**Client rule.** `save()` sends `leadNotes` **only when no proposal document
+exists** — the payload field, not merely the rendering. Conditioning the render
+alone makes the server rule below unsound.
 
-**Rule:** the "Notas privadas para revisión" textarea is rendered **only while no
-proposal document exists** — the pre-first-save case. Its content is sent as
-`leadNotes` exactly as today, written to `lead_notes` (so the submit email is
-byte-identical), **and** appended as the first `lead_note` message so the thread
-starts complete. Once the proposal exists the textarea is gone and the thread
-composer is the only path.
+**Server rule.** Append a `lead_note`, mirror it, and queue the notice **only when
+`request.leadNotes` is non-empty AND differs (trimmed) from the stored
+`lead_notes`.** Otherwise **omit `lead_notes` from the patch entirely** and append
+nothing.
 
-Child B removes the textarea together with the mirror, and re-sources the submit
-email from the thread.
+**Why each half is load-bearing:**
 
-**And a client loaded BEFORE this deploy still sends `leadNotes`.** The textarea
-renders whenever `!isApproved` today (`ProposalEditor.tsx:711-725`) and `:350`
-always sends it. So a lead with the page already open posts a note this child's
-save route would otherwise discard — behind a success toast, with no email, since
-`lead_notes` would not change.
+- `leadNotes` is a one-time initializer (`ProposalEditor.tsx:121`) re-sent verbatim
+  on every save (`:350`). Harmless for a `set`; with an unconditional append, three
+  draft saves mint three identical bubbles — permanent, no delete path.
+- After the lead posts, the mirror moves stored `lead_notes`, so the editor's stale
+  copy now *differs* — without the client half, the next save resurrects the
+  pre-post note as a new message and mails it.
+- "Write the newest lead message body" unconditionally **blanks** a document with a
+  note and an empty `messages[]` (the newest body is `""`), reachable in the
+  step 4 → step 8 window and after a per-document migration abort; and **silently
+  reverts** a newer note written through old production code with the older
+  migrated body — a class Phase D step 9's reconcile cannot detect, because it
+  compares exactly those two values.
+- A client loaded **before** this deploy still sends `leadNotes`
+  (`ProposalEditor.tsx:711-725` renders on `!isApproved`; `:350` always sends). The
+  "differs" test is what turns that into a real note instead of a discard.
 
-**Client rule, stated here because it is half the guard:** `save()` sends
-`leadNotes` **only when no proposal document exists.** Not merely "the textarea is
-rendered only then" — the payload field itself. Conditioning the render alone is
-what makes the server rule below unsound.
+**The submit email is byte-identical on a FIRST submission only.**
+`notifyProposalSubmitted` fires on **every** save committed as `pending`
+(`route.ts:298-304`), and a lead may re-save while `pending` or re-submit from
+`changes_requested`. Later submissions carry the mirror — the newest thread
+message, possibly older than this submission. **A Child-A-owned behaviour change,
+accepted and named**, not a claim of byte-identity. The email still fires, to the
+same audience, with the notes block it would have had.
 
-**Server rule, and the condition is the whole rule:** `POST /api/me/proposals`
-appends a `lead_note` message, mirrors it into `lead_notes`, and queues the notice
-**only when `request.leadNotes` is non-empty AND differs (trimmed) from the stored
-`lead_notes`.** Otherwise it **omits `lead_notes` from the patch entirely** and
-appends nothing.
+---
 
-**Why the client half is load-bearing.** `leadNotes` is seeded from
-`proposal.lead_notes` once (`ProposalEditor.tsx:121`) and re-sent on every save
-(`:350`). After the lead posts a thread message the mirror rewrites stored
-`lead_notes`, so the editor's stale copy now *differs* — and the next ordinary
-setlist save would append that **old** note as a brand-new message, mirror it back
-over the newer one, and queue an admin email. Every post→save cycle, permanently,
-since this delivery has no delete path. The server-side "differs" test cannot
-catch it, because the value it compares against is the one the lead's own post
-just moved.
+## 3. Message shape
 
-**Why the condition, and why "omit" rather than "write the newest message body":**
+Shipped in Phase 1 on `setlistProposal`, after `team_notes`:
 
-- `leadNotes` in the editor is a one-time initializer seeded from the stored value
-  (`ProposalEditor.tsx:121`) and is re-sent verbatim on **every** save (`:350`),
-  whether or not the lead touched it. Harmless for a `set`; with an unconditional
-  append, a lead with the page open who saves a draft three times mints **three
-  identical bubbles** — and §"Explicitly not in this delivery at all" rules out
-  editing or deleting a message, so that is unrepairable production data.
-- An unconditional mirror ("write the newest lead message body") **blanks** a
-  document that has a non-empty `lead_notes` and no `lead_note` message — the
-  newest body is `""`. That state is reachable through this plan's own release
-  window: `--apply` is Phase D step 4 and production runs old code until step 8, so
-  a note written in between lands in `lead_notes` with no message beside it. It is
-  also what a per-document migration abort leaves behind.
-- Worse, it **silently reverts**: if a lead updates `lead_notes` through old
-  production code after step 4, the migrated message is stale, and the first
-  new-bundle save would write the OLD message body over the NEWER note. Step 9's
-  reconcile compares `lead_notes` against its migrated message, finds them in
-  agreement, and reports clean. That class is undetectable by design.
+```
+messages: array of object `proposal_message`
+  _key        string    nextKey() — 12 hex chars
+  _type       "proposal_message"
+  author      reference → teamMembers, OPTIONAL
+  author_role "lead" | "admin" | "pastor" | "system"
+  kind        "lead_note" | "admin_change_request" | "pastor_note" | "system"
+  body        text, ≤ PROPOSAL_NOTES_MAX (4000)
+  at          datetime, server-minted
+```
 
-Omitting the field unless this request appends resolves all three at once. This guard belongs to Child A because **Child A opens the window**;
-scheduling it in Child B would put the fix a release after the loss, which is
-exactly the error corrected for the blanking hazard above. Child B keeps the same
-rule for bundles predating Child A.
+**`author` is a reference plus an `author_role` snapshot.** People on protected
+documents here are references; names are denormalized only at projection time.
+`author_role` is a fact about the message *when posted*, so an admin who later
+becomes a member does not have their history re-render as a lead note. `author` is
+optional because two production `admin_notes` have nobody to attribute them to.
 
-**Do not call `queueLeadNotesNotice` at all when nothing was appended.** That is
-exact, and it replaces an earlier instruction to "pass the mirrored value", which
-yields `""` on a document with a non-empty `lead_notes` and an empty `messages[]`
-— reachable via a per-document migration abort or the step 4→8 window — minting a
-spurious notice and resetting `servedRecipients` (`outboxNotice.ts:147-153`). When
-the route DOES append, pass `beforeNotes` = the stored `lead_notes` captured
-PRE-COMMIT, `afterNotes` = the appended body, **and `previousStatus`** = the
-proposal's status before this write, which the input requires
-(`serviceMutationSideEffects.ts:619`, `:632`) and an earlier draft omitted.
+`kind` and `author_role` reserve `pastor_note` and `system`, so routing "notas del
+pastor" here later needs no migration. This child mints neither.
 
-**Consequence for `afterNotes` when the route does append:** it is the appended
-message body, not `request.leadNotes` blindly. Passing the raw request value from a new bundle sends `""`,
-which trips the equality guard (`serviceMutationSideEffects.ts:636`) on ordinary
-setlist saves and re-slides `notifyAfter` while resetting `servedRecipients` on an
-already-queued subject (`outboxNotice.ts:147-153`). No mis-send — `before` lives
-only in `createIfNotExists` — but it can delay a message email to the maximum
-window and re-attempt a recipient a limited sweep already served.
+**`_type` is carried by both writers and cross-pinned — implemented in Phase A.**
+`buildProposalMessage` shipped in Phase 1 without it; Phase A added
+`PROPOSAL_MESSAGE_TYPE`, put `_type` on the interface and the returned object, and
+made `scripts/__tests__/migrateProposalMessages.test.ts` **import
+`buildProposalMessage` and compare the two key sets directly**, plus pin `_type`
+against the name the schema gives the array item. Two suites each pinning their own
+hardcoded list is what let `_type` ship on one side only with `npm test` green;
+that arrangement is not a guard and is not used.
 
-## Design
+---
 
-### Message shape
-
-Per the parent's shipped schema. **`buildProposalMessage` must gain
-`_type: "proposal_message"`** — it shipped without it
-(`app/utils/proposalMessageWrite.ts`) and `proposalMessageWrite.test.ts` pins that
-shape, while every other array-of-object write on this document carries a `_type`
-(`proposal_song`, `contributor`). The migration writes the same field, and the exported `ProposalMessage`
-**interface** gains it alongside the returned object. Otherwise migrated items
-carry `_type` and runtime items do not: permanently heterogeneous, half of it
-written irreversibly.
-
-### Write routes
+## 4. Write routes
 
 | Route | Guard | Append |
 |---|---|---|
 | `POST /api/me/proposals/[id]/messages` | `requireMinistryMember("worship")`, caller ∈ `canonicalLeadRefs(role)`, **and** `role.published !== false` — both halves of `me/proposals/route.ts:127` | `setIfMissing({messages: []})` + `append`, **no `ifRevisionId`** |
-| `POST /api/admin/proposals/[id]/messages` | `requireActiveManager()` **and** `role !== "content-editor"` — **no ministry check, inherited deliberately** from the sibling transition writer, so a kids-only `admin` can post into a worship thread. A new writer stricter than the route beside it would give two answers to "can this admin act on this proposal"; tightening both is `FrankERP/owt-kb-v1#8` | same |
+| `POST /api/admin/proposals/[id]/messages` | `requireActiveManager()` **and** `role !== "content-editor"` | same |
 
 Both resolve through `loadCanonicalProposal`, are wrapped in
-`withVerificationRunContext`, declare `export const maxDuration = 60` like their
-siblings, and share `app/utils/proposalMessageWrite.ts`.
+`withVerificationRunContext`, and declare `export const maxDuration = 60` like
+their siblings — the lead route hosts the same `after()` fan-out, and
+`commitUpserts` runs an inline sweep at roughly 14 s per send.
+
+**No ministry check on the admin route, inherited deliberately** from the sibling
+transition writer, so a kids-only `admin` can post into a worship thread. A new
+writer stricter than the route beside it would give two answers to "can this admin
+act on this proposal"; tightening both is `FrankERP/owt-kb-v1#8`.
 
 **`setIfMissing` is mandatory on every appending patch.** Sanity requires the array
 to exist (`node_modules/@sanity/client/README.md:1213-1218`; live precedent
 `app/api/me/push-token/route.ts:19-23`). Without it the first message fails on
-every proposal the migration does not touch and on every proposal created later,
-and inside the transition patch it fails the whole transaction so admins cannot
-request changes at all. **Route tests here mock the Sanity patch chain**
+every proposal the migration does not touch and every proposal created later, and
+inside the transition patch it fails the whole transaction so admins cannot request
+changes at all. **Route tests here mock the Sanity patch chain**
 (`notifPrefsRoute.test.ts:21-35`), so a mocked `append` succeeds regardless — the
-test must assert on the mutation chain itself.
+test must assert the mutation chain itself.
 
 **Concurrency.** Standalone appends carry no revision precondition, so two
-concurrent posts both land. Deliberately not read-modify-write, which would either
-409 or drop the loser.
+concurrent posts both land. Deliberately not read-modify-write.
 
 **The transition appends inside its existing patch**, inheriting
 `ifRevisionId(request.rev)` because the note is part of a reviewed decision:
@@ -253,309 +217,148 @@ The asymmetry with the chat routes is intentional and must be commented in code.
 
 - **`reopen` with an empty note appends nothing** and still commits the status
   change — it legitimately sends none (`ProposalsPanel.tsx:143`, `:329`).
-- **`reconcile_target` never appends.** Metadata repair, already branched at
-  `route.ts:491-503`.
-- **The thread-open predicate does not gate the transition.** A `request_changes`
-  on a past-dated service must still commit.
-- **`PROPOSAL_MESSAGES_MAX = 200` applies to the standalone routes only, and the
-  transition is EXEMPT — it always appends, even past 200.** A full thread must
-  never block a review decision, and it must never silently swallow one either:
-  §Reads replaces both `admin_notes` render blocks with `<ProposalThread>`, so a
-  `request_changes` that committed without appending would leave the lead looking
-  at `changes_requested` **with no reason shown anywhere**. The reason must reach
-  the thread; the cap is a growth bound on chatter, not on decisions.
+- **`reconcile_target` never appends.** Metadata repair, branched at `route.ts:491-503`.
+- **The thread-open predicate does not gate the transition.** A `request_changes` on
+  a past-dated service must still commit.
+- **The transition is EXEMPT from `PROPOSAL_MESSAGES_MAX` and always appends.** A
+  full thread must never block a review decision, and must never swallow one
+  either: §6 replaces both `admin_notes` render blocks with `<ProposalThread>`, so
+  a transition that committed without appending would leave the lead looking at
+  `changes_requested` with no reason shown anywhere.
 
 **Limits.** Body ≤ `PROPOSAL_NOTES_MAX` (`app/utils/proposalNotesLimit.ts`). Empty
 or whitespace-only → `invalid_request` on the standalone routes. The 200 cap is
-checked against the loaded document and is **racy by construction** (two concurrent
-posts at 199 both land) — a growth bound, not a security boundary. Say so in code.
+checked against the loaded document and is **racy by construction** — a growth
+bound, not a security boundary. Say so in code.
 
 **On duplicate proposals the message routes are deliberately laxer than the save
 path**, which refuses an ambiguous group via `loadProposalGroup`
 (`me/proposals/route.ts:138-145`). A message landing on the document the composer
-is rendering is self-consistent, and refusing to let someone talk is worst exactly
-when a duplicate needs discussing. A write to the wrong document is a lost setlist;
-a message is not.
+renders is self-consistent, and refusing to let someone talk is worst exactly when
+a duplicate needs discussing. A write to the wrong document is a lost setlist; a
+message is not.
 
-### Revision handling — different per surface, and that is the point
+**Revalidation: none.** Both surfaces are already uncached
+(`me/propose/[roleId]/page.tsx:8` is `revalidate = 0`; `/admin` is dynamic and
+fetches client-side). `app/api/me/proposals/route.ts` calls no `revalidate*`
+either; the admin route calls `revalidateProposalApproval()` only because approval
+writes the live setlist, which backs ISR pages.
 
-**Admin panel: refresh content and revision together.** After a successful post,
-`ProposalsPanel` calls `await load()`, which replaces the whole record
-(`:508` → `:395`) and re-renders the card from props. **The admin route returns `observedRev` too, and the banner is gated on THAT.**
-Surface the existing "Propuesta actualizada — recarga" banner
-(`ProposalsPanel.tsx:239-245`) only when `observedRev !== the _rev the card held`;
-otherwise adopt the reload silently.
+---
 
-**When it DOES fire, `conflict` is permanent for that card** — there is no
-in-panel reset and cards are keyed by `_id`, so the admin must leave the tab even
-though `load()` has just put fresh content on screen. That matches the existing 409
-path and fails closed, but this child adds a frequent new trigger for it.
+## 5. Revision handling
 
-**Gating it on the reloaded `_rev` instead would lock the admin out of the card.**
-The admin's own append always moves `_rev`, so that condition is true after *every*
-admin message. The banner is the `conflict` flag, and `conflict` disables Aprobar
-(`:289`), Solicitar cambios (`:274`) and Reabrir (`:331`); cards are keyed by `_id`
-(`:638`) so `load()` does not remount them and the flag persists until the panel
-itself does. An admin who asks a question in the thread could no longer review that
-proposal. This is the same reasoning the lead surface uses — the actor's own post
-moves the revision — and an earlier draft applied it to one surface and not the
-other. Note also that today this banner appears only after a rejected action, never
-proactively from a `load()` diff.
+**Both routes return `observedRev`** — the revision read immediately **before**
+their own append — alongside the fresh `_rev`.
 
-**Lead editor: adopt conditionally, on `observedRev`** — **both** routes return it
-(§"Response shape"); the full rule is below under "Rule". In one line: the editor keeps its pinned `rev` unless the route can
-prove nothing moved between the editor's render and its own append.
+**Response body:** the appended message and the full `messages[]` **with author
+names resolved**, using the same projection the surfaces use — not
+`PROPOSAL_PROJECTION`'s bare `"author": author._ref`. The lead surface has no other
+path to its own message (optimistic append is forbidden below, and
+`setRev` + `router.refresh()` is rejected), so a bare `_ref` would re-render the
+whole thread unattributed on a feature whose Outcome is an *attributed*
+conversation. An inline GROQ on `setlistProposal` executed by `operationalClient`
+is `compliant` (`protectedReadAudit.ts:880`), exactly as
+`app/api/admin/proposals/route.ts:20-48` already is — the write is licensed by the
+`PROTECTED_RUNTIME_WRITERS` entry, not by which query helper the read uses.
 
-**Why the surfaces differ.** `_rev` on the admin transition is not a staleness
-token — it is an **attestation that the admin saw this content**. The route says
-so (`app/api/admin/proposals/[id]/route.ts:63-67`): *"a freshly fetched server
-revision is never a substitute, because it would re-authorize a decision made
-against content the reviewer never saw."* Approve publishes the **stored** songs
-(`:164`) with no client content fingerprint, so the revision is the only thing
-binding the decision to what was on screen.
+**No optimistic append.** A failed post that had already rendered would leave a
+phantom message in a channel whose whole value is that nothing is lost.
 
-- **Admin, if a bare `_rev` were adopted:** admin renders at rev A → lead saves a
-  different setlist → rev B → admin posts a question → adopts rev C → *Aprobar*
-  **passes** and publishes songs the admin never reviewed. `await load()` prevents
-  it because content arrives with the revision.
-- **Lead, if `setRev` + `router.refresh()` were used:** `rev` tracks the prop
-  (`ProposalEditor.tsx:162-163`) but `songs` (`:109-119`) and `teamNotes` (`:122`)
-  are one-time lazy initializers with no prop-driven setter, and
-  `router.refresh()` preserves client state by design (see the comment at
-  `:158-161`). So the revision would advance without the content: lead A at R1 →
-  co-lead B saves different songs → A posts → adopts R3 → A saves →
-  `compareObservedTarget` returns `null` (success) and the patch **overwrites B's
-  setlist with no 409, no banner and no toast.** Today it 409s.
+### Admin panel
 
-**Pinning unconditionally is too blunt, because the lead's OWN post moves the
-revision.** A post patches the proposal (append + mirror), so `_rev` advances with
-no co-lead involved and the field it touched holds that same message. The dominant
-sequence is therefore *post (clean) → edit the setlist → save*, which under a
-blanket pin **guarantees a 409** and forces a reload that re-seeds `songs` from the
-server, discarding the drag-ordered setlist in progress. An earlier draft mitigated
-only *post-while-dirty*, which is the rarer half.
+`await load()` after a successful post — it replaces the whole record
+(`ProposalsPanel.tsx:508` → `:395`) and re-renders the card from props. **Surface
+the existing "Propuesta actualizada — recarga" banner (`:239-245`) only when
+`observedRev !== the _rev the card held`**; otherwise adopt silently.
 
-**Rule:** the lead messages route returns the fresh `_rev` **and `observedRev` —
-the revision it read immediately BEFORE its own append.** The editor adopts the
-fresh `_rev` **only if `observedRev` equals its pinned `rev`.** Otherwise it keeps
-the pin and the next save 409s into the existing banner, exactly as today.
+**Gating on the reloaded `_rev` would lock the admin out of the card.** The admin's
+own append always moves `_rev`, so that condition is true after *every* admin
+message. The banner is the `conflict` flag, which disables Aprobar (`:289`),
+Solicitar cambios (`:274`) and Reabrir (`:331`); cards are keyed by `_id` (`:638`)
+so `load()` does not remount them and the flag persists until the panel does. When
+it does fire it is permanent for that card — matching the existing 409 path, but
+this child adds a frequent new trigger.
 
-**Why this and not a content comparison.** An earlier draft said "adopt if the
-returned songs are identical to `proposal.songs`", reasoning that identical songs
-meant the only mutation since render was the lead's own message. **That reasoning
-is false.** `POST /api/me/proposals` writes `songs`, `status`, `lead_notes` **and**
-`team_notes` in one unconditional patch (`app/api/me/proposals/route.ts:229-241`),
-and `teamNotes` (`ProposalEditor.tsx:122`) and `status` (`:123`) are one-time lazy
-initializers with no prop-driven setter — the same property that makes `songs`
-dangerous. So songs-identical proves only that songs did not move:
+### Lead editor
+
+**Adopt the fresh `_rev` only if `observedRev` equals the pinned `rev`.** Otherwise
+keep the pin; the next save 409s into the existing reload banner.
+
+**Why not a content comparison.** `POST /api/me/proposals` writes `songs`,
+`status`, `lead_notes` **and** `team_notes` in one unconditional patch
+(`route.ts:229-241`), and `teamNotes` (`ProposalEditor.tsx:122`) and `status`
+(`:123`) are one-time lazy initializers just like `songs` (`:109-119`). So
+"identical songs" proves only that songs did not move:
 
 > Lead A renders at `R1` with `team_notes = "T1"` → co-lead B changes **only** the
-> team message to `"T2"` and saves → `R2`, songs unchanged → A posts → `R3`, songs
-> unchanged → A adopts → A saves → the patch writes `team_notes: "T1"` and **B's
-> text is destroyed with no 409, no banner and no toast.** Today step 5 is a 409.
+> team message and saves → `R2`, songs unchanged → A posts → `R3` → A adopts → A
+> saves → the patch writes `team_notes: "T1"` and **B's text is destroyed with no
+> 409, no banner, no toast.** Today that save 409s. The admin variant needs no
+> co-lead: `request_changes` sets `status` with songs untouched
+> (`admin/proposals/[id]/route.ts:495-500`), so A's next "Guardar borrador"
+> silently reverts `changes_requested → draft`.
 
-The admin variant needs no co-lead: a `request_changes` sets `status` and
-`admin_notes` with songs untouched (`admin/proposals/[id]/route.ts:495-500`), so A
-posts, adopts, presses "Guardar borrador", and silently reverts
-`changes_requested → draft`.
+**Why not a blanket pin either.** The lead's *own* post moves `_rev`, so pinning
+unconditionally guarantees a 409 on their next save and a reload that discards the
+in-progress setlist — on the feature's primary action.
 
-`observedRev` establishes the property directly — *nothing at all moved between the
-editor's render and the route's read* —
+`observedRev` establishes *nothing moved between the editor's render and the
+route's read*. **That is slightly weaker than "before my append":** the append
+carries no precondition, so a co-lead commit inside the read→commit window still
+lets the editor adopt a revision whose parent it never saw. Milliseconds, and
+conditioning the append would reintroduce the 409 it exists to avoid. Named, not
+hidden.
 
-**and that is slightly weaker than "before my append".** The append carries no
-revision precondition (deliberately, so concurrent posts both land), so a co-lead
-commit inside the route's read→commit window would still let the editor adopt a
-revision whose parent it never saw. The window is milliseconds and the alternative
-— conditioning the append on `observedRev` — would reintroduce the 409 the
-unconditioned append exists to avoid. Accepted and named rather than hidden; if it
-ever matters, the fix is a bounded re-read-and-retry, not a precondition. It is
-also strictly better than the songs comparison it replaced, which proved nothing
-about three of the four fields the save writes — rather than inferring it from one field. It
-also sidesteps a shape mismatch the comparison would have needed to resolve: the
-route's projection emits `song{_type,_ref}` (`serviceReadQueries.ts:15`) while the
-editor's prop is `"song_id": song._ref, title, author, key`
-(`me/propose/[roleId]/page.tsx:45-51`).
+**Also still true, and pre-existing:** an admin's post 409s every open lead editor,
+and the "Recargar" path re-seeds `rev` but not `songs`/`status`/`teamNotes`. This
+child makes it frequent. Closing it is the same work a live thread refresh needs.
 
-It also removes any need to disable the composer while dirty.
+---
 
-**What still 409s, and should:** a genuine co-lead edit. That is the guard doing its
-job, it is non-destructive (the editor does not clear), and the banner already
-exists.
-
-**An admin's standalone post also 409s every open lead editor**, with no content
-change behind it. The mechanism is pre-existing — the "Recargar" path calls
-`router.refresh()`, which re-seeds `rev` (`ProposalEditor.tsx:162-163`) but not
-`songs`/`status`/`teamNotes`, so the lead's next save can commit against content
-they were never shown — but this child adds a new and, in a chat, frequent trigger
-for it. Criterion 8 does not cover it. Accepted for Child A and named; the real fix
-is prop-seeding the editor's content on revision change, which is the same work a
-live thread refresh needs and belongs with read marks.
-
-**Response shape.** The appended message and the full `messages[]` **with author
-names resolved — the same projection the surfaces use**, not `PROPOSAL_PROJECTION`'s
-bare `"author": author._ref`. **Both** routes also return **`observedRev`**, the
-revision read immediately before appending.
-
-**Why not `canonicalProposalByIdQuery`.** An earlier draft mandated it "so the
-protected-read classifier sees a helper-sourced read". That justification is false:
-`auditViolations` exempts every `compliant` site outright
-(`app/utils/protectedReadAudit.ts:880`), and an inline GROQ on `setlistProposal`
-executed by `operationalClient` **is** compliant — which is exactly what
-`app/api/admin/proposals/route.ts:20-48` and `me/propose/[roleId]/page.tsx:42-53`
-already do. Registering the routes in `PROTECTED_RUNTIME_WRITERS` licenses the
-*write*; the read passes on its client.
-
-**And the bare `_ref` would break the feature's own Outcome.** The lead surface has
-no other path to its own message — optimistic append is forbidden below, and
-`setRev` + `router.refresh()` is rejected at §"Why the surfaces differ" — so
-returning unresolved authors means that after a lead's first post of a session the
-whole thread re-renders with every bubble unlabelled, on a feature whose Outcome is
-an "append-only, **attributed**, timestamped conversation".
-
-Neither route returns the songs; an earlier draft's content comparison was replaced
-precisely because it could not prove what it claimed. **No optimistic append** — a failed post that had
-already rendered would leave a phantom message in a channel whose whole value is
-that nothing is lost.
-
-**Revalidation: none, deliberately.** Both surfaces are already uncached
-(`me/propose/[roleId]/page.tsx:8` is `revalidate = 0`; `/admin` is dynamic via
-`requireActiveManager()` and fetches client-side). `app/api/me/proposals/route.ts`
-calls no `revalidate*` either; the admin route calls `revalidateProposalApproval()`
-only because approval writes the live setlist, which backs ISR pages.
-
-### Migration
-
-`scripts/migrate-proposal-messages.mjs` + `scripts/lib/proposalMessages.mjs`,
-dry-run by default, `--apply` to write, run as
-`node --env-file=.env.local scripts/migrate-proposal-messages.mjs [--apply]`.
-
-**Client configuration, stated because it is a one-shot production write:**
-`projectId`/`dataset` from `NEXT_PUBLIC_SANITY_PROJECT_ID` / `NEXT_PUBLIC_SANITY_DATASET`,
-token `SANITY_API_READ_TOKEN` for the dry run and `SANITY_WRITE_TOKEN` for
-`--apply`, `useCdn: false`, and **`perspective: "published"` with an explicit
-`!(_id in path("drafts.**"))` filter**. There are 0 draft proposals today, but a
-`raw` perspective would also patch a draft overlay if one appeared between now and
-cutover, and a draft is not a document this migration has any business writing.
-
-**The `--apply` runs at exactly one point: Phase D step 4.** Nowhere else.
-
-1. **Refuse to write, per document, whenever `messages` is already non-empty and
-   carries no migration `_key`** — a reported hard abort, not a silent skip.
-2. Given that interlock, **`set` the whole array**: every target's array is absent
-   or empty, so ordering the (at most two) minted messages in JS and writing one
-   `set` is the simplest correct thing and needs no anchor semantics.
-3. Mint deterministic `_key`s `migleadnote01` / `migadminnote1` and **skip a
-   document when ANY key it would mint is present** — 3 production documents mint
-   both, so a singular check would half-migrate one on a re-run.
-4. **Assert the `_rev` the script read** (`ifRevisionId`) on each patch, and **on a
-   mismatch abort that document, report it, and continue** — do not retry. It
-   **can** fire: production is live during step 4, and any ordinary save
-   (`me/proposals/route.ts:229`) or transition (`admin/proposals/[id]/route.ts:506`)
-   moves `_rev`. An earlier draft claimed it could not, reasoning only about
-   *message* writers. A mismatch means someone edited the proposal between the
-   script's read and its write, so the note it is about to migrate may already be
-   stale — exactly the case a human should look at. Step 5's count is the detector,
-   and the run's report names the aborted ids.
-
-| Source | `kind` | `author_role` | `author` | `at`, first available |
-|---|---|---|---|---|
-| `lead_notes` | `lead_note` | `lead` | `lead._ref` | `last_edited_at` → `submitted_at` → `_createdAt` |
-| `admin_notes` | `admin_change_request` | `admin` | `last_transition.by` **only when `last_transition.action` is `request_changes` or `reopen`**, else **absent** | `last_transition.at` (same condition) → `reviewed_at` → `_updatedAt` |
-
-**`last_transition.by` is a PLAIN STRING id, not a reference** (`buildTransitionRecord`,
-`proposalWriteRequest.ts:368`) — `by._ref` is null. The migration must wrap it as
-`{_type: "reference", _ref: by}` to populate `author`. `lead._ref` on the other row
-already is a reference and needs no wrapping.
-
-**Why the action condition.** `reconcile_target` writes `last_transition`
-(`admin/proposals/[id]/route.ts:491-497`) while never touching `admin_notes`, so a
-retarget after a change request would attribute X's note to Y with Y's timestamp —
-permanently, with no edit path. The schema's own comment says a fabricated
-attribution is worse than an absent one (`setlistProposal.ts:183-186`). `approve`
-does not write `last_transition` at all, so the fallback is narrower than it looks.
-**The dry-run must print the resolved `action` per document** so this is auditable
-before the write. Same class, lower stakes and accepted: a lead note is attributed
-to `lead._ref` even when a co-lead wrote it, because nothing records which.
-
-Those fallback fields are **not** in `PROPOSAL_PROJECTION`; the script issues its
-own query. Order by resolved `at` ascending, lead-first on a tie.
-
-**One shape, two implementations — a deliberate choice, not a limitation.**
-`scripts/lib/proposalMessages.mjs` re-derives what `proposalMessageWrite.ts` owns.
-An earlier draft justified this by claiming a `.mjs` script cannot import a TS
-module; that is false — `scripts/requeue-setlist-notice.mjs:17-18` imports
-`../app/utils/outboxNotice.ts` under `npx tsx --env-file=.env.local`. The real
-reason is that this script must run standalone against production with the
-smallest possible dependency surface, and importing the app's module tree into a
-one-shot production writer is a larger risk than duplicating six field names. Nothing makes them agree at compile time — assert the same field set,
-including `_type`, in both test files.
-
-**Figures are illustrative, never acceptance criteria.** Measured `production`:
-
-| | 2026-08-24 | 2026-08-25 |
-|---|---|---|
-| documents | 14 | 14 |
-| `lead_notes` | 7 | 7 |
-| `admin_notes` | 3 | **4** |
-| both | 2 | **3** |
-| ⇒ patched / minted | 8 / 10 | **8 / 11** |
-| `admin_notes` with no attributable author | 2 of 3 | **2 of 4** |
-| in `changes_requested` | 0 | **1** |
-
-One day moved the message count. Phase D step 2 re-measures and the verification
-asserts against *that*.
-
-### Reads
+## 6. Reads
 
 | Site | Change |
 |---|---|
-| `serviceReadQueries.ts:33-43` (`PROPOSAL_PROJECTION`) | Add `messages[]{_key, "author": author._ref, author_role, kind, body, at}`. Keep the legacy fields. **Payload note:** this also backs `canonicalProposalsQuery()`, an all-proposals read; worst case adds ~800 KB per document. Irrelevant at 14, revisit before the catalog grows |
-| `app/api/admin/proposals/route.ts:20-49` | Add the projection with a resolved author name, following `"lead_name": coalesce(lead->alias, lead->member_name)` (`:35`) |
-| `ProposalsPanel.tsx:43-45, 106, 225-237` | Type gains `messages`; the `lead_notes` and `admin_notes` blocks become `<ProposalThread>`; `team_notes` untouched. **`:106` seeds the change-request composer from `proposal.admin_notes` — seed it empty** |
+| `serviceReadQueries.ts:33-43` (`PROPOSAL_PROJECTION`) | Add `messages[]{_key, _type, "author": author._ref, author_role, kind, body, at}`. Keep the legacy fields. **Payload note:** also backs `canonicalProposalsQuery()`, an all-proposals read; worst case adds ~800 KB per document. Irrelevant at 14; revisit before the catalog grows |
+| `app/api/admin/proposals/route.ts:20-49` | Add the projection **with a resolved author name**, following `"lead_name": coalesce(lead->alias, lead->member_name)` (`:35`) |
+| `ProposalsPanel.tsx:43-45, 106, 225-237` | Type gains `messages`; the `lead_notes` and `admin_notes` blocks become `<ProposalThread>`; `team_notes` untouched. **`:106` seeds the change-request composer from `proposal.admin_notes` — seed it empty**, or an admin re-sends a stale legacy note as a new message |
 | `me/propose/[roleId]/page.tsx:40-56` | Add messages with resolved author names |
-| `ProposalEditor.tsx` | Type gains `messages`; the approved-state echo and the `admin_notes` banner become `<ProposalThread>`. **`teamNotes` untouched.** The "Notas privadas" textarea is **retained but conditioned on `!proposalId`** — see §"The submission note"; it still sends `leadNotes` on that first save and nowhere else |
+| `ProposalEditor.tsx` | Type gains `messages`; the approved-state echo and the `admin_notes` banner become `<ProposalThread>`. **`teamNotes` untouched.** The "Notas privadas" textarea is retained but conditioned on `!proposalId` (§2) |
 | `app/api/me/proposals/route.ts:56-62` | GET projection gains `messages` (no in-app consumer today; e2e only) |
 | `app/(client)/me/page.tsx` | **Drop `admin_notes`** — projected and never rendered |
-| `protectedReadAudit.ts` | **No change.** `messages` is deliberately not in `PROTECTED_FIELDS`: word-boundary regex (`:729`), and the list's own comment (`:34-38`) excludes ambiguous names |
+| `app/utils/interface.tsx` | Already carries `messages?` with optional `_type` (Phase A) |
+| `protectedReadAudit.ts` | **No change to `PROTECTED_FIELDS`.** `messages` is a generic identifier matched by a word-boundary regex (`:729`), and the list's own comment (`:34-38`) excludes ambiguous names. It already omits `lead_notes`/`admin_notes` |
 | `e2e/service-readiness/lib/dataset.ts:390-403` | `StoredProposal` and its projection gain `messages` |
 
-**`POST /api/me/proposals` keeps the `lead_notes` mirror — conditionally.** When
-the request appends a message it writes **that appended body**; when it does not,
-it **omits the field from the patch entirely** (§"The submission note"). It never
-writes "the newest lead message body" unconditionally — on a document with a note
-and an empty `messages[]` that value is `""` and the save would blank the archive.
-It does **not** stop writing the field in this child; that is Child B, and doing it
-here would silently retire the existing email.
+---
 
-### UI
+## 7. UI
 
 `app/components/ProposalThread.tsx`, shared by both surfaces:
 `{messages, viewerId, viewerRole, onPost, posting, error}`.
 
-- Chronological, sender-aligned, author name (or `Admin` when `author_role === "admin"` and `author` is absent —
-  key the fallback label on the ROLE, not on the absence, or a `lead_note` minted
-  without an author would render as "Admin" in an audit-adjacent history), timestamp, `whitespace-pre-wrap` body, composer below.
+- Chronological, sender-aligned, author name (or `Admin` when
+  `author_role === "admin"` and `author` is absent — **key the fallback on the
+  ROLE**, or a `lead_note` minted without an author renders as "Admin" in an
+  audit-adjacent history), a timestamp, `whitespace-pre-wrap` body, composer below.
 - **Timestamps follow the timezone invariant.** Any "Hoy"/"Ayer" is a calendar-day
   diff at local noon in `America/Mexico_City`; `message.at` is a full ISO datetime,
   so convert to a local calendar day first. Never bare `new Date(iso)`, never
   elapsed hours.
 - **The composer closes when the SERVICE has passed**, not on approval —
   `isThreadOpen` (shipped): `service_date >= today` as a calendar-day string
-  compare, failing closed on an unusable date because it authorizes a write.
-  **Both routes enforce it server-side** — a hidden composer is not a guard. Past
-  the date: read-only with `La conversación se cerró al pasar el servicio.`
-- **No proposal document yet ⇒ the thread composer is absent, and the legacy
-  submission textarea stands in its place** (§"The submission note"). The thread
-  renders empty with `Aún no hay mensajes.` This is why the earlier framing —
-  "disabled composer, accepted narrowing" — was wrong: it would have taken away
-  the lead's only way to speak on a first submission and emptied the submit
-  email. Nothing is buffered client-side; the note travels with the save that
-  creates the proposal, exactly as today.
+  compare, failing closed on an unusable date because it authorizes a write. **Both
+  routes enforce it server-side** — a hidden composer is not a guard. Past the date:
+  read-only with `La conversación se cerró al pasar el servicio.`
+- **No proposal document yet ⇒ no thread composer**; the §2 submission textarea
+  stands in its place and the thread renders `Aún no hay mensajes.` Nothing is
+  buffered client-side.
 - **Colour:** lead bubbles `border-surface-accent-30` / `bg-accent/5` /
   `text-mono-300`; admin bubbles `border-negative-strong/30` /
   `bg-negative-strong/10` / `text-negative-muted`; timestamps
-  `font-label text-[11px] uppercase tracking-widest text-mono-500`. Existing
-  tokens only; `themeColour(rgbVar, alpha)` if alpha is needed — **never** string
+  `font-label text-[11px] uppercase tracking-widest text-mono-500`. Existing tokens
+  only; `themeColour(rgbVar, alpha)` if alpha is needed — **never** string
   concatenation.
 - **Toasts** via `useTransientValue`. Never a bare `setTimeout`.
 - **Mutation handler** wraps `fetch` in try/catch/finally, checks `res.ok`, resets
@@ -563,27 +366,107 @@ here would silently retire the existing email.
 - **Spanish:** `Conversación con los admins` / `Conversación con el líder`;
   `Aún no hay mensajes.`; `Escribe un mensaje…`; `Enviar`; `Enviando…`;
   `Error al enviar el mensaje`. No unread badge.
-- **The admin `request_changes` composer stays as it is** — it is a decision, not a
-  chat message. **One change: branch on `data.idempotent`**, which the route
-  already returns (`admin/proposals/[id]/route.ts:437`). A repeat with identical
-  `adminNotes` is a no-write retry; show "sin cambios", not a success toast, or the
-  admin believes a message was delivered that was not.
+- **The admin `request_changes` composer stays as it is** — a decision, not a chat
+  message. **One change: branch on `data.idempotent`** (`admin/proposals/[id]/route.ts:437`).
+  A repeat with identical `adminNotes` is a no-write retry; show "sin cambios", not
+  a success toast, or the admin believes a message was delivered that was not.
+
+---
+
+## 8. Migration — **Phase A, implemented and on `preview`**
+
+`scripts/migrate-proposal-messages.mjs` + `scripts/lib/proposalMessages.mjs`,
+dry-run by default, `--apply` to write.
+
+**The `--apply` runs at exactly one point: Phase D step 4.** Nowhere else. Phase D
+step 9 repairs by consented top-up, never by re-running it, and Phase E retires the
+script behind `assertRetiredWriter`, which makes a re-run impossible.
+
+**Safety, in order — the interlock is verified, not assumed:**
+
+1. **Hard abort, per document, when `messages` is non-empty and carries no
+   migration `_key`** — reported, not silently skipped.
+2. **Skip when ANY key it would mint is already present** — some documents mint
+   both, so a singular check would half-migrate one on a re-run.
+3. **A patch decision reached with a non-empty array aborts as
+   `partial_migration`.** *This corner was not in the pre-implementation plan and
+   four review rounds missed it:* `messages[] === [migleadnote01]` on a document
+   whose `lead_notes` was later blanked and whose `admin_notes` was written
+   afterwards passes rule 1 (a migration key is present) and rule 2 (the other is
+   not), and the whole-array `set` would drop the stored message. The precondition
+   is now enforced rather than argued.
+4. Given those, **`set` the whole array**.
+5. **`ifRevisionId` on each patch; on mismatch abort that document, report it,
+   continue** — do not retry. It *can* fire: production is live and any ordinary
+   save or transition moves `_rev`.
+
+**The projection reads `count(messages)` alongside `messages[]._key`.** GROQ does
+**not** compact nulls — verified against the live API and `groq-js`:
+`[{_key:"a"},{x:1},{_key:"b"}][]._key` returns `["a", null, "b"]`. The script's own
+non-string filter is what empties the key list, so without the count a stored
+keyless item would read as "empty, safe to overwrite".
+
+**Field mapping**
+
+| Source | `kind` | `author_role` | `author` | `at`, first available |
+|---|---|---|---|---|
+| `lead_notes` | `lead_note` | `lead` | `lead._ref` | `last_edited_at` → `submitted_at` → `_createdAt` |
+| `admin_notes` | `admin_change_request` | `admin` | `last_transition.by` **only when `last_transition.action` is `request_changes` or `reopen`**, else absent | `last_transition.at` (same condition) → `reviewed_at` → `_updatedAt` |
+
+- **The action condition** exists because `reconcile_target` writes
+  `last_transition` without touching `admin_notes`, so a retarget after a change
+  request would attribute one admin's note to another, permanently. `approve`
+  writes no `last_transition` at all. The dry-run prints the resolved action per
+  document so the decision is auditable before any write.
+- **`last_transition.by` is a PLAIN STRING id, not a reference**
+  (`proposalWriteRequest.ts:368`) — wrap it as `{_type: "reference", _ref: by}`.
+  `lead._ref` already is one.
+- Nothing resolves ⇒ **abort**, never store a half-formed message.
+- **Order by `Date.parse(at)`, not lexicographically**, tie → lead first.
+  `app/utils/proposalThread.ts:33-36` documents the rule for this same field: `at`
+  is a full ISO datetime that may carry an offset, so a string compare orders
+  `…T10:00:00-06:00` against `…T11:00:00Z` wrongly.
+- Deterministic `_key`s `migleadnote01` / `migadminnote1`.
+
+**Client configuration:** `projectId`/`dataset` from `NEXT_PUBLIC_SANITY_*`;
+`SANITY_API_READ_TOKEN` for the dry run and `SANITY_WRITE_TOKEN` for `--apply`;
+`useCdn: false`; **`perspective: "published"` with an explicit
+`!(_id in path("drafts.**"))` filter**. Its query fetches the five fields
+`PROPOSAL_PROJECTION` omits.
+
+**Failure reporting.** Distinguish failure kinds (`err?.name` / `err?.statusCode`)
+rather than labelling everything a revision conflict, and tell the operator to
+**re-run the dry-run before any repair** — a timeout can follow an accepted
+mutation, so a reported abort does not prove the write did not land. A landed write
+re-reads as `skip (already_migrated)`; a top-up applied to a falsely-reported abort
+would duplicate the message permanently.
+
+**One shape, two implementations, cross-pinned directly.**
+`scripts/lib/proposalMessages.mjs` re-derives what `proposalMessageWrite.ts` owns —
+a deliberate choice to keep a one-shot production writer's dependency surface
+minimal, not a limitation (a `.mjs` script *can* import TS under `tsx`;
+`scripts/requeue-setlist-notice.mjs:17-18` does). The test imports both and compares
+their key sets.
+
+**Figures are illustrative, never acceptance criteria.** Measured `production`
+across three readings in two days: 14 documents throughout, but `lead_notes` 7 → 6,
+both 3 → 2, minted 11 → 10, `changes_requested` 1 → 0. The last dry-run reports
+**8 documents / 10 messages / 0 aborts / 0 already carrying `messages`**. Phase D
+step 2 re-measures and the verification asserts against *that*.
+
+---
 
 ## Phases
 
 Every phase ends with `npx tsc --noEmit`, `npm test`, `npx eslint .` at 0 errors,
 plus the check named.
 
-### Phase A — Migration script, dry-run only
+### Phase A — Migration script, dry-run only ✅ IMPLEMENTED (on `preview`, `f1ebdf13`)
 
-- The script and its lib. **Register in `OPERATOR_TOOLING_ALLOWLIST` in this same
-  phase** (`protectedReadAudit.ts:346`; the exact list is pinned at
-  `protectedReadAudit.test.ts:484-497`) — `scripts/**` is audited, so creating the
-  file without registering reddens this phase's own gate. Not
-  `RETIRED_ONE_SHOT_WRITERS`, which fails closed.
-- **Verification:** gate + `scripts/__tests__/migrateProposalMessages.test.ts`
-  (mapping, fallback chains, ordering, `_key` skip, hard abort on a live thread).
-- **State after:** deployable; no production write.
+Script, pure lib, `OPERATOR_TOOLING_ALLOWLIST` registration (`protectedReadAudit.ts:346`,
+exact list pinned at `protectedReadAudit.test.ts:484-497`) — **not**
+`RETIRED_ONE_SHOT_WRITERS`, which fails closed. 34 unit tests plus the cross-writer
+comparison. Two code reviews; the second confirmed no data-safety blocker.
 
 ### Phase B — Rehearsal
 
@@ -592,44 +475,30 @@ moved; investigate. **No `--apply`.**
 
 ### Phase C — The cutover (one deploy)
 
-- Both message routes, with `setIfMissing`, `loadCanonicalProposal`,
-  `withVerificationRunContext`, `maxDuration`, and the per-surface revision rule.
+- Both message routes (§4), with `setIfMissing`, `loadCanonicalProposal`,
+  `withVerificationRunContext`, `maxDuration`, `observedRev`, and the resolved-name
+  response of §5.
 - The transition appends its message; `reopen`-empty and `reconcile_target` append
-  nothing.
-- **The mirror**, exactly as §"The mirror" and §"The submission note" state it:
-  the lead messages route always mirrors `lead_notes` (it always appends —
-  `parseProposalMessageRequest` rejects an empty body), while the save route's
-  compat path mirrors **conditionally**, omitting the field when it appends
-  nothing; **the transition, and
-  only the transition, mirrors `admin_notes`**; the standalone admin route mirrors
-  nothing. The lead route calls `queueLeadNotesNotice` with its **existing**
-  signature, and only when it appended.
-- `buildProposalMessage` gains `_type`; its test updated.
-- Reads and UI.
-- Register both writers in `PROTECTED_RUNTIME_WRITERS`, and move the count test's
+  nothing; the transition is exempt from the cap.
+- **`POST /api/me/proposals`** per §2 — the client rule, the server rule, and the
+  retained submission textarea.
+- **The mirror** per §1: the lead messages route always mirrors (its body can never
+  be empty); the save route's compat path mirrors conditionally; **the transition,
+  and only the transition, mirrors `admin_notes`**.
+- Reads (§6) and UI (§7).
+- Register both writers in `PROTECTED_RUNTIME_WRITERS` and move the count test's
   title from fourteen to sixteen (`protectedReadAudit.test.ts:387`).
-- **Verification:** gate + the whole table below.
 - **Caveat:** e2e fixtures still assert `admin_notes` until Phase E, so this phase
   is deployable against vitest but not the e2e suites.
-- **The `preview` walkthrough happens AFTER Phase D step 8**, never here and never
-  at step 6. Step 8's rule is the binding one: until production has the code,
-  `preview` runs new code against the same dataset while production runs old, and a
-  walkthrough there writes permanent messages and moves `lead_notes` through the
-  mirror where production's old code can revert it. This phase's verification is
-  the gate plus the table.
-- **That walkthrough writes REAL data.** No edit or delete path exists, so every
-  test message is permanent and visible to the team. Name the target proposal in
-  advance.
 
 ### Phase D — Release
 
-1. Gates green, then a **fresh code review of `main...feature`**. Do not "merge to
-   `main` locally" — it is protected with `enforce_admins: true` (`docs/CI.md`).
-   Fix, **re-verify the fix**.
+1. Gates green, then a **fresh code review of `main...feature`** — the range the PR
+   merges. Do not "merge to `main` locally": it is protected with
+   `enforce_admins: true` (`docs/CI.md`). Fix, **re-verify the fix**.
 2. **Re-measure:** documents with non-empty legacy notes and the count they imply;
-   documents already carrying `messages` (**expect 0** — non-zero means a write
-   path shipped early, stop for a human); documents carrying a migration `_key`
-   (expect 0).
+   documents already carrying `messages` (**expect 0** — non-zero means a write path
+   shipped early, stop for a human); documents carrying a migration `_key` (expect 0).
 3. Read the fresh dry-run diff line by line.
 4. **Frank's explicit consent in chat**, then `--apply`. **The only `--apply`.**
 5. Re-read the patched documents and confirm the count step 2 predicted — never a
@@ -641,150 +510,139 @@ moved; investigate. **No `--apply`.**
 9. **Reconcile.** Re-read all proposals and compare each `lead_notes` /
    `admin_notes` against its migrated message. **Compare emptiness too** — a field
    blanked to `""` would be skipped by a non-empty-only comparison. Repair by
-   **consented top-up** with a distinct `_key` (`topup<n>`), never by re-running
-   the migration.
+   **consented top-up** with a distinct `_key` (`topup<n>`), never by re-running the
+   migration.
 
 **The residual window is step 4 → step 8**: a preview verification and a PR gate,
-roughly ten to twenty minutes. Do not exercise the thread on `preview` until step 8
-completes — during that window `preview` runs new code and production old code
-against the same dataset.
+roughly ten to twenty minutes. **Do not exercise the thread on `preview` until step
+8 completes** — during that window `preview` runs new code and production old code
+against the same dataset, and a new-shape notice classified by production's old
+sweep could mail admins stale text. That includes the walkthrough below.
+
+**The `preview` walkthrough happens after step 8**, and it writes REAL data: no
+edit or delete path exists, so every test message is permanent and visible to the
+team. Name the target proposal in advance.
 
 ### Phase E — Docs, ADRs, e2e
 
-- `docs/DATA_MODEL.md`; `docs/API_REFERENCE.md` (+ rows for the two routes, and
-  state that the transition-fingerprint field list is unchanged);
+- `docs/DATA_MODEL.md`; `docs/API_REFERENCE.md` (+ rows for the two routes, stating
+  the transition-fingerprint field list is unchanged);
   `docs/UTILITIES_AND_COMPONENTS.md` (+ `ProposalThread`); a forward pointer at
-  `docs/superpowers/specs/2026-07-03-shared-setlist-proposals-design.md:83`.
+  `docs/superpowers/specs/2026-07-03-shared-setlist-proposals-design.md:83`;
+  update `docs/SOLVER_AND_INFRA.md`'s migration row to record that `--apply` ran.
 - **ADR-0023** — why `APPROVAL_RECEIPT_VERSION` / `APPROVAL_APP_MARKER` were
   deliberately not bumped. Link from `proposalWriteRequest.ts:173-176`.
 - **ADR-0024** — why read state is deferred and must never live on
-  `setlistProposal` or `teamMembers` (the `_rev`-as-auth-token and
-  `publishReadyTransaction.ts:26-32` arguments).
+  `setlistProposal` or `teamMembers`.
 - e2e: `proposal-lifecycle.spec.ts:104`, `zero-delivery.spec.ts:64`,
   `lib/dataset.ts:390-403`, `scripts/lib/sr-verification.mjs:938`.
-- **Retire the migration script** — the repo's terminal step for a one-shot:
-  `assertRetiredWriter` at the top and a move from `OPERATOR_TOOLING_ALLOWLIST` to
-  `RETIRED_ONE_SHOT_WRITERS`, following `scripts/migrate-shared-proposals.mjs:26-27`.
-  Also update `scripts/lib/sr-retired-writer.mjs`'s `RETIRED_WRITERS` and the
-  "six retired one-shot writers" test title, which are pinned equal.
+- **Retire the migration script**: `assertRetiredWriter` at the top, move from
+  `OPERATOR_TOOLING_ALLOWLIST` to `RETIRED_ONE_SHOT_WRITERS`, and update
+  `scripts/lib/sr-retired-writer.mjs`'s `RETIRED_WRITERS` and the "six retired
+  one-shot writers" title, which are pinned equal.
+
+---
 
 ## Acceptance criteria
 
 1. Every message ever posted is retrievable; none is overwritten.
-2. **Every document carrying legacy notes at the time of the Phase D step 2
-   re-measure** has them as messages, with the count that re-measure predicted —
-   never a hard-coded number, matching step 5. The split has already moved three
-   times between drafts of this plan; one proposal's `lead_notes` was blanked and
-   its status changed on 2026-08-25 alone.
-3. **`lead_notes` is never blanked to `""` on a document that carried a value.**
-   On each such document — including every one the migration touches — its value is
-   either its pre-migration value or a mirror write carrying a real message body.
-   (A proposal created after this child whose lead writes nothing legitimately has
-   `""`; the criterion is about erasure, not about emptiness.)
-   This is the criterion that guards the archive Child A's own rollback depends on,
-   and it belongs here rather than in Child B because **this child is what makes
-   the client stop sending the field**.
-4. `admin_notes` likewise, **with one behaviour change this child does make and
-   accepts.** Seeding the change-request composer empty (§Reads, `:106`) means a
-   note-less `reopen` now sends `undefined` → `""` → blanks `admin_notes`, where
-   today the composer re-sends the stored value and nothing is blanked. The empty
-   seed is right — it stops a stale legacy note being re-minted as a fresh bubble —
-   and the blanking is harmless because the content lives in `messages[]` and
-   `admin_notes` has no notification consumer. Stated because the parent's
-   invariant 7 called this pre-existing, and with the empty seed it becomes the
-   default rather than the exception.
-5. **The existing debounced admin email fires on exactly the occasions it fires
-   today**, same audience, same debounce, same preference key.
-6. **The "Nueva propuesta" submit email always fires**, to the same audience as
-   today, with the same notes block it would have had — empty if the lead wrote
-   nothing, exactly as today. On a **first** submission the body is
-   byte-identical, via the retained textarea. On **later** submissions — a re-save
-   while `pending`, or a re-submit from `changes_requested` — it carries the newest
-   thread message instead, because `notifyProposalSubmitted` fires on every save
-   committed as `pending` (`app/api/me/proposals/route.ts:298-304`), not only the
-   first. **That body drift is a Child-A-owned behaviour change, accepted and named
-   under invariant 8**, not a claim of byte-identity.
-7. No file under `app/utils/outbox*` or `proposalNotify.ts` is modified — **and
-   neither has its INPUT changed**, which criteria 5 and 6 are what actually check.
+2. **Every document carrying legacy notes at the Phase D step 2 re-measure** has
+   them as messages, with the count that re-measure predicted — never a hard-coded
+   number.
+3. **`lead_notes` is never blanked to `""` on a document that carried a value.** Its
+   value is either its pre-migration value or a mirror write carrying a real message
+   body. (A proposal created later whose lead writes nothing legitimately has `""`;
+   this is about erasure, not emptiness.)
+4. `admin_notes` likewise, **with one behaviour change this child makes and
+   accepts**: seeding the change-request composer empty (§6) means a note-less
+   `reopen` now blanks it, where today the composer re-sends the stored value. The
+   empty seed is right — it stops a stale legacy note being re-minted as a fresh
+   bubble — and the blanking is harmless because the content lives in `messages[]`
+   and `admin_notes` has no notification consumer.
+5. **The debounced admin email fires on exactly the occasions it fires today**, same
+   audience, same debounce, same preference key.
+6. **The "Nueva propuesta" submit email always fires**, to the same audience, with
+   the notes block it would have had — subject to the first-submission scope in §2.
+7. No file under `app/utils/outbox*` or `proposalNotify.ts` is modified, **and
+   neither has its INPUT changed** — criteria 5 and 6 are what actually check that.
    An unmodified file fed an emptied field is still a regression.
 8. **A post never enables an approval or a save against content the actor was not
    shown, on the paths the Verification table exercises.** Two residual windows are
-   named in the design and deliberately not closed here: the route's read→commit
-   gap (§"and that is slightly weaker…"), and an admin post followed by a lead's
-   "Recargar", which re-seeds `rev` but not the content. Both are pre-existing
-   mechanisms this child triggers more often; closing them is the same work a live
-   thread refresh needs.
+   named in §5 and deliberately not closed here.
 9. `team_notes` behaviour is unchanged end to end.
+
+---
 
 ## Verification
 
-| Requirement | Test | Failure it detects |
+Each row names the **rule it enforces** rather than restating it — the restating is
+what let four rounds of contradictions through.
+
+| Enforces | Test | Failure it detects |
 |---|---|---|
-| **`setIfMissing` precedes every append** | `proposalMessageRoutes.test.ts` + `proposalWriteRoutes.test.ts` — assert the MUTATION CHAIN, not a 200 | The first message failing silently; a first-time `request_changes` rolling back its status change |
-| **The existing email still fires** | `setlistNoticeQueueing.test.ts` — a lead message on a `pending` proposal produces an outbox document with the same shape as today's | Silently retiring the notification this child promises not to touch |
-| **`lead_notes` is never blanked** | `proposalWriteRoutes.test.ts` — a save from the new bundle (no `leadNotes` in the payload) **omits `lead_notes` from the patch entirely** and appends nothing; re-read a document with a pre-existing value and show it byte-unchanged. A save that DOES append writes the appended body | The client stopping sending the field and the next save erasing the archive — and, equally, a test written to "write the newest body" going green while encoding that blanking |
-| **The submit email still carries the note** | `proposalNotify.test.ts` — a first submission carrying the textarea's text produces an email whose notes block is that text | A first submission mailing admins with no notes, and the lead having no way to speak on their first submission |
-| **A pre-deploy bundle's CHANGED note is not discarded** | `proposalWriteRoutes.test.ts` — a save carrying a `leadNotes` that DIFFERS from the stored value appends a `lead_note`, mirrors it, and queues a notice | A lead with the page already open losing their note behind a success toast, with no email |
-| **An UNCHANGED note appends nothing** | `proposalWriteRoutes.test.ts` — a repeated save carrying the same `leadNotes` appends no message and omits `lead_notes` from the patch | Three identical bubbles from three draft saves, permanently, since no delete path exists |
-| **The mirror never blanks or reverts** | `proposalWriteRoutes.test.ts` — a document with a non-empty `lead_notes` and an EMPTY `messages[]` comes back byte-unchanged after a save that appends nothing | Writing `""` over a real note, or writing a stale migrated body over a newer one — the second of which the Phase D reconcile cannot detect |
-| **A lead's own post does not 409 their next save** | mount test — post with no co-lead activity, then edit songs and save; the save must SUCCEED | The revision pin discarding the lead's in-progress setlist on the feature's own primary action |
-| **A post after ANY other mutation does not adopt** | mount test — a co-lead changes only `team_notes`, then the lead posts and saves; the save must **409** | `observedRev` degenerating to a songs comparison and letting a save silently overwrite a co-lead's team message or an admin's status change |
-| **A save after a post appends nothing** | `proposalWriteRoutes.test.ts` + mount test — post a message, then save; no message is appended, `lead_notes` is omitted from the patch, no notice is queued | The editor's stale `leadNotes` resurrecting the pre-post note as a permanent new message on every post-then-save cycle |
-| **No outbox module changed** | a **checklist item on the Phase D step-1 diff review**, not a test — a vitest would need a base ref and would break outside the feature branch | Scope leaking into Child B |
-| A LEAD's post never enables a lost update | mount test — interleave a co-lead content edit between the lead's page render and the lead's post; the subsequent save must **409** | Adopting a revision without its content |
-| An ADMIN's post never enables an unreviewed approval | mount test — interleave a lead content edit between the admin's card render and the admin's post; approve must 409 or publish only what was shown | Re-authorizing against unseen content |
-| A post does not 409 the ADMIN's own next action | `proposalMessageRoutes.test.ts` — after `load()`, a transition succeeds | Locking the admin out of the card |
-| Concurrent posts both land | `proposalMessageRoutes.test.ts` | A revision precondition creeping into the append |
-| An empty `reopen` appends nothing | `proposalWriteRoutes.test.ts` | A blank bubble on every note-less reopen |
-| A repeat identical `request_changes` is not shown as delivered | panel mount test — a 200 with `idempotent: true` renders no bubble and no success toast | Presenting a no-write retry as a sent message |
-| Replay appends no duplicate | `proposalWriteRoutes.test.ts` | The append escaping the `no_write_retry` guard |
-| The composer closes on the SERVICE DATE | `proposalThread.test.ts` (shipped) + `proposalMessageRoutes.test.ts` — an approved future service accepts; a past-dated one is rejected server-side | A chat read-only on most real proposals, or a client-only gate |
-| Stored shape is homogeneous | `proposalMessageWrite.test.ts` + `migrateProposalMessages.test.ts` assert the same field set including `_type` | Migrated items carrying `_type` and runtime items not |
-| Migration ABORTS on a live thread | `migrateProposalMessages.test.ts` | A whole-array `set` erasing real messages |
-| Migration is idempotent | `migrateProposalMessages.test.ts` — running the mapping twice over the same fixture patches nothing the second time; plus a **dry-run** re-run against production reporting `0 to patch` | Duplicate messages. **Not a second `--apply`** — §Migration and Phase D step 4 both say there is exactly one, step 9 forbids re-running it as a repair, and after Phase E `assertRetiredWriter` makes it impossible anyway |
-| Non-lead / content-editor blocked | `proposalMessageRoutes.test.ts` | An ACL hole on a new writer |
-| `team_notes` untouched | existing `proposalWriteRoutes.test.ts` approval assertions | Folding team notes into the thread |
-| Approval receipts survive | `proposalWriteRequest.test.ts` frozen digests (shipped) | Any change to the fingerprints or their constants |
+| §4 `setIfMissing` | `proposalMessageRoutes.test.ts` + `proposalWriteRoutes.test.ts` — assert the MUTATION CHAIN, not a 200 | The first message failing silently; a first-time `request_changes` rolling back its status change |
+| §2 server rule, omit half | `proposalWriteRoutes.test.ts` — a new-bundle save (no `leadNotes` in the payload) omits `lead_notes` from the patch and appends nothing; a document with a pre-existing value comes back byte-unchanged | Blanking the archive Child A's own rollback depends on |
+| §2 server rule, differs half | `proposalWriteRoutes.test.ts` — a repeated save carrying the same `leadNotes` appends nothing; one carrying a DIFFERENT `leadNotes` appends and queues | Three identical bubbles from three draft saves; or a pre-deploy client's note discarded behind a success toast |
+| §2 client rule | mount test — post a message, then save; nothing is appended and no notice is queued | The stale `leadNotes` resurrecting the pre-post note on every post-then-save cycle |
+| §1 mirror keeps the email | `setlistNoticeQueueing.test.ts` — a lead message on a `pending` proposal produces an outbox document of the same shape as today's | Silently retiring the notification this child promises not to touch |
+| §2 submit email | `proposalNotify.test.ts` — a first submission carrying the textarea's text produces an email whose notes block is that text | A first submission mailing admins with no notes |
+| §5 lead adoption | mount test — a co-lead changes only `team_notes`, then the lead posts and saves; the save must **409** | `observedRev` degenerating to a content comparison and losing a co-lead's change |
+| §5 lead adoption, own post | mount test — post with no other activity, then edit songs and save; the save must **succeed** | The pin discarding the lead's in-progress setlist on the feature's primary action |
+| §5 admin banner | panel mount test — post, then transition; the transition must succeed and no banner appears | The `conflict` flag locking the admin out of the card after their own message |
+| §5 resolved names | `proposalMessageRoutes.test.ts` — the response's messages carry author names | The thread re-rendering unattributed after a post |
+| §4 `reopen` empty | `proposalWriteRoutes.test.ts` | A blank bubble on every note-less reopen |
+| §4 transition exempt from the cap | `proposalWriteRoutes.test.ts` — a `request_changes` on a 200-message thread still appends | A change request whose reason exists nowhere the lead can see |
+| §2 idempotent 200 | panel mount test — a 200 with `idempotent: true` renders no bubble and no success toast | Presenting a no-write retry as a sent message |
+| §7 service-date gate | `proposalThread.test.ts` (shipped) + `proposalMessageRoutes.test.ts` — an approved future service accepts; a past-dated one is rejected server-side | A chat read-only on most real proposals, or a client-only gate |
+| §3 one shape | `migrateProposalMessages.test.ts` — imports `buildProposalMessage` and compares key sets directly, and pins `_type` to the schema's item name | The two writers diverging with both suites green, as `_type` already did |
+| §8 interlocks | `migrateProposalMessages.test.ts` — a live thread aborts; a partial migration aborts; a re-run patches nothing | A whole-array `set` erasing real messages |
+| §4 guards | `proposalMessageRoutes.test.ts` — non-lead and `content-editor` rejected | An ACL hole on a new writer |
+| §2 replay | `proposalWriteRoutes.test.ts` — replay a committed `request_changes`, `messages.length` unchanged | The append escaping the `no_write_retry` guard |
+| Frozen digests | `proposalWriteRequest.test.ts` (shipped) | Any change to the fingerprints or their constants |
+| §4 `team_notes` | existing approval assertions | Folding team notes into the thread |
 
 **Suites that will break:** `proposalWriteRoutes.test.ts`,
 `proposalMessageWrite.test.ts`, `protectedReadAudit.test.ts`,
-`setlistNoticeQueueing.test.ts`. E2E: `proposal-lifecycle.spec.ts`,
-`zero-delivery.spec.ts`, `lib/dataset.ts`.
+`setlistNoticeQueueing.test.ts`, `proposalNotify.test.ts`. E2E:
+`proposal-lifecycle.spec.ts`, `zero-delivery.spec.ts`, `lib/dataset.ts`.
+
+---
 
 ## Safe ending state and rollback
 
 **Safe ending state:** the thread is the visible record; `lead_notes` /
 `admin_notes` are maintained mirrors and remain a complete archive of the newest
-message in each direction; every notification behaves as it did before.
+message in each direction; every notification behaves as before.
 
 **Rollback: revert the code.** The legacy fields were never stopped, so they are
-current, not stale, and the reverted UI reads them as authoritative. `messages[]`
-becomes inert. **What revert does not recover:** the *history* — a reverted reader
-shows only the newest note in each direction again, which is exactly today's
-behaviour. No data is destroyed and nothing needs a recovery script.
+current — not stale — and the reverted UI reads them as authoritative. `messages[]`
+becomes inert. **What revert does not recover:** the *history*, which returns to
+showing only the newest note in each direction. Today's behaviour. No data is
+destroyed and no recovery script is needed.
 
 **Partial failure:** the transition's `set` + `append` are one patch in one
-transaction. A standalone post is one patch. The migration aborts per document
+transaction; a standalone post is one patch; the migration aborts per document
 rather than half-writing.
 
-**A message append can 409 an in-flight publish-ready transaction**, which asserts
-the shared proposal's revision (`publishReadyTransaction.ts:70-72`). It fails
-closed, like the documented member-availability false conflict, and is far rarer
-than the read-mark case that argument was originally used to rule out — a message
-is a deliberate act, a read is not.
+**A message append can 409 an in-flight publish-ready transaction**
+(`publishReadyTransaction.ts:70-72`). It fails closed, and is far rarer than the
+read-mark case that argument ruled out — a message is a deliberate act, a read is
+not.
 
 ## Outputs for Child B
 
 - `messages[]` populated and live; the thread is the record.
 - Mirrors maintained, so Child B's first act is removing a shim rather than
   building a bridge.
-- `queueLeadNotesNotice` still on its original signature and still called from a
-  known set of sites, so Child B moves a call it can see.
+- `queueLeadNotesNotice` still on its original signature, called from a known set of
+  sites.
 
 ## Open questions
 
-None blocking. OQ-1 and OQ-2 in the parent belong to Child B.
+None blocking. `FrankERP/owt-kb-v1#8` (ministry-scoping the notification audience)
+is an independent delivery this child neither fixes nor worsens.
 
 ## Terminal state
 
-`READY_FOR_ADVERSARIAL_REVIEW`. Plan approval is not authorization to implement.
+`AWAITING_ADVERSARIAL_REVIEW` — Phases B–E. Plan approval is not authorization to
+implement.
