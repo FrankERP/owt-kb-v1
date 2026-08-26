@@ -73,33 +73,34 @@ any new email.
 
 ### The projection — stated once, here
 
-**Both new reads use the same GROQ shape:**
+**Both new reads interpolate ONE exported fragment.** Not "both use the same shape" —
+an earlier draft said that, and the shape was then written out separately in each
+query, which is three copies of the predicate (two GROQ, one JS) with only two of them
+pinned to anything.
 
 ```
-messages[kind == "lead_note"]{kind, body}
-```
+// exported, one definition
+export const LEAD_NOTE_MESSAGES = `messages[kind == "lead_note"]{kind, body}`;
 
-**`PROPOSAL_QUERY` in full, since the sub-projection alone is not the query:**
-
-```
+// PROPOSAL_QUERY, in full
 *[_type == "setlistProposal" && _id == $proposalId][0]{
   _id, status, service_date,
-  "leadMessages": messages[kind == "lead_note"]{kind, body}
+  "leadMessages": ${LEAD_NOTE_MESSAGES}
 }
 ```
 
-`status` and `service_date` must survive: the classifier needs `status` for
-`reviewable`, and the live-date-wins rule (`outboxSweep.ts:387`) needs
-`service_date`. **`lead_notes` does NOT** — **nothing in the SWEEP reads it** after B,
-the legacy branch included, which classifies against the thread (§Outbox). Scoped to
-the sweep deliberately: `me/proposals/route.ts:207` still reads the stored field to
-snapshot `beforeNotes`, and must, or `beforeNotes` becomes `""`, the old sweep sees
-`"" ≠ live lead_notes`, and it mails the stale archive — the failure this design
-exists to prevent.
+`proposalNotify`'s read — today an inline composite template literal
+(`proposalNotify.ts:142-147`) — interpolates the same constant. **The predicate now
+exists exactly twice**: this fragment, and the JS copy the queue side applies.
 
-Two call sites, and only two: `PROPOSAL_QUERY` (`outboxSweep.ts:203-205`) and
-`proposalNotify`'s read (`proposalNotify.ts:138-153`). No other section restates the
-shape; the Verification rows **execute** the query rather than quoting it.
+`status` and `service_date` must survive `PROPOSAL_QUERY`: the classifier needs
+`status` for `reviewable`, and the live-date-wins rule (`outboxSweep.ts:387`) needs
+`service_date`. **`lead_notes` does NOT** — nothing in the SWEEP reads it after B, the
+legacy branch included, which classifies against the thread (§Outbox). Scoped to the
+sweep deliberately: `me/proposals/route.ts:207` still reads the stored field to
+snapshot `beforeNotes`, and must, or `beforeNotes` becomes `""`, the old sweep sees
+`"" ≠ live lead_notes`, and it mails the stale archive — the failure this design exists
+to prevent.
 
 - **The filter is there so one predicate is applied once**, not for payload. Filtering
   by `kind` does not move the worst case, which is still 200 × `PROPOSAL_NOTES_MAX`
@@ -109,29 +110,28 @@ shape; the Verification rows **execute** the query rather than quoting it.
   inline on the member's save request.
 - **`kind` is projected** so the shape is uniform and a `.filter()` added later
   still matches. Nothing reads it.
-- **Consumers of THIS projection must NOT re-filter.** The array arrives
-  pre-filtered; the classifier's parameter is named `leadMessages`, not
-  `afterMessages`, and `proposalNotify` takes the **last element of the pre-filtered
-  array** in JS — not a second `kind` filter, and not a GROQ negative index.
-  **The queue side is not a consumer of this projection** and does apply the predicate
-  itself, in JS, over `PROPOSAL_PROJECTION`'s full `messages` array (§Outbox). Two
-  sides, one predicate each, neither re-applying the other's.
-- **Because the predicate IS written twice, it is CROSS-PINNED.** Export one
-  `kind === "lead_note"` test, have the queue side call it, and assert in one place
-  that filtering a mixed fixture with it yields exactly what the `groq-js`-executed
-  projection returns. Child A recorded why: "Two suites each pinning their own
-  hardcoded list is what let `_type` ship on one side only with `npm test` green" (§3),
-  and the fix was comparing the two writers directly rather than pinning each. A
-  queue side that drifts to counting the whole array kills the debounced email
-  silently — see the Verification row.
+- **Consumers of THIS projection must NOT re-filter.** The array arrives pre-filtered;
+  the classifier's parameter is named `leadMessages`, not `afterMessages`, and
+  `proposalNotify` takes the **last element of the pre-filtered array** in JS — not a
+  second `kind` filter, and not a GROQ negative index.
+- **The queue side is not a consumer of this projection** and applies the predicate
+  itself, in JS, over `PROPOSAL_PROJECTION`'s full `messages` array (§Outbox).
+- **The two remaining copies are CROSS-PINNED.** Export the JS `kind === "lead_note"`
+  test, have the queue side call it, and assert in one place that filtering a mixed
+  fixture with it yields the same `body` sequence the `groq-js`-executed fragment
+  returns. **Compare bodies, or map both sides to `{kind, body}`** — the GROQ side
+  returns `{kind, body}` while the JS side holds whole message objects
+  (`{_key, _type, author, author_role, kind, body, at}`), so a naive deep-equal cannot
+  be written. Child A recorded why this matters: "Two suites each pinning their own
+  hardcoded list is what let `_type` ship on one side only with `npm test` green" (§3).
 - **GROQ returns `null`, not `[]`,** when `messages` is absent. Coerce at each call
   site. (`outboxSweep.ts:390` coerces the same GROQ `null` for a *string* field — the
   same reflex, not the same type.)
 
 **The guard is execution, not this paragraph.** `outboxSweep.test.ts:244` routes the
 proposal query to a hand-written literal (`:1143`) and nothing compares the two, so a
-fixture cannot catch the projection drifting. Phase B therefore **exports
-`PROPOSAL_QUERY`** and the verification runs it with `groq-js` — already a
+fixture cannot catch the projection drifting. **Phase A** exports the fragment and
+both queries (see Phases), and the verification runs the fragment with `groq-js` — already a
 devDependency (`package.json:78`) and already used this way by five suites
 (`worshipAudienceScope.test.ts`, `adminMemberVisibility.test.ts`,
 `meAvailabilityConflict.test.ts`, `kidsAvailabilityConflict.test.ts`,
@@ -163,7 +163,9 @@ before Child A may still post it. The route appends it as a `lead_note` message
 body** — both halves, exactly as Child A §2 states them. The comparison target
 changes (the newest message rather than the frozen `lead_notes`); the non-empty half
 does not. `buildProposalMessage` returns `null` on an empty body
-(`proposalMessageWrite.ts:117-118`) so `tsc` backstops it, but the rule is stated
+(`proposalMessageWrite.ts:117-118` on this plan's branch; `:128-129` on
+`feat/proposal-messages-migration`, which already carries Child A Phase A's `_type`
+addition) so `tsc` backstops it, but the rule is stated
 rather than left to the type. **Keep Child A's negative test too**, not only the
 positive one — and **extend it**: a save carrying no `leadNotes` appends nothing **and
 queues no notice**. Post-B those are independent, because dropping `afterNotes`
@@ -245,6 +247,12 @@ precedes classification, `outboxSweep.ts:734`; `partitionClaimed` routes to
 `toConsume`, `:506-535`; the `finally` deletes, `:886-890`) but not correct, because a
 notice classified to `[]` contributes no pending recipients and `countLost` (`:890`)
 reports nothing.
+
+**One named low-probability case:** a legacy notice with a non-empty `beforeNotes` on a
+proposal with **zero** `lead_note` messages gives `before = "X"`, `after = ""`, which
+differs — so `classifyLeadNotes` returns a line with `notes: ""` and `renderLine` emits
+a `leadNotes` section with nothing in it (`notificationEmail.ts:183`). Child A's Phase D
+step 9 is designed so that combination does not exist. Named rather than guarded.
 
 The branch, the legacy `beforeNotes` field and `classifyLeadNotes` leave together in a
 follow-up, once no legacy notice can exist — provable rather than assumed.
@@ -473,12 +481,13 @@ Every phase ends with `npx tsc --noEmit`, `npm test`, `npx eslint .` at 0 errors
 
 ### Phase A — Exports and the pure classifier
 
-- Export `ADMIN_RECIPIENTS_QUERY`, `PROPOSAL_QUERY`, `fireAndForget` (module-private
-  today, `serviceMutationSideEffects.ts:106`, needed by the inline push) and
-  **`proposalNotify`'s proposal read** — today an inline composite template literal
-  (`proposalNotify.ts:142-147`). Extract and export it for the same reason
-  `PROPOSAL_QUERY` is exported: its Verification row executes it with `groq-js`, which
-  an inline literal makes impossible.
+- Export, in one place each: the **`LEAD_NOTE_MESSAGES` GROQ fragment** and the **JS
+  `kind === "lead_note"` predicate** (§The projection cross-pins them);
+  `PROPOSAL_QUERY`; `ADMIN_RECIPIENTS_QUERY`; `fireAndForget` (module-private today,
+  `serviceMutationSideEffects.ts:106`, needed by the inline push); and
+  **`proposalNotify`'s proposal read**, today an inline composite template literal
+  (`proposalNotify.ts:142-147`) — extract it so its Verification row can execute it
+  with `groq-js`, which an inline literal makes impossible.
   **Not `REVIEWABLE_BEFORE_WRITE` and not `REVIEWABLE_STATUSES`** — both stay
   module-private. The predecessor's contract had the lead messages route importing the
   first to choose push-vs-email, and inherited advice said to relocate the second to
@@ -602,7 +611,7 @@ marked delivered.
 | **The cutover seam end-to-end** | `setlistNoticeQueueing.test.ts` — queue through the **new** route, then pass the resulting notice's `before.beforeNotes` and the unchanged stored `lead_notes` to `classifyLeadNotes`, expecting `null`. **The fixture's stored `lead_notes` must be NON-EMPTY** (`setlistNoticeQueueing.test.ts` already uses `"Nota original"`) — with an empty one both sides are `""` and the row passes whether or not the route wrote anything. Composes the row above with the surviving pure function, so it fails if the route stops writing the field. **A bare `classifyLeadNotes({before:"x", after:"  x  "}) === null` is NOT this row** — `outboxClassify.test.ts:123-125` already makes it, and it passes whether or not the route writes anything | Criterion 7 regressing to a stale-content email during a deploy |
 | An old-shape save lands and queues | `setlistNoticeQueueing.test.ts` — a save carrying `leadNotes` appends a message and produces an outbox document | A pre-Child-A bundle's note discarded behind a success toast |
 | **A `{beforeMessageCount}` notice classifies and emails** | `outboxSweep.test.ts` — **execute the exported `PROPOSAL_QUERY` with `groq-js`** over a `setlistProposal` carrying both `lead_note` and `admin_change_request` messages, feed the result to `classifyProposalMessages`, and **assert the resulting `notes` equals the lead bodies exactly** — not merely "non-empty", which still passes if someone drops the `[kind == "lead_note"]` filter, misaligning `slice(beforeCount)` and mailing admins their own change-request text | The flush path silently classifying to `null` — the debounced email dying with every other check green |
-| **The submit email's body comes from the thread** | `proposalNotify.test.ts` — its fixture moves from `lead_notes` to `messages`, and `:186` pins a non-empty notes block. **Execute that query with `groq-js`** too: a hand-written fixture cannot catch this projection drifting either, and it is the same one line on a path `await`ed inline on the member's save request | Child A criterion 6's guarantee (the email "always fires … with the notes block it would have had") silently becoming an empty block |
+| **The submit email's body is the lead's last word, not the admin's** | `proposalNotify.test.ts` — **a fixture whose NEWEST message is an `admin_change_request`**: assert the notes block equals the lead's last `body` and does **not** contain the admin's text. `:186` alone is `expect(html).toContain("Notas del líder")` — the section label, rendered whenever `notes` is non-empty (`proposalNotify.ts:61`) — so on an all-lead-note fixture it passes even if the filter is missing entirely. **This is the twin of the count row's defect**, and this path is worse: `notifyProposalSubmitted` fires on every save committed `pending` (`me/proposals/route.ts:298-306`), so a re-submit from `changes_requested` is routine, and the newest message there IS the transition's change request. Execute the fragment with `groq-js` here too | Child A criterion 6's guarantee (the email "always fires … with the notes block it would have had") silently becoming an empty block |
 | **A legacy notice is CLASSIFIED against the THREAD** | `outboxSweep.test.ts` — a `{beforeNotes}`-only notice with no `beforeMessageCount`, on a proposal whose thread has gained messages **since** that notice was minted, emails the admin audience with the **newest `lead_note` body**. Two things must be asserted, and the second is the one an obvious implementation gets wrong: **(a)** an email is sent at all — a dropped notice contributes no pending recipients, so `countLost` (`outboxSweep.ts:890`) stays silent and an "it did not crash" assertion passes while a message vanishes; **(b)** the body is the newest message, **not** the frozen `lead_notes`. `before` is `createIfNotExists`-only (`outboxNotice.ts:127-146`) on a deterministic id (`serviceMutationSideEffects.ts:639`), so a pre-B notice keeps its legacy shape while B queues onto it — classify against the frozen field and every message appended after the release is swallowed | Losing a real message during the multi-hour preview→main window, with no signal anywhere |
 | `beforeMessageCount: 0` is not dropped | `outboxSweep.test.ts` | A truthiness check killing the first-message case |
 | Only lead messages queue a notice | `setlistNoticeQueueing.test.ts` | Admins mailed their own change-request |

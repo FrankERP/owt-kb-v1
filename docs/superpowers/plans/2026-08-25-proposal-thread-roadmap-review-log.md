@@ -136,9 +136,9 @@ explicit consent at the moment it runs.
 
 ## Corrections made during Child B's review (2026-08-26) — NOT covered by the approval
 
-Child B's review found three statements in this approved parent that were wrong, and
+Child B's review found four statements in this approved parent that were wrong, and
 they were corrected in the same delivery rather than left contradicting the child. All
-three are **un-reviewed text** by the same standard as the section above.
+four are **un-reviewed text** by the same standard as the section above.
 
 ### 1. Both in-flight-notice seam bullets
 
@@ -166,7 +166,23 @@ they were:
 The unconditional "with no exception … nothing is lost in either direction" is gone.
 The parent now claims only the first row, and names the second's residual.
 
-### 2. The coverage table's export row
+### 2. "None is notified twice"
+
+The same Integration bullet asserted it unqualified. Child B criterion 4 names two
+exceptions, **both introduced by B and both in steady state** — not window effects:
+
+- A status round-trip inside one debounce window. M1 on `pending` queues a notice
+  holding `beforeMessageCount = N`; approve; M2 on `approved` **pushes**; reopen; the
+  flush now finds a reviewable status and emails `slice(N) = [M1, M2]`. M2 gets both.
+  The push is B's, so this pairing does not exist today.
+- The send-budget re-pend. A new message clears `servedRecipients` while
+  `before.beforeMessageCount` is preserved, so an already-served admin receives the
+  joined body again including a message they had. Today they would receive only the
+  newest note; the join is B's.
+
+The bullet now names them and points at criterion 4 rather than criterion 6.
+
+### 3. The coverage table's export row
 
 It assigned `REVIEWABLE_BEFORE_WRITE` to Child B. B's resolved push gate is
 `status === "approved"`, which retired that export's only proposed consumer, so B
@@ -174,7 +190,7 @@ declines it and exports `ADMIN_RECIPIENTS_QUERY`, `PROPOSAL_QUERY` and `fireAndF
 instead. The table also called the classifier's parameter `afterMessages`; it is
 `leadMessages`, and the name carries the "do not re-filter" rule.
 
-### 3. Why this is recorded here rather than only in the child
+### 4. Why this is recorded here rather than only in the child
 
 CLAUDE.md's rule is that a child may not silently outperform **or undershoot** an
 invariant its parent declares. Child B does both — better than the parent on the

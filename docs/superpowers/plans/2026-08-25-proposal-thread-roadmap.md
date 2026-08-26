@@ -267,11 +267,15 @@ cannot be scheduled a release later.
   (no writes through `preview` until production serves the new code), not the
   mechanism. Named here rather than left to a child, so the parent's acceptance set is
   complete.
-- **No message queued by PRODUCTION's route is lost, and none is notified twice.**
-  Scoped to that direction deliberately — the other one is the bullet above, and its
-  residual is silence closed by procedure, not by mechanism. An earlier version claimed
-  "no exception … nothing is lost in either direction", which this delivery does not
-  achieve and Child B's criterion 6 explicitly declines to claim.
+- **No message queued by PRODUCTION's route is lost** (Child B criterion 6), **and no
+  message produces both the `leadNotes` email and a push except as Child B criterion 4
+  names** (two exceptions, both B-introduced: a status round-trip inside one debounce
+  window, and the send-budget re-pend re-sending a joined body to an already-served
+  admin). Both halves are scoped deliberately. An earlier version claimed "no
+  exception … nothing is lost in either direction" and left "none is notified twice"
+  unqualified beside it; the delivery achieves neither absolutely, and its own criteria
+  say so. Loss in the opposite direction is the bullet above — silence, closed by
+  procedure rather than mechanism.
   **A separate earlier decision — accept the seam, Child B drop-and-consumes — is also
   superseded, because its premise was false.** The window is not "minutes before B's
   deploy": this repo's mandated release runs `preview` on the new code and production
