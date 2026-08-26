@@ -309,6 +309,16 @@ a live hazard** — both filter `_id == $id`, so the duplicate branch cannot fir
 and merging them is a legitimate change that simply has to relocate `pickUnique`'s
 protection rather than drop it.
 
+**Residual, named not closed: the COMMIT path has no idempotency.** The read-back
+is guarded; the commit itself is not. A socket timeout that arrives after Sanity
+accepted the mutation produces a 500 for a message that landed, and the composer
+deliberately keeps its text, so the obvious retry mints a permanent duplicate —
+the same hazard the read-back guard exists for, on the other side of the write.
+Narrow (the `_key` is random per attempt, so nothing dedupes it) and not closed
+here: a deterministic `_key` would change append semantics, which is a design
+change rather than a fix. Found by the pre-release review of the merged range,
+which is the first review that saw the two guards side by side.
+
 **Residual, named not closed: the decoupling costs the first submission its own
 note, on one narrow failure.** When the THREAD read alone rejects, the response is
 a good `_rev` and `messages: null`, so the editor keeps editing rather than

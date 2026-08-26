@@ -10,7 +10,10 @@
 //   node --env-file=.env.local scripts/migrate-proposal-messages.mjs           (dry-run)
 //   node --env-file=.env.local scripts/migrate-proposal-messages.mjs --apply   (writes prod)
 //
-// THE --apply RUNS AT EXACTLY ONE POINT: Child A's Phase D step 4, after
+// THE --apply HAS RUN — 2026-08-26, Child A Phase D step 4, with explicit
+// consent: 8 documents, 10 messages, 0 failures. DO NOT RUN IT AGAIN. What
+// follows is the rule it was run under, kept because it is why the guards below
+// exist. Originally: it runs at exactly one point, after
 // Frank's explicit consent in chat. Nowhere else. Step 9's repair path is a
 // consented top-up with a distinct `_key`, never a second run of this script.
 //
