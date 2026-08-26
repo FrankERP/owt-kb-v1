@@ -471,6 +471,20 @@ describe("POST /api/admin/proposals/[id]/messages — the admin side", () => {
     expect(committed()).toHaveLength(0);
   });
 
+  it("reports SUCCESS when the post-commit read-back fails, like the lead route", async () => {
+    seed();
+    operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) => {
+      if (q.includes("author_name")) throw new Error("content lake timeout");
+      return canonicalRead(q, p);
+    });
+    const res = await postAdmin({ body: "sí llegó" });
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { ok: boolean; messages: unknown };
+    expect(data.ok).toBe(true);
+    expect(data.messages).toBeNull();
+    expect(committed()).toHaveLength(1);
+  });
+
   it("stores a message with no author when the session has no sanityId", async () => {
     seed();
     requireActiveManagerMock.mockResolvedValue({ user: { role: "admin" } });

@@ -531,8 +531,10 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
    *    in any open card, including the posting card's own;
    *  - the whole list would flash to skeletons on every chat message.
    *
-   * The response already carries the fresh `_rev`, `observedRev` and the full
-   * resolved `messages[]`, which is everything a re-render needs.
+   * The response carries the fresh `_rev`, `observedRev` and the resolved
+   * `messages[]` — or `messages: null`, which means the post landed but the
+   * read-back did not. `null` is NOT an empty thread: the card keeps what it is
+   * already rendering rather than blanking it.
    *
    * **The stale banner is gated on `observedRev`, not on the reloaded `_rev`.**
    * The admin's own append always moves `_rev`, so gating on that would raise
@@ -550,8 +552,14 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
       body: JSON.stringify({ body }),
     });
     if (!res.ok) throw new Error("post failed");
-    const data: { messages?: ThreadMessage[]; rev?: string | null; observedRev?: string | null } =
-      await res.json();
+    // `messages: null` is a REAL response — the post landed but the read-back
+    // did not. Typed as such so a later "simplification" back to
+    // `data.messages ?? []` cannot lean on it being impossible.
+    const data: {
+      messages?: ThreadMessage[] | null;
+      rev?: string | null;
+      observedRev?: string | null;
+    } = await res.json();
     // `data.messages === null` means the post landed but the read-back did not.
     // Keep the messages already on screen rather than blanking the thread.
     setProposals((current) =>

@@ -429,8 +429,13 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
       body: JSON.stringify({ body }),
     });
     if (!res.ok) throw new Error("post failed");
-    const data: { messages?: ThreadMessage[]; rev?: string | null; observedRev?: string | null } =
-      await res.json();
+    // `messages: null` means the post landed but the read-back did not — not an
+    // empty thread. Typed so the distinction survives the next edit.
+    const data: {
+      messages?: ThreadMessage[] | null;
+      rev?: string | null;
+      observedRev?: string | null;
+    } = await res.json();
     // `null` = the post landed but the read-back did not. Keep the thread on
     // screen rather than blanking it; the message is stored either way.
     if (data.messages) setMessages(data.messages);

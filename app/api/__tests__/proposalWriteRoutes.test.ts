@@ -230,6 +230,23 @@ function canonicalRead(query: string, params: Record<string, unknown>): unknown 
     return store.locks.filter((l) => (params.ids as string[]).includes(l._id as string));
   }
   if (query.includes("setlistProposal")) {
+    // THE THREAD READ-BACK, which must be matched BEFORE the generic
+    // `_id == $id` branch below. `THREAD_AFTER_APPEND_QUERY` contains both
+    // `setlistProposal` and `_id == $id`, so without this it fell into the array
+    // branch and the route received `[{doc}]` — truthy, `.messages` undefined —
+    // making `freshMessages` `[]` on every save in this suite. A test asserting
+    // the returned thread would then have passed with or without the code that
+    // produces it.
+    if (query.includes("author_name")) {
+      const doc = store.proposals.find((p) => p._id === params.id);
+      if (!doc) return null;
+      const rows = Array.isArray(doc.messages) ? (doc.messages as Record<string, unknown>[]) : [];
+      return {
+        _id: doc._id,
+        _rev: doc._rev,
+        messages: rows.map((m) => ({ ...m, author_name: m.author ? "Ana" : null })),
+      };
+    }
     if (query.includes("_id == $id")) return store.proposals.filter((p) => p._id === params.id);
     // Both indexes at once: the role reference OR an affected date.
     return store.proposals.filter(
@@ -507,6 +524,24 @@ describe("POST /api/me/proposals — first create", () => {
     expect(typeof messages[0]._key).toBe("string");
     // The mirror rides along on the same create.
     expect(created.lead_notes).toBe("Mi primera nota");
+  });
+
+  it("RETURNS the new thread, so the first note is visible without a reload", async () => {
+    // The editor swaps the "Notas privadas" textarea for the thread the moment it
+    // has a `proposalId`, and its `messages` state was initialized from props
+    // that predate this write. Without the thread in the response, a note the
+    // lead just wrote renders "Aún no hay mensajes." until a hard reload.
+    seed();
+    const res = await POST(req(saveBody({ leadNotes: "Mi primera nota" })));
+    const data = (await res.json()) as {
+      messages: Array<{ body: string; author_name: string | null }> | null;
+    };
+    expect(data.messages).not.toBeNull();
+    expect(data.messages).toHaveLength(1);
+    expect(data.messages![0].body).toBe("Mi primera nota");
+    // With the author name RESOLVED — a bare `_ref` would re-render the thread
+    // unattributed on a feature whose whole point is an attributed conversation.
+    expect(data.messages![0].author_name).toBe("Ana");
   });
 
   it("creates NO messages array when the submission carried no note", async () => {

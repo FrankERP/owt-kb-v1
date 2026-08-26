@@ -300,7 +300,13 @@ writes the live setlist, which backs ISR pages.
 their own append — alongside the fresh `_rev`.
 
 **Response body:** the appended message and the full `messages[]` **with author
-names resolved**, using the same projection the surfaces use — not
+names resolved** — **or `messages: null`**, which is NOT an empty thread but
+"the write committed and the read-back did not". Both clients treat `null` as
+"keep what you are already rendering"; treating it as `[]` would blank a thread
+on a transient read error. Added during Phase C, because the unguarded version
+reported a landed message as a failure and the obvious retry minted a permanent
+duplicate — this delivery ships no delete path. The projection is the same one
+the surfaces use — not
 `PROPOSAL_PROJECTION`'s bare `"author": author._ref`. The lead surface has no other
 path to its own message (optimistic append is forbidden below, and
 `setRev` + `router.refresh()` is rejected), so a bare `_ref` would re-render the

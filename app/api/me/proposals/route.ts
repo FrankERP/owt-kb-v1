@@ -381,21 +381,36 @@ async function postHandler(req: NextRequest) {
   // the textarea for the thread on `proposalId`, and its `messages` state was
   // initialized once from props that predate this very write. Nothing is lost in
   // Sanity; the surface just asserts the opposite of what it stored.
+  //
+  // BOTH reads are inside the guard, and that is the point: an earlier version
+  // wrapped only the thread read, leaving the revision read `await`ed on the line
+  // above it — so every content-lake failure the guard was written for threw
+  // BEFORE the guard existed, and the lead was told a committed save had failed.
+  // A guard defeated by the line above it is worse than no guard, because it
+  // reads as protection.
+  //
+  // In parallel: two sequential round trips on every save — draft or submit, note
+  // or none — is latency this path does not need. They are separate queries
+  // because the surfaces need author names resolved and `PROPOSAL_PROJECTION`
+  // deliberately carries bare refs (§5).
   const bound = canonicalProposalByIdQuery(proposalId);
-  const fresh = pickUnique(
-    await operationalClient.fetch<{ _rev?: string }[]>(bound.query, bound.params),
-  );
+  let fresh: { _rev?: string } | null = null;
   let freshMessages: ThreadMessageRow[] | null = null;
   try {
-    const thread = await operationalClient.fetch<{ messages?: ThreadMessageRow[] | null } | null>(
-      THREAD_AFTER_APPEND_QUERY,
-      { id: proposalId },
-    );
+    const [rows, thread] = await Promise.all([
+      operationalClient.fetch<{ _rev?: string }[]>(bound.query, bound.params),
+      operationalClient.fetch<{ messages?: ThreadMessageRow[] | null } | null>(
+        THREAD_AFTER_APPEND_QUERY,
+        { id: proposalId },
+      ),
+    ]);
+    fresh = pickUnique(rows);
     freshMessages = thread ? (thread.messages ?? []) : null;
   } catch (err) {
-    // Guarded for the same reason the message routes' read-back is: the write
-    // already committed, and reporting it as a failure would invite a retry.
-    console.error("[proposals] post-commit thread read failed:", err);
+    // The write already committed. Reporting it as a failure would invite a
+    // retry, and `_rev: null` already degrades correctly — the editor forces a
+    // reload rather than saving again against an unguarded observation.
+    console.error("[proposals] post-commit read failed:", err);
   }
   return NextResponse.json({
     _id: proposalId,

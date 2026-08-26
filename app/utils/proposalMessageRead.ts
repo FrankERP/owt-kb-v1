@@ -54,8 +54,11 @@ export interface ThreadMessageRow {
  * what the surface re-renders from.
  *
  * `messages` is absent on a document nothing has ever appended to, and GROQ
- * returns `null` rather than `[]` for that — coerced here so no caller has to
- * remember.
+ * returns `null` rather than `[]` for that. **The query does NOT coalesce it** —
+ * every call site coerces, and an earlier version of this comment claimed
+ * otherwise, which is worse than saying nothing: the routes now use `null` as a
+ * deliberate sentinel meaning "the read-back failed", and a caller trusting a
+ * phantom coercion would treat that state as impossible.
  */
 export const THREAD_AFTER_APPEND_QUERY = `*[_type == "setlistProposal" && _id == $id][0]{
   _id, _rev,
