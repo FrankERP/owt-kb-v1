@@ -25,6 +25,7 @@ import { describe, it, expect } from "vitest";
 import { evaluate, parse } from "groq-js";
 import {
   LEAD_NOTE_MESSAGES,
+  PROPOSAL_MESSAGE_KINDS,
   isLeadNote,
   type ProposalMessageKind,
 } from "@/app/utils/proposalMessageWrite";
@@ -94,7 +95,10 @@ describe("LEAD_NOTE_MESSAGES", () => {
 
   it("projects `kind`, so a downstream filter still matches", async () => {
     const row = (await leadFragment(PROPOSAL)) as { leadMessages: Record<string, unknown>[] };
-    // The whole point of carrying `kind`: this must not be `undefined`.
+    // `every` alone is vacuously true on an empty array — which is exactly the
+    // state a narrowed-to-`{body}` projection would leave a downstream filter
+    // in. Pin the length first so this cannot pass by finding nothing.
+    expect(row.leadMessages).toHaveLength(2);
     expect(row.leadMessages.every((m) => m.kind === "lead_note")).toBe(true);
   });
 
@@ -139,7 +143,12 @@ describe("the GROQ and JS copies of the predicate agree", () => {
   });
 
   it("agrees on every kind in the vocabulary, one at a time", async () => {
-    for (const kind of ["lead_note", "admin_change_request", "pastor_note", "system"] as const) {
+    // Iterated from the exported list, never re-hardcoded: two suites each
+    // pinning their own copy is the mistake this whole file exists to prevent,
+    // and `pastor_note`/`system` are documented as reserved for future minting,
+    // so a fifth kind is a foreseeable change that must not silently escape.
+    expect(PROPOSAL_MESSAGE_KINDS.length).toBeGreaterThanOrEqual(4);
+    for (const kind of PROPOSAL_MESSAGE_KINDS) {
       const one = msg("k", kind, `body-${kind}`);
       const row = (await leadFragment({
         _id: `p-${kind}`, _type: "setlistProposal", messages: [one],
@@ -221,7 +230,22 @@ describe("SUBMITTED_NOTIFY_QUERY", () => {
     });
   });
 
-  it("interpolates the shared admin audience rather than repeating it", () => {
-    expect(SUBMITTED_NOTIFY_QUERY).toContain(ADMIN_RECIPIENTS_QUERY);
+  it("resolves the SAME admin set as the sweep's own audience query", async () => {
+    // The point is not that one string contains the other — that is true by
+    // construction one line from the definition. It is that the two queries
+    // select the same people, which is what a future edit could break.
+    const dataset = [
+      PROPOSAL,
+      { _id: "sa", _type: "teamMembers", role: "super-admin" },
+      { _id: "ad", _type: "teamMembers", role: "admin" },
+      { _id: "ed", _type: "teamMembers", role: "content-editor" },
+    ];
+    const row = (await run(SUBMITTED_NOTIFY_QUERY, dataset, {
+      leadId: "lead-1",
+      proposalId: "prop-1",
+    })) as { admins: string[] };
+    const sweepAudience = (await run(ADMIN_RECIPIENTS_QUERY, dataset)) as string[];
+    expect([...row.admins].sort()).toEqual([...sweepAudience].sort());
+    expect([...row.admins].sort()).toEqual(["ad", "sa"]);
   });
 });

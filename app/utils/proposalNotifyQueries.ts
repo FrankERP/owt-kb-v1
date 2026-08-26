@@ -13,8 +13,11 @@
 // hand-written fixtures cannot see.
 //
 // Nothing here touches a client. Do not add one.
-
-import { LEAD_NOTE_MESSAGES } from "./proposalMessageWrite";
+//
+// Child B interpolates `LEAD_NOTE_MESSAGES` (`./proposalMessageWrite`) into both
+// queries below when it repoints the notification body from `lead_notes` to the
+// thread. It is deliberately NOT imported yet: this phase changes no behaviour,
+// and an import with no use is a claim the code does not make.
 
 /**
  * The admin audience, written down ONCE for the notification layer.
@@ -44,9 +47,9 @@ export const PROPOSAL_QUERY = `*[_type == "setlistProposal" && _id == $proposalI
  * The one read behind the "Nueva propuesta" email: audience, lead name, and the
  * proposal content the email renders.
  *
- * `LEAD_NOTE_MESSAGES` is NOT interpolated yet — the notes source is still
- * `lead_notes`, and this phase changes no behaviour. Child B swaps it, and the
- * test that executes this query is what will show the swap actually happened.
+ * The notes source is still `lead_notes` — this phase changes no behaviour.
+ * Child B swaps in `LEAD_NOTE_MESSAGES`, and the test that executes this query
+ * is what will show the swap actually happened.
  */
 export const SUBMITTED_NOTIFY_QUERY = `{
   "admins": ${ADMIN_RECIPIENTS_QUERY},
@@ -59,10 +62,3 @@ export interface SubmittedNotifyRow {
   lead: { alias?: string; member_name?: string } | null;
   proposal: { songs?: unknown; lead_notes?: unknown } | null;
 }
-
-/**
- * Re-exported so a reader of this module sees the whole vocabulary the
- * notification queries are built from, and so Child B's narrowing has one
- * import site rather than two.
- */
-export { LEAD_NOTE_MESSAGES };

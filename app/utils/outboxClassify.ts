@@ -128,10 +128,14 @@ export interface LeadNoteMessage {
  * `{body}` and this function still filters, every element lacks `kind`, nothing
  * matches, and the debounced email dies silently with every test green.
  *
- * A count-and-slice is sound because `messages[]` is append-only — there is no
- * edit or delete path — and the migration runs once, before any notice can be
- * queued against a migrated document, so no prepend can shift indices under a
- * notice already in flight.
+ * A count-and-slice is sound because `messages[]` is append-only and the
+ * migration runs once, before any notice can be queued against a migrated
+ * document, so no prepend shifts indices under a notice already in flight.
+ *
+ * "Append-only" is a property of the WRITE PATHS, not something the schema
+ * enforces: no route deletes or reorders a message, but a write token or Vision
+ * still can. Deleting an old lead note shifts every in-flight `beforeCount` and
+ * re-sends the tail. An operational constraint, not a proven invariant.
  */
 export function classifyProposalMessages(i: {
   beforeCount: number;
@@ -146,11 +150,16 @@ export function classifyProposalMessages(i: {
   // GROQ hands back `null` (not `[]`) for a document with no `messages`.
   const messages = Array.isArray(i.leadMessages) ? i.leadMessages : [];
 
-  // A non-integer or negative count is an upstream bug, and `slice` would read
-  // a negative as "from the end" — quietly re-emailing the OLDEST messages as
-  // if they were new. Clamping to 0 over-includes instead, which is visible and
-  // recoverable; counting from the end is neither. `NaN` reaches here because
-  // the caller's guard is `typeof === "number"`, which NaN satisfies.
+  // A non-integer or negative count is an upstream bug. `slice` reads a
+  // negative as an offset from the END, so the batch would silently become the
+  // last |n| messages — a re-send whose SIZE depends on the corrupt value, and
+  // which looks like a plausible email. Clamping to 0 re-sends everything
+  // instead: strictly more, and therefore obvious rather than plausible. Both
+  // re-send already-delivered content; only one of them is loud about it.
+  //
+  // `NaN` is handled here rather than upstream because it survives a
+  // `typeof === "number"` check. Whether Child B's caller lets one through
+  // depends on a guard that does not exist yet — this is total either way.
   const beforeCount = Number.isInteger(i.beforeCount) ? Math.max(0, i.beforeCount) : 0;
 
   const appended = messages.slice(beforeCount);

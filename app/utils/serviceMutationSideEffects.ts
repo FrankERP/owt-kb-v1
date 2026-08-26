@@ -102,6 +102,12 @@ function attemptSync(label: string, fn: () => void): void {
  * Start a delivery WITHOUT waiting for it, so a user-facing save is never held
  * open by FCM. The rejection handler keeps a failure logged and swallowed (§7)
  * rather than surfacing as an unhandled rejection.
+ *
+ * PRECONDITION, now that this is exported: call it from inside an `after()`
+ * block (or something else that keeps the invocation alive). It starts a promise
+ * nobody awaits, so on a serverless runtime a caller that returns its response
+ * first can have the delivery killed mid-flight. Both existing call sites are
+ * reached from `after()`; a new one must be too.
  */
 export function fireAndForget(label: string, promise: unknown): void {
   void Promise.resolve(promise).catch((err) => {

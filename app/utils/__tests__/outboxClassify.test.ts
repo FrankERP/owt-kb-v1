@@ -207,8 +207,9 @@ describe("classifyProposalMessages", () => {
   });
 
   it("clamps a negative count instead of slicing from the END", () => {
-    // `slice(-2)` would re-email the two OLDEST messages as if they were new.
-    // Over-including is visible and recoverable; counting from the end is not.
+    // `slice(-2)` would silently send the last TWO — a plausible-looking batch
+    // whose size depends on the corrupt value. Clamping sends all three, which
+    // is more wrong and therefore visible.
     const line = classifyProposalMessages({
       ...base,
       beforeCount: -2,

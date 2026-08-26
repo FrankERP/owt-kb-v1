@@ -39,8 +39,8 @@ export type ProposalMessageKind = (typeof PROPOSAL_MESSAGE_KINDS)[number];
  * it in different places: the queue side counts lead notes in JS over a loaded
  * document, and the flush side filters them in the query. Two copies is one
  * more than anybody wants, and the reason it is survivable is that
- * `proposalMessageWrite.test.ts` executes the GROQ fragment against this
- * function over the same fixture and compares the results. Child A learned that
+ * `__tests__/leadNoteProjection.test.ts` executes the GROQ fragment against
+ * this function over the same fixture and compares the results. Child A learned that
  * lesson the expensive way: two suites each pinning their own hardcoded list is
  * what let `_type` ship on one side only with `npm test` green.
  */
