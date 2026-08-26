@@ -486,6 +486,38 @@ describe("POST /api/me/proposals — first create", () => {
     expect(notifyProposalSubmittedMock).not.toHaveBeenCalled();
   });
 
+  it("mints the FIRST message from the submission note, in the created document", async () => {
+    // Untested until a review pointed it out: deleting `messages: [msg]` from the
+    // create branch left the whole suite green, and because the migration is
+    // one-shot that note would never become a message on any proposal created
+    // afterwards. A create needs no `setIfMissing` — it is not a patch.
+    seed();
+    const res = await POST(req(saveBody({ leadNotes: "Mi primera nota" })));
+    expect(res.status).toBe(200);
+    const created = creates(committedTransactions()[0])[0];
+    const messages = created.messages as Record<string, unknown>[];
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      _type: "proposal_message",
+      kind: "lead_note",
+      author_role: "lead",
+      body: "Mi primera nota",
+      author: { _ref: "mem-1", _type: "reference" },
+    });
+    expect(typeof messages[0]._key).toBe("string");
+    // The mirror rides along on the same create.
+    expect(created.lead_notes).toBe("Mi primera nota");
+  });
+
+  it("creates NO messages array when the submission carried no note", async () => {
+    seed();
+    const res = await POST(req(saveBody({ leadNotes: "" })));
+    expect(res.status).toBe(200);
+    const created = creates(committedTransactions()[0])[0];
+    expect(created).not.toHaveProperty("messages");
+    expect(created).not.toHaveProperty("lead_notes");
+  });
+
   it("notifies admins and co-leads only when the save submits for review", async () => {
     seed();
     const res = await POST(req(saveBody({ status: "pending" })));

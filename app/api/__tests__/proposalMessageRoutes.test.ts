@@ -379,6 +379,25 @@ describe("POST /api/me/proposals/[id]/messages — the lead side", () => {
     expect(committed()).toHaveLength(0);
   });
 
+  it("reports SUCCESS when the post-commit read-back fails", async () => {
+    seed();
+    // The write already committed. Throwing here would report a landed message
+    // as a failure, and the obvious retry mints a permanent duplicate — this
+    // delivery ships no delete path.
+    operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) => {
+      if (q.includes("author_name")) throw new Error("content lake timeout");
+      return canonicalRead(q, p);
+    });
+    const res = await postLead({ body: "sí llegó" });
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { ok: boolean; messages: unknown };
+    expect(data.ok).toBe(true);
+    // `null`, not `[]`: the client must keep the thread it is rendering rather
+    // than blanking it. An empty array is a real state and means something else.
+    expect(data.messages).toBeNull();
+    expect(committed()).toHaveLength(1);
+  });
+
   it("maps a Sanity write conflict onto a registered code", async () => {
     seed();
     commitOutcomes.push(conflictError());

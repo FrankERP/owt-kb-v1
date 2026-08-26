@@ -552,10 +552,12 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
     if (!res.ok) throw new Error("post failed");
     const data: { messages?: ThreadMessage[]; rev?: string | null; observedRev?: string | null } =
       await res.json();
+    // `data.messages === null` means the post landed but the read-back did not.
+    // Keep the messages already on screen rather than blanking the thread.
     setProposals((current) =>
       current.map((p) =>
         p._id === proposal._id
-          ? { ...p, messages: data.messages ?? [], _rev: data.rev ?? p._rev }
+          ? { ...p, messages: data.messages ?? p.messages, _rev: data.rev ?? p._rev }
           : p,
       ),
     );

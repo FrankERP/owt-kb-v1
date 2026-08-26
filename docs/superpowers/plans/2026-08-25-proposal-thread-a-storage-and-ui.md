@@ -106,6 +106,21 @@ acceptance criterion 5 and in the parent's coverage table.
   and `classifyLeadNotes` returns a line for it. Accepted because the alternative —
   letting an empty payload through — is what criterion 3 exists to prevent. See
   criterion 5.
+- **A chat message now invalidates an in-flight review, on BOTH surfaces.** This
+  is the cost of the standalone routes carrying no revision precondition, and it
+  was found by the Phase C code review rather than named here in advance.
+  - *Lead side:* any post by a co-lead OR an admin moves `_rev`. The poster
+    adopts the fresh revision; everyone else keeps a stale one, and their next
+    save 409s into the reload banner. Before this child only setlist saves and
+    admin transitions moved `_rev`; messages will be far more frequent.
+  - *Admin side:* the fail-closed lock fires on `observedRev` drift, so a SECOND
+    admin's chat message — or a lead's — disables Aprobar / Solicitar cambios /
+    Reabrir even though nothing about the setlist under review changed.
+  Both fail CLOSED, and both alternatives are worse: adopting a revision whose
+  parent you never saw, or comparing content, which §5 rejects on evidence. The
+  real fix is distinguishing "messages moved" from "content moved" — a separate
+  revision for thread appends — and that is Child-B-sized, not this delivery's.
+  **Named here so the team is told rather than surprised.**
 - **Two tabs, one pre-deploy and one post-deploy**, let the old tab's stale
   `leadNotes` resurrect over a thread post — server-side indistinguishable from a
   deliberate edit. Short window; the one case §2's rule cannot tell apart.

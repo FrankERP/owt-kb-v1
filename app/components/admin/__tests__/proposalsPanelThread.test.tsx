@@ -33,6 +33,7 @@ interface Row {
   lead_name: string;
   lead_id: string;
   messages?: unknown[];
+  admin_notes?: string;
   songs: Array<{ _key: string; play_key: string; song_id: string; title: string; author: string; key: string }>;
 }
 
@@ -135,14 +136,21 @@ describe("ProposalsPanel — posting into a card's thread", () => {
   });
 
   it("seeds the change-request composer EMPTY, not from the legacy field", async () => {
-    stubApi([row({ status: "pending" } as Partial<Row>)], {});
+    // The fixture MUST carry a legacy note. Without one this assertion cannot
+    // fail: reverting the seed to `useState(proposal.admin_notes ?? "")` would
+    // still produce "" and the test would pass while asserting nothing.
+    const LEGACY = "una petición anterior";
+    stubApi([row({ admin_notes: LEGACY } as Partial<Row>)], {});
     render(<ProposalsPanel viewerId="admin-1" />);
     await waitFor(() => expect(screen.queryByText("Ana Líder")).not.toBeNull());
     fireEvent.click(screen.getByText("Solicitar cambios"));
-    // It used to seed from `proposal.admin_notes`, now a legacy mirror of the
-    // newest change request — pre-filling it would re-send a stale note as a
-    // brand-new message the moment the panel opened.
+
+    // `admin_notes` is now a legacy mirror of the newest change request.
+    // Pre-filling the composer from it would re-send a stale note as a brand-new
+    // message the moment the admin opened the panel.
     const boxes = screen.getAllByRole("textbox") as HTMLTextAreaElement[];
+    expect(boxes.length).toBeGreaterThan(0);
+    for (const box of boxes) expect(box.value).not.toBe(LEGACY);
     for (const box of boxes) expect(box.value).toBe("");
   });
 });

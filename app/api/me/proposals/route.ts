@@ -25,7 +25,11 @@ import {
   targetFromCanonicalRole,
 } from "@/app/utils/proposalWriteRequest";
 import { buildProposalMessage } from "@/app/utils/proposalMessageWrite";
-import { THREAD_MESSAGES } from "@/app/utils/proposalMessageRead";
+import {
+  THREAD_AFTER_APPEND_QUERY,
+  THREAD_MESSAGES,
+  type ThreadMessageRow,
+} from "@/app/utils/proposalMessageRead";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
 function reject(res: { status: number; body: unknown }) {
@@ -371,14 +375,34 @@ async function postHandler(req: NextRequest) {
     });
   }
 
-  // Return the fresh revision so the client can keep editing without a reload.
+  // Return the fresh revision so the client can keep editing without a reload —
+  // and the thread with it. Without the thread, a FIRST submission that carried a
+  // note renders "Aún no hay mensajes." the instant it succeeds: the editor swaps
+  // the textarea for the thread on `proposalId`, and its `messages` state was
+  // initialized once from props that predate this very write. Nothing is lost in
+  // Sanity; the surface just asserts the opposite of what it stored.
   const bound = canonicalProposalByIdQuery(proposalId);
   const fresh = pickUnique(
     await operationalClient.fetch<{ _rev?: string }[]>(bound.query, bound.params),
   );
+  let freshMessages: ThreadMessageRow[] | null = null;
+  try {
+    const thread = await operationalClient.fetch<{ messages?: ThreadMessageRow[] | null } | null>(
+      THREAD_AFTER_APPEND_QUERY,
+      { id: proposalId },
+    );
+    freshMessages = thread ? (thread.messages ?? []) : null;
+  } catch (err) {
+    // Guarded for the same reason the message routes' read-back is: the write
+    // already committed, and reporting it as a failure would invite a retry.
+    console.error("[proposals] post-commit thread read failed:", err);
+  }
   return NextResponse.json({
     _id: proposalId,
     _rev: fresh?._rev ?? null,
     status: request.status,
+    // `null` means the read-back failed, NOT that the thread is empty. The
+    // client keeps what it has rather than blanking.
+    messages: freshMessages,
   });
 }

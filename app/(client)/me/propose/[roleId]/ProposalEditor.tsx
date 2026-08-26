@@ -374,13 +374,23 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
         return;
       }
       if (!res.ok) throw new Error();
-      const data: { _id?: string; status: ProposalStatus; _rev?: string | null } = await res.json();
+      const data: {
+        _id?: string;
+        status: ProposalStatus;
+        _rev?: string | null;
+        messages?: ThreadMessage[] | null;
+      } = await res.json();
       setStatus(data.status);
       if (data._id) setProposalId(data._id);
       // No fresh revision means the next save cannot be guarded: force a reload
       // rather than let it fall back to an unguarded observation.
       if (data._rev) setRev(data._rev);
       else setStaleReload(true);
+      // A first submission that carried a note mints the first message. Adopt it
+      // so the thread the editor is about to reveal shows what was just written,
+      // instead of "Aún no hay mensajes." — `null` means the read-back failed,
+      // so keep what is on screen.
+      if (data.messages) setMessages(data.messages);
       showToast(submitStatus === "pending" ? "Propuesta enviada" : "Borrador guardado");
       router.refresh();
     } catch {
@@ -421,7 +431,9 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
     if (!res.ok) throw new Error("post failed");
     const data: { messages?: ThreadMessage[]; rev?: string | null; observedRev?: string | null } =
       await res.json();
-    setMessages(data.messages ?? []);
+    // `null` = the post landed but the read-back did not. Keep the thread on
+    // screen rather than blanking it; the message is stored either way.
+    if (data.messages) setMessages(data.messages);
     if (data.rev && data.observedRev && data.observedRev === rev) setRev(data.rev);
   }, [proposalId, rev]);
 

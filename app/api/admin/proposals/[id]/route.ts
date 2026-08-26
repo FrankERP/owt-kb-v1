@@ -515,6 +515,12 @@ async function transition(args: TransitionArgs) {
   //    review decision. "Exempt from the cap" is NOT "always appends": the two
   //    rules above still hold.
   //
+  // **Also exempt from `isThreadOpen`**, which both standalone message routes DO
+  // enforce. Same reason as the cap: a `request_changes` on a past-dated service
+  // must still commit, and a decision must not be blocked by the conversation's
+  // lifecycle. The visible consequence is real and accepted — the note lands in a
+  // thread both surfaces render as closed, so neither party can reply to it.
+  //
   // It inherits `ifRevisionId` from the patch it rides in, UNLIKE the two
   // standalone message routes, which deliberately assert nothing. The asymmetry
   // is intentional: this note is part of a reviewed decision, so it must not

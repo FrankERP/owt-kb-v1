@@ -150,15 +150,31 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ id:
     afterNotes: message.body,
   });
 
-  const fresh = await operationalClient.fetch<{
-    _rev?: string;
-    messages?: ThreadMessageRow[] | null;
-  } | null>(THREAD_AFTER_APPEND_QUERY, { id });
+  // The read-back is for the RESPONSE ONLY — the write already committed. It is
+  // guarded because throwing here would report a landed message as a failure,
+  // and the obvious user action is to press Enviar again: this delivery ships no
+  // delete path, so that retry is a permanent duplicate in the one channel whose
+  // promise is that nothing is lost.
+  //
+  // On failure the response says so with `messages: null`, which both clients
+  // read as "keep what you have, clear the composer" rather than blanking the
+  // thread they are rendering.
+  let fresh: { _rev?: string; messages?: ThreadMessageRow[] | null } | null = null;
+  try {
+    fresh = await operationalClient.fetch<{
+      _rev?: string;
+      messages?: ThreadMessageRow[] | null;
+    } | null>(THREAD_AFTER_APPEND_QUERY, { id });
+  } catch (err) {
+    console.error("[proposalMessages] post-commit read failed:", err);
+  }
 
   return NextResponse.json({
     ok: true,
     message,
-    messages: fresh?.messages ?? [],
+    // `null`, not `[]`: an empty array is a real state (nothing to show) and
+    // must not be confused with "the read did not happen".
+    messages: fresh ? (fresh.messages ?? []) : null,
     rev: fresh?._rev ?? null,
     observedRev,
   });
