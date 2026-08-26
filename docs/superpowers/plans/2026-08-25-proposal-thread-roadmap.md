@@ -70,13 +70,30 @@ violated invariant 8.
 **Therefore Child A keeps the textarea for the pre-first-save case only** (see its
 §"The submission note"). Its content is written to `lead_notes` *and* appended as
 the first `lead_note` message. Once the proposal exists, the thread composer is
-the only path. Child B removes the textarea along with the mirror.
+the only path.
+
+**The pre-first-save textarea outlives BOTH children.** An earlier draft said Child
+B removes it with the mirror; that is wrong on three counts. Child B disclaims it
+("No UI beyond notification-adjacent copy") and keeps consuming the note. The
+coverage table below needs it to survive, since B's new body source is "the newest
+`lead_note` message" and on a first submission the textarea is what mints that
+message. And removing it would reintroduce the exact regression this section
+forbids — **the reason it exists is permanent, not Child-A-specific**: no thread
+composer can exist before the proposal document does, so without the textarea a
+first submission has no private-note input at all and mails admins an empty notes
+block.
+
+What Child B actually removes is the `lead_notes` **write**. The textarea then
+feeds `messages[]` only. Retiring it would need its own coverage row, an owner, and
+a named replacement path for the first-submission note; none exists, so it is not
+scheduled.
 
 **The submit email is byte-identical on a FIRST submission only, and that is a
 Child-A-owned behaviour change that must be named rather than glossed.**
 `notifyProposalSubmitted` is not first-submission-only: it fires on **every** save
-committed as `pending` (`app/api/me/proposals/route.ts:298-304`, with no
-`previousStatus` check), and a lead may re-save while `pending` or re-submit from
+committed as `pending` (`app/api/me/proposals/route.ts:298-304` calls
+`notifyProposalPending`, which wraps it at `serviceMutationSideEffects.ts:712`, with
+no `previousStatus` check), and a lead may re-save while `pending` or re-submit from
 `changes_requested` — the route refuses only `approved` (`:160-167`). **Note the
 live dataset has ZERO proposals in `pending` or `changes_requested`** (13 `approved`,
 1 `draft`), so the drift is reachable but not currently exercised — and, as Child A
@@ -106,9 +123,13 @@ claimed:**
 - **The queuing OCCASIONS change, and that is Child A's risk, not Child B's.** The
   debounced email moves from "the notes field changed on a save" to "a lead posted a
   chat message", which multiplies entry points into `commitUpserts`' unconditional
-  inline `sweepOutbox` (`serviceMutationSideEffects.ts:492`) — measured at ~14.4 s
+  inline `sweepOutbox` (`serviceMutationSideEffects.ts:491`) — measured at ~14.4 s
   per send against `NOTIFY_FLUSH_EMAIL_LIMIT=2`. Child B names the volume shift, but
   it lands with Child A. Watch `report.lost` after Child A's release, not Child B's.
+  **Conservative rather than currently firing:** `queueLeadNotesNotice` returns
+  before `commitUpserts` unless the pre-write status is `pending`/`changes_requested`
+  (`:632`), and the dataset has zero such proposals today — so the mechanism is
+  reachable but dormant until a proposal is submitted.
 
 Child B then moves the call, changes the input shape, rewrites classification,
 adds the pushes, and stops the mirror — with the thread already populated,
@@ -220,7 +241,10 @@ The three that most often get assumed wrong:
 
 ## Integration acceptance
 
-The split is correct only if all of these hold after Child B:
+The split is correct only if all of these hold. **Most are checked after Child B;
+the two `lead_notes`/`admin_notes` bullets are checked at the end of Child A**, for
+the reason their own text gives — Child A creates those hazards, so their guards
+cannot be scheduled a release later.
 
 - A lead's message on a `pending`/`changes_requested` proposal produces exactly
   the email admins get today — same audience, same debounce, same preference key
@@ -241,8 +265,10 @@ The split is correct only if all of these hold after Child B:
   so the looser wording would make the blanking write pass by construction, which is
   exactly the check failing to check.
 - **`admin_notes` likewise, except for the note-less-`reopen` trigger invariant 7
-  names.** That one is expected; count it and confirm the count matches the number
-  of note-less reopens performed, rather than treating any blanking as fine.
+  names.** At the end-of-Child-A check that count is necessarily zero, since no
+  reopen has happened yet — so the check there is that it IS zero. The ongoing
+  guard is the Verification row in Child A asserting the standalone admin route
+  never writes `admin_notes`; blanking may only ever come from a transition.
 - **Both checks run at the end of Child A, not after Child B** — the hazard is
   created by Child A's client change, so its guard cannot be scheduled a release
   later.

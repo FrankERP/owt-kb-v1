@@ -114,6 +114,15 @@ migration already ran, so no prepend can shift indices under a queued notice.
 `"leadNotes"` are **all unchanged** — renaming the wire value would orphan
 in-flight documents for no benefit. Only the meaning changes.
 
+**A cutover-window case the parent's integration acceptance does not reach:**
+during this child's deploy, a new route queuing `{beforeMessageCount}` against a
+still-warm OLD `classifyLeadNotesNotice` yields `before = ""` (`outboxSweep.ts:389`)
+compared against a now-unmirrored stale `lead_notes` — which classifies as changed
+and emails stale content. It is neither "lost" nor "notified twice", so the parent's
+bullet does not cover it. Bounded by the deploy window and by production carrying
+zero outbox documents at rest; name it in this child's verification rather than
+assuming the parent caught it.
+
 **In-flight legacy notices:**
 `typeof notice.before?.beforeMessageCount !== "number"` ⇒ **drop** (return `[]`).
 `typeof`, not truthiness — `beforeMessageCount: 0` is the legitimate first-message
