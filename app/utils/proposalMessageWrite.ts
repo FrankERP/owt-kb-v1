@@ -32,6 +32,46 @@ export const PROPOSAL_MESSAGE_KINDS = [
 export type ProposalMessageKind = (typeof PROPOSAL_MESSAGE_KINDS)[number];
 
 /**
+ * "Is this a lead's note?" — the predicate the notification layer slices on,
+ * defined ONCE for the JS side.
+ *
+ * It has a GROQ twin below, because the two sides of the debounced email apply
+ * it in different places: the queue side counts lead notes in JS over a loaded
+ * document, and the flush side filters them in the query. Two copies is one
+ * more than anybody wants, and the reason it is survivable is that
+ * `proposalMessageWrite.test.ts` executes the GROQ fragment against this
+ * function over the same fixture and compares the results. Child A learned that
+ * lesson the expensive way: two suites each pinning their own hardcoded list is
+ * what let `_type` ship on one side only with `npm test` green.
+ */
+export function isLeadNote(message: unknown): boolean {
+  return isObj(message) && message.kind === "lead_note";
+}
+
+/**
+ * The GROQ twin of `isLeadNote`, plus the narrowing every reader wants.
+ *
+ * ONE definition, interpolated by every query that reads the thread for
+ * notification purposes, so the filter cannot drift between them. `{kind, body}`
+ * rather than the whole message: `_key`, `author`, `author_role` and `at` are
+ * dead weight on a sweep that runs against a deadline budget and on a path
+ * awaited inline on a member's save. `kind` is projected even though nothing
+ * reads it, so the shape stays uniform and a `.filter()` added downstream still
+ * matches rather than silently matching nothing.
+ *
+ * Interpolate it — never retype the filter:
+ *
+ *     `*[_type == "setlistProposal" && _id == $id][0]{
+ *        _id, status, service_date,
+ *        "leadMessages": ${LEAD_NOTE_MESSAGES}
+ *      }`
+ *
+ * NOTE for consumers: GROQ returns `null`, not `[]`, when `messages` is absent
+ * on the document. Coerce at the call site.
+ */
+export const LEAD_NOTE_MESSAGES = `messages[kind == "lead_note"]{kind, body}`;
+
+/**
  * WHO spoke, snapshotted at post time rather than joined at read time: if an
  * admin later becomes a `member`, their historical change-request must not
  * retroactively re-render as a lead note.

@@ -103,7 +103,7 @@ function attemptSync(label: string, fn: () => void): void {
  * open by FCM. The rejection handler keeps a failure logged and swallowed (§7)
  * rather than surfacing as an unhandled rejection.
  */
-function fireAndForget(label: string, promise: unknown): void {
+export function fireAndForget(label: string, promise: unknown): void {
   void Promise.resolve(promise).catch((err) => {
     console.error(`[sideEffects] ${label} failed:`, err);
   });

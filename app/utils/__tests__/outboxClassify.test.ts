@@ -1,6 +1,12 @@
 // app/utils/__tests__/outboxClassify.test.ts
 import { describe, expect, it } from "vitest";
-import { classifyLeadNotes, classifyRole, classifySetlist, LINE_PREF } from "../outboxClassify";
+import {
+  classifyLeadNotes,
+  classifyProposalMessages,
+  classifyRole,
+  classifySetlist,
+  LINE_PREF,
+} from "../outboxClassify";
 
 const TODAY = "2026-08-01";
 const FUTURE = "2026-08-09";
@@ -144,5 +150,95 @@ describe("LINE_PREF", () => {
       setlistChanged: "setlist",
       leadNotes: "proposals",
     });
+  });
+});
+
+describe("classifyProposalMessages", () => {
+  const base = { serviceDate: FUTURE, today: TODAY, reviewable: true };
+  const note = (body: string) => ({ kind: "lead_note", body });
+
+  it("joins every message appended since the notice was queued", () => {
+    const line = classifyProposalMessages({
+      ...base,
+      beforeCount: 1,
+      leadMessages: [note("vieja"), note("uno"), note("dos")],
+    });
+    // The whole burst, not just the newest: the debounce collapses a
+    // conversation into one email and dropping its middle is worse than length.
+    expect(line?.notes).toBe("uno\n\ndos");
+    expect(line?.kind).toBe("leadNotes");
+  });
+
+  it("says nothing when the count already covers every message", () => {
+    expect(
+      classifyProposalMessages({ ...base, beforeCount: 2, leadMessages: [note("a"), note("b")] }),
+    ).toBeNull();
+  });
+
+  it("treats beforeCount 0 as the legitimate first-message case", () => {
+    const line = classifyProposalMessages({ ...base, beforeCount: 0, leadMessages: [note("hola")] });
+    expect(line?.notes).toBe("hola");
+  });
+
+  it("does NOT re-filter — the array arrives already filtered", () => {
+    // If this function filtered on `kind` and a caller narrowed the projection
+    // to `{body}`, nothing would match and the email would die silently. It
+    // takes what it is given.
+    const line = classifyProposalMessages({
+      ...base,
+      beforeCount: 0,
+      leadMessages: [{ body: "sin kind" }],
+    });
+    expect(line?.notes).toBe("sin kind");
+  });
+
+  it("coerces the null GROQ returns for a document with no messages", () => {
+    expect(classifyProposalMessages({ ...base, beforeCount: 0, leadMessages: null })).toBeNull();
+    expect(classifyProposalMessages({ ...base, beforeCount: 0, leadMessages: undefined })).toBeNull();
+  });
+
+  it("drops a past service and a non-reviewable status, like its predecessor", () => {
+    expect(
+      classifyProposalMessages({ ...base, serviceDate: "2026-07-01", beforeCount: 0, leadMessages: [note("x")] }),
+    ).toBeNull();
+    expect(
+      classifyProposalMessages({ ...base, reviewable: false, beforeCount: 0, leadMessages: [note("x")] }),
+    ).toBeNull();
+  });
+
+  it("clamps a negative count instead of slicing from the END", () => {
+    // `slice(-2)` would re-email the two OLDEST messages as if they were new.
+    // Over-including is visible and recoverable; counting from the end is not.
+    const line = classifyProposalMessages({
+      ...base,
+      beforeCount: -2,
+      leadMessages: [note("a"), note("b"), note("c")],
+    });
+    expect(line?.notes).toBe("a\n\nb\n\nc");
+  });
+
+  it("treats NaN as 0 — the caller's `typeof number` guard lets it through", () => {
+    const line = classifyProposalMessages({
+      ...base,
+      beforeCount: Number.NaN,
+      leadMessages: [note("a")],
+    });
+    expect(line?.notes).toBe("a");
+  });
+
+  it("says nothing rather than mailing a blank section", () => {
+    // Not writable through `buildProposalMessage`; reachable by hand-editing.
+    expect(
+      classifyProposalMessages({
+        ...base,
+        beforeCount: 0,
+        leadMessages: [{ kind: "lead_note", body: "   " }, { kind: "lead_note", body: 42 }],
+      }),
+    ).toBeNull();
+  });
+
+  it("carries the same preference key as the string classifier it replaces", () => {
+    const line = classifyProposalMessages({ ...base, beforeCount: 0, leadMessages: [note("x")] });
+    expect(LINE_PREF[line!.kind]).toBe("proposals");
   });
 });
