@@ -310,7 +310,7 @@ cannot be scheduled a release later.
 | Transition appends its change-request as a message | **A** | — |
 | Thread UI on both surfaces, service-date composer gate | **A** | — |
 | Reads/projections carry `messages` — **the app-surface ones** | **A** | — |
-| `outboxSweep`'s `PROPOSAL_QUERY` projects `messages[]` | **B** | — Child A **cannot**: its criterion 7 forbids modifying any file under `app/utils/outbox*`. The query today projects `_id, status, lead_notes, service_date` (`outboxSweep.ts:203-205`), and `classifyProposalMessages` needs the post-commit array — so if this is not done, `afterMessages` is `undefined`, the classifier returns `null`, and the debounced admin email silently stops |
+| `outboxSweep`'s `PROPOSAL_QUERY` projects `messages[]` | **B** | — Child A **cannot**: its criterion 7 forbids modifying any file under `app/utils/outbox*`. The query today projects `_id, status, lead_notes, service_date` (`outboxSweep.ts:203-205`), and `classifyProposalMessages` needs the post-commit array — so if this is not done, `leadMessages` is `undefined`, the classifier returns `null`, and the debounced admin email silently stops |
 | Revision handling (`_rev` attestation, per-surface) | **A** | — |
 | Debounced lead-notes email keeps firing, **with one named exception** | **A** (via the mirror; the exception is a pre-deploy client CLEARING the note, which stops queuing — an existing signal retired, recorded against invariant 8 in Child A criterion 5) | **B** (re-sources it) |
 | "Nueva propuesta" submit email keeps carrying the lead's note | **A** (via the retained submission textarea) | **B** (re-sources it) |
@@ -321,7 +321,7 @@ cannot be scheduled a release later.
 | admin→lead push for standalone messages | **B** | — |
 | Stop mirroring `lead_notes`/`admin_notes` | **B** | — |
 | `proposalNotify` body source | **B** | — |
-| Export `REVIEWABLE_BEFORE_WRITE`, `ADMIN_RECIPIENTS_QUERY` | **B** | — |
+| Export `ADMIN_RECIPIENTS_QUERY`, `PROPOSAL_QUERY`, `fireAndForget` (**not** `REVIEWABLE_BEFORE_WRITE` — B's resolved push gate is `status === "approved"`, which retired its only proposed consumer) | **B** | — |
 | Read marks / unread indicator | *neither* — later delivery | — |
 | Unset the legacy fields | *neither* — later delivery | — |
 

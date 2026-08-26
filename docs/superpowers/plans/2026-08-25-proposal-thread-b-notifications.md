@@ -88,8 +88,12 @@ messages[kind == "lead_note"]{kind, body}
 
 `status` and `service_date` must survive: the classifier needs `status` for
 `reviewable`, and the live-date-wins rule (`outboxSweep.ts:387`) needs
-`service_date`. **`lead_notes` does NOT** — after B nothing reads it, the legacy
-branch included, which classifies against the thread (§Outbox).
+`service_date`. **`lead_notes` does NOT** — **nothing in the SWEEP reads it** after B,
+the legacy branch included, which classifies against the thread (§Outbox). Scoped to
+the sweep deliberately: `me/proposals/route.ts:207` still reads the stored field to
+snapshot `beforeNotes`, and must, or `beforeNotes` becomes `""`, the old sweep sees
+`"" ≠ live lead_notes`, and it mails the stale archive — the failure this design
+exists to prevent.
 
 Two call sites, and only two: `PROPOSAL_QUERY` (`outboxSweep.ts:203-205`) and
 `proposalNotify`'s read (`proposalNotify.ts:138-153`). No other section restates the
@@ -257,40 +261,41 @@ no environment scoping — so **any write through `preview` runs B's sweep over
 production's outbox.** Reasoning about "a still-warm instance" would understate this by
 orders of magnitude.
 
-Two directions, and after the fix in §Outbox **neither loses a message**:
+Two directions. **One is closed by mechanism; the other only by procedure** — and
+saying so plainly is the point, because an earlier draft claimed both were mechanical:
 
-**New route queues, OLD sweep flushes — closed by keeping `beforeNotes`.** This is the
-case the parent carries (roadmap `:259-264`, "Child B names and owns it"). A message
-posted through `preview` queues a notice carrying `beforeNotes` = the stored
-`lead_notes` snapshotted pre-commit. Production's old sweep reads
-`notice.before?.beforeNotes ?? ""` (`outboxSweep.ts:389`) and compares it against the
-live `lead_notes`. Production is still mirroring, so the two agree and
-`classifyLeadNotes` returns `null` (`outboxClassify.ts:103`) — or production has just
-mirrored a newer message, in which case what it emails is that message, which is
-legitimate content. **Never stale text.** The same equality closes the seam on a
-**revert**.
+**New route queues, OLD sweep flushes — no stale text, but a silent message.** This is
+the case the parent carries. A message posted through `preview` queues a notice
+carrying `beforeNotes` = the stored `lead_notes` snapshotted pre-commit. Production's
+old sweep reads `notice.before?.beforeNotes ?? ""` (`outboxSweep.ts:389`) and compares
+it against the live `lead_notes`. **The two agree because the NEW route did not
+mirror** — not because production is still mirroring — so `classifyLeadNotes` returns
+`null` (`outboxClassify.ts:103`).
 
-**OLD route queues, new sweep flushes — closed by classifying instead of dropping**
-(the rule and its reasoning are in §Outbox; not restated here). Nothing is lost, and
-the correctness of the release no longer depends on getting an ordering right.
+**That is a real loss, and the plan does not pretend otherwise.** The notice yields no
+pairs, `partitionClaimed` routes it to `toConsume` (`:506-535`), the `finally` deletes
+it (`:887`), and `countLost` (`:541`, called at `:890`) counts nothing because no
+pending entry exists for it. No email, notice destroyed, `report.lost` silent — the
+exact property §Outbox calls unacceptable when it rejects drop-and-consume. The parent
+names it in the same terms (roadmap, "the residual is silence, not staleness").
 
-**This supersedes a decision in the approved parent.** The parent's two seam bullets accepted the
-seam and specified drop-and-consume, justified by a notice "queued minutes before B's
-deploy". The window is not minutes, so that premise is false and **both** bullets were
-corrected in the same delivery (line numbers moved; see the parent's review log) — a child may not silently outperform an invariant its
-parent declares.
+**Nothing in the mechanism prevents it; release-procedure step 3 does** — and that
+step holds even when the pre-check has just returned zero, because the notice at risk
+is one this window creates, not one the check could have seen. Keeping `beforeNotes`
+still earns its place: it is what makes the failure *silence* rather than a stale-text
+email, and it closes the seam identically on a **revert**.
 
-**The pre-check is retained but is no longer load-bearing.** Assert
-`count(*[_type == "notificationOutbox" && kind == "leadNotes"]) == 0` immediately
-before pushing `preview` and again before merging the PR. Production holds zero outbox
-documents at rest, so it is normally a no-op. It is a cheap confirmation that the
-window is empty, not the mechanism that makes it safe — an earlier draft had it the
-other way round, and a one-instant count cannot cover a multi-hour release.
+**OLD route queues, new sweep flushes — closed by mechanism.** B's sweep classifies a
+legacy notice against the thread rather than dropping it (the rule and its reasoning
+are in §Outbox; not restated here). Nothing is lost in this direction, including
+messages appended onto a legacy notice after the release.
 
-**`classifyLeadNotes` keeps its caller** and is not dead code: the legacy branch calls
-it, a revert restores its original caller, and it is the function production runs
-throughout the release window. It leaves in the follow-up that removes the legacy
-branch.
+**This supersedes a decision in the approved parent.** The parent's two seam bullets
+accepted the seam and specified drop-and-consume, justified by a notice "queued
+minutes before B's deploy". The window is not minutes, so that premise is false and
+**both** bullets were corrected in the same delivery (line numbers moved; see the
+parent's review log) — a child may not silently outperform, or silently undershoot, an
+invariant its parent declares.
 
 ### Release procedure (Phase B)
 
@@ -308,9 +313,12 @@ that meets production's outbox.
 2. Merge into `preview`, push, and **verify the dev alias moved** — the target domain
    in the deployment's `alias` array and `meta.githubCommitSha` equal to the pushed
    commit. A green build is not this check.
-3. **Do not post a thread message through `preview` yet.** The walkthrough Phase B
-   schedules runs *after* step 5, for the same reason Child A defers its own: a write
-   through `preview` sweeps the production outbox.
+3. **Do not post a thread message through `preview` yet — and do not relax this
+   because step 1 found the outbox empty.** A message posted here mints a notice that
+   production's old sweep classifies as unchanged, so it is consumed with no email and
+   `report.lost` stays 0. The pre-check cannot see a notice this window has not created
+   yet. A write through `preview` also sweeps the production outbox, which is why Child
+   A defers its own walkthrough. Phase B's walkthrough runs *after* step 5.
 4. Re-run the pre-check, open the PR, wait for `gates`, merge.
 5. Verify the production alias the same way as step 2.
 6. Walkthrough on `preview`, which writes REAL data and emails the REAL team.
@@ -342,14 +350,15 @@ sendPush(adminIds, "proposals", {
 })
 ```
 
-- **Disposal: `fireAndForget`**, as `notifyProposalReview` uses
-  (`serviceMutationSideEffects.ts:748`) — not a bare `void` like `proposalNotify.ts:157`.
-  The route already awaits `commitUpserts`' inline sweep at ~14 s/send; a floating
-  promise on top of that is a real freeze risk, and the two precedents disagree, so the
-  choice is made here rather than left to the implementer.
+- **Disposal: `fireAndForget`** — module-private today
+  (`serviceMutationSideEffects.ts:106`), so Phase A exports it — as
+  `notifyProposalReview` uses it (`:748`), not a bare `void` like
+  `proposalNotify.ts:157`. **The reason is rejection handling, not latency:** the push
+  fires only on `approved`, where `queueLeadNotesNotice` returns at `:632` and no sweep
+  runs, so an earlier draft's "~14 s inline sweep" argument does not apply on this
+  path. The two precedents disagree, so the choice is made here.
 - **`<Autor>`** is the author name the message route has already resolved for its own
-  response (Child A §5) — **not a second read** on a route that already awaits an
-  inline sweep at ~14 s/send.
+  response (Child A §5) — **not a second read**.
 - **`adminIds`** from the exported `ADMIN_RECIPIENTS_QUERY`, author filtered out.
   That query carries no ministry or active-member filter, and Phase B makes this its
   third consumer. **Inherited unfiltered, identical to the two existing copies, not
@@ -421,10 +430,13 @@ messages route is a latency-variable path; the tests must not assume queuing is
 cheap.
 
 **Email body size, bounded but named:** `notes` becomes a join of every lead message
-appended within the window, not a single ≤`PROPOSAL_NOTES_MAX` note. The 60-minute
-`deadline` bounds it, and the sweep already selects an oversized notice alone rather
-than splitting (`outboxSweep.ts:625-631`), so this needs no new guard — but the payload
-paragraph in §The projection covers the query only, and this is the other half.
+appended within the window, not a single ≤`PROPOSAL_NOTES_MAX` note. The bound is the
+60-minute `deadline` and, absolutely, `PROPOSAL_MESSAGES_MAX` × `PROPOSAL_NOTES_MAX` =
+200 × 4000 ≈ **800 KB in one HTML email** — a ceiling no realistic window reaches, but
+the honest one. **Not** `outboxSweep.ts:625-631`, which an earlier draft cited here:
+that guard is `recipients.length > emailLimit`, a recipient-count rule unrelated to
+body size (criterion 4a uses it correctly). No new guard is proposed; the ceiling is
+stated so it is a decision rather than an oversight.
 
 **Volume — B's increment is narrow, and the big shift is Child A's.** The move from
 "the notes field changed on a save" to "a lead posted a message" lands with **Child
@@ -442,8 +454,12 @@ Every phase ends with `npx tsc --noEmit`, `npm test`, `npx eslint .` at 0 errors
 
 ### Phase A — Exports and the pure classifier
 
-- Export `ADMIN_RECIPIENTS_QUERY`, `PROPOSAL_QUERY` and `fireAndForget` (module-private
-  today, `serviceMutationSideEffects.ts:106`, and needed by the inline push).
+- Export `ADMIN_RECIPIENTS_QUERY`, `PROPOSAL_QUERY`, `fireAndForget` (module-private
+  today, `serviceMutationSideEffects.ts:106`, needed by the inline push) and
+  **`proposalNotify`'s proposal read** — today an inline composite template literal
+  (`proposalNotify.ts:142-147`). Extract and export it for the same reason
+  `PROPOSAL_QUERY` is exported: its Verification row executes it with `groq-js`, which
+  an inline literal makes impossible.
   **Not `REVIEWABLE_BEFORE_WRITE` and not `REVIEWABLE_STATUSES`** — both stay
   module-private. The predecessor's contract had the lead messages route importing the
   first to choose push-vs-email, and inherited advice said to relocate the second to
@@ -502,10 +518,14 @@ marked delivered.
    path by hand would mean submitting a real proposal on `preview`, which writes the
    real dataset and emails the real admin team. **It rests on two suites:** `setlistNoticeQueueing.test.ts` proves the
    queue side, and the `outboxSweep.test.ts` rows below prove the thread-sourced body.
-   **The audience and preference key are pinned by an EXISTING assertion that must
-   survive the rewrite** — `outboxSweep.test.ts:1143-1150`, which emails two admins —
-   in a suite this delivery breaks. Carrying it forward is a Phase B task, not
-   incidental; none of the rows below asserts either. "Same audience" is not assertable at
+   **The audience and the preference key are pinned by two EXISTING assertions, in
+   different suites.** Audience: `outboxSweep.test.ts:1143-1150`, which emails two
+   admins — in a suite this delivery breaks, so carrying it forward is a Phase B task.
+   Preference key: **`outboxClassify.test.ts:137-148`**, which pins
+   `LINE_PREF.leadNotes === "proposals"` and stays green — **not** `:1143-1150`, whose
+   fixture uses `notifPrefs: {}` against an opt-out default of true
+   (`notifyPrefs.ts:25-30`), so any key or none passes it. None of the rows below
+   asserts either. "Same audience" is not assertable at
    queue time at all — the notice stores `knownRecipients: []` and the admin set
    resolves at flush (`outboxSweep.ts:263`).
    Named under parent invariant 8, as Child A names the same gap for itself.
@@ -543,9 +563,13 @@ marked delivered.
    sends.
 5. `lead_notes` and `admin_notes` are byte-identical to their values at the end of
    Child A. Nothing blanks them.
-6. In-flight legacy outbox notices are **classified and emailed exactly as production
-   would have**, never dropped and never crashing the sweep. No message queued by
-   either version is lost during the release window.
+6. **Legacy notices queued by PRODUCTION's route are classified against the thread
+   and emailed with the lead's most recent word** — the semantics the mirror produces
+   today — never dropped, never crashing the sweep. Stated of that direction only, and
+   deliberately **not** as "no message from either version is lost": a message posted
+   through `preview` before production serves the new code is consumed silently (§The
+   cutover seam). No stale content; one silent message; release-procedure step 3 is the
+   whole mitigation.
 7. **No stale content is emailed during the deploy window** (parent roadmap
    `:259-264`), by the mechanism in §The cutover seam.
 
@@ -576,7 +600,8 @@ marked delivered.
 `setlistNoticeQueueing.test.ts`, `proposalWriteRoutes.test.ts`, and
 **`notificationOutboxSchema.test.ts`** (`:49-54` pins `before`'s field names to
 exactly `["beforeNotes","beforeRoles","beforeSongs"]`; adding `beforeMessageCount`
-makes the set **four**, since `beforeNotes` is kept). Two types enumerate those same
+makes the set **four**, since `beforeNotes` is kept — **and its test title, "stores
+before-snapshots as three typed fields", changes with the assertion**). Two types enumerate those same
 three fields and both gain the new one — `UpsertInput.before` (`outboxNotice.ts:78`)
 and `StoredNotice.before` (`outboxSweep.ts:141`); `tsc` catches both.
 
