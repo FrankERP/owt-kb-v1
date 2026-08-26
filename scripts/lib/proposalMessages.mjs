@@ -9,8 +9,11 @@
 // re-derives what `app/utils/proposalMessageWrite.ts` owns, because the script
 // that consumes it runs standalone against production and importing the app's
 // module tree into a one-shot production writer is a larger risk than repeating
-// six field names. Nothing makes the two agree at compile time, so BOTH test
-// files assert the same field set, `_type` included.
+// six field names. Nothing makes the two agree at compile time, so
+// `scripts/__tests__/migrateProposalMessages.test.ts` imports `buildProposalMessage`
+// and compares the two writers' key sets DIRECTLY. Two suites each pinning their
+// own hardcoded list would not have caught the `_type` divergence — that is the
+// arrangement that shipped it.
 
 /** The stored array-item type — every item on this document carries one. */
 export const PROPOSAL_MESSAGE_TYPE = "proposal_message";

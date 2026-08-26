@@ -90,11 +90,12 @@ describe("buildProposalMessage", () => {
     });
   });
 
-  it("stores the SAME field set the one-shot migration mints", () => {
-    // The reciprocal of `scripts/__tests__/migrateProposalMessages.test.ts`.
-    // Two writers, one array, no compile-time link between them: each side pins
-    // the same field names so a divergence fails a suite instead of landing in
-    // production as a permanently heterogeneous array.
+  it("carries _type, and its value is the shared constant", () => {
+    // NOT the divergence guard — that lives in
+    // `scripts/__tests__/migrateProposalMessages.test.ts`, which imports this
+    // function and compares the two key sets directly. A hardcoded list here and
+    // another there is what let `_type` ship on one side only, with both suites
+    // green. This test pins the local shape; the cross-check is over there.
     expect(Object.keys(buildProposalMessage(base) ?? {}).sort()).toEqual(
       ["_key", "_type", "at", "author", "author_role", "body", "kind"].sort(),
     );

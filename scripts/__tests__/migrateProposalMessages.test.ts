@@ -6,15 +6,19 @@
 // attribution condition, the ordering, the deterministic-`_key` skip, and the
 // hard abort on a live thread.
 //
-// The stored shape is asserted field-by-field on purpose. `buildProposalMessage`
-// (`app/utils/proposalMessageWrite.ts`) re-derives the same fields in TypeScript
-// and nothing makes the two agree at compile time, so
-// `proposalMessageWrite.test.ts` pins the same set — `_type` included — from the
-// other side. A migrated item carrying `_type` while a runtime item does not
-// would leave the array permanently heterogeneous, half of it written
-// irreversibly.
+// `buildProposalMessage` (`app/utils/proposalMessageWrite.ts`) re-derives the same
+// fields in TypeScript and nothing makes the two agree at compile time. Two
+// suites each pinning their OWN hardcoded key list does NOT catch a divergence —
+// that arrangement is exactly what let `_type` ship on one side and not the other,
+// with `npm test` green: each file's list was edited alongside the code it
+// describes, and neither ran the other's. So this file compares the two writers
+// DIRECTLY, and pins the schema's array-item name as the third leg. Same pattern
+// as `routeMatcher.test.ts` and `vendoredSkillDigest.test.ts`.
 
 import { describe, expect, it } from "vitest";
+
+import { buildProposalMessage } from "@/app/utils/proposalMessageWrite";
+import { setlistProposal } from "@/sanity/schemas/setlistProposal";
 
 import {
   ADMIN_MESSAGE_KEY,
@@ -72,12 +76,48 @@ describe("field mapping", () => {
     ]);
   });
 
-  it("stores exactly the six fields plus _key and _type, and no others", () => {
-    const plan = planProposalMessages({ ...BASE, lead_notes: "Hola" });
-    expect(Object.keys(plan.messages[0]).sort()).toEqual(
-      ["_key", "_type", "at", "author", "author_role", "body", "kind"].sort(),
-    );
-    expect(plan.messages[0]._type).toBe(PROPOSAL_MESSAGE_TYPE);
+  it("emits the SAME field set as the runtime writer — compared directly, not pinned twice", () => {
+    // The guard that actually holds. A hardcoded list in each suite is what let
+    // `_type` diverge; this fails the moment either writer gains or drops a field.
+    const migrated = planProposalMessages({ ...BASE, lead_notes: "Hola" }).messages[0];
+    const runtime = buildProposalMessage({
+      authorId: "member-1",
+      authorRole: "lead",
+      kind: "lead_note",
+      body: "Hola",
+      now: "2026-08-05T09:00:00Z",
+      key: "abc123abc123",
+    });
+    expect(runtime).not.toBeNull();
+    expect(Object.keys(migrated).sort()).toEqual(Object.keys(runtime!).sort());
+    expect(migrated._type).toBe(runtime!._type);
+  });
+
+  it("emits the SAME shape as the runtime writer when there is no author", () => {
+    const migrated = planProposalMessages({
+      ...BASE,
+      admin_notes: "Cambia",
+      last_transition: { action: "request_changes", at: "2026-08-05T09:00:00Z" },
+    }).messages[0];
+    const runtime = buildProposalMessage({
+      authorRole: "admin",
+      kind: "admin_change_request",
+      body: "Cambia",
+      now: "2026-08-05T09:00:00Z",
+      key: "abc123abc123",
+    });
+    expect(runtime).not.toBeNull();
+    expect(Object.keys(migrated).sort()).toEqual(Object.keys(runtime!).sort());
+    expect(migrated).not.toHaveProperty("author");
+  });
+
+  it("pins _type to the name the SCHEMA gives the array item", () => {
+    // The third leg: without this, a schema rename leaves both writers emitting a
+    // stale `_type` and both suites green.
+    const messages = (setlistProposal.fields as Array<{ name: string; of?: Array<{ name?: string }> }>)
+      .find((f) => f.name === "messages");
+    expect(messages).toBeDefined();
+    expect(messages?.of?.[0]?.name).toBe(PROPOSAL_MESSAGE_TYPE);
   });
 
   it("wraps last_transition.by, a PLAIN STRING id, as a reference", () => {
