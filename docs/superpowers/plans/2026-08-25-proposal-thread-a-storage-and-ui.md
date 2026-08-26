@@ -558,7 +558,35 @@ exact list pinned at `protectedReadAudit.test.ts:484-497`) — **not**
 `RETIRED_ONE_SHOT_WRITERS`, which fails closed. 30 unit tests plus the cross-writer
 comparison. Two code reviews; the second confirmed no data-safety blocker.
 
-### Phase B — Rehearsal
+### Phase B — Rehearsal ✅ RUN 2026-08-26
+
+**Result: identical to Phase A.** 8 documents with non-empty legacy notes, 10
+messages implied, 8 to patch, 0 skipped, **0 aborted** — and the three counters that
+must be zero are zero: documents already carrying `messages[]`, documents carrying a
+migration `_key`, and aborts. Dry-run; the script defaults to the **read** token and
+`--apply` was not passed.
+
+The section below says to *expect* a difference and to check that it is explicable.
+There is none, which is the trivial pass — production has not moved since Phase A
+read it. **What this actually compares:** Phase A's per-document detail was never
+recorded anywhere diffable, so this is a comparison of the counts and the abort
+total, not of the ten individual messages. Phase D step 3 has the same limit and is
+where it gets closed, by reading the fresh diff line by line.
+
+Three facts carried into Phase D, all already handled by the script:
+- **Two documents resolve no author** — the message is written with no `author`
+  reference rather than a malformed one.
+- **One document is a `draft`**; 13 are `approved`; **zero are `pending` or
+  `changes_requested`**, which is the same measurement Child B's criterion 1 rests
+  on when it says no acceptable manual check reaches the debounced-email path.
+- **One `admin_notes` is a single character** (`"A"`), which migrates to a
+  one-character message. Not an abort, and not repairable by this delivery — there
+  is no edit or delete path.
+
+The per-document output is **deliberately not committed**: it carries real note
+bodies and member ids, and this repository is public.
+
+### Phase B — Rehearsal (the standing instruction)
 
 Re-run the dry-run and diff against Phase A's output. **Expect a difference** —
 production moved across all three prior readings (§8), so a change is routine and
