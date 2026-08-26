@@ -242,7 +242,9 @@ function canonicalRead(query: string, params: Record<string, unknown>): unknown 
     // `_id == $id` is part of the predicate because `THREAD_MESSAGES` is also
     // interpolated into the GET list query, which is keyed on the member instead.
     // Without it, a future GET test would silently get `null` where the route
-    // expects an array, rather than the loud `unmocked canonical query` throw.
+    // expects an array. With it, that query falls to the dual-index branch and
+    // throws on the absent `params.dates` — loud, though not the
+    // `unmocked canonical query` error an earlier version of this comment named.
     if (query.includes("author_name") && query.includes("_id == $id")) {
       const doc = store.proposals.find((p) => p._id === params.id);
       if (!doc) return null;
@@ -567,6 +569,10 @@ describe("POST /api/me/proposals — first create", () => {
     expect(data._rev).toBeTruthy();    // …and keep editing
   });
 
+  // NOT an independence test — this one passes under the coupled `Promise.all`
+  // version too, since both reads rejecting produced the same response there.
+  // Its value is narrower and still real: a TOTAL read failure is still a 200
+  // with the write committed. The test above is the one that discriminates.
   it("still answers 200 when BOTH post-commit reads fail", async () => {
     seed();
     const committedBefore = committedTransactions().length;

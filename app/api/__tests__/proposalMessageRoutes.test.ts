@@ -184,7 +184,10 @@ function proposal(over: Record<string, unknown> = {}): Record<string, unknown> {
 function canonicalRead(query: string, params: Record<string, unknown>): unknown {
   if (query.includes("setlistProposal")) {
     // The routes' own response read, projecting the thread back with names.
-    if (query.includes("author_name")) {
+    // `_id == $id` too: `THREAD_MESSAGES` is also interpolated into the GET
+    // list query, which is keyed on the member. No live failure here — this suite
+    // exercises no GET — but the two harnesses should not disagree.
+    if (query.includes("author_name") && query.includes("_id == $id")) {
       const doc = store.proposals.find((p) => p._id === params.id);
       if (!doc) return null;
       const rows = Array.isArray(doc.messages) ? (doc.messages as Record<string, unknown>[]) : [];

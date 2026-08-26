@@ -304,9 +304,12 @@ post-commit reads use `Promise.allSettled`, **not** `all`: they must degrade
 independently, or a slow author-name join discards a good revision and raises a
 false "otro líder actualizó" banner. And they stay TWO queries —
 `canonicalProposalByIdQuery` + `pickUnique` returns null on a duplicate group,
-while `THREAD_AFTER_APPEND_QUERY` ends in `[0]` and would pick one arbitrarily.
+while `THREAD_AFTER_APPEND_QUERY` ends in `[0]`. That is **convention rather than
+a live hazard** — both filter `_id == $id`, so the duplicate branch cannot fire —
+and merging them is a legitimate change that simply has to relocate `pickUnique`'s
+protection rather than drop it.
 
-**Both routes return `observedRev`** — the revision read immediately **before**
+**Both MESSAGE routes return `observedRev`** (the save route does not) — the revision read immediately **before**
 their own append — alongside the fresh `_rev`.
 
 **Response body:** the appended message and the full `messages[]` **with author

@@ -397,13 +397,21 @@ async function postHandler(req: NextRequest) {
   // contradicts the whole point of `messages: null`, which is "keep rendering,
   // nothing is lost".
   //
-  // **Why this is TWO queries and must stay two.** Not merely because the
-  // surfaces need author names — `THREAD_AFTER_APPEND_QUERY` projects `_rev`
-  // too, so merging them looks free. It is not: that query ends in `[0]`, an
-  // arbitrary pick, while `canonicalProposalByIdQuery` + `pickUnique` returns
-  // NULL on a duplicate group. Collapsing them would hand the lead a revision
-  // from an arbitrary member of an ambiguous group and silently retire the
-  // fail-closed check this repo built `pickUnique` for.
+  // **Why this is TWO queries — convention, not a live hazard.**
+  // `THREAD_AFTER_APPEND_QUERY` projects `_rev` too, so merging them is
+  // mechanically possible and the sibling messages route already sources its
+  // `rev` that way. An earlier version of this comment claimed merging would
+  // hand the lead a revision from an "ambiguous group"; that is FALSE and
+  // blocking a legitimate simplification with a false reason is the same defect
+  // as licensing a real one. Both queries filter `_id == $id`, ids are unique,
+  // and the published perspective excludes `drafts.*` — so `pickUnique`'s
+  // duplicate branch cannot fire here and `[0]` would be indistinguishable.
+  //
+  // It stays two because the guarded revision goes through the canonical bound
+  // query like every other revision this route hands out, which is
+  // defence-in-depth if that filter is ever widened. Merging them is a
+  // legitimate change; it just needs to move `pickUnique`'s protection, not drop
+  // it silently.
   const bound = canonicalProposalByIdQuery(proposalId);
   let fresh: { _rev?: string } | null = null;
   let freshMessages: ThreadMessageRow[] | null = null;
@@ -418,6 +426,16 @@ async function postHandler(req: NextRequest) {
   // the obvious retry is a second save. `_rev: null` degrades correctly on its
   // own — the editor forces a reload rather than saving against an unguarded
   // observation — and `messages: null` means "keep what you are rendering".
+  //
+  // **One residual the decoupling introduces, named not hidden.** On a FIRST
+  // submission whose thread read alone fails, the response is a good `_rev` and
+  // `messages: null`, so the editor keeps editing and reveals a thread that is
+  // still empty — "Aún no hay mensajes." for a note that IS stored. Under the
+  // coupled version this produced `_rev: null` and a forced reload, which showed
+  // it. The trade is deliberate: a false "otro líder actualizó" banner on every
+  // slow author-name join is worse than an empty thread on a transient failure
+  // during a first submission, and the next save or reload resolves it. Nothing
+  // is lost either way.
   if (revRead.status === "fulfilled") fresh = pickUnique(revRead.value);
   else console.error("[proposals] post-commit revision read failed:", revRead.reason);
   if (threadRead.status === "fulfilled") {
