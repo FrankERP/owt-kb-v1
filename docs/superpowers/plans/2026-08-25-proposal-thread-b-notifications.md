@@ -40,7 +40,10 @@ yet work.
 
 - `queueLeadNotesNotice`'s input shape and both its call sites.
 - `classifyProposalMessages` replacing `classifyLeadNotes`; `PROPOSAL_QUERY`
-  projecting `messages[]`; the legacy-shape drop.
+  projecting **`messages[kind == "lead_note"]{body}`** — filtered and narrowed, not
+  the whole array: the classifier slices exactly that, and a wholesale projection
+  would pull up to 200 × `PROPOSAL_NOTES_MAX` into a sweep that runs on a deadline
+  budget and has overrun it before. The legacy-shape drop.
 - `notificationOutbox.before` gaining `beforeMessageCount`.
 - `proposalNotify`'s "Nueva propuesta" body source.
 - The lead→admin push on non-reviewable statuses, and the admin→lead push for
@@ -99,6 +102,13 @@ messages route **and** from the legacy `leadNotes` compat path in
 `POST /api/me/proposals`, each snapshotting `previousStatus` and the lead-message
 count PRE-COMMIT in its own handler, and from nowhere else.
 
+**Neither call site may queue when it appended nothing.** Losing
+`beforeNotes`/`afterNotes` also removes the function's own trimmed-equal early
+return (`serviceMutationSideEffects.ts:636`), so the callers now carry that
+responsibility alone — and this matters for the compat path in particular, where an
+unchanged `leadNotes` appends nothing. A no-append queue still resets
+`servedRecipients` and slides the debounce (`outboxNotice.ts:152`).
+
 **Input shape.** `QueueLeadNotesNoticeInput` loses `beforeNotes`/`afterNotes` and
 gains `beforeMessageCount: number` — the pre-commit count of `messages` where
 **`kind === "lead_note"`**, the same predicate the classifier slices on. One
@@ -133,6 +143,21 @@ rather than contradicted.
 `"leadNotes"` are **all unchanged** — renaming the wire value would orphan
 in-flight documents for no benefit. Only the meaning changes.
 
+**Close the legacy seam outright rather than accepting it.** Because `before` is
+written only by `createIfNotExists`, a pre-cutover `{beforeNotes}` notice absorbs
+**every subsequent lead message on that proposal** until it flushes — up to its
+`deadline`, creation + `NOTIFY_MAX_WINDOW_MINUTES` (60), not just the deploy
+instant. All of them are then dropped unemailed. **Phase B gains a pre-check:**
+assert `count(*[_type == "notificationOutbox" && kind == "leadNotes"]) == 0`
+immediately before cutover and wait for the sweep if it is not. Production holds
+zero outbox documents at rest, so this is normally a no-op — which is exactly why
+it is cheap to require rather than to reason about.
+
+**The rollback has the mirror image and it is not closed:** reverting puts the OLD
+classifier in front of `{beforeMessageCount}` notices, which read
+`beforeNotes ?? ""` (`outboxSweep.ts:389`) against a now-stale `lead_notes` and
+email stale content. Same pre-check, applied before a revert.
+
 **A cutover-window case the parent's integration acceptance does not reach:**
 during this child's deploy, a new route queuing `{beforeMessageCount}` against a
 still-warm OLD `classifyLeadNotesNotice` yields `before = ""` (`outboxSweep.ts:389`)
@@ -166,7 +191,7 @@ be stale.
 | Direction | Trigger | Channel |
 |---|---|---|
 | lead → admin, `pending`/`changes_requested` | a `lead_note` message | the existing debounced `leadNotes` outbox email |
-| lead → admin, `approved` | a `lead_note` message | **push to ADMINS** — `sendPush(adminIds, "proposals", { …, path: "/admin" })`, `adminIds` from the exported `ADMIN_RECIPIENTS_QUERY`, author filtered out. **`path: "/admin"`**, matching the existing admin push (`proposalNotify.ts:159`) — `notifyProposalReview` hardcodes `/me`, which is the lead's surface and wrong for this row |
+| lead → admin, `approved` | a `lead_note` message | **push to ADMINS** — `sendPush(adminIds, "proposals", { …, path: "/admin" })`, `adminIds` from the exported `ADMIN_RECIPIENTS_QUERY`, author filtered out. **`path: "/admin"`**, matching the existing admin push (`proposalNotify.ts:160`) — `notifyProposalReview` hardcodes `/me`, which is the lead's surface and wrong for this row |
 | lead → admin, `draft` | — | **nothing** — a draft is not in front of admins yet |
 | admin → lead, **standalone message only** | an `admin_change_request` via the admin messages route | push via `notifyProposalReview(doc, push)` with NEW copy |
 | admin → lead, **via a transition** | `request_changes` / `reopen` | **unchanged** — the transition already calls `notifyProposalReview(doc, REVIEW_PUSH[action])` (`admin/proposals/[id]/route.ts:532`). Do not add a second call, and do not replace `Cambios solicitados` with `Nuevo mensaje` |
@@ -179,8 +204,8 @@ approved, so without it a lead could post where the admin never learns.
 **Do not reach for `notifyProposalReview` when the recipients are ADMINS.** Its
 audience is lead + contributors. There is **no reusable admin-push helper** — this
 needs a small new one or an inline `sendPush`. Pick one and say which. (It *is* the
-right helper for the rows whose recipient is the lead — read the recipient column,
-not the arrow.)
+right helper for the two rows whose recipient is the **lead** — read who receives,
+not the arrow's direction.)
 
 **Exclude the author from BOTH pushes — one stated mechanism each.** A lead who is
 also an `admin` would otherwise be pushed about their own message, and the hazard
@@ -268,7 +293,10 @@ Splitting this produces either a dead notification or a mass mis-send.
 
 1. A lead's message on `pending`/`changes_requested` produces the same email
    admins get today — same audience, same debounce, same preference key — with the
-   body from the thread.
+   body from the thread. **No manual check can reach this**: production has zero
+   proposals in `pending` or `changes_requested`, so the path is unreachable by hand
+   on `preview` and this criterion rests entirely on `setlistNoticeQueueing.test.ts`.
+   Named under parent invariant 8, as Child A names the same gap for itself.
 2. A lead's message on an `approved` future-dated proposal reaches admins by push.
 3. An admin's standalone message reaches the lead by push; a `request_changes`
    produces **exactly one** push.
@@ -291,20 +319,28 @@ Splitting this produces either a dead notification or a mass mis-send.
 |---|---|---|
 | **The archive is never overwritten** | `proposalWriteRoutes.test.ts` — the save mutation `set` has **no** `lead_notes` key; re-read a document with a value and show it byte-unchanged | Blanking `lead_notes` when the editor stops sending it |
 | **The transition stops setting `admin_notes`** | `proposalWriteRoutes.test.ts` — the transition `set` has no `admin_notes` key | Silently blanking the admin archive, which an empty `reopen` does today |
-| The email still fires, same shape | `setlistNoticeQueueing.test.ts` — before/after Child B, a lead message on `pending` produces an equivalent outbox document | Retiring the debounced email by refactor |
+| The email still fires, same audience and timing | `setlistNoticeQueueing.test.ts` — before/after Child B, a lead message on `pending` produces an outbox document with the **same id, kind, audience and timing**. Not "the same shape": `before` deliberately changes from `{beforeNotes}` to `{beforeMessageCount}` | Retiring the debounced email by refactor |
 | An old-shape save lands and queues | `setlistNoticeQueueing.test.ts` — a save carrying `leadNotes` appends a message and produces an outbox document | A pre-Child-A bundle's note discarded behind a success toast |
 | Legacy notice is dropped and consumed | `outboxSweep.test.ts` — a `{beforeNotes}` notice with no `beforeMessageCount` | An empty-body email to admins; a wedged claim |
 | `beforeMessageCount: 0` is not dropped | `outboxSweep.test.ts` | A truthiness check killing the first-message case |
 | Only lead messages queue a notice | `setlistNoticeQueueing.test.ts` | Admins mailed their own change-request |
 | The admin push reaches ADMINS | `proposalMessageRoutes.test.ts` — assert the recipient set | Pushing the lead about their own message |
 | The author is excluded | `proposalMessageRoutes.test.ts` — a lead who is also an admin | Self-notification |
-| `request_changes` pushes exactly once | `proposalWriteRoutes.test.ts` — count **`notifyProposalReview`** calls, not `sendPush`: that suite mocks `serviceMutationSideEffects` wholesale, so a `sendPush` counter reads zero regardless and the test would pass while broken | A double push from adding a second call site |
+| `request_changes` pushes exactly once | `proposalWriteRoutes.test.ts` — count **`sendPushMock`** calls on the transition, the mechanism the suite already uses (`:39` mocks `@/app/utils/push`; `:710` and `:946` assert on it). **Do NOT add a wholesale `serviceMutationSideEffects` mock** — no suite in the repo has one, `notifyProposalReview` runs through to `sendPush` for real, and mocking the module would make the existing negative assertions at `:796`, `:892` and `:969` pass vacuously, retiring three push guards on the delivery whose subject is push fan-out | A double push from adding a second call site — or the guards being silently vacated by the fix |
 | A `draft` message pushes nothing | `proposalMessageRoutes.test.ts` | Notifying admins about work not in front of them |
 
 **Suites that will break:** `outboxSweep.test.ts`, `outboxClassify.test.ts`,
 `serviceMutationSideEffects.test.ts`, `proposalNotify.test.ts`,
-`setlistNoticeQueueing.test.ts`, `proposalWriteRoutes.test.ts`, and if the email
-subject changes, `emailTemplateGallery.test.ts` / `notificationEmail.test.ts`.
+`setlistNoticeQueueing.test.ts`, `proposalWriteRoutes.test.ts`,
+**`notificationOutboxSchema.test.ts`** (`:49-54` pins `before`'s field names to
+exactly `["beforeNotes","beforeRoles","beforeSongs"]`, so `beforeMessageCount`
+breaks it), and if the email subject changes, `emailTemplateGallery.test.ts` /
+`notificationEmail.test.ts`.
+
+**E2E, which CI does not run** (`ci.yml:6-7`) and which therefore surfaces late:
+`e2e/service-readiness/proposal-lifecycle.spec.ts:104` asserts
+`afterRequest?.admin_notes` contains the change-request note — this child removes
+that write — and `scripts/lib/sr-verification.mjs:938` seeds the same field.
 
 ## Safe ending state and rollback
 
