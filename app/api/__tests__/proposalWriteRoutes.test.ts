@@ -60,6 +60,11 @@ interface PatchOp {
   rev: string | null;
   set: Record<string, unknown>;
   unset: string[];
+  /** Appended array items, by field. The transition appends its own message. */
+  appended: Record<string, unknown[]>;
+  /** Chain calls IN ORDER — `setIfMissing` must precede `append`, and a mocked
+   *  chain succeeds either way, so order is the only thing that proves it. */
+  calls: string[];
 }
 type TxOp =
   | PatchOp
@@ -94,11 +99,21 @@ function makeTransaction() {
       return tx;
     },
     patch(id: string, fn: (p: unknown) => unknown) {
-      const op: PatchOp = { kind: "patch", id, rev: null, set: {}, unset: [] };
+      const op: PatchOp = { kind: "patch", id, rev: null, set: {}, unset: [], appended: {}, calls: [] };
       const p = {
-        ifRevisionId(rev: string) { op.rev = rev; return p; },
-        set(values: Record<string, unknown>) { Object.assign(op.set, values); return p; },
-        unset(fields: string[]) { op.unset.push(...fields); return p; },
+        ifRevisionId(rev: string) { op.calls.push("ifRevisionId"); op.rev = rev; return p; },
+        set(values: Record<string, unknown>) { op.calls.push("set"); Object.assign(op.set, values); return p; },
+        unset(fields: string[]) { op.calls.push("unset"); op.unset.push(...fields); return p; },
+        setIfMissing(values: Record<string, unknown>) {
+          op.calls.push("setIfMissing");
+          for (const [k, v] of Object.entries(values)) if (!(k in op.set)) op.set[k] = v;
+          return p;
+        },
+        append(field: string, items: unknown[]) {
+          op.calls.push("append");
+          (op.appended[field] ??= []).push(...items);
+          return p;
+        },
         inc() { return p; },
       };
       fn(p);
@@ -122,6 +137,18 @@ function committedTransactions() {
 
 function patches(tx: RecordedTx): PatchOp[] {
   return tx.ops.filter((o): o is PatchOp => o.kind === "patch");
+}
+
+/**
+ * A patch without the chain bookkeeping (`calls`, `appended`), for the
+ * assertions that deep-equal the WHOLE op list.
+ *
+ * Those stay exhaustive on purpose — their value is "these operations and no
+ * others" — so they are normalized rather than loosened to `toMatchObject`,
+ * which would stop them noticing an operation nobody intended.
+ */
+function patchShapes(tx: RecordedTx) {
+  return patches(tx).map(({ calls: _calls, appended: _appended, ...rest }) => rest);
 }
 
 function creates(tx: RecordedTx): Record<string, unknown>[] {
@@ -189,6 +216,10 @@ function applyToStore(record: RecordedTx) {
     const doc = allDocs().find((d) => d._id === op.id);
     if (!doc) continue;
     Object.assign(doc, op.set);
+    for (const [field, items] of Object.entries(op.appended)) {
+      const current = Array.isArray(doc[field]) ? (doc[field] as unknown[]) : [];
+      doc[field] = [...current, ...items];
+    }
     for (const field of op.unset) delete doc[field];
     doc._rev = `${String(doc._rev)}+`;
   }
@@ -443,7 +474,7 @@ describe("POST /api/me/proposals — first create", () => {
       team_notes: "Salmo 100:2",
     });
     expect(created.submitted_at).toBeUndefined();
-    expect(patches(tx)).toEqual([
+    expect(patchShapes(tx)).toEqual([
       {
         kind: "patch",
         id: `roleTarget.sunday_role.${WEEK}`,
@@ -502,7 +533,7 @@ describe("POST /api/me/proposals — first create", () => {
       service_type: "special",
       service_date: "2026-08-20",
     });
-    expect(patches(tx)).toEqual([
+    expect(patchShapes(tx)).toEqual([
       {
         kind: "patch",
         id: "role-sp",
@@ -1001,6 +1032,70 @@ describe("PATCH /api/admin/proposals/[id] — request_changes and reopen", () =>
     expect(transactions).toHaveLength(0);
   });
 
+  // ── The transition's own thread message (Child A §4) ────────────────────
+
+  it("appends the change-request note as a message, inside the SAME patch", async () => {
+    seed();
+    const res = await patchAdmin(PROPOSAL_ID, {
+      action: "request_changes",
+      rev: "prop-rev-1",
+      adminNotes: "Cambia la última",
+    });
+    expect(res.status).toBe(200);
+
+    const op = patches(committedTransactions()[0])[0];
+    const [msg] = op.appended.messages as Record<string, unknown>[];
+    expect(msg).toMatchObject({
+      _type: "proposal_message",
+      kind: "admin_change_request",
+      author_role: "admin",
+      body: "Cambia la última",
+      author: { _ref: "admin-1", _type: "reference" },
+    });
+    // Still mirrored into the legacy archive by the TRANSITION, and only by it.
+    expect(op.set).toMatchObject({ admin_notes: "Cambia la última" });
+  });
+
+  it("inherits ifRevisionId — UNLIKE the standalone message routes", async () => {
+    seed();
+    await patchAdmin(PROPOSAL_ID, {
+      action: "request_changes",
+      rev: "prop-rev-1",
+      adminNotes: "Cambia la última",
+    });
+    const op = patches(committedTransactions()[0])[0];
+    // The asymmetry is the point: this note is part of a reviewed decision, so it
+    // must not land if the decision does not. A chat message asserts nothing.
+    expect(op.rev).toBe("prop-rev-1");
+    expect(op.calls.indexOf("setIfMissing")).toBeLessThan(op.calls.indexOf("append"));
+  });
+
+  it("a reopen with NO note appends nothing and still commits the status change", async () => {
+    seed({ status: "approved" });
+    const res = await patchAdmin(PROPOSAL_ID, { action: "reopen", rev: "prop-rev-1" });
+    expect(res.status).toBe(200);
+    const op = patches(committedTransactions()[0])[0];
+    expect(op.appended.messages).toBeUndefined();
+    expect(op.calls).not.toContain("append");
+    // "Exempt from the cap" is NOT "always appends".
+    expect(op.set).toMatchObject({ status: "changes_requested" });
+  });
+
+  it("appends even when the thread is FULL — a decision is never blocked", async () => {
+    const full = Array.from({ length: 200 }, (_, i) => ({ _key: `k${i}`, kind: "lead_note", body: `m${i}` }));
+    seed({ messages: full });
+    const res = await patchAdmin(PROPOSAL_ID, {
+      action: "request_changes",
+      rev: "prop-rev-1",
+      adminNotes: "Aun así hay que cambiarla",
+    });
+    expect(res.status).toBe(200);
+    // The standalone routes refuse at 200; the transition is exempt, because a
+    // committed `changes_requested` with no reason shown anywhere is worse than
+    // a thread one message over its growth bound.
+    expect((patches(committedTransactions()[0])[0].appended.messages as unknown[])).toHaveLength(1);
+  });
+
   it("re-opens only an approved proposal", async () => {
     seed({ status: "approved" });
     const res = await patchAdmin(PROPOSAL_ID, { action: "reopen", rev: "prop-rev-1" });
@@ -1054,6 +1149,10 @@ describe("PATCH /api/admin/proposals/[id] — reconcile_target", () => {
     // Status and review fields are untouched by a retarget.
     expect(op.set).not.toHaveProperty("status");
     expect(op.set).not.toHaveProperty("admin_notes");
+    // And it appends NO message: metadata repair is not a decision, so it must
+    // not put a bubble in the leads' conversation.
+    expect(op.appended.messages).toBeUndefined();
+    expect(op.calls).not.toContain("append");
   });
 
   it("never retargets approved history", async () => {

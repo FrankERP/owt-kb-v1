@@ -111,6 +111,12 @@ function makeTransaction() {
         ifRevisionId(rev: string) { op.rev = rev; return p; },
         set(values: Record<string, unknown>) { Object.assign(op.set, values); return p; },
         unset(fields: string[]) { op.unset.push(...fields); return p; },
+        // The transition appends its own thread message (Child A §4). This suite
+        // is about NOTICE QUEUEING, not about the message, so the chain is
+        // completed rather than recorded — `proposalWriteRoutes.test.ts` is where
+        // the append and its `setIfMissing` ordering are asserted.
+        setIfMissing() { return p; },
+        append() { return p; },
         inc() { return p; },
       };
       fn(p);
