@@ -69,6 +69,20 @@ accepted — not accepted on the reviewer's citation.
 |---|---|
 | §5's admin protocol rested on a false premise: that cards keyed by `_id` survive `load()`. **They do not** — `load()` sets `setLoading(true)` and the list renders only inside `{!loading && !error && (`, so every card unmounts and every per-card state resets. The `conflict` lock the section spent four paragraphs justifying would not have existed, and every posted message would have wiped an in-progress change-request note in any open card | `ProposalsPanel.tsx:389-390`, `:634`, `:104-110`; and the comment at `:108-109`, which says the 409 path deliberately does **not** call `load()` |
 
+## Churn cap — the record the process requires
+
+CLAUDE.md makes the cap binding after two rounds carrying verified substantive
+blockers: continuing needs Frank's go-ahead **obtained in advance**. This loop ran
+to six. Each continuation was authorised in chat before the round was dispatched —
+*"consolida el hijo A"* after the consolidation was recommended, *"corre una ronda
+sobre el hijo A consolidado"*, then *"sigue hasta que termines, me voy a dormir"*
+covering the rest.
+
+**None of it was written down at the time.** A reviewer of the parent asked for
+this record and could not find it; that omission was the process failure, not the
+continuations. The same standing instruction is recorded in
+[the parent's log](2026-08-25-proposal-thread-roadmap-review-log.md).
+
 ## Process failures on the author's side
 
 Recorded because a log containing only reviewer findings hides the half most worth

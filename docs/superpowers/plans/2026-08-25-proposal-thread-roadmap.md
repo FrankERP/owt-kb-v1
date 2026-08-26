@@ -207,6 +207,10 @@ alongside".
 | Child B | Not yet reviewed |
 | `FrankERP/owt-kb-v1#8` | Ministry scoping — open, owned by neither child. **Covers two things, not one:** the notification *audience* (a kids-only `admin` receives worship notices) **and the write-route ACL** — Child A §4 defers to it the fact that its new admin message route carries no ministry check, mirroring the sibling transition writer (`admin/proposals/[id]/route.ts:85-90`). CLAUDE.md's two-way isolation is binding and a NEW production writer is being registered against it, so the deferral is deliberate rather than overlooked |
 
+**Review status of this roadmap:** APPROVED — two sequential fresh verdicts on
+digest `a489d135…`; see [its review log](2026-08-25-proposal-thread-roadmap-review-log.md).
+The file has since gained un-reviewed non-blocking edits, listed there.
+
 ## Sequencing
 
 ```
