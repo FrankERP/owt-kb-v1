@@ -347,7 +347,17 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
             ? { state: "single", id: proposalId, rev }
             : { state: "none" },
           songs: songs.map(s => ({ songId: s.songId, play_key: s.play_key, medley_tag: s.medley_tag })),
-          leadNotes,
+          // Sent ONLY on a first submission, when no proposal document exists yet
+          // (Child A §2). Once one does, the private note is a thread message and
+          // the composer below is where it is written.
+          //
+          // The PAYLOAD is conditioned, not just the rendering: `leadNotes` is a
+          // one-time initializer re-sent verbatim on every save, so after the lead
+          // posts a message the mirror moves the stored value and this stale copy
+          // would read as a deliberate edit — resurrecting the pre-post note as a
+          // new bubble and mailing it. Conditioning the render alone leaves that
+          // payload in place and makes the server rule unsound.
+          leadNotes: proposalId ? "" : leadNotes,
           teamNotes,
           status: submitStatus,
         }),
@@ -707,8 +717,12 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
         </div>
       )}
 
-      {/* Private review notes */}
-      {!isApproved && (
+      {/* Private review notes — the FIRST-submission stand-in for the thread
+          composer, which needs a document that does not exist yet. Retained on
+          purpose: deleting it would also empty the "Nueva propuesta" admin email,
+          whose body is this value. Once the proposal exists, the conversation
+          moves to <ProposalThread> below. */}
+      {!proposalId && (
         <div className="space-y-2">
           <label className="font-label text-xs uppercase tracking-widest text-mono-500">
             Notas privadas para revisión <span className="normal-case tracking-normal text-mono-600">(opcional)</span>

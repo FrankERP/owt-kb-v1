@@ -571,16 +571,78 @@ describe("POST /api/me/proposals — save / resubmit an existing proposal", () =
       status: "pending",
       service_type: "sunday",
       service_date: WEEK,
-      lead_notes: "Solo para admins",
       team_notes: "Salmo 100:2",
       contributors: [
         { _type: "contributor", _key: "c1", person: { _type: "reference", _ref: "mem-9" } },
         { _type: "contributor", _key: expect.any(String), person: { _type: "reference", _ref: "mem-1" } },
       ],
     });
+    // `lead_notes` is ABSENT: this body re-sends the note already stored, and §2
+    // omits the field rather than writing the same value back. The editor's
+    // `leadNotes` is a one-time initializer re-sent on every save, so an
+    // unconditional write is what would mint duplicate bubbles.
+    expect(ops[0].set).not.toHaveProperty("lead_notes");
+    expect(ops[0].appended.messages).toBeUndefined();
     // The coordination token is heartbeated in the same transaction.
     expect(ops[1]).toMatchObject({ id: `roleTarget.sunday_role.${WEEK}`, rev: "lock-rev-1" });
   });
+
+  // ── §2: the submission note becomes a message, under a two-part rule ──────
+
+  it("appends and mirrors ONLY when the note is non-empty AND changed", async () => {
+    seed();
+    const res = await POST(
+      req(
+        saveBody({
+          observed: { state: "single", id: PROPOSAL_ID, rev: "prop-rev-1" },
+          leadNotes: "Una nota nueva",
+        }),
+      ),
+    );
+    expect(res.status).toBe(200);
+    const op = patches(committedTransactions()[0])[0];
+    const [msg] = op.appended.messages as Record<string, unknown>[];
+    expect(msg).toMatchObject({ kind: "lead_note", author_role: "lead", body: "Una nota nueva" });
+    expect(op.set).toMatchObject({ lead_notes: "Una nota nueva" });
+    expect(op.calls.indexOf("setIfMissing")).toBeLessThan(op.calls.indexOf("append"));
+  });
+
+  it("appends NOTHING for an empty note, and does not blank the stored one", async () => {
+    seed();
+    const res = await POST(
+      req(
+        saveBody({
+          observed: { state: "single", id: PROPOSAL_ID, rev: "prop-rev-1" },
+          leadNotes: "",
+        }),
+      ),
+    );
+    expect(res.status).toBe(200);
+    const op = patches(committedTransactions()[0])[0];
+    expect(op.appended.messages).toBeUndefined();
+    // The regression this accepts, named in criterion 5: a pre-deploy client
+    // that deliberately CLEARS the textarea is ignored, and the notice that
+    // fires today does not fire. The alternative — letting an empty payload
+    // through — is what blanks a document whose messages[] is empty.
+    expect(op.set).not.toHaveProperty("lead_notes");
+    expect(store.proposals[0].lead_notes).toBe("Solo para admins");
+  });
+
+  it("treats a whitespace-only difference as no change", async () => {
+    seed();
+    await POST(
+      req(
+        saveBody({
+          observed: { state: "single", id: PROPOSAL_ID, rev: "prop-rev-1" },
+          leadNotes: "  Solo para admins  ",
+        }),
+      ),
+    );
+    const op = patches(committedTransactions()[0])[0];
+    expect(op.appended.messages).toBeUndefined();
+    expect(op.set).not.toHaveProperty("lead_notes");
+  });
+
 
   it("refuses a stale observed revision with no mutation", async () => {
     seed();

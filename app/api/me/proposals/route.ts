@@ -24,6 +24,7 @@ import {
   parseProposalSaveRequest,
   targetFromCanonicalRole,
 } from "@/app/utils/proposalWriteRequest";
+import { buildProposalMessage } from "@/app/utils/proposalMessageWrite";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
 function reject(res: { status: number; body: unknown }) {
@@ -205,6 +206,42 @@ async function postHandler(req: NextRequest) {
   // value against itself and say nothing.
   const previousStatus = existing ? existing.status : null;
   const beforeNotes = existing ? existing.lead_notes : "";
+
+  // ── The submission note becomes a thread message (Child A §2) ─────────────
+  //
+  // TWO conditions, and BOTH are load-bearing:
+  //
+  //  - **non-empty**, because "write the newest lead message body"
+  //    unconditionally BLANKS a document that has a note and an empty
+  //    `messages[]` — reachable in the migration's own release window — and
+  //    silently reverts a newer note written by old production code with the
+  //    older migrated body, a class the reconcile cannot detect because it
+  //    compares exactly those two values.
+  //  - **differs (trimmed) from the stored value**, because `leadNotes` is a
+  //    one-time initializer in the editor and is re-sent verbatim on EVERY save.
+  //    Harmless for a `set`; with an unconditional append, three draft saves mint
+  //    three identical bubbles, permanently — this delivery ships no delete path.
+  //    It is also what turns a pre-deploy client's stale copy into a discard
+  //    rather than a resurrection of the note the lead already posted and moved
+  //    past.
+  //
+  // When the predicate is false the patch OMITS `lead_notes` entirely rather
+  // than writing the old value back: a no-op write still moves `_rev`, and
+  // writing a mirrored value on a save that appended nothing yields a spurious
+  // notice that resets `servedRecipients` and slides a live debounce.
+  const storedLeadNotes = typeof beforeNotes === "string" ? beforeNotes : "";
+  const submissionNote = request.leadNotes.trim();
+  const notesChanged = submissionNote !== "" && submissionNote !== storedLeadNotes.trim();
+  const submissionMessage = notesChanged
+    ? buildProposalMessage({
+        authorId: leadId,
+        authorRole: "lead",
+        kind: "lead_note",
+        body: request.leadNotes,
+        now,
+        key: nextKey(),
+      })
+    : null;
   const songs = buildProposalSongDocs(request.songs, nextKey);
   const submitted: Record<string, unknown> =
     request.status === "pending"
@@ -225,11 +262,13 @@ async function postHandler(req: NextRequest) {
       nextKey,
     );
     // `_type` is never sent: it is immutable per document id.
-    tx = tx.patch(proposalId, (p) =>
-      p.ifRevisionId(rev).set({
+    tx = tx.patch(proposalId, (p) => {
+      const patched = p.ifRevisionId(rev).set({
         songs,
         status: request.status,
-        lead_notes: request.leadNotes,
+        // `lead_notes` appears ONLY when the note actually changed — see the
+        // predicate above. Omitted, not written back.
+        ...(submissionMessage ? { lead_notes: submissionMessage.body } : {}),
         team_notes: request.teamNotes,
         contributors,
         // Target metadata refreshed from the authorized canonical role.
@@ -238,8 +277,11 @@ async function postHandler(req: NextRequest) {
         last_edited_by: { _type: "reference", _ref: leadId },
         last_edited_at: now,
         ...submitted,
-      }),
-    );
+      });
+      return submissionMessage
+        ? patched.setIfMissing({ messages: [] }).append("messages", [submissionMessage])
+        : patched;
+    });
   } else {
     const deterministic = deterministicProposalId(target.serviceRef);
     if (!deterministic) {
@@ -261,8 +303,13 @@ async function postHandler(req: NextRequest) {
       last_edited_at: now,
       songs,
       status: request.status,
-      lead_notes: request.leadNotes,
       team_notes: request.teamNotes,
+      // A first submission goes through `create`, not a patch, so the array is
+      // minted directly and needs no `setIfMissing`. `lead_notes` rides along as
+      // the mirror.
+      ...(submissionMessage
+        ? { lead_notes: submissionMessage.body, messages: [submissionMessage] }
+        : {}),
       ...submitted,
     };
     tx = tx.create(created);
@@ -308,13 +355,19 @@ async function postHandler(req: NextRequest) {
   // ALREADY `pending` / `changes_requested` before this write — a first
   // submission is silent, because `notifyProposalPending` above just mailed
   // admins "Nueva propuesta" about that very same write.
-  queueLeadNotesNotice({
-    proposalId,
-    serviceDate: target.serviceDate,
-    previousStatus,
-    beforeNotes,
-    afterNotes: request.leadNotes,
-  });
+  //
+  // **Only when something was appended.** A save that mirrored nothing has no
+  // new note to announce, and queuing one anyway resets `servedRecipients` and
+  // slides a live debounce for a message that does not exist.
+  if (submissionMessage) {
+    queueLeadNotesNotice({
+      proposalId,
+      serviceDate: target.serviceDate,
+      previousStatus,
+      beforeNotes,
+      afterNotes: submissionMessage.body,
+    });
+  }
 
   // Return the fresh revision so the client can keep editing without a reload.
   const bound = canonicalProposalByIdQuery(proposalId);
