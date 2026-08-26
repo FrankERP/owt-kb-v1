@@ -45,7 +45,7 @@ established from the code and confirmed below.
 ## The property that makes the split safe
 
 **`queueLeadNotesNotice` and `QueueLeadNotesNoticeInput` are exported with their
-current signature** (`app/utils/serviceMutationSideEffects.ts:614`, `:629`).
+current signature** (`app/utils/serviceMutationSideEffects.ts:658`, `:629`).
 
 So Child A's new lead-messages route can call the *existing, unmodified*
 notification function with its *existing* string-based contract — provided Child A
@@ -55,7 +55,7 @@ touches no module under `app/utils/outbox*`.
 
 **`lead_notes` has a SECOND consumer, and the mirror alone does not cover it.**
 `notifyProposalSubmitted` re-reads `lead_notes` off the committed proposal and puts
-it in the "Nueva propuesta" admin email (`app/utils/proposalNotify.ts:145`, `:153`).
+it in the "Nueva propuesta" admin email (`app/utils/proposalNotify.ts:146`, `:153`).
 Today that value is what the lead typed into the "Notas privadas para revisión"
 textarea **with that submission** (`ProposalEditor.tsx:714-720` → `:350` →
 `route.ts:232`/`:264`).
@@ -92,7 +92,7 @@ scheduled.
 Child-A-owned behaviour change that must be named rather than glossed.**
 `notifyProposalSubmitted` is not first-submission-only: it fires on **every** save
 committed as `pending` (`app/api/me/proposals/route.ts:298-304` calls
-`notifyProposalPending`, which wraps it at `serviceMutationSideEffects.ts:712`, with
+`notifyProposalPending`, which wraps it at `serviceMutationSideEffects.ts:713`, with
 no `previousStatus` check), and a lead may re-save while `pending` or re-submit from
 `changes_requested` — the route refuses only `approved` (`:160-167`). **Note the
 live dataset has ZERO proposals in `pending` or `changes_requested`** (13 `approved`,
@@ -123,7 +123,7 @@ claimed:**
 - **The queuing OCCASIONS change, and that is Child A's risk, not Child B's.** The
   debounced email moves from "the notes field changed on a save" to "a lead posted a
   chat message", which multiplies entry points into `commitUpserts`' unconditional
-  inline `sweepOutbox` (`serviceMutationSideEffects.ts:491`) — measured at ~14.4 s
+  inline `sweepOutbox` (`serviceMutationSideEffects.ts:513`) — measured at ~14.4 s
   per send against `NOTIFY_FLUSH_EMAIL_LIMIT=2`. Child B names the volume shift, but
   it lands with Child A. Watch `report.lost` after Child A's release, not Child B's.
   **Conservative rather than currently firing:** `queueLeadNotesNotice` returns
@@ -280,10 +280,10 @@ cannot be scheduled a release later.
   superseded, because its premise was false.** The window is not "minutes before B's
   deploy": this repo's mandated release runs `preview` on the new code and production
   on the old, against **one shared dataset**, for as long as the PR takes, and a write
-  that commits an outbox upsert sweeps inline (`serviceMutationSideEffects.ts:491`)
-  over a `DUE_NOTICES_QUERY` with no environment scoping (`outboxSweep.ts:178`).
+  that commits an outbox upsert sweeps inline (`serviceMutationSideEffects.ts:513`)
+  over a `DUE_NOTICES_QUERY` with no environment scoping (`outboxSweep.ts:179`).
   Dropping is also **unobservable**: a notice classified to `[]` contributes no pending
-  recipients, so `countLost` (`outboxSweep.ts:890`) reports nothing. Child B therefore
+  recipients, so `countLost` (`outboxSweep.ts:884`) reports nothing. Child B therefore
   **classifies** a legacy notice through the surviving `classifyLeadNotes`, against the
   thread rather than the frozen field, and carries a release procedure.
 - **`lead_notes` is byte-identical to its pre-Child-A value on every document the
@@ -315,7 +315,7 @@ cannot be scheduled a release later.
 | Transition appends its change-request as a message | **A** | — |
 | Thread UI on both surfaces, service-date composer gate | **A** | — |
 | Reads/projections carry `messages` — **the app-surface ones** | **A** | — |
-| `outboxSweep`'s `PROPOSAL_QUERY` projects `messages[]` | **B** | — Child A **cannot**: its criterion 7 forbids modifying any file under `app/utils/outbox*`. The query today projects `_id, status, lead_notes, service_date` (`outboxSweep.ts:203-205`), and `classifyProposalMessages` needs the post-commit array — so if this is not done, `leadMessages` is `undefined`, the classifier returns `null`, and the debounced admin email silently stops |
+| `outboxSweep`'s `PROPOSAL_QUERY` projects `messages[]` | **B** | — Child A **cannot**: its criterion 7 forbids modifying any file under `app/utils/outbox*`. The query today projects `_id, status, lead_notes, service_date` (`proposalNotifyQueries.ts:41-43`), and `classifyProposalMessages` needs the post-commit array — so if this is not done, `leadMessages` is `undefined`, the classifier returns `null`, and the debounced admin email silently stops |
 | Revision handling (`_rev` attestation, per-surface) | **A** | — |
 | Debounced lead-notes email keeps firing, **with one named exception** | **A** (via the mirror; the exception is a pre-deploy client CLEARING the note, which stops queuing — an existing signal retired, recorded against invariant 8 in Child A criterion 5) | **B** (re-sources it) |
 | "Nueva propuesta" submit email keeps carrying the lead's note | **A** (via the retained submission textarea) | **B** (re-sources it) |

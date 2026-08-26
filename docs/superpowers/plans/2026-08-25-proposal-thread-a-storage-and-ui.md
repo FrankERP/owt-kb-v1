@@ -60,7 +60,7 @@ overwrite the change-request archive the rollback leans on, and `admin_notes` ha
 no notification consumer anyway.
 
 **The lead route calls `queueLeadNotesNotice` with its existing, unmodified
-signature** (`serviceMutationSideEffects.ts:614`, `:629` — both exported), passing
+signature** (`serviceMutationSideEffects.ts:658`, `:629` — both exported), passing
 `beforeNotes` = the stored `lead_notes` captured PRE-COMMIT, `afterNotes` = the
 appended body, and **`previousStatus`** = the status before this write, which the
 input requires (`:619`, `:632`). **It does not call it at all when nothing was
@@ -85,7 +85,7 @@ acceptance criterion 5 and in the parent's coverage table.
 
 - **A lead's message on an `approved` or `draft` proposal notifies nobody** —
   `queueLeadNotesNotice` requires `previousStatus ∈ {pending, changes_requested}`
-  (`serviceMutationSideEffects.ts:632`). **This is the dominant real-world case, not
+  (`serviceMutationSideEffects.ts:654`). **This is the dominant real-world case, not
   an edge:** at the last measurement 13 of 14 production proposals were `approved`,
   1 was `draft`, and **zero** were pending or changes_requested. Two consequences
   worth stating plainly: Child B's `approved` push exists precisely to close it, and
@@ -93,16 +93,16 @@ acceptance criterion 5 and in the parent's coverage table.
   central promise rests entirely on `setlistNoticeQueueing.test.ts`.
 - **An admin's standalone message notifies nobody.** No such feature exists today.
 - **A repeated identical message sends no email.** The queue guard
-  (`serviceMutationSideEffects.ts:636`) and the flush classifier
+  (`serviceMutationSideEffects.ts:658`) and the flush classifier
   (`outboxClassify.ts:103`) both compare *trimmed strings*, so a bump — "¿Alguna
   noticia?" twice — queues nothing. The message is still stored and rendered.
 - **Two messages inside the debounce window produce one email, carrying only the
-  newest**, because the flush re-reads live `lead_notes` (`outboxSweep.ts:390`).
+  newest**, because the flush re-reads live `lead_notes` (`outboxSweep.ts:384`).
 - **REGRESSION — a pre-deploy client that deliberately CLEARS the textarea is
   ignored.** An empty value fails the non-empty half of §2's server rule, so the
   erasure does not propagate and, because `lead_notes` does not move, **the notice
   that fires today does not fire**. Verified: `queueLeadNotesNotice` queues on
-  `"X" → ""` (`serviceMutationSideEffects.ts:636` compares trimmed and they differ)
+  `"X" → ""` (`serviceMutationSideEffects.ts:658` compares trimmed and they differ)
   and `classifyLeadNotes` returns a line for it. Accepted because the alternative —
   letting an empty payload through — is what criterion 3 exists to prevent. See
   criterion 5.
@@ -115,7 +115,7 @@ acceptance criterion 5 and in the parent's coverage table.
 ## 2. `POST /api/me/proposals` — the submission note, and the two-part rule
 
 `lead_notes` has a **second consumer**: `notifyProposalSubmitted` re-reads it off
-the committed proposal for the "Nueva propuesta" admin email (`proposalNotify.ts:145`,
+the committed proposal for the "Nueva propuesta" admin email (`proposalNotify.ts:146`,
 `:153`). Today that value is what the lead typed into "Notas privadas para
 revisión" with that submission (`ProposalEditor.tsx:714-720` → `:350` →
 `route.ts:232`/`:264`).
