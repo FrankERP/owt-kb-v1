@@ -309,6 +309,26 @@ a live hazard** — both filter `_id == $id`, so the duplicate branch cannot fir
 and merging them is a legitimate change that simply has to relocate `pickUnique`'s
 protection rather than drop it.
 
+**Residual, named not closed: the decoupling costs the first submission its own
+note, on one narrow failure.** When the THREAD read alone rejects, the response is
+a good `_rev` and `messages: null`, so the editor keeps editing rather than
+reloading — and reveals a thread that is still empty, because its `messages` state
+was initialized from props that predate this very write. "Aún no hay mensajes."
+for a note that IS stored.
+
+The coupled `Promise.all` version did not have this: it nulled both, and `_rev:
+null` forced a reload that showed the message. **The trade is deliberate.** That
+version paid for it on every slow author-name join, with a "otro líder actualizó
+esta propuesta compartida" banner that is simply false — a frequent lie against an
+infrequent omission. Nothing is lost either way, and the next save or reload
+resolves it, because the post-commit reads run unconditionally rather than only
+when a message was appended.
+
+Closing it means either forcing the reload on `messages === null` **when the save
+was a first create** (narrow, and re-introduces a reload the lead did not need) or
+re-seeding `messages` from props on refresh — which is the same work the general
+staleness below needs, and is not in this delivery.
+
 **Both MESSAGE routes return `observedRev`** (the save route does not) — the revision read immediately **before**
 their own append — alongside the fresh `_rev`.
 

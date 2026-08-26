@@ -408,7 +408,9 @@ async function postHandler(req: NextRequest) {
   // duplicate branch cannot fire here and `[0]` would be indistinguishable.
   //
   // It stays two because the guarded revision goes through the canonical bound
-  // query like every other revision this route hands out, which is
+  // query like every other revision this HANDLER hands out — `GET` above serves
+  // `_rev` from an inline GROQ, so the rule is the handler's, not the file's —
+  // which is
   // defence-in-depth if that filter is ever widened. Merging them is a
   // legitimate change; it just needs to move `pickUnique`'s protection, not drop
   // it silently.
@@ -435,7 +437,8 @@ async function postHandler(req: NextRequest) {
   // it. The trade is deliberate: a false "otro líder actualizó" banner on every
   // slow author-name join is worse than an empty thread on a transient failure
   // during a first submission, and the next save or reload resolves it. Nothing
-  // is lost either way.
+  // is lost either way. Also recorded in the plan's §5, under the same
+  // "Residual, named not closed" heading its siblings use.
   if (revRead.status === "fulfilled") fresh = pickUnique(revRead.value);
   else console.error("[proposals] post-commit revision read failed:", revRead.reason);
   if (threadRead.status === "fulfilled") {

@@ -243,8 +243,11 @@ function canonicalRead(query: string, params: Record<string, unknown>): unknown 
     // interpolated into the GET list query, which is keyed on the member instead.
     // Without it, a future GET test would silently get `null` where the route
     // expects an array. With it, that query falls to the dual-index branch and
-    // throws on the absent `params.dates` — loud, though not the
-    // `unmocked canonical query` error an earlier version of this comment named.
+    // throws on the absent `params.dates` as soon as the store holds a proposal
+    // — `filter` never invokes its callback on an empty one — so the failure is
+    // loud exactly when a GET test is meaningful. Not the
+    // `unmocked canonical query` error an earlier version of this comment named:
+    // that throw sits after the `setlistProposal` block returns.
     if (query.includes("author_name") && query.includes("_id == $id")) {
       const doc = store.proposals.find((p) => p._id === params.id);
       if (!doc) return null;
