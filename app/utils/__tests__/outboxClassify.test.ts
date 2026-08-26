@@ -218,7 +218,7 @@ describe("classifyProposalMessages", () => {
     expect(line?.notes).toBe("a\n\nb\n\nc");
   });
 
-  it("treats NaN as 0 — the caller's `typeof number` guard lets it through", () => {
+  it("treats NaN as 0, since a `typeof number` guard would not stop one", () => {
     const line = classifyProposalMessages({
       ...base,
       beforeCount: Number.NaN,

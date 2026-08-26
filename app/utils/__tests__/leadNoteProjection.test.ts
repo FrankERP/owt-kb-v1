@@ -247,5 +247,11 @@ describe("SUBMITTED_NOTIFY_QUERY", () => {
     const sweepAudience = (await run(ADMIN_RECIPIENTS_QUERY, dataset)) as string[];
     expect([...row.admins].sort()).toEqual([...sweepAudience].sort());
     expect([...row.admins].sort()).toEqual(["ad", "sa"]);
+
+    // Kept alongside, cheap, and NOT redundant: the assertion above stays green
+    // if someone replaces the interpolation with a byte-identical literal, and
+    // the shared constant then becomes decorative — the next role edit diverges
+    // silently. This is what pins that they are actually one definition.
+    expect(SUBMITTED_NOTIFY_QUERY).toContain(ADMIN_RECIPIENTS_QUERY);
   });
 });

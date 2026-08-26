@@ -154,7 +154,8 @@ export function classifyProposalMessages(i: {
   // negative as an offset from the END, so the batch would silently become the
   // last |n| messages — a re-send whose SIZE depends on the corrupt value, and
   // which looks like a plausible email. Clamping to 0 re-sends everything
-  // instead: strictly more, and therefore obvious rather than plausible. Both
+  // instead — never fewer than the negative slice would, and more whenever
+  // `|n| < length` — so the mistake is obvious rather than plausible. Both
   // re-send already-delivered content; only one of them is loud about it.
   //
   // `NaN` is handled here rather than upstream because it survives a

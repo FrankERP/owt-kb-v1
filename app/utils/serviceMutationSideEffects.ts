@@ -103,11 +103,21 @@ function attemptSync(label: string, fn: () => void): void {
  * open by FCM. The rejection handler keeps a failure logged and swallowed (§7)
  * rather than surfacing as an unhandled rejection.
  *
- * PRECONDITION, now that this is exported: call it from inside an `after()`
- * block (or something else that keeps the invocation alive). It starts a promise
- * nobody awaits, so on a serverless runtime a caller that returns its response
- * first can have the delivery killed mid-flight. Both existing call sites are
- * reached from `after()`; a new one must be too.
+ * READ THIS BEFORE ADDING A CALLER, now that it is exported. It starts a promise
+ * nobody awaits, so on a serverless runtime the delivery can be killed when the
+ * response returns.
+ *
+ * Neither existing call site is inside `after()`: `notifySetlistSaved` (`:701`)
+ * and `notifyProposalReview` (`:754`) are both awaited inline by their routes
+ * (`admin/setlists/route.ts:416`; `admin/proposals/[id]/route.ts:379`, `:532`),
+ * which import no `after` at all. That is the deliberate trade in the paragraph
+ * above — an editor's save never waits on FCM — and it means the exposure is
+ * real on those paths today, not hypothetical. Note the contrast with this
+ * module's OTHER push fan-outs (`:224`, `:248`, `:558`), which do wrap in
+ * `after()` and `await sendPush` inside it.
+ *
+ * So: a new caller should be inside `after()`, and must not reach for the two
+ * `fireAndForget` sites as precedent for skipping it.
  */
 export function fireAndForget(label: string, promise: unknown): void {
   void Promise.resolve(promise).catch((err) => {
