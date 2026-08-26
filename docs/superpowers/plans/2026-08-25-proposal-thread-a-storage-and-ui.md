@@ -237,11 +237,13 @@ The asymmetry with the chat routes is intentional and must be commented in code.
 - **`reconcile_target` never appends.** Metadata repair, branched at `route.ts:491-503`.
 - **The thread-open predicate does not gate the transition.** A `request_changes` on
   a past-dated service must still commit.
-- **The transition is EXEMPT from `PROPOSAL_MESSAGES_MAX` and always appends.** A
-  full thread must never block a review decision, and must never swallow one
-  either: §6 replaces both `admin_notes` render blocks with `<ProposalThread>`, so
-  a transition that committed without appending would leave the lead looking at
-  `changes_requested` with no reason shown anywhere.
+- **The transition is EXEMPT from `PROPOSAL_MESSAGES_MAX`** — a full thread must
+  never block a review decision, and must never swallow one either: §6 replaces
+  both `admin_notes` render blocks with `<ProposalThread>`, so a transition that
+  committed without appending would leave the lead looking at `changes_requested`
+  with no reason shown anywhere. **"Exempt from the cap" is not "always appends"** —
+  the two rules above still hold: an empty `reopen` note and `reconcile_target`
+  append nothing.
 
 **Limits.** Body ≤ `PROPOSAL_NOTES_MAX` (`app/utils/proposalNotesLimit.ts`). Empty
 or whitespace-only → `invalid_request` on the standalone routes. The 200 cap is
@@ -284,24 +286,43 @@ phantom message in a channel whose whole value is that nothing is lost.
 
 ### Admin panel
 
-`await load()` after a successful post — it replaces the whole record
-(`ProposalsPanel.tsx:508` → `:395`) and re-renders the card from props. **Surface
-the existing "Propuesta actualizada — recarga" banner (`:239-245`) only when
-`observedRev !== the _rev the card held`**; otherwise adopt silently.
+**A post does NOT call `load()`.** It patches that one record in `proposals` state
+from the response, which already carries the fresh `_rev`, `observedRev` and the
+full resolved `messages[]` — everything a re-render needs.
 
-**Gating on the reloaded `_rev` would lock the admin out of the card.** The admin's
-own append always moves `_rev`, so that condition is true after *every* admin
-message. The banner is the `conflict` flag, which disables Aprobar (`:289`),
-Solicitar cambios (`:274`) and Reabrir (`:331`); cards are keyed by `_id` (`:638`)
-so `load()` does not remount them and the flag persists until the panel does. When
-it does fire it is permanent for that card — matching the existing 409 path, but
-this child adds a frequent new trigger.
+**Why not `load()`, which an earlier draft prescribed:** `load()` begins with
+`setLoading(true)` (`ProposalsPanel.tsx:389-390`) and the card list renders only
+inside `{!loading && !error && (` (`:634`). **Every card therefore unmounts for the
+duration of the fetch** — `key` preserves identity across renders where the list is
+rendered, not across one where it is not. So every per-card `useState` resets:
+`requestingChanges` (`:104`), `reopening` (`:105`), **`adminNotes` (`:106`)** and
+`conflict` (`:110`).
 
-**Note the justification is narrower than it looks.** After `load()` the admin *is*
-looking at current content and a transition would carry the fresh `_rev`, so the
-lock is not "you were not shown this" — it is a deliberate fail-closed on the fact
-that something else moved while they were composing. Correct, but do not defend it
-with the stale-content argument.
+Three consequences, all disqualifying:
+
+- The `conflict` flag would be wiped by the remount, so the fail-closed lock this
+  section justifies **would not exist**, and its Verification row could not tell a
+  correct implementation from one where the banner never appears.
+- **Every successful post would wipe an in-progress "Solicitar cambios" / "Reabrir"
+  note in any open card, including the posting card's own.** That combination is
+  new: today `handleAction` calls `load()` only on `res.ok` (`:508`), while the 409
+  path returns `conflict` **without** calling it — deliberately, per the comment at
+  `:108-109`: *"keep this card (and its open panel) exactly as it is"*.
+- The whole list would flash to skeletons (`:610-616`) on every chat message.
+
+**The banner.** Surface the existing "Propuesta actualizada — recarga"
+(`:239-245`) only when `observedRev !== the _rev the card held` — i.e. something
+other than this post moved the document between the card's render and the route's
+read. Otherwise adopt silently. **Gating on the reloaded `_rev` would lock the
+admin out of the card**, because the admin's own append always moves `_rev`, so
+that condition is true after every admin message. The `conflict` flag disables
+Aprobar (`:289`), Solicitar cambios (`:274`) and Reabrir (`:331`), and with the
+patch-in-place approach it now genuinely persists until the panel unmounts.
+
+**The justification is narrower than it looks.** With the record patched in place
+the admin *is* looking at current content, so the lock is not "you were not shown
+this" — it is a deliberate fail-closed on the fact that something else moved while
+they were composing. Correct, but do not defend it with the stale-content argument.
 
 ### Lead editor
 
@@ -343,7 +364,7 @@ child makes it frequent. Closing it is the same work a live thread refresh needs
 
 | Site | Change |
 |---|---|
-| `serviceReadQueries.ts:33-43` (`PROPOSAL_PROJECTION`) | Add `messages[]{_key, _type, "author": author._ref, author_role, kind, body, at}`. Keep the legacy fields. **Payload note:** also backs `canonicalProposalsQuery()`, an all-proposals read; worst case adds ~800 KB per document. Irrelevant at 14; revisit before the catalog grows |
+| `serviceReadQueries.ts:33-43` (`PROPOSAL_PROJECTION`) | Add `messages[]{_key, _type, "author": author._ref, author_role, kind, body, at}`. Keep the legacy fields. **Payload note:** also backs `canonicalProposalsQuery()` → `publishReadyBundle.ts:147`, an ALL-proposals read on the service-readiness surface, so the worst case is ~800 KB × the catalog, not × 1. Nothing hashes or digests the projection, so it is payload-only. Irrelevant at 14 documents; revisit before the catalog grows |
 | `app/api/admin/proposals/route.ts:20-49` | Add the projection **with a resolved author name**, following `"lead_name": coalesce(lead->alias, lead->member_name)` (`:35`) |
 | `ProposalsPanel.tsx:43-45, 106, 225-237` | Type gains `messages`; the `lead_notes` and `admin_notes` blocks become `<ProposalThread>`; `team_notes` untouched. **`:106` seeds the change-request composer from `proposal.admin_notes` — seed it empty**, or an admin re-sends a stale legacy note as a new message |
 | `me/propose/[roleId]/page.tsx:40-56` | Add messages with resolved author names |
@@ -390,9 +411,12 @@ child makes it frequent. Closing it is the same work a live thread refresh needs
   `Aún no hay mensajes.`; `Escribe un mensaje…`; `Enviar`; `Enviando…`;
   `Error al enviar el mensaje`. No unread badge.
 - **The admin `request_changes` composer stays as it is** — a decision, not a chat
-  message. **One change: branch on `data.idempotent`** (`admin/proposals/[id]/route.ts:437`).
-  A repeat with identical `adminNotes` is a no-write retry; show "sin cambios", not
-  a success toast, or the admin believes a message was delivered that was not.
+  message. **One change: branch on `data.idempotent`** — which requires reading the response
+  body, something `handleAction` does not do today (`:501-509` checks only
+  `res.ok`). Note **`approve` returns it too** (`admin/proposals/[id]/route.ts:191`),
+  not just `request_changes` (`:437`), so the branch covers both. A repeat with
+  identical `adminNotes` is a no-write retry; show "sin cambios", not a success
+  toast, or the admin believes a message was delivered that was not.
 
 ---
 
@@ -553,8 +577,14 @@ moved; investigate. **No `--apply`.**
    4 → 8 window carries one, and §6 removes the render block that showed it, so it
    becomes invisible to admins.
 
+   **Compare against the newest message in that direction, not against
+   `migleadnote01` specifically.** From step 8 the mirror is live, so `lead_notes`
+   legitimately holds the newest *posted* message — a lead who posts between steps
+   8 and 9 would otherwise read as a mismatch and draw a permanent top-up.
+
    Repair by **consented top-up** with a distinct `_key` (`topup<n>`), never by
-   re-running the migration. **A top-up is irreversible and visible** — it lands at
+   re-running the migration, and **only when no message in that direction carries
+   the legacy text at all**. **A top-up is irreversible and visible** — it lands at
    the end of the thread carrying the top-up's own `at`, so it reads as a fresh
    repeat of an old note to both the lead and the admins, and this delivery ships
    no edit or delete path. Never top up a difference that is whitespace only.
@@ -567,7 +597,11 @@ sweep could mail admins stale text. That includes the walkthrough below.
 
 **The `preview` walkthrough happens after step 8**, and it writes REAL data: no
 edit or delete path exists, so every test message is permanent and visible to the
-team. Name the target proposal in advance.
+team. Name the target proposal in advance — and note that **`isThreadOpen` leaves
+only the future-dated proposals writable**. At the last measurement exactly one of
+the fourteen qualified; the other thirteen render read-only. Check which ones
+qualify at walkthrough time rather than discovering it with the composer
+disabled.
 
 ### Phase E — Docs, ADRs, e2e
 
@@ -666,15 +700,23 @@ what let four rounds of contradictions through.
 
 ## Safe ending state and rollback
 
-**Safe ending state:** the thread is the visible record; `lead_notes` /
-`admin_notes` are maintained mirrors and remain a complete archive of the newest
-message in each direction; every notification behaves as before.
+**Safe ending state:** the thread is the visible record. `lead_notes` is a
+maintained mirror of the newest **lead message**. **`admin_notes` is NOT the
+newest admin message** — §1 mirrors it from the transition only, so it holds the
+newest **change request**. Every notification behaves as before, except the one
+criterion 5 names.
 
 **Rollback: revert the code.** The legacy fields were never stopped, so they are
 current — not stale — and the reverted UI reads them as authoritative. `messages[]`
-becomes inert. **What revert does not recover:** the *history*, which returns to
-showing only the newest note in each direction. Today's behaviour. No data is
-destroyed and no recovery script is needed.
+becomes inert; no data is destroyed and no recovery script is needed.
+
+**What revert costs, stated precisely:** the *history* collapses back to one value
+per direction. For the lead that is today's behaviour — the newest note. **For the
+admin side it is worse than today**: every standalone admin message becomes
+invisible, and the lead sees the newest *change request*, which may be much older
+than the conversation that followed it. That asymmetry follows from §1 mirroring
+`admin_notes` only on transitions, and it is the price of not letting admin chatter
+overwrite the change-request archive.
 
 **Partial failure:** the transition's `set` + `append` are one patch in one
 transaction; a standalone post is one patch; the migration aborts per document
