@@ -69,18 +69,28 @@ Unconditionally. The create branch mints `messages: [msg]` instead when a note i
 present. The transition stops setting `admin_notes`. The message routes stop
 mirroring.
 
-**This is data-loss prevention, not tidiness.** Both branches set
-`lead_notes: request.leadNotes`, and `parseProposalSaveRequest` coerces an absent
-value to `""` (`proposalWriteRequest.ts:117`). Child A's editor already stopped
-*sending* `leadNotes`. So if that line survives past the mirror's removal, **the
-first save writes `lead_notes: ""` over every document that carries one**, erasing
-the archive. Removing the write and removing the mirror are the same edit and must
-land together.
+**The action is right; the hazard as an earlier draft stated it is already closed
+by Child A.** That draft cited `route.ts:232`/`:264` writing `lead_notes`
+unconditionally with `parseProposalSaveRequest` coercing an absent value to `""`
+(`proposalWriteRequest.ts:117`) — true of **pre-Child-A** code. Child A's §2 server
+rule already makes that write conditional and omits the field from the patch
+entirely otherwise, so the blanking cannot happen from B's actual starting point.
+
+What remains is simply that the mirror has a job that ends: once the outbox and the
+submit email read the thread, writing `lead_notes` serves nothing, and leaving a
+half-maintained field is worse than removing the write. Removing the write and
+removing the mirror are the same edit and land together.
 
 **`parseProposalSaveRequest` keeps ACCEPTING `leadNotes`** — an old bundle from
-before Child A may still post it; the route appends it as a `lead_note` message
-when it differs from the newest one. Removing the field from the parser is a
-later, separate delivery.
+before Child A may still post it. The route appends it as a `lead_note` message
+**only when it is non-empty AND differs (trimmed) from the newest `lead_note`
+body** — both halves, exactly as Child A §2 states them. The comparison target
+changes (the newest message rather than the frozen `lead_notes`); the non-empty half
+does not. `buildProposalMessage` returns `null` on an empty body
+(`proposalMessageWrite.ts:112`) so `tsc` backstops it, but the rule is stated rather
+than left to the type. **Keep Child A's negative test too**, not only the positive
+one: a save carrying no `leadNotes` appends nothing. Removing the field from the
+parser is a later, separate delivery.
 
 ### Outbox
 
@@ -109,6 +119,15 @@ classifyProposalMessages({ beforeCount, afterMessages, serviceDate, today, revie
 
 A count-and-slice is sound because the array is append-only *and* Child A's
 migration already ran, so no prepend can shift indices under a queued notice.
+
+**This silently closes one of Child A's named gaps — state it rather than let it
+fall out.** Today `queueLeadNotesNotice` returns early on
+`before.trim() === after.trim()` (`serviceMutationSideEffects.ts:636`), which is why
+Child A §1 lists "a repeated identical message sends no email" as an accepted gap.
+Dropping `beforeNotes`/`afterNotes` removes that comparison, so a repeat now queues
+and emails. An improvement, and intended — but it is a behaviour change against a
+sibling's stated baseline, and Child A's gap list should be read as superseded here
+rather than contradicted.
 
 `LineKind`, `LINE_PREF.leadNotes`, `NOTICE_KINDS` and the stored `kind` value
 `"leadNotes"` are **all unchanged** — renaming the wire value would orphan
@@ -147,7 +166,7 @@ be stale.
 | Direction | Trigger | Channel |
 |---|---|---|
 | lead → admin, `pending`/`changes_requested` | a `lead_note` message | the existing debounced `leadNotes` outbox email |
-| lead → admin, `approved` | a `lead_note` message | **push to ADMINS** — `sendPush(adminIds, "proposals", …)`, `adminIds` from the exported `ADMIN_RECIPIENTS_QUERY` |
+| lead → admin, `approved` | a `lead_note` message | **push to ADMINS** — `sendPush(adminIds, "proposals", { …, path: "/admin" })`, `adminIds` from the exported `ADMIN_RECIPIENTS_QUERY`, author filtered out. **`path: "/admin"`**, matching the existing admin push (`proposalNotify.ts:159`) — `notifyProposalReview` hardcodes `/me`, which is the lead's surface and wrong for this row |
 | lead → admin, `draft` | — | **nothing** — a draft is not in front of admins yet |
 | admin → lead, **standalone message only** | an `admin_change_request` via the admin messages route | push via `notifyProposalReview(doc, push)` with NEW copy |
 | admin → lead, **via a transition** | `request_changes` / `reopen` | **unchanged** — the transition already calls `notifyProposalReview(doc, REVIEW_PUSH[action])` (`admin/proposals/[id]/route.ts:532`). Do not add a second call, and do not replace `Cambios solicitados` with `Nuevo mensaje` |
@@ -163,11 +182,20 @@ needs a small new one or an inline `sendPush`. Pick one and say which. (It *is* 
 right helper for the rows whose recipient is the lead — read the recipient column,
 not the arrow.)
 
-**Exclude the author** from the recipient set: a lead who is also an `admin` would
-otherwise be pushed about their own message. `notifyProposalReview` takes no
-exclusion parameter and `proposalReviewRecipients` does not filter, so **filter in
-the route** rather than changing that helper, which would alter its two existing
-transition call sites for no reason.
+**Exclude the author from BOTH pushes — one stated mechanism each.** A lead who is
+also an `admin` would otherwise be pushed about their own message, and the hazard
+exists in both directions: `proposalReviewRecipients` does not filter, and
+`ADMIN_RECIPIENTS_QUERY` has no author filter either.
+
+- **admin → lead:** add an **optional third parameter** to `notifyProposalReview`,
+  `excludeIds?: readonly string[]`, and pass the author. "Filter in the route" is
+  not implementable — the helper resolves its own recipients internally and exposes
+  no hook (`serviceMutationSideEffects.ts:740-752`), so a route-side filter would
+  mean re-implementing `proposalReviewRecipients` + `sendPush`, a second copy of the
+  audience rule. **Adding the parameter changes neither existing call site**: both
+  pass exactly two arguments (`admin/proposals/[id]/route.ts:379`, `:532`).
+- **lead → admin:** filter the author out of `adminIds` in the route, before
+  `sendPush`. There is no shared helper to extend there.
 
 `REVIEWABLE_BEFORE_WRITE` and `REVIEWABLE_STATUSES` are **unchanged** — the email
 keeps today's audience and timing. The push is a separate additive call, fired only
@@ -244,7 +272,14 @@ Splitting this produces either a dead notification or a mass mis-send.
 2. A lead's message on an `approved` future-dated proposal reaches admins by push.
 3. An admin's standalone message reaches the lead by push; a `request_changes`
    produces **exactly one** push.
-4. No message is notified twice.
+4. **No message produces both an email and a push.** Stated as email-XOR-push,
+   not as "never notified twice": the outbox's re-pend path can legitimately re-send
+   a joined body. With 5 admins and `NOTIFY_FLUSH_EMAIL_LIMIT=2` a notice needs
+   three sweeps, and a new message in between clears `servedRecipients`
+   (`outboxNotice.ts:152`) while `before.beforeMessageCount` is preserved — so an
+   admin already served receives the joined body again, including a message they
+   had. Today they would receive only the newest note. Harmless, inherent to the
+   debounce, and not what this criterion is about.
 5. `lead_notes` and `admin_notes` are byte-identical to their values at the end of
    Child A. Nothing blanks them.
 6. In-flight legacy outbox notices are dropped and consumed, never crashing the
@@ -263,7 +298,7 @@ Splitting this produces either a dead notification or a mass mis-send.
 | Only lead messages queue a notice | `setlistNoticeQueueing.test.ts` | Admins mailed their own change-request |
 | The admin push reaches ADMINS | `proposalMessageRoutes.test.ts` — assert the recipient set | Pushing the lead about their own message |
 | The author is excluded | `proposalMessageRoutes.test.ts` — a lead who is also an admin | Self-notification |
-| `request_changes` pushes exactly once | `proposalWriteRoutes.test.ts` — count `sendPush` calls | A double push from adding a second call site |
+| `request_changes` pushes exactly once | `proposalWriteRoutes.test.ts` — count **`notifyProposalReview`** calls, not `sendPush`: that suite mocks `serviceMutationSideEffects` wholesale, so a `sendPush` counter reads zero regardless and the test would pass while broken | A double push from adding a second call site |
 | A `draft` message pushes nothing | `proposalMessageRoutes.test.ts` | Notifying admins about work not in front of them |
 
 **Suites that will break:** `outboxSweep.test.ts`, `outboxClassify.test.ts`,
@@ -288,7 +323,7 @@ ships second: its worst case is a stale email, not missing history.
 | # | Question | Recommendation | Blocking? |
 |---|---|---|---|
 | OQ-1 | ~~Ministry-filter the admin audience?~~ | **RESOLVED 2026-08-25: its own independent delivery.** Frank's call. It is a pre-existing defect across every proposal notification, not something this child introduced, and scoping it correctly means touching `proposalNotify`, `outboxSweep` and the kids surfaces together. This child neither fixes nor worsens the rule; it inherits whatever the audience is at the time. Tracked as FrankERP/owt-kb-v1#8 | Closed |
-| OQ-2 | New admin-push helper, or inline `sendPush`? | Either; state which | No |
+| OQ-2 | ~~New admin-push helper, or inline `sendPush`?~~ | **DECIDED: inline `sendPush` in the lead messages route.** There is one caller, and a helper wrapping a one-line fan-out would be a third place the admin audience is written down — `ADMIN_RECIPIENTS_QUERY` and `proposalNotify.ts:143` already duplicate it with no sync guard. Exporting the query and calling `sendPush` directly adds no fourth copy | Closed |
 | OQ-3 | Does the `leadNotes` email subject change to "Mensajes de la propuesta"? | Yes — "Notas del líder" is wrong once the thread carries admin replies | No |
 
 ## Terminal state
