@@ -262,8 +262,10 @@ cannot be scheduled a release later.
   and none is **notified twice**. One narrow exception, by Child B's deliberate
   design: an in-flight legacy `{beforeNotes}` outbox notice queued minutes before
   B's deploy is dropped and consumed, so that one message is stored and rendered
-  but never emailed. Either accept that seam or have B drain the outbox before
-  cutover.
+  but never emailed. **Decided: accept the seam.** Child B's disposition is
+  drop-and-consume on a missing `beforeMessageCount` — verified safe (the notice is
+  consumed, not re-pended or wedged) and narrow, since production holds zero outbox
+  documents at rest. Draining before cutover is not required.
 - **`lead_notes` is byte-identical to its pre-Child-A value on every document the
   mirror did not write, and every mirror write carries a real non-empty message
   body.** Stated as "non-empty body" rather than "the mirror's writes are the only
