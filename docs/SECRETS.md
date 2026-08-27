@@ -173,15 +173,27 @@ npx vercel env rm EMAIL_REDIRECT_TO production --yes
 
 **Needed in: Vercel Production only.** Not in GitHub Actions — the flush workflow only curls the route and never reads this. Not in `.env.local`, and not on Preview unless you are deliberately rehearsing there.
 
+**It is a tuning number, not a credential, and it is now stored as `Config` rather than `Secret`.** It was Sensitive until 2026-08-27, which meant `vercel env ls` showed `Hidden` and `vercel env pull` returned `[SENSITIVE]` — so the operative value could not be verified by anyone, only asserted in this file. A knob whose whole purpose is to be checked against a measurement should be readable. Re-add it with `--no-sensitive` if it is ever recreated.
+
 **Why it is set.** It caps the DISTINCT RECIPIENTS one sweep may claim. That cap is what makes stage 8's unconditional delete safe: a sweep is supposed to fully discharge everything it claims, so anything it claims and cannot send is **destroyed**, not retried. When `ms_per_send` is unknown or bad, a low value turns that risk into a bounded experiment — selection claims only what it can serve and leaves the rest **pending and unclaimed** (`report.deferred`), which the next sweep picks up.
 
-**Set to `2` — the number of sends that actually fit at the ~14 s each measured on the RETIRED sender (`mail.oasis.mx`).** It is the lesser of two bad options, and both are worth understanding before anyone changes it.
+**Set to `2`, and 40 is measured to be safe once the concurrency-8 code is deployed.** The 2 was sized for the ~14 s per send of the retired `mail.oasis.mx`; the reasoning below explains why the cap was ever below the per-service seat count.
+
+**THE TWO ARE COUPLED, and the order matters.** 40 is only safe at
+`SEND_CONCURRENCY = 8`: at the deployed serial code a sweep would claim 40, serve
+about 11, and **destroy the rest** — the "high loses mail" failure this section
+already describes. It was briefly set to 40 on 2026-08-27 and returned to 2 the
+same hour, so the code ships first and the cap follows a verified sweep. It is the lesser of two bad options, and both are worth understanding before anyone changes it.
 
 The cap governs what a sweep **claims**, and claiming is what commits a notice to being deleted whether or not it was sent. Above the serviceable count, the excess is destroyed. Below the month's distinct-recipient count, the fan-out fragments, because stage 6 can only group what stage 3 claimed — and a month of roles is published at once, so the requirement is ONE grouped email per member covering their whole month. So: high loses mail, low fragments it. `2` chooses fragmentation, because losing it is worse.
 
 **This does not protect `setlist` notices.** One setlist notice carries ALL of a service's participants in a single document, so it cannot be split by any cap: it is taken alone, over budget, and everyone past the serviceable count is destroyed. **`ms_per_send` coming down is exactly what has happened:** on 2026-08-27 a 14-recipient setlist notice went out with `unserved: 0` on Gmail, where the old sender would have destroyed 12. The gap is not closed in the code — the sweep still consumes what it never attempted — but at the current latency it is no longer being hit.
 
-**DO NOT raise this to 40.** An earlier version of this line said "raise it to the default of 40 the moment a send costs under ~2 s", and at the bounded ~1.2 s that reads as satisfied — following it would lose mail. The threshold was wrong because it used the spec's looser inequality (against the 40 s budget) rather than the runtime's: the send loop stops when `elapsed + SEND_TIMEOUT_MS (20 s) > 40 s`, so only 20 s are available and the real ceiling is `floor(20 000 / ms_per_send) + 1` — **17** at 1.2 s, not 40. See `docs/NOTIFICATIONS.md` §"Send throughput on Gmail" for the derivation. Raising it at all should follow a direct measurement with `scripts/measure-send-budget.mjs`, and a value near **12** is the one with margin.
+**This is now the binding constraint, by two orders of magnitude — and it is the last knob still sized for the retired server.** The clock allows ~136 recipients per sweep at the current inputs (Gmail, `SEND_CONCURRENCY = 8`); this cap allows 2. `docs/NOTIFICATIONS.md` §"Send throughput on Gmail" carries the derivation, which depends on BOTH the per-send latency AND the concurrency — an earlier version of this line gave a single-number threshold ("raise it to 40 once a send costs under ~2 s") and was wrong twice over for exactly that reason.
+
+**The code default of 40 is MEASURED to hold** — probed 2026-08-27 against the live Gmail transport: 40 recipients is 5 waves at a per-wave p95 of 2 429 ms, so 9 716 ms of the spendable 20 000, leaving 10 284 ms of margin. The clock allows 72; this cap allows 2.
+
+It has NOT been raised — that is a Vercel change, and a deliberate one. To re-probe, `scripts/measure-send-budget.mjs --to=you@example.com --concurrency=8 --apply` needs the app password, which `vercel env pull` will not give you (verified 2026-08-27: `SMTP_PASS` pulls as an 11-character `[SENSITIVE]` placeholder).
 
 **How to set and unset:**
 

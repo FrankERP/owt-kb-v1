@@ -54,7 +54,7 @@ real and load-bearing, but nobody wrote down why — a known gap, not a guess).
 | [0010](0010-specials-fill-locally-not-in-the-solver.md) | Fill special services locally; move the rules to Sanity | Accepted — P6 implemented 2026-08-03 |
 | [0011](0011-serialize-special-identities-globally.md) | Serialize special-service identities with one global coordinator | Accepted |
 | [0012](0012-grid-drag-excludes-swap-touch-and-auto-scroll.md) | Grid drag moves one seat, desktop only, with no auto-scroll | Accepted |
-| [0013](0013-smtp-sends-stay-serial.md) | SMTP sends stay serial, and the recipient cap sits below the seat count | Accepted |
+| [0013](0013-smtp-sends-stay-serial.md) | SMTP sends stay serial, and the recipient cap sits below the seat count | **Reversed** 2026-08-27 — `SEND_CONCURRENCY` is 8 with the Gmail sender |
 - [ADR-0014: Two Playwright configs](0014-two-playwright-configs.md) — why the write-safety harness is not reused for visual regression
 - [ADR-0015: A third root layout, at a dynamic segment](0015-gallery-root-layout.md) — why the theme gallery's layout cannot be moved upward
 - [ADR-0016: Revive light mode by tokenising colour](0016-light-mode-revived-by-tokenisation.md) — **supersedes ADR-0008**; why `dark:` variants and a partial-surface revival were both rejected

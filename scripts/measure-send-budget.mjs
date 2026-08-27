@@ -61,6 +61,16 @@ const count = Number(arg("count", "20"));
 // retune without editing code.
 const EMAIL_LIMIT = Number(arg("limit", process.env.NOTIFY_FLUSH_EMAIL_LIMIT ?? "40"));
 const SEND_BUDGET_MS = Number(arg("budget", process.env.NOTIFY_SEND_BUDGET_MS ?? "40000"));
+// MUST MIRROR `SEND_CONCURRENCY` in app/utils/email.ts. Not imported, because
+// this runs under plain `node` and that constant lives in TypeScript — so it is
+// explicit and printed rather than defaulted silently. Measuring at a width the
+// sweep does not use produces a number the sweep can never reproduce, which is
+// exactly what this file did while it hardcoded 1 and production shipped 8.
+const CONCURRENCY = Number(arg("concurrency", "1"));
+// The per-send reserve (`SEND_TIMEOUT_MS`). The sweep admits a wave only while
+// `elapsed + reserve <= budget`, so the spendable window is the budget MINUS
+// this — not the budget.
+const RESERVE_MS = Number(arg("reserve", "20000"));
 
 if (!to || !to.includes("@")) {
   console.error("refusing to run without an explicit recipient: --to=you@example.com");
@@ -68,6 +78,10 @@ if (!to || !to.includes("@")) {
 }
 if (!Number.isFinite(count) || count < 1 || count > 60) {
   console.error(`--count must be 1..60, got ${arg("count", "20")}`);
+  process.exit(2);
+}
+if (!Number.isFinite(CONCURRENCY) || CONCURRENCY < 1 || CONCURRENCY > 16) {
+  console.error(`--concurrency must be 1..16, got ${arg("concurrency", "1")}`);
   process.exit(2);
 }
 
@@ -87,6 +101,7 @@ console.log(`host       ${SMTP_HOST}:${port}`);
 console.log(`from       ${EMAIL_FROM}`);
 console.log(`to         ${to}  (every message; nothing reaches the team)`);
 console.log(`count      ${count}`);
+console.log(`width      ${CONCURRENCY}  (must mirror SEND_CONCURRENCY in app/utils/email.ts)`);
 console.log(`evaluating ${EMAIL_LIMIT} recipients against a ${SEND_BUDGET_MS} ms budget`);
 console.log("");
 
@@ -95,41 +110,62 @@ if (!apply) {
   process.exit(0);
 }
 
-// Exactly the production transport shape (app/utils/email.ts): one pooled
-// connection with maxConnections:1, so sends are serialized. Measuring against a
-// non-pooled or parallel transport would produce a number the sweep can never
-// reproduce.
+// The production transport shape (app/utils/email.ts), with the width taken from
+// --concurrency rather than hardcoded. It WAS hardcoded to 1, under a comment
+// calling that "exactly the production transport shape" — true until 2026-08-27,
+// when SEND_CONCURRENCY became 8. A measurement at the wrong width answers about
+// a machine that does not exist.
 const transport = nodemailer.createTransport({
   host: SMTP_HOST,
   port,
   secure: port === 465,
   auth: { user: SMTP_USER, pass: SMTP_PASS },
   pool: true,
-  maxConnections: 1,
+  maxConnections: CONCURRENCY,
   maxMessages: 100,
 });
 
 const timings = [];
+const waveTimings = [];
 let failures = 0;
 
-// The first send pays connection setup and auth. The sweep pays that too, once
-// per cold invocation, so it is reported separately rather than discarded — but
-// it is excluded from the steady-state percentiles that drive the inequality.
-for (let i = 1; i <= count; i++) {
+const sendOne = async (i) => {
   const started = Date.now();
   try {
     await transport.sendMail({
       from: EMAIL_FROM,
       to,
-      subject: `[medición] envío ${i} de ${count}`,
-      html: `<p>Medición del presupuesto de envío. Mensaje ${i} de ${count}.</p>`,
+      subject: `[medición w${CONCURRENCY}] envío ${i} de ${count}`,
+      html: `<p>Medición del presupuesto de envío, ancho ${CONCURRENCY}. Mensaje ${i} de ${count}.</p>`,
     });
-    const ms = Date.now() - started;
-    timings.push(ms);
-    process.stdout.write(`  ${String(i).padStart(2)} ${String(ms).padStart(6)} ms\n`);
+    return { i, ms: Date.now() - started };
   } catch (err) {
-    failures++;
-    process.stdout.write(`  ${String(i).padStart(2)}  FAILED  ${err?.message ?? err}\n`);
+    return { i, error: err?.message ?? String(err) };
+  }
+};
+
+// SENT IN WAVES OF `CONCURRENCY`, exactly as stage 7 does — and the WAVE is what
+// the admission check charges, so wave duration is the number the inequality
+// needs. The first wave pays connection setup and auth, so it is reported
+// separately and excluded from the steady-state percentiles.
+for (let i = 1; i <= count; i += CONCURRENCY) {
+  const batch = [];
+  for (let k = i; k < Math.min(i + CONCURRENCY, count + 1); k++) batch.push(k);
+  const waveStarted = Date.now();
+  const results = await Promise.all(batch.map(sendOne));
+  const waveMs = Date.now() - waveStarted;
+  waveTimings.push(waveMs);
+  for (const r of results) {
+    if (r.error) {
+      failures++;
+      process.stdout.write(`  ${String(r.i).padStart(2)}  FAILED  ${r.error}\n`);
+    } else {
+      timings.push(r.ms);
+      process.stdout.write(`  ${String(r.i).padStart(2)} ${String(r.ms).padStart(6)} ms\n`);
+    }
+  }
+  if (CONCURRENCY > 1) {
+    process.stdout.write(`   └ oleada de ${batch.length}: ${waveMs} ms\n`);
   }
 }
 
@@ -161,30 +197,58 @@ console.log("");
 // Evaluate against p95 rather than the mean. The budget is a wall-clock cliff
 // with permanent data loss on the far side, so the question is not "how fast is
 // a typical send" but "how slow can a batch plausibly be and still fit".
+// IN THE RUNTIME'S FORM. The spec writes `ms_per_send × limit < budget`, which
+// charges the reserve to nothing and ignores width. The loop admits a WAVE while
+// `elapsed + reserve <= budget`, so what must fit is (waves − 1) wave durations
+// against the SPENDABLE part. Layer 2's budget is derated above the reserve, not
+// halved outright — this file asserted `SEND_BUDGET_MS / 2` until 2026-08-27,
+// which is the expression production stopped using.
+const waveSorted = [...(waveTimings.length > 1 ? waveTimings.slice(1) : waveTimings)].sort((a, b) => a - b);
+const waveP95 = pct(waveSorted, 95);
+const derate = (full) => Math.min(full, RESERVE_MS + Math.max(0, full - RESERVE_MS) / 2);
 const layers = [
   ["layer 1", EMAIL_LIMIT, SEND_BUDGET_MS],
-  ["layer 2", Math.floor(EMAIL_LIMIT / 2), Math.floor(SEND_BUDGET_MS / 2)],
+  ["layer 2", Math.floor(EMAIL_LIMIT / 2), derate(SEND_BUDGET_MS)],
 ];
+
+console.log(`wave p95     ${waveP95} ms  (${CONCURRENCY} in flight)`);
+console.log("");
 
 let allHold = true;
 for (const [name, limit, budget] of layers) {
-  const needed = p95 * limit;
-  const holds = needed < budget;
+  const waves = Math.ceil(limit / CONCURRENCY);
+  const spendable = budget - RESERVE_MS;
+  const needed = (waves - 1) * waveP95;
+  const holds = needed <= spendable;
   if (!holds) allHold = false;
   console.log(
-    `${name}: ${p95} ms × ${limit} = ${needed} ms ${holds ? "<" : "≥"} ${budget} ms  ${holds ? "HOLDS" : "DOES NOT HOLD"}`,
+    `${name}: ${limit} recipients = ${waves} waves; (${waves} − 1) × ${waveP95} ms = ${needed} ms ` +
+      `${holds ? "<=" : ">"} ${spendable} ms spendable  ${holds ? "HOLDS" : "DOES NOT HOLD"}`,
   );
 }
+console.log("");
+console.log(
+  `At this width the clock allows ${(Math.floor((SEND_BUDGET_MS - RESERVE_MS) / waveP95) + 1) * CONCURRENCY} ` +
+    `recipients per layer-1 sweep, before NOTIFY_FLUSH_EMAIL_LIMIT caps it at ${EMAIL_LIMIT}.`,
+);
 
 console.log("");
 if (allHold) {
-  const headroom = Math.floor(SEND_BUDGET_MS / EMAIL_LIMIT);
-  console.log(`Inequality holds. Ceiling is ${headroom} ms/send at the shipped limit;`);
-  console.log(`measured p95 is ${p95} ms, leaving ${headroom - p95} ms of headroom per send.`);
+  // The HEADROOM IS PER WAVE, not per send. Reporting `budget / limit` against a
+  // per-send p95 mixes the two forms and can print a negative headroom under a
+  // line that says HOLDS — which it did, because at width 8 an individual send is
+  // slower (contention) while the WAVE is what the clock charges.
+  const wavesAtLimit = Math.ceil(EMAIL_LIMIT / CONCURRENCY);
+  const spendable = SEND_BUDGET_MS - RESERVE_MS;
+  const used = (wavesAtLimit - 1) * waveP95;
+  console.log(`Inequality holds at width ${CONCURRENCY}.`);
+  console.log(`${wavesAtLimit} waves for ${EMAIL_LIMIT} recipients, ${used} ms of ${spendable} ms spendable,`);
+  console.log(`leaving ${spendable - used} ms of margin.`);
   console.log("");
-  console.log("Set MEASURED_MS_PER_SEND in app/utils/__tests__/outboxSweep.test.ts to");
-  console.log(`${p95} and date the comment, so the standing regression check uses a`);
-  console.log("real number instead of the placeholder.");
+  console.log("DO NOT copy a measured number into MEASURED_MS_PER_SEND. That constant");
+  console.log("guards the consistency of the SHIPPED DEFAULTS and is deliberately not the");
+  console.log("real figure; raising it to keep a test green is the one forbidden move");
+  console.log("(CLAUDE.md, docs/NOTIFICATIONS.md). Record the measurement in the docs.");
 } else {
   console.log("Inequality DOES NOT hold. Per spec §1, derive rather than guess:");
   console.log(`  · raise NOTIFY_SEND_BUDGET_MS toward — but not past — maxDuration = 60 s, or`);

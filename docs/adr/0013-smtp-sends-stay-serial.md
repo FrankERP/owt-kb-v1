@@ -1,6 +1,6 @@
 # ADR-0013: Keep SMTP sends serial, and the recipient cap below the seat count
 
-**Date:** 2026-08-07 · **Status:** Accepted · **Amended 2026-08-27** — the sender moved to a third party (see Context banner and the reversal under Alternatives); the decision itself stands
+**Date:** 2026-08-07 · **Status:** **Reversed** 2026-08-27 on its central decision — `SEND_CONCURRENCY` is 8, not 1. No superseding ADR: the reversal is the retirement condition this ADR named for itself ("the ~14 s remote accept, fixed at the mail server"), met by replacing the server, so there is no new decision to record separately. The sender also moved to a third party, which this ADR had rejected. See the banner below; the measurements and the reasoning are kept as the record of why 1 was right against `mail.oasis.mx`
 
 ## Context
 
@@ -22,14 +22,29 @@ consume stage, serial claims). The standing constraint underneath them is not.
 > is in `docs/NOTIFICATIONS.md` §"Send throughput on Gmail"; it is a bound from the
 > sweep's report, not the authoritative `msPerSend` log line.
 >
-> **The DECISION below is unaffected — do not read the speedup as a reason to
-> revisit it.** Serial sending was chosen because consumption is unconditional and
-> an overrun loses the unserved tail permanently, which is a property of the
-> sweep's design and not of the server's latency. What the speedup does change is
-> the KNOB: `NOTIFY_FLUSH_EMAIL_LIMIT=2` was sized for 14.4 s and is now roughly
-> an order of magnitude too conservative. Raising it is a separate, deliberate
-> change that should follow a direct measurement with
-> `scripts/measure-send-budget.mjs`, not this bound.
+> **AND THE DECISION IS REVERSED.** `SEND_CONCURRENCY` is **8** as of
+> 2026-08-27, on Frank's report that concurrency was tested against Gmail and
+> works. The refutation recorded below is not thereby wrong — it measured that
+> **`mail.oasis.mx`** serialized acceptance for remote recipients, and a different
+> server has no obligation to. That is the ADR's own retirement condition ("the
+> ~14 s remote accept, fixed at the mail server"), met by replacing the server
+> rather than fixing it.
+>
+> **AND IT HAS ITS PROBE.** `scripts/measure-send-budget.mjs` was run against the
+> live Gmail transport on 2026-08-27, 16 messages per width, 0 failures:
+> serial p95 **1 838 ms**; width 8, per-wave p95 **2 429 ms**. So eight in flight
+> cost 1.32× one send and carry 8× the messages — the opposite of the retired
+> server, where ten connections bought the same two messages serial managed. At
+> width 8 the clock allows 72 recipients per layer-1 sweep against 11 serial.
+> The rule this ADR set is therefore honoured rather than waived: the value
+> answers to measurement, and now it has one. And the hazard is unchanged in kind but worse in
+> consequence: the old server punished concurrency with timeouts that destroyed a
+> batch, while Gmail punishes it with per-account throttling that would stop every
+> send until it lifts.
+>
+> The KNOB is separate and still un-raised: `NOTIFY_FLUSH_EMAIL_LIMIT=2` was sized
+> for 14.4 s at concurrency 1 and is now the binding constraint by two orders of
+> magnitude. See `docs/NOTIFICATIONS.md` §"Send throughput on Gmail".
 
 Measured from production, against `mail.oasis.mx`:
 

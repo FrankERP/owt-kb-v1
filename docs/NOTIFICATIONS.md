@@ -59,13 +59,34 @@ terminal edit of a working session — and the terminal edit is what every notic
 eventually is. If the GitHub workflow is broken or disabled, the realistic delay
 is **up to 24 hours**, until layer 3 runs.
 
-Layer 2 derates **both** knobs (half the recipient limit *and* half the send
-budget). That preserves the SPEC's inequality and not the runtime's: a send is
-admitted while `elapsed + SEND_TIMEOUT_MS <= sendBudgetMs`, and the 20 s timeout
-is not halved with the budget — so at layer 2's 20 s budget the check fails after
-the first send and **layer 2 delivers exactly one email per sweep, at any
-latency**. Its recipient limit never binds. Survivable because layer 2's job is to
-start the drain rather than finish it, and layer 1 runs at the full budget. It does not fire on
+Layer 2 derates **three** knobs (half the recipient limit *and* half the send
+budget) — but the budget is derated ABOVE THE RESERVE, not as a whole:
+
+```
+layer 2 sendBudgetMs  =  SEND_TIMEOUT_MS + (SEND_BUDGET_MS − SEND_TIMEOUT_MS) / 2
+```
+
+A send is admitted while `elapsed + SEND_TIMEOUT_MS <= sendBudgetMs`, and that
+reserve is the worst case of ONE send, so it cannot shrink with the budget.
+**Halving the budget as a whole did not derate layer 2, it disabled it:** at 20 s
+the check read `elapsed + 20 000 > 20 000`, false only at zero, so layer 2 sent
+exactly one email per sweep at any latency while its recipient limit said 20.
+Fixed 2026-08-27. On the shipped defaults layer 2 now gets 30 s — half of layer 1's
+spendable 20 s — which is nine sends at the ~1.2 s measured on Gmail and still one
+at the 14.4 s of the retired server, the conservative behaviour the original
+halving intended.
+
+**The whole-sweep clock is derated the same way**, and it has to be: it runs from
+the top of the SWEEP, not of the invocation, so it never accounted for the host
+write route's own elapsed time — the budget derate was the only thing that did.
+
+```
+layer 2 sweepDeadlineMs  =  SEND_TIMEOUT_MS + (SWEEP_DEADLINE_MS − SEND_TIMEOUT_MS) / 2
+```
+
+32.5 s on the defaults, against layer 1's 45 s. An earlier version of this
+paragraph said `SWEEP_DEADLINE_MS` was unchanged and that the invocation's worst
+case did not widen; that was wrong, and it is the claim the fix retracts. It does not fire on
 proposal submit or review, which queue nothing; layer 1 is what covers those —
 nominally within five minutes, in practice at a 41-minute median (§"Layer 1 does
 not run every five minutes"). The proposal-submit **email** (`buildProposalEmail`) is immediate, not
@@ -73,75 +94,72 @@ queued: intro + CTA, the same setlist table as "Setlist listo" (no Mov. column,
 medleys grouped), and the lead's newest `lead_note` message when the thread has one — the same thread source as the debounced email below, moved in the same delivery that stopped writing the legacy field. Empty or unreadable songs still
 send the intro and CTA. Push stays a one-line alert.
 
-## Send throughput on Gmail — measured 2026-08-27
+## Send throughput on Gmail — MEASURED 2026-08-27
 
-`NOTIFY_FLUSH_EMAIL_LIMIT=2` in production is calibrated for a server that no
-longer sends. The sender moved to Gmail SMTP (see `docs/SECRETS.md`); this is the
-first real measurement on it, and the first that means anything — on
-`mail.oasis.mx` the fan-out was slow enough that reaching the whole audience was
-the exception.
+Probed with `scripts/measure-send-budget.mjs` against the live Gmail transport,
+16 messages per run to a single address, 0 failures in both runs. This replaces
+an earlier bound in this section that was inferred from a sweep report; the
+inferred figure was optimistic.
 
-**What happened.** One `setlist` notice for 2026-08-30 with 14 recipients, flushed
-manually at 17:43 UTC. The sweep reported:
+| | serial (`SEND_CONCURRENCY = 1`) | width 8 |
+|---|---|---|
+| per-send median | 819 ms | 1 724 ms |
+| per-send p95 | 1 838 ms | 4 005 ms |
+| **per-WAVE p95** | 1 838 ms | **2 429 ms** (8 messages) |
+| inequality at `emailLimit` 40 | **fails** — 39 × 1 838 = 71 682 ms | **holds** — 4 × 2 429 = 9 716 ms |
+| recipients the clock allows | **11** | **72** |
 
-```
-{"rounds":1,"claimed":1,"emailed":14,"consumed":1,
- "deferred":0,"unserved":0,"repended":0,"lost":0}
-```
+An individual send is slower under contention — 4 005 ms p95 against 1 838 —
+while the WAVE, which is what the clock charges, costs 2 429 ms for eight. That
+is the whole result: **~6.5× the throughput, at a cost the budget can absorb.**
 
-**What that PROVES, by arithmetic rather than by stopwatch.** `SEND_CONCURRENCY`
-is **1** — sends are serial, which is ADR-0013's decision — and the send loop
-checks `elapsed + SEND_TIMEOUT_MS (20 s) > NOTIFY_SEND_BUDGET_MS (40 s)` before
-each send, stopping and recording `unserved` when it trips.
+### The formula, in the runtime's form
 
-- At the old 14 413 ms/send: send 1 passes, send 2 passes (14.4 + 20 < 40), send 3
-  trips (28.8 + 20 > 40). Result would be `emailed: 2, unserved: 12`.
-- Observed: `emailed: 14, unserved: 0`. For the 14th send to start, the first 13
-  had to fit inside 20 s → **≤ ~1.5 s per send**. The GitHub step's wall clock
-  (~17 s end to end, including curl, reads and consume) puts it nearer **1.2 s**.
+The design spec states the gate as
+`ms_per_send × NOTIFY_FLUSH_EMAIL_LIMIT < NOTIFY_SEND_BUDGET_MS`. That form is
+wrong in two ways and this section was rewritten three times chasing it, so:
 
-So Gmail is roughly **10–12× faster** than `mail.oasis.mx` on this path.
-
-**What it does NOT prove.** This is a bound derived from the sweep's report, not
-the authoritative `msPerSend` on the `notify_sweep_done` log line — Vercel's log
-retention on this plan had already dropped that line by 19:15. Treat the number as
-an order of magnitude with a firm ceiling, not a precise figure. To get the exact
-one, read the log within the hour of a real sweep, or run
-`scripts/measure-send-budget.mjs --to=you@example.com --apply` with the app
-password.
-
-**What it unlocks — and USE THE RIGHT INEQUALITY.** The design spec states the
-release gate as `ms_per_send × NOTIFY_FLUSH_EMAIL_LIMIT < NOTIFY_SEND_BUDGET_MS`,
-i.e. against 40 000 ms. **The runtime is stricter than that**, and the difference
-is a factor of two: the loop stops when `elapsed + SEND_TIMEOUT_MS (20 s) > 40 s`,
-so only the first **20 s** are actually available for sending. Serial sends of
-duration `d` therefore fit
+1. **The budget reserves one send's worst case.** A send is admitted only while
+   `elapsed + SEND_TIMEOUT_MS <= sendBudgetMs`, because a send can take
+   `SEND_TIMEOUT_MS` and one admitted without room for it overruns into the
+   platform's kill. Spendable time is `sendBudgetMs − SEND_TIMEOUT_MS` — 20 s of
+   40 at layer 1.
+2. **Admission is per WAVE.** Stage 7 sends in waves of `SEND_CONCURRENCY` and
+   checks the clock once per wave.
 
 ```
-N  =  floor(20 000 / d) + 1
+spendable   =  sendBudgetMs − SEND_TIMEOUT_MS
+waves       =  floor(spendable / ms_per_wave) + 1
+recipients  =  min(emailLimit, waves × SEND_CONCURRENCY)
 ```
 
-**There is a second clock, and it can bind first.** The same check also refuses a
-send when `elapsed_since_sweep_start + SEND_TIMEOUT_MS > SWEEP_DEADLINE_MS (45 s)`,
-so the sending window is really `min(20 s, 25 s − read_phase)`. At the recommended
-limit of 12 — 14.4 s of sending at 1.2 s each — a read phase over ~10.6 s lowers
-the ceiling with no separate signal. `stoppedBy` on the
-`notify_sweep_send_budget_exhausted` log line says which clock stopped it.
+**Two caveats, and both matter for deciding a limit.**
 
-| sender | ms/send | N (runtime) | spec's looser form |
-|---|---|---|---|
-| `mail.oasis.mx` | 14 413 (measured 2026-08-07) | **2** — which is why production runs 2 | 2 |
-| Gmail | ~1 200 (bounded 2026-08-27) | **17** | 33 |
+*A second clock can bind first.* The same check also refuses a wave when
+`elapsed_since_sweep_start + SEND_TIMEOUT_MS > sweepDeadlineMs` (45 s at layer 1,
+32.5 s at layer 2), so `spendable` is really
+`min(sendBudgetMs, sweepDeadlineMs − read_phase) − SEND_TIMEOUT_MS`. A slow read
+phase silently lowers the ceiling; `stoppedBy` on the
+`notify_sweep_send_budget_exhausted` log line says which clock stopped it, and
+that line now carries both clocks.
 
-The 14 sent on 2026-08-27 are consistent with the runtime form and not a fluke:
-13 × 1 200 = 15 600 < 20 000, with room for three more.
+*`emailLimit` does not bound a notice taken alone.* When a single notice's
+recipients exceed the limit it is selected **alone and deliberately over budget**
+rather than split, because one document per subject cannot represent per-recipient
+progress. For that path the `min(emailLimit, …)` term does not apply and the clock
+is the only bound.
 
-**Nothing has been raised.** The code's default of 40 needs `d ≤ ~512 ms` under the
-runtime form, which Gmail does not meet. A value around **12** would be safe at the
-bounded latency with margin for a slow day. Raising `NOTIFY_FLUSH_EMAIL_LIMIT` is a
-deliberate change that should follow a direct measurement rather than this bound —
-and `MEASURED_MS_PER_SEND` in `outboxSweep.test.ts` is a guard on the shipped
-defaults, never a place to write an observed number.
+### What this unlocks
+
+**`NOTIFY_FLUSH_EMAIL_LIMIT=2` is now the binding constraint, and it is the last
+knob still sized for the retired server.** The clock allows 72 recipients per
+layer-1 sweep; the cap allows 2. The code default of **40 is measured to hold** —
+5 waves, 9 716 ms of the spendable 20 000, leaving 10 284 ms of margin — and
+layer 2's derated budget holds it too (3 waves, 4 858 ms of 10 000).
+
+Raising it is a Vercel change and has NOT been made. `MEASURED_MS_PER_SEND` in
+`outboxSweep.test.ts` stays at its placeholder: it guards the consistency of the
+shipped defaults, and raising it to keep a test green is the one forbidden move.
 
 ## Layer 1 does not run every five minutes
 
@@ -442,14 +460,17 @@ Things that are counter-intuitive and were each a real defect at some point.
   `sendMs: 20020`, `emailed: 2`, and eight `SMTP send timed out after 20000ms`.
   In twenty seconds with ten connections open the server accepted **two** —
   the same rate it manages serially. The server serializes acceptance for remote
-  recipients, so concurrency buys no throughput while turning would-be successes
-  into destroyed notices (stage 8 consumes regardless). `SEND_CONCURRENCY` stays
-  at 1, and the wave machinery in stage 7 stays with it, because both become
-  correct the moment the server does. Recorded as **ADR-0013**. **Do not re-raise it on the reasoning that
-  pooling or parallelism "should" help — that reasoning has now failed twice
-  against measurement.**
-- **Therefore the grouped monthly email cannot be delivered by tuning this
-  codebase.** ~20 recipients × ~14 s is far past the hosting function's 60 s
+  recipients, so concurrency bought no throughput while turning would-be successes
+  into destroyed notices (stage 8 consumes regardless). Recorded as **ADR-0013**.
+  **REVERSED 2026-08-27:** that measured THAT server, and it is retired —
+  `SEND_CONCURRENCY` is now **8** with the Gmail sender, which is the retirement
+  condition ADR-0013 named for itself. **The rule it set still binds:** this value
+  answers to measurement, not to reasoning, and the 8 currently rests on a report
+  rather than a probe. Do not re-raise or re-lower it on the argument that
+  parallelism "should" or "shouldn't" help — run
+  `scripts/measure-send-budget.mjs`.
+- **That made the grouped monthly email undeliverable by tuning this codebase —
+  and the sender move is what changed it.** ~20 recipients × ~14 s is far past the hosting function's 60 s
   ceiling at any concurrency and any cap. Two things can fix it, and nothing else
   can: the **~14 s remote accept on the mail server**, or a change so the sweep
   **re-pends notices it never attempted instead of consuming them** — which would
@@ -553,6 +574,18 @@ Open a `.eml` in a mail client to check real rendering — it goes through the s
 pipeline a received message does, with no SMTP credentials and nothing sent.
 
 ## Still open
+
+- **A throttled wave is destroyed silently, and width 8 made it eight at a time.**
+  `sendOne` records a recipient as ATTEMPTED before awaiting, so a send that fails
+  — including a provider throttle — still discharges the notice: it is consumed,
+  `countLost` reports 0, and `unserved` is 0 too. The only signal is one
+  `notify_sweep_send_failed` line per recipient, and the flush workflow gates on
+  `lost > 0`, so it stays green. This is the documented at-most-once contract and
+  is not new; what IS new is that `SEND_CONCURRENCY = 8` turns one destroyed
+  notification into up to eight, and Gmail's failure mode is per-account
+  throttling rather than the old server's per-message timeout. The pooled
+  transport carries no `rateLimit`/`rateDelta`, so there is no client-side brake.
+
 
 - **The send-budget inequality and the recipient cap.** Spec §1 requires
   `ms_per_send × NOTIFY_FLUSH_EMAIL_LIMIT < NOTIFY_SEND_BUDGET_MS`. Production
