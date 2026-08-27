@@ -256,14 +256,14 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     file: "app/api/me/proposals/[id]/messages/route.ts",
     operation: "POST",
     reason:
-      "guarded lead thread writer: resolves the setlistProposal through `loadCanonicalProposal`, then appends one message and mirrors `lead_notes` in a single UNCONDITIONED patch. It carries no `ifRevisionId` ON PURPOSE — two co-leads posting at once must both land — so the usual observed-revision assertion is deliberately absent here and the entry exists to say so out loud (Child A §4)",
+      "guarded lead thread writer: resolves the setlistProposal through `loadCanonicalProposal`, then appends one message. It NO LONGER mirrors `lead_notes` — Child B removed that write, so the thread is the only record of a lead's note and the legacy field is a frozen archive. It carries no `ifRevisionId` ON PURPOSE — two co-leads posting at once must both land — so the usual observed-revision assertion is deliberately absent here and the entry exists to say so out loud (Child A §4)",
     removalOwner: "permanent runtime writer (never removed — the lead side of the thread)",
   },
   {
     file: "app/api/admin/proposals/[id]/messages/route.ts",
     operation: "POST",
     reason:
-      "guarded admin thread writer: same shape as the lead route, and deliberately does NOT touch `admin_notes` — that field is the change-request archive the rollback leans on and only the transition mirrors it (Child A §1, §4)",
+      "guarded admin thread writer: same shape as the lead route, and does NOT touch `admin_notes`. Nothing does any more: Child B stopped the transition mirroring it too, so that field is a frozen change-request archive rather than one the transition keeps current. Restoring either write is what a rollback does, and the e2e fixtures move with it (Child A §1, §4)",
     removalOwner: "permanent runtime writer (never removed — the admin side of the thread)",
   },
   {

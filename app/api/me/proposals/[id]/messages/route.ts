@@ -116,8 +116,13 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ id:
   // always moves.
   const observedRev = typeof doc._rev === "string" ? doc._rev : null;
 
-  // PRE-COMMIT, for the mirror and the notice. Reading these after the write gives
-  // post-write state and the debounced email silently sends nothing.
+  // PRE-COMMIT, for the notice. Reading these after the write gives post-write
+  // state and the debounced email silently sends nothing.
+  //
+  // `lead_notes` is no longer written by this route — the mirror is gone. It is
+  // still READ, and must be: the snapshot is what production's old sweep compares
+  // against during the release window, and it is now the value that makes that
+  // window silent rather than stale, because nothing moves the field any more.
   const beforeNotes = typeof doc.lead_notes === "string" ? doc.lead_notes : "";
   const previousStatus = doc.status;
   // The index the flush slices the thread from: LEAD NOTES only, counted with the
@@ -132,10 +137,6 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ id:
       .patch(id)
       .setIfMissing({ messages: [] })
       .append("messages", [message])
-      // The mirror (§1): `lead_notes` holds the newest LEAD message — exactly what
-      // it holds today, which is why the existing debounced email is unchanged.
-      // Lossy on purpose. `admin_notes` is mirrored by the TRANSITION only.
-      .set({ lead_notes: message.body })
       .commit();
   } catch (err) {
     // With no `ifRevisionId` a 409 is not a stale-revision race — the patch

@@ -75,9 +75,11 @@ Released 2026-08-26. `lead_notes` / `admin_notes` became a `messages[]` thread.
 slice 1, on a branch — not released). `PROPOSAL_QUERY` no longer projects
 `lead_notes` at all: the notice stores `before.beforeMessageCount`, the
 pre-commit count of `kind == "lead_note"` messages, and the flush emails
-everything appended since that index. The legacy fields are still written as
-mirrors — removing that write is a later slice — but nothing in the sweep reads
-them any more.
+everything appended since that index. **The legacy fields are no longer written
+at all** (slice 2): the lead message route, both branches of the save route and
+the `request_changes` transition have all stopped mirroring. `lead_notes` and
+`admin_notes` are a FROZEN archive — nothing blanks them, nothing updates them,
+and the thread is the only record of what was said.
 
 Audience, debounce and preference key are unchanged: the same admin set resolved
 at flush, the same 15–60 minute window, the same `notifPrefs.emailProposals`.

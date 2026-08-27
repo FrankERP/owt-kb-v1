@@ -216,9 +216,17 @@ async function postHandler(req: NextRequest) {
   // the same predicate `LEAD_NOTE_MESSAGES` filters on at flush, over the
   // pre-commit document this handler already loaded. A create has no thread yet,
   // so the count is 0 and `classifyProposalMessages` slices from the start.
-  const beforeMessageCount = Array.isArray(existing?.messages)
-    ? existing.messages.filter(isLeadNote).length
-    : 0;
+  const storedLeadMessages = Array.isArray(existing?.messages)
+    ? existing.messages.filter(isLeadNote)
+    : [];
+  const beforeMessageCount = storedLeadMessages.length;
+  // What the lead last SAID, which is what the mirror used to hold and what the
+  // append predicate below now compares against. `""` when the thread carries no
+  // lead note — including on a create, where every save is a first message.
+  const newestLast = storedLeadMessages[storedLeadMessages.length - 1] as
+    | { body?: unknown }
+    | undefined;
+  const newestLeadNoteBody = typeof newestLast?.body === "string" ? newestLast.body : "";
 
   // ── The submission note becomes a thread message (Child A §2) ─────────────
   //
@@ -230,21 +238,27 @@ async function postHandler(req: NextRequest) {
   //    silently reverts a newer note written by old production code with the
   //    older migrated body, a class the reconcile cannot detect because it
   //    compares exactly those two values.
-  //  - **differs (trimmed) from the stored value**, because `leadNotes` is a
-  //    one-time initializer in the editor and is re-sent verbatim on EVERY save.
-  //    Harmless for a `set`; with an unconditional append, three draft saves mint
-  //    three identical bubbles, permanently — this delivery ships no delete path.
-  //    It is also what turns a pre-deploy client's stale copy into a discard
-  //    rather than a resurrection of the note the lead already posted and moved
-  //    past.
+  //  - **differs (trimmed) from the NEWEST `lead_note` message**, because
+  //    `leadNotes` is a one-time initializer in the editor and is re-sent
+  //    verbatim on EVERY save. Harmless for a `set`; with an unconditional
+  //    append, three draft saves mint three identical bubbles, permanently —
+  //    this delivery ships no delete path. It is also what turns a pre-deploy
+  //    client's stale copy into a discard rather than a resurrection of the note
+  //    the lead already posted and moved past.
   //
-  // When the predicate is false the patch OMITS `lead_notes` entirely rather
-  // than writing the old value back: a no-op write still moves `_rev`, and
-  // writing a mirrored value on a save that appended nothing yields a spurious
-  // notice that resets `servedRecipients` and slides a live debounce.
-  const storedLeadNotes = typeof beforeNotes === "string" ? beforeNotes : "";
+  // THE COMPARISON TARGET MOVED, and it had to. It used to be the stored
+  // `lead_notes`, which was live because this route mirrored it. Nothing writes
+  // that field any more, so it is frozen at its pre-cutover value: a lead who
+  // posts through the thread and then saves would compare their new text against
+  // a stale archive, find it different, and mint a duplicate of the message they
+  // just posted. The thread is now the only thing that knows what the lead last
+  // said, so the thread is what the predicate reads.
+  //
+  // When the predicate is false the patch appends nothing and queues nothing: a
+  // no-op write still moves `_rev`, and a notice for a message that does not
+  // exist resets `servedRecipients` and slides a live debounce.
   const submissionNote = request.leadNotes.trim();
-  const notesChanged = submissionNote !== "" && submissionNote !== storedLeadNotes.trim();
+  const notesChanged = submissionNote !== "" && submissionNote !== newestLeadNoteBody.trim();
   const submissionMessage = notesChanged
     ? buildProposalMessage({
         authorId: leadId,
@@ -279,9 +293,6 @@ async function postHandler(req: NextRequest) {
       const patched = p.ifRevisionId(rev).set({
         songs,
         status: request.status,
-        // `lead_notes` appears ONLY when the note actually changed — see the
-        // predicate above. Omitted, not written back.
-        ...(submissionMessage ? { lead_notes: submissionMessage.body } : {}),
         team_notes: request.teamNotes,
         contributors,
         // Target metadata refreshed from the authorized canonical role.
@@ -318,11 +329,11 @@ async function postHandler(req: NextRequest) {
       status: request.status,
       team_notes: request.teamNotes,
       // A first submission goes through `create`, not a patch, so the array is
-      // minted directly and needs no `setIfMissing`. `lead_notes` rides along as
-      // the mirror.
-      ...(submissionMessage
-        ? { lead_notes: submissionMessage.body, messages: [submissionMessage] }
-        : {}),
+      // minted directly and needs no `setIfMissing`. `lead_notes` does NOT ride
+      // along any more: seeding a field nothing maintains is worse than not
+      // writing it, and a create is the one place a half-removed mirror would
+      // look deliberate.
+      ...(submissionMessage ? { messages: [submissionMessage] } : {}),
       ...submitted,
     };
     tx = tx.create(created);

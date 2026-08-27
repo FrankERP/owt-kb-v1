@@ -243,7 +243,7 @@ beforeEach(() => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe("POST /api/me/proposals/[id]/messages — the lead side", () => {
-  it("appends a lead_note and mirrors lead_notes, in ONE patch", async () => {
+  it("appends a lead_note and mirrors NOTHING, in ONE patch", async () => {
     seed();
     const res = await postLead({ body: "  Bajé la tonalidad  " });
     expect(res.status).toBe(200);
@@ -262,9 +262,14 @@ describe("POST /api/me/proposals/[id]/messages — the lead side", () => {
     expect(typeof msg._key).toBe("string");
     expect(typeof msg.at).toBe("string");
 
-    // The mirror: `lead_notes` holds the newest LEAD message body, which is what
-    // keeps the existing debounced admin email firing unchanged.
-    expect(p.set).toEqual({ lead_notes: "Bajé la tonalidad" });
+    // The mirror is gone: the patch appends and sets NOTHING. `toEqual({})` on
+    // the whole `set`, not `not.toHaveProperty`, because this route's patch has
+    // no other business writing a field — anything appearing here is a new
+    // writer nobody reviewed.
+    expect(p.set).toEqual({});
+    // And the stored value is left alone. Frozen, not blanked: it is what
+    // production's old sweep compares against during the release window.
+    expect(store.proposals[0].lead_notes).toBe("Nota original");
   });
 
   it("calls setIfMissing BEFORE append — the assertion this file exists for", async () => {

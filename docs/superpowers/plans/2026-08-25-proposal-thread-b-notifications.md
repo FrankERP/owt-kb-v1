@@ -748,6 +748,44 @@ into the one branch whose rewrites produced six consecutive fix-induced defects.
 Child A's Phase D step 9 is designed so the combination does not exist. Declined,
 not overlooked.
 
+### Slice 2 — removing the mirror (`feat/proposal-thread-b2-remove-mirror`)
+
+Branches off slice 1's verified head. In: the four mirror writes — the lead
+message route, both branches of `POST /api/me/proposals`, and the
+`request_changes` transition's `admin_notes`; the append predicate's comparison
+target; the two e2e fixtures; the docs this makes stale.
+
+Out, still: both pushes, `proposalNotify`'s body source, the subject and
+preference-hint copy.
+
+**The append predicate's comparison target had to move, and the plan says so in
+§Removing the mirror without saying why it is forced.** It compared against the
+stored `lead_notes`, which was live only because this route mirrored it. Frozen,
+that comparison is wrong in a way that produces duplicates: a lead who posts
+through the thread and then saves compares their new text against a stale
+archive, finds it different, and mints a second copy of the message they just
+posted. It now reads the newest `lead_note` message.
+
+**Two test fixtures described a document production does not have.**
+`proposalWriteRoutes.test.ts` and `setlistNoticeQueueing.test.ts` both seeded
+`lead_notes` with an EMPTY thread. Child A's `--apply` minted a `lead_note` for
+every document carrying that field, so post-migration that shape does not exist —
+and once the predicate reads the thread, a fixture without the migrated message
+tests a first submission while claiming to test an unchanged note. Both now seed
+the migrated message under its deterministic key.
+
+**The seam row is now written**, in `setlistNoticeQueueing.test.ts`: queue
+through the new route, then feed the notice's `beforeNotes` and the still-stored
+`lead_notes` to the surviving `classifyLeadNotes` and expect `null`. Slice 1
+could not write it — while the route mirrored, the stored value moved. The
+fixture's stored value is deliberately non-empty, or both sides are `""` and the
+row passes whether or not the route wrote anything.
+
+**Criterion 5 is pinned rather than asserted in prose.** Three assertions now
+read a stored legacy value back and show it byte-unchanged after a write that
+would previously have moved it, on the patch, the transition and the message
+route.
+
 ## Terminal state
 
 `READY_FOR_ADVERSARIAL_REVIEW` — all three open questions are closed.

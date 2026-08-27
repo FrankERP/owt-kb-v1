@@ -498,7 +498,14 @@ async function transition(args: TransitionArgs) {
       }
     : {
         status: "changes_requested",
-        admin_notes: request.adminNotes,
+        // `admin_notes` is NOT set. The transition was the last writer of that
+        // mirror and it stops here; `request.adminNotes` still feeds
+        // `transitionMessage` below, which is where the change request now lives.
+        //
+        // Not setting it is also what stops `reopen` with an empty note from
+        // BLANKING the archive, which is what writing the request verbatim did.
+        // The stored value is left exactly as it is — read the rollback note in
+        // the plan before restoring this write.
         reviewed_at: now,
         last_transition: record,
       };

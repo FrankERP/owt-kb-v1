@@ -372,6 +372,26 @@ function proposal(over: Record<string, unknown> = {}): Record<string, unknown> {
     lead: "mem-1",
     contributors: [{ _key: "c1", person: "mem-1" }],
     lead_notes: "Solo para admins",
+    // A pre-cutover change request, so the "left byte-unchanged" assertions
+    // below have a real value to be unchanged FROM. An empty one would pass
+    // whether the transition blanked the field or never touched it.
+    admin_notes: "Nota admin previa",
+    // The migrated twin of `lead_notes`, under the migration's deterministic
+    // key. Child A's `--apply` minted one of these for EVERY document carrying
+    // the field, so post-migration a proposal with `lead_notes` and an empty
+    // thread does not exist — and the append predicate now reads the thread, so
+    // a fixture without it would test a shape production does not have.
+    messages: [
+      {
+        _key: "migleadnote01",
+        _type: "proposal_message",
+        author: { _ref: "mem-1" },
+        author_role: "lead",
+        kind: "lead_note",
+        body: "Solo para admins",
+        at: "2026-07-01T00:00:00.000Z",
+      },
+    ],
     team_notes: "Salmo 100:2",
     songs: [
       { _key: "p1", play_key: "D", song: { _type: "reference", _ref: "song-1" } },
@@ -497,10 +517,13 @@ describe("POST /api/me/proposals — first create", () => {
       service_date: WEEK,
       service_ref: { _type: "reference", _ref: "role-1" },
       status: "draft",
-      // The team message stays separate from the private review note.
-      lead_notes: "Solo para admins",
       team_notes: "Salmo 100:2",
     });
+    // The mirror is GONE from the create. `toMatchObject` cannot see a surviving
+    // field, so this needs the explicit form — the failure it catches is a
+    // half-removed mirror, where the patch stops writing it and the create keeps
+    // seeding a field nothing maintains.
+    expect(created).not.toHaveProperty("lead_notes");
     expect(created.submitted_at).toBeUndefined();
     expect(patchShapes(tx)).toEqual([
       {
@@ -533,8 +556,9 @@ describe("POST /api/me/proposals — first create", () => {
       author: { _ref: "mem-1", _type: "reference" },
     });
     expect(typeof messages[0]._key).toBe("string");
-    // The mirror rides along on the same create.
-    expect(created.lead_notes).toBe("Mi primera nota");
+    // The message is now the ONLY record of that note — the mirror no longer
+    // rides along on the create.
+    expect(created).not.toHaveProperty("lead_notes");
   });
 
   it("RETURNS the new thread, so the first note is visible without a reload", async () => {
@@ -710,7 +734,7 @@ describe("POST /api/me/proposals — save / resubmit an existing proposal", () =
 
   // ── §2: the submission note becomes a message, under a two-part rule ──────
 
-  it("appends and mirrors ONLY when the note is non-empty AND changed", async () => {
+  it("appends ONLY when the note is non-empty AND changed, and mirrors nothing", async () => {
     seed();
     const res = await POST(
       req(
@@ -724,7 +748,10 @@ describe("POST /api/me/proposals — save / resubmit an existing proposal", () =
     const op = patches(committedTransactions()[0])[0];
     const [msg] = op.appended.messages as Record<string, unknown>[];
     expect(msg).toMatchObject({ kind: "lead_note", author_role: "lead", body: "Una nota nueva" });
-    expect(op.set).toMatchObject({ lead_notes: "Una nota nueva" });
+    // The patch appends and does NOT mirror. The stored value is left exactly as
+    // it was — this delivery freezes the legacy fields, it does not blank them.
+    expect(op.set).not.toHaveProperty("lead_notes");
+    expect(store.proposals[0].lead_notes).toBe("Solo para admins");
     expect(op.calls.indexOf("setIfMissing")).toBeLessThan(op.calls.indexOf("append"));
   });
 
@@ -1148,7 +1175,6 @@ describe("PATCH /api/admin/proposals/[id] — request_changes and reopen", () =>
     expect(op.rev).toBe("prop-rev-1");
     expect(op.set).toMatchObject({
       status: "changes_requested",
-      admin_notes: "Cambia la última",
       last_transition: {
         action: "request_changes",
         toStatus: "changes_requested",
@@ -1156,6 +1182,11 @@ describe("PATCH /api/admin/proposals/[id] — request_changes and reopen", () =>
         by: "admin-1",
       },
     });
+    // The transition was the last writer of `admin_notes` and it stops here.
+    // Explicit, because `toMatchObject` above would not notice it surviving —
+    // and the failure mode is silent: a `reopen` with an empty note used to
+    // BLANK the archive the rollback leans on.
+    expect(op.set).not.toHaveProperty("admin_notes");
     expect(patches(tx).some((o) => o.id === `roleTarget.sunday_role.${WEEK}`)).toBe(true);
     expect(sendPushMock).toHaveBeenCalledWith(["mem-1"], "proposals", expect.anything());
   });
@@ -1235,8 +1266,10 @@ describe("PATCH /api/admin/proposals/[id] — request_changes and reopen", () =>
       body: "Cambia la última",
       author: { _ref: "admin-1", _type: "reference" },
     });
-    // Still mirrored into the legacy archive by the TRANSITION, and only by it.
-    expect(op.set).toMatchObject({ admin_notes: "Cambia la última" });
+    // The message is the change request now. Nothing mirrors it into the legacy
+    // archive, and the stored value is left byte-unchanged.
+    expect(op.set).not.toHaveProperty("admin_notes");
+    expect(store.proposals[0].admin_notes).toBe("Nota admin previa");
   });
 
   it("inherits ifRevisionId — UNLIKE the standalone message routes", async () => {

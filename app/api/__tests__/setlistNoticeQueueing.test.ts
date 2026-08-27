@@ -65,6 +65,11 @@ import { POST as meProposalPOST } from "@/app/api/me/proposals/route";
 import { PATCH as adminProposalPATCH } from "@/app/api/admin/proposals/[id]/route";
 import { POST as publishPOST } from "@/app/api/admin/roles/publish/route";
 import { outboxId, songRowsFrom } from "@/app/utils/outboxNotice";
+// The surviving pure classifier — this is what PRODUCTION's old sweep runs
+// during the release window, and composing the seam row with it is what makes
+// that row test the seam rather than restate an assertion outboxClassify already
+// makes on hand-written strings.
+import { classifyLeadNotes } from "@/app/utils/outboxClassify";
 
 // ── Transaction recorder ────────────────────────────────────────────────────
 
@@ -742,6 +747,58 @@ describe("POST /api/me/proposals — leadNotes notice", () => {
     expect(beforeOf(notices[0]).beforeMessageCount).toBe(1);
   });
 
+  it("closes the cutover seam: the snapshot still matches the stored value", async () => {
+    // THE SEAM, end to end, and it only became testable when the mirror went
+    // away. During the preview→main window production runs the OLD sweep, which
+    // compares the notice's `beforeNotes` against the live `lead_notes`. Nothing
+    // moves that field any more, so the two agree and `classifyLeadNotes`
+    // returns null — silence rather than a stale-content email.
+    //
+    // The stored value MUST be non-empty. With an empty one both sides are `""`
+    // and this passes whether or not the route wrote anything.
+    seedService();
+    store.proposals.push(
+      proposal({
+        status: "pending",
+        lead_notes: "Nota original",
+        messages: [
+          { _key: "migleadnote01", _type: "proposal_message", kind: "lead_note", body: "Nota original", author: { _ref: "mem-1" }, author_role: "lead", at: "2026-07-01T00:00:00.000Z" },
+        ],
+      }),
+    );
+    const res = await meProposalPOST(
+      req(
+        saveBody({
+          status: "pending",
+          leadNotes: "Algo completamente distinto",
+          observed: { state: "single", id: PROPOSAL_ID, rev: "prop-rev-1" },
+        }),
+      ),
+    );
+    expect(res.status).toBe(200);
+    await drainAfter();
+
+    const notices = upsertsOfKind("leadNotes");
+    expect(notices).toHaveLength(1);
+    const snapshot = beforeOf(notices[0]).beforeNotes;
+    expect(snapshot).toBe("Nota original");
+    // The route appended a message and left `lead_notes` alone, so the value the
+    // old sweep would read is still the value the notice snapshotted.
+    const live = store.proposals.find((p) => p._id === PROPOSAL_ID)!.lead_notes as string;
+    expect(live).toBe("Nota original");
+    // Composed with the surviving pure function, which is what production runs.
+    // This fails the moment anything starts writing the mirror again.
+    expect(
+      classifyLeadNotes({
+        before: snapshot ?? "",
+        after: live,
+        serviceDate: WEEK,
+        today: "2026-08-01",
+        reviewable: true,
+      }),
+    ).toBeNull();
+  });
+
   it("queues leadNotes on a changes_requested proposal too", async () => {
     seedService();
     store.proposals.push(proposal({ status: "changes_requested", lead_notes: "Nota original" }));
@@ -768,7 +825,21 @@ describe("POST /api/me/proposals — leadNotes notice", () => {
   // predicate becomes load-bearing on its own.
   it("queues nothing when the notes did not change", async () => {
     seedService();
-    store.proposals.push(proposal({ status: "pending", lead_notes: "Nota original" }));
+    // The predicate now compares against the NEWEST `lead_note` message, not the
+    // stored `lead_notes` — which nothing writes any more and which is therefore
+    // frozen. The migrated message is what a post-`--apply` document actually
+    // carries, and it is what makes this an unchanged note rather than a first
+    // one. Seeding only the legacy field would test a shape production does not
+    // have, and would pass for the wrong reason.
+    store.proposals.push(
+      proposal({
+        status: "pending",
+        lead_notes: "Nota original",
+        messages: [
+          { _key: "migleadnote01", _type: "proposal_message", kind: "lead_note", body: "Nota original", author: { _ref: "mem-1" }, author_role: "lead", at: "2026-07-01T00:00:00.000Z" },
+        ],
+      }),
+    );
     const res = await meProposalPOST(
       req(
         saveBody({

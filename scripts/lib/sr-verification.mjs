@@ -935,7 +935,23 @@ export function buildFixtureDocuments({ now }) {
     status: "changes_requested",
     submitted_at: now,
     reviewed_at: now,
-    admin_notes: "Fixture: cambios solicitados",
+    // The thread, not the legacy mirror. Nothing asserted on the seeded
+    // `admin_notes`, so this is a correctness edit rather than a repair: post
+    // Child B the transition writes a message and never that field, and a
+    // fixture seeding only the field describes a document the app no longer
+    // produces. Keyed deterministically like the migration's own messages, so
+    // re-seeding is idempotent.
+    messages: [
+      {
+        _key: "srvchangereq01",
+        _type: "proposal_message",
+        author: { _type: "reference", _ref: "srv.member.admin" },
+        author_role: "admin",
+        kind: "admin_change_request",
+        body: "Fixture: cambios solicitados",
+        at: now,
+      },
+    ],
   });
 
   const proposalApproved = "srv.proposal.approved";
