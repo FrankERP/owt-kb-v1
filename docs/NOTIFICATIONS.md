@@ -64,6 +64,40 @@ queued: intro + CTA, the same setlist table as "Setlist listo" (no Mov. column,
 medleys grouped), and `lead_notes` when present. Empty or unreadable songs still
 send the intro and CTA. Push stays a one-line alert.
 
+## The proposal thread — what it does NOT notify
+
+Released 2026-08-26. `lead_notes` / `admin_notes` became a `messages[]` thread,
+and **the notification layer did not change with it.** The legacy fields are
+still written as mirrors precisely so this layer keeps behaving identically:
+`lead_notes` holds the newest lead message, which is exactly what it held
+before, so the debounced `leadNotes` email fires on the same occasions with the
+same audience, debounce and preference key.
+
+**The consequence, which will be reported as a bug if nobody says it first:**
+`queueLeadNotesNotice` requires the pre-write status to be `pending` or
+`changes_requested`. Production currently holds **13 approved proposals, 1
+draft, and zero in either reviewable status** — so **a message posted today
+notifies nobody, in either direction**:
+
+| Who posts | Where | Today |
+|---|---|---|
+| Lead, on `pending` / `changes_requested` | thread | the existing debounced admin email |
+| Lead, on `approved` — **the dominant real case** | thread | **nothing** |
+| Lead, on `draft` | thread | nothing (not in front of admins yet) |
+| Admin, standalone message | thread | **nothing** — no such feature existed before |
+| Admin, via `request_changes` / `reopen` | transition | unchanged review push |
+
+Closing the two "nothing" rows is Child B, which adds a push to admins on
+`approved` and a push to the lead for a standalone admin message. It is planned
+and **not approved** — see its review log.
+
+Three smaller behaviours worth knowing, all deliberate and named in Child A §1:
+a repeated identical message queues nothing (both the queue guard and the flush
+classifier compare trimmed strings); two messages inside one debounce window
+produce one email carrying only the newest, because the flush re-reads the live
+mirror; and a pre-deploy client that deliberately CLEARS the note textarea is
+now ignored, which retires a signal that used to fire.
+
 ## The liveness alarm
 
 The daily cron reports the oldest `firstQueuedAt` across notices in **either**

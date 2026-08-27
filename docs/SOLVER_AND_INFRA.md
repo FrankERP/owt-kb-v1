@@ -136,9 +136,14 @@ import with `--apply`.**
   hard-aborts with `live_thread` and exits 1. A reported patch failure does not prove the write did
   not land: re-run the DRY-RUN before any repair.
 
-### ⛔ Retired writers — five one-shots that now **fail closed**
+### ⛔ Retired writers — seven one-shots that now **fail closed**
 
-These five already ran against production and **cannot** adopt the guarded mutation invariant
+**Count kept honest by hand, and it drifted once:** this said "five" while the registry held
+six, because no test pins prose. `RETIRED_WRITER_NAMES` in
+[`lib/sr-retired-writer.mjs`](../scripts/lib/sr-retired-writer.mjs) is the source of truth;
+if this number disagrees with it, the registry is right.
+
+These seven already ran against production and **cannot** adopt the guarded mutation invariant
 (target lock + creation receipt + exact observed revision + dependency policy). Documentation-only
 retirement would have been insufficient, so each one calls `assertRetiredWriter()` from
 [`lib/sr-retired-writer.mjs`](../scripts/lib/sr-retired-writer.mjs) as its **first statement** —

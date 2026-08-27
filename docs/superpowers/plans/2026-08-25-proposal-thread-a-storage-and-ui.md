@@ -676,8 +676,22 @@ that it is absent. A change you cannot explain is the stop signal. **No `--apply
 - Reads (§6) and UI (§7).
 - Register both writers in `PROTECTED_RUNTIME_WRITERS` and move the count test's
   title from fourteen to sixteen (`protectedReadAudit.test.ts:387`).
-- **Caveat:** e2e fixtures still assert `admin_notes` until Phase E, so this phase
-  is deployable against vitest but not the e2e suites.
+- ~~**Caveat:** e2e fixtures still assert `admin_notes` until Phase E, so this
+  phase is deployable against vitest but not the e2e suites.~~
+  **WITHDRAWN 2026-08-26 — this caveat was inherited from a draft in which Phase C
+  removed the mirror.** It does not: §1 keeps `admin_notes` mirrored **by the
+  transition**, and the transition still writes it
+  (`admin/proposals/[id]/route.ts:501`). The only e2e assertion on that field is
+  `proposal-lifecycle.spec.ts:104`, which reads it back after a `request_changes`,
+  so it should still pass; `lib/dataset.ts` keeps it in the projection (and gained
+  `messages`), and `sr-verification.mjs:938` only *seeds* it — nothing asserts the
+  seeded value.
+
+  **Not run, so not proven.** The e2e needs a deployment and credentials, and CI
+  does not run it (`ci.yml:6-7`). The claim here is that the reasoning no longer
+  supports "knowingly red", not that a green run was observed. **The suite does
+  break at Child B**, which removes the mirror — that is where `:104` and the seed
+  genuinely need editing, and where the Phase E bullet below belongs.
 
 ### Phase D — Release — **steps 1–5 DONE 2026-08-26; the `--apply` HAS RUN**
 
@@ -696,7 +710,37 @@ expected and named in Phase B.
 `lead_notes` / `admin_notes` were not touched, so a code rollback remains
 available.
 
-Steps 6–9 (preview, PR to `main`, production alias, reconcile) remain.
+**Steps 6–9 are DONE. Phase D is complete and Child A is RELEASED.**
+
+- **Step 6** — merged into `preview`, pushed, dev alias verified on `59369ec1`
+  and again on `2f1a2d2e`: the domain in the deployment's `alias` array AND a
+  matching `meta.githubCommitSha`. Worth recording — the first two authoritative
+  checks caught the alias still serving the PREVIOUS commit while the new
+  deployment was `BUILDING`. A green build would have reported success about 2.5
+  minutes early, which is exactly what CLAUDE.md warns about.
+- **Step 6.5, which was not in this list** — Frank exercised it on dev before
+  authorizing the merge. §5's post-approval notes had accepted that "the only
+  end-to-end human walkthrough happens after the production release"; it happened
+  BEFORE, because the migration landing first meant dev had real populated
+  threads to look at. That ordering is worth keeping for any release of this
+  shape: migration → preview → human look → production.
+- **Step 7** — [PR #9](https://github.com/FrankERP/owt-kb-v1/pull/9), `gates`
+  green on the head commit, merged as `1198aed5`.
+- **Step 8** — production alias verified: `owt-backstage.vercel.app` in the
+  `alias` array, `meta.githubCommitSha` = `1198aed5`, branch `main`.
+- **Step 9 — reconcile: CLEAN.** Every non-empty legacy value is carried by a
+  message in its own direction, compared on TRIMMED values. No top-up needed and
+  none made. The window this step exists for was real: the `--apply` ran at
+  14:33 and production served the new code at 18:49, so for about four hours
+  production ran OLD code and any save in that window would have written
+  `lead_notes` with no message — invisible once §6 removed the render block.
+  Nothing did.
+
+The reconcile is a committed script rather than an ad-hoc query:
+`scripts/reconcile-proposal-messages.mjs`, read-only, exit 1 when a human is
+needed. Its three comparison rules are the ones that make it correct rather than
+alarming: TRIMMED values, any message in that direction rather than only the
+newest, and emptiness compared too.
 
 ### Phase D — Release (the standing procedure)
 
@@ -773,8 +817,14 @@ disabled.
   deliberately not bumped. Link from `proposalWriteRequest.ts:173-176`.
 - **ADR-0024** — why read state is deferred and must never live on
   `setlistProposal` or `teamMembers`.
-- e2e: `proposal-lifecycle.spec.ts:104`, `zero-delivery.spec.ts:64`,
-  `lib/dataset.ts:390-403`, `scripts/lib/sr-verification.mjs:938`.
+- e2e: `lib/dataset.ts:390-403` is **DONE** — `StoredProposal` and its projection
+  carry `messages`. The rest of this bullet **moves to Child B**:
+  `proposal-lifecycle.spec.ts:104` and `scripts/lib/sr-verification.mjs:938` are
+  about `admin_notes`, which Child A still mirrors and Child B stops mirroring, so
+  editing them now would break a passing assertion ahead of the change that
+  invalidates it. `zero-delivery.spec.ts` needs no row at all: `deliveryFirewall`
+  gates at the transport, in front of `push.ts`'s provider call, so a new
+  `sendPush` caller cannot bypass it.
 - **Retire the migration script**: `assertRetiredWriter` at the top, move from
   `OPERATOR_TOOLING_ALLOWLIST` to `RETIRED_ONE_SHOT_WRITERS`, and update
   `scripts/lib/sr-retired-writer.mjs`'s `RETIRED_WRITERS` and the "six retired

@@ -181,9 +181,10 @@ songs/notes are written to the real setlist. See the design spec
 | `last_edited_at` | datetime (readOnly) | |
 | `songs` | array of `proposal_song` | `{ song → post, play_key, medley_tag (hidden) }`. |
 | `status` | string (radio) | `draft` (init) / `pending` / `approved` / `changes_requested`. |
-| `lead_notes` | text | "Notas del líder." |
-| `team_notes` | text | Published to the team on approval. |
-| `admin_notes` | text | |
+| `messages` | array of `proposal_message` | **The private lead ↔ admin thread.** `{_key, _type, author → teamMembers (OPTIONAL), author_role, kind, body, at}`. Append-only — this delivery ships no edit or delete path. `author_role` is a snapshot taken at post time, never joined at read time, so an admin who later becomes a member does not have their history re-render as a lead note; `author` is optional because two migrated `admin_notes` had nobody to attribute them to. `kind` and `author_role` reserve `pastor_note` / `system`, unminted, so routing pastor notes here later needs no migration. |
+| `lead_notes` | text | **LEGACY MIRROR — no longer the source of truth.** Holds the newest LEAD message body, written by every path that appends one. Lossy on purpose: that is exactly what it held before the thread existed, which is why the debounced admin email is unchanged. Still read by `notifyProposalSubmitted` and by the outbox classifier. Child B retires both readers. |
+| `team_notes` | text | Published to the team on approval. **Not** part of the thread — it is the message to the whole team, and it stayed a field deliberately. |
+| `admin_notes` | text | **LEGACY MIRROR, written by the TRANSITION only.** The standalone admin message route appends and leaves it alone, so ordinary admin chatter cannot overwrite the change-request archive the rollback leans on. It has no notification consumer. |
 | `submitted_at`, `reviewed_at` | datetime (readOnly) | |
 | `approval_receipt` | object (hidden, readOnly) | **Internal.** `{v, marker, fingerprint, serviceType, serviceDate, serviceRef, setlistTargetKey, setlistId, songCount, approvedAt, approvedBy}` — written atomically with the live setlist on approval. |
 | `last_transition` | object (hidden, readOnly) | **Internal.** `{v, marker, action, fingerprint, toStatus, at, by}` — the receipt for `request_changes` / `reopen` / `reconcile_target`. |

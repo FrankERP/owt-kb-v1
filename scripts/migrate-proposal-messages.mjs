@@ -27,6 +27,17 @@ import { createClient } from "@sanity/client";
 
 import { MIGRATION_KEYS, planProposalMessages } from "./lib/proposalMessages.mjs";
 
+// ── Service Readiness A2 §8: RETIRED WRITER ────────────────────────────────
+// This one-shot ran against production on 2026-08-26 (Child A Phase D step 4,
+// with explicit consent): 8 documents, 10 messages, 0 failures. It now FAILS
+// CLOSED here, before any Sanity client is constructed and before any mutation
+// is assembled, so there is no path from this file to a second write — not even
+// a dry run. Everything below is kept as the historical record of what was
+// applied; `scripts/reconcile-proposal-messages.mjs` is the read-only check that
+// replaced it, and a repair is a consented top-up with a distinct `_key`.
+import { assertRetiredWriter } from "./lib/sr-retired-writer.mjs";
+assertRetiredWriter("migrate-proposal-messages", { argv: process.argv.slice(2), env: process.env });
+
 const APPLY = process.argv.includes("--apply");
 
 const token = APPLY ? process.env.SANITY_WRITE_TOKEN : process.env.SANITY_API_READ_TOKEN;

@@ -172,7 +172,16 @@ export function parseProposalTransitionRequest(
 
 // ── Approval receipt ───────────────────────────────────────────────────────
 
-/** Bump when the fingerprinted shape changes, so old digests can never collide. */
+/**
+ * Bump when the FINGERPRINTED shape changes, so old digests can never collide.
+ *
+ * "Fingerprinted" means what `canonicalizeApprovalInput` covers, NOT what the
+ * document holds. Release 2 added `messages[]` to `setlistProposal` and did not
+ * bump this — see **ADR-0023**, which is the answer to "surely the thread was a
+ * shape change?". Bumping invalidates every `approval_receipt` in production at
+ * once, and the receipt is what makes a retried approval a no-write success
+ * rather than a second publish.
+ */
 export const APPROVAL_RECEIPT_VERSION = 1;
 /** App/version marker recorded and fingerprinted with every approval. */
 export const APPROVAL_APP_MARKER = "owt-kb-v1/a2-approval-1";

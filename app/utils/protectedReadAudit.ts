@@ -313,6 +313,13 @@ export const RETIRED_ONE_SHOT_WRITERS: readonly AuditExemption[] = [
     removalOwner: "retired historical writer (never A2 — the file is the record, the gate is the guard)",
   },
   {
+    file: "scripts/migrate-proposal-messages.mjs",
+    operation: "module",
+    reason:
+      "retired one-shot: folded lead_notes/admin_notes on every published setlistProposal into messages[] under two deterministic _keys. It RAN — 2026-08-26, 8 documents, 10 messages, 0 failures — and now fails closed at assertRetiredWriter() before any client is constructed. Replacement: nothing, the fold is done; scripts/reconcile-proposal-messages.mjs is the read-only check, and a repair is a consented top-up with a distinct _key",
+    removalOwner: "retired historical writer (never A2 — the file is the record, the gate is the guard)",
+  },
+  {
     file: "scripts/import-schedule.ts",
     operation: "module",
     reason:
@@ -407,13 +414,6 @@ export const OPERATOR_TOOLING_ALLOWLIST: readonly AuditExemption[] = [
     operation: "module",
     reason:
       "one-off A2 §1 rollout: creates the claimed weekend roleTargetLock for each pre-A2 weekend role. Reads through the canonical published client and the raw client for draft evidence; each lock is created at its deterministic id (a concurrent create loses rather than overwriting) paired with a revision-asserting no-op patch on the role's own unchanged week field, which is the protected write this entry covers. Refuses a duplicate target, a draft overlay, a malformed role, or an existing lock",
-    removalOwner: "one-off migration tooling (never A2 — retire alongside the other one-shot writers)",
-  },
-  {
-    file: "scripts/migrate-proposal-messages.mjs",
-    operation: "module",
-    reason:
-      "one-shot Release 2 migration: reads every published setlistProposal (its own query, because PROPOSAL_PROJECTION omits the timestamp fallbacks) and folds lead_notes/admin_notes into messages[] under two deterministic _keys. Dry-run by default; --apply asserts the exact revision it read and aborts that document rather than retrying. Refuses to touch a document whose messages[] already holds a real thread. Not yet retired — assertRetiredWriter and the move to RETIRED_ONE_SHOT_WRITERS are Child A Phase E, after the single --apply",
     removalOwner: "one-off migration tooling (never A2 — retire alongside the other one-shot writers)",
   },
 ];
