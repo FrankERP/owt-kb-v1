@@ -16,8 +16,9 @@ consume stage, serial claims). The standing constraint underneath them is not.
 > the OLD server.
 >
 > **Gmail has since been bounded at ~1.2 s per send** (2026-08-27: one sweep,
-> 14 recipients, `emailed: 14, unserved: 0` — which serial sends and the 40 s
-> budget make impossible above ~1.5 s/send). Roughly 10–12× faster. The derivation
+> 14 recipients, `emailed: 14, unserved: 0` — which serial sends and the 20 s
+> ADMISSION WINDOW, not the 40 s budget, make impossible above ~1.5 s/send:
+> 20 000 / 13 = 1 538 ms). Roughly 10–12× faster. The derivation
 > is in `docs/NOTIFICATIONS.md` §"Send throughput on Gmail"; it is a bound from the
 > sweep's report, not the authoritative `msPerSend` log line.
 >
@@ -113,7 +114,8 @@ accepted only because the alternative loses mail.
 
 **`setlist` notices are still truncated, and no cap can fix them.** One setlist
 notice carries every participant in a single document, so it is taken alone, runs
-over budget, and everyone past the second recipient is destroyed.
+over budget, and everyone past the serviceable count is destroyed — two on the
+server these figures describe, seventeen at the latency measured after the move.
 
 If someone raises `SEND_CONCURRENCY` without new measurements, sweeps will report
 `emailed: 0` while destroying whole batches, and the flush workflow will go red on
@@ -121,9 +123,13 @@ If someone raises `SEND_CONCURRENCY` without new measurements, sweeps will repor
 
 Two things retire this ADR, and nothing else does:
 
-1. **The ~14 s remote accept, fixed at the mail server.** Then the cap returns to
-   40, one sweep serves a whole month, grouping works, and `SEND_CONCURRENCY`
-   stops mattering.
+1. **The ~14 s remote accept, fixed at the mail server.** Then the cap rises, one
+   sweep serves a whole month, grouping works, and `SEND_CONCURRENCY` stops
+   mattering. **NOT "returns to 40"**, which this line used to say: 40 needs
+   `ms_per_send ≤ ~512 ms` under the runtime admission rule, not the 2 s the loose
+   inequality suggests. The move to Gmail is the closest this has come — see
+   `docs/NOTIFICATIONS.md` §"Send throughput on Gmail" and the bold warning in
+   `docs/SECRETS.md` — and it does not reach 40.
 2. **Re-pending notices the sweep never attempted, instead of consuming them.**
    Grouped *and* lossless across several sweeps, since a recipient's notices stay
    together and are either all served or all returned. This changes the consume

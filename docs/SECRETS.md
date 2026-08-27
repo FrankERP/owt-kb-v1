@@ -294,6 +294,8 @@ that order, and the window is zero.
 
 **Purpose.** Sign-in. Without them nobody can authenticate, on any surface.
 
+**A FOURTH variable holds the same value as one of them.** `NEXT_PUBLIC_GOOGLE_IOS_CLIENT_ID` (`app/utils/native.ts`) is the client-side half of the iOS flow and **must equal the server's `GOOGLE_IOS_CLIENT_ID`** — the server validates the audience of a token the client obtained with it, so a mismatch fails sign-in on iOS only, silently on every other surface. Being `NEXT_PUBLIC_`, it is inlined into the bundle at build time, so changing it needs a rebuild rather than just a redeploy.
+
 **Where the values came from.** Google Cloud console → APIs & Services → Credentials, in the project that owns the OAuth consent screen. The client IDs are **not secret** and appear in client bundles by design; only `GOOGLE_CLIENT_SECRET` is.
 
 **How to rotate the secret.** Add a second secret to the same OAuth client in the Google console, update `GOOGLE_CLIENT_SECRET` in Vercel, redeploy, confirm a web sign-in works, then delete the old secret. **Blast radius:** between updating Vercel and the redeploy completing, web Google sign-in fails; existing sessions survive because they are JWT-backed. The native paths do not use the secret and are unaffected. Rotating a client **ID** is a different and much larger job — it invalidates the mobile builds that hard-code it.

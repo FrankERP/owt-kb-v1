@@ -459,10 +459,21 @@ type BuiltUpsert = NonNullable<ReturnType<typeof setlistUpsert>>;
  * `ms_per_send × emailLimit < sendBudgetMs` (§1, "Bounding the sweep") — and
  * halving only the limit would let a sweep hosted inside an admin's save spend a
  * FULL 40 s of send budget after that write route had already consumed part of
- * its own `maxDuration`. Halving both keeps the inequality holding identically
- * here. The consequence is named in §1 and accepted: at a limit of 20 a large
- * Sunday setlist is "oversized" for layer 2 and taken alone, which is fine
- * because layer 2 is a backstop and layer 1 runs at the full limit.
+ * its own `maxDuration`.
+ *
+ * HALVING BOTH PRESERVES THE SPEC'S INEQUALITY AND NOT THE RUNTIME'S, which is a
+ * sharper consequence than "derated" suggests. The send loop admits a send only
+ * while `elapsed + SEND_TIMEOUT_MS <= sendBudgetMs`, and `SEND_TIMEOUT_MS`
+ * (20 s) is NOT halved with the budget. At layer 2's 20 s budget the check reads
+ * `elapsed + 20 000 > 20 000`, which is false only when `elapsed` is 0 — so
+ * **layer 2 sends exactly ONE email per sweep, at any latency**, and its
+ * `emailLimit` never binds. Survivable because layer 2's job is to START the
+ * drain rather than finish it, and layer 1 runs at the full budget. Recorded
+ * because this comment used to claim the inequality held "identically" here,
+ * which is true of the spec's form and false of the one that runs.
+ *
+ * The consequence named in §1 still holds: at a limit of 20 a large Sunday
+ * setlist is "oversized" for layer 2 and taken alone.
  *
  * Derived from the sweep's own exported defaults rather than restated as
  * numbers, so retuning `NOTIFY_FLUSH_EMAIL_LIMIT` / `NOTIFY_SEND_BUDGET_MS`
@@ -502,7 +513,9 @@ function opportunisticSweepOptions(): { emailLimit: number; sendBudgetMs: number
  * no-op save — and also PROPOSAL SUBMIT and PROPOSAL REVIEW, which §3's text
  * names as protected writes but which send immediately via
  * `notifyProposalSubmitted`/`notifyProposalReview` and queue no outbox document
- * at all. Immaterial in practice, since layer 1 sweeps five minutes later; noted
+ * at all. Layer 1 sweeps afterwards — nominally five minutes, measured at a 41-minute
+ * median and occasionally hours (docs/NOTIFICATIONS.md), so this is a delay rather
+ * than the near-immediate follow-up it was written as; noted
  * so the next reader does not read this as complete coverage.
  */
 async function commitUpserts(label: string, upserts: BuiltUpsert[]): Promise<void> {

@@ -416,8 +416,9 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   Vercel Hobby allows one cron per day, so the other two are driven by GitHub Actions.
 
 - **`GET /api/cron/flush-notifications`** — same secret-based auth (401 otherwise). Runs one
-  `sweepOutbox()` at full budget: the notification outbox's primary flush trigger. Driven every
-  five minutes by `.github/workflows/flush-notifications.yml`, never by `vercel.json`. See
+  `sweepOutbox()` at full budget: the notification outbox's primary flush trigger. Driven by
+  `.github/workflows/flush-notifications.yml`, never by `vercel.json` — that workflow DECLARES
+  every five minutes and measurably runs at a 41-minute median. See
   `docs/NOTIFICATIONS.md`.
 
 - **`GET /api/cron/smtp-probe`** — same secret-based auth (401 otherwise). Diagnostic: times each
@@ -455,7 +456,7 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   as a non-editable `targetState`, `/api/song/[id]` and `/api/me/songs` drop it from play
   history, and `notifyProposalSubmitted` sends nothing.
 - **Protected mutations have no alternate path:** the API routes above are the only writers. The
-  embedded Studio strips every mutating action from all thirteen protected types, and the five historical
+  embedded Studio strips every mutating action from all thirteen protected types, and the seven historical
   one-shot scripts fail closed before constructing a client — see
   [DATA_MODEL → Studio](DATA_MODEL.md#studio) and
   [SOLVER_AND_INFRA §3](SOLVER_AND_INFRA.md#3-scripts--one-off-migrations-imports--ops).

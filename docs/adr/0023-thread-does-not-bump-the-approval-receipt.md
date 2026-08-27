@@ -1,6 +1,6 @@
 # ADR-0023: The message thread does not bump `APPROVAL_RECEIPT_VERSION`
 
-**Date:** 2026-08-26 · **Status:** Accepted
+**Date:** 2026-08-26 · **Status:** Accepted · **Amended 2026-08-27** — the mirror was removed, and the receipt count corrected from 13 to 6
 
 ## Context
 

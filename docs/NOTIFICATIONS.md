@@ -60,7 +60,12 @@ eventually is. If the GitHub workflow is broken or disabled, the realistic delay
 is **up to 24 hours**, until layer 3 runs.
 
 Layer 2 derates **both** knobs (half the recipient limit *and* half the send
-budget), so the send-time inequality holds identically there. It does not fire on
+budget). That preserves the SPEC's inequality and not the runtime's: a send is
+admitted while `elapsed + SEND_TIMEOUT_MS <= sendBudgetMs`, and the 20 s timeout
+is not halved with the budget — so at layer 2's 20 s budget the check fails after
+the first send and **layer 2 delivers exactly one email per sweep, at any
+latency**. Its recipient limit never binds. Survivable because layer 2's job is to
+start the drain rather than finish it, and layer 1 runs at the full budget. It does not fire on
 proposal submit or review, which queue nothing; layer 1 is what covers those —
 nominally within five minutes, in practice at a 41-minute median (§"Layer 1 does
 not run every five minutes"). The proposal-submit **email** (`buildProposalEmail`) is immediate, not
@@ -116,6 +121,13 @@ duration `d` therefore fit
 N  =  floor(20 000 / d) + 1
 ```
 
+**There is a second clock, and it can bind first.** The same check also refuses a
+send when `elapsed_since_sweep_start + SEND_TIMEOUT_MS > SWEEP_DEADLINE_MS (45 s)`,
+so the sending window is really `min(20 s, 25 s − read_phase)`. At the recommended
+limit of 12 — 14.4 s of sending at 1.2 s each — a read phase over ~10.6 s lowers
+the ceiling with no separate signal. `stoppedBy` on the
+`notify_sweep_send_budget_exhausted` log line says which clock stopped it.
+
 | sender | ms/send | N (runtime) | spec's looser form |
 |---|---|---|---|
 | `mail.oasis.mx` | 14 413 (measured 2026-08-07) | **2** — which is why production runs 2 | 2 |
@@ -124,7 +136,7 @@ N  =  floor(20 000 / d) + 1
 The 14 sent on 2026-08-27 are consistent with the runtime form and not a fluke:
 13 × 1 200 = 15 600 < 20 000, with room for three more.
 
-**Nothing has been raised.** The code's default of 40 needs `d < 500 ms` under the
+**Nothing has been raised.** The code's default of 40 needs `d ≤ ~512 ms` under the
 runtime form, which Gmail does not meet. A value around **12** would be safe at the
 bounded latency with margin for a slow day. Raising `NOTIFY_FLUSH_EMAIL_LIMIT` is a
 deliberate change that should follow a direct measurement rather than this bound —

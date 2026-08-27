@@ -376,7 +376,7 @@ the load-bearing shapes are:
 - **Post-commit side effects are centralized** in
   [`app/utils/serviceMutationSideEffects.ts`](../app/utils/serviceMutationSideEffects.ts) — see §9.
 - **Alternate write paths are closed:** the Studio strips every mutating action from all **thirteen**
-  protected types (→ [DATA_MODEL → Studio](DATA_MODEL.md#studio)) and the five historical one-shot
+  protected types (→ [DATA_MODEL → Studio](DATA_MODEL.md#studio)) and the seven historical one-shot
   scripts fail closed (→ [SOLVER_AND_INFRA §3](SOLVER_AND_INFRA.md#3-scripts--one-off-migrations-imports--ops)).
 
 ### Integrity surface
@@ -563,7 +563,7 @@ Don't rediscover these as "bugs":
   classify one from the other with `CHORD_MARKER_RE`. See [ADR-0018](adr/0018-lyrics-and-charts-are-independent.md).
   Adding a filled chart hides `body` in both readers until every chart is removed.
 - **~15 songs have no lyrics** because they're absent from the source catalog PDF (expected).
-- **Android build pending; Apple Developer Program enrollment blocked on the DUNS number** (confirmed still in progress 2026-08-27) (mobile Phase 1 verified on
+- **Android build pending; Apple Developer Program enrollment blocked on the DUNS number**, confirmed 2026-08-27 (mobile Phase 1 verified on
   iOS device). → [MOBILE.md](MOBILE.md)
 - **Two schema files are intentionally unregistered:** `youtubeType.ts` (an object type) and
   `[deprecated]roleSat.ts` (an old Saturday-role shape). Don't wire them in.
