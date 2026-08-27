@@ -411,8 +411,9 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
    * lead's OWN post moves `_rev`, so a blanket pin guarantees a 409 on their
    * next save and a reload that discards the in-progress setlist — on the
    * feature's primary action. And a content comparison is not a substitute:
-   * `POST /api/me/proposals` writes `songs`, `status`, `lead_notes` AND
-   * `team_notes` in one patch, so "identical songs" proves only that songs did
+   * `POST /api/me/proposals` writes `songs`, `status` AND `team_notes` in one
+   * patch — `lead_notes` was in this list until Child B froze it, and the
+   * argument rests on the others — so "identical songs" proves only that songs did
    * not move; adopting on that would let this editor's stale `teamNotes`
    * initializer destroy a co-lead's message with no 409 and no banner.
    *

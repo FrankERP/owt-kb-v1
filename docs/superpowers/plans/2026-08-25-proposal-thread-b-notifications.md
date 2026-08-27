@@ -755,8 +755,21 @@ message route, both branches of `POST /api/me/proposals`, and the
 `request_changes` transition's `admin_notes`; the append predicate's comparison
 target; the two e2e fixtures; the docs this makes stale.
 
-Out, still: both pushes, `proposalNotify`'s body source, the subject and
-preference-hint copy.
+Out, still: both pushes, the subject and preference-hint copy.
+
+**`proposalNotify`'s body source MOVED INTO THIS SLICE, and the diff review is
+what forced it.** The plan lists it under Phase B without saying it is coupled to
+the mirror removal. It is: the create stops writing `lead_notes`, so a submit
+email still sourcing from that field renders an EMPTY notes block on every first
+submission carrying a note — the one flow the field existed for — and a frozen
+pre-cutover note on every resubmit, because `notifyProposalSubmitted` fires on
+every save committed `pending`. `notesBlock` renders nothing at all for an empty
+value, so the regression is invisible rather than obvious, and nothing caught it:
+`proposalNotify.test.ts` hand-seeded `lead_notes` in its own fixture and passed
+regardless of what the route wrote.
+
+Splitting them would have created a co-ship constraint enforced by nothing but a
+sentence in an unapproved plan. They land together instead.
 
 **The append predicate's comparison target had to move, and the plan says so in
 §Removing the mirror without saying why it is forced.** It compared against the

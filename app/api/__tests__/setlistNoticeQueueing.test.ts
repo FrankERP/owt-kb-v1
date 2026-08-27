@@ -801,7 +801,18 @@ describe("POST /api/me/proposals — leadNotes notice", () => {
 
   it("queues leadNotes on a changes_requested proposal too", async () => {
     seedService();
-    store.proposals.push(proposal({ status: "changes_requested", lead_notes: "Nota original" }));
+    // Carries its migrated message like the others — a document with
+    // `lead_notes` and an empty thread does not exist after Child A's --apply,
+    // and the append predicate reads the thread now.
+    store.proposals.push(
+      proposal({
+        status: "changes_requested",
+        lead_notes: "Nota original",
+        messages: [
+          { _key: "migleadnote01", _type: "proposal_message", kind: "lead_note", body: "Nota original", author: { _ref: "mem-1" }, author_role: "lead", at: "2026-07-01T00:00:00.000Z" },
+        ],
+      }),
+    );
     const res = await meProposalPOST(
       req(
         saveBody({

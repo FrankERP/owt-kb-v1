@@ -67,18 +67,33 @@ export const PROPOSAL_QUERY = `*[_type == "setlistProposal" && _id == $proposalI
  * The one read behind the "Nueva propuesta" email: audience, lead name, and the
  * proposal content the email renders.
  *
- * The notes source is still `lead_notes` — this phase changes no behaviour.
- * Child B swaps in `LEAD_NOTE_MESSAGES`, and the test that executes this query
- * is what will show the swap actually happened.
+ * The notes source is the THREAD. It had to move in the same delivery that
+ * removed the mirror, and not a slice later: the create no longer writes
+ * `lead_notes`, so sourcing the body from that field would render an EMPTY notes
+ * block on every first submission carrying a note — the one flow the field
+ * existed for — and a frozen pre-cutover note on every resubmit. `notesBlock`
+ * renders nothing at all for an empty value (`proposalNotify.ts`), so the
+ * regression is invisible rather than obvious.
+ *
+ * Interpolates the same `LEAD_NOTE_MESSAGES` fragment as `PROPOSAL_QUERY`, so
+ * the predicate still exists exactly twice in the codebase.
+ *
+ * Semantic drift to accept, and it is the reason the email's own wording must
+ * not say "notes attached to this submission": `lead_notes` on submit used to be
+ * what the lead saved WITH that submission, whereas the newest message may be
+ * days older. It is still their most recent word.
  */
 export const SUBMITTED_NOTIFY_QUERY = `{
   "admins": ${ADMIN_RECIPIENTS_QUERY},
   "lead": *[_type == "teamMembers" && _id == $leadId][0]{ alias, member_name },
-  "proposal": *[_type == "setlistProposal" && _id == $proposalId][0]{ songs, lead_notes }
+  "proposal": *[_type == "setlistProposal" && _id == $proposalId][0]{
+    songs,
+    "leadMessages": ${LEAD_NOTE_MESSAGES}
+  }
 }`;
 
 export interface SubmittedNotifyRow {
   admins: string[] | null;
   lead: { alias?: string; member_name?: string } | null;
-  proposal: { songs?: unknown; lead_notes?: unknown } | null;
+  proposal: { songs?: unknown; leadMessages?: { kind?: unknown; body?: unknown }[] | null } | null;
 }

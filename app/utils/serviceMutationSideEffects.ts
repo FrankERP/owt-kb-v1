@@ -646,24 +646,26 @@ export interface QueueLeadNotesNoticeInput {
    * ONE reader: production's OLD sweep, during the preview→main window and after
    * a revert, both of which compare this snapshot against the live `lead_notes`.
    *
-   * THIS COMMENT DESCRIBES ONLY THE CURRENT TREE, in which the mirror is still
-   * written. Three rewrites of this paragraph each shipped a claim about a state
-   * the tree was not in yet, so it no longer reasons about the slice that removes
-   * the mirror. `docs/NOTIFICATIONS.md` says which half of the cutover has landed,
-   * and `docs/superpowers/plans/2026-08-25-proposal-thread-b-notifications.md`
-   * §The cutover seam owns the analysis.
+   * NOTHING WRITES `lead_notes` ANY MORE, and that is what this snapshot is for.
+   * During the preview→main window production runs the OLD sweep, which compares
+   * this value against the live field. The field is frozen, so the two ALWAYS
+   * agree, `classifyLeadNotes` returns null, and the notice is consumed with no
+   * email — silence rather than a stale-content email mailing the archive.
    *
-   * On this tree the old sweep USUALLY finds the two different and sends a
-   * current email carrying the NEWEST message only. It finds them EQUAL, and
-   * sends nothing, when the new message repeats the stored body verbatim — which
-   * this slice newly permits, having removed the trimmed-equal guard that used to
-   * suppress a repeat on the thread route. The notice then yields no pairs, is
-   * consumed, and `countLost` reports 0: silent loss of a real message.
+   * READ THAT AS THE RISK IT IS, NOT AS SAFETY. Silence means a message posted
+   * through `preview` during the window reaches nobody: the notice yields no
+   * pairs, `partitionClaimed` consumes it, and `countLost` reports 0, so nothing
+   * anywhere records the loss. It is not the corner case it was while the mirror
+   * still moved — with the mirror gone it is EVERY notice queued in that window.
    *
-   * SO THE WINDOW IS NOT CLOSED BY THIS MECHANISM. It is closed by that plan's
-   * release-procedure step 3 — do not post a thread message through `preview` —
-   * which holds even when the outbox pre-check has just returned zero. Do not
-   * read this field as a mechanical guarantee and relax that step.
+   * SO THE WINDOW IS NOT CLOSED BY THIS MECHANISM. It is closed by release
+   * procedure step 3 in
+   * `docs/superpowers/plans/2026-08-25-proposal-thread-b-notifications.md` — do
+   * not post a thread message through `preview` — which holds even when the
+   * outbox pre-check has just returned zero, because the notice at risk is one
+   * the window creates. Do not read this field as a mechanical guarantee and
+   * relax that step. A REVERT has the same shape in reverse; §The cutover seam
+   * owns the full analysis.
    *
    * Nothing may drop it as dead weight. It is pinned in three suites precisely
    * because the flush no longer gives it a reason to exist.

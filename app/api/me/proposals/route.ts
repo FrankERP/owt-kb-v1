@@ -242,9 +242,17 @@ async function postHandler(req: NextRequest) {
   //    `leadNotes` is a one-time initializer in the editor and is re-sent
   //    verbatim on EVERY save. Harmless for a `set`; with an unconditional
   //    append, three draft saves mint three identical bubbles, permanently —
-  //    this delivery ships no delete path. It is also what turns a pre-deploy
-  //    client's stale copy into a discard rather than a resurrection of the note
-  //    the lead already posted and moved past.
+  //    this delivery ships no delete path.
+  //
+  //    THE "pre-deploy client" ARGUMENT NO LONGER HOLDS, and inverted rather than
+  //    merely expired: it was true while the target was the stored `lead_notes`,
+  //    which the mirror kept equal to the newest message. A pre-Child-A client
+  //    initialises its textarea from that now-FROZEN field, so once any thread
+  //    post has happened since the cutover its stale copy DIFFERS from the newest
+  //    message, the predicate fires, and the route resurrects the pre-cutover
+  //    archive as a fresh bubble — mailed to admins, with no delete path.
+  //    Residual, not guarded: the shipped editor sends `""` whenever `proposalId`
+  //    is set, so only a tab loaded before Child A's release can produce it.
   //
   // THE COMPARISON TARGET MOVED, and it had to. It used to be the stored
   // `lead_notes`, which was live because this route mirrored it. Nothing writes

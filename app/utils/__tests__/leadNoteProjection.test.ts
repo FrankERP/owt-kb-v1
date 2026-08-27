@@ -231,15 +231,27 @@ describe("SUBMITTED_NOTIFY_QUERY", () => {
 
     expect(row.admins).toEqual(["ad"]);
     expect(row.lead).toEqual({ alias: "Fran", member_name: "Francisco" });
-    // Still `lead_notes`: this phase changes no behaviour. When Child B
-    // repoints the body at the thread, THIS assertion is what shows it moved.
+    // The body source MOVED to the thread, and this is the assertion that shows
+    // it: `lead_notes` is gone from the row entirely.
+    //
+    // The fixture's thread is MIXED and its NEWEST message is a `pastor_note`
+    // preceded by an `admin_change_request`, which is the shape that matters:
+    // the submit email fires on every save committed `pending`, so a resubmit
+    // from `changes_requested` is routine and the newest message there is the
+    // admin's own words. Taking the last message of the whole array — or
+    // dropping the filter — would mail admins their change request back under a
+    // heading that says "Notas del líder", and no other row would notice.
+    //
     // `songs` comes back as an explicit null rather than being omitted — GROQ
     // projects a requested-but-absent field, which is why every consumer of
     // these rows coerces instead of checking `in`.
     expect(row.proposal).toEqual({
-      lead_notes: "Bajé la tonalidad de Santo a D.",
+      leadMessages: MIXED.filter(isLeadNote).map((m) => ({ kind: m.kind, body: m.body })),
       songs: null,
     });
+    const messages = (row.proposal as { leadMessages: { body: string }[] }).leadMessages;
+    expect(messages[messages.length - 1].body).toBe("Listo, cambié la última.");
+    expect(JSON.stringify(row.proposal)).not.toContain("¿Podemos cerrar con algo más lento?");
   });
 
   it("resolves the SAME admin set as the sweep's own audience query", async () => {

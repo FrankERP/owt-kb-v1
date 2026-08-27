@@ -35,10 +35,12 @@ export const POST = withVerificationRunContext(postHandler);
 /**
  * POST /api/admin/proposals/[id]/messages — an admin posts into the private thread.
  *
- * **This route does NOT touch `admin_notes`.** The transition mirrors that field
- * and only the transition does: `admin_notes` is the change-request archive the
- * rollback leans on, and letting ordinary admin chatter overwrite it would make a
- * question indistinguishable from a review decision. It also has no notification
+ * **This route does NOT touch `admin_notes`, and neither does anything else.**
+ * The transition was that field's last writer and Child B stopped it too, so it
+ * is a FROZEN change-request archive rather than one anybody keeps current. This
+ * route never wrote it even while the transition did, for a reason that still
+ * stands on a rollback: letting ordinary admin chatter overwrite it would make a
+ * question indistinguishable from a review decision. It has no notification
  * consumer, so there is nothing to keep in sync.
  *
  * **`kind` is `admin_change_request`** because that is the only admin-facing value

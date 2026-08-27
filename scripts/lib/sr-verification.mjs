@@ -939,8 +939,10 @@ export function buildFixtureDocuments({ now }) {
     // `admin_notes`, so this is a correctness edit rather than a repair: post
     // Child B the transition writes a message and never that field, and a
     // fixture seeding only the field describes a document the app no longer
-    // produces. Keyed deterministically like the migration's own messages, so
-    // re-seeding is idempotent.
+    // produces. A fixed key, so re-seeding is idempotent — deliberately NOT one
+    // of the migration's own keys (`migleadnote01` / `migadminnote1`), because
+    // this is a fixture's message rather than a migrated one and reusing those
+    // would make a seeded document look migrated to anything that reads them.
     messages: [
       {
         _key: "srvchangereq01",
