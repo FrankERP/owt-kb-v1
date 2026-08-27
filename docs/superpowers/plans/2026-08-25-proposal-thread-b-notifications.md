@@ -806,16 +806,20 @@ message, via `notifyProposalReview`'s new optional `excludeIds`; the author
 excluded in both directions; the `leadNotes` subject and the preference hint.
 With this the delivery is feature-complete — nothing of Child B is left unbuilt.
 
-**One instruction in this plan could not be followed as written, and the reason
-is worth keeping.** §Push says the lead→admin body must use "the author name the
-message route has already resolved for its own response — **not a second read**."
-That name comes from the POST-COMMIT read-back, which is deliberately wrapped in
-try/catch and yields `null` on failure, because reporting a stored message as an
-error invites a retry this delivery cannot undo. On that branch there is no name
-and the message has still committed, so the push must still fire. A body reading
-"undefined escribió" is worse than one without a name. The name is therefore
-resolved on its own, and the body falls back to a nameless form — pinned by a
-test that empties the member store.
+**§Push's "not a second read" instruction IS satisfiable, and the first attempt
+here got it wrong in both directions.** The name the plan points at — the one the
+route resolved for its response — is the POST-COMMIT read-back, which is
+deliberately guarded and null on failure, so it genuinely cannot be relied on.
+The first implementation concluded the instruction was un-followable and added a
+second Sanity read, which the diff review corrected: the author IS the caller,
+and the session already carries `alias` and `name`, refreshed from the same two
+`teamMembers` fields with the same precedence. No read at all.
+
+That also removed a real hazard rather than just a query. The added read sat in a
+`Promise.all` beside the audience read, so a transient failure on the COSMETIC
+half rejected the whole thing and NO push was sent — a decorative field able to
+silence the delivery. The nameless fallback remains, for an impersonated or
+name-less member, pinned by a session with neither field.
 
 **The email-XOR-push invariant is proved by TWO suites composed, and it has to
 be.** `proposalMessageRoutes.test.ts` mocks `queueLeadNotesNotice`, so the
@@ -824,6 +828,17 @@ unconditionally on every status. That suite pins the push and the status handed
 to the helper; `serviceMutationSideEffects.test.ts` pins that those statuses
 queue nothing. **Until this slice only the POSITIVE case was covered there**
 (`previousStatus: "pending"`), so the half the invariant leans on was unpinned.
+
+**Both pushes are fired INSIDE `after()`.** `fireAndForget`'s own doc requires it
+of every new caller — an unawaited promise can be killed when the response
+returns — and the first implementation broke that rule on both. It matters most
+on the lead path: on `approved`, `queueLeadNotesNotice` returns on its status
+gate BEFORE registering its own `after()`, so the push is the handler's ONLY
+deferred work and nothing else holds the invocation open. The suite now mocks and
+drains `after()`, with one row that asserts the push has NOT happened when the
+response is written and HAS after the drain — otherwise every push assertion in
+that file was passing only because the handler happened to await a read-back
+afterwards, which is the coupling this fix removes.
 
 **Neither branch of the XOR is reachable by hand**, in either direction:
 production holds zero proposals in `pending` or `changes_requested`, so the email

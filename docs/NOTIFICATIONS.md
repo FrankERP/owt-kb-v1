@@ -67,7 +67,7 @@ queued: intro + CTA, the same setlist table as "Setlist listo" (no Mov. column,
 medleys grouped), and the lead's newest `lead_note` message when the thread has one — the same thread source as the debounced email below, moved in the same delivery that stopped writing the legacy field. Empty or unreadable songs still
 send the intro and CTA. Push stays a one-line alert.
 
-## The proposal thread — what it does NOT notify
+## The proposal thread — what it notifies
 
 Released 2026-08-26. `lead_notes` / `admin_notes` became a `messages[]` thread.
 
@@ -90,7 +90,8 @@ which is precisely what the mirror held — never dropped. Dropping would be saf
 and not correct: a notice that yields no pairs contributes no pending recipients,
 so `report.lost` stays 0 while a real message vanishes.
 
-**Both directions of the conversation now reach their counterpart.** They did
+**Both directions of the conversation now reach their counterpart** (Child B
+slice 3 — on a branch, NOT released; `main` carries none of Child B). They did
 not before: `queueLeadNotesNotice` requires the pre-write status to be `pending`
 or `changes_requested`, and production holds **13 approved proposals, 1 draft,
 and zero in either reviewable status** — so before slice 3 a message posted on a
@@ -105,7 +106,7 @@ real proposal notified NOBODY, in either direction.
 | Admin, via `request_changes` / `reopen` | transition | unchanged review push, exactly one |
 | Lead, first submission | save | unchanged `notifyProposalSubmitted` |
 
-**ONE SIGNAL PER MESSAGE, never both** — an email or a push, never the pair. The
+**AT MOST ONE SIGNAL PER MESSAGE** — never both, and in one named case neither — an email or a push, never the pair. The
 gate for the lead→admin push is `status === "approved"`, nothing looser: "a
 status the outbox will not cover" is a NECESSARY condition only, and read as
 sufficient it fires on `draft` too. Neither branch is reachable by hand in
@@ -113,11 +114,21 @@ production, so it rests on `proposalMessageRoutes.test.ts` composed with
 `serviceMutationSideEffects.test.ts` — the first pins the push, the second pins
 that the status handed to the outbox helper queues nothing.
 
-Three named exceptions to the XOR, all inherent: the outbox's send-budget
-re-pend can re-send a joined body to an admin already served; a status
-round-trip inside one 60-minute window can email a message that was already
-pushed; and a re-submit fires `notifyProposalSubmitted`, which pushes and emails
-admins as it always has. The last is outside this delivery and unchanged by it.
+Four named exceptions, all inherent and none introduced here. Three send twice:
+the outbox's send-budget re-pend can re-send a joined body to an admin already
+served; a status round-trip inside one 60-minute window can email a message that
+was already pushed; and a re-submit fires `notifyProposalSubmitted`, which pushes
+and emails admins as it always has (outside this delivery and unchanged by it).
+
+The fourth sends **nothing**, which is why the invariant is "at most one" rather
+than "exactly one". A lead posts while `pending`, so a notice is queued and no
+push fires. An admin reads the thread and approves inside the 15–60 minute
+debounce — the ordinary flow, since reading the message is what prompts the
+approval. At flush the live status is no longer reviewable, the notice
+classifies to `null`, and it is consumed. The other admins never learn the
+message existed, and `report.lost` stays 0. Pre-existing and named in Child B's
+plan; closing it would mean firing a push the email was meant to cover, or
+widening the flush gate.
 
 **These pushes are not debounced.** N messages, N pushes. Acceptable at this
 team's volume; if it becomes noise the fix is a push debounce, not a wider email.

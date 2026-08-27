@@ -24,6 +24,25 @@ const sendPushMock = vi.fn();
 // admin→lead rows below are asserting.
 vi.mock("@/app/utils/push", () => ({ sendPush: (...a: unknown[]) => sendPushMock(...a) }));
 
+// `after()` is REAL deferred work in these routes — both pushes live inside one,
+// because an unawaited promise can be killed when the response returns. So the
+// suite has to run the callbacks explicitly: asserting on a push that only
+// happened to land because the handler awaited something afterwards would be
+// testing the coupling this delivery deliberately removed.
+const afterCallbacks: (() => unknown)[] = [];
+vi.mock("next/server", async (orig) => {
+  const mod = await orig<typeof import("next/server")>();
+  return { ...mod, after: (fn: () => unknown) => void afterCallbacks.push(fn) };
+});
+
+/** Run every registered `after()` callback, including ones they register. */
+async function drainAfter(): Promise<void> {
+  for (let guard = 0; guard < 10 && afterCallbacks.length; guard++) {
+    const batch = afterCallbacks.splice(0);
+    for (const cb of batch) await cb();
+  }
+}
+
 vi.mock("@/app/utils/authGuards", () => ({
   requireMinistryMember: () => requireMinistryMemberMock(),
   requireActiveManager: () => requireActiveManagerMock(),
@@ -150,7 +169,9 @@ let store: Store;
 const WEEK = "2099-09-06";
 const ROLE_ID = "role-1";
 const PROPOSAL_ID = "setlistProposal.role-1";
-const LEAD = { user: { sanityId: "mem-1", role: "member" } };
+// `alias` and `name` are what the push body reads — a real session carries them,
+// refreshed from the same two `teamMembers` fields the member projection returns.
+const LEAD = { user: { sanityId: "mem-1", role: "member", alias: "Ana", name: "Ana Ruiz" } };
 const ADMIN = { user: { role: "admin", sanityId: "admin-1" } };
 
 function ref(key: string, id: string) {
@@ -237,10 +258,22 @@ function req(body: unknown): NextRequest {
   return { json: async () => body, headers: new Headers() } as unknown as NextRequest;
 }
 
-const postLead = (body: unknown, id = PROPOSAL_ID) =>
+// Both helpers DRAIN `after()` before returning, so every row below exercises
+// the deferred path the routes actually take rather than a promise that happened
+// to resolve first. `postLeadRaw` skips the drain, for the one row that pins the
+// deferral itself.
+const postLeadRaw = (body: unknown, id = PROPOSAL_ID) =>
   leadPost(req(body), { params: Promise.resolve({ id }) });
-const postAdmin = (body: unknown, id = PROPOSAL_ID) =>
-  adminPost(req(body), { params: Promise.resolve({ id }) });
+const postLead = async (body: unknown, id = PROPOSAL_ID) => {
+  const res = await postLeadRaw(body, id);
+  await drainAfter();
+  return res;
+};
+const postAdmin = async (body: unknown, id = PROPOSAL_ID) => {
+  const res = await adminPost(req(body), { params: Promise.resolve({ id }) });
+  await drainAfter();
+  return res;
+};
 
 function seed(over: Record<string, unknown> = {}) {
   store.roles.push(sundayRole());
@@ -249,6 +282,7 @@ function seed(over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  afterCallbacks.length = 0;
   patches.length = 0;
   commitOutcomes.length = 0;
   store = {
@@ -395,6 +429,22 @@ describe("POST /api/me/proposals/[id]/messages — the lead side", () => {
     });
   });
 
+  it("defers the push into after() — it does not race the response", async () => {
+    // The reason this matters is specific to `approved`: on that status
+    // `queueLeadNotesNotice` returns on its gate BEFORE registering its own
+    // `after()`, so this push is the ONLY deferred work the handler has. Fired
+    // inline it would be an unawaited promise with nothing holding the
+    // invocation open, and a killed one means a stored message that notified
+    // nobody, with no log and no outbox row to show for it.
+    seed({ status: "approved" });
+    const res = await postLeadRaw({ body: "una nota" });
+    expect(res.status).toBe(200);
+    // The response is written and the push has NOT happened yet.
+    expect(sendPushMock).not.toHaveBeenCalled();
+    await drainAfter();
+    expect(sendPushMock).toHaveBeenCalledTimes(1);
+  });
+
   it("pushes the ADMINS, on the admin surface, with the author's name and the service date", async () => {
     seed({ status: "approved" });
     await postLead({ body: "una nota" });
@@ -416,10 +466,13 @@ describe("POST /api/me/proposals/[id]/messages — the lead side", () => {
   });
 
   it("falls back to a nameless body rather than interpolating nothing", async () => {
-    // The author's name is not resolvable. The message HAS committed, so the
-    // push must still fire — and "undefined escribió" is worse than no name.
+    // A session with neither alias nor name — an impersonated or name-less
+    // member. The message HAS committed, so the push must still fire, and
+    // "undefined escribió" is worse than no name at all.
     seed({ status: "approved" });
-    store.members = {};
+    requireMinistryMemberMock.mockResolvedValue({
+      user: { sanityId: "mem-1", role: "member" },
+    });
     await postLead({ body: "una nota" });
     const payload = sendPushMock.mock.calls[0][2] as { body: string };
     expect(payload.body).not.toContain("undefined");
@@ -657,7 +710,7 @@ describe("POST /api/admin/proposals/[id]/messages — the admin side", () => {
     expect(store.proposals[0].lead_notes).toBe("Nota original");
   });
 
-  it("queues NO notice — an admin message notifies nobody in this delivery", async () => {
+  it("queues NO email notice — the admin\u2192lead signal is a push, not the outbox", async () => {
     seed();
     await postAdmin({ body: "una pregunta" });
     expect(queueLeadNotesNoticeMock).not.toHaveBeenCalled();

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 
 // This route hosts the same post-commit `after()` fan-out as the save route:
 // `queueLeadNotesNotice` registers a deferred `commitUpserts`, which runs an
@@ -26,7 +26,6 @@ import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext
 import { fireAndForget } from "@/app/utils/serviceMutationSideEffects";
 import { ADMIN_RECIPIENTS_QUERY } from "@/app/utils/proposalNotifyQueries";
 import { sendPush } from "@/app/utils/push";
-import { canonicalMembersByIdsQuery } from "@/app/utils/serviceReadQueries";
 
 /**
  * Push the admins about a lead's message on an APPROVED proposal.
@@ -49,35 +48,29 @@ import { canonicalMembersByIdsQuery } from "@/app/utils/serviceReadQueries";
  * NOT to copy is `assignmentPush`, which interpolates the raw stored value into a
  * push body with no rendering at all.
  *
- * THE AUTHOR NAME IS RESOLVED HERE, not taken from the route's response read.
- * The plan says to reuse that one, but it is the POST-COMMIT read-back, which is
- * deliberately wrapped in try/catch and yields `null` on failure — reporting a
- * stored message as an error would invite a retry this delivery cannot undo. On
- * that branch there is no name, and the message has still committed, so the push
- * must still fire. A push body reading "undefined escribió" is worse than one
- * without a name, so the name is looked up on its own and the body falls back to
- * a nameless form when it is missing.
+ * THE AUTHOR NAME COMES FROM THE CALLER'S SESSION — no read at all. The author
+ * IS the caller, and the session carries `alias` and `name` refreshed from the
+ * same two `teamMembers` fields, with the same precedence. The plan said to reuse
+ * the name the route resolved for its response; that one is the POST-COMMIT
+ * read-back, deliberately guarded and null on failure, so it cannot be relied on
+ * — but the session is a third option that needs neither.
+ *
+ * That also decouples the body's decoration from the delivery. An earlier version
+ * fetched the name alongside the audience in a `Promise.all`, where a transient
+ * failure on the COSMETIC read rejected the whole thing and no push was sent at
+ * all. The body still falls back to a nameless form, for an impersonated or
+ * name-less member.
  */
 async function pushAdminsAboutLeadMessage(o: {
-  proposalId: string;
   authorId: string;
+  authorName: string;
   serviceDate: string;
 }): Promise<void> {
-  const [adminIds, members] = await Promise.all([
-    operationalClient.fetch<string[] | null>(ADMIN_RECIPIENTS_QUERY),
-    (() => {
-      const q = canonicalMembersByIdsQuery([o.authorId]);
-      return operationalClient.fetch<{ alias?: string; member_name?: string }[] | null>(
-        q.query,
-        q.params,
-      );
-    })(),
-  ]);
+  const adminIds = await operationalClient.fetch<string[] | null>(ADMIN_RECIPIENTS_QUERY);
   const recipients = (adminIds ?? []).filter((id) => id && id !== o.authorId);
   if (!recipients.length) return;
 
-  const who = members?.[0];
-  const name = who?.alias || who?.member_name || "";
+  const name = o.authorName;
   const when = o.serviceDate
     ? new Date(`${o.serviceDate.slice(0, 10)}T12:00:00`).toLocaleDateString("es-MX", {
         day: "numeric",
@@ -241,13 +234,23 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ id:
   // reads. An append does not move `status`, so pre and post agree here; using
   // the snapshot keeps the two gates reading one value.
   if (String(previousStatus ?? "") === "approved") {
-    fireAndForget(
-      "proposal lead message push",
-      pushAdminsAboutLeadMessage({
-        proposalId: id,
-        authorId: leadId,
-        serviceDate: typeof doc.service_date === "string" ? doc.service_date : "",
-      }),
+    // INSIDE `after()`, which `fireAndForget`'s own doc requires of every new
+    // caller — and this path needs it more than most: on `approved`
+    // `queueLeadNotesNotice` returns on its status gate BEFORE registering its
+    // own `after()`, so without this the handler registers none at all and
+    // nothing holds the invocation open. The push needs two more round trips
+    // than the handler has left, so the promise is always still in flight when
+    // the response is written. Losing it would mean a stored message that
+    // notified nobody, with no log and no outbox row to show for it.
+    after(() =>
+      fireAndForget(
+        "proposal lead message push",
+        pushAdminsAboutLeadMessage({
+          authorId: leadId,
+          authorName: session.user.alias || session.user.name || "",
+          serviceDate: typeof doc.service_date === "string" ? doc.service_date : "",
+        }),
+      ),
     );
   }
 

@@ -1,8 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 
-// Kept at 60 s to match its sibling writers, though this route registers no
-// `after()` fan-out of its own: an admin message notifies nobody in this
-// delivery (Child A §1's named gap; Child B's push closes it).
+// Kept at 60 s to match its sibling writers. This route registers no OUTBOX
+// fan-out — an admin message queues no debounced email, which was Child A §1's
+// named gap — but since Child B it does register an `after()`: the push that
+// closes that gap by telling the lead. The budget is what keeps that deferred
+// work alive after the response returns.
 export const maxDuration = 60;
 
 import { requireActiveManager } from "@/app/utils/authGuards";
@@ -146,18 +148,23 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ id:
   // through its third parameter rather than in this route, so the audience rule
   // stays written down once.
   //
-  // Fired post-commit and not awaited for delivery: the message has landed, and
-  // a push failure must not turn a stored message into an error response, which
-  // would invite a retry that this delivery cannot undo.
-  fireAndForget(
-    "proposal admin message push",
-    notifyProposalReview(
-      pushDoc,
-      {
-        title: "Nuevo mensaje",
-        body: "Un admin escribió en la propuesta.",
-      },
-      adminId ? [adminId] : [],
+  // INSIDE `after()`, which `fireAndForget`'s own doc requires of every new
+  // caller: an unawaited promise can be killed when the response returns, and
+  // this route registers no other deferred work to hold the invocation open.
+  // Still fire-and-forget INSIDE it, because a push failure must not turn a
+  // stored message into an error response — that would invite a retry this
+  // delivery cannot undo.
+  after(() =>
+    fireAndForget(
+      "proposal admin message push",
+      notifyProposalReview(
+        pushDoc,
+        {
+          title: "Nuevo mensaje",
+          body: "Un admin escribió en la propuesta.",
+        },
+        adminId ? [adminId] : [],
+      ),
     ),
   );
 

@@ -124,7 +124,7 @@ add("07-one-song-group.html", "Grupo de una canción (debe verse normal)", build
     songs: [song("s1", "G", 0), song("s2", "D", 1), song("s3", "D", 1)],
   })] }, titles));
 
-add("08-lead-notes.html", "Notas del líder", buildGroupedEmail(
+add("08-lead-notes.html", "Mensajes de la propuesta", buildGroupedEmail(
   { name: "Admin", lines: [line({
     kind: "leadNotes", roleType: null,
     notes: "Bajé la tonalidad de Santo a D. Ensayo el jueves 7pm.",
