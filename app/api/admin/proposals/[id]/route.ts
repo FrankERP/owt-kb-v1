@@ -15,6 +15,7 @@ import {
 import { serviceError } from "@/app/utils/serviceMutation";
 import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
 import { nextKey, nowIso, type StoredLock } from "@/app/utils/roleWriteOps";
+import { buildProposalMessage } from "@/app/utils/proposalMessageWrite";
 import {
   loadCanonicalProposal,
   loadProposalGroup,
@@ -502,8 +503,50 @@ async function transition(args: TransitionArgs) {
         last_transition: record,
       };
 
+  // The transition's own message in the thread (Child A §4).
+  //
+  // Three rules, and none of them is the cap:
+  //  - `reconcile_target` NEVER appends. It is metadata repair, not a decision.
+  //  - `reopen` with an empty note appends nothing and still commits the status
+  //    change — an admin legitimately reopens without saying anything.
+  //    `buildProposalMessage` returns null on an empty body, so this falls out of
+  //    the builder rather than needing its own branch.
+  //  - **Exempt from `PROPOSAL_MESSAGES_MAX`.** A full thread must never block a
+  //    review decision. "Exempt from the cap" is NOT "always appends": the two
+  //    rules above still hold.
+  //
+  // **Also exempt from `isThreadOpen`**, which both standalone message routes DO
+  // enforce. Same reason as the cap: a `request_changes` on a past-dated service
+  // must still commit, and a decision must not be blocked by the conversation's
+  // lifecycle. The visible consequence is real and accepted — the note lands in a
+  // thread both surfaces render as closed, so neither party can reply to it.
+  //
+  // It inherits `ifRevisionId` from the patch it rides in, UNLIKE the two
+  // standalone message routes, which deliberately assert nothing. The asymmetry
+  // is intentional: this note is part of a reviewed decision, so it must not
+  // land if the decision does not.
+  const transitionMessage = reconcile
+    ? null
+    : buildProposalMessage({
+        authorId: reviewerId,
+        authorRole: "admin",
+        kind: "admin_change_request",
+        body: request.adminNotes,
+        now,
+        key: nextKey(),
+      });
+
   const proposalRev = request.rev;
-  let tx = writeClient.transaction().patch(id, (p) => p.ifRevisionId(proposalRev).set(set));
+  let tx = writeClient.transaction().patch(id, (p) => {
+    const patched = p.ifRevisionId(proposalRev).set(set);
+    // `setIfMissing` is mandatory before an append: Sanity rejects an append to
+    // an absent array, and inside a transaction that failure takes the WHOLE
+    // transaction down — so without it an admin could not request changes at all
+    // on any proposal the migration never touched.
+    return transitionMessage
+      ? patched.setIfMissing({ messages: [] }).append("messages", [transitionMessage])
+      : patched;
+  });
   if (lock) {
     const lockRev = lock._rev;
     tx = tx.patch(lock._id, (p) => p.ifRevisionId(lockRev).set({ updatedAt: now }));

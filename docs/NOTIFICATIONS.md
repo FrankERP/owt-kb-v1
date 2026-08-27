@@ -37,7 +37,10 @@ the window collapse to silence.
 `outboxClassify.ts` (snapshot vs live → lines) · `setlistDiff.ts` (the standings
 table) · `notificationEmail.ts` + `emailShell.ts` (rendering) ·
 `outboxSweep.ts` (the one pipeline) · `outboxLiveness.ts` (the alarm) ·
-`notifyPrefs.ts` (the single preference resolver).
+`notifyPrefs.ts` (the single preference resolver) ·
+`proposalNotifyQueries.ts` (the GROQ the proposal notifications read with — a
+leaf with no client, so a test can execute the queries with `groq-js` instead of
+hand-writing a fixture that mirrors them).
 
 ## The three flush triggers
 

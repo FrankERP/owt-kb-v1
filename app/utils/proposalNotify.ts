@@ -18,6 +18,7 @@ import { sendPush } from "./push";
 import { sendEmail } from "./email";
 import { getAllowlist, isEmailAllowed, appBaseUrl, escapeHtml } from "./assignmentEmail";
 import { wantsNotification } from "./notifyPrefs";
+import { SUBMITTED_NOTIFY_QUERY, type SubmittedNotifyRow } from "./proposalNotifyQueries";
 import { C, td, tr, shell } from "./emailShell";
 import { songRowsFrom, type OutboxSongRow } from "./outboxNotice";
 import { buildSetlistTable } from "./setlistDiff";
@@ -134,16 +135,8 @@ export async function notifyProposalSubmitted(opts: {
     if (!validateRole(role).groupable) return; // invalid identity -> fail closed
     if (Array.isArray(rawRoleDrafts) && rawRoleDrafts.length > 0) return; // draft conflict
 
-    const data = await operationalClient.fetch<{
-      admins: string[] | null;
-      lead: { alias?: string; member_name?: string } | null;
-      proposal: { songs?: unknown; lead_notes?: unknown } | null;
-    }>(
-      `{
-        "admins": *[_type == "teamMembers" && role in ["super-admin","admin"]]._id,
-        "lead": *[_type == "teamMembers" && _id == $leadId][0]{ alias, member_name },
-        "proposal": *[_type == "setlistProposal" && _id == $proposalId][0]{ songs, lead_notes }
-      }`,
+    const data = await operationalClient.fetch<SubmittedNotifyRow>(
+      SUBMITTED_NOTIFY_QUERY,
       { leadId, proposalId },
     );
     const admins = data.admins ?? [];

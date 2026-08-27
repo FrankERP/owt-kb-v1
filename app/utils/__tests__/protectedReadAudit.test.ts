@@ -384,7 +384,7 @@ describe("A2 handoff allowlist", () => {
     expect(A2_HANDOFF_ALLOWLIST).toEqual([]);
   });
 
-  it("licenses the fourteen permanent runtime writers for WRITES ONLY, never reads", () => {
+  it("licenses the sixteen permanent runtime writers for WRITES ONLY, never reads", () => {
     expect(PROTECTED_RUNTIME_WRITERS.map((e) => `${e.file}#${e.operation}`).sort()).toEqual(
       [
         "app/utils/outboxSweep.ts#module",
@@ -401,6 +401,8 @@ describe("A2 handoff allowlist", () => {
         "app/utils/roleWriteOps.ts#module",
         "app/api/admin/setlists/route.ts#PUT",
         "app/api/me/proposals/route.ts#POST",
+        "app/api/me/proposals/[id]/messages/route.ts#POST",
+        "app/api/admin/proposals/[id]/messages/route.ts#POST",
       ].sort(),
     );
     // Nothing removes a writer: item 12 must never be "satisfied" by moving reads here.
@@ -487,6 +489,10 @@ describe("A2 handoff allowlist", () => {
         "e2e/service-readiness/lib/dataset.ts#module",
         "scripts/backfill-legacy-seat-arrays.mjs#module",
         "scripts/bootstrap-weekend-locks.mjs#module",
+        // One-shot Release 2 migration, still LIVE: it has not run --apply yet,
+        // so it must NOT be in RETIRED_ONE_SHOT_WRITERS (which fails closed at
+        // assertRetiredWriter). It moves there in Child A Phase E.
+        "scripts/migrate-proposal-messages.mjs#module",
         // Reads role documents to re-queue notices a lossy flush spent; writes
         // only notificationOutbox, and is dry-run until --apply.
         "scripts/requeue-role-notices.mjs#module",

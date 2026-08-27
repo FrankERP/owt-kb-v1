@@ -111,6 +111,12 @@ function makeTransaction() {
         ifRevisionId(rev: string) { op.rev = rev; return p; },
         set(values: Record<string, unknown>) { Object.assign(op.set, values); return p; },
         unset(fields: string[]) { op.unset.push(...fields); return p; },
+        // The transition appends its own thread message (Child A §4). This suite
+        // is about NOTICE QUEUEING, not about the message, so the chain is
+        // completed rather than recorded — `proposalWriteRoutes.test.ts` is where
+        // the append and its `setIfMissing` ordering are asserted.
+        setIfMissing() { return p; },
+        append() { return p; },
         inc() { return p; },
       };
       fn(p);
@@ -734,6 +740,13 @@ describe("POST /api/me/proposals — leadNotes notice", () => {
     expect(upsertsOfKind("leadNotes")).toHaveLength(1);
   });
 
+  // NOTE for Child B: as of Child A §2 this passes for TWO independent reasons —
+  // the save route now declines to append (and so declines to queue) when the
+  // note is unchanged, AND `queueLeadNotesNotice` still applies its own
+  // trimmed-equal guard. Child B removes the second one. If this test is ever
+  // the only evidence for "an unchanged note queues nothing", it will still be
+  // green then — but for one reason instead of two, and the caller-side
+  // predicate becomes load-bearing on its own.
   it("queues nothing when the notes did not change", async () => {
     seedService();
     store.proposals.push(proposal({ status: "pending", lead_notes: "Nota original" }));

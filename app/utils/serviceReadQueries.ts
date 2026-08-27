@@ -30,6 +30,19 @@ export const SETLIST_PROJECTION = `{
   ${SONGS_FRAGMENT}
 }`;
 
+/**
+ * The proposal as the WRITE PATHS read it.
+ *
+ * `messages` is projected with a BARE `author` ref and no name join, because
+ * writers compare and store references. The surfaces want something else and use
+ * `THREAD_MESSAGES` (`proposalMessageRead.ts`), which resolves the display name.
+ *
+ * Payload note: this also backs `canonicalProposalsQuery()` →
+ * `publishReadyBundle.ts`, an ALL-proposals read on the service-readiness
+ * surface, so the worst case for the thread is ~800 KB × the catalog rather than
+ * × 1. Nothing hashes or digests this projection, so it is payload-only.
+ * Irrelevant at 14 documents; revisit before the catalog grows.
+ */
 export const PROPOSAL_PROJECTION = `{
   _id, _rev, _createdAt, service_type,
   "service_ref": service_ref._ref,
@@ -38,6 +51,7 @@ export const PROPOSAL_PROJECTION = `{
   contributors[]{ _key, "person": person._ref },
   "lead": lead._ref,
   lead_notes, team_notes, admin_notes,
+  messages[]{ _key, _type, "author": author._ref, author_role, kind, body, at },
   approval_receipt, last_transition
 }`;
 

@@ -7,6 +7,7 @@ import { normalizeMedleyTags } from "@/app/utils/medley";
 import { useFocusTrap } from "@/app/utils/useFocusTrap";
 import { ChainLinkIcon } from "@/app/components/ChainLinkIcon";
 import { useTransientValue } from "@/app/utils/useTransientValue";
+import ProposalThread, { type ThreadMessage } from "@/app/components/ProposalThread";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
@@ -36,6 +37,7 @@ interface SharedProposal {
   lead_notes?: string;
   team_notes?: string;
   admin_notes?: string;
+  messages?: ThreadMessage[] | null;
   createdById?: string;
   contributors?: Array<{ id: string; name: string }>;
   songs?: Array<{
@@ -118,6 +120,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
     }));
   });
 
+  const [messages, setMessages] = useState<ThreadMessage[]>(proposal?.messages ?? []);
   const [leadNotes, setLeadNotes] = useState(proposal?.lead_notes ?? "");
   const [teamNotes, setTeamNotes] = useState(proposal?.team_notes ?? "");
   const [status, setStatus]       = useState<ProposalStatus>(proposal?.status ?? "draft");
@@ -347,7 +350,17 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
             ? { state: "single", id: proposalId, rev }
             : { state: "none" },
           songs: songs.map(s => ({ songId: s.songId, play_key: s.play_key, medley_tag: s.medley_tag })),
-          leadNotes,
+          // Sent ONLY on a first submission, when no proposal document exists yet
+          // (Child A §2). Once one does, the private note is a thread message and
+          // the composer below is where it is written.
+          //
+          // The PAYLOAD is conditioned, not just the rendering: `leadNotes` is a
+          // one-time initializer re-sent verbatim on every save, so after the lead
+          // posts a message the mirror moves the stored value and this stale copy
+          // would read as a deliberate edit — resurrecting the pre-post note as a
+          // new bubble and mailing it. Conditioning the render alone leaves that
+          // payload in place and makes the server rule unsound.
+          leadNotes: proposalId ? "" : leadNotes,
           teamNotes,
           status: submitStatus,
         }),
@@ -361,13 +374,23 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
         return;
       }
       if (!res.ok) throw new Error();
-      const data: { _id?: string; status: ProposalStatus; _rev?: string | null } = await res.json();
+      const data: {
+        _id?: string;
+        status: ProposalStatus;
+        _rev?: string | null;
+        messages?: ThreadMessage[] | null;
+      } = await res.json();
       setStatus(data.status);
       if (data._id) setProposalId(data._id);
       // No fresh revision means the next save cannot be guarded: force a reload
       // rather than let it fall back to an unguarded observation.
       if (data._rev) setRev(data._rev);
       else setStaleReload(true);
+      // A first submission that carried a note mints the first message. Adopt it
+      // so the thread the editor is about to reveal shows what was just written,
+      // instead of "Aún no hay mensajes." — `null` means the read-back failed,
+      // so keep what is on screen.
+      if (data.messages) setMessages(data.messages);
       showToast(submitStatus === "pending" ? "Propuesta enviada" : "Borrador guardado");
       router.refresh();
     } catch {
@@ -376,6 +399,48 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
       setSaving(false);
     }
   };
+
+  /**
+   * Post one message into the thread.
+   *
+   * Rethrows on failure so `<ProposalThread>` keeps the composer's text — its
+   * own catch is what shows the error. Clearing on failure would lose what the
+   * lead wrote, which is the one thing this channel promises not to do.
+   *
+   * **Adopts the fresh revision only when `observedRev` matches the pin.** The
+   * lead's OWN post moves `_rev`, so a blanket pin guarantees a 409 on their
+   * next save and a reload that discards the in-progress setlist — on the
+   * feature's primary action. And a content comparison is not a substitute:
+   * `POST /api/me/proposals` writes `songs`, `status`, `lead_notes` AND
+   * `team_notes` in one patch, so "identical songs" proves only that songs did
+   * not move; adopting on that would let this editor's stale `teamNotes`
+   * initializer destroy a co-lead's message with no 409 and no banner.
+   *
+   * Residual, named not closed: the append carries no revision precondition, so
+   * a co-lead commit inside the route's read→commit window still lets this
+   * editor adopt a revision whose parent it never saw. Milliseconds, and
+   * conditioning the append would reintroduce the 409 it exists to avoid.
+   */
+  const postMessage = useCallback(async (body: string) => {
+    if (!proposalId) throw new Error("no proposal");
+    const res = await fetch(`/api/me/proposals/${encodeURIComponent(proposalId)}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body }),
+    });
+    if (!res.ok) throw new Error("post failed");
+    // `messages: null` means the post landed but the read-back did not — not an
+    // empty thread. Typed so the distinction survives the next edit.
+    const data: {
+      messages?: ThreadMessage[] | null;
+      rev?: string | null;
+      observedRev?: string | null;
+    } = await res.json();
+    // `null` = the post landed but the read-back did not. Keep the thread on
+    // screen rather than blanking it; the message is stored either way.
+    if (data.messages) setMessages(data.messages);
+    if (data.rev && data.observedRev && data.observedRev === rev) setRev(data.rev);
+  }, [proposalId, rev]);
 
   const isApproved  = status === "approved";
   const serviceLabel =
@@ -442,12 +507,22 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
         </div>
       )}
 
-      {/* Admin notes banner (changes requested) */}
-      {status === "changes_requested" && proposal?.admin_notes && (
-        <div className="rounded-xl border border-negative-strong/30 bg-negative-strong/10 p-4 space-y-1">
-          <p className="font-label text-xs uppercase tracking-widest text-negative-fg">Comentarios del admin</p>
-          <p className="font-body text-sm text-negative-muted whitespace-pre-wrap">{proposal.admin_notes}</p>
-        </div>
+      {/* The private lead ↔ admin conversation, replacing the old "Comentarios
+          del admin" banner. Rendered whenever a document exists and NOT gated on
+          status or on a field being non-empty: the block it replaces was gated on
+          `changes_requested && admin_notes`, and inheriting that would hide the
+          thread on a `pending` proposal, which is where the conversation happens.
+
+          Before the document exists there is no composer — the "Notas privadas"
+          textarea below stands in, and nothing is buffered client-side. */}
+      {proposalId && (
+        <ProposalThread
+          messages={messages}
+          viewerId={currentUserId}
+          viewerRole="lead"
+          serviceDate={roleDoc.service_date}
+          onPost={postMessage}
+        />
       )}
 
       {/* Song list */}
@@ -707,8 +782,12 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
         </div>
       )}
 
-      {/* Private review notes */}
-      {!isApproved && (
+      {/* Private review notes — the FIRST-submission stand-in for the thread
+          composer, which needs a document that does not exist yet. Retained on
+          purpose: deleting it would also empty the "Nueva propuesta" admin email,
+          whose body is this value. Once the proposal exists, the conversation
+          moves to <ProposalThread> below. */}
+      {!proposalId && (
         <div className="space-y-2">
           <label className="font-label text-xs uppercase tracking-widest text-mono-500">
             Notas privadas para revisión <span className="normal-case tracking-normal text-mono-600">(opcional)</span>
@@ -731,12 +810,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
         </div>
       )}
 
-      {isApproved && leadNotes && (
-        <div className="space-y-1">
-          <p className="font-label text-xs uppercase tracking-widest text-mono-500">Tus notas privadas para revisión</p>
-          <p className="font-body text-sm text-mono-300 whitespace-pre-wrap">{leadNotes}</p>
-        </div>
-      )}
+
 
       {/* Approved banner */}
       {isApproved && (

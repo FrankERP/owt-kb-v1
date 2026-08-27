@@ -102,8 +102,30 @@ function attemptSync(label: string, fn: () => void): void {
  * Start a delivery WITHOUT waiting for it, so a user-facing save is never held
  * open by FCM. The rejection handler keeps a failure logged and swallowed (§7)
  * rather than surfacing as an unhandled rejection.
+ *
+ * READ THIS BEFORE ADDING A CALLER, now that it is exported. It starts a promise
+ * nobody awaits, so on a serverless runtime the delivery can be killed when the
+ * response returns.
+ *
+ * Neither of its two call sites is inside `after()`. Both `notifySetlistSaved`
+ * and `notifyProposalReview` are awaited inline by their routes
+ * (`admin/setlists/route.ts:416`; `admin/proposals/[id]/route.ts:379`, `:532`),
+ * and neither route imports `after` at all. That is the deliberate trade in the
+ * paragraph above — an editor's save never waits on FCM — and it means the
+ * exposure is real on those paths today, not hypothetical.
+ *
+ * The contrast is `notifyRoleAssignments` and `notifyRolePublished`, this
+ * module's two other push fan-outs: both wrap in `after()` and `await sendPush`
+ * inside it.
+ *
+ * So: a new caller should be inside `after()`, and must not reach for the two
+ * `fireAndForget` sites as precedent for skipping it.
+ *
+ * (Symbols, not same-file line numbers, on purpose — three successive reviews
+ * of this comment caught line references that had rotted, twice because they
+ * were computed against the buffer before the edit that moved them.)
  */
-function fireAndForget(label: string, promise: unknown): void {
+export function fireAndForget(label: string, promise: unknown): void {
   void Promise.resolve(promise).catch((err) => {
     console.error(`[sideEffects] ${label} failed:`, err);
   });

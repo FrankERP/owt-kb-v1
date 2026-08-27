@@ -60,6 +60,11 @@ interface PatchOp {
   rev: string | null;
   set: Record<string, unknown>;
   unset: string[];
+  /** Appended array items, by field. The transition appends its own message. */
+  appended: Record<string, unknown[]>;
+  /** Chain calls IN ORDER — `setIfMissing` must precede `append`, and a mocked
+   *  chain succeeds either way, so order is the only thing that proves it. */
+  calls: string[];
 }
 type TxOp =
   | PatchOp
@@ -94,11 +99,21 @@ function makeTransaction() {
       return tx;
     },
     patch(id: string, fn: (p: unknown) => unknown) {
-      const op: PatchOp = { kind: "patch", id, rev: null, set: {}, unset: [] };
+      const op: PatchOp = { kind: "patch", id, rev: null, set: {}, unset: [], appended: {}, calls: [] };
       const p = {
-        ifRevisionId(rev: string) { op.rev = rev; return p; },
-        set(values: Record<string, unknown>) { Object.assign(op.set, values); return p; },
-        unset(fields: string[]) { op.unset.push(...fields); return p; },
+        ifRevisionId(rev: string) { op.calls.push("ifRevisionId"); op.rev = rev; return p; },
+        set(values: Record<string, unknown>) { op.calls.push("set"); Object.assign(op.set, values); return p; },
+        unset(fields: string[]) { op.calls.push("unset"); op.unset.push(...fields); return p; },
+        setIfMissing(values: Record<string, unknown>) {
+          op.calls.push("setIfMissing");
+          for (const [k, v] of Object.entries(values)) if (!(k in op.set)) op.set[k] = v;
+          return p;
+        },
+        append(field: string, items: unknown[]) {
+          op.calls.push("append");
+          (op.appended[field] ??= []).push(...items);
+          return p;
+        },
         inc() { return p; },
       };
       fn(p);
@@ -122,6 +137,18 @@ function committedTransactions() {
 
 function patches(tx: RecordedTx): PatchOp[] {
   return tx.ops.filter((o): o is PatchOp => o.kind === "patch");
+}
+
+/**
+ * A patch without the chain bookkeeping (`calls`, `appended`), for the
+ * assertions that deep-equal the WHOLE op list.
+ *
+ * Those stay exhaustive on purpose — their value is "these operations and no
+ * others" — so they are normalized rather than loosened to `toMatchObject`,
+ * which would stop them noticing an operation nobody intended.
+ */
+function patchShapes(tx: RecordedTx) {
+  return patches(tx).map(({ calls: _calls, appended: _appended, ...rest }) => rest);
 }
 
 function creates(tx: RecordedTx): Record<string, unknown>[] {
@@ -189,6 +216,10 @@ function applyToStore(record: RecordedTx) {
     const doc = allDocs().find((d) => d._id === op.id);
     if (!doc) continue;
     Object.assign(doc, op.set);
+    for (const [field, items] of Object.entries(op.appended)) {
+      const current = Array.isArray(doc[field]) ? (doc[field] as unknown[]) : [];
+      doc[field] = [...current, ...items];
+    }
     for (const field of op.unset) delete doc[field];
     doc._rev = `${String(doc._rev)}+`;
   }
@@ -199,6 +230,34 @@ function canonicalRead(query: string, params: Record<string, unknown>): unknown 
     return store.locks.filter((l) => (params.ids as string[]).includes(l._id as string));
   }
   if (query.includes("setlistProposal")) {
+    // THE THREAD READ-BACK, which must be matched BEFORE the generic
+    // `_id == $id` branch below. `THREAD_AFTER_APPEND_QUERY` contains both
+    // `setlistProposal` and `_id == $id`, so without this it fell into the array
+    // branch and the route received `[{doc}]` — truthy, `.messages` undefined —
+    // making `freshMessages` `[]` on every save in this suite — so a test
+    // asserting `[]` would have passed with or without the code that produces it.
+    // (A test asserting a NON-empty thread would have failed either way; only the
+    // empty assertion was unfalsifiable.)
+    //
+    // `_id == $id` is part of the predicate because `THREAD_MESSAGES` is also
+    // interpolated into the GET list query, which is keyed on the member instead.
+    // Without it, a future GET test would silently get `null` where the route
+    // expects an array. With it, that query falls to the dual-index branch and
+    // throws on the absent `params.dates` as soon as the store holds a proposal
+    // — `filter` never invokes its callback on an empty one — so the failure is
+    // loud exactly when a GET test is meaningful. Not the
+    // `unmocked canonical query` error an earlier version of this comment named:
+    // that throw sits after the `setlistProposal` block returns.
+    if (query.includes("author_name") && query.includes("_id == $id")) {
+      const doc = store.proposals.find((p) => p._id === params.id);
+      if (!doc) return null;
+      const rows = Array.isArray(doc.messages) ? (doc.messages as Record<string, unknown>[]) : [];
+      return {
+        _id: doc._id,
+        _rev: doc._rev,
+        messages: rows.map((m) => ({ ...m, author_name: m.author ? "Ana" : null })),
+      };
+    }
     if (query.includes("_id == $id")) return store.proposals.filter((p) => p._id === params.id);
     // Both indexes at once: the role reference OR an affected date.
     return store.proposals.filter(
@@ -443,7 +502,7 @@ describe("POST /api/me/proposals — first create", () => {
       team_notes: "Salmo 100:2",
     });
     expect(created.submitted_at).toBeUndefined();
-    expect(patches(tx)).toEqual([
+    expect(patchShapes(tx)).toEqual([
       {
         kind: "patch",
         id: `roleTarget.sunday_role.${WEEK}`,
@@ -453,6 +512,99 @@ describe("POST /api/me/proposals — first create", () => {
       },
     ]);
     expect(notifyProposalSubmittedMock).not.toHaveBeenCalled();
+  });
+
+  it("mints the FIRST message from the submission note, in the created document", async () => {
+    // Untested until a review pointed it out: deleting `messages: [msg]` from the
+    // create branch left the whole suite green, and because the migration is
+    // one-shot that note would never become a message on any proposal created
+    // afterwards. A create needs no `setIfMissing` — it is not a patch.
+    seed();
+    const res = await POST(req(saveBody({ leadNotes: "Mi primera nota" })));
+    expect(res.status).toBe(200);
+    const created = creates(committedTransactions()[0])[0];
+    const messages = created.messages as Record<string, unknown>[];
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      _type: "proposal_message",
+      kind: "lead_note",
+      author_role: "lead",
+      body: "Mi primera nota",
+      author: { _ref: "mem-1", _type: "reference" },
+    });
+    expect(typeof messages[0]._key).toBe("string");
+    // The mirror rides along on the same create.
+    expect(created.lead_notes).toBe("Mi primera nota");
+  });
+
+  it("RETURNS the new thread, so the first note is visible without a reload", async () => {
+    // The editor swaps the "Notas privadas" textarea for the thread the moment it
+    // has a `proposalId`, and its `messages` state was initialized from props
+    // that predate this write. Without the thread in the response, a note the
+    // lead just wrote renders "Aún no hay mensajes." until a hard reload.
+    seed();
+    const res = await POST(req(saveBody({ leadNotes: "Mi primera nota" })));
+    const data = (await res.json()) as {
+      messages: Array<{ body: string; author_name: string | null }> | null;
+    };
+    expect(data.messages).not.toBeNull();
+    expect(data.messages).toHaveLength(1);
+    expect(data.messages![0].body).toBe("Mi primera nota");
+    // With the author name RESOLVED — a bare `_ref` would re-render the thread
+    // unattributed on a feature whose whole point is an attributed conversation.
+    expect(data.messages![0].author_name).toBe("Ana");
+  });
+
+  it("keeps a good revision when only the THREAD read fails", async () => {
+    // Under `Promise.all` one rejection zeroed both, so a slow author-name join
+    // discarded a perfectly good `_rev` and drove the editor into "Otro líder
+    // actualizó esta propuesta compartida" — a banner that would be false, and
+    // that contradicts what `messages: null` is for.
+    seed();
+    operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) => {
+      if (q.includes("author_name")) throw new Error("author join timeout");
+      return canonicalRead(q, p);
+    });
+    const res = await POST(req(saveBody({ leadNotes: "Mi primera nota" })));
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { _rev: string | null; messages: unknown };
+    expect(data.messages).toBeNull();  // keep what you are rendering
+    expect(data._rev).toBeTruthy();    // …and keep editing
+  });
+
+  // NOT an independence test — this one passes under the coupled `Promise.all`
+  // version too, since both reads rejecting produced the same response there.
+  // Its value is narrower and still real: a TOTAL read failure is still a 200
+  // with the write committed. The test above is the one that discriminates.
+  it("still answers 200 when BOTH post-commit reads fail", async () => {
+    seed();
+    const committedBefore = committedTransactions().length;
+    // Fail only reads issued AFTER the commit. A blanket failure would kill the
+    // role resolution instead and 403 before anything was written, testing
+    // nothing about the post-commit path.
+    operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) => {
+      if (committedTransactions().length > committedBefore && q.includes("setlistProposal")) {
+        throw new Error("content lake down");
+      }
+      return canonicalRead(q, p);
+    });
+    const res = await POST(req(saveBody({ leadNotes: "Mi primera nota" })));
+    // The write committed. Reporting it as a failure invites a second save.
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { _rev: string | null };
+    // `_rev: null` forces a reload rather than a save against an unguarded
+    // observation — degraded, but fail-closed.
+    expect(data._rev).toBeNull();
+    expect(committedTransactions().length).toBeGreaterThan(committedBefore);
+  });
+
+  it("creates NO messages array when the submission carried no note", async () => {
+    seed();
+    const res = await POST(req(saveBody({ leadNotes: "" })));
+    expect(res.status).toBe(200);
+    const created = creates(committedTransactions()[0])[0];
+    expect(created).not.toHaveProperty("messages");
+    expect(created).not.toHaveProperty("lead_notes");
   });
 
   it("notifies admins and co-leads only when the save submits for review", async () => {
@@ -502,7 +654,7 @@ describe("POST /api/me/proposals — first create", () => {
       service_type: "special",
       service_date: "2026-08-20",
     });
-    expect(patches(tx)).toEqual([
+    expect(patchShapes(tx)).toEqual([
       {
         kind: "patch",
         id: "role-sp",
@@ -540,16 +692,78 @@ describe("POST /api/me/proposals — save / resubmit an existing proposal", () =
       status: "pending",
       service_type: "sunday",
       service_date: WEEK,
-      lead_notes: "Solo para admins",
       team_notes: "Salmo 100:2",
       contributors: [
         { _type: "contributor", _key: "c1", person: { _type: "reference", _ref: "mem-9" } },
         { _type: "contributor", _key: expect.any(String), person: { _type: "reference", _ref: "mem-1" } },
       ],
     });
+    // `lead_notes` is ABSENT: this body re-sends the note already stored, and §2
+    // omits the field rather than writing the same value back. The editor's
+    // `leadNotes` is a one-time initializer re-sent on every save, so an
+    // unconditional write is what would mint duplicate bubbles.
+    expect(ops[0].set).not.toHaveProperty("lead_notes");
+    expect(ops[0].appended.messages).toBeUndefined();
     // The coordination token is heartbeated in the same transaction.
     expect(ops[1]).toMatchObject({ id: `roleTarget.sunday_role.${WEEK}`, rev: "lock-rev-1" });
   });
+
+  // ── §2: the submission note becomes a message, under a two-part rule ──────
+
+  it("appends and mirrors ONLY when the note is non-empty AND changed", async () => {
+    seed();
+    const res = await POST(
+      req(
+        saveBody({
+          observed: { state: "single", id: PROPOSAL_ID, rev: "prop-rev-1" },
+          leadNotes: "Una nota nueva",
+        }),
+      ),
+    );
+    expect(res.status).toBe(200);
+    const op = patches(committedTransactions()[0])[0];
+    const [msg] = op.appended.messages as Record<string, unknown>[];
+    expect(msg).toMatchObject({ kind: "lead_note", author_role: "lead", body: "Una nota nueva" });
+    expect(op.set).toMatchObject({ lead_notes: "Una nota nueva" });
+    expect(op.calls.indexOf("setIfMissing")).toBeLessThan(op.calls.indexOf("append"));
+  });
+
+  it("appends NOTHING for an empty note, and does not blank the stored one", async () => {
+    seed();
+    const res = await POST(
+      req(
+        saveBody({
+          observed: { state: "single", id: PROPOSAL_ID, rev: "prop-rev-1" },
+          leadNotes: "",
+        }),
+      ),
+    );
+    expect(res.status).toBe(200);
+    const op = patches(committedTransactions()[0])[0];
+    expect(op.appended.messages).toBeUndefined();
+    // The regression this accepts, named in criterion 5: a pre-deploy client
+    // that deliberately CLEARS the textarea is ignored, and the notice that
+    // fires today does not fire. The alternative — letting an empty payload
+    // through — is what blanks a document whose messages[] is empty.
+    expect(op.set).not.toHaveProperty("lead_notes");
+    expect(store.proposals[0].lead_notes).toBe("Solo para admins");
+  });
+
+  it("treats a whitespace-only difference as no change", async () => {
+    seed();
+    await POST(
+      req(
+        saveBody({
+          observed: { state: "single", id: PROPOSAL_ID, rev: "prop-rev-1" },
+          leadNotes: "  Solo para admins  ",
+        }),
+      ),
+    );
+    const op = patches(committedTransactions()[0])[0];
+    expect(op.appended.messages).toBeUndefined();
+    expect(op.set).not.toHaveProperty("lead_notes");
+  });
+
 
   it("refuses a stale observed revision with no mutation", async () => {
     seed();
@@ -1001,6 +1215,70 @@ describe("PATCH /api/admin/proposals/[id] — request_changes and reopen", () =>
     expect(transactions).toHaveLength(0);
   });
 
+  // ── The transition's own thread message (Child A §4) ────────────────────
+
+  it("appends the change-request note as a message, inside the SAME patch", async () => {
+    seed();
+    const res = await patchAdmin(PROPOSAL_ID, {
+      action: "request_changes",
+      rev: "prop-rev-1",
+      adminNotes: "Cambia la última",
+    });
+    expect(res.status).toBe(200);
+
+    const op = patches(committedTransactions()[0])[0];
+    const [msg] = op.appended.messages as Record<string, unknown>[];
+    expect(msg).toMatchObject({
+      _type: "proposal_message",
+      kind: "admin_change_request",
+      author_role: "admin",
+      body: "Cambia la última",
+      author: { _ref: "admin-1", _type: "reference" },
+    });
+    // Still mirrored into the legacy archive by the TRANSITION, and only by it.
+    expect(op.set).toMatchObject({ admin_notes: "Cambia la última" });
+  });
+
+  it("inherits ifRevisionId — UNLIKE the standalone message routes", async () => {
+    seed();
+    await patchAdmin(PROPOSAL_ID, {
+      action: "request_changes",
+      rev: "prop-rev-1",
+      adminNotes: "Cambia la última",
+    });
+    const op = patches(committedTransactions()[0])[0];
+    // The asymmetry is the point: this note is part of a reviewed decision, so it
+    // must not land if the decision does not. A chat message asserts nothing.
+    expect(op.rev).toBe("prop-rev-1");
+    expect(op.calls.indexOf("setIfMissing")).toBeLessThan(op.calls.indexOf("append"));
+  });
+
+  it("a reopen with NO note appends nothing and still commits the status change", async () => {
+    seed({ status: "approved" });
+    const res = await patchAdmin(PROPOSAL_ID, { action: "reopen", rev: "prop-rev-1" });
+    expect(res.status).toBe(200);
+    const op = patches(committedTransactions()[0])[0];
+    expect(op.appended.messages).toBeUndefined();
+    expect(op.calls).not.toContain("append");
+    // "Exempt from the cap" is NOT "always appends".
+    expect(op.set).toMatchObject({ status: "changes_requested" });
+  });
+
+  it("appends even when the thread is FULL — a decision is never blocked", async () => {
+    const full = Array.from({ length: 200 }, (_, i) => ({ _key: `k${i}`, kind: "lead_note", body: `m${i}` }));
+    seed({ messages: full });
+    const res = await patchAdmin(PROPOSAL_ID, {
+      action: "request_changes",
+      rev: "prop-rev-1",
+      adminNotes: "Aun así hay que cambiarla",
+    });
+    expect(res.status).toBe(200);
+    // The standalone routes refuse at 200; the transition is exempt, because a
+    // committed `changes_requested` with no reason shown anywhere is worse than
+    // a thread one message over its growth bound.
+    expect((patches(committedTransactions()[0])[0].appended.messages as unknown[])).toHaveLength(1);
+  });
+
   it("re-opens only an approved proposal", async () => {
     seed({ status: "approved" });
     const res = await patchAdmin(PROPOSAL_ID, { action: "reopen", rev: "prop-rev-1" });
@@ -1054,6 +1332,10 @@ describe("PATCH /api/admin/proposals/[id] — reconcile_target", () => {
     // Status and review fields are untouched by a retarget.
     expect(op.set).not.toHaveProperty("status");
     expect(op.set).not.toHaveProperty("admin_notes");
+    // And it appends NO message: metadata repair is not a decision, so it must
+    // not put a bubble in the leads' conversation.
+    expect(op.appended.messages).toBeUndefined();
+    expect(op.calls).not.toContain("append");
   });
 
   it("never retargets approved history", async () => {

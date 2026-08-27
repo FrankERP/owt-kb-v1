@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTransientValue } from "@/app/utils/useTransientValue";
+import ProposalThread, { type ThreadMessage } from "@/app/components/ProposalThread";
 
 import {
   HANDOFF_NOTICE,
@@ -43,6 +44,7 @@ interface Proposal {
   lead_notes?: string;
   team_notes?: string;
   admin_notes?: string;
+  messages?: ThreadMessage[] | null;
   submitted_at?: string;
   contributors?: Array<{ id: string; name: string }>;
   songs: ProposalSong[];
@@ -87,11 +89,16 @@ const STATUS_LABEL: Record<ProposalStatus, string> = {
 
 function ProposalCard({
   proposal,
+  viewerId,
+  onPostMessage,
   onAction,
   highlighted,
   register,
 }: {
   proposal: Proposal;
+  viewerId: string | null;
+  /** Resolves to true when something OTHER than this post moved the document. */
+  onPostMessage: (proposal: Proposal, body: string) => Promise<boolean>;
   onAction: (
     proposal: Proposal,
     action: ProposalAction,
@@ -103,11 +110,33 @@ function ProposalCard({
 }) {
   const [requestingChanges, setRequestingChanges] = useState(false);
   const [reopening, setReopening] = useState(false);
-  const [adminNotes, setAdminNotes] = useState(proposal.admin_notes ?? "");
+  // Seeded EMPTY, deliberately. It used to seed from `proposal.admin_notes`,
+  // which is now a legacy mirror of the newest change request — pre-filling it
+  // would make an admin re-send a stale note as a brand-new message the moment
+  // they opened the panel.
+  const [adminNotes, setAdminNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   // A 409 means the reviewed revision is stale: keep this card (and its open
   // panel) exactly as it is and require a reload before reviewing again.
   const [conflict, setConflict] = useState(false);
+
+  /**
+   * Post, then raise this card's fail-closed lock if something else moved the
+   * proposal while the admin was composing.
+   *
+   * Deliberately NOT gated on the reloaded `_rev`: this admin's own append
+   * always moves it, so that condition is true after every message they send
+   * and would lock them out of their own card.
+   *
+   * The justification is narrower than it looks. With the record patched in
+   * place the admin IS looking at current content, so the lock is not "you were
+   * not shown this" — it is a deliberate fail-closed on the fact that something
+   * else moved while they were composing.
+   */
+  const postAndLock = async (body: string) => {
+    const moved = await onPostMessage(proposal, body);
+    if (moved) setConflict(true);
+  };
 
   // Co-leads who edited the shared proposal, besides the creator shown above.
   const coContributors = (proposal.contributors ?? [])
@@ -221,21 +250,21 @@ function ProposalCard({
         </div>
       )}
 
-      {/* Private lead notes */}
-      {proposal.lead_notes && (
-        <div className="px-4 pb-3">
-          <p className="font-label text-[11px] uppercase tracking-widest text-mono-500 mb-1">Notas privadas para revisión</p>
-          <p className="font-body text-sm text-mono-300 whitespace-pre-wrap">{proposal.lead_notes}</p>
-        </div>
-      )}
-
-      {/* Previous admin notes (when showing changes_requested) */}
-      {proposal.status === "changes_requested" && proposal.admin_notes && !requestingChanges && (
-        <div className="px-4 pb-3">
-          <p className="font-label text-[11px] uppercase tracking-widest text-negative-fg mb-1">Tus comentarios anteriores</p>
-          <p className="font-body text-sm text-negative-muted whitespace-pre-wrap">{proposal.admin_notes}</p>
-        </div>
-      )}
+      {/* The private lead ↔ admin conversation, replacing BOTH the "Notas
+          privadas para revisión" and "Tus comentarios anteriores" blocks.
+          Rendered UNCONDITIONALLY — those two were gated on their fields being
+          non-empty and on `changes_requested`, and inheriting either condition
+          would hide the thread on a `pending` proposal, which is where the
+          conversation happens. */}
+      <div className="px-4 pb-3">
+        <ProposalThread
+          messages={proposal.messages}
+          viewerId={viewerId}
+          viewerRole="admin"
+          serviceDate={proposal.service_date}
+          onPost={postAndLock}
+        />
+      </div>
 
       {/* Stale-review banner (409). The card keeps exactly what was reviewed. */}
       {conflict && (
@@ -353,6 +382,14 @@ function ProposalCard({
 
 export interface ProposalsPanelProps {
   /**
+   * The signed-in admin's Sanity id, for right-aligning their own thread
+   * bubbles. Passed from `AdminPanel` rather than read with `useSession` here:
+   * this panel has never needed a `<SessionProvider>` and its own suite mounts
+   * it bare. Absent is a real, harmless state — alignment simply falls back to
+   * left for every message.
+   */
+  viewerId?: string | null;
+  /**
    * A transient `ProposalReviewTarget` set by a service card. It is resolved by
    * EXACT id against the already-loaded response — this panel never rebuilds a
    * target key, re-groups records, or chooses a canonical proposal.
@@ -367,7 +404,7 @@ const prefersReducedMotion = () =>
   typeof window.matchMedia === "function" &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-export default function ProposalsPanel({ target = null, onResolved }: ProposalsPanelProps = {}) {
+export default function ProposalsPanel({ target = null, onResolved, viewerId = null }: ProposalsPanelProps = {}) {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -478,6 +515,67 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
     reopen: "changes_requested",
   };
 
+  /**
+   * Post one message into a proposal's thread, then patch THAT ONE RECORD in
+   * place from the response.
+   *
+   * **It must not call `load()`.** `load()` begins with `setLoading(true)` and
+   * the card list renders only inside `{!loading && !error && (`, so every card
+   * unmounts for the duration of the fetch — `key` preserves identity across
+   * renders where the list is rendered, not across one where it is not. Three
+   * consequences, all disqualifying:
+   *
+   *  - the `conflict` flag would be wiped by the remount, so the fail-closed
+   *    lock would not exist at all;
+   *  - every successful post would wipe an in-progress "Solicitar cambios" note
+   *    in any open card, including the posting card's own;
+   *  - the whole list would flash to skeletons on every chat message.
+   *
+   * The response carries the fresh `_rev`, `observedRev` and the resolved
+   * `messages[]` — or `messages: null`, which means the post landed but the
+   * read-back did not. `null` is NOT an empty thread: the card keeps what it is
+   * already rendering rather than blanking it.
+   *
+   * **The stale banner is gated on `observedRev`, not on the reloaded `_rev`.**
+   * The admin's own append always moves `_rev`, so gating on that would raise
+   * the banner after every message they send and lock them out of their own
+   * card. `observedRev !== the rev the card held` means something OTHER than
+   * this post moved the document while they were composing.
+   *
+   * Rethrows so `<ProposalThread>` keeps the composer text; its own catch shows
+   * the error.
+   */
+  const postMessage = useCallback(async (proposal: Proposal, body: string): Promise<boolean> => {
+    const res = await fetch(`/api/admin/proposals/${encodeURIComponent(proposal._id)}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body }),
+    });
+    if (!res.ok) throw new Error("post failed");
+    // `messages: null` is a REAL response — the post landed but the read-back
+    // did not. Typed as such so a later "simplification" back to
+    // `data.messages ?? []` cannot lean on it being impossible.
+    const data: {
+      messages?: ThreadMessage[] | null;
+      rev?: string | null;
+      observedRev?: string | null;
+    } = await res.json();
+    // `data.messages === null` means the post landed but the read-back did not.
+    // Keep the messages already on screen rather than blanking the thread.
+    setProposals((current) =>
+      current.map((p) =>
+        p._id === proposal._id
+          ? { ...p, messages: data.messages ?? p.messages, _rev: data.rev ?? p._rev }
+          : p,
+      ),
+    );
+    // Returned, not set here: the fail-closed lock is per-CARD state
+    // (`conflict` inside `ProposalCard`), and it is what disables Aprobar,
+    // Solicitar cambios and Reabrir. `conflictKey` is the handoff notice and is
+    // a different thing entirely.
+    return !!data.observedRev && data.observedRev !== proposal._rev;
+  }, []);
+
   const handleAction = async (
     proposal: Proposal,
     action: ProposalAction,
@@ -492,7 +590,15 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
         body: JSON.stringify({ action, rev: proposal._rev, adminNotes: notes }),
       });
       if (res.ok) {
-        showToast(ACTION_TOAST[action]);
+        // Branch on `idempotent`, which means the route matched an existing
+        // receipt and wrote NOTHING. Both `approve` and `request_changes`/
+        // `reopen` can return it. Reading the body at all is new — this handler
+        // used to check only `res.ok` — and it matters now that the transition
+        // also appends a thread message: a repeat with the same note is a
+        // no-write retry, and a success toast would tell the admin a message
+        // was delivered that was not.
+        const data: { idempotent?: boolean } = await res.json().catch(() => ({}));
+        showToast(data.idempotent ? "Sin cambios" : ACTION_TOAST[action]);
         // Approving a PAST-dated proposal moves it into a windowed status whose
         // month may already be behind the window start — the card would vanish
         // from under the admin right after the toast. Widen to keep it on
@@ -637,6 +743,8 @@ export default function ProposalsPanel({ target = null, onResolved }: ProposalsP
             <ProposalCard
               key={p._id}
               proposal={p}
+              viewerId={viewerId}
+              onPostMessage={postMessage}
               onAction={handleAction}
               highlighted={highlightIds.includes(p._id)}
               register={(el) => cardRefs.current.set(p._id, el)}

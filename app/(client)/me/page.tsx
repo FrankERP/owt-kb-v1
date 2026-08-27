@@ -230,7 +230,7 @@ export default async function MePage() {
       // whichever row happened to arrive last.
       `*[_type == "setlistProposal" && service_date >= $today &&
          $id in service_ref->Lead[]._ref] {
-        _id, _createdAt, status, admin_notes,
+        _id, _createdAt, status,
         "service_ref": service_ref._ref,
         "contributors": contributors[]{ "id": person->_id, "name": coalesce(person->alias, person->member_name) }
       }`,
@@ -265,7 +265,7 @@ export default async function MePage() {
   // `_createdAt`) instead of last-write-wins, so the CTA a lead sees is stable
   // across renders.
   const rawProposals = (Array.isArray(proposals) ? proposals : []) as Array<{
-    _id: string; _createdAt?: string; status: ProposalStatus; admin_notes?: string;
+    _id: string; _createdAt?: string; status: ProposalStatus;
     service_ref: string; contributors?: Array<{ id: string; name: string }>;
   }>;
   const proposalsByService = new Map<string, typeof rawProposals>();
@@ -275,14 +275,14 @@ export default async function MePage() {
     if (list) list.push(p);
     else proposalsByService.set(p.service_ref, [p]);
   }
-  const proposalMap = new Map<string, { _id: string; status: ProposalStatus; admin_notes?: string; hint: string }>();
+  const proposalMap = new Map<string, { _id: string; status: ProposalStatus; hint: string }>();
   for (const [serviceRef, list] of proposalsByService) {
     const [winner] = orderProposals(
       list.map((p) => ({ ...p, createdAt: p._createdAt ?? null })),
     );
     if (!winner) continue;
     proposalMap.set(serviceRef, {
-      _id: winner._id, status: winner.status, admin_notes: winner.admin_notes,
+      _id: winner._id, status: winner.status,
       hint: describeContributors(winner.contributors, sanityId),
     });
   }
