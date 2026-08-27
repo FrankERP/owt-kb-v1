@@ -461,4 +461,4 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   [SOLVER_AND_INFRA §3](SOLVER_AND_INFRA.md#3-scripts--one-off-migrations-imports--ops).
 - **Push categories:** `assignments`, `setlist`, `proposals`, `reminders` — each gated by
   `notifPrefs` inside `sendPush`.
-- **`app/api/__tests__/proposalTeamNotes.test.ts`** is a test, not a route.
+- **`app/api/__tests__/proposalWriteRoutes.test.ts`** is a test, not a route.

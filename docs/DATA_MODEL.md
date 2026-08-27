@@ -11,7 +11,7 @@ exact strings used in GROQ `_type` filters.
 
 ---
 
-## Registered document types (16)
+## Registered document types (18)
 
 `post`, `tag`, `author`, `featuredSongs`, `saturdarSongs`, `saturday_role`, `sunday_role`,
 `teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, and five **internal** types never

@@ -71,8 +71,9 @@ default), timezone **America/Mexico_City**.
 8. **Production Sanity writes need explicit user consent** — dry-run scripts first.
 9. **All three must pass before "done":** `npx tsc --noEmit`, `npm test`, and
    `npx eslint .` with zero errors.
-10. **No AI/Claude attribution in commits.** Conventional commits, direct push to `main`
-    (via a working branch), no PRs.
+10. **No AI/Claude attribution in commits.** Conventional commits. **`main` is protected
+    and takes no direct pushes** — it is reached through a PR whose `gates` check is green,
+    and `preview` is pushed and alias-verified first. See [CI.md](CI.md).
 
 ---
 

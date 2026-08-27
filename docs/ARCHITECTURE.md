@@ -307,15 +307,20 @@ that **no entry is dead** (each must be exercised by a real scanned site).
 | Registry | Satisfies | Contents | Owner |
 |----------|-----------|----------|-------|
 | `A2_HANDOFF_ALLOWLIST` | any kind | **empty** — every A1 mutation-local read is migrated | closed out by A2 |
-| `PROTECTED_RUNTIME_WRITERS` | **`protected-write` only** | the 12 guarded mutation surfaces (roles create / edit / **delete** / publish / publish-ready / unpublish / swap / copy-instruments, setlists PUT, proposal POST, proposal PATCH, and `app/utils/roleWriteOps.ts` itself) | permanent — nothing removes them |
-| `RETIRED_ONE_SHOT_WRITERS` | reads + writes | the 5 historical one-shot scripts, each fail-closed before any client | permanent record, not A2's to delete |
-| `OPERATOR_TOOLING_ALLOWLIST` | reads + writes | `service-readiness-cleanup.mjs`, `service-readiness-feasibility.mjs` | operator / A3 tooling |
-| `DEFENSIVE_TYPE_REJECTION_GUARDS` | `type-rejection-guard` only | `app/api/content/posts/[id]/route.ts` `PATCH` — reads only `{_type}` to refuse overwriting a protected doc through the song editor | song-editor refactor |
+| `PROTECTED_RUNTIME_WRITERS` | **`protected-write` only** | **16** guarded mutation surfaces (roles create / edit / **delete** / publish / publish-ready / unpublish / swap / copy-instruments, setlists PUT, proposal POST, proposal PATCH, **both proposal-thread message routes**, `app/utils/roleWriteOps.ts`, `outboxSweep.ts` and `serviceMutationSideEffects.ts`) | permanent — nothing removes them |
+| `RETIRED_ONE_SHOT_WRITERS` | reads + writes | **7** historical one-shot scripts, each fail-closed before any client | permanent record, not A2's to delete |
+| `OPERATOR_TOOLING_ALLOWLIST` | reads + writes | **8** entries — the two service-readiness scripts, `reconcile-proposal-messages.mjs`, both `requeue-*` tools, `backfill-legacy-seat-arrays.mjs`, `bootstrap-weekend-locks.mjs`, and `e2e/service-readiness/lib/dataset.ts` | operator / A3 tooling |
+| `DEFENSIVE_TYPE_REJECTION_GUARDS` | `type-rejection-guard` only | **2** — `app/api/content/posts/[id]/route.ts` and `app/api/kids/pairs/[id]/route.ts`, each reading only `{_type}` to refuse overwriting a protected doc through an editor | song-editor refactor |
+
+**These counts drift.** They are prose beside five live arrays and nothing pins them; every one
+of them was wrong on 2026-08-27, two of them because this delivery added entries. The arrays in
+`app/utils/protectedReadAudit.ts` are the source of truth — if a number here disagrees, the array
+is right.
 
 Two consequences worth internalizing:
 
 - **The runtime writers are licensed to write, never to read.** A non-canonical read appearing in one
-  of those eight file+operation pairs is still a violation, so the A1 read migration cannot be quietly
+  of those 16 file+operation pairs is still a violation, so the A1 read migration cannot be quietly
   undone. A generic `_id` read that projects protected *fields* is likewise not covered by the
   defensive-guard registry.
 - **A retired script's entry is contingent on its gate.** The scan is static, so the historical GROQ
@@ -397,7 +402,9 @@ must never fail the underlying write.
 [`app/utils/serviceMutationSideEffects.ts`](../app/utils/serviceMutationSideEffects.ts): routes build
 a *notice* and hand it over; they never assemble a recipient list. Recipients come from **committed
 server state across all five seat paths** via `operationalClient` — never a client-supplied list, and
-never a `drafts.*` overlay that could widen the audience. The rules, exhaustively:
+never a `drafts.*` overlay that could widen the audience. The rules for the SERVICE and
+ROLE paths — the proposal thread's own signals are in
+[NOTIFICATIONS.md](NOTIFICATIONS.md) §"The proposal thread" and are not repeated here:
 
 | Event | Audience |
 |-------|----------|
@@ -428,7 +435,7 @@ flowchart LR
 - **Push categories:** `assignments`, `setlist`, `proposals`, `reminders`. Each gated by the
   member's `notifPrefs`. Dead FCM tokens are auto-pruned.
 - **Email:** SMTP preferred (Gmail, `dev.raccoon.labs@gmail.com`), Resend fallback; gated by `EMAIL_ALLOWLIST`
-  (default `"*"` = whole team) and the per-member `notifPrefs.email` opt-out.
+  (default `"*"` = whole team) and the per-member preference, which `wantsNotification` resolves per TYPE first (`emailAssigned`/`emailRemoved`/`emailRoleChanged`/`emailSetlist`/`emailProposals`) and only then falls back to the blanket `notifPrefs.email`.
 - **Opt-out is permissive by default:** an unset pref means opted-in.
 - **`notifyProposalSubmitted` is fail-closed on identity:** it resolves the service role through
   the canonical contract (§8) and sends **nothing at all** when that identity is missing,

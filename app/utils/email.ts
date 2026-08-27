@@ -194,8 +194,11 @@ async function sendWithTimeout(
 
 // Sends one email. Two backends, chosen by env:
 //   1. SMTP (preferred) — when SMTP_HOST + SMTP_USER + SMTP_PASS are set, sends
-//      through that mailbox (e.g. contacto@oasis.mx on the cPanel/MailBaby
-//      server). Delivers to anyone; no domain verification needed.
+//      through that mailbox — currently Gmail as dev.raccoon.labs@gmail.com,
+//      with SMTP_PASS a Google APP PASSWORD. It was contacto@oasis.mx on
+//      cPanel/MailBaby until 2026-08. Delivers to anyone; no domain
+//      verification needed, which is why the sender moved here after Resend's
+//      DNS verification for oasis.mx could not be completed.
 //   2. Resend — when RESEND_API_KEY is set (and no SMTP_HOST). Requires a
 //      verified sending domain to reach arbitrary recipients.
 // EMAIL_FROM is required for both; with neither backend configured the call

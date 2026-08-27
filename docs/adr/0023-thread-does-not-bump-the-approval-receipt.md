@@ -4,8 +4,11 @@
 
 ## Context
 
-Release 2 added `messages[]` to `setlistProposal` and turned `lead_notes` /
-`admin_notes` into mirrors of it. Two constants sit next to that field and look
+Release 2 added `messages[]` to `setlistProposal` and mirrored it into
+`lead_notes` / `admin_notes`. Child B removed that write on 2026-08-27, so both
+fields are now a frozen archive (`docs/DATA_MODEL.md`); the decision below is
+unaffected, because it turns on what the receipt fingerprints, not on who writes
+the legacy fields. Two constants sit next to that field and look
 like they should move with it:
 
 ```ts

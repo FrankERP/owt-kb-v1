@@ -34,12 +34,15 @@ the data-free theme gallery — ADR-0017); sign in with Google SSO (your email m
 
 ## The "done" gate
 
-Before claiming any change is complete, **both must pass**:
+Before claiming any change is complete, **all three must pass**:
 
 ```bash
 npx tsc --noEmit
 npm test
+npx eslint .
 ```
+
+`eslint` must report **0 errors**; the warnings are a deliberate backlog (see `eslint.config.mjs`).
 
 ## Documentation map
 
@@ -66,10 +69,12 @@ npm test
 4. **Member-facing reads filter `published != false`**; setlists gate via `publishedSetlist()`.
 5. **Mutations must revalidate** their ISR pages, and **array-of-object writes need a `_key`**.
 
-Full list in [docs/ARCHITECTURE.md §11](docs/ARCHITECTURE.md#12-the-load-bearing-invariants-do-not-break).
+Full list in [docs/ARCHITECTURE.md §12](docs/ARCHITECTURE.md#12-the-load-bearing-invariants-do-not-break).
 
 ## Conventions
 
-Work on a branch, merge to `main` periodically (direct push, **no PRs**). Conventional commits;
+Work on a branch. **`main` is protected and takes NO direct pushes** — it is reached through a
+PR whose `gates` check is green. **Push `preview` FIRST** and verify the dev alias moved, then
+open the PR; merging it IS the production release. Conventional commits;
 the body explains the *why*. **Never** add AI/Claude attribution. Production Sanity writes need
 explicit user consent (dry-run scripts first). See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).

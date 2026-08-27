@@ -10,7 +10,7 @@
 // everything the server does BEFORE accepting content: sender verification,
 // recipient verification, and any callout to the recipient's own MTA.
 //
-// HOW TO READ IT (`mail.oasis.mx` is cPanel/Exim):
+// HOW TO READ IT (the phase names were decoded against `mail.oasis.mx`, cPanel/Exim; the probe now runs against Gmail, so the timings differ but the phases do not):
 //
 //   · `rcptToMs` large, and larger for an EXTERNAL recipient than a local one
 //     → Exim is doing recipient callout verification: connecting to the

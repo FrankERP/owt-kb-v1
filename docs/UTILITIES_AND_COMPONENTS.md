@@ -18,7 +18,7 @@ Set `color` on an ancestor and inherit `currentColor` instead.
 The shared logic layer. **Before writing new logic, check here — these helpers are the
 single source of truth for their concern, and several encode invariants you'd otherwise get
 wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching test in
-`app/utils/__tests__/` (a few — `authGuards`, `revalidate`, `native`, `firebaseAdmin`,
+`app/utils/__tests__/` (a few — `revalidate`, `native`, `firebaseAdmin`,
 `interface`, `Provider` — do not).
 
 ---
@@ -93,6 +93,21 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
 - **`mergeContributor(existing, editorId, newKey)`**, **`describeContributors(contributors, myId)`**
   ([proposalContributors.ts](../app/utils/proposalContributors.ts)) — preserve contributor `_key`s
   + append the current editor once; "con Ana, Beto" label.
+- **`parseProposalMessageRequest`**, **`buildProposalMessage`**, **`isLeadNote`**,
+  **`LEAD_NOTE_MESSAGES`**, `PROPOSAL_MESSAGE_KINDS`, `PROPOSAL_MESSAGES_MAX`
+  ([proposalMessageWrite.ts](../app/utils/proposalMessageWrite.ts)) — the thread's write side, pure.
+  `isLeadNote` and the `LEAD_NOTE_MESSAGES` GROQ fragment are the SAME predicate on the two sides
+  of the debounced email, cross-pinned by executing the fragment against the function
+  (`__tests__/leadNoteProjection.test.ts`) — do not add a third copy.
+- **`THREAD_MESSAGES`**, **`THREAD_AFTER_APPEND_QUERY`**
+  ([proposalMessageRead.ts](../app/utils/proposalMessageRead.ts)) — the thread as the surfaces read
+  it, with author names joined. `author` is optional: two migrated `admin_notes` have nobody to
+  attribute them to.
+- **`isThreadOpen({serviceDate})`** ([proposalThread.ts](../app/utils/proposalThread.ts)) — the
+  conversation closes when the SERVICE passes, not on approval. Enforced server-side in both
+  message routes; a hidden composer is not a guard. The transition is deliberately exempt.
+- **`PROPOSAL_NOTES_MAX`** ([proposalNotesLimit.ts](../app/utils/proposalNotesLimit.ts)) — 4000
+  chars per message. A leaf so both the client and the pure write path can read it.
 
 ### Auth & access (also see [AUTH_AND_SECURITY.md](AUTH_AND_SECURITY.md))
 - **`getMemberAccess(sanityId)`**, **`isMemberActive(sanityId)`** ([memberAccess.ts](../app/utils/memberAccess.ts))
@@ -316,7 +331,7 @@ Shares `songToForm` / chart helpers with `SongFormModal`. Lyrics and charts are 
 
 ## Tests
 
-**161 test files / 3,777 tests** (137 under `app/` + 15 under `scripts/` + 9 harness unit
+**188 test files / 4,281 tests** (163 under `app/` + 16 under `scripts/` + 9 harness unit
 tests under `e2e/service-readiness/__tests__/`).
 Separately, **11 Playwright specs** under `e2e/service-readiness/` run only against the isolated
 verification deployment and are **not** part of `npm test` — see

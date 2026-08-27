@@ -49,7 +49,7 @@ hand-writing a fixture that mirrors them).
 
 | Layer | What | Where |
 |---|---|---|
-| 1 — primary | GitHub Actions, every 5 min | `.github/workflows/flush-notifications.yml` → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
+| 1 — primary | GitHub Actions, declared every 5 min — see §"Layer 1 does not run every five minutes" | `.github/workflows/flush-notifications.yml` → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
 | 2 — backstop | opportunistic sweep after any queueing write | end of `commitUpserts()` in `serviceMutationSideEffects.ts` |
 | 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` |
 
@@ -61,8 +61,9 @@ is **up to 24 hours**, until layer 3 runs.
 
 Layer 2 derates **both** knobs (half the recipient limit *and* half the send
 budget), so the send-time inequality holds identically there. It does not fire on
-proposal submit or review, which queue nothing; layer 1 covers those within five
-minutes. The proposal-submit **email** (`buildProposalEmail`) is immediate, not
+proposal submit or review, which queue nothing; layer 1 is what covers those —
+nominally within five minutes, in practice at a 41-minute median (§"Layer 1 does
+not run every five minutes"). The proposal-submit **email** (`buildProposalEmail`) is immediate, not
 queued: intro + CTA, the same setlist table as "Setlist listo" (no Mov. column,
 medleys grouped), and the lead's newest `lead_note` message when the thread has one — the same thread source as the debounced email below, moved in the same delivery that stopped writing the legacy field. Empty or unreadable songs still
 send the intro and CTA. Push stays a one-line alert.
@@ -104,19 +105,31 @@ one, read the log within the hour of a real sweep, or run
 `scripts/measure-send-budget.mjs --to=you@example.com --apply` with the app
 password.
 
-**What it unlocks**, against the release gate the design states as
-`ms_per_send × NOTIFY_FLUSH_EMAIL_LIMIT < NOTIFY_SEND_BUDGET_MS`:
+**What it unlocks — and USE THE RIGHT INEQUALITY.** The design spec states the
+release gate as `ms_per_send × NOTIFY_FLUSH_EMAIL_LIMIT < NOTIFY_SEND_BUDGET_MS`,
+i.e. against 40 000 ms. **The runtime is stricter than that**, and the difference
+is a factor of two: the loop stops when `elapsed + SEND_TIMEOUT_MS (20 s) > 40 s`,
+so only the first **20 s** are actually available for sending. Serial sends of
+duration `d` therefore fit
 
-| sender | ms/send | viable limit |
-|---|---|---|
-| `mail.oasis.mx` | 14 413 (measured 2026-08-07) | **2** — which is why production runs 2 |
-| Gmail | ~1 200 (bounded 2026-08-27) | **~25–30** |
+```
+N  =  floor(20 000 / d) + 1
+```
 
-The code's default of 40 is still slightly out at 1.2 s (48 s > 40 s). **Nothing
-has been raised.** Raising `NOTIFY_FLUSH_EMAIL_LIMIT` is a deliberate change that
-should follow a direct measurement, not this bound — and note that
-`MEASURED_MS_PER_SEND` in `outboxSweep.test.ts` is a guard on the shipped
-defaults, never a place to write the observed number.
+| sender | ms/send | N (runtime) | spec's looser form |
+|---|---|---|---|
+| `mail.oasis.mx` | 14 413 (measured 2026-08-07) | **2** — which is why production runs 2 | 2 |
+| Gmail | ~1 200 (bounded 2026-08-27) | **17** | 33 |
+
+The 14 sent on 2026-08-27 are consistent with the runtime form and not a fluke:
+13 × 1 200 = 15 600 < 20 000, with room for three more.
+
+**Nothing has been raised.** The code's default of 40 needs `d < 500 ms` under the
+runtime form, which Gmail does not meet. A value around **12** would be safe at the
+bounded latency with margin for a slow day. Raising `NOTIFY_FLUSH_EMAIL_LIMIT` is a
+deliberate change that should follow a direct measurement rather than this bound —
+and `MEASURED_MS_PER_SEND` in `outboxSweep.test.ts` is a guard on the shipped
+defaults, never a place to write an observed number.
 
 ## Layer 1 does not run every five minutes
 
@@ -299,7 +312,7 @@ ignores 3xx — see the landmine below.
 report carries `lost > 0`, which means recipients were claimed, never reached,
 and their notices were **consumed anyway** — permanently deleted. `unserved > 0`
 with `repended > 0` is normal: the send budget stopped early and those recipients
-wait for the next sweep (every five minutes). `deferred > 0` is also healthy:
+wait for the next sweep (declared five-minutely; median 41). `deferred > 0` is also healthy:
 work left *unclaimed* for the next sweep.
 
 **Is the mail path healthy, and where is its time going?**
