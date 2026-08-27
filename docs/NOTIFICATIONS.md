@@ -64,7 +64,7 @@ budget), so the send-time inequality holds identically there. It does not fire o
 proposal submit or review, which queue nothing; layer 1 covers those within five
 minutes. The proposal-submit **email** (`buildProposalEmail`) is immediate, not
 queued: intro + CTA, the same setlist table as "Setlist listo" (no Mov. column,
-medleys grouped), and `lead_notes` when present. Empty or unreadable songs still
+medleys grouped), and the lead's newest `lead_note` message when the thread has one — the same thread source as the debounced email below, moved in the same delivery that stopped writing the legacy field. Empty or unreadable songs still
 send the intro and CTA. Push stays a one-line alert.
 
 ## The proposal thread — what it does NOT notify

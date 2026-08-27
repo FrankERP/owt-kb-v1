@@ -234,13 +234,13 @@ describe("SUBMITTED_NOTIFY_QUERY", () => {
     // The body source MOVED to the thread, and this is the assertion that shows
     // it: `lead_notes` is gone from the row entirely.
     //
-    // The fixture's thread is MIXED and its NEWEST message is a `pastor_note`
-    // preceded by an `admin_change_request`, which is the shape that matters:
-    // the submit email fires on every save committed `pending`, so a resubmit
-    // from `changes_requested` is routine and the newest message there is the
-    // admin's own words. Taking the last message of the whole array — or
-    // dropping the filter — would mail admins their change request back under a
-    // heading that says "Notas del líder", and no other row would notice.
+    // The fixture's thread is MIXED: its newest message is a `pastor_note`, and
+    // it also carries an `admin_change_request`. Both matter. The submit email
+    // fires on every save committed `pending`, so a resubmit from
+    // `changes_requested` is routine and the thread there holds the admin's own
+    // words; taking the last message of the WHOLE array would mail "Bendiciones."
+    // and dropping the filter would put the change request in a block headed
+    // "Notas del líder". No other row would notice either.
     //
     // `songs` comes back as an explicit null rather than being omitted — GROQ
     // projects a requested-but-absent field, which is why every consumer of

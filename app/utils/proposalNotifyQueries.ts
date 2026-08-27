@@ -14,10 +14,10 @@
 //
 // Nothing here touches a client. Do not add one.
 //
-// `LEAD_NOTE_MESSAGES` (`./proposalMessageWrite`) is interpolated by
-// `PROPOSAL_QUERY` below. `SUBMITTED_NOTIFY_QUERY` still reads `lead_notes`:
-// repointing the SUBMIT email at the thread is a separate slice, and an import
-// used by one query is not a claim about the other.
+// `LEAD_NOTE_MESSAGES` (`./proposalMessageWrite`) is interpolated by BOTH
+// queries below, so the lead-note predicate exists exactly twice in the
+// codebase — that fragment and `isLeadNote` — and the two are cross-pinned by
+// execution in `__tests__/leadNoteProjection.test.ts`.
 
 import { LEAD_NOTE_MESSAGES } from "./proposalMessageWrite";
 

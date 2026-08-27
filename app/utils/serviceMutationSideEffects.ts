@@ -646,17 +646,18 @@ export interface QueueLeadNotesNoticeInput {
    * ONE reader: production's OLD sweep, during the preview→main window and after
    * a revert, both of which compare this snapshot against the live `lead_notes`.
    *
-   * NOTHING WRITES `lead_notes` ANY MORE, and that is what this snapshot is for.
-   * During the preview→main window production runs the OLD sweep, which compares
-   * this value against the live field. The field is frozen, so the two ALWAYS
-   * agree, `classifyLeadNotes` returns null, and the notice is consumed with no
-   * email — silence rather than a stale-content email mailing the archive.
+   * WHO READS IT: production's OLD sweep, which compares this snapshot against
+   * the live `lead_notes` during the preview→main window and after a revert.
+   * Nothing in THIS tree writes that field any more; the version running in
+   * production during the window still does. That is the whole subtlety, and it
+   * is why no universal about the two values belongs in this comment — five
+   * successive rewrites of this paragraph asserted one, and each was wrong in a
+   * different direction, because a claim true of one version is being made about
+   * a system running two.
    *
-   * READ THAT AS THE RISK IT IS, NOT AS SAFETY. Silence means a message posted
-   * through `preview` during the window reaches nobody: the notice yields no
-   * pairs, `partitionClaimed` consumes it, and `countLost` reports 0, so nothing
-   * anywhere records the loss. It is not the corner case it was while the mirror
-   * still moved — with the mirror gone it is EVERY notice queued in that window.
+   * WHAT YOU MAY RELY ON: a message posted through `preview` in that window can
+   * reach nobody, and when it does, nothing records it — the notice yields no
+   * pairs, `partitionClaimed` consumes it, and `countLost` reports 0.
    *
    * SO THE WINDOW IS NOT CLOSED BY THIS MECHANISM. It is closed by release
    * procedure step 3 in
@@ -664,11 +665,12 @@ export interface QueueLeadNotesNoticeInput {
    * not post a thread message through `preview` — which holds even when the
    * outbox pre-check has just returned zero, because the notice at risk is one
    * the window creates. Do not read this field as a mechanical guarantee and
-   * relax that step. A REVERT has the same shape in reverse; §The cutover seam
-   * owns the full analysis.
+   * relax that step. §The cutover seam owns the analysis, including the revert.
    *
-   * Nothing may drop it as dead weight. It is pinned in three suites precisely
-   * because the flush no longer gives it a reason to exist.
+   * Nothing may drop it as dead weight. Five test files touch it and three
+   * ASSERT it — the schema field set, and the notice's `before` on each of the
+   * two call sites — precisely because the flush no longer gives it a reason to
+   * exist.
    */
   beforeNotes: unknown;
   /**
