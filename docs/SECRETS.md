@@ -177,7 +177,13 @@ npx vercel env rm EMAIL_REDIRECT_TO production --yes
 
 **Why it is set.** It caps the DISTINCT RECIPIENTS one sweep may claim. That cap is what makes stage 8's unconditional delete safe: a sweep is supposed to fully discharge everything it claims, so anything it claims and cannot send is **destroyed**, not retried. When `ms_per_send` is unknown or bad, a low value turns that risk into a bounded experiment — selection claims only what it can serve and leaves the rest **pending and unclaimed** (`report.deferred`), which the next sweep picks up.
 
-**Set to `40` since 2026-08-27 — the code default, measured to hold.** It was `2` for three weeks, sized for the ~14 s per send of the retired `mail.oasis.mx`; that number and its reasoning are kept below because they explain why the cap was ever below the seat count. It is the lesser of two bad options, and both are worth understanding before anyone changes it.
+**Set to `2`, and 40 is measured to be safe once the concurrency-8 code is deployed.** The 2 was sized for the ~14 s per send of the retired `mail.oasis.mx`; the reasoning below explains why the cap was ever below the per-service seat count.
+
+**THE TWO ARE COUPLED, and the order matters.** 40 is only safe at
+`SEND_CONCURRENCY = 8`: at the deployed serial code a sweep would claim 40, serve
+about 11, and **destroy the rest** — the "high loses mail" failure this section
+already describes. It was briefly set to 40 on 2026-08-27 and returned to 2 the
+same hour, so the code ships first and the cap follows a verified sweep. It is the lesser of two bad options, and both are worth understanding before anyone changes it.
 
 The cap governs what a sweep **claims**, and claiming is what commits a notice to being deleted whether or not it was sent. Above the serviceable count, the excess is destroyed. Below the month's distinct-recipient count, the fan-out fragments, because stage 6 can only group what stage 3 claimed — and a month of roles is published at once, so the requirement is ONE grouped email per member covering their whole month. So: high loses mail, low fragments it. `2` chooses fragmentation, because losing it is worse.
 
