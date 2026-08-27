@@ -66,12 +66,24 @@ send the intro and CTA. Push stays a one-line alert.
 
 ## The proposal thread — what it does NOT notify
 
-Released 2026-08-26. `lead_notes` / `admin_notes` became a `messages[]` thread,
-and **the notification layer did not change with it.** The legacy fields are
-still written as mirrors precisely so this layer keeps behaving identically:
-`lead_notes` holds the newest lead message, which is exactly what it held
-before, so the debounced `leadNotes` email fires on the same occasions with the
-same audience, debounce and preference key.
+Released 2026-08-26. `lead_notes` / `admin_notes` became a `messages[]` thread.
+
+**The debounced admin email now reads the THREAD, not `lead_notes`** (Child B
+slice 1, on a branch — not released). `PROPOSAL_QUERY` no longer projects
+`lead_notes` at all: the notice stores `before.beforeMessageCount`, the
+pre-commit count of `kind == "lead_note"` messages, and the flush emails
+everything appended since that index. The legacy fields are still written as
+mirrors — removing that write is a later slice — but nothing in the sweep reads
+them any more.
+
+Audience, debounce and preference key are unchanged: the same admin set resolved
+at flush, the same 15–60 minute window, the same `notifPrefs.emailProposals`.
+
+A notice minted before that cutover carries `beforeNotes` and no count. It is
+classified against the thread too — against the **newest `lead_note` body**,
+which is precisely what the mirror held — never dropped. Dropping would be safe
+and not correct: a notice that yields no pairs contributes no pending recipients,
+so `report.lost` stays 0 while a real message vanishes.
 
 **The consequence, which will be reported as a bug if nobody says it first:**
 `queueLeadNotesNotice` requires the pre-write status to be `pending` or
@@ -91,12 +103,23 @@ Closing the two "nothing" rows is Child B, which adds a push to admins on
 `approved` and a push to the lead for a standalone admin message. It is planned
 and **not approved** — see its review log.
 
-Three smaller behaviours worth knowing, all deliberate and named in Child A §1:
-a repeated identical message queues nothing (both the queue guard and the flush
-classifier compare trimmed strings); two messages inside one debounce window
-produce one email carrying only the newest, because the flush re-reads the live
-mirror; and a pre-deploy client that deliberately CLEARS the note textarea is
-now ignored, which retires a signal that used to fire.
+Three smaller behaviours worth knowing. The first two CHANGED with slice 1 and
+supersede what Child A §1 named as accepted gaps:
+
+- **A repeated identical message now queues and emails.** It used to be
+  suppressed twice over — `queueLeadNotesNotice` compared the notes trimmed, and
+  so did the flush classifier. Neither comparison exists any more: the queue side
+  has no "after" string to compare against, and the flush diffs a count against
+  the thread. Posting `"ok"` twice inside one window sends one email whose body
+  is `ok` / `ok`. An improvement, and intended — a lead repeating themselves is
+  saying something.
+- **Two messages inside one window produce one email carrying BOTH**, joined by a
+  blank line, not only the newest. The debounce deliberately collapses a burst,
+  and dropping the middle of a conversation is worse than a longer email. The
+  bound is the window; the absolute ceiling is `PROPOSAL_MESSAGES_MAX` ×
+  `PROPOSAL_NOTES_MAX` = 200 × 4000 ≈ 800 KB, which no realistic window reaches.
+- A pre-deploy client that deliberately CLEARS the note textarea is ignored,
+  which retires a signal that used to fire. Unchanged by slice 1.
 
 ## The liveness alarm
 

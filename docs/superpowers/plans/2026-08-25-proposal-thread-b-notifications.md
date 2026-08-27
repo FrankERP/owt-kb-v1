@@ -700,6 +700,54 @@ missing history.
 | OQ-2 | ~~New admin-push helper, or inline `sendPush`?~~ | **DECIDED: inline `sendPush` in the lead messages route.** There is one caller, and a helper wrapping a one-line fan-out would be a third place the admin audience is written down — and that duplication is now **gone**: Phase A made `ADMIN_RECIPIENTS_QUERY` one exported constant (`proposalNotifyQueries.ts:32`) that both the sweep and the submit email read, so a helper would reintroduce a second place rather than avoid a third. Calling `sendPush` directly adds no copy at all | Closed |
 | OQ-3 | ~~Does the `leadNotes` email subject change?~~ | **DECIDED: yes, to "Mensajes de la propuesta", in Phase B.** "Notas del líder" is wrong once the thread carries admin replies | Closed |
 
+## Implementation record — slice 1
+
+**How this plan is being implemented, and under what authority.** The plan is
+NOT approved and its review was stopped at round 13 (see the review log). Frank's
+decision, 2026-08-26, was to implement in slices and let the DIFF review find
+what plan review cannot — the evidence being that Child A's Phase A found three
+defects four plan-review rounds had missed, and its Phase C diff review found
+six more. **This section records that decision rather than claiming an approval
+that does not exist.**
+
+**Risk tier is unchanged: CRITICAL.** Slicing the implementation does not retier
+the delivery. What changes is where the review budget is spent: a fresh code
+review of each slice's diff, instead of a fourteenth plan round.
+
+**Phase B's "one deploy" rule is intact.** It governs what reaches production
+together, not how the branch is written. No slice deploys on its own; the whole
+branch ships as one release, in the §Release procedure order.
+
+### Slice 1 — the outbox source cutover (`feat/proposal-thread-b1-outbox-source`)
+
+In: `queueLeadNotesNotice`'s input shape and both call sites;
+`notificationOutbox.before.beforeMessageCount`; `PROPOSAL_QUERY` narrowed to the
+thread; `classifyProposalMessages` in the sweep with the legacy-tolerance branch.
+
+Out, deliberately, and each its own later slice: the mirror removal, both
+pushes, `proposalNotify`'s body source, the subject and preference-hint copy, the
+e2e fixtures, the docs sweep.
+
+**One coupling this slice discovered, which the plan's Verification table does
+not state.** The seam row — "queue through the new route, then pass the notice's
+`before.beforeNotes` and the unchanged stored `lead_notes` to `classifyLeadNotes`,
+expecting `null`" — **cannot be written in this slice.** It presumes the mirror is
+gone; while the route still writes `lead_notes`, the stored value CHANGES and the
+expectation is not `null`. The row belongs with the mirror-removal slice and moves
+there. The seam is closed by the queue writing `beforeNotes`, which IS pinned
+here, in three suites.
+
+**One finding declined, with its reason.** The post-review diff review found that
+the legacy branch can emit a `leadNotes` email with an empty body: a pre-cutover
+notice with a non-empty `beforeNotes` on a proposal with ZERO `lead_note`
+messages gives `before = "X"`, `after = ""`, which differ, so `classifyLeadNotes`
+returns a line and `renderLine` emits a section with nothing under it. **This is
+the case §Outbox already names and declines to guard**, and the proposed
+one-liner (`if (!leadMessages.length) return [];`) reintroduces drop-and-consume
+into the one branch whose rewrites produced six consecutive fix-induced defects.
+Child A's Phase D step 9 is designed so the combination does not exist. Declined,
+not overlooked.
+
 ## Terminal state
 
 `READY_FOR_ADVERSARIAL_REVIEW` — all three open questions are closed.

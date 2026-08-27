@@ -642,12 +642,22 @@ export interface QueueLeadNotesNoticeInput {
   /**
    * The stored `lead_notes` BEFORE this write, captured PRE-COMMIT.
    *
-   * KEPT even though the flush no longer classifies against it (Child B
-   * §The cutover seam). It is what makes the release window's residual SILENCE
-   * rather than a stale-content email: production's old sweep compares this
-   * snapshot against the live `lead_notes` and finds them equal, so it sends
-   * nothing instead of mailing the archive. It closes the window identically on
-   * a revert. Nothing may drop it as dead weight.
+   * KEPT even though the flush no longer classifies against it.
+   *
+   * WHILE THE MIRROR IS STILL WRITTEN — which it is in this slice — production's
+   * old sweep compares this snapshot against a live `lead_notes` that the new
+   * route still updates, finds them different, and sends a correct, current
+   * email. The release window is clean, and this field is what keeps it clean on
+   * a REVERT.
+   *
+   * Once the mirror write is removed (a later slice), the same field is what
+   * makes that window's residual SILENCE rather than a stale-content email: the
+   * two values then agree, so the old sweep sends nothing instead of mailing the
+   * archive. Do not read this as already true — see `docs/NOTIFICATIONS.md` for
+   * which half of the cutover has landed.
+   *
+   * Either way, nothing may drop it as dead weight. It is pinned in three
+   * suites precisely because the flush no longer gives it a reason to exist.
    */
   beforeNotes: unknown;
   /**

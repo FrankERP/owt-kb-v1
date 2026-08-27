@@ -190,7 +190,9 @@ describe("PROPOSAL_QUERY", () => {
     // this array is what §The projection forbids; the shape is what makes the
     // ban safe to state.
     expect(row.leadMessages).toEqual(
-      MIXED.filter((m) => m.kind === "lead_note").map((m) => ({ kind: m.kind, body: m.body })),
+      // `isLeadNote`, not a third inline copy of the string, in the one file
+      // whose whole purpose is holding the copies to two.
+      MIXED.filter(isLeadNote).map((m) => ({ kind: m.kind, body: m.body })),
     );
   });
 
