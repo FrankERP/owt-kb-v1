@@ -111,9 +111,11 @@ supersede what Child A §1 named as accepted gaps:
 
 - **A repeated identical message now queues and emails — ON THE THREAD ROUTE.**
   It used to be suppressed twice over: `queueLeadNotesNotice` compared the notes
-  trimmed, and so did the flush classifier. Neither comparison exists any more —
-  the queue side has no "after" string to compare against, and the flush diffs a
-  count against the thread. Posting `"ok"` twice inside one window sends one
+  trimmed, and so did the flush classifier. Neither comparison is on the path a
+  new message takes any more — the queue side has no "after" string to compare
+  against, and the flush diffs a count against the thread. (`classifyLeadNotes`
+  and its trimmed comparison still exist, and are still reached, on the
+  legacy-notice arm of the sweep.) Posting `"ok"` twice inside one window sends one
   email whose body is `ok` / `ok`. An improvement, and intended: a lead repeating
   themselves is saying something.
 

@@ -642,34 +642,31 @@ export interface QueueLeadNotesNoticeInput {
   /**
    * The stored `lead_notes` BEFORE this write, captured PRE-COMMIT.
    *
-   * KEPT even though the flush no longer classifies against it.
+   * KEPT even though the flush no longer classifies against it. It exists for
+   * ONE reader: production's OLD sweep, during the preview→main window and after
+   * a revert, both of which compare this snapshot against the live `lead_notes`.
    *
-   * WHILE THE MIRROR IS STILL WRITTEN — which it is in this slice — production's
-   * old sweep compares this snapshot against a live `lead_notes` the new route
-   * still updates. It USUALLY finds them different and sends a current email
-   * carrying the NEWEST message only.
+   * THIS COMMENT DESCRIBES ONLY THE CURRENT TREE, in which the mirror is still
+   * written. Three rewrites of this paragraph each shipped a claim about a state
+   * the tree was not in yet, so it no longer reasons about the slice that removes
+   * the mirror. `docs/NOTIFICATIONS.md` says which half of the cutover has landed,
+   * and `docs/superpowers/plans/2026-08-25-proposal-thread-b-notifications.md`
+   * §The cutover seam owns the analysis.
    *
-   * It finds them EQUAL, and sends nothing, when the new message repeats the
-   * stored body verbatim — which this slice newly permits, because it removed
-   * the trimmed-equal guard that used to suppress a repeat on the thread route.
-   * The notice then yields no pairs, is consumed, and `countLost` reports 0:
-   * silent loss of a real message.
+   * On this tree the old sweep USUALLY finds the two different and sends a
+   * current email carrying the NEWEST message only. It finds them EQUAL, and
+   * sends nothing, when the new message repeats the stored body verbatim — which
+   * this slice newly permits, having removed the trimmed-equal guard that used to
+   * suppress a repeat on the thread route. The notice then yields no pairs, is
+   * consumed, and `countLost` reports 0: silent loss of a real message.
    *
-   * SO THE WINDOW IS CLOSED BY PROCEDURE, NOT BY THIS MECHANISM — the plan's
-   * release-procedure step 3, "do not post a thread message through `preview`",
-   * which holds even when the outbox pre-check just returned zero. Do not read
-   * this field as a mechanical guarantee and relax that step. What it does
-   * guarantee is the REVERT: the snapshot is what keeps a rollback from mailing
-   * the archive.
+   * SO THE WINDOW IS NOT CLOSED BY THIS MECHANISM. It is closed by that plan's
+   * release-procedure step 3 — do not post a thread message through `preview` —
+   * which holds even when the outbox pre-check has just returned zero. Do not
+   * read this field as a mechanical guarantee and relax that step.
    *
-   * Once the mirror write is removed (a later slice), the same field is what
-   * makes that window's residual SILENCE rather than a stale-content email: the
-   * two values then agree, so the old sweep sends nothing instead of mailing the
-   * archive. Do not read this as already true — see `docs/NOTIFICATIONS.md` for
-   * which half of the cutover has landed.
-   *
-   * Either way, nothing may drop it as dead weight. It is pinned in three
-   * suites precisely because the flush no longer gives it a reason to exist.
+   * Nothing may drop it as dead weight. It is pinned in three suites precisely
+   * because the flush no longer gives it a reason to exist.
    */
   beforeNotes: unknown;
   /**
