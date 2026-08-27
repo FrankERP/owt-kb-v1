@@ -645,10 +645,22 @@ export interface QueueLeadNotesNoticeInput {
    * KEPT even though the flush no longer classifies against it.
    *
    * WHILE THE MIRROR IS STILL WRITTEN — which it is in this slice — production's
-   * old sweep compares this snapshot against a live `lead_notes` that the new
-   * route still updates, finds them different, and sends a correct, current
-   * email. The release window is clean, and this field is what keeps it clean on
-   * a REVERT.
+   * old sweep compares this snapshot against a live `lead_notes` the new route
+   * still updates. It USUALLY finds them different and sends a current email
+   * carrying the NEWEST message only.
+   *
+   * It finds them EQUAL, and sends nothing, when the new message repeats the
+   * stored body verbatim — which this slice newly permits, because it removed
+   * the trimmed-equal guard that used to suppress a repeat on the thread route.
+   * The notice then yields no pairs, is consumed, and `countLost` reports 0:
+   * silent loss of a real message.
+   *
+   * SO THE WINDOW IS CLOSED BY PROCEDURE, NOT BY THIS MECHANISM — the plan's
+   * release-procedure step 3, "do not post a thread message through `preview`",
+   * which holds even when the outbox pre-check just returned zero. Do not read
+   * this field as a mechanical guarantee and relax that step. What it does
+   * guarantee is the REVERT: the snapshot is what keeps a rollback from mailing
+   * the archive.
    *
    * Once the mirror write is removed (a later slice), the same field is what
    * makes that window's residual SILENCE rather than a stale-content email: the

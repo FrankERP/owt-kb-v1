@@ -31,7 +31,10 @@ writer commits ──▶ after() queues a notice (own transaction, writeClient)
 
 Reading live state at send time rather than storing an "after" snapshot is what
 makes the email never stale, and makes any change that nets out to nothing inside
-the window collapse to silence.
+the window collapse to silence. **The proposal thread is the one exception to
+the second half:** it diffs a message COUNT against an append-only array, so a
+repeat does not net out to nothing and does not collapse. See "The proposal
+thread" below.
 
 **Key modules.** `outboxNotice.ts` (ids, snapshots, upsert builders) ·
 `outboxClassify.ts` (snapshot vs live → lines) · `setlistDiff.ts` (the standings
@@ -106,17 +109,23 @@ and **not approved** — see its review log.
 Three smaller behaviours worth knowing. The first two CHANGED with slice 1 and
 supersede what Child A §1 named as accepted gaps:
 
-- **A repeated identical message now queues and emails.** It used to be
-  suppressed twice over — `queueLeadNotesNotice` compared the notes trimmed, and
-  so did the flush classifier. Neither comparison exists any more: the queue side
-  has no "after" string to compare against, and the flush diffs a count against
-  the thread. Posting `"ok"` twice inside one window sends one email whose body
-  is `ok` / `ok`. An improvement, and intended — a lead repeating themselves is
-  saying something.
+- **A repeated identical message now queues and emails — ON THE THREAD ROUTE.**
+  It used to be suppressed twice over: `queueLeadNotesNotice` compared the notes
+  trimmed, and so did the flush classifier. Neither comparison exists any more —
+  the queue side has no "after" string to compare against, and the flush diffs a
+  count against the thread. Posting `"ok"` twice inside one window sends one
+  email whose body is `ok` / `ok`. An improvement, and intended: a lead repeating
+  themselves is saying something.
+
+  The legacy `leadNotes` save path still declines an unchanged note, in the
+  route rather than in the queue helper (`notesChanged` in
+  `app/api/me/proposals/route.ts`) — that predicate is now load-bearing alone,
+  and it is what stops a client re-sending its one-time initializer from minting
+  a bubble on every save.
 - **Two messages inside one window produce one email carrying BOTH**, joined by a
   blank line, not only the newest. The debounce deliberately collapses a burst,
   and dropping the middle of a conversation is worse than a longer email. The
-  bound is the window; the absolute ceiling is `PROPOSAL_MESSAGES_MAX` ×
+  bound is the window; the nominal ceiling is `PROPOSAL_MESSAGES_MAX` ×
   `PROPOSAL_NOTES_MAX` = 200 × 4000 ≈ 800 KB, which no realistic window reaches.
 - A pre-deploy client that deliberately CLEARS the note textarea is ignored,
   which retires a signal that used to fire. Unchanged by slice 1.
