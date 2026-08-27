@@ -1,8 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 
-// Kept at 60 s to match its sibling writers, though this route registers no
-// `after()` fan-out of its own: an admin message notifies nobody in this
-// delivery (Child A §1's named gap; Child B's push closes it).
+// Kept at 60 s to match its sibling writers. This route registers no OUTBOX
+// fan-out — an admin message queues no debounced email, which was Child A §1's
+// named gap — but since Child B it does register an `after()`: the push that
+// closes that gap by telling the lead. The budget is what keeps that deferred
+// work alive after the response returns.
 export const maxDuration = 60;
 
 import { requireActiveManager } from "@/app/utils/authGuards";
@@ -12,6 +14,7 @@ import { serviceError } from "@/app/utils/serviceMutation";
 import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
 import { nextKey, nowIso } from "@/app/utils/roleWriteOps";
 import { loadCanonicalProposal } from "@/app/utils/serviceWriteTargets";
+import { attempt, attemptSync, notifyProposalReview } from "@/app/utils/serviceMutationSideEffects";
 import {
   buildProposalMessage,
   parseProposalMessageRequest,
@@ -35,10 +38,12 @@ export const POST = withVerificationRunContext(postHandler);
 /**
  * POST /api/admin/proposals/[id]/messages — an admin posts into the private thread.
  *
- * **This route does NOT touch `admin_notes`.** The transition mirrors that field
- * and only the transition does: `admin_notes` is the change-request archive the
- * rollback leans on, and letting ordinary admin chatter overwrite it would make a
- * question indistinguishable from a review decision. It also has no notification
+ * **This route does NOT touch `admin_notes`, and neither does anything else.**
+ * The transition was that field's last writer and Child B stopped it too, so it
+ * is a FROZEN change-request archive rather than one anybody keeps current. This
+ * route never wrote it even while the transition did, for a reason that still
+ * stands on a rollback: letting ordinary admin chatter overwrite it would make a
+ * question indistinguishable from a review decision. It has no notification
  * consumer, so there is nothing to keep in sync.
  *
  * **`kind` is `admin_change_request`** because that is the only admin-facing value
@@ -106,6 +111,12 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const observedRev = typeof doc._rev === "string" ? doc._rev : null;
+  // PRE-COMMIT: the push below reads it, and the read-back that follows the
+  // commit is guarded and may return null. Nothing about the audience changes
+  // between here and there — `doc.lead` and `doc.contributors` are not touched
+  // by an append — but taking it from the loaded document keeps the push off the
+  // guarded read entirely.
+  const pushDoc = doc;
 
   try {
     // No `ifRevisionId`, and `setIfMissing` before `append` — both for the same
@@ -123,6 +134,45 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ id:
     if (!sanityConflictKind(err)) throw err;
     return reject(serviceError("stale_revision", { details: { id } }));
   }
+
+  // The other half of the conversation (Child B). A standalone admin message
+  // notified NOBODY before this: the transition pushes on `request_changes` and
+  // `reopen`, but an admin asking a question in the thread was silent.
+  //
+  // NEW COPY, deliberately. Reusing `REVIEW_PUSH.request_changes` would push
+  // "Cambios solicitados — Revisaron la propuesta y pidieron cambios" when an
+  // admin merely asked something, which is worse than saying nothing.
+  //
+  // `notifyProposalReview` is the right helper here because the RECIPIENT is the
+  // lead, not because of the arrow's direction — and the author is excluded
+  // through its third parameter rather than in this route, so the audience rule
+  // stays written down once.
+  //
+  // INSIDE `after()`, and the callback AWAITS — see the lead route for why the
+  // second half matters as much as the first. `awaitDelivery` is what makes the
+  // await reach FCM: `notifyProposalReview` is fire-and-forget INSIDE by default,
+  // so awaiting it without that flag would resolve before the send and hold
+  // nothing. This route registers no other deferred work.
+  //
+  // `attempt` swallows and logs, so a push failure cannot turn a stored message
+  // into an error response — that would invite a retry this delivery cannot undo.
+  // The REGISTRATION is guarded for the same reason: `after()` throws
+  // synchronously outside a request scope, and this runs after the commit.
+  attemptSync("proposal admin message push register", () =>
+    after(() =>
+      attempt("proposal admin message push", () =>
+        notifyProposalReview(
+          pushDoc,
+          {
+            title: "Nuevo mensaje",
+            body: "Un admin escribió en la propuesta.",
+          },
+          adminId ? [adminId] : [],
+          { awaitDelivery: true },
+        ),
+      ),
+    ),
+  );
 
   // The read-back is for the RESPONSE ONLY — the write already committed. It is
   // guarded because throwing here would report a landed message as a failure,

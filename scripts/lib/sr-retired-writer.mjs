@@ -7,7 +7,7 @@
 // The plan is explicit: "Documentation-only retirement is insufficient; a script
 // that cannot use the shared invariant must fail before any production write."
 //
-// Each of these five scripts is a HISTORICAL one-shot that has already been
+// Each of these scripts is a HISTORICAL one-shot that has already been
 // applied to production, and none of them can adopt the guarded invariant the
 // runtime writers now use (target locks, creation receipts, exact observed
 // revisions, the dependency policy). So they are retired in code, not in prose:
@@ -60,6 +60,12 @@ export const RETIRED_WRITERS = Object.freeze({
     file: "scripts/unpublish-july-2026.mjs",
     did: "patch published:false on every July 2026 sunday_role / saturday_role / special_role",
     replacement: "POST /api/admin/roles/publish (guarded batch publish/unpublish)",
+  },
+  "migrate-proposal-messages": {
+    file: "scripts/migrate-proposal-messages.mjs",
+    did: "fold lead_notes / admin_notes on every published setlistProposal into the append-only messages[] thread, under two deterministic _keys",
+    replacement:
+      "nothing — it is DONE (2026-08-26: 8 documents, 10 messages). Verify with scripts/reconcile-proposal-messages.mjs (read-only); repair with a consented top-up carrying a distinct _key, never a second run",
   },
   "normalize-instrument-names": {
     file: "scripts/normalize-instrument-names.mjs",

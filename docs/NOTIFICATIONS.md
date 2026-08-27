@@ -31,7 +31,10 @@ writer commits ──▶ after() queues a notice (own transaction, writeClient)
 
 Reading live state at send time rather than storing an "after" snapshot is what
 makes the email never stale, and makes any change that nets out to nothing inside
-the window collapse to silence.
+the window collapse to silence. **The proposal thread is the one exception to
+the second half:** it diffs a message COUNT against an append-only array, so a
+repeat does not net out to nothing and does not collapse. See "The proposal
+thread" below.
 
 **Key modules.** `outboxNotice.ts` (ids, snapshots, upsert builders) ·
 `outboxClassify.ts` (snapshot vs live → lines) · `setlistDiff.ts` (the standings
@@ -61,8 +64,110 @@ budget), so the send-time inequality holds identically there. It does not fire o
 proposal submit or review, which queue nothing; layer 1 covers those within five
 minutes. The proposal-submit **email** (`buildProposalEmail`) is immediate, not
 queued: intro + CTA, the same setlist table as "Setlist listo" (no Mov. column,
-medleys grouped), and `lead_notes` when present. Empty or unreadable songs still
+medleys grouped), and the lead's newest `lead_note` message when the thread has one — the same thread source as the debounced email below, moved in the same delivery that stopped writing the legacy field. Empty or unreadable songs still
 send the intro and CTA. Push stays a one-line alert.
+
+## The proposal thread — what it notifies
+
+Released 2026-08-26. `lead_notes` / `admin_notes` became a `messages[]` thread.
+
+**The debounced admin email now reads the THREAD, not `lead_notes`** (Child B
+slice 1, on a branch — not released). `PROPOSAL_QUERY` no longer projects
+`lead_notes` at all: the notice stores `before.beforeMessageCount`, the
+pre-commit count of `kind == "lead_note"` messages, and the flush emails
+everything appended since that index. **The legacy fields are no longer written
+at all** (slice 2): the lead message route, both branches of the save route and
+the `request_changes` transition have all stopped mirroring. `lead_notes` and
+`admin_notes` are a FROZEN archive — nothing blanks them, nothing updates them,
+and the thread is the only record of what was said.
+
+Audience, debounce and preference key are unchanged: the same admin set resolved
+at flush, the same 15–60 minute window, the same `notifPrefs.emailProposals`.
+
+A notice minted before that cutover carries `beforeNotes` and no count. It is
+classified against the thread too — against the **newest `lead_note` body**,
+which is precisely what the mirror held — never dropped. Dropping would be safe
+and not correct: a notice that yields no pairs contributes no pending recipients,
+so `report.lost` stays 0 while a real message vanishes.
+
+**Both directions of the conversation now reach their counterpart** (Child B
+slice 3 — on a branch, NOT released. `main` carries only Child B Phase A, which
+is exports plus one uncalled pure function and changes no behaviour). They did
+not before: `queueLeadNotesNotice` requires the pre-write status to be `pending`
+or `changes_requested`, and production holds **13 approved proposals, 1 draft,
+and zero in either reviewable status** — so before slice 3 a message posted on a
+real proposal notified NOBODY, in either direction.
+
+| Who posts | Where | Signal |
+|---|---|---|
+| Lead, on `pending` / `changes_requested` | thread | the debounced admin **email** |
+| Lead, on `approved` — **the dominant real case** | thread | **push to admins**, `/admin` |
+| Lead, on `draft` | thread | nothing — a draft is not in front of admins yet |
+| Admin, standalone message | thread | **push to the lead** + contributors, "Nuevo mensaje" |
+| Admin, via `request_changes` / `reopen` | transition | unchanged review push, exactly one |
+| Lead, first submission | save | unchanged `notifyProposalSubmitted` |
+
+**AT MOST ONE SIGNAL PER MESSAGE** — never both, and in one named case neither — an email or a push, never the pair. The
+gate for the lead→admin push is `status === "approved"`, nothing looser: "a
+status the outbox will not cover" is a NECESSARY condition only, and read as
+sufficient it fires on `draft` too. Neither branch is reachable by hand in
+production, so it rests on `proposalMessageRoutes.test.ts` composed with
+`serviceMutationSideEffects.test.ts` — the first pins the push, the second pins
+that the status handed to the outbox helper queues nothing.
+
+Four named exceptions, all inherent and none introduced here. Three send twice:
+the outbox's send-budget re-pend can re-send a joined body to an admin already
+served; a status round-trip inside one 60-minute window can email a message that
+was already pushed; and a re-submit fires `notifyProposalSubmitted`, which pushes
+and emails admins as it always has (outside this delivery and unchanged by it).
+
+The fourth sends **nothing**, which is why the invariant is "at most one" rather
+than "exactly one". A lead posts while `pending`, so a notice is queued and no
+push fires. An admin reads the thread and approves inside the 15–60 minute
+debounce — the ordinary flow, since reading the message is what prompts the
+approval. At flush the live status is no longer reviewable, the notice
+classifies to `null`, and it is consumed. The other admins never learn the
+message existed, and `report.lost` stays 0. Pre-existing and named in Child B's
+plan; closing it would mean firing a push the email was meant to cover, or
+widening the flush gate.
+
+**These pushes are not debounced.** N messages, N pushes. Acceptable at this
+team's volume; if it becomes noise the fix is a push debounce, not a wider email.
+They also gate on a different preference axis from the email: `sendPush` reads
+`notifPrefs.proposals` via `optedIn`, while the email reads `emailProposals` via
+`wantsNotification`. Independent on purpose — do not "unify" them.
+
+The debounced email's subject is **"Mensajes de la propuesta"**, not "Notas del
+líder" — the thread carries admin replies and the body can be several messages
+joined. `SUBJECT` feeds both the subject line and the in-body header, so that is
+one constant and two visible strings. One accepted drift: the submit email's
+section label stays "Notas del líder", so a member sees two names for one thread.
+
+Three smaller behaviours worth knowing. The first two CHANGED with slice 1 and
+supersede what Child A §1 named as accepted gaps:
+
+- **A repeated identical message now queues and emails — ON THE THREAD ROUTE.**
+  It used to be suppressed twice over: `queueLeadNotesNotice` compared the notes
+  trimmed, and so did the flush classifier. Neither comparison is on the path a
+  new message takes any more — the queue side has no "after" string to compare
+  against, and the flush diffs a count against the thread. (`classifyLeadNotes`
+  and its trimmed comparison still exist, and are still reached, on the
+  legacy-notice arm of the sweep.) Posting `"ok"` twice inside one window sends one
+  email whose body is `ok` / `ok`. An improvement, and intended: a lead repeating
+  themselves is saying something.
+
+  The legacy `leadNotes` save path still declines an unchanged note, in the
+  route rather than in the queue helper (`notesChanged` in
+  `app/api/me/proposals/route.ts`) — that predicate is now load-bearing alone,
+  and it is what stops a client re-sending its one-time initializer from minting
+  a bubble on every save.
+- **Two messages inside one window produce one email carrying BOTH**, joined by a
+  blank line, not only the newest. The debounce deliberately collapses a burst,
+  and dropping the middle of a conversation is worse than a longer email. The
+  bound is the window; the nominal ceiling is `PROPOSAL_MESSAGES_MAX` ×
+  `PROPOSAL_NOTES_MAX` = 200 × 4000 ≈ 800 KB, which no realistic window reaches.
+- A pre-deploy client that deliberately CLEARS the note textarea is ignored,
+  which retires a signal that used to fire. Unchanged by slice 1.
 
 ## The liveness alarm
 

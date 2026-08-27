@@ -700,6 +700,154 @@ missing history.
 | OQ-2 | ~~New admin-push helper, or inline `sendPush`?~~ | **DECIDED: inline `sendPush` in the lead messages route.** There is one caller, and a helper wrapping a one-line fan-out would be a third place the admin audience is written down — and that duplication is now **gone**: Phase A made `ADMIN_RECIPIENTS_QUERY` one exported constant (`proposalNotifyQueries.ts:32`) that both the sweep and the submit email read, so a helper would reintroduce a second place rather than avoid a third. Calling `sendPush` directly adds no copy at all | Closed |
 | OQ-3 | ~~Does the `leadNotes` email subject change?~~ | **DECIDED: yes, to "Mensajes de la propuesta", in Phase B.** "Notas del líder" is wrong once the thread carries admin replies | Closed |
 
+## Implementation record — slice 1
+
+**How this plan is being implemented, and under what authority.** The plan is
+NOT approved and its review was stopped at round 13 (see the review log). Frank's
+decision, 2026-08-26, was to implement in slices and let the DIFF review find
+what plan review cannot — the evidence being that Child A's Phase A found three
+defects four plan-review rounds had missed, and its Phase C diff review found
+six more. **This section records that decision rather than claiming an approval
+that does not exist.**
+
+**Risk tier is unchanged: CRITICAL.** Slicing the implementation does not retier
+the delivery. What changes is where the review budget is spent: a fresh code
+review of each slice's diff, instead of a fourteenth plan round.
+
+**Phase B's "one deploy" rule is intact.** It governs what reaches production
+together, not how the branch is written. No slice deploys on its own; the whole
+branch ships as one release, in the §Release procedure order.
+
+### Slice 1 — the outbox source cutover (`feat/proposal-thread-b1-outbox-source`)
+
+In: `queueLeadNotesNotice`'s input shape and both call sites;
+`notificationOutbox.before.beforeMessageCount`; `PROPOSAL_QUERY` narrowed to the
+thread; `classifyProposalMessages` in the sweep with the legacy-tolerance branch.
+
+Out, deliberately, and each its own later slice: the mirror removal, both
+pushes, `proposalNotify`'s body source, the subject and preference-hint copy, the
+e2e fixtures, the docs sweep.
+
+**One coupling this slice discovered, which the plan's Verification table does
+not state.** The seam row — "queue through the new route, then pass the notice's
+`before.beforeNotes` and the unchanged stored `lead_notes` to `classifyLeadNotes`,
+expecting `null`" — **cannot be written in this slice.** It presumes the mirror is
+gone; while the route still writes `lead_notes`, the stored value CHANGES and the
+expectation is not `null`. The row belongs with the mirror-removal slice and moves
+there. The seam is closed by the queue writing `beforeNotes`, which IS pinned
+here, in three suites.
+
+**One finding declined, with its reason.** The post-review diff review found that
+the legacy branch can emit a `leadNotes` email with an empty body: a pre-cutover
+notice with a non-empty `beforeNotes` on a proposal with ZERO `lead_note`
+messages gives `before = "X"`, `after = ""`, which differ, so `classifyLeadNotes`
+returns a line and `renderLine` emits a section with nothing under it. **This is
+the case §Outbox already names and declines to guard**, and the proposed
+one-liner (`if (!leadMessages.length) return [];`) reintroduces drop-and-consume
+into the one branch whose rewrites produced six consecutive fix-induced defects.
+Child A's Phase D step 9 is designed so the combination does not exist. Declined,
+not overlooked.
+
+### Slice 2 — removing the mirror (`feat/proposal-thread-b2-remove-mirror`)
+
+Branches off slice 1's verified head. In: the four mirror writes — the lead
+message route, both branches of `POST /api/me/proposals`, and the
+`request_changes` transition's `admin_notes`; the append predicate's comparison
+target; the two e2e fixtures; the docs this makes stale.
+
+Out, still: both pushes, the subject and preference-hint copy.
+
+**`proposalNotify`'s body source MOVED INTO THIS SLICE, and the diff review is
+what forced it.** The plan lists it under Phase B without saying it is coupled to
+the mirror removal. It is: the create stops writing `lead_notes`, so a submit
+email still sourcing from that field renders an EMPTY notes block on every first
+submission carrying a note — the one flow the field existed for — and a frozen
+pre-cutover note on every resubmit, because `notifyProposalSubmitted` fires on
+every save committed `pending`. `notesBlock` renders nothing at all for an empty
+value, so the regression is invisible rather than obvious, and nothing caught it:
+`proposalNotify.test.ts` hand-seeded `lead_notes` in its own fixture and passed
+regardless of what the route wrote.
+
+Splitting them would have created a co-ship constraint enforced by nothing but a
+sentence in an unapproved plan. They land together instead.
+
+**The append predicate's comparison target had to move, and the plan says so in
+§Removing the mirror without saying why it is forced.** It compared against the
+stored `lead_notes`, which was live only because this route mirrored it. Frozen,
+that comparison is wrong in a way that produces duplicates: a lead who posts
+through the thread and then saves compares their new text against a stale
+archive, finds it different, and mints a second copy of the message they just
+posted. It now reads the newest `lead_note` message.
+
+**Two test fixtures described a document production does not have.**
+`proposalWriteRoutes.test.ts` and `setlistNoticeQueueing.test.ts` both seeded
+`lead_notes` with an EMPTY thread. Child A's `--apply` minted a `lead_note` for
+every document carrying that field, so post-migration that shape does not exist —
+and once the predicate reads the thread, a fixture without the migrated message
+tests a first submission while claiming to test an unchanged note. Both now seed
+the migrated message under its deterministic key.
+
+**The seam row is now written**, in `setlistNoticeQueueing.test.ts`: queue
+through the new route, then feed the notice's `beforeNotes` and the still-stored
+`lead_notes` to the surviving `classifyLeadNotes` and expect `null`. Slice 1
+could not write it — while the route mirrored, the stored value moved. The
+fixture's stored value is deliberately non-empty, or both sides are `""` and the
+row passes whether or not the route wrote anything.
+
+**Criterion 5 is pinned rather than asserted in prose.** Three assertions now
+read a stored legacy value back and show it byte-unchanged after a write that
+would previously have moved it, on the patch, the transition and the message
+route.
+
+### Slice 3 — both pushes and the copy (`feat/proposal-thread-b3-pushes`)
+
+In: the lead→admin push on `approved`; the admin→lead push for a standalone
+message, via `notifyProposalReview`'s new optional `excludeIds`; the author
+excluded in both directions; the `leadNotes` subject and the preference hint.
+With this the delivery is feature-complete — nothing of Child B is left unbuilt.
+
+**§Push's "not a second read" instruction IS satisfiable, and the first attempt
+here got it wrong in both directions.** The name the plan points at — the one the
+route resolved for its response — is the POST-COMMIT read-back, which is
+deliberately guarded and null on failure, so it genuinely cannot be relied on.
+The first implementation concluded the instruction was un-followable and added a
+second Sanity read, which the diff review corrected: the author IS the caller, and
+the session already carries a usable name. `alias` is `teamMembers.alias`; `name`
+is `member_name` except on web Google SSO, where it is the Google profile name.
+Neither is refreshed — both are snapshotted at sign-in. Cosmetic either way: the
+push names the right person. No read at all.
+
+That also removed a real hazard rather than just a query. The added read sat in a
+`Promise.all` beside the audience read, so a transient failure on the COSMETIC
+half rejected the whole thing and NO push was sent — a decorative field able to
+silence the delivery. The nameless fallback remains as defence rather than for a known
+trigger — NOT impersonation, whose branch sets both fields from the target — and
+is pinned by a session carrying neither.
+
+**The email-XOR-push invariant is proved by TWO suites composed, and it has to
+be.** `proposalMessageRoutes.test.ts` mocks `queueLeadNotesNotice`, so the
+outbox gate inside that helper is not observable there — the route calls it
+unconditionally on every status. That suite pins the push and the status handed
+to the helper; `serviceMutationSideEffects.test.ts` pins that those statuses
+queue nothing. **Until this slice only the POSITIVE case was covered there**
+(`previousStatus: "pending"`), so the half the invariant leans on was unpinned.
+
+**Both pushes are fired INSIDE `after()`.** `fireAndForget`'s own doc requires it
+of every new caller — an unawaited promise can be killed when the response
+returns — and the first implementation broke that rule on both. It matters most
+on the lead path: on `approved`, `queueLeadNotesNotice` returns on its status
+gate BEFORE registering its own `after()`, so the push is the handler's ONLY
+deferred work and nothing else holds the invocation open. The suite now mocks and
+drains `after()`, with one row that asserts the push has NOT happened when the
+response is written and HAS after the drain — otherwise every push assertion in
+that file was passing only because the handler happened to await a read-back
+afterwards, which is the coupling this fix removes.
+
+**Neither branch of the XOR is reachable by hand**, in either direction:
+production holds zero proposals in `pending` or `changes_requested`, so the email
+branch cannot be exercised without submitting a real proposal on `preview`, which
+writes the real dataset and mails the real admin team.
+
 ## Terminal state
 
 `READY_FOR_ADVERSARIAL_REVIEW` — all three open questions are closed.

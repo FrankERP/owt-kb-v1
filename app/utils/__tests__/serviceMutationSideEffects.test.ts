@@ -651,7 +651,7 @@ describe("the opportunistic sweep", () => {
     serviceDate: "2026-08-09",
     previousStatus: "pending",
     beforeNotes: "antes",
-    afterNotes: "después",
+    beforeMessageCount: 1,
   };
 
   it("every committed write that queues a notice also sweeps due notices", async () => {
@@ -689,6 +689,21 @@ describe("the opportunistic sweep", () => {
     await flushAfter();
     expect(sweepOutboxMock).toHaveBeenCalledTimes(3);
   });
+
+  // The OUTBOX HALF of Child B's email-XOR-push invariant. The push half lives
+  // in `proposalMessageRoutes.test.ts`, which mocks this helper and so cannot
+  // see the gate below; composed, the two pin "one signal per message".
+  //
+  // This gate is the reason the route's push may fire on `approved` without
+  // double-notifying: the helper declines on every status that is not already in
+  // front of admins. Until now only the POSITIVE case was covered.
+  for (const previousStatus of ["approved", "draft", null] as const) {
+    it(`queues no leadNotes notice when the proposal was ${previousStatus ?? "new"}`, async () => {
+      queueLeadNotesNotice({ ...leadNotesInput, previousStatus });
+      await flushAfter();
+      expect(sweepOutboxMock).not.toHaveBeenCalled();
+    });
+  }
 
   it("runs AFTER the outbox upsert commits, never before it", async () => {
     queueRoleNotices(roleInput);

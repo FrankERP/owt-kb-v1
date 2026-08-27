@@ -75,7 +75,13 @@ export interface UpsertInput {
   proposalId: string | null;
   serviceDate: string;
   roleType: "sunday_role" | "saturday_role" | "special_role" | null;
-  before: { beforeRoles?: string[]; beforeSongs?: OutboxSongRow[]; beforeNotes?: string };
+  before: {
+    beforeRoles?: string[];
+    beforeSongs?: OutboxSongRow[];
+    beforeNotes?: string;
+    /** `leadNotes` only: the pre-commit `lead_note` count the flush slices from. */
+    beforeMessageCount?: number;
+  };
   knownRecipients: string[];
 }
 

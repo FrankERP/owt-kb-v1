@@ -143,7 +143,22 @@ export async function notifyProposalSubmitted(opts: {
     const coLeads = canonicalLeadRefs(role).filter((id) => id && id !== leadId);
     const leadName = data.lead?.alias || data.lead?.member_name || "Un líder";
     const songs = songRowsFrom(data.proposal?.songs);
-    const notes = typeof data.proposal?.lead_notes === "string" ? data.proposal.lead_notes : "";
+    // The LAST element of an ALREADY-FILTERED array — not a second `kind` filter
+    // and not a GROQ negative index. `LEAD_NOTE_MESSAGES` did the filtering, and
+    // re-filtering here is what would silently match nothing if the projection
+    // were ever narrowed to `{body}`.
+    //
+    // The newest LEAD note, deliberately, on a thread whose newest message is
+    // routinely an admin's change request: `notifyProposalSubmitted` fires on
+    // every save committed `pending`, so a resubmit from `changes_requested` is
+    // the routine path, and mailing admins their own change-request text back
+    // under a heading that says "Notas del líder" is what taking the last
+    // message would do.
+    const leadMessages = Array.isArray(data.proposal?.leadMessages)
+      ? data.proposal.leadMessages
+      : [];
+    const newest = leadMessages[leadMessages.length - 1];
+    const notes = typeof newest?.body === "string" ? newest.body : "";
 
     // 1) Admins — push
     if (admins.length) {

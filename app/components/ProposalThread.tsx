@@ -7,6 +7,14 @@
 // (`{proposal.lead_notes && …}`, `{status === "changes_requested" && …}`), and
 // inheriting those conditions would hide the thread on a `pending` proposal —
 // which is exactly where the conversation happens.
+//
+// NO UNREAD INDICATOR, deliberately. Real read marks were chosen over a derived
+// "newer than your last visit" signal, which lies in the case that matters —
+// someone who opened the page without reading. Before adding one, read
+// **ADR-0024**: the two obvious homes for that state (`setlistProposal.readBy[]`
+// and a map on `teamMembers`) both turn a page view into a write on a protected,
+// revision-asserted document, which 409s every open lead editor and trips the
+// admin's fail-closed review lock.
 
 import { useState } from "react";
 import { orderedMessages, isThreadOpen } from "@/app/utils/proposalThread";

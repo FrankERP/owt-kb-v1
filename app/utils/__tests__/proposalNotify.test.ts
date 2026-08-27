@@ -169,7 +169,14 @@ describe("notifyProposalSubmitted", () => {
           { play_key: "D", medley_tag: "m", song: { _ref: "s2" } },
           { play_key: "D", medley_tag: "m", song: { _ref: "s3" } },
         ],
-        lead_notes: "Ensayo <jueves> & más",
+        // The row as `SUBMITTED_NOTIFY_QUERY` returns it: ALREADY filtered to
+        // lead notes by `LEAD_NOTE_MESSAGES`. Two of them, because the email
+        // must carry the lead's LAST word — taking `[0]` would mail their
+        // oldest note forever, and both pass an "is the block non-empty" check.
+        leadMessages: [
+          { kind: "lead_note", body: "Una nota vieja" },
+          { kind: "lead_note", body: "Ensayo <jueves> & más" },
+        ],
       },
       titles: [
         { _id: "s1", title: "Abres Camino" },
@@ -183,8 +190,12 @@ describe("notifyProposalSubmitted", () => {
     expect(html).toContain("Abres Camino");
     expect(html).toContain("Santo");
     expect(html).toContain("Medley");
+    // NOT `toContain("Notas del líder")` alone — that is the section label,
+    // rendered whenever the block is non-empty, so it passes even if the body
+    // came from the wrong message entirely.
     expect(html).toContain("Notas del líder");
     expect(html).toContain("Ensayo &lt;jueves&gt; &amp; más");
+    expect(html).not.toContain("Una nota vieja");
     expect(html).not.toContain("Mov.");
     expect(html).not.toContain("<jueves>");
   });

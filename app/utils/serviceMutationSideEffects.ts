@@ -74,7 +74,7 @@ import { canonicalSetlistsForWeeksQuery } from "./serviceReadQueries";
 import { normalizeStoredSeats, seatAssignees, type NormalizedSeats } from "./roleWriteRequest";
 
 /** Run one delivery attempt; log and swallow any failure. Never rejects. */
-async function attempt(label: string, fn: () => unknown | Promise<unknown>): Promise<void> {
+export async function attempt(label: string, fn: () => unknown | Promise<unknown>): Promise<void> {
   try {
     await fn();
   } catch (err) {
@@ -90,7 +90,7 @@ async function attempt(label: string, fn: () => unknown | Promise<unknown>): Pro
  * handler and turn an already-committed content write into a 500 for the
  * client — the one thing §7's guarantee says must never happen.
  */
-function attemptSync(label: string, fn: () => void): void {
+export function attemptSync(label: string, fn: () => void): void {
   try {
     fn();
   } catch (err) {
@@ -107,19 +107,24 @@ function attemptSync(label: string, fn: () => void): void {
  * nobody awaits, so on a serverless runtime the delivery can be killed when the
  * response returns.
  *
- * Neither of its two call sites is inside `after()`. Both `notifySetlistSaved`
- * and `notifyProposalReview` are awaited inline by their routes
- * (`admin/setlists/route.ts:416`; `admin/proposals/[id]/route.ts:379`, `:532`),
- * and neither route imports `after` at all. That is the deliberate trade in the
- * paragraph above — an editor's save never waits on FCM — and it means the
- * exposure is real on those paths today, not hypothetical.
+ * Its in-module call sites are awaited inline by their routes and are NOT inside
+ * `after()` — `notifySetlistSaved`, and `notifyProposalReview` when its
+ * `awaitDelivery` option is off. That is the deliberate trade in the paragraph
+ * above — an editor's save never waits on FCM — and it means the exposure is
+ * real on those paths today, not hypothetical.
  *
  * The contrast is `notifyRoleAssignments` and `notifyRolePublished`, this
  * module's two other push fan-outs: both wrap in `after()` and `await sendPush`
  * inside it.
  *
- * So: a new caller should be inside `after()`, and must not reach for the two
- * `fireAndForget` sites as precedent for skipping it.
+ * So: a new caller should be inside `after()` — and **`after()` must be given
+ * something to AWAIT**. `after(() => fireAndForget(p))` is not that: this
+ * function returns `void`, the after-queue goes idle at once, `waitUntil`
+ * settles, and the promise is left racing the freeze with LESS overlap than if
+ * it had been started inline, because nothing else is still running. A caller
+ * that wants the invocation held must await the promise itself inside the
+ * callback — use `attempt`, which this module exports for exactly that. That
+ * mistake shipped once here and a re-verification caught it.
  *
  * (Symbols, not same-file line numbers, on purpose — three successive reviews
  * of this comment caught line references that had rotted, twice because they
@@ -639,10 +644,51 @@ export interface QueueLeadNotesNoticeInput {
   serviceDate: string;
   /** The proposal's stored status BEFORE this write; `null` when it is new. */
   previousStatus: unknown;
-  /** The stored `lead_notes` BEFORE this write, captured PRE-COMMIT. */
+  /**
+   * The stored `lead_notes` BEFORE this write, captured PRE-COMMIT.
+   *
+   * KEPT even though the flush no longer classifies against it.
+   *
+   * WHO READS IT: production's OLD sweep, which compares this snapshot against
+   * the live `lead_notes` during the preview→main window and after a revert.
+   * Nothing in THIS tree writes that field any more; the version running in
+   * production during the window still does. That is the whole subtlety, and it
+   * is why no universal about the two values belongs in this comment — five
+   * successive rewrites of this paragraph asserted one, and each was wrong in a
+   * different direction, because a claim true of one version is being made about
+   * a system running two.
+   *
+   * WHAT YOU MAY RELY ON: a message posted through `preview` in that window can
+   * reach nobody, and when it does, nothing records it — the notice yields no
+   * pairs, `partitionClaimed` consumes it, and `countLost` reports 0.
+   *
+   * SO THE WINDOW IS NOT CLOSED BY THIS MECHANISM. It is closed by release
+   * procedure step 3 in
+   * `docs/superpowers/plans/2026-08-25-proposal-thread-b-notifications.md` — do
+   * not post a thread message through `preview` — which holds even when the
+   * outbox pre-check has just returned zero, because the notice at risk is one
+   * the window creates. Do not read this field as a mechanical guarantee and
+   * relax that step. §The cutover seam owns the analysis, including the revert.
+   *
+   * Nothing may drop it as dead weight. Five test files touch it and three
+   * ASSERT it — the schema field set, and the notice's `before` on each of the
+   * two call sites — precisely because the flush no longer gives it a reason to
+   * exist.
+   */
   beforeNotes: unknown;
-  /** The notes this transaction committed. */
-  afterNotes: unknown;
+  /**
+   * The number of `kind == "lead_note"` messages the proposal held BEFORE this
+   * write, captured PRE-COMMIT — the index the flush slices the thread from.
+   *
+   * Counted with `isLeadNote`, the same predicate `LEAD_NOTE_MESSAGES` filters
+   * on at flush. Counting the WHOLE array instead is the failure this shape is
+   * most exposed to and it is total: with `T` total messages and `L` lead notes,
+   * `leadMessages.slice(T)` over a post-commit array of length `L + 1` is empty
+   * whenever `T > L` — which is every proposal that has been through one review
+   * cycle — so admins stop receiving the debounced email entirely, with a `null`
+   * classification, the notice consumed, and `report.lost` at 0.
+   */
+  beforeMessageCount: number;
 }
 
 const asNotes = (v: unknown): string => (typeof v === "string" ? v : "");
@@ -653,9 +699,13 @@ export function queueLeadNotesNotice(input: QueueLeadNotesNoticeInput): void {
     if (!input.proposalId) return;
     if (!REVIEWABLE_BEFORE_WRITE.has(String(input.previousStatus ?? ""))) return;
     const before = asNotes(input.beforeNotes);
-    // The same trimmed comparison `classifyLeadNotes` makes at flush, so a save
-    // that did not touch the notes never mints a document that says nothing.
-    if (before.trim() === asNotes(input.afterNotes).trim()) return;
+    // NO trimmed-equal early return any more. It compared `beforeNotes` against
+    // `afterNotes`, and post-Child-B there is no "after" string to compare
+    // against — the flush diffs a count against the thread. The guard has not
+    // moved somewhere else in here: it is now the CALLERS' alone, and both must
+    // decline to queue when they appended nothing. A no-append queue is bounded
+    // (it classifies to `null` and is consumed) but it clears `servedRecipients`
+    // and slides a live debounce for a message that does not exist.
 
     const upsert = {
       id: outboxId("leadNotes", input.proposalId),
@@ -668,7 +718,7 @@ export function queueLeadNotesNotice(input: QueueLeadNotesNoticeInput): void {
           proposalId: input.proposalId,
           serviceDate: input.serviceDate,
           roleType: null,
-          before: { beforeNotes: before },
+          before: { beforeNotes: before, beforeMessageCount: input.beforeMessageCount },
           // The admin audience is resolved at flush from the live team roster;
           // there is no queue-time set to introduce anybody against, and
           // `leadNotes` renders no diff for `knownRecipients` to qualify.
@@ -758,16 +808,48 @@ export function proposalReviewRecipients(doc: Record<string, unknown>): string[]
   return [...new Set([lead, ...people].filter((id): id is string => !!id))];
 }
 
-/** `request_changes` / `reopen` / `approve` review push to the shared-proposal team. */
+/**
+ * `request_changes` / `reopen` / `approve` review push to the shared-proposal
+ * team — and, with `excludeIds`, the admin's standalone thread message.
+ *
+ * The audience is the LEAD plus contributors. Read who RECEIVES, not the
+ * arrow's direction: this is the right helper whenever the recipient is the
+ * lead, and the wrong one whenever the recipient is admins, who have their own
+ * query.
+ *
+ * `excludeIds` is an optional THIRD parameter and changes neither existing call
+ * site, both of which pass two arguments. It exists because the helper resolves
+ * its own recipients internally and exposes no hook, so "filter in the route"
+ * would mean re-implementing `proposalReviewRecipients` + `sendPush` — a second
+ * copy of the audience rule.
+ *
+ * **The filter runs BEFORE the empty-audience guard, and that ordering is the
+ * whole point.** A proposal whose only review recipient is the posting admin
+ * would otherwise pass the guard on a non-empty list and push them about their
+ * own message. Filtering after the guard is a no-op precisely in the one case
+ * the parameter exists for.
+ */
 export async function notifyProposalReview(
   doc: Record<string, unknown>,
   push: { title: string; body: string },
+  excludeIds?: readonly string[],
+  opts?: { awaitDelivery?: boolean },
 ): Promise<void> {
-  await attempt("proposal review push", () => {
-    const recipients = proposalReviewRecipients(doc);
+  await attempt("proposal review push", async () => {
+    const excluded = new Set(excludeIds ?? []);
+    const recipients = proposalReviewRecipients(doc).filter((id) => !excluded.has(id));
     if (!recipients.length) return;
-    // Fire-and-forget, as before: a review decision never waits on FCM.
-    fireAndForget("proposal review push", sendPush(recipients, "proposals", { ...push, path: "/me" }));
+    const delivery = sendPush(recipients, "proposals", { ...push, path: "/me" });
+    // `awaitDelivery` exists because awaiting THIS function is not enough when
+    // the inside is fire-and-forget: a caller running inside `after()` would
+    // resolve immediately and let the runtime freeze the instance with FCM still
+    // in flight. Off by default, so the transition call sites keep today's trade
+    // — a review decision never waits on FCM — and change not at all.
+    if (opts?.awaitDelivery) {
+      await delivery;
+      return;
+    }
+    fireAndForget("proposal review push", delivery);
   });
 }
 

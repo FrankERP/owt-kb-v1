@@ -256,14 +256,14 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     file: "app/api/me/proposals/[id]/messages/route.ts",
     operation: "POST",
     reason:
-      "guarded lead thread writer: resolves the setlistProposal through `loadCanonicalProposal`, then appends one message and mirrors `lead_notes` in a single UNCONDITIONED patch. It carries no `ifRevisionId` ON PURPOSE — two co-leads posting at once must both land — so the usual observed-revision assertion is deliberately absent here and the entry exists to say so out loud (Child A §4)",
+      "guarded lead thread writer: resolves the setlistProposal through `loadCanonicalProposal`, then appends one message. It NO LONGER mirrors `lead_notes` — Child B removed that write, so the thread is the only record of a lead's note and the legacy field is a frozen archive. It carries no `ifRevisionId` ON PURPOSE — two co-leads posting at once must both land — so the usual observed-revision assertion is deliberately absent here and the entry exists to say so out loud (Child A §4)",
     removalOwner: "permanent runtime writer (never removed — the lead side of the thread)",
   },
   {
     file: "app/api/admin/proposals/[id]/messages/route.ts",
     operation: "POST",
     reason:
-      "guarded admin thread writer: same shape as the lead route, and deliberately does NOT touch `admin_notes` — that field is the change-request archive the rollback leans on and only the transition mirrors it (Child A §1, §4)",
+      "guarded admin thread writer: same shape as the lead route, and does NOT touch `admin_notes`. Nothing does any more: Child B stopped the transition mirroring it too, so that field is a frozen change-request archive rather than one the transition keeps current. Restoring either write is what a rollback does, and the e2e fixtures move with it (Child A §1, §4)",
     removalOwner: "permanent runtime writer (never removed — the admin side of the thread)",
   },
   {
@@ -310,6 +310,13 @@ export const RETIRED_ONE_SHOT_WRITERS: readonly AuditExemption[] = [
     operation: "module",
     reason:
       "retired one-shot: queried setlistProposal and deleted stale non-approved proposals; now fails closed at assertRetiredWriter() before any client is constructed. Replacement: scripts/service-readiness-cleanup.mjs --action resolve-proposal",
+    removalOwner: "retired historical writer (never A2 — the file is the record, the gate is the guard)",
+  },
+  {
+    file: "scripts/migrate-proposal-messages.mjs",
+    operation: "module",
+    reason:
+      "retired one-shot: folded lead_notes/admin_notes on every published setlistProposal into messages[] under two deterministic _keys. It RAN — 2026-08-26, 8 documents, 10 messages, 0 failures — and now fails closed at assertRetiredWriter() before any client is constructed. Replacement: nothing, the fold is done; scripts/reconcile-proposal-messages.mjs is the read-only check, and a repair is a consented top-up with a distinct _key",
     removalOwner: "retired historical writer (never A2 — the file is the record, the gate is the guard)",
   },
   {
@@ -380,6 +387,14 @@ export const OPERATOR_TOOLING_ALLOWLIST: readonly AuditExemption[] = [
     removalOwner: "A3 verification tooling (never A2)",
   },
   {
+    file: "scripts/reconcile-proposal-messages.mjs",
+    operation: "module",
+    reason:
+      "READ-ONLY post-release reconcile for Child A's message migration: reads setlistProposal's lead_notes/admin_notes and messages[] and REPORTS a mismatch; it constructs no write, and exit 1 means a human looks. It exists for the window between the --apply and production serving the new code, in which old code wrote the legacy fields directly and minted no message — a note that the thread surfaces no longer render, so nothing else would report it",
+    removalOwner:
+      "operator verification tooling (never A2 — retire it with the legacy fields, once no unmigrated note can exist)",
+  },
+  {
     file: "scripts/requeue-role-notices.mjs",
     operation: "module",
     reason:
@@ -407,13 +422,6 @@ export const OPERATOR_TOOLING_ALLOWLIST: readonly AuditExemption[] = [
     operation: "module",
     reason:
       "one-off A2 §1 rollout: creates the claimed weekend roleTargetLock for each pre-A2 weekend role. Reads through the canonical published client and the raw client for draft evidence; each lock is created at its deterministic id (a concurrent create loses rather than overwriting) paired with a revision-asserting no-op patch on the role's own unchanged week field, which is the protected write this entry covers. Refuses a duplicate target, a draft overlay, a malformed role, or an existing lock",
-    removalOwner: "one-off migration tooling (never A2 — retire alongside the other one-shot writers)",
-  },
-  {
-    file: "scripts/migrate-proposal-messages.mjs",
-    operation: "module",
-    reason:
-      "one-shot Release 2 migration: reads every published setlistProposal (its own query, because PROPOSAL_PROJECTION omits the timestamp fallbacks) and folds lead_notes/admin_notes into messages[] under two deterministic _keys. Dry-run by default; --apply asserts the exact revision it read and aborts that document rather than retrying. Refuses to touch a document whose messages[] already holds a real thread. Not yet retired — assertRetiredWriter and the move to RETIRED_ONE_SHOT_WRITERS are Child A Phase E, after the single --apply",
     removalOwner: "one-off migration tooling (never A2 — retire alongside the other one-shot writers)",
   },
 ];

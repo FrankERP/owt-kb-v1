@@ -101,7 +101,19 @@ test.describe("proposal lifecycle", () => {
 
     const afterRequest = await readProposal(run.identity, PROPOSALS.pending);
     expect(afterRequest?.status).toBe("changes_requested");
-    expect(afterRequest?.admin_notes).toContain("apertura");
+    // The change request lives in the THREAD now, not in `admin_notes` — Child B
+    // stopped the transition mirroring that field. This was the only
+    // `admin_notes` assertion in the e2e tree, and it moved rather than being
+    // dropped: the transition still has to record what the admin asked for, and
+    // the message is where it records it.
+    const requestMessages = (afterRequest?.messages ?? []) as Array<{
+      kind?: string;
+      body?: string;
+      author_role?: string;
+    }>;
+    const changeRequest = requestMessages.find((m) => m.kind === "admin_change_request");
+    expect(changeRequest?.body).toContain("apertura");
+    expect(changeRequest?.author_role).toBe("admin");
 
     /* --- member resubmits ------------------------------------------ */
     const resubmit = await member.api.post(MY_PROPOSALS, {

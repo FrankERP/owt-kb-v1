@@ -39,12 +39,16 @@ const VERIFICATION_ENV = {
 };
 
 describe("retired-writer decision", () => {
-  it("registers exactly the six plan §8 executable writers", () => {
+  it("registers exactly the seven plan §8 executable writers", () => {
     expect(RETIRED_WRITER_NAMES).toEqual(
       [
         "cleanup-superseded-proposals",
         "import-schedule",
         "import-setlist-history",
+        // Release 2's notes-to-thread fold. It RAN (2026-08-26) and was retired
+        // in Child A Phase E; `scripts/reconcile-proposal-messages.mjs` is the
+        // read-only check that replaced it.
+        "migrate-proposal-messages",
         "migrate-shared-proposals",
         "normalize-instrument-names",
         "unpublish-july-2026",

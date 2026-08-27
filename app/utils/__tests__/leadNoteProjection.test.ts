@@ -179,9 +179,21 @@ describe("PROPOSAL_QUERY", () => {
     // the only place the real query is executed, so a projection change that
     // drops a field the classifier needs fails HERE or nowhere. No mocks are
     // needed to get here — that is why the queries live in a leaf.
-    expect(Object.keys(row).sort()).toEqual(["_id", "lead_notes", "service_date", "status"]);
+    // `lead_notes` is GONE and `leadMessages` has replaced it: the sweep reads
+    // the thread, the legacy-tolerance branch included. Pinned as an exact key
+    // set so re-adding the field — or dropping `status`/`service_date`, which
+    // the classifier and the live-date-wins rule need — fails here.
+    expect(Object.keys(row).sort()).toEqual(["_id", "leadMessages", "service_date", "status"]);
     expect(row.status).toBe("changes_requested");
     expect(row.service_date).toBe("2026-09-06");
+    // Pre-filtered by the ONE fragment, and narrowed. A consumer re-filtering
+    // this array is what §The projection forbids; the shape is what makes the
+    // ban safe to state.
+    expect(row.leadMessages).toEqual(
+      // `isLeadNote`, not a third inline copy of the string, in the one file
+      // whose whole purpose is holding the copies to two.
+      MIXED.filter(isLeadNote).map((m) => ({ kind: m.kind, body: m.body })),
+    );
   });
 
   it("selects by id and yields null for an unknown proposal", async () => {
@@ -219,15 +231,29 @@ describe("SUBMITTED_NOTIFY_QUERY", () => {
 
     expect(row.admins).toEqual(["ad"]);
     expect(row.lead).toEqual({ alias: "Fran", member_name: "Francisco" });
-    // Still `lead_notes`: this phase changes no behaviour. When Child B
-    // repoints the body at the thread, THIS assertion is what shows it moved.
+    // The body source MOVED to the thread, and this is the assertion that shows
+    // it: `lead_notes` is gone from the row entirely.
+    //
+    // The fixture's thread is MIXED: its newest message is a `pastor_note`, and
+    // it also carries an `admin_change_request`. Both matter. The submit email
+    // fires on every save committed `pending`, so a resubmit from
+    // `changes_requested` is routine and the thread there holds the admin's own
+    // words. Taking the last message of the WHOLE array mails "Bendiciones."; so
+    // does dropping the filter, since this consumer takes the last element
+    // either way. The change request lands in a block headed "Notas del líder"
+    // on the SWEEP's side, where every appended body is rendered rather than
+    // just the newest. No other row would notice any of it.
+    //
     // `songs` comes back as an explicit null rather than being omitted — GROQ
     // projects a requested-but-absent field, which is why every consumer of
     // these rows coerces instead of checking `in`.
     expect(row.proposal).toEqual({
-      lead_notes: "Bajé la tonalidad de Santo a D.",
+      leadMessages: MIXED.filter(isLeadNote).map((m) => ({ kind: m.kind, body: m.body })),
       songs: null,
     });
+    const messages = (row.proposal as { leadMessages: { body: string }[] }).leadMessages;
+    expect(messages[messages.length - 1].body).toBe("Listo, cambié la última.");
+    expect(JSON.stringify(row.proposal)).not.toContain("¿Podemos cerrar con algo más lento?");
   });
 
   it("resolves the SAME admin set as the sweep's own audience query", async () => {

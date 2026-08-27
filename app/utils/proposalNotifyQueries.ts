@@ -14,10 +14,12 @@
 //
 // Nothing here touches a client. Do not add one.
 //
-// Child B interpolates `LEAD_NOTE_MESSAGES` (`./proposalMessageWrite`) into both
-// queries below when it repoints the notification body from `lead_notes` to the
-// thread. It is deliberately NOT imported yet: this phase changes no behaviour,
-// and an import with no use is a claim the code does not make.
+// `LEAD_NOTE_MESSAGES` (`./proposalMessageWrite`) is interpolated by BOTH
+// queries below, so the lead-note predicate exists exactly twice in the
+// codebase — that fragment and `isLeadNote` — and the two are cross-pinned by
+// execution in `__tests__/leadNoteProjection.test.ts`.
+
+import { LEAD_NOTE_MESSAGES } from "./proposalMessageWrite";
 
 /**
  * The admin audience, written down ONCE for the notification layer.
@@ -34,31 +36,64 @@ export const ADMIN_RECIPIENTS_QUERY = `*[_type == "teamMembers" && role in ["sup
 /**
  * The proposal the sweep classifies a `leadNotes` notice against.
  *
- * `lead_notes` is still projected: it is what `classifyLeadNotes` compares the
- * notice's `beforeNotes` snapshot against. Child B repoints this at the thread
- * and retires the field from here; until then the shape is unchanged, and
- * `leadNoteProjection.test.ts` executes it so that change cannot land silently.
+ * `lead_notes` is GONE from here. Nothing in the sweep reads it any more — the
+ * legacy-tolerance branch included, which classifies a pre-Child-B notice
+ * against the THREAD rather than against a field nothing writes. Reading it
+ * would be reading a frozen value: `before` is written only by
+ * `createIfNotExists` on a deterministic id, so a legacy notice keeps its shape
+ * for its whole window while new code queues onto it, and comparing against the
+ * frozen field would email the pre-release message and swallow every one
+ * appended after.
+ *
+ * `status` and `service_date` must survive: the classifier needs `status` for
+ * `reviewable`, and the live-date-wins rule needs `service_date`.
+ *
+ * `leadMessages` interpolates `LEAD_NOTE_MESSAGES` rather than restating the
+ * predicate, so the filter exists exactly twice in the codebase (this fragment
+ * and `isLeadNote`) and `leadNoteProjection.test.ts` cross-pins the two by
+ * executing them over one fixture.
+ *
+ * Consumers must NOT re-filter: the array arrives pre-filtered, and a consumer
+ * that filters again over a `{kind, body}` narrowing would still match — until
+ * someone narrows it to `{body}`, at which point nothing matches and the
+ * debounced email dies silently.
  */
 export const PROPOSAL_QUERY = `*[_type == "setlistProposal" && _id == $proposalId][0]{
-  _id, status, lead_notes, service_date
+  _id, status, service_date,
+  "leadMessages": ${LEAD_NOTE_MESSAGES}
 }`;
 
 /**
  * The one read behind the "Nueva propuesta" email: audience, lead name, and the
  * proposal content the email renders.
  *
- * The notes source is still `lead_notes` — this phase changes no behaviour.
- * Child B swaps in `LEAD_NOTE_MESSAGES`, and the test that executes this query
- * is what will show the swap actually happened.
+ * The notes source is the THREAD. It had to move in the same delivery that
+ * removed the mirror, and not a slice later: the create no longer writes
+ * `lead_notes`, so sourcing the body from that field would render an EMPTY notes
+ * block on every first submission carrying a note — the one flow the field
+ * existed for — and a frozen pre-cutover note on every resubmit. `notesBlock`
+ * renders nothing at all for an empty value (`proposalNotify.ts`), so the
+ * regression is invisible rather than obvious.
+ *
+ * Interpolates the same `LEAD_NOTE_MESSAGES` fragment as `PROPOSAL_QUERY`, so
+ * the predicate still exists exactly twice in the codebase.
+ *
+ * Semantic drift to accept, and it is the reason the email's own wording must
+ * not say "notes attached to this submission": `lead_notes` on submit used to be
+ * what the lead saved WITH that submission, whereas the newest message may be
+ * days older. It is still their most recent word.
  */
 export const SUBMITTED_NOTIFY_QUERY = `{
   "admins": ${ADMIN_RECIPIENTS_QUERY},
   "lead": *[_type == "teamMembers" && _id == $leadId][0]{ alias, member_name },
-  "proposal": *[_type == "setlistProposal" && _id == $proposalId][0]{ songs, lead_notes }
+  "proposal": *[_type == "setlistProposal" && _id == $proposalId][0]{
+    songs,
+    "leadMessages": ${LEAD_NOTE_MESSAGES}
+  }
 }`;
 
 export interface SubmittedNotifyRow {
   admins: string[] | null;
   lead: { alias?: string; member_name?: string } | null;
-  proposal: { songs?: unknown; lead_notes?: unknown } | null;
+  proposal: { songs?: unknown; leadMessages?: { kind?: unknown; body?: unknown }[] | null } | null;
 }

@@ -6,6 +6,7 @@
 // which notices survive — rather than the order in which mocks were touched.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { evaluate, parse } from "groq-js";
 
 // operationalClient/outboxSweep are `import "server-only"` guarded; neutralize
 // the marker so the modules load under vitest's node environment.
@@ -232,6 +233,42 @@ function emptyWorld(): World {
 }
 
 /**
+ * A stored thread message, in the shape the routes actually append. WHOLE
+ * objects, because `world.proposals` now feeds `groq-js`: the projection has to
+ * do its own filtering and narrowing rather than being handed a pre-shaped row.
+ */
+const threadMessage = (kind: string, body: string, key: string) => ({
+  _key: key,
+  _type: "proposal_message",
+  author: { _ref: kind === "lead_note" ? "lead-1" : "a1" },
+  author_role: kind === "lead_note" ? "lead" : "admin",
+  kind,
+  body,
+  at: "2026-08-08T10:00:00.000Z",
+});
+
+let msgKey = 0;
+const note = (body: string) => threadMessage("lead_note", body, `k${++msgKey}`);
+const adminNote = (body: string) => threadMessage("admin_change_request", body, `k${++msgKey}`);
+
+/** A whole `setlistProposal`, for the query to project rather than replace. */
+const proposalDoc = (over: Doc = {}): Doc => ({
+  _id: "p1",
+  _type: "setlistProposal",
+  status: "pending",
+  service_date: "2026-08-09",
+  lead_notes: "",
+  messages: [],
+  ...over,
+});
+
+/** Executes a real query against an in-memory dataset, as Sanity would. */
+async function runGroq(query: string, dataset: unknown[], params: Doc): Promise<unknown> {
+  const value = await evaluate(parse(query), { dataset, params });
+  return value.get();
+}
+
+/**
  * Routes the sweep's reads by their distinguishing shape. Deliberately strict:
  * an unrouted query throws rather than silently answering `null`, so a change to
  * the read contract surfaces as a failure instead of an empty sweep.
@@ -241,7 +278,15 @@ function routeRead(query: string, params: Doc): unknown {
   if (query.includes("notificationOutbox")) return world.notices;
   if (query.includes("array::unique")) return world.recipients[p.roleId ?? ""] ?? [];
   if (query.includes("role in [")) return world.admins;
-  if (query.includes("setlistProposal")) return world.proposals[p.proposalId ?? ""] ?? null;
+  // EXECUTED, not hand-written. `world.proposals` holds whole documents and the
+  // real `PROPOSAL_QUERY` runs over them with `groq-js`, so the projection and
+  // the fixture cannot drift apart. Answering with a literal is what let this
+  // suite stay green through a projection change for as long as it did: the
+  // classifier would have been fed a shape the query no longer returns.
+  if (query.includes("setlistProposal")) {
+    const doc = world.proposals[p.proposalId ?? ""];
+    return doc ? runGroq(query, [doc], params) : null;
+  }
   if (query.includes('_type == "post"')) {
     return (p.ids ?? [])
       .filter((id) => world.titles[id] !== undefined)
@@ -1135,18 +1180,23 @@ describe("sweepOutbox — recipient scoping and read contract", () => {
       roleId: null,
       roleType: null,
       proposalId: "p1",
-      before: { beforeNotes: "" },
+      before: { beforeNotes: "", beforeMessageCount: 0 },
       knownRecipients: [],
       ...over,
     });
     world.notices = [leadNotes()];
-    world.proposals = { p1: { _id: "p1", status: "pending", lead_notes: "Ensayo 7pm", service_date: "2026-08-09" } };
+    world.proposals = { p1: proposalDoc({ status: "pending", messages: [note("Ensayo 7pm")] }) };
     world.admins = ["a1", "a2"];
     world.members = members(["a1", "a2"]);
 
     let report = await sweepOutbox();
     expect(sendEmailMock).toHaveBeenCalledTimes(2);
-    expect((sendEmailMock.mock.calls[0][0] as { subject: string }).subject).toContain("Notas del líder");
+    // The subject moved with the source: the thread carries admin replies and
+    // the body can be several messages, so "Notas del líder" was wrong twice
+    // over. This is the ONLY place the outbox subject is asserted.
+    expect((sendEmailMock.mock.calls[0][0] as { subject: string }).subject).toContain(
+      "Mensajes de la propuesta",
+    );
     expect(report.consumed).toBe(1);
 
     // A proposal that is no longer reviewable drops.
@@ -1160,10 +1210,146 @@ describe("sweepOutbox — recipient scoping and read contract", () => {
       reads.push({ query, params });
       return routeRead(query, params);
     });
-    world.proposals = { p1: { _id: "p1", status: "approved", lead_notes: "Ensayo 7pm", service_date: "2026-08-09" } };
+    world.proposals = { p1: proposalDoc({ status: "approved", messages: [note("Ensayo 7pm")] }) };
 
     report = await sweepOutbox();
     expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(report.consumed).toBe(1);
+  });
+
+  it("emails the messages appended after the snapshot, and only the LEAD's", async () => {
+    // The row the delivery turns on. The thread is MIXED — the normal shape of a
+    // proposal that has been through one review cycle — and the notice was
+    // queued when it held ONE lead note. What admins must receive is the two
+    // lead notes appended since, and NOT the admin's own change request.
+    //
+    // `beforeMessageCount` counts LEAD notes, so 1, not 2. A queue side counting
+    // the whole array would send `slice(2)` = the last message only; counting it
+    // on a longer thread sends nothing at all. Both pass an assertion that only
+    // checks the body is non-empty, which is why this asserts it EXACTLY.
+    world.notices = [
+      {
+        ...roleNotice(),
+        _id: "outbox.leadnotes.mixed",
+        _rev: "rev-mixed-1",
+        kind: "leadNotes",
+        subjectKey: "p1",
+        memberId: null,
+        roleId: null,
+        roleType: null,
+        proposalId: "p1",
+        before: { beforeNotes: "Bajé la tonalidad.", beforeMessageCount: 1 },
+        knownRecipients: [],
+      },
+    ];
+    world.proposals = {
+      p1: proposalDoc({
+        status: "changes_requested",
+        lead_notes: "Bajé la tonalidad.",
+        messages: [
+          note("Bajé la tonalidad."),
+          adminNote("¿Podemos cerrar con algo más lento?"),
+          note("Listo, cambié la última."),
+          note("Y subí el tono de Santo."),
+        ],
+      }),
+    };
+    world.admins = ["a1"];
+    world.members = members(["a1"]);
+
+    await sweepOutbox();
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    const html = (sendEmailMock.mock.calls[0][0] as { html: string }).html;
+    expect(html).toContain("Listo, cambié la última.");
+    expect(html).toContain("Y subí el tono de Santo.");
+    // The two that must NOT be there: the admin's own words, and a message the
+    // snapshot already covered.
+    expect(html).not.toContain("¿Podemos cerrar con algo más lento?");
+    expect(html).not.toContain("Bajé la tonalidad.");
+  });
+
+  it("does not drop a first-message notice, whose count is 0", async () => {
+    // `beforeMessageCount: 0` is legitimate and falsy. A truthiness check reads
+    // it as "legacy shape" and routes it to `classifyLeadNotes`, which — with a
+    // `beforeNotes` of "" against a real newest body — happens to send here too.
+    // So this asserts the CONTENT, which the two paths disagree about the moment
+    // more than one message has been appended.
+    world.notices = [
+      {
+        ...roleNotice(),
+        _id: "outbox.leadnotes.first",
+        _rev: "rev-first-1",
+        kind: "leadNotes",
+        subjectKey: "p1",
+        memberId: null,
+        roleId: null,
+        roleType: null,
+        proposalId: "p1",
+        before: { beforeNotes: "", beforeMessageCount: 0 },
+        knownRecipients: [],
+      },
+    ];
+    world.proposals = {
+      p1: proposalDoc({ status: "pending", messages: [note("Primera."), note("Segunda.")] }),
+    };
+    world.admins = ["a1"];
+    world.members = members(["a1"]);
+
+    await sweepOutbox();
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    const html = (sendEmailMock.mock.calls[0][0] as { html: string }).html;
+    expect(html).toContain("Primera.");
+    expect(html).toContain("Segunda.");
+  });
+
+  it("classifies a LEGACY notice against the thread, not the frozen field", async () => {
+    // A notice minted by production's pre-cutover route: `beforeNotes`, no count.
+    // `before` is written only by `createIfNotExists` on a deterministic id, so
+    // it keeps this shape for its whole window while the new route queues onto
+    // it — which is why classifying against the stored `lead_notes` is wrong
+    // rather than merely old: that field is frozen once the mirror stops, so
+    // every message appended after the release would be swallowed.
+    //
+    // TWO assertions, and the second is the one an obvious implementation gets
+    // wrong. Dropping the notice instead sends nothing, contributes no pending
+    // recipients, leaves `countLost` silent, and passes any "it did not crash"
+    // check while a real message vanishes.
+    world.notices = [
+      {
+        ...roleNotice(),
+        _id: "outbox.leadnotes.legacy",
+        _rev: "rev-legacy-1",
+        kind: "leadNotes",
+        subjectKey: "p1",
+        memberId: null,
+        roleId: null,
+        roleType: null,
+        proposalId: "p1",
+        before: { beforeNotes: "Lo de siempre." },
+        knownRecipients: [],
+      },
+    ];
+    world.proposals = {
+      p1: proposalDoc({
+        status: "pending",
+        // Frozen at the pre-release value: nothing writes it any more.
+        lead_notes: "Lo de siempre.",
+        messages: [note("Lo de siempre."), note("Cambio de último momento: empezamos con Santo.")],
+      }),
+    };
+    world.admins = ["a1"];
+    world.members = members(["a1"]);
+
+    const report = await sweepOutbox();
+
+    // (a) an email is sent at all
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    // (b) carrying the NEWEST message — the lead's most recent word, which is
+    // exactly what the mirror used to hold — not the frozen field.
+    const html = (sendEmailMock.mock.calls[0][0] as { html: string }).html;
+    expect(html).toContain("Cambio de último momento: empezamos con Santo.");
     expect(report.consumed).toBe(1);
   });
 });

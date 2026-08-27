@@ -431,12 +431,13 @@ describe("A2 handoff allowlist", () => {
     }
   });
 
-  it("lists exactly the six retired one-shot writers, each proven fail-closed", () => {
+  it("lists exactly the seven retired one-shot writers, each proven fail-closed", () => {
     expect(RETIRED_ONE_SHOT_WRITERS.map((e) => `${e.file}#${e.operation}`).sort()).toEqual(
       [
         "scripts/cleanup-superseded-proposals.mjs#module",
         "scripts/import-schedule.ts#module",
         "scripts/import-setlist-history.mjs#module",
+        "scripts/migrate-proposal-messages.mjs#module",
         "scripts/migrate-shared-proposals.mjs#module",
         "scripts/normalize-instrument-names.mjs#module",
         "scripts/unpublish-july-2026.mjs#module",
@@ -489,10 +490,12 @@ describe("A2 handoff allowlist", () => {
         "e2e/service-readiness/lib/dataset.ts#module",
         "scripts/backfill-legacy-seat-arrays.mjs#module",
         "scripts/bootstrap-weekend-locks.mjs#module",
-        // One-shot Release 2 migration, still LIVE: it has not run --apply yet,
-        // so it must NOT be in RETIRED_ONE_SHOT_WRITERS (which fails closed at
-        // assertRetiredWriter). It moves there in Child A Phase E.
-        "scripts/migrate-proposal-messages.mjs#module",
+        // Child A Phase E added this read-only reconcile and listed it nowhere, so
+        // the audit failed on the commit that introduced it.
+        "scripts/reconcile-proposal-messages.mjs#module",
+        // `migrate-proposal-messages.mjs` used to sit here. It ran on 2026-08-26
+        // and moved to RETIRED_ONE_SHOT_WRITERS, which fails closed at
+        // assertRetiredWriter — the two lists are mutually exclusive by design.
         // Reads role documents to re-queue notices a lossy flush spent; writes
         // only notificationOutbox, and is dry-run until --apply.
         "scripts/requeue-role-notices.mjs#module",

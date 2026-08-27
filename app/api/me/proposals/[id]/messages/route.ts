@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 
 // This route hosts the same post-commit `after()` fan-out as the save route:
 // `queueLeadNotesNotice` registers a deferred `commitUpserts`, which runs an
@@ -18,10 +18,85 @@ import {
   buildProposalMessage,
   parseProposalMessageRequest,
   PROPOSAL_MESSAGES_MAX,
+  isLeadNote,
 } from "@/app/utils/proposalMessageWrite";
 import { isThreadOpen } from "@/app/utils/proposalThread";
 import { THREAD_AFTER_APPEND_QUERY, type ThreadMessageRow } from "@/app/utils/proposalMessageRead";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
+import { attempt, attemptSync } from "@/app/utils/serviceMutationSideEffects";
+import { ADMIN_RECIPIENTS_QUERY } from "@/app/utils/proposalNotifyQueries";
+import { sendPush } from "@/app/utils/push";
+
+/**
+ * Push the admins about a lead's message on an APPROVED proposal.
+ *
+ * `ADMIN_RECIPIENTS_QUERY` carries no ministry or active-member filter. Inherited
+ * from the two copies Child B Phase A collapsed into it, NOT introduced here, and
+ * recorded so a later reader does not re-litigate it as new — it is
+ * FrankERP/owt-kb-v1#8. What this call does add is frequency: the audience used
+ * to be resolved on transitions and submissions only, and now it is resolved per
+ * message.
+ *
+ * The AUTHOR is filtered out. A lead who is also an `admin` is in that set, and
+ * nothing else removes them.
+ *
+ * `path: "/admin"` — the admin surface. `notifyProposalReview` hardcodes `/me`,
+ * which is the LEAD's home and wrong for this audience.
+ *
+ * THE DATE IS RENDERED AT LOCAL NOON. A bare `new Date(iso)` day-flips in
+ * America/Mexico_City. The precedent to copy is `proposalNotify`; the precedent
+ * NOT to copy is `assignmentPush`, which interpolates the raw stored value into a
+ * push body with no rendering at all.
+ *
+ * THE AUTHOR NAME COMES FROM THE CALLER'S SESSION — no read at all. The author
+ * IS the caller. The plan said to reuse the name the route resolved for its
+ * response; that one is the POST-COMMIT read-back, deliberately guarded and null
+ * on failure, so it cannot be relied on — the session is a third option needing
+ * neither.
+ *
+ * WHAT THE SESSION ACTUALLY CARRIES, stated precisely because "the same fields"
+ * is not quite true: `alias` is `teamMembers.alias`, matching the removed query's
+ * first choice. `name` is `member_name` on the credentials and native-Google
+ * paths, but on WEB Google SSO it is the Google profile name. Neither is
+ * refreshed on an ordinary session — both are snapshotted at sign-in for the
+ * token's life, so an alias edit does not reach a push body until the member
+ * signs in again. (Starting impersonation is the one exception: that branch
+ * re-reads both live from Sanity. STOPPING it restores the snapshot taken at
+ * start, which was itself the admin's sign-in snapshot — no read.) All of it is cosmetic — the push says
+ * who wrote, and every variant names the right person.
+ *
+ * Using the session also decouples the body's decoration from the delivery. An
+ * earlier version fetched the name alongside the audience in a `Promise.all`,
+ * where a transient failure on the COSMETIC read rejected the whole thing and no
+ * push was sent at all.
+ *
+ * The nameless fallback is defence, not a path with a known trigger. NOT
+ * impersonation — that branch sets both `name` and `alias` from the target
+ * member, so an impersonated session is named like any other.
+ */
+async function pushAdminsAboutLeadMessage(o: {
+  authorId: string;
+  authorName: string;
+  serviceDate: string;
+}): Promise<void> {
+  const adminIds = await operationalClient.fetch<string[] | null>(ADMIN_RECIPIENTS_QUERY);
+  const recipients = (adminIds ?? []).filter((id) => id && id !== o.authorId);
+  if (!recipients.length) return;
+
+  const name = o.authorName;
+  const when = o.serviceDate
+    ? new Date(`${o.serviceDate.slice(0, 10)}T12:00:00`).toLocaleDateString("es-MX", {
+        day: "numeric",
+        month: "short",
+      })
+    : "";
+  const where = when ? ` del ${when}` : "";
+  const body = name
+    ? `${name} escribió en la propuesta${where}.`
+    : `Hay un mensaje nuevo en la propuesta${where}.`;
+
+  await sendPush(recipients, "proposals", { title: "Nuevo mensaje", body, path: "/admin" });
+}
 
 function reject(res: { status: number; body: unknown }) {
   return NextResponse.json(res.body, { status: res.status });
@@ -115,20 +190,27 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ id:
   // always moves.
   const observedRev = typeof doc._rev === "string" ? doc._rev : null;
 
-  // PRE-COMMIT, for the mirror and the notice. Reading these after the write gives
-  // post-write state and the debounced email silently sends nothing.
+  // PRE-COMMIT, for the notice. Reading these after the write gives post-write
+  // state and the debounced email silently sends nothing.
+  //
+  // `lead_notes` is no longer written by this route — the mirror is gone. It is
+  // still READ, and must be: the snapshot is what production's old sweep compares
+  // against during the release window, and it is now the value that makes that
+  // window silent rather than stale, because nothing moves the field any more.
   const beforeNotes = typeof doc.lead_notes === "string" ? doc.lead_notes : "";
   const previousStatus = doc.status;
+  // The index the flush slices the thread from: LEAD NOTES only, counted with the
+  // same predicate `LEAD_NOTE_MESSAGES` filters on. `stored` is the pre-commit
+  // array this handler already read, so this is not a second fetch. Counting
+  // `stored.length` instead would silently empty the batch on every proposal
+  // carrying an admin message — the normal shape of one that has been reviewed.
+  const beforeMessageCount = stored.filter(isLeadNote).length;
 
   try {
     await writeClient
       .patch(id)
       .setIfMissing({ messages: [] })
       .append("messages", [message])
-      // The mirror (§1): `lead_notes` holds the newest LEAD message — exactly what
-      // it holds today, which is why the existing debounced email is unchanged.
-      // Lossy on purpose. `admin_notes` is mirrored by the TRANSITION only.
-      .set({ lead_notes: message.body })
       .commit();
   } catch (err) {
     // With no `ifRevisionId` a 409 is not a stale-revision race — the patch
@@ -147,8 +229,54 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ id:
     serviceDate: typeof doc.service_date === "string" ? doc.service_date : "",
     previousStatus,
     beforeNotes,
-    afterNotes: message.body,
+    beforeMessageCount,
   });
+
+  // The lead→admin push, and it exists because the outbox email does NOT cover
+  // `approved` (Child B §Notifications). Both outbox gates are
+  // `{pending, changes_requested}` while the composer stays open on `approved`,
+  // and most proposals ARE approved — so without this a lead could post where no
+  // admin ever learns of it.
+  //
+  // THE GATE IS `status === "approved"`, nothing looser. "A status the outbox
+  // will not cover" is a NECESSARY condition only: read as sufficient it fires on
+  // `draft` too, which must stay silent because a draft is not in front of admins
+  // yet. ONE signal per message, never both — an email or a push.
+  //
+  // `previousStatus` is the pre-commit status, the same value the notice gate
+  // reads. An append does not move `status`, so pre and post agree here; using
+  // the snapshot keeps the two gates reading one value.
+  if (String(previousStatus ?? "") === "approved") {
+    // INSIDE `after()`, AND the callback AWAITS the promise. Both halves are
+    // load-bearing and only the first is obvious: `after(() => fireAndForget(p))`
+    // hands the queue a `void`, so it goes idle at once and `waitUntil` settles
+    // while the send is still in flight — worse than firing inline, because
+    // nothing else is left running to overlap it. That version shipped here once.
+    //
+    // This path needs the hold more than most: on `approved`,
+    // `queueLeadNotesNotice` returns on its status gate BEFORE registering its
+    // own `after()`, so this is the handler's ONLY deferred work. Losing it means
+    // a stored message that notified nobody, with no log and no outbox row.
+    //
+    // `attempt` swallows and logs, so a push failure cannot surface as an
+    // unhandled rejection on an already-committed write.
+    //
+    // The REGISTRATION is guarded too: `after()` throws synchronously when there
+    // is no request scope, and this runs after the commit — an uncaught throw
+    // here would 500 a message that already landed, and the obvious user action
+    // is to send it again.
+    attemptSync("proposal lead message push register", () =>
+      after(() =>
+        attempt("proposal lead message push", () =>
+          pushAdminsAboutLeadMessage({
+            authorId: leadId,
+            authorName: session.user.alias || session.user.name || "",
+            serviceDate: typeof doc.service_date === "string" ? doc.service_date : "",
+          }),
+        ),
+      ),
+    );
+  }
 
   // The read-back is for the RESPONSE ONLY — the write already committed. It is
   // guarded because throwing here would report a landed message as a failure,

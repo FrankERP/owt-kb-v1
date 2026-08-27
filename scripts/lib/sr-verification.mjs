@@ -935,7 +935,25 @@ export function buildFixtureDocuments({ now }) {
     status: "changes_requested",
     submitted_at: now,
     reviewed_at: now,
-    admin_notes: "Fixture: cambios solicitados",
+    // The thread, not the legacy mirror. Nothing asserted on the seeded
+    // `admin_notes`, so this is a correctness edit rather than a repair: post
+    // Child B the transition writes a message and never that field, and a
+    // fixture seeding only the field describes a document the app no longer
+    // produces. A fixed key, so re-seeding is idempotent — deliberately NOT one
+    // of the migration's own keys (`migleadnote01` / `migadminnote1`), because
+    // this is a fixture's message rather than a migrated one and reusing those
+    // would make a seeded document look migrated to anything that reads them.
+    messages: [
+      {
+        _key: "srvchangereq01",
+        _type: "proposal_message",
+        author: { _type: "reference", _ref: "srv.member.admin" },
+        author_role: "admin",
+        kind: "admin_change_request",
+        body: "Fixture: cambios solicitados",
+        at: now,
+      },
+    ],
   });
 
   const proposalApproved = "srv.proposal.approved";
