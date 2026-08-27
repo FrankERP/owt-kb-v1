@@ -113,6 +113,26 @@ An individual send is slower under contention — 4 005 ms p95 against 1 838 —
 while the WAVE, which is what the clock charges, costs 2 429 ms for eight. That
 is the whole result: **~6.5× the throughput, at a cost the budget can absorb.**
 
+### Confirmed on the real path, from Vercel
+
+The probe above runs from a laptop, and the script's own header warns that the
+sweep's network round trip may differ. It does not. A production sweep at
+concurrency 8 on 2026-08-27, 14 recipients through `EMAIL_REDIRECT_TO` so the
+team received nothing, logged:
+
+```
+notify_sweep_done  emailed 14  unserved 0  lost 0
+                   elapsedMs 8165  sendMs 5210  claimMs 744  msPerSend 372
+```
+
+14 recipients in 2 waves in **5 210 ms** — about **2 605 ms per wave**, against
+the laptop's 2 429 ms. Close enough that the laptop probe can be trusted for
+future retunes.
+
+Read `msPerSend` with care: it is `sendMs / emailed`, so at width 8 it is an
+average per MESSAGE (372 ms), not the per-wave figure the admission check
+charges. Divide `sendMs` by the wave count for that.
+
 ### The formula, in the runtime's form
 
 The design spec states the gate as
@@ -157,7 +177,9 @@ layer-1 sweep; the cap allows 2. The code default of **40 is measured to hold** 
 5 waves, 9 716 ms of the spendable 20 000, leaving 10 284 ms of margin — and
 layer 2's derated budget holds it too (3 waves, 4 858 ms of 10 000).
 
-Raising it is a Vercel change and has NOT been made. `MEASURED_MS_PER_SEND` in
+**Raised to 40 in Vercel Production on 2026-08-27**, after the sweep above
+verified concurrency 8 on the real path. It is stored as `Config`, not `Secret`,
+so the operative value can be read back and checked against this section. `MEASURED_MS_PER_SEND` in
 `outboxSweep.test.ts` stays at its placeholder: it guards the consistency of the
 shipped defaults, and raising it to keep a test green is the one forbidden move.
 
