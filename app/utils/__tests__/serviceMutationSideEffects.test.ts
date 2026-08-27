@@ -122,6 +122,7 @@ vi.mock("next/server", async (importOriginal) => {
 import {
   notifyProposalPending,
   notifyProposalReview,
+  opportunisticSweepOptions,
   notifyRoleAssignments,
   notifyRolePublished,
   notifySetlistSaved,
@@ -138,8 +139,8 @@ import {
   roleUpdateNotice,
 } from "@/app/utils/serviceMutationSideEffects";
 import { outboxId } from "@/app/utils/outboxNotice";
-import { SEND_TIMEOUT_MS } from "@/app/utils/email";
-import { EMAIL_LIMIT, SEND_BUDGET_MS } from "@/app/utils/outboxSweep";
+import { SEND_CONCURRENCY, SEND_TIMEOUT_MS } from "@/app/utils/email";
+import { EMAIL_LIMIT, SEND_BUDGET_MS, SWEEP_DEADLINE_MS } from "@/app/utils/outboxSweep";
 import type { NormalizedSeats } from "@/app/utils/roleWriteRequest";
 
 function seats(over: Partial<NormalizedSeats> = {}): NormalizedSeats {
@@ -678,6 +679,11 @@ describe("the opportunistic sweep", () => {
     expect(sweepOutboxMock).toHaveBeenCalledWith({
       emailLimit: EMAIL_LIMIT / 2,
       sendBudgetMs: SEND_TIMEOUT_MS + (SEND_BUDGET_MS - SEND_TIMEOUT_MS) / 2,
+      // The WHOLE-SWEEP clock is derated too, and it has to be: it runs from the
+      // top of the SWEEP, not of the invocation, so it never bounded the write
+      // route's own elapsed time. Handing the send stage 10 s more without this
+      // would widen exactly what the derate exists to contain.
+      sweepDeadlineMs: SEND_TIMEOUT_MS + (SWEEP_DEADLINE_MS - SEND_TIMEOUT_MS) / 2,
     });
   });
 
@@ -692,9 +698,9 @@ describe("the opportunistic sweep", () => {
     // The reserve read here comes from THIS FILE'S mock of `email`. It mirrors the
     // real constant, and it has to: the production code computes the budget from
     // the real one, so a mock that drifts would make this row agree with itself
-    // and with nothing else. (The same mock declares SEND_CONCURRENCY: 8 while the
-    // real value is 1 — inert here because the send loop is not exercised, but it
-    // is the kind of drift this note is about.)
+    // and with nothing else. The same mock's SEND_CONCURRENCY: 8 agrees with the
+    // real constant as of 2026-08-27; it did NOT for three weeks, and that drift
+    // is what made this file's send arithmetic get read wrong twice in one day.
     const admitted = (msPerSend: number) =>
       Math.floor((sendBudgetMs - SEND_TIMEOUT_MS) / msPerSend) + 1;
 
@@ -706,6 +712,28 @@ describe("the opportunistic sweep", () => {
     expect(admitted(14_413)).toBe(1);
     // And it never exceeds layer 1, which is the whole point of derating.
     expect(sendBudgetMs).toBeLessThan(SEND_BUDGET_MS);
+  });
+
+  it("layer 2's derated knobs still satisfy the send-budget gate", () => {
+    // The layer-2 half of §10's release gate. It lives here, against the options
+    // this module actually builds, because the version that lived in
+    // `outboxSweep.test.ts` recomputed the derate itself and so went on asserting
+    // `SEND_BUDGET_MS / 2` after production stopped using it — green, describing
+    // a machine that no longer existed.
+    //
+    // 500 ms is `MEASURED_MS_PER_SEND`'s value and is deliberately NOT the real
+    // number (see that file); the point is that the SHIPPED DEFAULTS are mutually
+    // consistent, and raising it to keep this green is the one forbidden move.
+    const MEASURED_MS_PER_SEND = 500;
+    const { emailLimit, sendBudgetMs, sweepDeadlineMs } = opportunisticSweepOptions();
+    const waves = Math.ceil(emailLimit / SEND_CONCURRENCY);
+    expect((waves - 1) * MEASURED_MS_PER_SEND).toBeLessThanOrEqual(
+      sendBudgetMs - SEND_TIMEOUT_MS,
+    );
+    // Layer 2 never outspends layer 1, on EITHER clock — the invariant the
+    // derate exists for, and the one a misconfigured budget could invert.
+    expect(sendBudgetMs).toBeLessThanOrEqual(SEND_BUDGET_MS);
+    expect(sweepDeadlineMs).toBeLessThanOrEqual(SWEEP_DEADLINE_MS);
   });
 
   it("sweeps from the setlist, publish and lead-notes writers too", async () => {

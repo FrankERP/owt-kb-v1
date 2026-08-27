@@ -1,6 +1,6 @@
 # ADR-0013: Keep SMTP sends serial, and the recipient cap below the seat count
 
-**Date:** 2026-08-07 · **Status:** SUPERSEDED 2026-08-27 on its central decision — `SEND_CONCURRENCY` is 8, not 1. The sender also moved to a third party, which this ADR had rejected. See the banner below; the measurements and the reasoning are kept as the record of why 1 was right against `mail.oasis.mx`
+**Date:** 2026-08-07 · **Status:** **Reversed** 2026-08-27 on its central decision — `SEND_CONCURRENCY` is 8, not 1. No superseding ADR: the reversal is the retirement condition this ADR named for itself ("the ~14 s remote accept, fixed at the mail server"), met by replacing the server, so there is no new decision to record separately. The sender also moved to a third party, which this ADR had rejected. See the banner below; the measurements and the reasoning are kept as the record of why 1 was right against `mail.oasis.mx`
 
 ## Context
 

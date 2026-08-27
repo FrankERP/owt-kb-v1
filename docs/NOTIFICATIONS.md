@@ -100,7 +100,9 @@ manually at 17:43 UTC. The sweep reported:
 ```
 
 **What that PROVES, by arithmetic rather than by stopwatch.** `SEND_CONCURRENCY`
-is **1** — sends are serial, which is ADR-0013's decision — and the send loop
+was **1** when this was measured — sends were serial, per ADR-0013, which is why
+total ÷ 14 is the per-send latency here; it is 8 as of 2026-08-27 — and the send
+loop
 checks `elapsed + SEND_TIMEOUT_MS (20 s) > NOTIFY_SEND_BUDGET_MS (40 s)` before
 each send, stopping and recording `unserved` when it trips.
 
@@ -142,6 +144,22 @@ spendable   =  sendBudgetMs − SEND_TIMEOUT_MS
 waves       =  floor(spendable / ms_per_send) + 1
 recipients  =  min(emailLimit, waves × SEND_CONCURRENCY)
 ```
+
+**Two caveats, and both matter for deciding a limit.**
+
+*A second clock can bind first.* The same check also refuses a wave when
+`elapsed_since_sweep_start + SEND_TIMEOUT_MS > sweepDeadlineMs` (45 s at layer 1,
+32.5 s at layer 2), so `spendable` is really
+`min(sendBudgetMs, sweepDeadlineMs − read_phase) − SEND_TIMEOUT_MS`. A slow read
+phase silently lowers the ceiling; `stoppedBy` on the
+`notify_sweep_send_budget_exhausted` log line says which clock stopped it.
+
+*`emailLimit` does not bound a notice taken alone.* When a single notice's
+recipients exceed the limit it is selected **alone and deliberately over budget**
+rather than split, because one document per subject cannot represent per-recipient
+progress. That is the shape of the 2026-08-27 observation above — one setlist
+notice, 14 recipients, against a production limit of 2 — so for that path the
+`min(emailLimit, …)` term does not apply and the clock is the only bound.
 
 | | `SEND_CONCURRENCY` | ms/send | spendable | waves | recipients the clock allows |
 |---|---|---|---|---|---|
@@ -461,14 +479,17 @@ Things that are counter-intuitive and were each a real defect at some point.
   `sendMs: 20020`, `emailed: 2`, and eight `SMTP send timed out after 20000ms`.
   In twenty seconds with ten connections open the server accepted **two** —
   the same rate it manages serially. The server serializes acceptance for remote
-  recipients, so concurrency buys no throughput while turning would-be successes
-  into destroyed notices (stage 8 consumes regardless). `SEND_CONCURRENCY` stays
-  at 1, and the wave machinery in stage 7 stays with it, because both become
-  correct the moment the server does. Recorded as **ADR-0013**. **Do not re-raise it on the reasoning that
-  pooling or parallelism "should" help — that reasoning has now failed twice
-  against measurement.**
-- **Therefore the grouped monthly email cannot be delivered by tuning this
-  codebase.** ~20 recipients × ~14 s is far past the hosting function's 60 s
+  recipients, so concurrency bought no throughput while turning would-be successes
+  into destroyed notices (stage 8 consumes regardless). Recorded as **ADR-0013**.
+  **SUPERSEDED 2026-08-27:** that measured THAT server, and it is retired —
+  `SEND_CONCURRENCY` is now **8** with the Gmail sender, which is the retirement
+  condition ADR-0013 named for itself. **The rule it set still binds:** this value
+  answers to measurement, not to reasoning, and the 8 currently rests on a report
+  rather than a probe. Do not re-raise or re-lower it on the argument that
+  parallelism "should" or "shouldn't" help — run
+  `scripts/measure-send-budget.mjs`.
+- **That made the grouped monthly email undeliverable by tuning this codebase —
+  and the sender move is what changed it.** ~20 recipients × ~14 s is far past the hosting function's 60 s
   ceiling at any concurrency and any cap. Two things can fix it, and nothing else
   can: the **~14 s remote accept on the mail server**, or a change so the sweep
   **re-pends notices it never attempted instead of consuming them** — which would

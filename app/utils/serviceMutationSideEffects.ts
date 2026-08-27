@@ -68,7 +68,13 @@ import {
   type SetlistPref,
 } from "./notifyTargets";
 import { buildUpsert, outboxId, songRowsFrom } from "./outboxNotice";
-import { EMAIL_LIMIT, SEND_BUDGET_MS, sweepOutbox } from "./outboxSweep";
+import {
+  EMAIL_LIMIT,
+  SEND_BUDGET_MS,
+  SWEEP_DEADLINE_MS,
+  sweepOutbox,
+  type SweepOptions,
+} from "./outboxSweep";
 import { SEND_TIMEOUT_MS } from "./email";
 import { notifyProposalSubmitted } from "./proposalNotify";
 import { canonicalSetlistsForWeeksQuery } from "./serviceReadQueries";
@@ -485,9 +491,17 @@ type BuiltUpsert = NonNullable<ReturnType<typeof setlistUpsert>>;
  * server, which is the conservative behaviour the original halving intended and
  * accidentally made unconditional.
  *
- * `SWEEP_DEADLINE_MS` is unchanged and still bounds the whole sweep at 45 s, so
- * this does not widen the worst case an invocation can spend — only how much of
- * it layer 2 may use for sending.
+ * AND THE WHOLE-SWEEP CLOCK IS DERATED THE SAME WAY, because otherwise this
+ * would widen the host invocation's worst case by the 10 s it just handed back.
+ * `SWEEP_DEADLINE_MS` runs from the top of the SWEEP, not the top of the
+ * invocation, so it never accounted for the write route's own elapsed time — the
+ * budget derate was the only thing that did. Halving its spendable part too
+ * (32.5 s on the defaults) restores a real bound on what layer 2 can add to a
+ * route that has already been running.
+ *
+ * That clock is what keeps stage 8 reachable, and stage 8 not running is the
+ * 2026-08-06/07 wedge: claims left at `status: "sending"`, the lease re-offering
+ * the same batch, nothing delivered.
  *
  * The consequence named in §1 still holds: at a limit of 20 a large Sunday
  * setlist is "oversized" for layer 2 and taken alone.
@@ -498,14 +512,20 @@ type BuiltUpsert = NonNullable<ReturnType<typeof setlistUpsert>>;
  */
 const LAYER_2_DERATE = 2;
 
-function opportunisticSweepOptions(): { emailLimit: number; sendBudgetMs: number } {
-  // `Math.max` on the spendable part, not on the total: a misconfigured
-  // `NOTIFY_SEND_BUDGET_MS` at or below the reserve leaves nothing to halve, and
-  // the floor must still admit the first send rather than collapsing to 1 ms.
-  const spendable = Math.max(0, SEND_BUDGET_MS - SEND_TIMEOUT_MS);
+export function opportunisticSweepOptions(): Required<
+  Pick<SweepOptions, "emailLimit" | "sendBudgetMs" | "sweepDeadlineMs">
+> {
+  const derate = (full: number) =>
+    // `Math.min` against the full value, not just a floor at zero: with
+    // `NOTIFY_SEND_BUDGET_MS` misconfigured at or below the reserve there is
+    // nothing to halve, and `SEND_TIMEOUT_MS + 0` would EXCEED layer 1 and invert
+    // the whole point of derating. Clamping makes "layer 2 never outspends layer
+    // 1" hold unconditionally rather than only at the defaults.
+    Math.min(full, SEND_TIMEOUT_MS + Math.max(0, full - SEND_TIMEOUT_MS) / LAYER_2_DERATE);
   return {
     emailLimit: Math.max(1, EMAIL_LIMIT / LAYER_2_DERATE),
-    sendBudgetMs: SEND_TIMEOUT_MS + spendable / LAYER_2_DERATE,
+    sendBudgetMs: derate(SEND_BUDGET_MS),
+    sweepDeadlineMs: derate(SWEEP_DEADLINE_MS),
   };
 }
 

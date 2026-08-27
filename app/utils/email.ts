@@ -164,9 +164,9 @@ function smtpTransport(host: string, port: number, secure: boolean, user: string
  * conversation nobody was waiting for. It stopped being defensible the moment
  * sends could run alongside each other, where the same close is friendly fire:
  * it drops the connections carrying every other recipient in the wave, turning
- * one stalled message into a wave of failures. The width is back to 1 today, but
- * the teardown is not coming back with it — `socketTimeout` is simply the better
- * mechanism at any width.
+ * one stalled message into a wave of failures. That is live again at width 8,
+ * and the teardown is still not coming back — `socketTimeout` is simply the
+ * better mechanism at any width.
  *
  * `socketTimeout` (SEND_TIMEOUT_MS) is what reclaims a stuck connection now, and
  * it does it at the right granularity — nodemailer destroys THAT connection and

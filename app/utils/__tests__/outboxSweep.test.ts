@@ -113,6 +113,7 @@ vi.mock("@/app/utils/deliveryFirewall", () => ({
 }));
 
 import { EMAIL_LIMIT, SEND_BUDGET_MS, sweepOutbox } from "@/app/utils/outboxSweep";
+import { SEND_CONCURRENCY, SEND_TIMEOUT_MS } from "@/app/utils/email";
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -432,9 +433,10 @@ describe("sweepOutbox — grouping and fan-out", () => {
     expect(report.emailed).toBe(12);
     expect(report.unserved).toBe(0);
     // Asserted against the constant rather than a hard-coded width, because the
-    // right width is an open question: 8 was tried in production and produced
-    // ZERO deliveries where serial produced one, so it is back to 1 pending a
-    // measurement that is not confounded by every message going to one domain.
+    // right width has moved twice: 8 produced ZERO deliveries against
+    // mail.oasis.mx where serial produced one, so it went to 1; the sender then
+    // moved to Gmail and it is 8 again as of 2026-08-27. Asserting the constant
+    // means this row follows without editing.
     // The machinery must be correct at whatever value that turns out to be.
     const { SEND_CONCURRENCY } = await import("@/app/utils/email");
     expect(peakInFlight).toBe(Math.min(SEND_CONCURRENCY, 12));
@@ -1376,9 +1378,6 @@ describe("sweepOutbox — recipient scoping and read contract", () => {
  */
 const MEASURED_MS_PER_SEND = 500;
 
-/** Layer 2 (the opportunistic sweep inside a save) derates BOTH knobs by this. */
-const LAYER_2_DERATE = 2;
-
 describe("sweepOutbox — configuration", () => {
   it("defaults the recipient limit above the largest realistic single service", async () => {
     // 40, not 12: a Sunday on this ~30-member team routinely fills 12-20 seats,
@@ -1388,13 +1387,29 @@ describe("sweepOutbox — configuration", () => {
     expect(SEND_BUDGET_MS).toBe(40_000);
   });
 
-  it("satisfies the knob inequality at layer 1 and at the halved layer 2", () => {
+  it("satisfies the knob inequality at layer 1 and at the derated layer 2", () => {
     // §10's release gate as a STANDING regression check. Asserting the two
     // constants' values (above) would pass against any pair of numbers someone
     // typed, including a pair that cannot fit — this asserts they fit.
-    expect(MEASURED_MS_PER_SEND * EMAIL_LIMIT).toBeLessThan(SEND_BUDGET_MS);
-    expect(MEASURED_MS_PER_SEND * (EMAIL_LIMIT / LAYER_2_DERATE)).toBeLessThan(
-      SEND_BUDGET_MS / LAYER_2_DERATE,
-    );
+    //
+    // IN THE RUNTIME'S FORM, not the spec's. The spec writes
+    // `ms_per_send × limit < budget`, which charges the per-send reserve to
+    // nothing and ignores concurrency; the loop actually admits a WAVE of
+    // `SEND_CONCURRENCY` while `elapsed + SEND_TIMEOUT_MS <= budget`, so what
+    // must fit is the wave count against the SPENDABLE part of the budget. The
+    // previous version of this row asserted `SEND_BUDGET_MS / LAYER_2_DERATE`,
+    // an expression production stopped using on 2026-08-27 — it passed while
+    // describing a machine that no longer existed.
+    const waves = Math.ceil(EMAIL_LIMIT / SEND_CONCURRENCY);
+    const spendable = SEND_BUDGET_MS - SEND_TIMEOUT_MS;
+    // The first wave is admitted at elapsed 0; each further wave costs one send's
+    // latency and must still leave the reserve.
+    expect((waves - 1) * MEASURED_MS_PER_SEND).toBeLessThanOrEqual(spendable);
+
+    // LAYER 2'S HALF IS ASSERTED IN `serviceMutationSideEffects.test.ts`, against
+    // the options that module actually builds. Recomputing the derate here is how
+    // the previous version of this row came to assert `SEND_BUDGET_MS / 2`, an
+    // expression production stopped using on 2026-08-27 — it stayed green while
+    // describing a machine that no longer existed.
   });
 });

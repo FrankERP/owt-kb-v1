@@ -102,7 +102,7 @@ export const SEND_BUDGET_MS = parsePositiveEnv(process.env.NOTIFY_SEND_BUDGET_MS
  * of the route's 60 is what stage 8 needs for one `Patch.commit()` per claimed
  * notice at `EMAIL_LIMIT`-scale batches, plus the response.
  */
-const SWEEP_DEADLINE_MS = 45_000;
+export const SWEEP_DEADLINE_MS = 45_000;
 
 /**
  * How many candidate notices one sweep looks at. `deferred` counts the due
@@ -127,6 +127,14 @@ export interface SweepReport {
 export interface SweepOptions {
   emailLimit?: number;
   sendBudgetMs?: number;
+  /**
+   * Overrides `SWEEP_DEADLINE_MS` for THIS sweep. Exists for layer 2, whose
+   * sweep is hosted inside a write route that has already spent part of its own
+   * `maxDuration` — and this clock runs from the top of the SWEEP, so it never
+   * accounted for that. Derating the send budget alone leaves the whole-sweep
+   * bound at 45 s, which the host route cannot afford on top of its own work.
+   */
+  sweepDeadlineMs?: number;
 }
 
 type RoleTypeName = "sunday_role" | "saturday_role" | "special_role";
@@ -607,6 +615,7 @@ function countLost(
 export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport> {
   const emailLimit = opts.emailLimit ?? EMAIL_LIMIT;
   const sendBudgetMs = opts.sendBudgetMs ?? SEND_BUDGET_MS;
+  const sweepDeadlineMs = opts.sweepDeadlineMs ?? SWEEP_DEADLINE_MS;
   /** Whole-sweep wall clock — for the completion log only, never for the budget. */
   const sweepStartedAt = Date.now();
   /** Stage-7 wall clock, set where stage 7 begins; `null` if it never ran. */
@@ -659,7 +668,7 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
     // path costs a delay and cannot cost a notification. Claiming a batch this
     // late would hand stage 4 work it has no time to classify, which is how the
     // first version of this guard turned a stall into silent deletion.
-    if (Date.now() - sweepStartedAt >= SWEEP_DEADLINE_MS) {
+    if (Date.now() - sweepStartedAt >= sweepDeadlineMs) {
       report.deferred = due.length - i + selected.length;
       log("notify_sweep_select_deadline", {
         deferred: report.deferred,
@@ -769,7 +778,7 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
       // The first version of this guard left that gap, which reported
       // `unserved: 0` while destroying the tail and so read as GREEN to the very
       // workflow gate added alongside it to catch exactly this.
-      if (Date.now() - sweepStartedAt >= SWEEP_DEADLINE_MS) {
+      if (Date.now() - sweepStartedAt >= sweepDeadlineMs) {
         report.unserved += claimed.length - classified;
         log("notify_sweep_classify_deadline", {
           classified,
@@ -897,7 +906,7 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
       // re-offered to the next sweep. Every send is bounded by SEND_TIMEOUT_MS,
       // so that IS the worst case and the reserve can actually be reserved.
       const budgetSpent = Date.now() - sendStartedAt + SEND_TIMEOUT_MS > sendBudgetMs;
-      const deadlineHit = Date.now() - sweepStartedAt + SEND_TIMEOUT_MS > SWEEP_DEADLINE_MS;
+      const deadlineHit = Date.now() - sweepStartedAt + SEND_TIMEOUT_MS > sweepDeadlineMs;
       if (budgetSpent || deadlineHit) {
         // `+=`, not `=`: stage 4 may already have recorded a tail it could not
         // classify, and overwriting that would hide it again.
