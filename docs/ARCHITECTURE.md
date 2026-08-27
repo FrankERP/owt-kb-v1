@@ -39,7 +39,7 @@ routes, the service-readiness identity route and the theme gallery — see ADR-0
 | Auth | **NextAuth v4** | JWT sessions (7-day), Google SSO (web + native), email/password (bcrypt). |
 | Search | **Fuse.js** + `normalizeText` | Accent-insensitive fuzzy search over songs/members. |
 | Solver | **Python 3.12 + OR-Tools CP-SAT** | Deployed as a Gen-2 Google Cloud Function (`owt-solver`). |
-| Email | **nodemailer (SMTP)** primary, **Resend** fallback | Live via `contacto@oasis.mx`. |
+| Email | **nodemailer (SMTP)** primary, **Resend** fallback | Live via Gmail SMTP as `dev.raccoon.labs@gmail.com`. |
 | Push | **Firebase Admin (FCM)** | Self-healing dead-token pruning. |
 | Mobile | **Capacitor 8** | Wraps the web app; iOS + Android projects committed. |
 | Hosting | **Vercel** (web) + **Google Cloud** (solver) | `vercel.json` defines one daily cron. |
@@ -75,7 +75,7 @@ flowchart TB
 
   subgraph External
     FCM[Firebase Cloud Messaging]
-    SMTP[SMTP contacto@oasis.mx / Resend]
+    SMTP[Gmail SMTP dev.raccoon.labs@gmail.com / Resend]
     GAuth[Google OAuth]
   end
 
@@ -427,7 +427,7 @@ flowchart LR
 
 - **Push categories:** `assignments`, `setlist`, `proposals`, `reminders`. Each gated by the
   member's `notifPrefs`. Dead FCM tokens are auto-pruned.
-- **Email:** SMTP preferred (`contacto@oasis.mx`), Resend fallback; gated by `EMAIL_ALLOWLIST`
+- **Email:** SMTP preferred (Gmail, `dev.raccoon.labs@gmail.com`), Resend fallback; gated by `EMAIL_ALLOWLIST`
   (default `"*"` = whole team) and the per-member `notifPrefs.email` opt-out.
 - **Opt-out is permissive by default:** an unset pref means opted-in.
 - **`notifyProposalSubmitted` is fail-closed on identity:** it resolves the service role through

@@ -128,11 +128,15 @@ Then confirm with a manual run as above.
 
 **Needed in: Vercel.** Also needed locally by anything that actually sends mail — currently only `scripts/measure-send-budget.mjs`.
 
-`SMTP_HOST` (`mail.oasis.mx`), `SMTP_PORT` (465), `SMTP_USER` (`contacto@oasis.mx`) and `EMAIL_FROM` all pull cleanly from Vercel. **`SMTP_PASS` does not** — it is `Sensitive` and pulls as the 11-character marker described above, so `vercel env pull` alone will never give you a working local mail setup. Attempting it fails with `535 Incorrect authentication data`, which reads like wrong credentials rather than absent ones.
+**THE SENDER MOVED TO GMAIL.** It was `contacto@oasis.mx` over `mail.oasis.mx` (cPanel/MailBaby) until DNS verification for `oasis.mx` in Resend could not be completed. Sending now goes through **Gmail SMTP as `dev.raccoon.labs@gmail.com`**, and `SMTP_PASS` is a Google **App Password**, not a mailbox password. Anything below that still says cPanel is describing the old sender.
 
-**Where the value came from.** The cPanel/MailBaby mailbox for `contacto@oasis.mx`. Retrieve or reset it in that hosting control panel; it is not recoverable from Vercel.
+`SMTP_HOST` (`smtp.gmail.com`), `SMTP_PORT` (465), `SMTP_USER` (`dev.raccoon.labs@gmail.com`) and `EMAIL_FROM` all pull cleanly from Vercel. **`SMTP_PASS` does not** — it is `Sensitive` and pulls as the 11-character marker described above, so `vercel env pull` alone will never give you a working local mail setup. Attempting it fails with `535 Incorrect authentication data`, which reads like wrong credentials rather than absent ones.
 
-**How to rotate.** Reset the mailbox password in cPanel, then update `SMTP_PASS` in Vercel for Production *and* Preview, then redeploy. Note the blast radius is wider than the cron secret's: every outbound email — assignment notifications, the debounced notification sweep, proposal emails, and the outbox liveness alarm — is down between the reset and the redeploy.
+**Where the value came from.** Google Account → Security → 2-Step Verification → **App passwords**, for the `dev.raccoon.labs@gmail.com` account. An app password is shown ONCE at creation and is not recoverable afterwards from Google or from Vercel — a lost one is replaced, never retrieved. It also requires 2-Step Verification to be on for that account; turning 2SV off revokes every app password on it.
+
+**How to rotate.** Create a NEW app password in that Google account first, update `SMTP_PASS` in Vercel for Production *and* Preview, redeploy, confirm a send works, and only then revoke the old one. Creating before revoking is what keeps the blast radius near zero — in the other order every outbound email is down in between: assignment notifications, the debounced notification sweep, proposal emails, and the outbox liveness alarm.
+
+**Gmail's own limits apply now and did not before.** A free Gmail account is bounded at roughly 500 recipients/day and a Workspace account at 2000; the outbox's batches are far under that today, but a large fan-out is a limit that `mail.oasis.mx` did not impose. Gmail may also refuse a `From` that is not the authenticated account or a verified "Send mail as" alias — which is why `EMAIL_FROM` cannot be an arbitrary `noreply@` address on this sender. **Only the ADDRESS is constrained, not the label:** `EMAIL_FROM` currently carries a display name, `OWT Backstage <dev.raccoon.labs@gmail.com>`, which Gmail accepts because the address is still the authenticated account. A `noreply@` needs a domain this project can publish DNS for — and `oasis.mx` is not one: its zone is served by `ns1/ns2.softlayer.com`, not by the cPanel whose Zone Editor is reachable, which is why the Resend verification for it fails with "all required records are missing" no matter what is entered there.
 
 ---
 
@@ -274,6 +278,6 @@ that order, and the window is zero.
 
 ## Not yet documented
 
-Other variables in use — `NEXTAUTH_*`, SMTP credentials for `contacto@oasis.mx`, `EMAIL_ALLOWLIST`, FCM push credentials, the solver's Secret Manager key — predate this file. Add each one here as it is next touched or rotated.
+Other variables in use — `NEXTAUTH_*`, `EMAIL_ALLOWLIST`, FCM push credentials, the solver's Secret Manager key — predate this file. Add each one here as it is next touched or rotated.
 
 Notification-outbox tuning knobs (`NOTIFY_DEBOUNCE_MINUTES`, `NOTIFY_MAX_WINDOW_MINUTES`, `NOTIFY_CLAIM_TTL_MINUTES`, `NOTIFY_SEND_BUDGET_MS`, `NOTIFY_FLUSH_EMAIL_LIMIT`, `NOTIFY_STALE_ALERT_HOURS`) are configuration, not secrets, and all have code defaults. They are specified in `docs/superpowers/specs/2026-07-27-service-notification-emails-design.md` §9.
