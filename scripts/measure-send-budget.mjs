@@ -21,8 +21,14 @@
 // `vercel env pull` is NOT enough: SMTP_PASS is a Sensitive variable and pulls as
 // an 11-character redaction marker, which fails with `535 Incorrect
 // authentication data` — a message that reads like a wrong password rather than a
-// missing one. Supply the real mailbox password (cPanel/MailBaby, the mailbox for
-// contacto@oasis.mx) yourself. Everything else pulls cleanly. See docs/SECRETS.md.
+// missing one. Supply it yourself.
+//
+// WHAT "IT" IS HAS CHANGED. The sender is now Gmail SMTP as
+// `dev.raccoon.labs@gmail.com`, and SMTP_PASS is a Google APP PASSWORD — not the
+// cPanel/MailBaby mailbox password for `contacto@oasis.mx`, which this header used
+// to name and which no longer sends anything. An app password is shown once at
+// creation and is not recoverable afterwards; see docs/SECRETS.md. Everything else
+// pulls cleanly.
 //
 // Also pull into a scratch file, never .env.local — `vercel env pull` rewrites its
 // target wholesale and will discard your local NEXTAUTH_URL and friends.
@@ -33,6 +39,13 @@
 // whether the defaults are viable. The authoritative number is the `msPerSend`
 // field on the `notify_sweep_done` log line, emitted by every production sweep
 // that actually sends — that one is measured on the real path.
+//
+// AND CATCH THAT LOG LINE WHILE IT EXISTS. Vercel's runtime log retention on this
+// plan is short: a sweep at 17:43 UTC on 2026-08-27 sent 14 emails, and by 19:15
+// the line was already unqueryable through the Vercel API. If you want the
+// authoritative number, read it within the hour or set up a log drain — otherwise
+// all that survives is the sweep's own report, from which ms/send can only be
+// BOUNDED rather than read (see docs/NOTIFICATIONS.md).
 import nodemailer from "nodemailer";
 
 const arg = (name, fallback) => {

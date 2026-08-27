@@ -67,6 +67,95 @@ queued: intro + CTA, the same setlist table as "Setlist listo" (no Mov. column,
 medleys grouped), and the lead's newest `lead_note` message when the thread has one — the same thread source as the debounced email below, moved in the same delivery that stopped writing the legacy field. Empty or unreadable songs still
 send the intro and CTA. Push stays a one-line alert.
 
+## Send throughput on Gmail — measured 2026-08-27
+
+`NOTIFY_FLUSH_EMAIL_LIMIT=2` in production is calibrated for a server that no
+longer sends. The sender moved to Gmail SMTP (see `docs/SECRETS.md`); this is the
+first real measurement on it, and the first that means anything — on
+`mail.oasis.mx` the fan-out was slow enough that reaching the whole audience was
+the exception.
+
+**What happened.** One `setlist` notice for 2026-08-30 with 14 recipients, flushed
+manually at 17:43 UTC. The sweep reported:
+
+```
+{"rounds":1,"claimed":1,"emailed":14,"consumed":1,
+ "deferred":0,"unserved":0,"repended":0,"lost":0}
+```
+
+**What that PROVES, by arithmetic rather than by stopwatch.** `SEND_CONCURRENCY`
+is **1** — sends are serial, which is ADR-0013's decision — and the send loop
+checks `elapsed + SEND_TIMEOUT_MS (20 s) > NOTIFY_SEND_BUDGET_MS (40 s)` before
+each send, stopping and recording `unserved` when it trips.
+
+- At the old 14 413 ms/send: send 1 passes, send 2 passes (14.4 + 20 < 40), send 3
+  trips (28.8 + 20 > 40). Result would be `emailed: 2, unserved: 12`.
+- Observed: `emailed: 14, unserved: 0`. For the 14th send to start, the first 13
+  had to fit inside 20 s → **≤ ~1.5 s per send**. The GitHub step's wall clock
+  (~17 s end to end, including curl, reads and consume) puts it nearer **1.2 s**.
+
+So Gmail is roughly **10–12× faster** than `mail.oasis.mx` on this path.
+
+**What it does NOT prove.** This is a bound derived from the sweep's report, not
+the authoritative `msPerSend` on the `notify_sweep_done` log line — Vercel's log
+retention on this plan had already dropped that line by 19:15. Treat the number as
+an order of magnitude with a firm ceiling, not a precise figure. To get the exact
+one, read the log within the hour of a real sweep, or run
+`scripts/measure-send-budget.mjs --to=you@example.com --apply` with the app
+password.
+
+**What it unlocks**, against the release gate the design states as
+`ms_per_send × NOTIFY_FLUSH_EMAIL_LIMIT < NOTIFY_SEND_BUDGET_MS`:
+
+| sender | ms/send | viable limit |
+|---|---|---|
+| `mail.oasis.mx` | 14 413 (measured 2026-08-07) | **2** — which is why production runs 2 |
+| Gmail | ~1 200 (bounded 2026-08-27) | **~25–30** |
+
+The code's default of 40 is still slightly out at 1.2 s (48 s > 40 s). **Nothing
+has been raised.** Raising `NOTIFY_FLUSH_EMAIL_LIMIT` is a deliberate change that
+should follow a direct measurement, not this bound — and note that
+`MEASURED_MS_PER_SEND` in `outboxSweep.test.ts` is a guard on the shipped
+defaults, never a place to write the observed number.
+
+## Layer 1 does not run every five minutes
+
+The flush cron is declared `*/5 * * * *` in
+`.github/workflows/flush-notifications.yml`, and the route's own comment calls it
+"the PRIMARY one, and genuinely load-bearing". **The schedule is not honoured.**
+Measured over 98 consecutive scheduled runs, 2026-08-23 to 2026-08-27:
+
+| | |
+|---|---|
+| declared interval | 5.0 min |
+| minimum observed | 17.3 min |
+| **median** | **41.3 min** |
+| mean | 56.0 min |
+| maximum | **682 min (11.4 h)** |
+| intervals ≤ 10 min | **0 of 98** |
+| intervals > 60 min | 18 of 98 |
+
+GitHub documents `schedule` as best-effort: the five-minute minimum bounds what
+you may REQUEST, not what runs, and high-frequency schedules are delayed under
+load. No GitHub plan changes this, and neither more `schedule` entries nor
+self-hosted runners help — the trigger is the bottleneck, not the runner.
+
+**The practical consequence:** a notice becomes due 15 minutes after it is queued,
+and layer 2 (the writer's own `after()` sweep) has already run by then, so layer 1
+is what must come back. On the median it comes back at 41 minutes; on a bad day it
+does not come back for half a day. Layer 3's liveness alarm is daily, so a stall
+shorter than that is invisible.
+
+**Mitigation, not yet applied:** an external scheduler (Google Cloud Scheduler —
+the project already runs GCP for the solver — or a free cron service) hitting
+`/api/cron/flush-notifications` with `Authorization: Bearer $CRON_SECRET` in the
+HEADER, never in the `?secret=` query string, where it would land in access logs.
+Keep the GitHub workflow as a second, independent trigger rather than replacing
+it. Blocked as of 2026-08-27 on `CRON_SECRET` being unrecoverable by design — it
+is `Sensitive` in Vercel and write-only in GitHub Secrets — so wiring a third
+consumer means either supplying the stored value or rotating it in all three
+places at once.
+
 ## The proposal thread — what it notifies
 
 Released 2026-08-26. `lead_notes` / `admin_notes` became a `messages[]` thread.

@@ -12,14 +12,23 @@ consume stage, serial claims). The standing constraint underneath them is not.
 > **The sender has since moved.** These figures were measured against
 > `mail.oasis.mx`; production now sends through **Gmail SMTP** as
 > `dev.raccoon.labs@gmail.com`, because DNS verification for `oasis.mx` in Resend
-> could not be completed. The 14.4 s per remote recipient is a property of the OLD
-> server and has **not** been re-measured on Gmail. Everything calibrated on it —
-> `NOTIFY_FLUSH_EMAIL_LIMIT=2`, the 40 s send budget, and the inequality
-> `MEASURED_MS_PER_SEND` guards in `outboxSweep.test.ts` — is therefore
-> conservative rather than wrong: a faster server sends MORE per sweep than the
-> budget assumes, never fewer. Re-measure with
-> `scripts/measure-send-budget.mjs` before loosening any of them. The decision
-> below stands on its own reasoning and is not invalidated by the move.
+> could not be completed. The 14.4 s per remote recipient below is a property of
+> the OLD server.
+>
+> **Gmail has since been bounded at ~1.2 s per send** (2026-08-27: one sweep,
+> 14 recipients, `emailed: 14, unserved: 0` — which serial sends and the 40 s
+> budget make impossible above ~1.5 s/send). Roughly 10–12× faster. The derivation
+> is in `docs/NOTIFICATIONS.md` §"Send throughput on Gmail"; it is a bound from the
+> sweep's report, not the authoritative `msPerSend` log line.
+>
+> **The DECISION below is unaffected — do not read the speedup as a reason to
+> revisit it.** Serial sending was chosen because consumption is unconditional and
+> an overrun loses the unserved tail permanently, which is a property of the
+> sweep's design and not of the server's latency. What the speedup does change is
+> the KNOB: `NOTIFY_FLUSH_EMAIL_LIMIT=2` was sized for 14.4 s and is now roughly
+> an order of magnitude too conservative. Raising it is a separate, deliberate
+> change that should follow a direct measurement with
+> `scripts/measure-send-budget.mjs`, not this bound.
 
 Measured from production, against `mail.oasis.mx`:
 
