@@ -58,9 +58,11 @@ import { sendPush } from "@/app/utils/push";
  * is not quite true: `alias` is `teamMembers.alias`, matching the removed query's
  * first choice. `name` is `member_name` on the credentials and native-Google
  * paths, but on WEB Google SSO it is the Google profile name. Neither is
- * refreshed — both are snapshotted at sign-in for the token's life, so an alias
- * edit does not reach a push body until the member signs in again. All of that
- * is cosmetic: the push says who wrote, and every variant names the right person.
+ * refreshed on an ordinary session — both are snapshotted at sign-in for the
+ * token's life, so an alias edit does not reach a push body until the member
+ * signs in again. (Starting or stopping impersonation is the exception: that
+ * branch re-reads both live from Sanity.) All of it is cosmetic — the push says
+ * who wrote, and every variant names the right person.
  *
  * Using the session also decouples the body's decoration from the delivery. An
  * earlier version fetched the name alongside the audience in a `Promise.all`,

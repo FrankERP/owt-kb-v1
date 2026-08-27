@@ -275,6 +275,12 @@ function seed(over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // RESET, not just clear: `clearAllMocks` clears calls but KEEPS
+  // implementations, so the timer-backed `sendPush` the await rows install would
+  // survive into every later row in this file — including the admin block 200
+  // lines down — and a future row using fake timers or skipping the drain would
+  // hang for a reason invisible at its own call site.
+  sendPushMock.mockReset();
   afterCallbacks.length = 0;
   patches.length = 0;
   commitOutcomes.length = 0;
@@ -456,26 +462,6 @@ describe("POST /api/me/proposals/[id]/messages — the lead side", () => {
     );
     seed({ status: "approved" });
     await postLeadRaw({ body: "una nota" });
-    await drainAfter();
-    expect(delivered).toBe(true);
-  });
-
-  it("AWAITS the admin\u2192lead delivery too, through awaitDelivery", async () => {
-    // `notifyProposalReview` is fire-and-forget INSIDE by default, so awaiting it
-    // without `awaitDelivery` resolves before the send and holds nothing. This
-    // fails if that flag is dropped, which awaiting the helper alone would not
-    // reveal.
-    let delivered = false;
-    sendPushMock.mockImplementation(
-      () =>
-        new Promise<void>((resolve) => setTimeout(resolve, 0)).then(() => {
-          delivered = true;
-        }),
-    );
-    seed();
-    await adminPost(req({ body: "una pregunta" }), {
-      params: Promise.resolve({ id: PROPOSAL_ID }),
-    });
     await drainAfter();
     expect(delivered).toBe(true);
   });
@@ -668,6 +654,26 @@ describe("POST /api/me/proposals/[id]/messages — the lead side", () => {
 });
 
 describe("POST /api/admin/proposals/[id]/messages — the admin side", () => {
+  it("AWAITS the admin\u2192lead delivery too, through awaitDelivery", async () => {
+    // `notifyProposalReview` is fire-and-forget INSIDE by default, so awaiting it
+    // without `awaitDelivery` resolves before the send and holds nothing. This
+    // fails if that flag is dropped, which awaiting the helper alone would not
+    // reveal.
+    let delivered = false;
+    sendPushMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => setTimeout(resolve, 0)).then(() => {
+          delivered = true;
+        }),
+    );
+    seed();
+    await adminPost(req({ body: "una pregunta" }), {
+      params: Promise.resolve({ id: PROPOSAL_ID }),
+    });
+    await drainAfter();
+    expect(delivered).toBe(true);
+  });
+
   it("pushes the LEAD with NEW copy — not the change-request alarm", async () => {
     // The other half of the conversation. Before Child B a standalone admin
     // message notified nobody at all.
