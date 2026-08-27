@@ -563,7 +563,7 @@ Don't rediscover these as "bugs":
   classify one from the other with `CHORD_MARKER_RE`. See [ADR-0018](adr/0018-lyrics-and-charts-are-independent.md).
   Adding a filled chart hides `body` in both readers until every chart is removed.
 - **~15 songs have no lyrics** because they're absent from the source catalog PDF (expected).
-- **Android build pending; Apple Developer enrollment in progress** (mobile Phase 1 verified on
+- **Android build pending; Apple Developer Program enrollment blocked on the DUNS number** (confirmed still in progress 2026-08-27) (mobile Phase 1 verified on
   iOS device). → [MOBILE.md](MOBILE.md)
 - **Two schema files are intentionally unregistered:** `youtubeType.ts` (an object type) and
   `[deprecated]roleSat.ts` (an old Saturday-role shape). Don't wire them in.

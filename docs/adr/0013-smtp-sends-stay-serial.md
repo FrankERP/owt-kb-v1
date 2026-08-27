@@ -1,6 +1,6 @@
 # ADR-0013: Keep SMTP sends serial, and the recipient cap below the seat count
 
-**Date:** 2026-08-07 · **Status:** Accepted
+**Date:** 2026-08-07 · **Status:** Accepted · **Amended 2026-08-27** — the sender moved to a third party (see Context banner and the reversal under Alternatives); the decision itself stands
 
 ## Context
 
@@ -89,6 +89,21 @@ is the wrong shape; destroyed delivery is worse.
 **A third-party sender.** `email.ts` already supports Resend and it would end the
 problem outright. Rejected on the owner's instruction: the team runs its own mail
 server, and a 14 s accept is a fault to fix rather than route around.
+
+> **REVERSED 2026-08-27, by Frank.** The own-server fault was not fixed, and the lag
+> is why: the team moved off `mail.oasis.mx` to a third-party sender — Gmail SMTP as
+> `dev.raccoon.labs@gmail.com`. So the alternative this section rejects is what
+> production now runs, and "the team runs its own mail server" no longer holds.
+>
+> The Resend path specifically remains dormant, but for a different reason than the
+> one recorded here: its DNS verification for `oasis.mx` could not be completed —
+> that zone is served by `ns1/ns2.softlayer.com`, not by the reachable cPanel, so
+> the records never publish. See `docs/SECRETS.md`.
+>
+> **The DECISION below is unaffected.** Serial sending rests on unconditional
+> consumption destroying an unserved tail, which is a property of the sweep and not
+> of the transport. What the move changes is the measured latency, and therefore the
+> knob — see the amendment at the top of this file.
 
 ## Consequences
 
