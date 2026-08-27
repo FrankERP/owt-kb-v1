@@ -40,15 +40,39 @@ export const SEND_TIMEOUT_MS = 20_000;
  */
 
 /**
- * How many messages may be in flight at once. **One**, and the block below is
- * why — it is a measured result, not caution and not a starting point.
+ * How many messages may be in flight at once. **Eight**, since the sender moved
+ * to Gmail. The block below is the history, and it matters: this was 1 for three
+ * weeks on a MEASURED result, not on caution.
  *
  * It also feeds `maxConnections`, so the pool is exactly as wide as this.
  */
-export const SEND_CONCURRENCY = 1;
+export const SEND_CONCURRENCY = 8;
 
 /*
- * TESTED TWICE, AT 8 AND AT 10. CONCURRENCY DOES NOT WORK AGAINST THIS SERVER.
+ * RAISED TO 8 ON 2026-08-27, WITH THE SENDER. Everything below this paragraph
+ * was measured against `mail.oasis.mx`, which no longer sends anything: the
+ * refutation was a property of THAT server serializing acceptance, not of
+ * concurrency. Production now sends through Gmail, which Frank reports handles 8
+ * in flight — and the comment below anticipated exactly this, keeping the
+ * constant and the wave machinery "because both become correct the moment the
+ * server does".
+ *
+ * TWO THINGS TO KNOW BEFORE TRUSTING THE 8:
+ *
+ *  - **The number below came from a probe; this one came from a report.** The
+ *    2026-08-07 figures are in this file because ADR-0013 demanded measurement
+ *    over reasoning — "do not re-derive it from first principles a third time".
+ *    Honouring that rule means this value earns a probe of its own against Gmail
+ *    (`scripts/measure-send-budget.mjs`), and until it has one, treat 8 as a
+ *    decision rather than a datum.
+ *  - **Gmail rate-limits per account.** The old server's failure mode was
+ *    timeouts, which cost the batch. Gmail's is throttling or a temporary block,
+ *    which costs every send from the account until it lifts. That is a worse
+ *    failure and it is new.
+ *
+ * ── The 2026-08-07 measurement, against the RETIRED server ──────────────────
+ *
+ * TESTED TWICE, AT 8 AND AT 10. CONCURRENCY DID NOT WORK AGAINST THAT SERVER.
  *
  * 2026-08-07, ten messages in flight to TEN DIFFERENT gmail addresses, with the
  * claim phase fixed so stage 7 genuinely ran: `sendMs: 20020`, `emailed: 2`, and
@@ -72,7 +96,8 @@ export const SEND_CONCURRENCY = 1;
  *
  * Kept as a named constant, and the wave machinery in stage 7 kept with it,
  * because both become correct the moment the server does — not because the value
- * is in doubt.
+ * is in doubt. **That moment arrived on 2026-08-27**, which is why the constant
+ * above is 8 and this section is history rather than instruction.
  *
  * Recorded as ADR-0013 (docs/adr/0013-smtp-sends-stay-serial.md), which also
  * carries the two things that would retire it.

@@ -120,38 +120,47 @@ one, read the log within the hour of a real sweep, or run
 `scripts/measure-send-budget.mjs --to=you@example.com --apply` with the app
 password.
 
-**What it unlocks — and USE THE RIGHT INEQUALITY.** The design spec states the
-release gate as `ms_per_send × NOTIFY_FLUSH_EMAIL_LIMIT < NOTIFY_SEND_BUDGET_MS`,
-i.e. against 40 000 ms. **The runtime is stricter than that**, and the difference
-is a factor of two: the loop stops when `elapsed + SEND_TIMEOUT_MS (20 s) > 40 s`,
-so only the first **20 s** are actually available for sending. Serial sends of
-duration `d` therefore fit
+**What it unlocks — and the ceiling depends on TWO inputs, not one.** The design
+spec states the release gate as
+`ms_per_send × NOTIFY_FLUSH_EMAIL_LIMIT < NOTIFY_SEND_BUDGET_MS`. That form is
+wrong in both directions now, and has been rewritten three times in one day
+chasing it, so here it is once, generally.
+
+Two facts about the runtime the spec's form omits:
+
+1. **The budget reserves one send's worst case.** A send is admitted only while
+   `elapsed + SEND_TIMEOUT_MS <= sendBudgetMs`, because a send can take
+   `SEND_TIMEOUT_MS` and one admitted without room for it overruns into the
+   platform's kill. So the *spendable* time is `sendBudgetMs − SEND_TIMEOUT_MS`,
+   not `sendBudgetMs` — 20 s of 40 s at layer 1.
+2. **Admission is per WAVE, not per recipient.** Stage 7 sends in waves of
+   `SEND_CONCURRENCY` and checks the clock once per wave, so a wave costs about
+   one send's latency however many recipients are in it.
 
 ```
-N  =  floor(20 000 / d) + 1
+spendable   =  sendBudgetMs − SEND_TIMEOUT_MS
+waves       =  floor(spendable / ms_per_send) + 1
+recipients  =  min(emailLimit, waves × SEND_CONCURRENCY)
 ```
 
-**There is a second clock, and it can bind first.** The same check also refuses a
-send when `elapsed_since_sweep_start + SEND_TIMEOUT_MS > SWEEP_DEADLINE_MS (45 s)`,
-so the sending window is really `min(20 s, 25 s − read_phase)`. At the recommended
-limit of 12 — 14.4 s of sending at 1.2 s each — a read phase over ~10.6 s lowers
-the ceiling with no separate signal. `stoppedBy` on the
-`notify_sweep_send_budget_exhausted` log line says which clock stopped it.
+| | `SEND_CONCURRENCY` | ms/send | spendable | waves | recipients the clock allows |
+|---|---|---|---|---|---|
+| layer 1, retired server | 1 | 14 413 | 20 s | 2 | **2** — which is why production runs `NOTIFY_FLUSH_EMAIL_LIMIT=2` |
+| layer 1, Gmail serial | 1 | ~1 200 | 20 s | 17 | 17 |
+| **layer 1, Gmail at 8** | **8** | ~1 200 | 20 s | 17 | **136** |
+| layer 2, Gmail at 8 | 8 | ~1 200 | 10 s | 9 | 72 |
 
-| sender | ms/send | N (runtime) | spec's looser form |
-|---|---|---|---|
-| `mail.oasis.mx` | 14 413 (measured 2026-08-07) | **2** — which is why production runs 2 | 2 |
-| Gmail | ~1 200 (bounded 2026-08-27) | **17** | 33 |
+The 14 sent on 2026-08-27 were at concurrency 1 and are consistent with that row:
+13 × 1 200 = 15 600 ≤ 20 000, with room for three more.
 
-The 14 sent on 2026-08-27 are consistent with the runtime form and not a fluke:
-13 × 1 200 = 15 600 < 20 000, with room for three more.
-
-**Nothing has been raised.** The code's default of 40 needs `d ≤ ~512 ms` under the
-runtime form, which Gmail does not meet. A value around **12** would be safe at the
-bounded latency with margin for a slow day. Raising `NOTIFY_FLUSH_EMAIL_LIMIT` is a
-deliberate change that should follow a direct measurement rather than this bound —
-and `MEASURED_MS_PER_SEND` in `outboxSweep.test.ts` is a guard on the shipped
-defaults, never a place to write an observed number.
+**`NOTIFY_FLUSH_EMAIL_LIMIT=2` is now the binding constraint by two orders of
+magnitude**, and it is the one knob still sized for the retired server. The code
+default of 40 needs 5 waves — 4.8 s of the spendable 20 — so it is comfortably
+viable at these inputs. **It has not been raised**; it lives in Vercel, and
+raising it should follow a probe rather than this table, because the ~1 200 ms is
+itself a bound rather than a reading and the concurrency figure is a report rather
+than a probe. `MEASURED_MS_PER_SEND` in `outboxSweep.test.ts` is a guard on the
+shipped defaults, never a place to record an observation.
 
 ## Layer 1 does not run every five minutes
 
