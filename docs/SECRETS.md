@@ -68,8 +68,8 @@ then the generate-and-write block above, then redeploy. A rotation leaves both s
 
 **Purpose.** Authorizes the two cron routes. Without it:
 
-- `app/api/cron/service-reminders/route.ts:20` — the daily Vercel cron (service reminders **and** the notification-outbox liveness alarm) returns 403.
-- `app/api/cron/flush-notifications/route.ts:31` — the five-minute notification sweep **fails closed**: when `CRON_SECRET` is unset the route 401s every caller, including one presenting nothing. Layer 1 of the notification outbox stops entirely, and members' emails fall back to the daily cron — up to 24 hours late.
+- `app/api/cron/service-reminders/route.ts:29` — the daily Vercel cron (service reminders **and** the notification-outbox liveness alarm) returns 403.
+- `app/api/cron/flush-notifications/route.ts:103` — the notification sweep **fails closed**: when `CRON_SECRET` is unset the route 401s every caller, including one presenting nothing. Layer 1 of the notification outbox stops entirely, and members' emails fall back to the daily cron — up to 24 hours late.
 
 **Where the value came from.** A random bearer token with no external issuer — any high-entropy string works. Generate one with `openssl rand -hex 32`.
 
@@ -94,7 +94,7 @@ then the generate-and-write block above, then redeploy. A rotation leaves both s
    ```
    A green run means the new value matches on both sides. A 401 means it does not.
 
-**Blast radius of rotation.** From the moment Vercel is updated until the redeploy completes, the deployed app still verifies against the *old* value while GitHub already presents the new one — so every five-minute flush run goes red and no debounced notification email is sent, and Vercel's own daily cron is 403ing in the same window. Nothing is lost: outbox notices accumulate and flush once the values agree. Keep the window to a single deploy by doing step 2 immediately.
+**Blast radius of rotation.** From the moment Vercel is updated until the redeploy completes, the deployed app still verifies against the *old* value while GitHub already presents the new one — so every flush run goes red and no debounced notification email is sent, and Vercel's own daily cron is 403ing in the same window. Nothing is lost: outbox notices accumulate and flush once the values agree. Keep the window to a single deploy by doing step 2 immediately.
 
 ---
 
@@ -130,7 +130,9 @@ Then confirm with a manual run as above.
 
 **THE SENDER MOVED TO GMAIL.** It was `contacto@oasis.mx` over `mail.oasis.mx` (cPanel/MailBaby) until DNS verification for `oasis.mx` in Resend could not be completed. Sending now goes through **Gmail SMTP as `dev.raccoon.labs@gmail.com`**, and `SMTP_PASS` is a Google **App Password**, not a mailbox password. Anything below that still says cPanel is describing the old sender.
 
-`SMTP_HOST` (`smtp.gmail.com`), `SMTP_PORT` (465), `SMTP_USER` (`dev.raccoon.labs@gmail.com`) and `EMAIL_FROM` all pull cleanly from Vercel. **`SMTP_PASS` does not** — it is `Sensitive` and pulls as the 11-character marker described above, so `vercel env pull` alone will never give you a working local mail setup. Attempting it fails with `535 Incorrect authentication data`, which reads like wrong credentials rather than absent ones.
+**Not needed in GitHub Actions.** The flush workflow only curls the route; it never sends mail itself and reads none of these.
+
+The set is `SMTP_HOST` (`smtp.gmail.com`), `SMTP_PORT` (465), `SMTP_USER` (`dev.raccoon.labs@gmail.com`), `SMTP_SECURE` (optional — defaults to `port === 465`, so it is normally unset), `SMTP_PASS` and `EMAIL_FROM`. All of them except `SMTP_PASS` pull cleanly from Vercel. **`SMTP_PASS` does not** — it is `Sensitive` and pulls as the 11-character marker described above, so `vercel env pull` alone will never give you a working local mail setup. Attempting it fails with `535 Incorrect authentication data`, which reads like wrong credentials rather than absent ones.
 
 **Where the value came from.** Google Account → Security → 2-Step Verification → **App passwords**, for the `dev.raccoon.labs@gmail.com` account. An app password is shown ONCE at creation and is not recoverable afterwards from Google or from Vercel — a lost one is replaced, never retrieved. It also requires 2-Step Verification to be on for that account; turning 2SV off revokes every app password on it.
 
@@ -173,13 +175,13 @@ npx vercel env rm EMAIL_REDIRECT_TO production --yes
 
 **Why it is set.** It caps the DISTINCT RECIPIENTS one sweep may claim. That cap is what makes stage 8's unconditional delete safe: a sweep is supposed to fully discharge everything it claims, so anything it claims and cannot send is **destroyed**, not retried. When `ms_per_send` is unknown or bad, a low value turns that risk into a bounded experiment — selection claims only what it can serve and leaves the rest **pending and unclaimed** (`report.deferred`), which the next sweep picks up.
 
-**Set to `2` — the number of sends that actually fit a 40 s budget at the measured ~14 s each.** It is the lesser of two bad options, and both are worth understanding before anyone changes it.
+**Set to `2` — the number of sends that actually fit at the ~14 s each measured on the RETIRED sender (`mail.oasis.mx`).** It is the lesser of two bad options, and both are worth understanding before anyone changes it.
 
 The cap governs what a sweep **claims**, and claiming is what commits a notice to being deleted whether or not it was sent. Above the serviceable count, the excess is destroyed. Below the month's distinct-recipient count, the fan-out fragments, because stage 6 can only group what stage 3 claimed — and a month of roles is published at once, so the requirement is ONE grouped email per member covering their whole month. So: high loses mail, low fragments it. `2` chooses fragmentation, because losing it is worse.
 
-**This does not protect `setlist` notices.** One setlist notice carries ALL of a service's participants in a single document, so it cannot be split by any cap: it is taken alone, over budget, and everyone past the second recipient is destroyed. That gap closes only when `ms_per_send` comes down or the sweep stops consuming what it never attempted — see `docs/NOTIFICATIONS.md`.
+**This does not protect `setlist` notices.** One setlist notice carries ALL of a service's participants in a single document, so it cannot be split by any cap: it is taken alone, over budget, and everyone past the serviceable count is destroyed. **`ms_per_send` coming down is exactly what has happened:** on 2026-08-27 a 14-recipient setlist notice went out with `unserved: 0` on Gmail, where the old sender would have destroyed 12. The gap is not closed in the code — the sweep still consumes what it never attempted — but at the current latency it is no longer being hit.
 
-Raise it to the default of 40 the moment a send costs under ~2 s, and not before.
+**DO NOT raise this to 40.** An earlier version of this line said "raise it to the default of 40 the moment a send costs under ~2 s", and at the bounded ~1.2 s that reads as satisfied — following it would lose mail. The threshold was wrong because it used the spec's looser inequality (against the 40 s budget) rather than the runtime's: the send loop stops when `elapsed + SEND_TIMEOUT_MS (20 s) > 40 s`, so only 20 s are available and the real ceiling is `floor(20 000 / ms_per_send) + 1` — **17** at 1.2 s, not 40. See `docs/NOTIFICATIONS.md` §"Send throughput on Gmail" for the derivation. Raising it at all should follow a direct measurement with `scripts/measure-send-budget.mjs`, and a value near **12** is the one with margin.
 
 **How to set and unset:**
 
@@ -275,6 +277,28 @@ every authenticated read and every write fails — members cannot sign in
 (NextAuth reads through `SANITY_API_READ_TOKEN`), proposals cannot be saved or
 approved, and the outbox sweep cannot flush. Create-then-swap-then-revoke, in
 that order, and the window is zero.
+
+## `RESEND_API_KEY`
+
+**Needed in: Vercel** — and only as the FALLBACK transport. `sendEmail` prefers SMTP whenever `SMTP_HOST` is set (`app/utils/email.ts`), so with the Gmail set configured this key is not on the live path. It becomes the live path the moment SMTP is unset or `SMTP_HOST` is removed.
+
+**Purpose.** Sends through Resend's API instead of an SMTP mailbox. Unlike SMTP it requires a VERIFIED SENDING DOMAIN, which is the whole reason it is not primary: verification for `oasis.mx` was never completed — that zone is served by `ns1/ns2.softlayer.com`, not by the reachable cPanel, so records added there are never published. Until a domain is verified, Resend delivers only to the account owner's own address.
+
+**Where the value came from.** The Resend dashboard → API Keys. Shown once at creation.
+
+**How to rotate.** Create a new key in Resend, update `RESEND_API_KEY` in Vercel (Production and Preview), redeploy, then revoke the old one. **Blast radius is currently nil** because SMTP is preferred and this path is dormant — but that is a property of `SMTP_HOST` being set, not of the key. If SMTP is ever removed, this becomes the only transport and the same create-then-revoke order applies.
+
+## Google OAuth — `GOOGLE_CLIENT_SECRET` and the three client IDs
+
+**Needed in: Vercel.** `GOOGLE_CLIENT_SECRET` and `GOOGLE_CLIENT_ID` back the web `GoogleProvider`; `GOOGLE_IOS_CLIENT_ID` and `GOOGLE_ANDROID_CLIENT_ID` are accepted audiences for the native `google-native` credentials path (Capacitor). Not needed in GitHub Actions.
+
+**Purpose.** Sign-in. Without them nobody can authenticate, on any surface.
+
+**A FOURTH variable holds the same value as one of them.** `NEXT_PUBLIC_GOOGLE_IOS_CLIENT_ID` (`app/utils/native.ts`) is the client-side half of the iOS flow and **must equal the server's `GOOGLE_IOS_CLIENT_ID`** — the server validates the audience of a token the client obtained with it, so a mismatch fails sign-in on iOS only, silently on every other surface. Being `NEXT_PUBLIC_`, it is inlined into the bundle at build time, so changing it needs a rebuild rather than just a redeploy.
+
+**Where the values came from.** Google Cloud console → APIs & Services → Credentials, in the project that owns the OAuth consent screen. The client IDs are **not secret** and appear in client bundles by design; only `GOOGLE_CLIENT_SECRET` is.
+
+**How to rotate the secret.** Add a second secret to the same OAuth client in the Google console, update `GOOGLE_CLIENT_SECRET` in Vercel, redeploy, confirm a web sign-in works, then delete the old secret. **Blast radius:** between updating Vercel and the redeploy completing, web Google sign-in fails; existing sessions survive because they are JWT-backed. The native paths do not use the secret and are unaffected. Rotating a client **ID** is a different and much larger job — it invalidates the mobile builds that hard-code it.
 
 ## Not yet documented
 

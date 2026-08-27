@@ -17,7 +17,7 @@ const SERVICE_LABEL: Record<ServiceType, string> = {
 
 export function getAllowlist(): string[] {
   // Default is the whole team ("*"): the Resend test-mode era that needed a
-  // Frank-only gate is over (SMTP via contacto@oasis.mx is live). Set
+  // Frank-only gate is over (SMTP is live — Gmail, dev.raccoon.labs@gmail.com). Set
   // EMAIL_ALLOWLIST to a comma-separated list to narrow delivery again.
   return (process.env.EMAIL_ALLOWLIST ?? "*")
     .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);

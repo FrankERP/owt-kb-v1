@@ -292,7 +292,7 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
 
 /**
  * RETIRED one-shot executable writers — kept as the historical record of what was
- * applied to production, and unreachable in code. Each of these five files calls
+ * applied to production, and unreachable in code. Each of these seven files calls
  * `assertRetiredWriter()` (`scripts/lib/sr-retired-writer.mjs`) as its first
  * statement, before any client is constructed and before any mutation is
  * assembled, and that gate is an unconditional non-zero exit (A2 §8).

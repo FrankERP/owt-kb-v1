@@ -5,7 +5,9 @@
 # a thin caller: it curls the route, and the route calls the one exported sweep.
 #
 # Two operational properties, named rather than discovered:
-#   · GitHub's scheduled runs are routinely 5–15 minutes late. That makes an
+#   · GitHub's scheduled runs are routinely far later than the declared schedule —
+#     measured on this repo over 98 runs: median 41 min, max 11.4 h, and not once
+#     within 10 min. That makes an
 #     email later, never wrong.
 #   · GitHub DISABLES scheduled workflows after 60 days of repository inactivity,
 #     and that rule applies to public repositories like this one. The daily
@@ -29,7 +31,7 @@ permissions: {}
 # next five-minute tick fires. The sweep claims before it sends, so an overlap is
 # not a double-send — but two concurrent sweeps do split one backlog and pile
 # onto an SMTP transport with `maxConnections: 1`. Newer wins: a skipped tick is
-# five minutes, and there is always another one.
+# nominally five minutes (in practice far more), and there is always another one.
 concurrency:
   group: flush-notification-outbox
   cancel-in-progress: false

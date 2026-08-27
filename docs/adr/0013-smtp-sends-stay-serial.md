@@ -1,6 +1,6 @@
 # ADR-0013: Keep SMTP sends serial, and the recipient cap below the seat count
 
-**Date:** 2026-08-07 · **Status:** Accepted
+**Date:** 2026-08-07 · **Status:** Accepted · **Amended 2026-08-27** — the sender moved to a third party (see Context banner and the reversal under Alternatives); the decision itself stands
 
 ## Context
 
@@ -12,14 +12,24 @@ consume stage, serial claims). The standing constraint underneath them is not.
 > **The sender has since moved.** These figures were measured against
 > `mail.oasis.mx`; production now sends through **Gmail SMTP** as
 > `dev.raccoon.labs@gmail.com`, because DNS verification for `oasis.mx` in Resend
-> could not be completed. The 14.4 s per remote recipient is a property of the OLD
-> server and has **not** been re-measured on Gmail. Everything calibrated on it —
-> `NOTIFY_FLUSH_EMAIL_LIMIT=2`, the 40 s send budget, and the inequality
-> `MEASURED_MS_PER_SEND` guards in `outboxSweep.test.ts` — is therefore
-> conservative rather than wrong: a faster server sends MORE per sweep than the
-> budget assumes, never fewer. Re-measure with
-> `scripts/measure-send-budget.mjs` before loosening any of them. The decision
-> below stands on its own reasoning and is not invalidated by the move.
+> could not be completed. The 14.4 s per remote recipient below is a property of
+> the OLD server.
+>
+> **Gmail has since been bounded at ~1.2 s per send** (2026-08-27: one sweep,
+> 14 recipients, `emailed: 14, unserved: 0` — which serial sends and the 20 s
+> ADMISSION WINDOW, not the 40 s budget, make impossible above ~1.5 s/send:
+> 20 000 / 13 = 1 538 ms). Roughly 10–12× faster. The derivation
+> is in `docs/NOTIFICATIONS.md` §"Send throughput on Gmail"; it is a bound from the
+> sweep's report, not the authoritative `msPerSend` log line.
+>
+> **The DECISION below is unaffected — do not read the speedup as a reason to
+> revisit it.** Serial sending was chosen because consumption is unconditional and
+> an overrun loses the unserved tail permanently, which is a property of the
+> sweep's design and not of the server's latency. What the speedup does change is
+> the KNOB: `NOTIFY_FLUSH_EMAIL_LIMIT=2` was sized for 14.4 s and is now roughly
+> an order of magnitude too conservative. Raising it is a separate, deliberate
+> change that should follow a direct measurement with
+> `scripts/measure-send-budget.mjs`, not this bound.
 
 Measured from production, against `mail.oasis.mx`:
 
@@ -81,6 +91,21 @@ is the wrong shape; destroyed delivery is worse.
 problem outright. Rejected on the owner's instruction: the team runs its own mail
 server, and a 14 s accept is a fault to fix rather than route around.
 
+> **REVERSED 2026-08-27, by Frank.** The own-server fault was not fixed, and the lag
+> is why: the team moved off `mail.oasis.mx` to a third-party sender — Gmail SMTP as
+> `dev.raccoon.labs@gmail.com`. So the alternative this section rejects is what
+> production now runs, and "the team runs its own mail server" no longer holds.
+>
+> The Resend path specifically remains dormant, but for a different reason than the
+> one recorded here: its DNS verification for `oasis.mx` could not be completed —
+> that zone is served by `ns1/ns2.softlayer.com`, not by the reachable cPanel, so
+> the records never publish. See `docs/SECRETS.md`.
+>
+> **The DECISION below is unaffected.** Serial sending rests on unconditional
+> consumption destroying an unserved tail, which is a property of the sweep and not
+> of the transport. What the move changes is the measured latency, and therefore the
+> knob — see the amendment at the top of this file.
+
 ## Consequences
 
 A monthly role publish arrives as **several emails per member instead of one**,
@@ -89,7 +114,8 @@ accepted only because the alternative loses mail.
 
 **`setlist` notices are still truncated, and no cap can fix them.** One setlist
 notice carries every participant in a single document, so it is taken alone, runs
-over budget, and everyone past the second recipient is destroyed.
+over budget, and everyone past the serviceable count is destroyed — two on the
+server these figures describe, seventeen at the latency measured after the move.
 
 If someone raises `SEND_CONCURRENCY` without new measurements, sweeps will report
 `emailed: 0` while destroying whole batches, and the flush workflow will go red on
@@ -97,9 +123,13 @@ If someone raises `SEND_CONCURRENCY` without new measurements, sweeps will repor
 
 Two things retire this ADR, and nothing else does:
 
-1. **The ~14 s remote accept, fixed at the mail server.** Then the cap returns to
-   40, one sweep serves a whole month, grouping works, and `SEND_CONCURRENCY`
-   stops mattering.
+1. **The ~14 s remote accept, fixed at the mail server.** Then the cap rises, one
+   sweep serves a whole month, grouping works, and `SEND_CONCURRENCY` stops
+   mattering. **NOT "returns to 40"**, which this line used to say: 40 needs
+   `ms_per_send ≤ ~512 ms` under the runtime admission rule, not the 2 s the loose
+   inequality suggests. The move to Gmail is the closest this has come — see
+   `docs/NOTIFICATIONS.md` §"Send throughput on Gmail" and the bold warning in
+   `docs/SECRETS.md` — and it does not reach 40.
 2. **Re-pending notices the sweep never attempted, instead of consuming them.**
    Grouped *and* lossless across several sweeps, since a recipient's notices stay
    together and are either all served or all returned. This changes the consume

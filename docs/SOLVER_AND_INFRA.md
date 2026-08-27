@@ -123,23 +123,26 @@ import with `--apply`.**
 
 ### Migrations (one-off)
 - `migrate-authors.mjs` — free-text authors → canonical `author` references (`lib/author-canon.mjs`).
-- `migrate-proposal-messages.mjs` — folds `setlistProposal.lead_notes` / `.admin_notes` into the
-  append-only `messages[]` thread (Release 2, Child A). The legacy fields are **left in place** as a
-  frozen archive. Pure mapping in `lib/proposalMessages.mjs` (unit-tested in
-  `scripts/__tests__/migrateProposalMessages.test.ts`); the two `_key`s it mints are deterministic,
-  so a re-run skips its own work, and it hard-aborts rather than overwriting a live thread.
-  **STATE: APPLIED 2026-08-26 — never run `--apply` again.** 8 documents, 10 messages, 0 failed
-  patches, at Child A Phase D step 4 with explicit consent. Verified against the count the legacy
-  fields predict rather than a hard-coded one. A re-run is *safe* but pointless — a migrated
-  document reports `skip (already_migrated)` on the `_key`, not the body, so it holds even where the
-  mirror has since moved `lead_notes` — and a document that has since gained a route-minted message
-  hard-aborts with `live_thread` and exits 1. A reported patch failure does not prove the write did
-  not land: re-run the DRY-RUN before any repair.
+- `migrate-proposal-messages.mjs` — **RETIRED, see the table below.** It folded
+  `setlistProposal.lead_notes` / `.admin_notes` into the append-only `messages[]` thread
+  (Release 2, Child A). **STATE: APPLIED 2026-08-26** — 8 documents, 10 messages, 0 failed
+  patches, at Child A Phase D step 4 with explicit consent.
+
+  **It can no longer run at all, not even a dry run.** `assertRetiredWriter()` is its first
+  statement, before any client is constructed. Earlier revisions of this entry described a
+  re-run as "safe but pointless" and told an operator to "re-run the DRY-RUN before any
+  repair" — that procedure is not executable and following it wastes the time of whoever is
+  mid-incident. **The read-only check is `reconcile-proposal-messages.mjs`**, which reports a
+  mismatch and exits 1; a repair is a consented top-up under a distinct `_key`, never a re-run.
+
+  The pure mapping survives in `lib/proposalMessages.mjs` (unit-tested in
+  `scripts/__tests__/migrateProposalMessages.test.ts`) as the record of what was applied.
 
 ### ⛔ Retired writers — seven one-shots that now **fail closed**
 
-**Count kept honest by hand, and it drifted once:** this said "five" while the registry held
-six, because no test pins prose. `RETIRED_WRITER_NAMES` in
+**Count kept honest by hand, and it has drifted twice:** it said "five" while the registry held
+six, and then the TABLE held five while the heading correctly said seven — the heading was fixed
+and the rows were not. No test pins prose, so check both when you touch either. `RETIRED_WRITER_NAMES` in
 [`lib/sr-retired-writer.mjs`](../scripts/lib/sr-retired-writer.mjs) is the source of truth;
 if this number disagrees with it, the registry is right.
 
@@ -160,6 +163,8 @@ bodies are kept only as the historical record of what was applied.
 | `cleanup-superseded-proposals.mjs` | delete non-approved proposals where an approved one exists | `service-readiness-cleanup.mjs --action resolve-proposal --mode remove` |
 | `migrate-shared-proposals.mjs` | backfill `contributors` and delete collision losers | applied 2026-07-03; residual collisions → `--action resolve-proposal` |
 | `unpublish-july-2026.mjs` | patch `published:false` on every July 2026 service | `POST /api/admin/roles/publish` |
+| `migrate-proposal-messages.mjs` | fold `lead_notes`/`admin_notes` into `messages[]` under two deterministic `_key`s | applied 2026-08-26; the fold is done. Read-only check: `reconcile-proposal-messages.mjs` |
+| `normalize-instrument-names.mjs` | rewrite free-text instrument names on role docs to the canonical set | `PATCH /api/admin/roles/[id]` |
 
 Unit tests: `lib/__tests__/sr-retired-writer.test.mjs` proves the refusal is unconditional **and**
 statically checks each real file — the gate call must precede every write marker (`createClient(`,

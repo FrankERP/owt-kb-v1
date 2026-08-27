@@ -11,12 +11,13 @@ exact strings used in GROQ `_type` filters.
 
 ---
 
-## Registered document types (16)
+## Registered document types (18)
 
 `post`, `tag`, `author`, `featuredSongs`, `saturdarSongs`, `saturday_role`, `sunday_role`,
-`teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, and five **internal** types never
-authored by hand: `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`,
-`specialIdentityCoordinator`, `solverConfig`.
+`teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, the two Oasis Kids types
+`kidsPair` and `kidsSchedule`, and five **internal** types never authored by hand:
+`roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
+`solverConfig`.
 
 **Not registered** (present but intentionally unused — do not wire in):
 - `sanity/schemas/youtubeType/youtubeType.ts` — object type `youtube`.

@@ -37,7 +37,7 @@ never run.
 ## Consequences
 
 - Two configs, and a reader must know which is which. That is what this record is for.
-- The VR `testDir` sits **under `e2e/`** for a non-obvious reason: `eslint.config.mjs:42`
+- The VR `testDir` sits **under `e2e/`** for a non-obvious reason: `eslint.config.mjs:68-72`
   disables `react-hooks/rules-of-hooks` only for `files: ["e2e/**"]`, and a Playwright spec
   using a `use` fixture outside that path fails `npx eslint .` — the repo's 0-errors gate.
 - VR specs must be named **`*.spec.ts`, never `*.test.ts`**: `vitest.config.ts:15` includes

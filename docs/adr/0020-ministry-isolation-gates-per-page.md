@@ -43,7 +43,7 @@ the same request that renders it.
 ## Rejected
 
 **Gating worship paths in `proxy.ts` middleware.** This was genuinely available:
-`ministries` and `managesMinistries` now ride on the JWT (`auth.ts:266–270`),
+`ministries` and `managesMinistries` now ride on the JWT (`auth.ts:203-204` / `:217-218`),
 sourced from the same 30s-TTL `getMemberAccess` snapshot the guards use, so a
 middleware check would have had fresh-looking claims *and* preserved ISR on all
 seven pages. It is the better-performing design and it was rejected anyway, for

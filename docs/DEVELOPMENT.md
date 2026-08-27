@@ -58,12 +58,16 @@ script under `scripts/service-readiness-*.mjs` is dry-run by default and needs `
 
 ## The "done" gate (non-negotiable)
 
-Before claiming any change is complete, **both must pass**:
+Before claiming any change is complete, **all three must pass**:
 
 ```bash
 npx tsc --noEmit      # must exit 0
 npm test              # must be all-green
+npx eslint .          # must report 0 ERRORS; warnings are a deliberate backlog
 ```
+
+These are the same three the CI `gates` job runs, which is what `main`'s branch protection
+requires — so a change that skips them locally is caught at the PR, not merged.
 
 Add or update a unit test whenever you touch testable pure logic (extract a helper if needed).
 For anything the browser can exercise, also verify the change end-to-end in the preview, not just
@@ -76,7 +80,16 @@ the command output in hand.
 
 - **Work on a branch; merge to `main` periodically.** Don't commit routine work straight to
   `main`. The continuous-improvement loop uses branch `improve/continuous`.
-- **Direct push, no PRs** — this repo merges straight to `main`, no pull requests.
+- **`main` is PROTECTED and takes no direct pushes.** It is reached through a PR whose
+  `gates` check is green (`tsc`, `vitest`, `eslint` at 0 errors). Protection applies to admins
+  too, so there is no silent bypass. `preview` still takes direct pushes.
+- **Push order is `preview` FIRST, then `main`** — always. `main` auto-deploys to production,
+  so merging the PR *is* the release. Merge into `preview`, push, VERIFY the dev alias moved
+  (the target domain in the deployment's `alias` array and `meta.githubCommitSha` equal to the
+  pushed commit — a green build is not this check), then open the PR.
+- **A merge to `main` is a release, so it needs a FRESH CODE REVIEW of the diff first** — not
+  the plan review. Fix what it finds, then re-verify the fix; the last step before a merge must
+  be a verification, not a fix. See [CI.md](CI.md) and the root `CLAUDE.md`.
 - **Conventional commits:** `fix(scope): …`, `feat(scope): …`, `chore(scope): …`,
   `refactor(scope): …`, `test(scope): …`. The body explains the **why** and the failure it
   prevents.

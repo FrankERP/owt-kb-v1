@@ -109,7 +109,8 @@ async function getHandler(req: NextRequest) {
 
   // Full budget each round; layer 2 alone is derated. When a setlist notice is
   // re-pended because the send stage ran out of clock, drain again in the same
-  // invocation instead of waiting five minutes for the next GitHub tick.
+  // invocation instead of waiting for the next GitHub tick — nominally five
+  // minutes, measured at a 41-minute median (docs/NOTIFICATIONS.md).
   const report = await drainOutbox();
   return NextResponse.json(report);
 }
