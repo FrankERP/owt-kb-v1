@@ -60,8 +60,9 @@ import { sendPush } from "@/app/utils/push";
  * paths, but on WEB Google SSO it is the Google profile name. Neither is
  * refreshed on an ordinary session — both are snapshotted at sign-in for the
  * token's life, so an alias edit does not reach a push body until the member
- * signs in again. (Starting or stopping impersonation is the exception: that
- * branch re-reads both live from Sanity.) All of it is cosmetic — the push says
+ * signs in again. (Starting impersonation is the one exception: that branch
+ * re-reads both live from Sanity. STOPPING it restores the snapshot taken at
+ * start, which was itself the admin's sign-in snapshot — no read.) All of it is cosmetic — the push says
  * who wrote, and every variant names the right person.
  *
  * Using the session also decouples the body's decoration from the delivery. An
