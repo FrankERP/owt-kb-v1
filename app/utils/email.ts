@@ -59,12 +59,12 @@ export const SEND_CONCURRENCY = 8;
  *
  * TWO THINGS TO KNOW BEFORE TRUSTING THE 8:
  *
- *  - **The number below came from a probe; this one came from a report.** The
- *    2026-08-07 figures are in this file because ADR-0013 demanded measurement
- *    over reasoning — "do not re-derive it from first principles a third time".
- *    Honouring that rule means this value earns a probe of its own against Gmail
- *    (`scripts/measure-send-budget.mjs`), and until it has one, treat 8 as a
- *    decision rather than a datum.
+ *  - **PROBED 2026-08-27, so this is a datum and not a report.**
+ *    `scripts/measure-send-budget.mjs` against the live transport, 16 messages
+ *    per width, 0 failures: serial p95 1 838 ms; width 8, per-WAVE p95 2 429 ms.
+ *    Eight in flight cost 1.32× one send and carry eight messages, where the
+ *    retired server gave the same two either way. 72 recipients per layer-1
+ *    sweep against 11 serial.
  *  - **Gmail rate-limits per account.** The old server's failure mode was
  *    timeouts, which cost the batch. Gmail's is throttling or a temporary block,
  *    which costs every send from the account until it lifts. That is a worse

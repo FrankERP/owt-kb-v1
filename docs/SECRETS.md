@@ -183,7 +183,9 @@ The cap governs what a sweep **claims**, and claiming is what commits a notice t
 
 **This is now the binding constraint, by two orders of magnitude — and it is the last knob still sized for the retired server.** The clock allows ~136 recipients per sweep at the current inputs (Gmail, `SEND_CONCURRENCY = 8`); this cap allows 2. `docs/NOTIFICATIONS.md` §"Send throughput on Gmail" carries the derivation, which depends on BOTH the per-send latency AND the concurrency — an earlier version of this line gave a single-number threshold ("raise it to 40 once a send costs under ~2 s") and was wrong twice over for exactly that reason.
 
-**The code default of 40 is viable at these inputs** — 40 recipients is 5 waves, about 4.8 s of the spendable 20. It has NOT been raised, and raising it should follow a probe rather than the table: the ~1 200 ms is a bound rather than a reading, and the concurrency figure is a reported result rather than a measured one. `scripts/measure-send-budget.mjs` is the probe, and it needs the app password, which `vercel env pull` will not give you (verified 2026-08-27: `SMTP_PASS` pulls as an 11-character `[SENSITIVE]` placeholder).
+**The code default of 40 is MEASURED to hold** — probed 2026-08-27 against the live Gmail transport: 40 recipients is 5 waves at a per-wave p95 of 2 429 ms, so 9 716 ms of the spendable 20 000, leaving 10 284 ms of margin. The clock allows 72; this cap allows 2.
+
+It has NOT been raised — that is a Vercel change, and a deliberate one. To re-probe, `scripts/measure-send-budget.mjs --to=you@example.com --concurrency=8 --apply` needs the app password, which `vercel env pull` will not give you (verified 2026-08-27: `SMTP_PASS` pulls as an 11-character `[SENSITIVE]` placeholder).
 
 **How to set and unset:**
 

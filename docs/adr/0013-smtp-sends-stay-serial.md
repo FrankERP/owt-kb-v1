@@ -30,11 +30,14 @@ consume stage, serial claims). The standing constraint underneath them is not.
 > ~14 s remote accept, fixed at the mail server"), met by replacing the server
 > rather than fixing it.
 >
-> **What still binds from this ADR:** the rule that this value answers to
-> measurement and not to reasoning — "do not re-derive it from first principles a
-> third time". The 8 currently rests on a report rather than a probe, and
-> `scripts/measure-send-budget.mjs` has not been run against Gmail, so it is a
-> decision awaiting its datum. And the hazard is unchanged in kind but worse in
+> **AND IT HAS ITS PROBE.** `scripts/measure-send-budget.mjs` was run against the
+> live Gmail transport on 2026-08-27, 16 messages per width, 0 failures:
+> serial p95 **1 838 ms**; width 8, per-wave p95 **2 429 ms**. So eight in flight
+> cost 1.32× one send and carry 8× the messages — the opposite of the retired
+> server, where ten connections bought the same two messages serial managed. At
+> width 8 the clock allows 72 recipients per layer-1 sweep against 11 serial.
+> The rule this ADR set is therefore honoured rather than waived: the value
+> answers to measurement, and now it has one. And the hazard is unchanged in kind but worse in
 > consequence: the old server punished concurrency with timeouts that destroyed a
 > batch, while Gmail punishes it with per-account throttling that would stop every
 > send until it lifts.
