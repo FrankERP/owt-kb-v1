@@ -72,7 +72,7 @@ send the intro and CTA. Push stays a one-line alert.
 Released 2026-08-26. `lead_notes` / `admin_notes` became a `messages[]` thread.
 
 **The debounced admin email now reads the THREAD, not `lead_notes`** (Child B
-slice 1, on a branch — not released). `PROPOSAL_QUERY` no longer projects
+slice 1). `PROPOSAL_QUERY` no longer projects
 `lead_notes` at all: the notice stores `before.beforeMessageCount`, the
 pre-commit count of `kind == "lead_note"` messages, and the flush emails
 everything appended since that index. **The legacy fields are no longer written
@@ -91,8 +91,10 @@ and not correct: a notice that yields no pairs contributes no pending recipients
 so `report.lost` stays 0 while a real message vanishes.
 
 **Both directions of the conversation now reach their counterpart** (Child B
-slice 3 — on a branch, NOT released. `main` carries only Child B Phase A, which
-is exports plus one uncalled pure function and changes no behaviour). They did
+slice 3). **Released to production 2026-08-27** in `c47d30ad` (PR #10),
+production alias verified by `alias` + `meta.githubCommitSha`, and the
+`notificationOutbox` schema redeployed with `beforeMessageCount` in the same
+delivery. They did
 not before: `queueLeadNotesNotice` requires the pre-write status to be `pending`
 or `changes_requested`, and production holds **13 approved proposals, 1 draft,
 and zero in either reviewable status** — so before slice 3 a message posted on a
