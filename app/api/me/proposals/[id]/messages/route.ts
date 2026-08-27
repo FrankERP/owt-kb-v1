@@ -18,6 +18,7 @@ import {
   buildProposalMessage,
   parseProposalMessageRequest,
   PROPOSAL_MESSAGES_MAX,
+  isLeadNote,
 } from "@/app/utils/proposalMessageWrite";
 import { isThreadOpen } from "@/app/utils/proposalThread";
 import { THREAD_AFTER_APPEND_QUERY, type ThreadMessageRow } from "@/app/utils/proposalMessageRead";
@@ -119,6 +120,12 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ id:
   // post-write state and the debounced email silently sends nothing.
   const beforeNotes = typeof doc.lead_notes === "string" ? doc.lead_notes : "";
   const previousStatus = doc.status;
+  // The index the flush slices the thread from: LEAD NOTES only, counted with the
+  // same predicate `LEAD_NOTE_MESSAGES` filters on. `stored` is the pre-commit
+  // array this handler already read, so this is not a second fetch. Counting
+  // `stored.length` instead would silently empty the batch on every proposal
+  // carrying an admin message — the normal shape of one that has been reviewed.
+  const beforeMessageCount = stored.filter(isLeadNote).length;
 
   try {
     await writeClient
@@ -147,7 +154,7 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ id:
     serviceDate: typeof doc.service_date === "string" ? doc.service_date : "",
     previousStatus,
     beforeNotes,
-    afterNotes: message.body,
+    beforeMessageCount,
   });
 
   // The read-back is for the RESPONSE ONLY — the write already committed. It is

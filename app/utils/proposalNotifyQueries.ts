@@ -14,10 +14,12 @@
 //
 // Nothing here touches a client. Do not add one.
 //
-// Child B interpolates `LEAD_NOTE_MESSAGES` (`./proposalMessageWrite`) into both
-// queries below when it repoints the notification body from `lead_notes` to the
-// thread. It is deliberately NOT imported yet: this phase changes no behaviour,
-// and an import with no use is a claim the code does not make.
+// `LEAD_NOTE_MESSAGES` (`./proposalMessageWrite`) is interpolated by
+// `PROPOSAL_QUERY` below. `SUBMITTED_NOTIFY_QUERY` still reads `lead_notes`:
+// repointing the SUBMIT email at the thread is a separate slice, and an import
+// used by one query is not a claim about the other.
+
+import { LEAD_NOTE_MESSAGES } from "./proposalMessageWrite";
 
 /**
  * The admin audience, written down ONCE for the notification layer.
@@ -34,13 +36,31 @@ export const ADMIN_RECIPIENTS_QUERY = `*[_type == "teamMembers" && role in ["sup
 /**
  * The proposal the sweep classifies a `leadNotes` notice against.
  *
- * `lead_notes` is still projected: it is what `classifyLeadNotes` compares the
- * notice's `beforeNotes` snapshot against. Child B repoints this at the thread
- * and retires the field from here; until then the shape is unchanged, and
- * `leadNoteProjection.test.ts` executes it so that change cannot land silently.
+ * `lead_notes` is GONE from here. Nothing in the sweep reads it any more — the
+ * legacy-tolerance branch included, which classifies a pre-Child-B notice
+ * against the THREAD rather than against a field nothing writes. Reading it
+ * would be reading a frozen value: `before` is written only by
+ * `createIfNotExists` on a deterministic id, so a legacy notice keeps its shape
+ * for its whole window while new code queues onto it, and comparing against the
+ * frozen field would email the pre-release message and swallow every one
+ * appended after.
+ *
+ * `status` and `service_date` must survive: the classifier needs `status` for
+ * `reviewable`, and the live-date-wins rule needs `service_date`.
+ *
+ * `leadMessages` interpolates `LEAD_NOTE_MESSAGES` rather than restating the
+ * predicate, so the filter exists exactly twice in the codebase (this fragment
+ * and `isLeadNote`) and `leadNoteProjection.test.ts` cross-pins the two by
+ * executing them over one fixture.
+ *
+ * Consumers must NOT re-filter: the array arrives pre-filtered, and a consumer
+ * that filters again over a `{kind, body}` narrowing would still match — until
+ * someone narrows it to `{body}`, at which point nothing matches and the
+ * debounced email dies silently.
  */
 export const PROPOSAL_QUERY = `*[_type == "setlistProposal" && _id == $proposalId][0]{
-  _id, status, lead_notes, service_date
+  _id, status, service_date,
+  "leadMessages": ${LEAD_NOTE_MESSAGES}
 }`;
 
 /**

@@ -46,12 +46,19 @@ describe("notificationOutbox schema", () => {
     expect(servedRecipients.of?.[0]?.type).toBe("string");
   });
 
-  it("stores before-snapshots as three typed fields, not a JSON blob", () => {
+  it("stores before-snapshots as four typed fields, not a JSON blob", () => {
     const before = byName("before") as unknown as {
       fields: { name: string; type: string; of?: { type: string; fields?: { name: string }[] }[] }[];
     };
+    // FOUR, because `beforeMessageCount` joins them and `beforeNotes` is KEPT:
+    // the flush slices the thread from the count, while the snapshot is what
+    // makes the preview→main window's residual silence rather than a stale-text
+    // email. A later cleanup dropping `beforeNotes` as dead weight fails here.
     expect(before.fields.map((f) => f.name).sort())
-      .toEqual(["beforeNotes", "beforeRoles", "beforeSongs"]);
+      .toEqual(["beforeMessageCount", "beforeNotes", "beforeRoles", "beforeSongs"]);
+
+    const beforeMessageCount = before.fields.find((f) => f.name === "beforeMessageCount");
+    expect(beforeMessageCount?.type).toBe("number");
 
     const beforeRoles = before.fields.find((f) => f.name === "beforeRoles");
     expect(beforeRoles?.type).toBe("array");

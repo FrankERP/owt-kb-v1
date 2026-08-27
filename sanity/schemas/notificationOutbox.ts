@@ -108,6 +108,13 @@ export const notificationOutbox = defineType({
           }],
         },
         { name: "beforeNotes", title: "Before notes", type: "text" },
+        {
+          name: "beforeMessageCount",
+          title: "Before message count",
+          type: "number",
+          description:
+            "leadNotes only: the number of lead_note messages the proposal held when this notice was queued. The flush slices the thread from this index. Absent on a notice minted before the thread became the source, which the sweep classifies against beforeNotes instead — so 0 and absent are different states and must not be conflated.",
+        },
       ],
     },
 

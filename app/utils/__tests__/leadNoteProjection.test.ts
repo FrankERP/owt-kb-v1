@@ -179,9 +179,19 @@ describe("PROPOSAL_QUERY", () => {
     // the only place the real query is executed, so a projection change that
     // drops a field the classifier needs fails HERE or nowhere. No mocks are
     // needed to get here — that is why the queries live in a leaf.
-    expect(Object.keys(row).sort()).toEqual(["_id", "lead_notes", "service_date", "status"]);
+    // `lead_notes` is GONE and `leadMessages` has replaced it: the sweep reads
+    // the thread, the legacy-tolerance branch included. Pinned as an exact key
+    // set so re-adding the field — or dropping `status`/`service_date`, which
+    // the classifier and the live-date-wins rule need — fails here.
+    expect(Object.keys(row).sort()).toEqual(["_id", "leadMessages", "service_date", "status"]);
     expect(row.status).toBe("changes_requested");
     expect(row.service_date).toBe("2026-09-06");
+    // Pre-filtered by the ONE fragment, and narrowed. A consumer re-filtering
+    // this array is what §The projection forbids; the shape is what makes the
+    // ban safe to state.
+    expect(row.leadMessages).toEqual(
+      MIXED.filter((m) => m.kind === "lead_note").map((m) => ({ kind: m.kind, body: m.body })),
+    );
   });
 
   it("selects by id and yields null for an unknown proposal", async () => {

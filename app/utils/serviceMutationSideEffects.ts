@@ -639,10 +639,30 @@ export interface QueueLeadNotesNoticeInput {
   serviceDate: string;
   /** The proposal's stored status BEFORE this write; `null` when it is new. */
   previousStatus: unknown;
-  /** The stored `lead_notes` BEFORE this write, captured PRE-COMMIT. */
+  /**
+   * The stored `lead_notes` BEFORE this write, captured PRE-COMMIT.
+   *
+   * KEPT even though the flush no longer classifies against it (Child B
+   * §The cutover seam). It is what makes the release window's residual SILENCE
+   * rather than a stale-content email: production's old sweep compares this
+   * snapshot against the live `lead_notes` and finds them equal, so it sends
+   * nothing instead of mailing the archive. It closes the window identically on
+   * a revert. Nothing may drop it as dead weight.
+   */
   beforeNotes: unknown;
-  /** The notes this transaction committed. */
-  afterNotes: unknown;
+  /**
+   * The number of `kind == "lead_note"` messages the proposal held BEFORE this
+   * write, captured PRE-COMMIT — the index the flush slices the thread from.
+   *
+   * Counted with `isLeadNote`, the same predicate `LEAD_NOTE_MESSAGES` filters
+   * on at flush. Counting the WHOLE array instead is the failure this shape is
+   * most exposed to and it is total: with `T` total messages and `L` lead notes,
+   * `leadMessages.slice(T)` over a post-commit array of length `L + 1` is empty
+   * whenever `T > L` — which is every proposal that has been through one review
+   * cycle — so admins stop receiving the debounced email entirely, with a `null`
+   * classification, the notice consumed, and `report.lost` at 0.
+   */
+  beforeMessageCount: number;
 }
 
 const asNotes = (v: unknown): string => (typeof v === "string" ? v : "");
@@ -653,9 +673,13 @@ export function queueLeadNotesNotice(input: QueueLeadNotesNoticeInput): void {
     if (!input.proposalId) return;
     if (!REVIEWABLE_BEFORE_WRITE.has(String(input.previousStatus ?? ""))) return;
     const before = asNotes(input.beforeNotes);
-    // The same trimmed comparison `classifyLeadNotes` makes at flush, so a save
-    // that did not touch the notes never mints a document that says nothing.
-    if (before.trim() === asNotes(input.afterNotes).trim()) return;
+    // NO trimmed-equal early return any more. It compared `beforeNotes` against
+    // `afterNotes`, and post-Child-B there is no "after" string to compare
+    // against — the flush diffs a count against the thread. The guard has not
+    // moved somewhere else in here: it is now the CALLERS' alone, and both must
+    // decline to queue when they appended nothing. A no-append queue is bounded
+    // (it classifies to `null` and is consumed) but it clears `servedRecipients`
+    // and slides a live debounce for a message that does not exist.
 
     const upsert = {
       id: outboxId("leadNotes", input.proposalId),
@@ -668,7 +692,7 @@ export function queueLeadNotesNotice(input: QueueLeadNotesNoticeInput): void {
           proposalId: input.proposalId,
           serviceDate: input.serviceDate,
           roleType: null,
-          before: { beforeNotes: before },
+          before: { beforeNotes: before, beforeMessageCount: input.beforeMessageCount },
           // The admin audience is resolved at flush from the live team roster;
           // there is no queue-time set to introduce anybody against, and
           // `leadNotes` renders no diff for `knownRecipients` to qualify.

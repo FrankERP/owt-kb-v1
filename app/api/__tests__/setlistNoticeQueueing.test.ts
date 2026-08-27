@@ -155,7 +155,7 @@ function upsertsOfKind(kind: string): Record<string, unknown>[] {
 }
 
 function beforeOf(doc: Record<string, unknown>) {
-  return doc.before as { beforeSongs?: unknown[]; beforeNotes?: string };
+  return doc.before as { beforeSongs?: unknown[]; beforeNotes?: string; beforeMessageCount?: number };
 }
 
 /** Run every registered `after()` callback, including ones they register. */
@@ -696,7 +696,22 @@ describe("POST /api/me/proposals — leadNotes notice", () => {
 
   it("queues leadNotes when an already-pending proposal's notes change", async () => {
     seedService();
-    store.proposals.push(proposal({ status: "pending", lead_notes: "Nota original" }));
+    // MIXED: one lead note and one admin change request. On an all-lead-note
+    // thread the whole-array count and the lead-note count agree, so the
+    // `beforeMessageCount` assertion below would pass by construction — and the
+    // failure it exists to catch only appears on a proposal that has been
+    // through a review cycle, which is the normal shape of a `changes_requested`
+    // one.
+    store.proposals.push(
+      proposal({
+        status: "pending",
+        lead_notes: "Nota original",
+        messages: [
+          { _key: "m1", _type: "proposal_message", kind: "lead_note", body: "Nota original", author: { _ref: "mem-1" }, author_role: "lead", at: "2026-08-01T10:00:00.000Z" },
+          { _key: "m2", _type: "proposal_message", kind: "admin_change_request", body: "Cambia el cierre", author: { _ref: "adm-1" }, author_role: "admin", at: "2026-08-02T10:00:00.000Z" },
+        ],
+      }),
+    );
     const res = await meProposalPOST(
       req(
         saveBody({
@@ -721,6 +736,10 @@ describe("POST /api/me/proposals — leadNotes notice", () => {
       serviceDate: WEEK,
     });
     expect(beforeOf(notices[0]).beforeNotes).toBe("Nota original");
+    // The compat path snapshots the count too, over the pre-commit thread. This
+    // proposal carries a lead note and an admin change request, so the two
+    // candidate counts differ and only the lead-note one passes.
+    expect(beforeOf(notices[0]).beforeMessageCount).toBe(1);
   });
 
   it("queues leadNotes on a changes_requested proposal too", async () => {

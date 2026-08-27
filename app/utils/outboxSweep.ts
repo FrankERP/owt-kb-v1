@@ -48,6 +48,8 @@ import { assignedMemberRefsQuery } from "./notifyTargets";
 import {
   LINE_PREF,
   classifyLeadNotes,
+  classifyProposalMessages,
+  type LeadNoteMessage,
   classifyRole,
   classifySetlist,
   type Line,
@@ -139,7 +141,17 @@ interface StoredNotice {
   proposalId: string | null;
   serviceDate: string;
   roleType: RoleTypeName | null;
-  before?: { beforeRoles?: string[]; beforeSongs?: OutboxSongRow[]; beforeNotes?: string } | null;
+  before?: {
+    beforeRoles?: string[];
+    beforeSongs?: OutboxSongRow[];
+    beforeNotes?: string;
+    /**
+     * `leadNotes` only, and ABSENT on a notice minted by pre-Child-B code —
+     * which is why the classifier tests `typeof === "number"` rather than
+     * truthiness: `0` is the legitimate first-message case.
+     */
+    beforeMessageCount?: number;
+  } | null;
   knownRecipients?: string[] | null;
   servedRecipients?: string[] | null;
   firstQueuedAt: string;
@@ -372,6 +384,16 @@ async function classifySetlistNotice(notice: StoredNotice, today: string): Promi
   }));
 }
 
+/**
+ * The body of the newest `lead_note`, or `""` when there is none — precisely
+ * what the `lead_notes` mirror held, which is why the legacy branch compares
+ * against it. The array is append-only, so "newest" is the last element.
+ */
+function newestBody(messages: readonly LeadNoteMessage[]): string {
+  const last = messages[messages.length - 1];
+  return typeof last?.body === "string" ? last.body : "";
+}
+
 async function classifyLeadNotesNotice(notice: StoredNotice, today: string): Promise<Pair[]> {
   if (!notice.proposalId) return [];
   const row = await operationalClient.fetch<Record<string, unknown> | null>(PROPOSAL_QUERY, {
@@ -379,13 +401,45 @@ async function classifyLeadNotesNotice(notice: StoredNotice, today: string): Pro
   });
   const proposal = isObj(row) ? row : null;
   const liveDate = typeof proposal?.service_date === "string" ? proposal.service_date.slice(0, 10) : null;
-  const line = classifyLeadNotes({
-    before: notice.before?.beforeNotes ?? "",
-    after: typeof proposal?.lead_notes === "string" ? proposal.lead_notes : "",
-    serviceDate: liveDate ?? notice.serviceDate,
-    today,
-    reviewable: !!proposal && REVIEWABLE_STATUSES.has(String(proposal.status ?? "")),
-  });
+  // GROQ returns `null`, not `[]`, when `messages` is absent. Coerced HERE, at
+  // the call site, as §The projection requires — `classifyProposalMessages` is
+  // total over `null` too, but the newest-message read below is not.
+  const leadMessages: LeadNoteMessage[] = Array.isArray(proposal?.leadMessages)
+    ? (proposal.leadMessages as LeadNoteMessage[])
+    : [];
+  const serviceDate = liveDate ?? notice.serviceDate;
+  const reviewable = !!proposal && REVIEWABLE_STATUSES.has(String(proposal.status ?? ""));
+
+  // A notice minted by PRE-Child-B code carries `beforeNotes` and no count.
+  // `typeof`, not truthiness: `beforeMessageCount: 0` is the legitimate
+  // first-message case and belongs on the new path.
+  //
+  // Such a notice is CLASSIFIED, never dropped. Dropping is safe — no pairs, so
+  // `partitionClaimed` routes it to `toConsume` and the `finally` deletes it —
+  // but it is not correct: a notice that yields no pairs contributes no pending
+  // recipients, so `countLost` reports nothing and a real message vanishes with
+  // no signal anywhere.
+  //
+  // `after` is the NEWEST `lead_note` body, not the live `lead_notes` field.
+  // That field is what the mirror used to hold, so this reproduces today's
+  // semantics exactly — one email carrying the lead's most recent word — while
+  // staying correct once nothing writes the mirror.
+  const line =
+    typeof notice.before?.beforeMessageCount === "number"
+      ? classifyProposalMessages({
+          beforeCount: notice.before.beforeMessageCount,
+          leadMessages,
+          serviceDate,
+          today,
+          reviewable,
+        })
+      : classifyLeadNotes({
+          before: notice.before?.beforeNotes ?? "",
+          after: newestBody(leadMessages),
+          serviceDate,
+          today,
+          reviewable,
+        });
   if (!line) return [];
   const recipients = await resolveRecipients(notice);
   return recipients.map((recipientId) => ({ noticeId: notice._id, recipientId, line }));

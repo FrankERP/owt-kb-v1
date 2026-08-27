@@ -651,7 +651,7 @@ describe("the opportunistic sweep", () => {
     serviceDate: "2026-08-09",
     previousStatus: "pending",
     beforeNotes: "antes",
-    afterNotes: "después",
+    beforeMessageCount: 1,
   };
 
   it("every committed write that queues a notice also sweeps due notices", async () => {

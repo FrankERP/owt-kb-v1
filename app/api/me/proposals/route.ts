@@ -24,7 +24,7 @@ import {
   parseProposalSaveRequest,
   targetFromCanonicalRole,
 } from "@/app/utils/proposalWriteRequest";
-import { buildProposalMessage } from "@/app/utils/proposalMessageWrite";
+import { buildProposalMessage, isLeadNote } from "@/app/utils/proposalMessageWrite";
 import {
   THREAD_AFTER_APPEND_QUERY,
   THREAD_MESSAGES,
@@ -212,6 +212,13 @@ async function postHandler(req: NextRequest) {
   // value against itself and say nothing.
   const previousStatus = existing ? existing.status : null;
   const beforeNotes = existing ? existing.lead_notes : "";
+  // The index the flush slices the thread from — LEAD NOTES only, counted with
+  // the same predicate `LEAD_NOTE_MESSAGES` filters on at flush, over the
+  // pre-commit document this handler already loaded. A create has no thread yet,
+  // so the count is 0 and `classifyProposalMessages` slices from the start.
+  const beforeMessageCount = Array.isArray(existing?.messages)
+    ? existing.messages.filter(isLeadNote).length
+    : 0;
 
   // ── The submission note becomes a thread message (Child A §2) ─────────────
   //
@@ -371,7 +378,7 @@ async function postHandler(req: NextRequest) {
       serviceDate: target.serviceDate,
       previousStatus,
       beforeNotes,
-      afterNotes: submissionMessage.body,
+      beforeMessageCount,
     });
   }
 

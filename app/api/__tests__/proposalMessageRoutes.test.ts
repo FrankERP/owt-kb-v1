@@ -286,7 +286,23 @@ describe("POST /api/me/proposals/[id]/messages — the lead side", () => {
   });
 
   it("queues the debounced notice with the PRE-COMMIT snapshot", async () => {
-    seed({ lead_notes: "vieja", status: "changes_requested" });
+    // MIXED on purpose, and the fixture is the assertion. On an all-lead-note
+    // thread `count(all) === count(lead_note)`, so a queue side counting the
+    // whole array passes by construction — and then, on a real proposal that
+    // has been through one review cycle, `slice(T)` over an array of `L + 1`
+    // lead notes is EMPTY. Every admin stops receiving the debounced email, the
+    // notice classifies to `null` and is consumed, `report.lost` stays 0, and
+    // every other test in this repo stays green. Three messages, two of them
+    // lead notes, so the two counts differ: 2, never 3.
+    seed({
+      lead_notes: "vieja",
+      status: "changes_requested",
+      messages: [
+        { _key: "m1", kind: "lead_note", body: "vieja", author: "mem-1" },
+        { _key: "m2", kind: "admin_change_request", body: "cambia el cierre", author: "adm-1" },
+        { _key: "m3", kind: "lead_note", body: "listo", author: "mem-1" },
+      ],
+    });
     await postLead({ body: "nueva" });
     expect(queueLeadNotesNoticeMock).toHaveBeenCalledTimes(1);
     expect(queueLeadNotesNoticeMock.mock.calls[0][0]).toMatchObject({
@@ -294,10 +310,32 @@ describe("POST /api/me/proposals/[id]/messages — the lead side", () => {
       serviceDate: WEEK,
       // Pre-commit, not the value the mirror just wrote: reading it after the
       // write gives post-write state and the email silently sends nothing.
+      //
+      // `beforeNotes` is KEPT, and this pin is what keeps it: it is what makes
+      // the preview→main window's residual SILENCE rather than a stale-content
+      // email, and nothing else would stop a later cleanup dropping it as dead
+      // weight now that the flush no longer classifies against it.
       beforeNotes: "vieja",
-      afterNotes: "nueva",
+      beforeMessageCount: 2,
       previousStatus: "changes_requested",
     });
+    // `afterNotes` is GONE, not renamed. It carried the queue side's own
+    // trimmed-equal guard, which now lives only in the callers.
+    expect(queueLeadNotesNoticeMock.mock.calls[0][0]).not.toHaveProperty("afterNotes");
+  });
+
+  it("counts only LEAD notes into the snapshot, never the whole thread", async () => {
+    // The twin of the row above, stated as the zero case: an admin's change
+    // request alone leaves the count at 0, so the first lead reply is `slice(0)`
+    // and reaches admins. Counting the array would make it `slice(1)` — empty.
+    seed({
+      status: "changes_requested",
+      messages: [
+        { _key: "m1", kind: "admin_change_request", body: "cambia el cierre", author: "adm-1" },
+      ],
+    });
+    await postLead({ body: "listo" });
+    expect(queueLeadNotesNoticeMock.mock.calls[0][0]).toMatchObject({ beforeMessageCount: 0 });
   });
 
   it("returns the full thread with author names, plus observedRev", async () => {
