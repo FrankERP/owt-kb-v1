@@ -69,6 +69,7 @@ import {
 } from "./notifyTargets";
 import { buildUpsert, outboxId, songRowsFrom } from "./outboxNotice";
 import { EMAIL_LIMIT, SEND_BUDGET_MS, sweepOutbox } from "./outboxSweep";
+import { SEND_TIMEOUT_MS } from "./email";
 import { notifyProposalSubmitted } from "./proposalNotify";
 import { canonicalSetlistsForWeeksQuery } from "./serviceReadQueries";
 import { normalizeStoredSeats, seatAssignees, type NormalizedSeats } from "./roleWriteRequest";
@@ -461,16 +462,32 @@ type BuiltUpsert = NonNullable<ReturnType<typeof setlistUpsert>>;
  * FULL 40 s of send budget after that write route had already consumed part of
  * its own `maxDuration`.
  *
- * HALVING BOTH PRESERVES THE SPEC'S INEQUALITY AND NOT THE RUNTIME'S, which is a
- * sharper consequence than "derated" suggests. The send loop admits a send only
- * while `elapsed + SEND_TIMEOUT_MS <= sendBudgetMs`, and `SEND_TIMEOUT_MS`
- * (20 s) is NOT halved with the budget. At layer 2's 20 s budget the check reads
- * `elapsed + 20 000 > 20 000`, which is false only when `elapsed` is 0 — so
- * **layer 2 sends exactly ONE email per sweep, at any latency**, and its
- * `emailLimit` never binds. Survivable because layer 2's job is to START the
- * drain rather than finish it, and layer 1 runs at the full budget. Recorded
- * because this comment used to claim the inequality held "identically" here,
- * which is true of the spec's form and false of the one that runs.
+ * SO THE BUDGET IS DERATED ABOVE THE RESERVE, NOT AS A WHOLE. The send loop
+ * admits a send only while `elapsed + SEND_TIMEOUT_MS <= sendBudgetMs` — a
+ * RESERVE, because a send's worst case is `SEND_TIMEOUT_MS` and a wave that
+ * starts without room for it overruns into the platform's kill. That reserve is
+ * a property of ONE send and cannot shrink with the budget.
+ *
+ * Halving the budget as a whole therefore did not derate layer 2, it disabled
+ * it: at `SEND_BUDGET_MS / 2` = 20 s the check read `elapsed + 20 000 > 20 000`,
+ * false only when `elapsed` is 0, so layer 2 sent **exactly one email per
+ * sweep at any latency** and its `emailLimit` never bound. The knobs said 20
+ * recipients and the clock allowed one.
+ *
+ * Only the part ABOVE the reserve is actually spendable, so that is what gets
+ * halved:
+ *
+ *     sendBudgetMs = SEND_TIMEOUT_MS + (SEND_BUDGET_MS - SEND_TIMEOUT_MS) / 2
+ *
+ * On the shipped defaults: 20 000 + 10 000 = 30 000, giving layer 2 half of
+ * layer 1's spendable 20 s. Sends admitted are `floor(spendable / d) + 1` — nine
+ * at the ~1.2 s measured on Gmail, and still **one** at the 14.4 s of the retired
+ * server, which is the conservative behaviour the original halving intended and
+ * accidentally made unconditional.
+ *
+ * `SWEEP_DEADLINE_MS` is unchanged and still bounds the whole sweep at 45 s, so
+ * this does not widen the worst case an invocation can spend — only how much of
+ * it layer 2 may use for sending.
  *
  * The consequence named in §1 still holds: at a limit of 20 a large Sunday
  * setlist is "oversized" for layer 2 and taken alone.
@@ -482,9 +499,13 @@ type BuiltUpsert = NonNullable<ReturnType<typeof setlistUpsert>>;
 const LAYER_2_DERATE = 2;
 
 function opportunisticSweepOptions(): { emailLimit: number; sendBudgetMs: number } {
+  // `Math.max` on the spendable part, not on the total: a misconfigured
+  // `NOTIFY_SEND_BUDGET_MS` at or below the reserve leaves nothing to halve, and
+  // the floor must still admit the first send rather than collapsing to 1 ms.
+  const spendable = Math.max(0, SEND_BUDGET_MS - SEND_TIMEOUT_MS);
   return {
     emailLimit: Math.max(1, EMAIL_LIMIT / LAYER_2_DERATE),
-    sendBudgetMs: Math.max(1, SEND_BUDGET_MS / LAYER_2_DERATE),
+    sendBudgetMs: SEND_TIMEOUT_MS + spendable / LAYER_2_DERATE,
   };
 }
 

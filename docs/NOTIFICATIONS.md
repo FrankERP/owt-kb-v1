@@ -60,12 +60,22 @@ eventually is. If the GitHub workflow is broken or disabled, the realistic delay
 is **up to 24 hours**, until layer 3 runs.
 
 Layer 2 derates **both** knobs (half the recipient limit *and* half the send
-budget). That preserves the SPEC's inequality and not the runtime's: a send is
-admitted while `elapsed + SEND_TIMEOUT_MS <= sendBudgetMs`, and the 20 s timeout
-is not halved with the budget — so at layer 2's 20 s budget the check fails after
-the first send and **layer 2 delivers exactly one email per sweep, at any
-latency**. Its recipient limit never binds. Survivable because layer 2's job is to
-start the drain rather than finish it, and layer 1 runs at the full budget. It does not fire on
+budget) — but the budget is derated ABOVE THE RESERVE, not as a whole:
+
+```
+layer 2 sendBudgetMs  =  SEND_TIMEOUT_MS + (SEND_BUDGET_MS − SEND_TIMEOUT_MS) / 2
+```
+
+A send is admitted while `elapsed + SEND_TIMEOUT_MS <= sendBudgetMs`, and that
+reserve is the worst case of ONE send, so it cannot shrink with the budget.
+**Halving the budget as a whole did not derate layer 2, it disabled it:** at 20 s
+the check read `elapsed + 20 000 > 20 000`, false only at zero, so layer 2 sent
+exactly one email per sweep at any latency while its recipient limit said 20.
+Fixed 2026-08-27. On the shipped defaults layer 2 now gets 30 s — half of layer 1's
+spendable 20 s — which is nine sends at the ~1.2 s measured on Gmail and still one
+at the 14.4 s of the retired server, the conservative behaviour the original
+halving intended. `SWEEP_DEADLINE_MS` is unchanged, so the worst case an
+invocation can spend does not widen. It does not fire on
 proposal submit or review, which queue nothing; layer 1 is what covers those —
 nominally within five minutes, in practice at a 41-minute median (§"Layer 1 does
 not run every five minutes"). The proposal-submit **email** (`buildProposalEmail`) is immediate, not

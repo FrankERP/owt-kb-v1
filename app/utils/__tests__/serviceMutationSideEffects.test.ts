@@ -138,6 +138,7 @@ import {
   roleUpdateNotice,
 } from "@/app/utils/serviceMutationSideEffects";
 import { outboxId } from "@/app/utils/outboxNotice";
+import { SEND_TIMEOUT_MS } from "@/app/utils/email";
 import { EMAIL_LIMIT, SEND_BUDGET_MS } from "@/app/utils/outboxSweep";
 import type { NormalizedSeats } from "@/app/utils/roleWriteRequest";
 
@@ -660,16 +661,51 @@ describe("the opportunistic sweep", () => {
     expect(sweepOutboxMock).toHaveBeenCalledTimes(1);
   });
 
-  it("derates BOTH knobs — half the recipient limit AND half the send budget", async () => {
+  it("derates the recipient limit by half, and the SPENDABLE send time by half", async () => {
     // Halving only the limit would let a layer-2 sweep spend a FULL send budget
-    // after the write route already consumed part of its `maxDuration`; halving
-    // both keeps `ms_per_send × limit < budget` holding identically here.
+    // after the write route already consumed part of its `maxDuration`.
+    //
+    // But halving the budget AS A WHOLE did not derate layer 2, it disabled it.
+    // The send loop admits while `elapsed + SEND_TIMEOUT_MS <= sendBudgetMs`, and
+    // that reserve is the worst case of ONE send, so it cannot shrink with the
+    // budget. At `SEND_BUDGET_MS / 2` = 20 s the check read
+    // `elapsed + 20 000 > 20 000` — false only at zero — so layer 2 sent exactly
+    // one email per sweep at ANY latency while its `emailLimit` said 20.
+    //
+    // Only the part above the reserve is spendable, so that is what is halved.
     queueRoleNotices(roleInput);
     await flushAfter();
     expect(sweepOutboxMock).toHaveBeenCalledWith({
       emailLimit: EMAIL_LIMIT / 2,
-      sendBudgetMs: SEND_BUDGET_MS / 2,
+      sendBudgetMs: SEND_TIMEOUT_MS + (SEND_BUDGET_MS - SEND_TIMEOUT_MS) / 2,
     });
+  });
+
+  it("leaves layer 2 room for more than one send — the property the derate is FOR", async () => {
+    // The assertion above pins the formula; this one pins what the formula buys,
+    // and it is what the previous shape silently lost. Expressed as sends
+    // admitted rather than milliseconds, so it fails if a future retune restores
+    // a budget that cannot outlive its own reserve.
+    queueRoleNotices(roleInput);
+    await flushAfter();
+    const { sendBudgetMs } = sweepOutboxMock.mock.calls[0][0] as { sendBudgetMs: number };
+    // The reserve read here comes from THIS FILE'S mock of `email`. It mirrors the
+    // real constant, and it has to: the production code computes the budget from
+    // the real one, so a mock that drifts would make this row agree with itself
+    // and with nothing else. (The same mock declares SEND_CONCURRENCY: 8 while the
+    // real value is 1 — inert here because the send loop is not exercised, but it
+    // is the kind of drift this note is about.)
+    const admitted = (msPerSend: number) =>
+      Math.floor((sendBudgetMs - SEND_TIMEOUT_MS) / msPerSend) + 1;
+
+    // At the ~1.2 s measured on Gmail (docs/NOTIFICATIONS.md), layer 2 serves a
+    // real batch instead of a single recipient.
+    expect(admitted(1_200)).toBeGreaterThan(1);
+    // At the 14.4 s of the retired server it collapses back to one, which is the
+    // conservative behaviour the original halving intended.
+    expect(admitted(14_413)).toBe(1);
+    // And it never exceeds layer 1, which is the whole point of derating.
+    expect(sendBudgetMs).toBeLessThan(SEND_BUDGET_MS);
   });
 
   it("sweeps from the setlist, publish and lead-notes writers too", async () => {
