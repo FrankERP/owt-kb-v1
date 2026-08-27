@@ -74,7 +74,7 @@ import { canonicalSetlistsForWeeksQuery } from "./serviceReadQueries";
 import { normalizeStoredSeats, seatAssignees, type NormalizedSeats } from "./roleWriteRequest";
 
 /** Run one delivery attempt; log and swallow any failure. Never rejects. */
-async function attempt(label: string, fn: () => unknown | Promise<unknown>): Promise<void> {
+export async function attempt(label: string, fn: () => unknown | Promise<unknown>): Promise<void> {
   try {
     await fn();
   } catch (err) {
@@ -90,7 +90,7 @@ async function attempt(label: string, fn: () => unknown | Promise<unknown>): Pro
  * handler and turn an already-committed content write into a 500 for the
  * client — the one thing §7's guarantee says must never happen.
  */
-function attemptSync(label: string, fn: () => void): void {
+export function attemptSync(label: string, fn: () => void): void {
   try {
     fn();
   } catch (err) {
@@ -107,19 +107,24 @@ function attemptSync(label: string, fn: () => void): void {
  * nobody awaits, so on a serverless runtime the delivery can be killed when the
  * response returns.
  *
- * Neither of its two call sites is inside `after()`. Both `notifySetlistSaved`
- * and `notifyProposalReview` are awaited inline by their routes
- * (`admin/setlists/route.ts:416`; `admin/proposals/[id]/route.ts:379`, `:532`),
- * and neither route imports `after` at all. That is the deliberate trade in the
- * paragraph above — an editor's save never waits on FCM — and it means the
- * exposure is real on those paths today, not hypothetical.
+ * Its in-module call sites are awaited inline by their routes and are NOT inside
+ * `after()` — `notifySetlistSaved`, and `notifyProposalReview` when its
+ * `awaitDelivery` option is off. That is the deliberate trade in the paragraph
+ * above — an editor's save never waits on FCM — and it means the exposure is
+ * real on those paths today, not hypothetical.
  *
  * The contrast is `notifyRoleAssignments` and `notifyRolePublished`, this
  * module's two other push fan-outs: both wrap in `after()` and `await sendPush`
  * inside it.
  *
- * So: a new caller should be inside `after()`, and must not reach for the two
- * `fireAndForget` sites as precedent for skipping it.
+ * So: a new caller should be inside `after()` — and **`after()` must be given
+ * something to AWAIT**. `after(() => fireAndForget(p))` is not that: this
+ * function returns `void`, the after-queue goes idle at once, `waitUntil`
+ * settles, and the promise is left racing the freeze with LESS overlap than if
+ * it had been started inline, because nothing else is still running. A caller
+ * that wants the invocation held must await the promise itself inside the
+ * callback — use `attempt`, which this module exports for exactly that. That
+ * mistake shipped once here and a re-verification caught it.
  *
  * (Symbols, not same-file line numbers, on purpose — three successive reviews
  * of this comment caught line references that had rotted, twice because they
@@ -828,13 +833,23 @@ export async function notifyProposalReview(
   doc: Record<string, unknown>,
   push: { title: string; body: string },
   excludeIds?: readonly string[],
+  opts?: { awaitDelivery?: boolean },
 ): Promise<void> {
-  await attempt("proposal review push", () => {
+  await attempt("proposal review push", async () => {
     const excluded = new Set(excludeIds ?? []);
     const recipients = proposalReviewRecipients(doc).filter((id) => !excluded.has(id));
     if (!recipients.length) return;
-    // Fire-and-forget, as before: a review decision never waits on FCM.
-    fireAndForget("proposal review push", sendPush(recipients, "proposals", { ...push, path: "/me" }));
+    const delivery = sendPush(recipients, "proposals", { ...push, path: "/me" });
+    // `awaitDelivery` exists because awaiting THIS function is not enough when
+    // the inside is fire-and-forget: a caller running inside `after()` would
+    // resolve immediately and let the runtime freeze the instance with FCM still
+    // in flight. Off by default, so the transition call sites keep today's trade
+    // — a review decision never waits on FCM — and change not at all.
+    if (opts?.awaitDelivery) {
+      await delivery;
+      return;
+    }
+    fireAndForget("proposal review push", delivery);
   });
 }
 

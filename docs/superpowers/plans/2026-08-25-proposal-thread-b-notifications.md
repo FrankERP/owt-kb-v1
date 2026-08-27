@@ -811,15 +811,18 @@ here got it wrong in both directions.** The name the plan points at — the one 
 route resolved for its response — is the POST-COMMIT read-back, which is
 deliberately guarded and null on failure, so it genuinely cannot be relied on.
 The first implementation concluded the instruction was un-followable and added a
-second Sanity read, which the diff review corrected: the author IS the caller,
-and the session already carries `alias` and `name`, refreshed from the same two
-`teamMembers` fields with the same precedence. No read at all.
+second Sanity read, which the diff review corrected: the author IS the caller, and
+the session already carries a usable name. `alias` is `teamMembers.alias`; `name`
+is `member_name` except on web Google SSO, where it is the Google profile name.
+Neither is refreshed — both are snapshotted at sign-in. Cosmetic either way: the
+push names the right person. No read at all.
 
 That also removed a real hazard rather than just a query. The added read sat in a
 `Promise.all` beside the audience read, so a transient failure on the COSMETIC
 half rejected the whole thing and NO push was sent — a decorative field able to
-silence the delivery. The nameless fallback remains, for an impersonated or
-name-less member, pinned by a session with neither field.
+silence the delivery. The nameless fallback remains as defence rather than for a known
+trigger — NOT impersonation, whose branch sets both fields from the target — and
+is pinned by a session carrying neither.
 
 **The email-XOR-push invariant is proved by TWO suites composed, and it has to
 be.** `proposalMessageRoutes.test.ts` mocks `queueLeadNotesNotice`, so the

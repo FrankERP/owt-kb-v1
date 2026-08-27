@@ -91,7 +91,8 @@ and not correct: a notice that yields no pairs contributes no pending recipients
 so `report.lost` stays 0 while a real message vanishes.
 
 **Both directions of the conversation now reach their counterpart** (Child B
-slice 3 — on a branch, NOT released; `main` carries none of Child B). They did
+slice 3 — on a branch, NOT released. `main` carries only Child B Phase A, which
+is exports plus one uncalled pure function and changes no behaviour). They did
 not before: `queueLeadNotesNotice` requires the pre-write status to be `pending`
 or `changes_requested`, and production holds **13 approved proposals, 1 draft,
 and zero in either reviewable status** — so before slice 3 a message posted on a

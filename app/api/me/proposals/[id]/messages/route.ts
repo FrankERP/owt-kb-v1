@@ -23,7 +23,7 @@ import {
 import { isThreadOpen } from "@/app/utils/proposalThread";
 import { THREAD_AFTER_APPEND_QUERY, type ThreadMessageRow } from "@/app/utils/proposalMessageRead";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
-import { fireAndForget } from "@/app/utils/serviceMutationSideEffects";
+import { attempt, attemptSync } from "@/app/utils/serviceMutationSideEffects";
 import { ADMIN_RECIPIENTS_QUERY } from "@/app/utils/proposalNotifyQueries";
 import { sendPush } from "@/app/utils/push";
 
@@ -49,17 +49,27 @@ import { sendPush } from "@/app/utils/push";
  * push body with no rendering at all.
  *
  * THE AUTHOR NAME COMES FROM THE CALLER'S SESSION — no read at all. The author
- * IS the caller, and the session carries `alias` and `name` refreshed from the
- * same two `teamMembers` fields, with the same precedence. The plan said to reuse
- * the name the route resolved for its response; that one is the POST-COMMIT
- * read-back, deliberately guarded and null on failure, so it cannot be relied on
- * — but the session is a third option that needs neither.
+ * IS the caller. The plan said to reuse the name the route resolved for its
+ * response; that one is the POST-COMMIT read-back, deliberately guarded and null
+ * on failure, so it cannot be relied on — the session is a third option needing
+ * neither.
  *
- * That also decouples the body's decoration from the delivery. An earlier version
- * fetched the name alongside the audience in a `Promise.all`, where a transient
- * failure on the COSMETIC read rejected the whole thing and no push was sent at
- * all. The body still falls back to a nameless form, for an impersonated or
- * name-less member.
+ * WHAT THE SESSION ACTUALLY CARRIES, stated precisely because "the same fields"
+ * is not quite true: `alias` is `teamMembers.alias`, matching the removed query's
+ * first choice. `name` is `member_name` on the credentials and native-Google
+ * paths, but on WEB Google SSO it is the Google profile name. Neither is
+ * refreshed — both are snapshotted at sign-in for the token's life, so an alias
+ * edit does not reach a push body until the member signs in again. All of that
+ * is cosmetic: the push says who wrote, and every variant names the right person.
+ *
+ * Using the session also decouples the body's decoration from the delivery. An
+ * earlier version fetched the name alongside the audience in a `Promise.all`,
+ * where a transient failure on the COSMETIC read rejected the whole thing and no
+ * push was sent at all.
+ *
+ * The nameless fallback is defence, not a path with a known trigger. NOT
+ * impersonation — that branch sets both `name` and `alias` from the target
+ * member, so an impersonated session is named like any other.
  */
 async function pushAdminsAboutLeadMessage(o: {
   authorId: string;
@@ -234,22 +244,33 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ id:
   // reads. An append does not move `status`, so pre and post agree here; using
   // the snapshot keeps the two gates reading one value.
   if (String(previousStatus ?? "") === "approved") {
-    // INSIDE `after()`, which `fireAndForget`'s own doc requires of every new
-    // caller — and this path needs it more than most: on `approved`
+    // INSIDE `after()`, AND the callback AWAITS the promise. Both halves are
+    // load-bearing and only the first is obvious: `after(() => fireAndForget(p))`
+    // hands the queue a `void`, so it goes idle at once and `waitUntil` settles
+    // while the send is still in flight — worse than firing inline, because
+    // nothing else is left running to overlap it. That version shipped here once.
+    //
+    // This path needs the hold more than most: on `approved`,
     // `queueLeadNotesNotice` returns on its status gate BEFORE registering its
-    // own `after()`, so without this the handler registers none at all and
-    // nothing holds the invocation open. The push needs two more round trips
-    // than the handler has left, so the promise is always still in flight when
-    // the response is written. Losing it would mean a stored message that
-    // notified nobody, with no log and no outbox row to show for it.
-    after(() =>
-      fireAndForget(
-        "proposal lead message push",
-        pushAdminsAboutLeadMessage({
-          authorId: leadId,
-          authorName: session.user.alias || session.user.name || "",
-          serviceDate: typeof doc.service_date === "string" ? doc.service_date : "",
-        }),
+    // own `after()`, so this is the handler's ONLY deferred work. Losing it means
+    // a stored message that notified nobody, with no log and no outbox row.
+    //
+    // `attempt` swallows and logs, so a push failure cannot surface as an
+    // unhandled rejection on an already-committed write.
+    //
+    // The REGISTRATION is guarded too: `after()` throws synchronously when there
+    // is no request scope, and this runs after the commit — an uncaught throw
+    // here would 500 a message that already landed, and the obvious user action
+    // is to send it again.
+    attemptSync("proposal lead message push register", () =>
+      after(() =>
+        attempt("proposal lead message push", () =>
+          pushAdminsAboutLeadMessage({
+            authorId: leadId,
+            authorName: session.user.alias || session.user.name || "",
+            serviceDate: typeof doc.service_date === "string" ? doc.service_date : "",
+          }),
+        ),
       ),
     );
   }

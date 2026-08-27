@@ -14,7 +14,7 @@ import { serviceError } from "@/app/utils/serviceMutation";
 import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
 import { nextKey, nowIso } from "@/app/utils/roleWriteOps";
 import { loadCanonicalProposal } from "@/app/utils/serviceWriteTargets";
-import { fireAndForget, notifyProposalReview } from "@/app/utils/serviceMutationSideEffects";
+import { attempt, attemptSync, notifyProposalReview } from "@/app/utils/serviceMutationSideEffects";
 import {
   buildProposalMessage,
   parseProposalMessageRequest,
@@ -148,22 +148,28 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ id:
   // through its third parameter rather than in this route, so the audience rule
   // stays written down once.
   //
-  // INSIDE `after()`, which `fireAndForget`'s own doc requires of every new
-  // caller: an unawaited promise can be killed when the response returns, and
-  // this route registers no other deferred work to hold the invocation open.
-  // Still fire-and-forget INSIDE it, because a push failure must not turn a
-  // stored message into an error response — that would invite a retry this
-  // delivery cannot undo.
-  after(() =>
-    fireAndForget(
-      "proposal admin message push",
-      notifyProposalReview(
-        pushDoc,
-        {
-          title: "Nuevo mensaje",
-          body: "Un admin escribió en la propuesta.",
-        },
-        adminId ? [adminId] : [],
+  // INSIDE `after()`, and the callback AWAITS — see the lead route for why the
+  // second half matters as much as the first. `awaitDelivery` is what makes the
+  // await reach FCM: `notifyProposalReview` is fire-and-forget INSIDE by default,
+  // so awaiting it without that flag would resolve before the send and hold
+  // nothing. This route registers no other deferred work.
+  //
+  // `attempt` swallows and logs, so a push failure cannot turn a stored message
+  // into an error response — that would invite a retry this delivery cannot undo.
+  // The REGISTRATION is guarded for the same reason: `after()` throws
+  // synchronously outside a request scope, and this runs after the commit.
+  attemptSync("proposal admin message push register", () =>
+    after(() =>
+      attempt("proposal admin message push", () =>
+        notifyProposalReview(
+          pushDoc,
+          {
+            title: "Nuevo mensaje",
+            body: "Un admin escribió en la propuesta.",
+          },
+          adminId ? [adminId] : [],
+          { awaitDelivery: true },
+        ),
       ),
     ),
   );

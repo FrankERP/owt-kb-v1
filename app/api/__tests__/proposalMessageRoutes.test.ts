@@ -159,8 +159,6 @@ interface Store {
   rawProposalDrafts: Record<string, unknown>[];
   /** `ADMIN_RECIPIENTS_QUERY`'s answer — ids, as that query projects. */
   admins: string[];
-  /** `canonicalMembersByIdsQuery`'s answer, keyed by id. */
-  members: Record<string, { alias?: string; member_name?: string }>;
 }
 let store: Store;
 
@@ -169,8 +167,9 @@ let store: Store;
 const WEEK = "2099-09-06";
 const ROLE_ID = "role-1";
 const PROPOSAL_ID = "setlistProposal.role-1";
-// `alias` and `name` are what the push body reads — a real session carries them,
-// refreshed from the same two `teamMembers` fields the member projection returns.
+// `alias` and `name` are what the push body reads. A real session carries both,
+// snapshotted at sign-in: `alias` from `teamMembers.alias`, `name` from
+// `member_name` (or the Google profile name on web SSO).
 const LEAD = { user: { sanityId: "mem-1", role: "member", alias: "Ana", name: "Ana Ruiz" } };
 const ADMIN = { user: { role: "admin", sanityId: "admin-1" } };
 
@@ -217,12 +216,6 @@ function canonicalRead(query: string, params: Record<string, unknown>): unknown 
   // ADMIN_RECIPIENTS_QUERY — the un-scoped admin audience the lead→admin push
   // fans out to. Matched on the role list, which is what makes it that query.
   if (query.includes('role in ["super-admin","admin"]')) return store.admins;
-  // canonicalMembersByIdsQuery — the author's display name for the push body.
-  if (query.includes("teamMembers") && query.includes("_id in $ids")) {
-    return ((params.ids as string[]) ?? [])
-      .map((id) => store.members[id])
-      .filter(Boolean);
-  }
   if (query.includes("setlistProposal")) {
     // The routes' own response read, projecting the thread back with names.
     // `_id == $id` too: `THREAD_MESSAGES` is also interpolated into the GET
@@ -291,7 +284,6 @@ beforeEach(() => {
     rawRoleDrafts: [],
     rawProposalDrafts: [],
     admins: ["adm-1", "adm-2"],
-    members: { "mem-1": { alias: "Ana" }, "adm-1": { alias: "Admin Uno" } },
   };
   requireMinistryMemberMock.mockResolvedValue(LEAD);
   requireActiveManagerMock.mockResolvedValue(ADMIN);
@@ -445,6 +437,49 @@ describe("POST /api/me/proposals/[id]/messages — the lead side", () => {
     expect(sendPushMock).toHaveBeenCalledTimes(1);
   });
 
+  it("AWAITS the delivery inside after() — draining is not enough", async () => {
+    // The row above pins that the push is DEFERRED. This one pins that the
+    // deferred callback actually awaits it, which is a different property and
+    // the one that shipped broken: `after(() => fireAndForget(p))` hands the
+    // queue a `void`, so it goes idle immediately, `waitUntil` settles, and the
+    // send is left racing the freeze with nothing running to overlap it.
+    //
+    // A microtask-only assertion cannot tell the two apart — vitest flushes
+    // those either way. So the delivery is made to settle on a LATER tick, and
+    // the drain has to have waited for it.
+    let delivered = false;
+    sendPushMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => setTimeout(resolve, 0)).then(() => {
+          delivered = true;
+        }),
+    );
+    seed({ status: "approved" });
+    await postLeadRaw({ body: "una nota" });
+    await drainAfter();
+    expect(delivered).toBe(true);
+  });
+
+  it("AWAITS the admin\u2192lead delivery too, through awaitDelivery", async () => {
+    // `notifyProposalReview` is fire-and-forget INSIDE by default, so awaiting it
+    // without `awaitDelivery` resolves before the send and holds nothing. This
+    // fails if that flag is dropped, which awaiting the helper alone would not
+    // reveal.
+    let delivered = false;
+    sendPushMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => setTimeout(resolve, 0)).then(() => {
+          delivered = true;
+        }),
+    );
+    seed();
+    await adminPost(req({ body: "una pregunta" }), {
+      params: Promise.resolve({ id: PROPOSAL_ID }),
+    });
+    await drainAfter();
+    expect(delivered).toBe(true);
+  });
+
   it("pushes the ADMINS, on the admin surface, with the author's name and the service date", async () => {
     seed({ status: "approved" });
     await postLead({ body: "una nota" });
@@ -466,9 +501,10 @@ describe("POST /api/me/proposals/[id]/messages — the lead side", () => {
   });
 
   it("falls back to a nameless body rather than interpolating nothing", async () => {
-    // A session with neither alias nor name — an impersonated or name-less
-    // member. The message HAS committed, so the push must still fire, and
-    // "undefined escribió" is worse than no name at all.
+    // A session carrying neither field. Defence rather than a known trigger —
+    // impersonation sets BOTH from the target member, so it is not this case.
+    // The message HAS committed, so the push must still fire, and "undefined
+    // escribió" is worse than no name at all.
     seed({ status: "approved" });
     requireMinistryMemberMock.mockResolvedValue({
       user: { sanityId: "mem-1", role: "member" },
