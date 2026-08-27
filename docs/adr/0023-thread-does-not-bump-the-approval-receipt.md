@@ -42,8 +42,16 @@ invalidates all of them at once, and the receipt is what makes a retried
 approval a **no-write success** rather than a second publish: `decideApprovalReceipt`
 compares the stored receipt against a freshly computed one, and a mismatch is
 refused as `receipt_mismatch`. Invalidating the set converts every historical
-approval from "verifiably already done" into "cannot be verified", on 13 live
-documents, to record a change that the fingerprint does not observe.
+approval from "verifiably already done" into "cannot be verified", to record a
+change that the fingerprint does not observe.
+
+**On SIX documents, not thirteen.** An earlier version of this line said 13, which
+is the number of APPROVED proposals — not the number carrying an
+`approval_receipt`. Counted against production on 2026-08-27:
+`count(*[_type == "setlistProposal" && defined(approval_receipt)])` = **6**, against
+13 approved. The gap is approvals that predate the receipt mechanism, and it does
+not weaken the argument: six unverifiable approvals is still a worse outcome than
+the one this ADR declines to record.
 
 **Adding `messages` to the fingerprint** so the two move together. That would
 make an approval's identity depend on the conversation around it — a lead
