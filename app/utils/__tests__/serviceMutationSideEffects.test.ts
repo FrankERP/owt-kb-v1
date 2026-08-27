@@ -122,6 +122,7 @@ vi.mock("next/server", async (importOriginal) => {
 import {
   notifyProposalPending,
   notifyProposalReview,
+  derateClock,
   opportunisticSweepOptions,
   notifyRoleAssignments,
   notifyRolePublished,
@@ -714,7 +715,29 @@ describe("the opportunistic sweep", () => {
     expect(sendBudgetMs).toBeLessThan(SEND_BUDGET_MS);
   });
 
-  it("layer 2's derated knobs still satisfy the send-budget gate", () => {
+  it("halves the SPENDABLE part of a clock, and never exceeds the clock itself", () => {
+    // The arithmetic on its own, at the configurations no shipped config reaches.
+    // Extracted precisely because `opportunisticSweepOptions` reads its inputs at
+    // module scope, so the interesting cases are unreachable through it.
+    const RESERVE = SEND_TIMEOUT_MS; // 20 s — one send's worst case
+
+    // Default: half the spendable 20 s, so 30 s.
+    expect(derateClock(40_000)).toBe(30_000);
+    // Exactly at the reserve: nothing to halve, equal to the full clock.
+    expect(derateClock(RESERVE)).toBe(RESERVE);
+    // BELOW the reserve: the clamp is what stops layer 2 getting 20 s against
+    // layer 1's 15 s. Without `Math.min` this returns 20 000.
+    expect(derateClock(15_000)).toBe(15_000);
+    // Large values stay well under.
+    expect(derateClock(10_000_000)).toBeLessThan(10_000_000);
+
+    // The invariant, at every configuration rather than at the default only.
+    for (const full of [0, 1, 15_000, 20_000, 20_001, 40_000, 45_000, 10_000_000]) {
+      expect(derateClock(full)).toBeLessThanOrEqual(full);
+    }
+  });
+
+  it("layer 2's derated knobs still satisfy the send-budget gate", async () => {
     // The layer-2 half of §10's release gate. It lives here, against the options
     // this module actually builds, because the version that lived in
     // `outboxSweep.test.ts` recomputed the derate itself and so went on asserting
@@ -726,7 +749,12 @@ describe("the opportunistic sweep", () => {
     // consistent, and raising it to keep this green is the one forbidden move.
     const MEASURED_MS_PER_SEND = 500;
     const { emailLimit, sendBudgetMs, sweepDeadlineMs } = opportunisticSweepOptions();
-    const waves = Math.ceil(emailLimit / SEND_CONCURRENCY);
+    // The REAL constant, not this file's mock — see the twin row in
+    // outboxSweep.test.ts for why that distinction is the whole point.
+    const { SEND_CONCURRENCY: realConcurrency } =
+      await vi.importActual<typeof import("@/app/utils/email")>("@/app/utils/email");
+    expect(realConcurrency).toBe(SEND_CONCURRENCY);
+    const waves = Math.ceil(emailLimit / realConcurrency);
     expect((waves - 1) * MEASURED_MS_PER_SEND).toBeLessThanOrEqual(
       sendBudgetMs - SEND_TIMEOUT_MS,
     );

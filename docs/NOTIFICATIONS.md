@@ -59,7 +59,7 @@ terminal edit of a working session — and the terminal edit is what every notic
 eventually is. If the GitHub workflow is broken or disabled, the realistic delay
 is **up to 24 hours**, until layer 3 runs.
 
-Layer 2 derates **both** knobs (half the recipient limit *and* half the send
+Layer 2 derates **three** knobs (half the recipient limit *and* half the send
 budget) — but the budget is derated ABOVE THE RESERVE, not as a whole:
 
 ```
@@ -74,8 +74,19 @@ exactly one email per sweep at any latency while its recipient limit said 20.
 Fixed 2026-08-27. On the shipped defaults layer 2 now gets 30 s — half of layer 1's
 spendable 20 s — which is nine sends at the ~1.2 s measured on Gmail and still one
 at the 14.4 s of the retired server, the conservative behaviour the original
-halving intended. `SWEEP_DEADLINE_MS` is unchanged, so the worst case an
-invocation can spend does not widen. It does not fire on
+halving intended.
+
+**The whole-sweep clock is derated the same way**, and it has to be: it runs from
+the top of the SWEEP, not of the invocation, so it never accounted for the host
+write route's own elapsed time — the budget derate was the only thing that did.
+
+```
+layer 2 sweepDeadlineMs  =  SEND_TIMEOUT_MS + (SWEEP_DEADLINE_MS − SEND_TIMEOUT_MS) / 2
+```
+
+32.5 s on the defaults, against layer 1's 45 s. An earlier version of this
+paragraph said `SWEEP_DEADLINE_MS` was unchanged and that the invocation's worst
+case did not widen; that was wrong, and it is the claim the fix retracts. It does not fire on
 proposal submit or review, which queue nothing; layer 1 is what covers those —
 nominally within five minutes, in practice at a 41-minute median (§"Layer 1 does
 not run every five minutes"). The proposal-submit **email** (`buildProposalEmail`) is immediate, not
@@ -481,7 +492,7 @@ Things that are counter-intuitive and were each a real defect at some point.
   the same rate it manages serially. The server serializes acceptance for remote
   recipients, so concurrency bought no throughput while turning would-be successes
   into destroyed notices (stage 8 consumes regardless). Recorded as **ADR-0013**.
-  **SUPERSEDED 2026-08-27:** that measured THAT server, and it is retired —
+  **REVERSED 2026-08-27:** that measured THAT server, and it is retired —
   `SEND_CONCURRENCY` is now **8** with the Gmail sender, which is the retirement
   condition ADR-0013 named for itself. **The rule it set still binds:** this value
   answers to measurement, not to reasoning, and the 8 currently rests on a report
@@ -593,6 +604,18 @@ Open a `.eml` in a mail client to check real rendering — it goes through the s
 pipeline a received message does, with no SMTP credentials and nothing sent.
 
 ## Still open
+
+- **A throttled wave is destroyed silently, and width 8 made it eight at a time.**
+  `sendOne` records a recipient as ATTEMPTED before awaiting, so a send that fails
+  — including a provider throttle — still discharges the notice: it is consumed,
+  `countLost` reports 0, and `unserved` is 0 too. The only signal is one
+  `notify_sweep_send_failed` line per recipient, and the flush workflow gates on
+  `lost > 0`, so it stays green. This is the documented at-most-once contract and
+  is not new; what IS new is that `SEND_CONCURRENCY = 8` turns one destroyed
+  notification into up to eight, and Gmail's failure mode is per-account
+  throttling rather than the old server's per-message timeout. The pooled
+  transport carries no `rateLimit`/`rateDelta`, so there is no client-side brake.
+
 
 - **The send-budget inequality and the recipient cap.** Spec §1 requires
   `ms_per_send × NOTIFY_FLUSH_EMAIL_LIMIT < NOTIFY_SEND_BUDGET_MS`. Production

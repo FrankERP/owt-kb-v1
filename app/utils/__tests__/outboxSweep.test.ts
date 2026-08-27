@@ -1387,7 +1387,7 @@ describe("sweepOutbox — configuration", () => {
     expect(SEND_BUDGET_MS).toBe(40_000);
   });
 
-  it("satisfies the knob inequality at layer 1 and at the derated layer 2", () => {
+  it("satisfies the knob inequality at layer 1 and at the derated layer 2", async () => {
     // §10's release gate as a STANDING regression check. Asserting the two
     // constants' values (above) would pass against any pair of numbers someone
     // typed, including a pair that cannot fit — this asserts they fit.
@@ -1400,7 +1400,13 @@ describe("sweepOutbox — configuration", () => {
     // previous version of this row asserted `SEND_BUDGET_MS / LAYER_2_DERATE`,
     // an expression production stopped using on 2026-08-27 — it passed while
     // describing a machine that no longer existed.
-    const waves = Math.ceil(EMAIL_LIMIT / SEND_CONCURRENCY);
+    // The REAL constant, not this file's mock of it. Computing waves from the
+    // mock is how a guard goes green describing a machine that does not exist:
+    // the mock said 8 for three weeks while production shipped 1.
+    const { SEND_CONCURRENCY: realConcurrency } =
+      await vi.importActual<typeof import("@/app/utils/email")>("@/app/utils/email");
+    expect(realConcurrency).toBe(SEND_CONCURRENCY);
+    const waves = Math.ceil(EMAIL_LIMIT / realConcurrency);
     const spendable = SEND_BUDGET_MS - SEND_TIMEOUT_MS;
     // The first wave is admitted at elapsed 0; each further wave costs one send's
     // latency and must still leave the reserve.

@@ -22,7 +22,7 @@ consume stage, serial claims). The standing constraint underneath them is not.
 > is in `docs/NOTIFICATIONS.md` §"Send throughput on Gmail"; it is a bound from the
 > sweep's report, not the authoritative `msPerSend` log line.
 >
-> **AND THE DECISION IS SUPERSEDED.** `SEND_CONCURRENCY` is **8** as of
+> **AND THE DECISION IS REVERSED.** `SEND_CONCURRENCY` is **8** as of
 > 2026-08-27, on Frank's report that concurrency was tested against Gmail and
 > works. The refutation recorded below is not thereby wrong — it measured that
 > **`mail.oasis.mx`** serialized acceptance for remote recipients, and a different

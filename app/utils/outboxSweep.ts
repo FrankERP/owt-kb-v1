@@ -915,6 +915,9 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
           unserved: report.unserved,
           emailed: report.emailed,
           sendBudgetMs,
+          // BOTH clocks, because layer 2 derates them to different values and
+          // `stoppedBy` alone does not say WHICH deadline was in force.
+          sweepDeadlineMs,
           // WHICH bound stopped the stage. `sweep_deadline` means the read phase
           // is crowding out the sends and the budget is no longer the real limit.
           stoppedBy: budgetSpent ? "send_budget" : "sweep_deadline",

@@ -491,8 +491,11 @@ type BuiltUpsert = NonNullable<ReturnType<typeof setlistUpsert>>;
  * server, which is the conservative behaviour the original halving intended and
  * accidentally made unconditional.
  *
- * AND THE WHOLE-SWEEP CLOCK IS DERATED THE SAME WAY, because otherwise this
- * would widen the host invocation's worst case by the 10 s it just handed back.
+ * AND THE WHOLE-SWEEP CLOCK IS DERATED THE SAME WAY. Precisely: the 45 s
+ * ceiling capped stage 7 either way, so the GLOBAL worst case did not move — what
+ * the budget fix raised is what layer 2 spends at a normal, short read phase,
+ * from 20 s to 30 s. Derating this clock is what lowers the ceiling itself, from
+ * 45 s to 32.5 s.
  * `SWEEP_DEADLINE_MS` runs from the top of the SWEEP, not the top of the
  * invocation, so it never accounted for the write route's own elapsed time — the
  * budget derate was the only thing that did. Halving its spendable part too
@@ -512,20 +515,27 @@ type BuiltUpsert = NonNullable<ReturnType<typeof setlistUpsert>>;
  */
 const LAYER_2_DERATE = 2;
 
+/**
+ * Halve a sweep clock's SPENDABLE part — everything above the per-send reserve —
+ * rather than the clock itself.
+ *
+ * Exported for its own unit test, because the interesting configurations are the
+ * ones no shipped config reaches: below the reserve there is nothing to halve,
+ * and `SEND_TIMEOUT_MS + 0` would hand layer 2 MORE than layer 1 and invert the
+ * point of derating. `Math.min` against the full value makes "layer 2 never
+ * outspends layer 1" hold unconditionally instead of only at the defaults.
+ */
+export function derateClock(full: number, derate = LAYER_2_DERATE): number {
+  return Math.min(full, SEND_TIMEOUT_MS + Math.max(0, full - SEND_TIMEOUT_MS) / derate);
+}
+
 export function opportunisticSweepOptions(): Required<
   Pick<SweepOptions, "emailLimit" | "sendBudgetMs" | "sweepDeadlineMs">
 > {
-  const derate = (full: number) =>
-    // `Math.min` against the full value, not just a floor at zero: with
-    // `NOTIFY_SEND_BUDGET_MS` misconfigured at or below the reserve there is
-    // nothing to halve, and `SEND_TIMEOUT_MS + 0` would EXCEED layer 1 and invert
-    // the whole point of derating. Clamping makes "layer 2 never outspends layer
-    // 1" hold unconditionally rather than only at the defaults.
-    Math.min(full, SEND_TIMEOUT_MS + Math.max(0, full - SEND_TIMEOUT_MS) / LAYER_2_DERATE);
   return {
     emailLimit: Math.max(1, EMAIL_LIMIT / LAYER_2_DERATE),
-    sendBudgetMs: derate(SEND_BUDGET_MS),
-    sweepDeadlineMs: derate(SWEEP_DEADLINE_MS),
+    sendBudgetMs: derateClock(SEND_BUDGET_MS),
+    sweepDeadlineMs: derateClock(SWEEP_DEADLINE_MS),
   };
 }
 
