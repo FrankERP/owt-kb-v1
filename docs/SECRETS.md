@@ -173,9 +173,11 @@ npx vercel env rm EMAIL_REDIRECT_TO production --yes
 
 **Needed in: Vercel Production only.** Not in GitHub Actions — the flush workflow only curls the route and never reads this. Not in `.env.local`, and not on Preview unless you are deliberately rehearsing there.
 
+**It is a tuning number, not a credential, and it is now stored as `Config` rather than `Secret`.** It was Sensitive until 2026-08-27, which meant `vercel env ls` showed `Hidden` and `vercel env pull` returned `[SENSITIVE]` — so the operative value could not be verified by anyone, only asserted in this file. A knob whose whole purpose is to be checked against a measurement should be readable. Re-add it with `--no-sensitive` if it is ever recreated.
+
 **Why it is set.** It caps the DISTINCT RECIPIENTS one sweep may claim. That cap is what makes stage 8's unconditional delete safe: a sweep is supposed to fully discharge everything it claims, so anything it claims and cannot send is **destroyed**, not retried. When `ms_per_send` is unknown or bad, a low value turns that risk into a bounded experiment — selection claims only what it can serve and leaves the rest **pending and unclaimed** (`report.deferred`), which the next sweep picks up.
 
-**Set to `2` — the number of sends that actually fit at the ~14 s each measured on the RETIRED sender (`mail.oasis.mx`).** It is the lesser of two bad options, and both are worth understanding before anyone changes it.
+**Set to `40` since 2026-08-27 — the code default, measured to hold.** It was `2` for three weeks, sized for the ~14 s per send of the retired `mail.oasis.mx`; that number and its reasoning are kept below because they explain why the cap was ever below the seat count. It is the lesser of two bad options, and both are worth understanding before anyone changes it.
 
 The cap governs what a sweep **claims**, and claiming is what commits a notice to being deleted whether or not it was sent. Above the serviceable count, the excess is destroyed. Below the month's distinct-recipient count, the fan-out fragments, because stage 6 can only group what stage 3 claimed — and a month of roles is published at once, so the requirement is ONE grouped email per member covering their whole month. So: high loses mail, low fragments it. `2` chooses fragmentation, because losing it is worse.
 
