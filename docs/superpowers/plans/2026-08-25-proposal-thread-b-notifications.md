@@ -848,6 +848,24 @@ production holds zero proposals in `pending` or `changes_requested`, so the emai
 branch cannot be exercised without submitting a real proposal on `preview`, which
 writes the real dataset and mails the real admin team.
 
+### Released
+
+**2026-08-27, `c47d30ad` (PR #10).** All three slices in one deploy, as
+§Release procedure requires. The outbox pre-check ran twice against production
+and returned zero both times; the dev alias was verified on `ccfd844c` and the
+production alias on the merge commit, each by `alias` + `meta.githubCommitSha`
+rather than by a green build. No thread message was posted through `preview`
+during the window (step 3). The Sanity schema was redeployed and the deployed
+manifest re-read to confirm `beforeMessageCount` is actually in it.
+
+Gates on the released tree: `tsc` 0 errors, 4281 tests, `eslint` 0 errors.
+
+**Step 6's walkthrough is NOT done** — it belongs to whoever can sign in as a
+lead, and only the push branch is reachable: production holds zero proposals in
+`pending` or `changes_requested`, so the email branch cannot be exercised without
+creating a real proposal and mailing the real admin team. It rests on the two
+composed suites, as this plan says it must.
+
 ## Terminal state
 
 `READY_FOR_ADVERSARIAL_REVIEW` — all three open questions are closed.
