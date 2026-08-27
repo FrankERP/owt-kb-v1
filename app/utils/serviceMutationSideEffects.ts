@@ -642,9 +642,7 @@ export interface QueueLeadNotesNoticeInput {
   /**
    * The stored `lead_notes` BEFORE this write, captured PRE-COMMIT.
    *
-   * KEPT even though the flush no longer classifies against it. It exists for
-   * ONE reader: production's OLD sweep, during the preview→main window and after
-   * a revert, both of which compare this snapshot against the live `lead_notes`.
+   * KEPT even though the flush no longer classifies against it.
    *
    * WHO READS IT: production's OLD sweep, which compares this snapshot against
    * the live `lead_notes` during the preview→main window and after a revert.
@@ -805,13 +803,35 @@ export function proposalReviewRecipients(doc: Record<string, unknown>): string[]
   return [...new Set([lead, ...people].filter((id): id is string => !!id))];
 }
 
-/** `request_changes` / `reopen` / `approve` review push to the shared-proposal team. */
+/**
+ * `request_changes` / `reopen` / `approve` review push to the shared-proposal
+ * team — and, with `excludeIds`, the admin's standalone thread message.
+ *
+ * The audience is the LEAD plus contributors. Read who RECEIVES, not the
+ * arrow's direction: this is the right helper whenever the recipient is the
+ * lead, and the wrong one whenever the recipient is admins, who have their own
+ * query.
+ *
+ * `excludeIds` is an optional THIRD parameter and changes neither existing call
+ * site, both of which pass two arguments. It exists because the helper resolves
+ * its own recipients internally and exposes no hook, so "filter in the route"
+ * would mean re-implementing `proposalReviewRecipients` + `sendPush` — a second
+ * copy of the audience rule.
+ *
+ * **The filter runs BEFORE the empty-audience guard, and that ordering is the
+ * whole point.** A proposal whose only review recipient is the posting admin
+ * would otherwise pass the guard on a non-empty list and push them about their
+ * own message. Filtering after the guard is a no-op precisely in the one case
+ * the parameter exists for.
+ */
 export async function notifyProposalReview(
   doc: Record<string, unknown>,
   push: { title: string; body: string },
+  excludeIds?: readonly string[],
 ): Promise<void> {
   await attempt("proposal review push", () => {
-    const recipients = proposalReviewRecipients(doc);
+    const excluded = new Set(excludeIds ?? []);
+    const recipients = proposalReviewRecipients(doc).filter((id) => !excluded.has(id));
     if (!recipients.length) return;
     // Fire-and-forget, as before: a review decision never waits on FCM.
     fireAndForget("proposal review push", sendPush(recipients, "proposals", { ...push, path: "/me" }));

@@ -65,7 +65,7 @@ export const EMAIL_PREF_ROWS: EmailPrefRow[] = [
     kind: "proposals",
     field: NOTIFY_PREF_FIELD.proposals,
     label: "Propuestas",
-    hint: "Notas del líder y propuestas nuevas.",
+    hint: "Mensajes de la propuesta y propuestas nuevas.",
     adminOnly: true,
   },
 ];

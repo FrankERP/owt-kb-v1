@@ -23,6 +23,74 @@ import {
 import { isThreadOpen } from "@/app/utils/proposalThread";
 import { THREAD_AFTER_APPEND_QUERY, type ThreadMessageRow } from "@/app/utils/proposalMessageRead";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
+import { fireAndForget } from "@/app/utils/serviceMutationSideEffects";
+import { ADMIN_RECIPIENTS_QUERY } from "@/app/utils/proposalNotifyQueries";
+import { sendPush } from "@/app/utils/push";
+import { canonicalMembersByIdsQuery } from "@/app/utils/serviceReadQueries";
+
+/**
+ * Push the admins about a lead's message on an APPROVED proposal.
+ *
+ * `ADMIN_RECIPIENTS_QUERY` carries no ministry or active-member filter. Inherited
+ * from the two copies Child B Phase A collapsed into it, NOT introduced here, and
+ * recorded so a later reader does not re-litigate it as new — it is
+ * FrankERP/owt-kb-v1#8. What this call does add is frequency: the audience used
+ * to be resolved on transitions and submissions only, and now it is resolved per
+ * message.
+ *
+ * The AUTHOR is filtered out. A lead who is also an `admin` is in that set, and
+ * nothing else removes them.
+ *
+ * `path: "/admin"` — the admin surface. `notifyProposalReview` hardcodes `/me`,
+ * which is the LEAD's home and wrong for this audience.
+ *
+ * THE DATE IS RENDERED AT LOCAL NOON. A bare `new Date(iso)` day-flips in
+ * America/Mexico_City. The precedent to copy is `proposalNotify`; the precedent
+ * NOT to copy is `assignmentPush`, which interpolates the raw stored value into a
+ * push body with no rendering at all.
+ *
+ * THE AUTHOR NAME IS RESOLVED HERE, not taken from the route's response read.
+ * The plan says to reuse that one, but it is the POST-COMMIT read-back, which is
+ * deliberately wrapped in try/catch and yields `null` on failure — reporting a
+ * stored message as an error would invite a retry this delivery cannot undo. On
+ * that branch there is no name, and the message has still committed, so the push
+ * must still fire. A push body reading "undefined escribió" is worse than one
+ * without a name, so the name is looked up on its own and the body falls back to
+ * a nameless form when it is missing.
+ */
+async function pushAdminsAboutLeadMessage(o: {
+  proposalId: string;
+  authorId: string;
+  serviceDate: string;
+}): Promise<void> {
+  const [adminIds, members] = await Promise.all([
+    operationalClient.fetch<string[] | null>(ADMIN_RECIPIENTS_QUERY),
+    (() => {
+      const q = canonicalMembersByIdsQuery([o.authorId]);
+      return operationalClient.fetch<{ alias?: string; member_name?: string }[] | null>(
+        q.query,
+        q.params,
+      );
+    })(),
+  ]);
+  const recipients = (adminIds ?? []).filter((id) => id && id !== o.authorId);
+  if (!recipients.length) return;
+
+  const who = members?.[0];
+  const name = who?.alias || who?.member_name || "";
+  const when = o.serviceDate
+    ? new Date(`${o.serviceDate.slice(0, 10)}T12:00:00`).toLocaleDateString("es-MX", {
+        day: "numeric",
+        month: "short",
+      })
+    : "";
+  const where = when ? ` del ${when}` : "";
+  const body = name
+    ? `${name} escribió en la propuesta${where}.`
+    : `Hay un mensaje nuevo en la propuesta${where}.`;
+
+  await sendPush(recipients, "proposals", { title: "Nuevo mensaje", body, path: "/admin" });
+}
 
 function reject(res: { status: number; body: unknown }) {
   return NextResponse.json(res.body, { status: res.status });
@@ -157,6 +225,31 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ id:
     beforeNotes,
     beforeMessageCount,
   });
+
+  // The lead→admin push, and it exists because the outbox email does NOT cover
+  // `approved` (Child B §Notifications). Both outbox gates are
+  // `{pending, changes_requested}` while the composer stays open on `approved`,
+  // and most proposals ARE approved — so without this a lead could post where no
+  // admin ever learns of it.
+  //
+  // THE GATE IS `status === "approved"`, nothing looser. "A status the outbox
+  // will not cover" is a NECESSARY condition only: read as sufficient it fires on
+  // `draft` too, which must stay silent because a draft is not in front of admins
+  // yet. ONE signal per message, never both — an email or a push.
+  //
+  // `previousStatus` is the pre-commit status, the same value the notice gate
+  // reads. An append does not move `status`, so pre and post agree here; using
+  // the snapshot keeps the two gates reading one value.
+  if (String(previousStatus ?? "") === "approved") {
+    fireAndForget(
+      "proposal lead message push",
+      pushAdminsAboutLeadMessage({
+        proposalId: id,
+        authorId: leadId,
+        serviceDate: typeof doc.service_date === "string" ? doc.service_date : "",
+      }),
+    );
+  }
 
   // The read-back is for the RESPONSE ONLY — the write already committed. It is
   // guarded because throwing here would report a landed message as a failure,

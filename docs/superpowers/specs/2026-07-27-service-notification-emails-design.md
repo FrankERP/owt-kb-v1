@@ -771,7 +771,7 @@ New boolean fields on `notifPrefs`, all defaulting to `true`:
 | `emailRemoved` | Ya no participas |
 | `emailRoleChanged` | Tu rol cambió |
 | `emailSetlist` | Setlist listo, El setlist cambió |
-| `emailProposals` | Notas del líder, plus the existing "nueva propuesta" admin email |
+| `emailProposals` | The debounced proposal-thread email (subject "Mensajes de la propuesta" since Child B; "Notas del líder" when this spec was written), plus the existing "nueva propuesta" admin email. It does NOT gate the thread's pushes, which read `notifPrefs.proposals` through `optedIn` instead |
 
 **Legacy fallback, no data migration.** Resolution for a given type: if the
 specific field is a boolean, use it; otherwise fall back to

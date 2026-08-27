@@ -15,7 +15,11 @@ export const SUBJECT: Record<LineKind, string> = {
   roleChanged: "Tu rol cambió",
   setlistReady: "Setlist listo",
   setlistChanged: "El setlist cambió",
-  leadNotes: "Notas del líder",
+  // "Mensajes de la propuesta", not "Notas del líder": the thread carries admin
+  // replies now, and the body can be several messages joined rather than one
+  // note. SUBJECT feeds BOTH the subject line and the in-body header via
+  // `headerLine`, so this one constant is two visible strings.
+  leadNotes: "Mensajes de la propuesta",
 };
 
 // Render at local noon per CLAUDE.md — a bare `new Date(iso)` flips the day in

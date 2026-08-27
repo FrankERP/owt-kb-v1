@@ -799,6 +799,37 @@ read a stored legacy value back and show it byte-unchanged after a write that
 would previously have moved it, on the patch, the transition and the message
 route.
 
+### Slice 3 — both pushes and the copy (`feat/proposal-thread-b3-pushes`)
+
+In: the lead→admin push on `approved`; the admin→lead push for a standalone
+message, via `notifyProposalReview`'s new optional `excludeIds`; the author
+excluded in both directions; the `leadNotes` subject and the preference hint.
+With this the delivery is feature-complete — nothing of Child B is left unbuilt.
+
+**One instruction in this plan could not be followed as written, and the reason
+is worth keeping.** §Push says the lead→admin body must use "the author name the
+message route has already resolved for its own response — **not a second read**."
+That name comes from the POST-COMMIT read-back, which is deliberately wrapped in
+try/catch and yields `null` on failure, because reporting a stored message as an
+error invites a retry this delivery cannot undo. On that branch there is no name
+and the message has still committed, so the push must still fire. A body reading
+"undefined escribió" is worse than one without a name. The name is therefore
+resolved on its own, and the body falls back to a nameless form — pinned by a
+test that empties the member store.
+
+**The email-XOR-push invariant is proved by TWO suites composed, and it has to
+be.** `proposalMessageRoutes.test.ts` mocks `queueLeadNotesNotice`, so the
+outbox gate inside that helper is not observable there — the route calls it
+unconditionally on every status. That suite pins the push and the status handed
+to the helper; `serviceMutationSideEffects.test.ts` pins that those statuses
+queue nothing. **Until this slice only the POSITIVE case was covered there**
+(`previousStatus: "pending"`), so the half the invariant leans on was unpinned.
+
+**Neither branch of the XOR is reachable by hand**, in either direction:
+production holds zero proposals in `pending` or `changes_requested`, so the email
+branch cannot be exercised without submitting a real proposal on `preview`, which
+writes the real dataset and mails the real admin team.
+
 ## Terminal state
 
 `READY_FOR_ADVERSARIAL_REVIEW` — all three open questions are closed.

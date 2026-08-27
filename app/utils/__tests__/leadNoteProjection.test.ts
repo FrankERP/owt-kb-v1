@@ -238,9 +238,11 @@ describe("SUBMITTED_NOTIFY_QUERY", () => {
     // it also carries an `admin_change_request`. Both matter. The submit email
     // fires on every save committed `pending`, so a resubmit from
     // `changes_requested` is routine and the thread there holds the admin's own
-    // words; taking the last message of the WHOLE array would mail "Bendiciones."
-    // and dropping the filter would put the change request in a block headed
-    // "Notas del líder". No other row would notice either.
+    // words. Taking the last message of the WHOLE array mails "Bendiciones."; so
+    // does dropping the filter, since this consumer takes the last element
+    // either way. The change request lands in a block headed "Notas del líder"
+    // on the SWEEP's side, where every appended body is rendered rather than
+    // just the newest. No other row would notice any of it.
     //
     // `songs` comes back as an explicit null rather than being omitted — GROQ
     // projects a requested-but-absent field, which is why every consumer of

@@ -90,23 +90,46 @@ which is precisely what the mirror held — never dropped. Dropping would be saf
 and not correct: a notice that yields no pairs contributes no pending recipients,
 so `report.lost` stays 0 while a real message vanishes.
 
-**The consequence, which will be reported as a bug if nobody says it first:**
-`queueLeadNotesNotice` requires the pre-write status to be `pending` or
-`changes_requested`. Production currently holds **13 approved proposals, 1
-draft, and zero in either reviewable status** — so **a message posted today
-notifies nobody, in either direction**:
+**Both directions of the conversation now reach their counterpart.** They did
+not before: `queueLeadNotesNotice` requires the pre-write status to be `pending`
+or `changes_requested`, and production holds **13 approved proposals, 1 draft,
+and zero in either reviewable status** — so before slice 3 a message posted on a
+real proposal notified NOBODY, in either direction.
 
-| Who posts | Where | Today |
+| Who posts | Where | Signal |
 |---|---|---|
-| Lead, on `pending` / `changes_requested` | thread | the existing debounced admin email |
-| Lead, on `approved` — **the dominant real case** | thread | **nothing** |
-| Lead, on `draft` | thread | nothing (not in front of admins yet) |
-| Admin, standalone message | thread | **nothing** — no such feature existed before |
-| Admin, via `request_changes` / `reopen` | transition | unchanged review push |
+| Lead, on `pending` / `changes_requested` | thread | the debounced admin **email** |
+| Lead, on `approved` — **the dominant real case** | thread | **push to admins**, `/admin` |
+| Lead, on `draft` | thread | nothing — a draft is not in front of admins yet |
+| Admin, standalone message | thread | **push to the lead** + contributors, "Nuevo mensaje" |
+| Admin, via `request_changes` / `reopen` | transition | unchanged review push, exactly one |
+| Lead, first submission | save | unchanged `notifyProposalSubmitted` |
 
-Closing the two "nothing" rows is Child B, which adds a push to admins on
-`approved` and a push to the lead for a standalone admin message. It is planned
-and **not approved** — see its review log.
+**ONE SIGNAL PER MESSAGE, never both** — an email or a push, never the pair. The
+gate for the lead→admin push is `status === "approved"`, nothing looser: "a
+status the outbox will not cover" is a NECESSARY condition only, and read as
+sufficient it fires on `draft` too. Neither branch is reachable by hand in
+production, so it rests on `proposalMessageRoutes.test.ts` composed with
+`serviceMutationSideEffects.test.ts` — the first pins the push, the second pins
+that the status handed to the outbox helper queues nothing.
+
+Three named exceptions to the XOR, all inherent: the outbox's send-budget
+re-pend can re-send a joined body to an admin already served; a status
+round-trip inside one 60-minute window can email a message that was already
+pushed; and a re-submit fires `notifyProposalSubmitted`, which pushes and emails
+admins as it always has. The last is outside this delivery and unchanged by it.
+
+**These pushes are not debounced.** N messages, N pushes. Acceptable at this
+team's volume; if it becomes noise the fix is a push debounce, not a wider email.
+They also gate on a different preference axis from the email: `sendPush` reads
+`notifPrefs.proposals` via `optedIn`, while the email reads `emailProposals` via
+`wantsNotification`. Independent on purpose — do not "unify" them.
+
+The debounced email's subject is **"Mensajes de la propuesta"**, not "Notas del
+líder" — the thread carries admin replies and the body can be several messages
+joined. `SUBJECT` feeds both the subject line and the in-body header, so that is
+one constant and two visible strings. One accepted drift: the submit email's
+section label stays "Notas del líder", so a member sees two names for one thread.
 
 Three smaller behaviours worth knowing. The first two CHANGED with slice 1 and
 supersede what Child A §1 named as accepted gaps:

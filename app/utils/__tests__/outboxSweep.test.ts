@@ -1191,7 +1191,12 @@ describe("sweepOutbox — recipient scoping and read contract", () => {
 
     let report = await sweepOutbox();
     expect(sendEmailMock).toHaveBeenCalledTimes(2);
-    expect((sendEmailMock.mock.calls[0][0] as { subject: string }).subject).toContain("Notas del líder");
+    // The subject moved with the source: the thread carries admin replies and
+    // the body can be several messages, so "Notas del líder" was wrong twice
+    // over. This is the ONLY place the outbox subject is asserted.
+    expect((sendEmailMock.mock.calls[0][0] as { subject: string }).subject).toContain(
+      "Mensajes de la propuesta",
+    );
     expect(report.consumed).toBe(1);
 
     // A proposal that is no longer reviewable drops.

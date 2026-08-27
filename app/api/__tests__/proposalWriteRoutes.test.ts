@@ -1248,6 +1248,28 @@ describe("PATCH /api/admin/proposals/[id] — request_changes and reopen", () =>
 
   // ── The transition's own thread message (Child A §4) ────────────────────
 
+  it("pushes EXACTLY once on request_changes — not twice", async () => {
+    // Child B added a push to the standalone admin message route. The transition
+    // already had one (`notifyProposalReview(doc, REVIEW_PUSH[action])`), and the
+    // failure this guards is adding a second call site rather than reusing it: a
+    // lead would get "Cambios solicitados" and "Nuevo mensaje" for one decision.
+    //
+    // Counted on `sendPushMock`, the mechanism this suite already uses. A
+    // wholesale mock of `serviceMutationSideEffects` would make this pass
+    // vacuously AND vacate the existing negative push assertions elsewhere in
+    // this file — retiring three guards on the delivery whose subject is push
+    // fan-out.
+    seed();
+    const res = await patchAdmin(PROPOSAL_ID, {
+      action: "request_changes",
+      rev: "prop-rev-1",
+      adminNotes: "Cambia la última",
+    });
+    expect(res.status).toBe(200);
+    expect(sendPushMock).toHaveBeenCalledTimes(1);
+    expect((sendPushMock.mock.calls[0][2] as { title: string }).title).toBe("Cambios solicitados");
+  });
+
   it("appends the change-request note as a message, inside the SAME patch", async () => {
     seed();
     const res = await patchAdmin(PROPOSAL_ID, {

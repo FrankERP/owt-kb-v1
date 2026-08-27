@@ -16,6 +16,13 @@ const requireActiveManagerMock = vi.fn();
 const operationalFetch = vi.fn();
 const rawFetch = vi.fn();
 const queueLeadNotesNoticeMock = vi.fn();
+const sendPushMock = vi.fn();
+
+// The transport, mocked at `push.ts` rather than at
+// `serviceMutationSideEffects` — a wholesale mock of that module would vacate
+// `notifyProposalReview`'s own audience resolution, which is exactly what the
+// admin→lead rows below are asserting.
+vi.mock("@/app/utils/push", () => ({ sendPush: (...a: unknown[]) => sendPushMock(...a) }));
 
 vi.mock("@/app/utils/authGuards", () => ({
   requireMinistryMember: () => requireMinistryMemberMock(),
@@ -131,6 +138,10 @@ interface Store {
   proposals: Record<string, unknown>[];
   rawRoleDrafts: Record<string, unknown>[];
   rawProposalDrafts: Record<string, unknown>[];
+  /** `ADMIN_RECIPIENTS_QUERY`'s answer — ids, as that query projects. */
+  admins: string[];
+  /** `canonicalMembersByIdsQuery`'s answer, keyed by id. */
+  members: Record<string, { alias?: string; member_name?: string }>;
 }
 let store: Store;
 
@@ -182,6 +193,15 @@ function proposal(over: Record<string, unknown> = {}): Record<string, unknown> {
 }
 
 function canonicalRead(query: string, params: Record<string, unknown>): unknown {
+  // ADMIN_RECIPIENTS_QUERY — the un-scoped admin audience the lead→admin push
+  // fans out to. Matched on the role list, which is what makes it that query.
+  if (query.includes('role in ["super-admin","admin"]')) return store.admins;
+  // canonicalMembersByIdsQuery — the author's display name for the push body.
+  if (query.includes("teamMembers") && query.includes("_id in $ids")) {
+    return ((params.ids as string[]) ?? [])
+      .map((id) => store.members[id])
+      .filter(Boolean);
+  }
   if (query.includes("setlistProposal")) {
     // The routes' own response read, projecting the thread back with names.
     // `_id == $id` too: `THREAD_MESSAGES` is also interpolated into the GET
@@ -231,7 +251,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   patches.length = 0;
   commitOutcomes.length = 0;
-  store = { roles: [], proposals: [], rawRoleDrafts: [], rawProposalDrafts: [] };
+  store = {
+    roles: [],
+    proposals: [],
+    rawRoleDrafts: [],
+    rawProposalDrafts: [],
+    admins: ["adm-1", "adm-2"],
+    members: { "mem-1": { alias: "Ana" }, "adm-1": { alias: "Admin Uno" } },
+  };
   requireMinistryMemberMock.mockResolvedValue(LEAD);
   requireActiveManagerMock.mockResolvedValue(ADMIN);
   operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) =>
@@ -327,6 +354,104 @@ describe("POST /api/me/proposals/[id]/messages — the lead side", () => {
     // `afterNotes` is GONE, not renamed. It carried the queue side's own
     // trimmed-equal guard, which now lives only in the callers.
     expect(queueLeadNotesNoticeMock.mock.calls[0][0]).not.toHaveProperty("afterNotes");
+  });
+
+  // ── Email XOR push (Child B criteria 2 and 4) ─────────────────────────────
+  //
+  // THE DELIVERY'S HEADLINE INVARIANT, and NOTHING ELSE PINS IT. There is also
+  // no manual fallback: production holds zero proposals in `pending` or
+  // `changes_requested`, so the email branch cannot be reached by hand at all.
+  //
+  // The two gates a plausible implementation reaches for are both wrong and both
+  // pass every other row in this file:
+  //   - `status !== "draft"` fires on `pending`/`changes_requested` too, so the
+  //     admins get an email AND a push for one message.
+  //   - `!REVIEWABLE_BEFORE_WRITE.has(previousStatus)` looks precise and is the
+  //     same bug: that set IS `{pending, changes_requested}`, so its negation
+  //     includes `draft`, which must stay silent.
+  // The gate is `status === "approved"`, nothing else.
+  for (const status of ["pending", "changes_requested"] as const) {
+    it(`emails and does NOT push on ${status}`, async () => {
+      seed({ status });
+      const res = await postLead({ body: "una nota" });
+      expect(res.status).toBe(200);
+      expect(queueLeadNotesNoticeMock).toHaveBeenCalledTimes(1);
+      expect(sendPushMock).not.toHaveBeenCalled();
+    });
+  }
+
+  it("pushes and does NOT queue an email on approved", async () => {
+    seed({ status: "approved" });
+    const res = await postLead({ body: "una nota" });
+    expect(res.status).toBe(200);
+    expect(sendPushMock).toHaveBeenCalledTimes(1);
+    // The outbox gate lives INSIDE `queueLeadNotesNotice`, which this suite
+    // mocks — so the route calls it unconditionally and the early return is not
+    // observable here. What IS observable is the status it was handed, and
+    // `serviceMutationSideEffects.test.ts` pins that this exact value queues
+    // nothing. The XOR is proved by the two suites composed, never by one.
+    expect(queueLeadNotesNoticeMock.mock.calls[0][0]).toMatchObject({
+      previousStatus: "approved",
+    });
+  });
+
+  it("pushes the ADMINS, on the admin surface, with the author's name and the service date", async () => {
+    seed({ status: "approved" });
+    await postLead({ body: "una nota" });
+    const [recipients, pref, payload] = sendPushMock.mock.calls[0] as [
+      string[],
+      string,
+      { title: string; body: string; path: string },
+    ];
+    expect(recipients).toEqual(["adm-1", "adm-2"]);
+    expect(pref).toBe("proposals");
+    expect(payload.title).toBe("Nuevo mensaje");
+    // `/admin`, not `/me` — `notifyProposalReview` hardcodes the LEAD's surface,
+    // which is why that helper is not used for this audience.
+    expect(payload.path).toBe("/admin");
+    expect(payload.body).toContain("Ana");
+    // Rendered at LOCAL NOON. WEEK is 2099-09-06; a bare `new Date(iso)` in
+    // America/Mexico_City renders the 5th.
+    expect(payload.body).toContain("6 sep");
+  });
+
+  it("falls back to a nameless body rather than interpolating nothing", async () => {
+    // The author's name is not resolvable. The message HAS committed, so the
+    // push must still fire — and "undefined escribió" is worse than no name.
+    seed({ status: "approved" });
+    store.members = {};
+    await postLead({ body: "una nota" });
+    const payload = sendPushMock.mock.calls[0][2] as { body: string };
+    expect(payload.body).not.toContain("undefined");
+    expect(payload.body).toContain("mensaje nuevo");
+  });
+
+  it("excludes the author from the admin push — a lead who is also an admin", async () => {
+    seed({ status: "approved" });
+    store.admins = ["mem-1", "adm-2"];
+    await postLead({ body: "una nota" });
+    expect(sendPushMock.mock.calls[0][0]).toEqual(["adm-2"]);
+  });
+
+  it("pushes nothing at all when the author is the only admin", async () => {
+    seed({ status: "approved" });
+    store.admins = ["mem-1"];
+    await postLead({ body: "una nota" });
+    expect(sendPushMock).not.toHaveBeenCalled();
+  });
+
+  it("a message on a DRAFT proposal notifies nobody, in either channel", async () => {
+    // A draft is not in front of admins yet. This is the row both wrong gates
+    // above would fail.
+    seed({ status: "draft" });
+    const res = await postLead({ body: "una nota" });
+    expect(res.status).toBe(200);
+    expect(sendPushMock).not.toHaveBeenCalled();
+    // Same composition as the `approved` row: the helper is handed `draft` and
+    // declines, which its own suite pins.
+    expect(queueLeadNotesNoticeMock.mock.calls[0][0]).toMatchObject({
+      previousStatus: "draft",
+    });
   });
 
   it("counts only LEAD notes into the snapshot, never the whole thread", async () => {
@@ -454,6 +579,59 @@ describe("POST /api/me/proposals/[id]/messages — the lead side", () => {
 });
 
 describe("POST /api/admin/proposals/[id]/messages — the admin side", () => {
+  it("pushes the LEAD with NEW copy — not the change-request alarm", async () => {
+    // The other half of the conversation. Before Child B a standalone admin
+    // message notified nobody at all.
+    //
+    // ASSERT THE COPY, not just the call. Reusing `REVIEW_PUSH.request_changes`
+    // would push "Cambios solicitados — Revisaron la propuesta y pidieron
+    // cambios" when an admin merely asked a question, and no other row here
+    // would notice.
+    seed();
+    const res = await postAdmin({ body: "¿Podemos cerrar más lento?" });
+    expect(res.status).toBe(200);
+    const [recipients, pref, payload] = sendPushMock.mock.calls[0] as [
+      string[],
+      string,
+      { title: string; body: string; path: string },
+    ];
+    // `doc.lead` plus contributors — the LEAD's audience, resolved by
+    // `notifyProposalReview` itself rather than by this route.
+    expect(recipients).toEqual(["mem-1"]);
+    expect(pref).toBe("proposals");
+    expect(payload.title).toBe("Nuevo mensaje");
+    expect(payload.title).not.toBe("Cambios solicitados");
+    expect(payload.body).not.toContain("pidieron cambios");
+  });
+
+  it("excludes the posting admin, and does so BEFORE the empty-audience guard", async () => {
+    // THE ONE CASE that distinguishes filter-before-guard from
+    // filter-after-guard: the posting admin is the proposal's ONLY review
+    // recipient. A filter placed after the guard is a no-op precisely here, and
+    // the proposal's lead would be pushed about their own message.
+    //
+    // The lead→admin row's "author is also an admin" case cannot catch this — it
+    // exercises the route-side filter on the other direction.
+    seed({ lead: "adm-1", contributors: [] });
+    requireActiveManagerMock.mockResolvedValue({
+      user: { role: "admin", sanityId: "adm-1" },
+    });
+    const res = await postAdmin({ body: "una pregunta" });
+    expect(res.status).toBe(200);
+    expect(sendPushMock).not.toHaveBeenCalled();
+  });
+
+  it("still pushes the OTHER recipients when the author is one of them", async () => {
+    // The complement of the row above: excluding the author must not empty an
+    // audience that has somebody else in it.
+    seed({ lead: "adm-1", contributors: [{ _key: "c1", person: "mem-1" }] });
+    requireActiveManagerMock.mockResolvedValue({
+      user: { role: "admin", sanityId: "adm-1" },
+    });
+    await postAdmin({ body: "una pregunta" });
+    expect(sendPushMock.mock.calls[0][0]).toEqual(["mem-1"]);
+  });
+
   it("appends an admin_change_request and does NOT touch admin_notes", async () => {
     seed({ admin_notes: "el archivo de la petición de cambios" });
     const res = await postAdmin({ body: "¿Podemos cerrar más lento?" });

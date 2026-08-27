@@ -12,6 +12,7 @@ import { serviceError } from "@/app/utils/serviceMutation";
 import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
 import { nextKey, nowIso } from "@/app/utils/roleWriteOps";
 import { loadCanonicalProposal } from "@/app/utils/serviceWriteTargets";
+import { fireAndForget, notifyProposalReview } from "@/app/utils/serviceMutationSideEffects";
 import {
   buildProposalMessage,
   parseProposalMessageRequest,
@@ -108,6 +109,12 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const observedRev = typeof doc._rev === "string" ? doc._rev : null;
+  // PRE-COMMIT: the push below reads it, and the read-back that follows the
+  // commit is guarded and may return null. Nothing about the audience changes
+  // between here and there — `doc.lead` and `doc.contributors` are not touched
+  // by an append — but taking it from the loaded document keeps the push off the
+  // guarded read entirely.
+  const pushDoc = doc;
 
   try {
     // No `ifRevisionId`, and `setIfMissing` before `append` — both for the same
@@ -125,6 +132,34 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ id:
     if (!sanityConflictKind(err)) throw err;
     return reject(serviceError("stale_revision", { details: { id } }));
   }
+
+  // The other half of the conversation (Child B). A standalone admin message
+  // notified NOBODY before this: the transition pushes on `request_changes` and
+  // `reopen`, but an admin asking a question in the thread was silent.
+  //
+  // NEW COPY, deliberately. Reusing `REVIEW_PUSH.request_changes` would push
+  // "Cambios solicitados — Revisaron la propuesta y pidieron cambios" when an
+  // admin merely asked something, which is worse than saying nothing.
+  //
+  // `notifyProposalReview` is the right helper here because the RECIPIENT is the
+  // lead, not because of the arrow's direction — and the author is excluded
+  // through its third parameter rather than in this route, so the audience rule
+  // stays written down once.
+  //
+  // Fired post-commit and not awaited for delivery: the message has landed, and
+  // a push failure must not turn a stored message into an error response, which
+  // would invite a retry that this delivery cannot undo.
+  fireAndForget(
+    "proposal admin message push",
+    notifyProposalReview(
+      pushDoc,
+      {
+        title: "Nuevo mensaje",
+        body: "Un admin escribió en la propuesta.",
+      },
+      adminId ? [adminId] : [],
+    ),
+  );
 
   // The read-back is for the RESPONSE ONLY — the write already committed. It is
   // guarded because throwing here would report a landed message as a failure,
