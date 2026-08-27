@@ -9,6 +9,18 @@ returned 504 `FUNCTION_INVOCATION_TIMEOUT` and the team received nothing. The
 proximate defects were ours and are fixed (unbounded sends, no reserve for the
 consume stage, serial claims). The standing constraint underneath them is not.
 
+> **The sender has since moved.** These figures were measured against
+> `mail.oasis.mx`; production now sends through **Gmail SMTP** as
+> `dev.raccoon.labs@gmail.com`, because DNS verification for `oasis.mx` in Resend
+> could not be completed. The 14.4 s per remote recipient is a property of the OLD
+> server and has **not** been re-measured on Gmail. Everything calibrated on it —
+> `NOTIFY_FLUSH_EMAIL_LIMIT=2`, the 40 s send budget, and the inequality
+> `MEASURED_MS_PER_SEND` guards in `outboxSweep.test.ts` — is therefore
+> conservative rather than wrong: a faster server sends MORE per sweep than the
+> budget assumes, never fewer. Re-measure with
+> `scripts/measure-send-budget.mjs` before loosening any of them. The decision
+> below stands on its own reasoning and is not invalidated by the move.
+
 Measured from production, against `mail.oasis.mx`:
 
 | what | cost |
