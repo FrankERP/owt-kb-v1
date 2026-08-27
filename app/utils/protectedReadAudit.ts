@@ -387,6 +387,14 @@ export const OPERATOR_TOOLING_ALLOWLIST: readonly AuditExemption[] = [
     removalOwner: "A3 verification tooling (never A2)",
   },
   {
+    file: "scripts/reconcile-proposal-messages.mjs",
+    operation: "module",
+    reason:
+      "READ-ONLY post-release reconcile for Child A's message migration: reads setlistProposal's lead_notes/admin_notes and messages[] and REPORTS a mismatch; it constructs no write, and exit 1 means a human looks. It exists for the window between the --apply and production serving the new code, in which old code wrote the legacy fields directly and minted no message — a note that the thread surfaces no longer render, so nothing else would report it",
+    removalOwner:
+      "operator verification tooling (never A2 — retire it with the legacy fields, once no unmigrated note can exist)",
+  },
+  {
     file: "scripts/requeue-role-notices.mjs",
     operation: "module",
     reason:

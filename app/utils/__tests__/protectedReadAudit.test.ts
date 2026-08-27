@@ -490,6 +490,9 @@ describe("A2 handoff allowlist", () => {
         "e2e/service-readiness/lib/dataset.ts#module",
         "scripts/backfill-legacy-seat-arrays.mjs#module",
         "scripts/bootstrap-weekend-locks.mjs#module",
+        // Child A Phase E added this read-only reconcile and listed it nowhere, so
+        // the audit failed on the commit that introduced it.
+        "scripts/reconcile-proposal-messages.mjs#module",
         // `migrate-proposal-messages.mjs` used to sit here. It ran on 2026-08-26
         // and moved to RETIRED_ONE_SHOT_WRITERS, which fails closed at
         // assertRetiredWriter — the two lists are mutually exclusive by design.
