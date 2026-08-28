@@ -908,10 +908,24 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
         });
         return;
       }
-      const { subject, html } = buildGroupedEmail(
-        { name: m.alias || m.member_name || "", lines },
-        titles,
-      );
+      // GUARDED, because a throw here is the last silent-discharge path. The
+      // recipient is already in `attemptedRecipientIds`, so a rejection would
+      // propagate through `Promise.all`, be caught by the sweep's outer handler,
+      // and leave that person consumed with no counter in ANY bucket — not
+      // `emailed`, not `failed`, not `lost`. Counted as `failed`, which is what
+      // it is: attempted and not delivered.
+      let subject: string;
+      let html: string;
+      try {
+        ({ subject, html } = buildGroupedEmail(
+          { name: m.alias || m.member_name || "", lines },
+          titles,
+        ));
+      } catch (err) {
+        report.failed++;
+        logError("notify_sweep_render_failed", { memberId: recipientId, error: String(err) });
+        return;
+      }
       const res = await sendEmail({
         to: redirectTo || email,
         subject: redirectTo ? `[→ ${email}] ${subject}` : subject,

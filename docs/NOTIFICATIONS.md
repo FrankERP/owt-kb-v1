@@ -356,16 +356,34 @@ gh workflow run "Flush notification outbox"
 ```
 
 A healthy run prints `HTTP 200` and a report like
-`{"claimed":0,"emailed":0,"consumed":0,"deferred":0,"unserved":0,"repended":0,"lost":0,"rounds":1}`. The workflow
+`{"claimed":0,"emailed":0,"consumed":0,"deferred":0,"unserved":0,"repended":0,"lost":0,"failed":0,"skipped":0,"rounds":1}`. The workflow
 asserts the status code explicitly rather than relying on `curl --fail`, which
 ignores 3xx — see the landmine below.
 
-**A red run does not always mean the cron is broken.** The job fails when the
-report carries `lost > 0`, which means recipients were claimed, never reached,
-and their notices were **consumed anyway** — permanently deleted. `unserved > 0`
-with `repended > 0` is normal: the send budget stopped early and those recipients
-wait for the next sweep (declared five-minutely; median 41). `deferred > 0` is also healthy:
-work left *unclaimed* for the next sweep.
+**A red run does not always mean the cron is broken.** Two conditions fail the job,
+and they are different failures:
+
+- **`lost > 0`** — recipients were claimed, never reached, and their notices were
+  **consumed anyway**. Permanently deleted, and the send was never attempted.
+- **`failed >= 2`** — sends that WERE attempted and did not succeed. Their notices
+  are consumed too, because `sendOne` marks a recipient attempted before awaiting
+  and that is what makes the contract at-most-once, so `lost` cannot see them.
+  **Red starts at two, not one:** a single failure is usually one undeliverable
+  address, and a member with a permanently bad address must never be able to hold
+  the alarm red forever. Two or more is the wave shape — `SEND_CONCURRENCY` is 8
+  and Gmail throttles per ACCOUNT, so a throttle arrives as a cluster. One
+  failure emits a warning instead.
+
+Healthy, and not failures: `unserved > 0` with `repended > 0` — the send budget
+stopped early and those recipients wait for the next sweep (declared
+five-minutely; median 41). `deferred > 0` — work left *unclaimed* for the next
+sweep. `skipped > 0` — a recipient with no address or blocked by
+`EMAIL_ALLOWLIST`; a warning, since a deliberately narrowed allowlist makes it the
+expected state.
+
+**All three gates fail OPEN on an absent field**, so rolling the route back to a
+build without `failed`/`skipped` disarms them silently. That is deliberate — it
+survives a deploy skew — but it means the gate is only as live as the deployment.
 
 **Is the mail path healthy, and where is its time going?**
 
