@@ -356,7 +356,7 @@ gh workflow run "Flush notification outbox"
 ```
 
 A healthy run prints `HTTP 200` and a report like
-`{"claimed":0,"emailed":0,"consumed":0,"deferred":0,"unserved":0,"repended":0,"lost":0,"failed":0,"skipped":0,"rounds":1}`. The workflow
+`{"rounds":1,"claimed":0,"emailed":0,"consumed":0,"deferred":0,"unserved":0,"repended":0,"lost":0,"failed":0,"skipped":0}` — `rounds` FIRST, which is the shape `aggregateFlushReports` builds; the order with `rounds` last comes only from the empty-drain branch, which `drainOutbox` cannot reach. The workflow
 asserts the status code explicitly rather than relying on `curl --fail`, which
 ignores 3xx — see the landmine below.
 
@@ -624,12 +624,21 @@ pipeline a received message does, with no SMTP credentials and nothing sent.
   What changed is visibility. The report now carries **`failed`** (attempted, not
   delivered) and **`skipped`** (discharged with no attempt at all — no member, no
   address, or blocked by `EMAIL_ALLOWLIST`, which previously logged nothing
-  whatsoever). The flush workflow goes **red on `failed`**, like it does on
-  `lost`, and **warns on `skipped`**, since a deliberately narrowed allowlist
-  makes that the expected state. The pooled transport also gained
-  `rateDelta`/`rateLimit`, a client-side brake sized so it caps a runaway without
-  pacing normal work — Gmail rate-limits per ACCOUNT, so a burst penalises every
-  send from the sender rather than one message.
+  whatsoever). The flush workflow goes **red on `failed >= 2`** — the wave shape —
+  **warns at 1**, since a single failure is usually one undeliverable address and
+  a member with a permanently bad address must not hold the alarm red, and
+  **warns on `skipped`**, since a deliberately narrowed allowlist makes that the
+  expected state.
+
+  **What is NOT mitigated, despite an option that looks like it is.** The pooled
+  transport carries `rateDelta`/`rateLimit`, but that is a sustained-rate cap and
+  **not a brake on the burst**: nodemailer opens a connection whenever a message
+  is queued and the pool is under `maxConnections`, with no rate check on that
+  path, and it consults the rate limiter only after a send SUCCEEDS — so the
+  error path a provider throttle takes bypasses it entirely. Verified against the
+  installed library source, not its docs. The levers that would actually brake a
+  wave are `SEND_CONCURRENCY` itself and pacing between waves in stage 7, and
+  neither is in place.
 
 
 - **The send-budget inequality and the recipient cap.** Spec §1 requires

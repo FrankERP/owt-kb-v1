@@ -438,10 +438,12 @@ describe("aggregateFlushReports", () => {
   });
 
   it("never emits null for a counter, whatever the rounds carry", async () => {
-    // The regression that actually happened: every mock in this file returned
-    // the OLD report shape, so `failed += r.failed` was `0 + undefined` = NaN and
-    // the route answered `"failed":null`. `toMatchObject` ignored the key, so
-    // nothing failed.
+    // A reducer-internal typo, which is what this row actually covers — the
+    // helper below always supplies both fields, so it cannot reproduce a CALLER
+    // passing the old shape. That regression (every mock returning the old
+    // report, making `failed += r.failed` NaN and the route answer
+    // `"failed":null`) is caught by the eleven updated fixtures plus the exact
+    // `failed: 0` assertion on the drain body, where `null !== 0` fails.
     const { aggregateFlushReports } = await import("@/app/api/cron/flush-notifications/route");
     const out = aggregateFlushReports([round({ emailed: 1 })]);
     for (const [k, v] of Object.entries(out)) {

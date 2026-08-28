@@ -740,6 +740,32 @@ describe("sweepOutbox — claim and consume", () => {
     expect(report.lost).toBe(0);
   });
 
+  it("counts a RENDER failure, the last path that had no counter at all", async () => {
+    // `buildGroupedEmail` throwing left a recipient consumed with no counter in
+    // ANY bucket: already in `attemptedRecipientIds`, so not `lost`; never
+    // reaching the send, so neither `emailed` nor `failed`. Attempted and not
+    // delivered is exactly `failed`.
+    world.notices = [roleNotice()];
+    world.roles = { r1: roleDoc() };
+    world.recipients = { r1: ["m1"] };
+    world.members = members(["m1"]);
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const mod = await import("@/app/utils/notificationEmail");
+    const spy = vi.spyOn(mod, "buildGroupedEmail").mockImplementation(() => {
+      throw new Error("render exploded");
+    });
+
+    const report = await sweepOutbox();
+
+    expect(report.failed).toBe(1);
+    expect(report.emailed).toBe(0);
+    expect(report.lost).toBe(0);
+    // Still consumed — the contract is unchanged; only the silence is fixed.
+    expect(report.consumed).toBe(1);
+    spy.mockRestore();
+    errSpy.mockRestore();
+  });
+
   it("separates a failed send from a skipped recipient in one sweep", async () => {
     // Both at once, because the two were previously the same invisible thing:
     // `emailed` lower than the recipient count, with no way to tell which.
