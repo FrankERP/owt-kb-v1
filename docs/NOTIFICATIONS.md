@@ -171,9 +171,9 @@ is the only bound.
 
 ### What this unlocks
 
-**`NOTIFY_FLUSH_EMAIL_LIMIT=2` is now the binding constraint, and it is the last
-knob still sized for the retired server.** The clock allows 72 recipients per
-layer-1 sweep; the cap allows 2. The code default of **40 is measured to hold** —
+**`NOTIFY_FLUSH_EMAIL_LIMIT=2` WAS the binding constraint, and the last knob still
+sized for the retired server.** The clock allows 72 recipients per layer-1 sweep;
+the cap allowed 2. The code default of **40 is measured to hold** —
 5 waves, 9 716 ms of the spendable 20 000, leaving 10 284 ms of margin — and
 layer 2's derated budget holds it too (3 waves, 4 858 ms of 10 000).
 

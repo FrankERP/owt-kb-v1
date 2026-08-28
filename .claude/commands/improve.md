@@ -38,7 +38,7 @@ worth changing is a success, not a failure. Never manufacture churn.
 5. **Verify it works — hard gate, no exceptions:**
    ```
    npx tsc --noEmit      # must exit 0
-   npm test              # must be all-green (2400+ tests)
+   npm test              # must be all-green (currently 4,293 tests)
    npx eslint .          # 0 errors (warnings are the tracked backlog — see Ladder rung 8)
    ```
    For data scripts, dry-run first, then verify against production. Only claim
@@ -131,8 +131,9 @@ for polish:
   on a proposed larger change.
 - **Consider a real feature** from the team's perspective if bugs are truly
   exhausted — scope it to something finishable and testable in a couple of runs.
-- **Periodically merge** `improve/continuous` → `main` (fast-forward-clean when
-  possible; verify tsc+tests on the merged result before pushing).
+- **Periodically release** `improve/continuous` — `preview` first, then a PR to
+  `main`. Never a local merge and push: `main` is protected. See *Commit / branch
+  conventions* below for the full order.
 
 ---
 
@@ -166,7 +167,7 @@ for polish:
 (`next-sanity`), Tailwind, NextAuth v4, Fuse.js. Node 22. Dark-mode-only. Studio
 embedded at `/studio`. Spanish-language UI (`lang="es"`).
 
-**Commands:** `npx tsc --noEmit` (typecheck), `npm test` (vitest, 2400+ tests),
+**Commands:** `npx tsc --noEmit` (typecheck), `npm test` (vitest, 4,293 tests),
 `npx eslint .` (flat config in `eslint.config.mjs`; 0 errors required, warnings
 are the deliberate backlog). No `build` needed for the gate.
 

@@ -186,26 +186,29 @@ describes. So the code shipped first, a production sweep verified it, and the ca
 followed. **If `SEND_CONCURRENCY` is ever lowered, lower this first** — in that
 order, or the window between them loses mail. It is the lesser of two bad options, and both are worth understanding before anyone changes it.
 
-The cap governs what a sweep **claims**, and claiming is what commits a notice to being deleted whether or not it was sent. Above the serviceable count, the excess is destroyed. Below the month's distinct-recipient count, the fan-out fragments, because stage 6 can only group what stage 3 claimed — and a month of roles is published at once, so the requirement is ONE grouped email per member covering their whole month. So: high loses mail, low fragments it. `2` chooses fragmentation, because losing it is worse.
+The cap governs what a sweep **claims**, and claiming is what commits a notice to being deleted whether or not it was sent. Above the serviceable count, the excess is destroyed. Below the month's distinct-recipient count, the fan-out fragments, because stage 6 can only group what stage 3 claimed — and a month of roles is published at once, so the requirement is ONE grouped email per member covering their whole month. So: high loses mail, low fragments it. **`2` chose fragmentation**, because losing it is worse — and it was the right call for a sender that took ~14 s per message. At Gmail's measured throughput the trade is gone: 40 is inside what the send path services, so the cap no longer has to pick a failure.
 
 **This does not protect `setlist` notices.** One setlist notice carries ALL of a service's participants in a single document, so it cannot be split by any cap: it is taken alone, over budget, and everyone past the serviceable count is destroyed. **`ms_per_send` coming down is exactly what has happened:** on 2026-08-27 a 14-recipient setlist notice went out with `unserved: 0` on Gmail, where the old sender would have destroyed 12. The gap is not closed in the code — the sweep still consumes what it never attempted — but at the current latency it is no longer being hit.
 
-**This is now the binding constraint, by two orders of magnitude — and it is the last knob still sized for the retired server.** The clock allows ~136 recipients per sweep at the current inputs (Gmail, `SEND_CONCURRENCY = 8`); this cap allows 2. `docs/NOTIFICATIONS.md` §"Send throughput on Gmail" carries the derivation, which depends on BOTH the per-send latency AND the concurrency — an earlier version of this line gave a single-number threshold ("raise it to 40 once a send costs under ~2 s") and was wrong twice over for exactly that reason.
+**It WAS the binding constraint, by a factor of 36, and was the last knob still sized for the retired server.** `docs/NOTIFICATIONS.md` §"Send throughput on Gmail" carries the derivation, which depends on BOTH the per-send latency AND the concurrency — earlier versions of this line gave a single-number threshold ("raise it to 40 once a send costs under ~2 s") and an inferred ceiling of ~136 recipients, and both were wrong for that reason. The measured ceiling is **72**.
 
-**The code default of 40 is MEASURED to hold** — probed 2026-08-27 against the live Gmail transport: 40 recipients is 5 waves at a per-wave p95 of 2 429 ms, so 9 716 ms of the spendable 20 000, leaving 10 284 ms of margin. The clock allows 72; this cap allows 2.
+**The code default of 40 is MEASURED to hold** — probed 2026-08-27 against the live Gmail transport: 40 recipients is 5 waves at a per-wave p95 of 2 429 ms, so 9 716 ms of the spendable 20 000, leaving 10 284 ms of margin. The clock allows 72; the cap allows 40.
 
-It has NOT been raised — that is a Vercel change, and a deliberate one. To re-probe, `scripts/measure-send-budget.mjs --to=you@example.com --concurrency=8 --apply` needs the app password, which `vercel env pull` will not give you (verified 2026-08-27: `SMTP_PASS` pulls as an 11-character `[SENSITIVE]` placeholder).
+It was raised 2 → 40 on 2026-08-27, after a production sweep verified concurrency 8 on the real path. To re-probe, `scripts/measure-send-budget.mjs --to=you@example.com --concurrency=8 --apply` needs the app password, which `vercel env pull` will not give you (verified 2026-08-27: `SMTP_PASS` pulls as an 11-character `[SENSITIVE]` placeholder).
 
 **How to set and unset:**
 
 ```bash
-printf '2' | npx vercel env add NOTIFY_FLUSH_EMAIL_LIMIT production
+# `--no-sensitive` deliberately: this is a tuning number, not a credential, and it
+# was stored as a Secret until 2026-08-27 — which meant the operative value could
+# not be read back and checked against the measurement it is derived from.
+npx vercel env add NOTIFY_FLUSH_EMAIL_LIMIT production --no-sensitive --value=40
 npx vercel env rm NOTIFY_FLUSH_EMAIL_LIMIT production --yes
 ```
 
 **A redeploy is required** for either direction to reach a running function.
 
-**Blast radius.** While it is low, a service whose fan-out exceeds it is split across sweeps — some members hear now and the rest on a later flush. That is the deliberate trade: slower, but nothing is deleted unsent. Leaving it low permanently is not harmful, only slow; raising it above what the send path can actually service in `NOTIFY_SEND_BUDGET_MS` is what silently loses mail.
+**Blast radius.** Set BELOW a service's fan-out, that service is split across sweeps — some members hear now and the rest on a later flush. Slower, but nothing is deleted unsent, which is why it sat at 2 for three weeks. Set ABOVE what the send path can service in `NOTIFY_SEND_BUDGET_MS`, the excess is claimed and destroyed silently. At 40 with `SEND_CONCURRENCY = 8` the measured ceiling is 72, so there is margin on both sides — but that margin is a property of the CURRENT sender and width, not of the number 40.
 
 ## Sanity CLI session token (`~/.config/sanity/config.json`)
 

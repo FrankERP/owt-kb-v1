@@ -40,7 +40,8 @@ worth changing is a success, not a failure. Never manufacture churn.
 5. **Verify it works — hard gate, no exceptions:**
    ```
    npx tsc --noEmit      # must exit 0
-   npm test              # must be all-green (currently ~3,700 tests)
+   npm test              # must be all-green (currently 4,293 tests)
+   npx eslint .          # must report 0 ERRORS; warnings are a deliberate backlog
    ```
    For data scripts, dry-run first, then verify against production. Only claim
    success with evidence in hand — never assert "done" without the command
@@ -123,8 +124,9 @@ for polish:
   custom agent for a proposed larger change.
 - **Consider a real feature** from the team's perspective if bugs are truly
   exhausted — scope it to something finishable and testable in a couple of runs.
-- **Periodically merge** `improve/continuous` → `main` (fast-forward-clean when
-  possible; verify tsc+tests on the merged result before pushing).
+- **Periodically release** `improve/continuous` — `preview` first, then a PR to
+  `main`. Never a local merge and push: `main` is protected. See *Commit / branch
+  conventions* below for the full order.
 
 ---
 
@@ -158,7 +160,7 @@ for polish:
 (`next-sanity`), Tailwind, NextAuth v4, Fuse.js. Node 22. Dark-mode-only. Studio
 embedded at `/studio`. Spanish-language UI (`lang="es"`).
 
-**Commands:** `npx tsc --noEmit` (typecheck), `npm test` (vitest, ~3,700 tests).
+**Commands:** `npx tsc --noEmit` (typecheck), `npm test` (vitest, 4,293 tests), `npx eslint .` (0 errors). All THREE — that is what the CI `gates` job runs, and `main`'s branch protection requires it.
 No `build` needed for the gate.
 
 **Timezone & dates (critical):** all service dates are Sanity `date` type
