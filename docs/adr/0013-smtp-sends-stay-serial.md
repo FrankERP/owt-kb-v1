@@ -12,7 +12,8 @@ consume stage, serial claims). The standing constraint underneath them is not.
 > **The sender has since moved.** These figures were measured against
 > `mail.oasis.mx`; production now sends through **Gmail SMTP** as
 > `dev.raccoon.labs@gmail.com`, because DNS verification for `oasis.mx` in Resend
-> could not be completed. The 14.4 s per remote recipient below is a property of
+> could not be completed — [ADR-0025](0025-mail-sends-through-a-gmail-account.md)
+> is that decision, with the 140-send measurement behind it. The 14.4 s per remote recipient below is a property of
 > the OLD server.
 >
 > **Gmail has since been bounded at ~1.2 s per send** (2026-08-27: one sweep,

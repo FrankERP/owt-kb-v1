@@ -128,7 +128,7 @@ Then confirm with a manual run as above.
 
 **Needed in: Vercel.** Also needed locally by anything that actually sends mail — currently only `scripts/measure-send-budget.mjs`.
 
-**THE SENDER MOVED TO GMAIL.** It was `contacto@oasis.mx` over `mail.oasis.mx` (cPanel/MailBaby) until DNS verification for `oasis.mx` in Resend could not be completed. Sending now goes through **Gmail SMTP as `dev.raccoon.labs@gmail.com`**, and `SMTP_PASS` is a Google **App Password**, not a mailbox password. Anything below that still says cPanel is describing the old sender.
+**THE SENDER MOVED TO GMAIL** ([ADR-0025](adr/0025-mail-sends-through-a-gmail-account.md) carries the measurement that justified it and the alternatives rejected on the way)**.** It was `contacto@oasis.mx` over `mail.oasis.mx` (cPanel/MailBaby) until DNS verification for `oasis.mx` in Resend could not be completed. Sending now goes through **Gmail SMTP as `dev.raccoon.labs@gmail.com`**, and `SMTP_PASS` is a Google **App Password**, not a mailbox password. Anything below that still says cPanel is describing the old sender.
 
 **Not needed in GitHub Actions.** The flush workflow only curls the route; it never sends mail itself and reads none of these.
 
