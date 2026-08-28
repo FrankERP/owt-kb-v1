@@ -597,16 +597,21 @@ pipeline a received message does, with no SMTP credentials and nothing sent.
 
 ## Still open
 
-- **A throttled wave is destroyed silently, and width 8 made it eight at a time.**
-  `sendOne` records a recipient as ATTEMPTED before awaiting, so a send that fails
-  — including a provider throttle — still discharges the notice: it is consumed,
-  `countLost` reports 0, and `unserved` is 0 too. The only signal is one
-  `notify_sweep_send_failed` line per recipient, and the flush workflow gates on
-  `lost > 0`, so it stays green. This is the documented at-most-once contract and
-  is not new; what IS new is that `SEND_CONCURRENCY = 8` turns one destroyed
-  notification into up to eight, and Gmail's failure mode is per-account
-  throttling rather than the old server's per-message timeout. The pooled
-  transport carries no `rateLimit`/`rateDelta`, so there is no client-side brake.
+- **A throttled wave is still DESTROYED — but it is no longer silent** (fixed
+  2026-08-28). `sendOne` records a recipient as ATTEMPTED before awaiting, so a
+  failed send discharges its notice exactly like a successful one: consumed,
+  `lost` 0, `unserved` 0. That is the at-most-once contract and it is unchanged
+  here — re-pending what was attempted is the "different outbox model" spec §1
+  says must be designed rather than discovered.
+  What changed is visibility. The report now carries **`failed`** (attempted, not
+  delivered) and **`skipped`** (discharged with no attempt at all — no member, no
+  address, or blocked by `EMAIL_ALLOWLIST`, which previously logged nothing
+  whatsoever). The flush workflow goes **red on `failed`**, like it does on
+  `lost`, and **warns on `skipped`**, since a deliberately narrowed allowlist
+  makes that the expected state. The pooled transport also gained
+  `rateDelta`/`rateLimit`, a client-side brake sized so it caps a runaway without
+  pacing normal work — Gmail rate-limits per ACCOUNT, so a burst penalises every
+  send from the sender rather than one message.
 
 
 - **The send-budget inequality and the recipient cap.** Spec §1 requires

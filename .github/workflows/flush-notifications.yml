@@ -87,3 +87,28 @@ jobs:
             echo "::error::Sweep discarded $LOST recipient(s) unsent — they were claimed, never sent, and deleted. See notify_sweep_send_budget_exhausted."
             exit 1
           fi
+
+          # `failed` is the OTHER destroyed class, and `lost` cannot see it.
+          # `sendOne` marks a recipient attempted BEFORE awaiting, so the
+          # at-most-once contract holds — which means a send that fails is
+          # discharged exactly like one that succeeds, and its notice is consumed.
+          # At SEND_CONCURRENCY = 8 a single provider throttle destroys up to
+          # eight at once, and Gmail throttles per ACCOUNT, so it arrives as a
+          # wave rather than as one bad address. Red, for the same reason `lost`
+          # is red: the mail is gone and nothing else would say so.
+          FAILED=$(sed -n 's/.*"failed":\([0-9]*\).*/\1/p' "$BODY")
+          if [ -n "$FAILED" ] && [ "$FAILED" -gt 0 ]; then
+            echo "::error::Sweep FAILED $FAILED send(s) — attempted, not delivered, and the notices were consumed anyway. See notify_sweep_send_failed."
+            exit 1
+          fi
+
+          # `skipped` is a recipient discharged without a send even being tried:
+          # no member document, no email address, or blocked by EMAIL_ALLOWLIST.
+          # A WARNING rather than an error — an allowlist narrowed on purpose
+          # makes this the expected state — but it must be visible, because a
+          # member missing an email address was previously indistinguishable
+          # from one who was mailed.
+          SKIPPED=$(sed -n 's/.*"skipped":\([0-9]*\).*/\1/p' "$BODY")
+          if [ -n "$SKIPPED" ] && [ "$SKIPPED" -gt 0 ]; then
+            echo "::warning::Sweep skipped $SKIPPED recipient(s) with no address or blocked by the allowlist. See notify_sweep_recipient_skipped."
+          fi

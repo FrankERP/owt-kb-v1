@@ -587,6 +587,12 @@ describe("an absent delivery mode delivers unchanged", () => {
       // serializing over one connection was the throughput ceiling itself.
       maxConnections: SEND_CONCURRENCY,
       maxMessages: 100,
+      // The client-side brake, pinned with the rest of the options. Without it
+      // the pool bursts all eight connections and authenticates them at once,
+      // which is what a provider rate-limits on — and Gmail rate-limits per
+      // ACCOUNT, so the penalty lands on every send from this sender.
+      rateDelta: 1_000,
+      rateLimit: SEND_CONCURRENCY,
       // The timeout set is part of the pinned options, not incidental: every one
       // of nodemailer's defaults outlives the hosting function's maxDuration, so
       // dropping them would restore the hang that stalled the outbox for a day on

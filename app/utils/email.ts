@@ -142,6 +142,14 @@ function smtpTransport(host: string, port: number, secure: boolean, user: string
   const transport = nodemailer.createTransport({
     host, port, secure, auth: { user, pass },
     pool: true, maxConnections: SEND_CONCURRENCY, maxMessages: 100,
+    // A CLIENT-SIDE BRAKE, added with width 8. Without it the pool opens all
+    // eight connections and authenticates them at once, which is the burst a
+    // provider rate-limits on — and Gmail rate-limits per ACCOUNT, so the
+    // penalty lands on every send from this sender rather than on one message.
+    // `rateLimit` messages per `rateDelta` ms, sized at the measured per-wave
+    // p95 (~2.4 s for eight) so it does not throttle the sweep's own cadence:
+    // it caps a runaway, it does not pace normal work.
+    rateDelta: 1_000, rateLimit: SEND_CONCURRENCY,
     // Every one of these overrides a default that outlives the hosting function.
     // They are the cheap, in-protocol half of the ceiling: they turn a dead peer
     // into a thrown error at a known moment instead of a silent hang.

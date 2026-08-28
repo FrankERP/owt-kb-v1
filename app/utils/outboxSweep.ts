@@ -120,8 +120,27 @@ export interface SweepReport {
   unserved: number;
   /** Notices returned to `pending` for another sweep to finish. */
   repended: number;
-  /** Recipients never attempted whose notices were consumed anyway — the only loss signal. */
+  /** Recipients never attempted whose notices were consumed anyway. */
   lost: number;
+  /**
+   * Sends ATTEMPTED that did not succeed. Their notices are consumed anyway —
+   * `sendOne` marks a recipient attempted before awaiting, deliberately, so the
+   * at-most-once contract holds — which means a failure is discharged exactly
+   * like a success and `lost` cannot see it.
+   *
+   * That is survivable and silent, and silent is the part this field fixes.
+   * `SEND_CONCURRENCY = 8` turns one provider throttle into up to eight
+   * destroyed notifications at once, and Gmail throttles per ACCOUNT, so the
+   * failure arrives as a wave rather than as one bad address.
+   */
+  failed: number;
+  /**
+   * Recipients discharged without a send even being attempted: no member
+   * document, no email address, or blocked by `EMAIL_ALLOWLIST`. Also consumed,
+   * also invisible to `lost`, and previously not logged at all — a member
+   * missing an email address simply never received anything and nothing said so.
+   */
+  skipped: number;
 }
 
 export interface SweepOptions {
@@ -631,6 +650,8 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
     unserved: 0,
     repended: 0,
     lost: 0,
+    failed: 0,
+    skipped: 0,
   };
 
   // ── 1. Gate ───────────────────────────────────────────────────────────────
@@ -876,7 +897,17 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
       attemptedRecipientIds.add(recipientId);
       const m = byId.get(recipientId);
       const email = m?.email?.trim().toLowerCase();
-      if (!m || !email || !isEmailAllowed(email, allow)) return;
+      if (!m || !email || !isEmailAllowed(email, allow)) {
+        // Counted AND logged. This path discharges a recipient without ever
+        // trying, and said nothing at all before — a member with no email
+        // address was indistinguishable from one who was mailed successfully.
+        report.skipped++;
+        log("notify_sweep_recipient_skipped", {
+          memberId: recipientId,
+          reason: !m ? "no_member" : !email ? "no_email" : "allowlist",
+        });
+        return;
+      }
       const { subject, html } = buildGroupedEmail(
         { name: m.alias || m.member_name || "", lines },
         titles,
@@ -888,7 +919,10 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
       });
       if (res.ok) {
         report.emailed++;
-      } else logError("notify_sweep_send_failed", { memberId: recipientId, error: res.error });
+      } else {
+        report.failed++;
+        logError("notify_sweep_send_failed", { memberId: recipientId, error: res.error });
+      }
     };
 
     for (let i = 0; i < entries.length; i += SEND_CONCURRENCY) {
@@ -963,6 +997,9 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
       // `emailed: 0` with a large `claimMs` did not fail to send — it never got
       // to try, which reads identically in every other field.
       claimMs,
+      // `sendMs / emailed` is an average per MESSAGE. At SEND_CONCURRENCY > 1
+      // that is NOT the per-wave figure the admission check charges — divide by
+      // the wave count for that.
       msPerSend: sendMs !== null && report.emailed > 0 ? Math.round(sendMs / report.emailed) : null,
       emailLimit,
       sendBudgetMs,
