@@ -136,10 +136,19 @@ for polish:
 ## Commit / branch conventions (project-specific — follow exactly)
 
 - Work on branch `improve/continuous`; **merge to `main` periodically**, don't
-  commit improvements straight to `main`. (Direct pushes to `main` are fine for
-  the *merge* and for urgent one-off fixes the user asks for — but not for
-  routine loop work.)
-- **Direct push, no PRs** — this repo merges straight to `main`, no pull requests.
+  commit improvements straight to `main`.
+- **`main` is PROTECTED and takes NO direct pushes.** It is reached through a PR
+  whose `gates` check is green (`tsc --noEmit`, `vitest`, `eslint` at 0 errors).
+  Protection applies to admins too, so there is no silent bypass. This reversed on
+  2026-08-24; earlier revisions of this file said "direct push, no PRs", and
+  following that now just fails at the remote.
+- **Push order is `preview` FIRST, then `main`.** `preview` still takes direct
+  pushes and deploys to the dev alias; `main` auto-deploys to PRODUCTION, so
+  merging the PR *is* the release. Push `preview`, VERIFY the dev alias moved —
+  the domain in the deployment's `alias` array and `meta.githubCommitSha` equal to
+  the pushed commit, which a green build does NOT establish — then open the PR.
+- **A merge to `main` needs a FRESH CODE REVIEW of the diff first**, and the last
+  step before merging must be a verification rather than a fix.
 - Conventional commits: `fix(scope): …`, `feat(scope): …`, `chore(scope): …`,
   `refactor(scope): …`, `test(scope): …`. Body explains the *why* and the failure
   it prevents.
