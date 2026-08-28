@@ -587,6 +587,12 @@ describe("an absent delivery mode delivers unchanged", () => {
       // serializing over one connection was the throughput ceiling itself.
       maxConnections: SEND_CONCURRENCY,
       maxMessages: 100,
+      // The sustained-rate cap, pinned with the rest of the options. It is NOT a
+      // burst brake and NOT a throttle mitigation — nodemailer checks the rate
+      // only after a send succeeds, so the error path a provider throttle takes
+      // bypasses it entirely. See the comment on it in `email.ts`.
+      rateDelta: 1_000,
+      rateLimit: SEND_CONCURRENCY,
       // The timeout set is part of the pinned options, not incidental: every one
       // of nodemailer's defaults outlives the hosting function's maxDuration, so
       // dropping them would restore the hang that stalled the outbox for a day on

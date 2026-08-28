@@ -34,7 +34,10 @@ export type FlushReport = SweepReport & { rounds: number };
 /** Sum numeric sweep fields across rounds; `repended`/`deferred` come from the last. */
 export function aggregateFlushReports(rounds: SweepReport[]): FlushReport {
   if (!rounds.length) {
-    return { claimed: 0, emailed: 0, consumed: 0, deferred: 0, unserved: 0, repended: 0, lost: 0, rounds: 0 };
+    return {
+      claimed: 0, emailed: 0, consumed: 0, deferred: 0,
+      unserved: 0, repended: 0, lost: 0, failed: 0, skipped: 0, rounds: 0,
+    };
   }
   const last = rounds[rounds.length - 1];
   let claimed = 0;
@@ -42,12 +45,18 @@ export function aggregateFlushReports(rounds: SweepReport[]): FlushReport {
   let consumed = 0;
   let unserved = 0;
   let lost = 0;
+  let failed = 0;
+  let skipped = 0;
   for (const r of rounds) {
     claimed += r.claimed;
     emailed += r.emailed;
     consumed += r.consumed;
     unserved += r.unserved;
     lost += r.lost;
+    // SUMMED, like the other losses — not taken from the last round. A wave
+    // throttled in round 1 and a clean round 2 must not net out to zero.
+    failed += r.failed;
+    skipped += r.skipped;
   }
   return {
     rounds: rounds.length,
@@ -58,6 +67,8 @@ export function aggregateFlushReports(rounds: SweepReport[]): FlushReport {
     unserved,
     repended: last.repended,
     lost,
+    failed,
+    skipped,
   };
 }
 

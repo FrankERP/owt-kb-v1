@@ -705,6 +705,84 @@ describe("sweepOutbox — claim and consume", () => {
     expect(writeClientDelete).toHaveBeenCalled();
     expect(report.consumed).toBe(1);
     expect(report.emailed).toBe(0);
+    // COUNTED. The notice is consumed either way — `sendOne` marks a recipient
+    // attempted before awaiting, so the at-most-once contract holds and `lost`
+    // cannot see this. Before `failed` existed the only trace was one error log,
+    // and the flush workflow gates on the REPORT, so a throttled wave of eight
+    // destroyed eight notifications while the job stayed green.
+    expect(report.failed).toBe(1);
+    expect(report.lost).toBe(0);
+    errSpy.mockRestore();
+  });
+
+  it("counts a recipient discharged without any send attempt", async () => {
+    // The other silent path, and it said nothing at all before: a member with no
+    // email address returned early from `sendOne`, was consumed like everyone
+    // else, and was indistinguishable in the report from one who was mailed.
+    // A SETLIST notice, because a `role` notice resolves to its single
+    // `memberId` and cannot express two recipients at all.
+    world.notices = [setlistNotice()];
+    world.roles = { r2: roleDoc({ _id: "r2", _type: "saturday_role", week: "2026-08-08" }) };
+    world.recipients = { r2: ["m1", "m2"] };
+    world.members = { m1: member("m1"), m2: { ...member("m2"), email: "" } };
+    world.weekendSongs = { "saturdarSongs:2026-08-08": [storedSong("song1")] };
+    world.titles = { song1: "Santo" };
+
+    const report = await sweepOutbox();
+
+    expect(report.emailed).toBe(1);
+    expect(report.skipped).toBe(1);
+    expect(report.failed).toBe(0);
+    // Still consumed, and still not `lost` — the point is visibility, not a
+    // change to the consume contract, which spec §1 says must be designed
+    // deliberately rather than discovered here.
+    expect(report.consumed).toBe(1);
+    expect(report.lost).toBe(0);
+  });
+
+  it("counts a RENDER failure, the last path that had no counter at all", async () => {
+    // `buildGroupedEmail` throwing left a recipient consumed with no counter in
+    // ANY bucket: already in `attemptedRecipientIds`, so not `lost`; never
+    // reaching the send, so neither `emailed` nor `failed`. Attempted and not
+    // delivered is exactly `failed`.
+    world.notices = [roleNotice()];
+    world.roles = { r1: roleDoc() };
+    world.recipients = { r1: ["m1"] };
+    world.members = members(["m1"]);
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const mod = await import("@/app/utils/notificationEmail");
+    const spy = vi.spyOn(mod, "buildGroupedEmail").mockImplementation(() => {
+      throw new Error("render exploded");
+    });
+
+    const report = await sweepOutbox();
+
+    expect(report.failed).toBe(1);
+    expect(report.emailed).toBe(0);
+    expect(report.lost).toBe(0);
+    // Still consumed — the contract is unchanged; only the silence is fixed.
+    expect(report.consumed).toBe(1);
+    spy.mockRestore();
+    errSpy.mockRestore();
+  });
+
+  it("separates a failed send from a skipped recipient in one sweep", async () => {
+    // Both at once, because the two were previously the same invisible thing:
+    // `emailed` lower than the recipient count, with no way to tell which.
+    world.notices = [setlistNotice()];
+    world.roles = { r2: roleDoc({ _id: "r2", _type: "saturday_role", week: "2026-08-08" }) };
+    world.recipients = { r2: ["m1", "m2"] };
+    world.members = { m1: member("m1"), m2: { ...member("m2"), email: "" } };
+    world.weekendSongs = { "saturdarSongs:2026-08-08": [storedSong("song1")] };
+    world.titles = { song1: "Santo" };
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    sendEmailMock.mockResolvedValue({ ok: false, error: "throttled" });
+
+    const report = await sweepOutbox();
+
+    expect(report.emailed).toBe(0);
+    expect(report.failed).toBe(1);
+    expect(report.skipped).toBe(1);
     errSpy.mockRestore();
   });
 

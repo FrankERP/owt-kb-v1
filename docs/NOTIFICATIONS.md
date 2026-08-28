@@ -356,16 +356,34 @@ gh workflow run "Flush notification outbox"
 ```
 
 A healthy run prints `HTTP 200` and a report like
-`{"claimed":0,"emailed":0,"consumed":0,"deferred":0,"unserved":0,"repended":0,"lost":0,"rounds":1}`. The workflow
+`{"rounds":1,"claimed":0,"emailed":0,"consumed":0,"deferred":0,"unserved":0,"repended":0,"lost":0,"failed":0,"skipped":0}` — `rounds` FIRST, which is the shape `aggregateFlushReports` builds; the order with `rounds` last comes only from the empty-drain branch, which `drainOutbox` cannot reach. The workflow
 asserts the status code explicitly rather than relying on `curl --fail`, which
 ignores 3xx — see the landmine below.
 
-**A red run does not always mean the cron is broken.** The job fails when the
-report carries `lost > 0`, which means recipients were claimed, never reached,
-and their notices were **consumed anyway** — permanently deleted. `unserved > 0`
-with `repended > 0` is normal: the send budget stopped early and those recipients
-wait for the next sweep (declared five-minutely; median 41). `deferred > 0` is also healthy:
-work left *unclaimed* for the next sweep.
+**A red run does not always mean the cron is broken.** Two conditions fail the job,
+and they are different failures:
+
+- **`lost > 0`** — recipients were claimed, never reached, and their notices were
+  **consumed anyway**. Permanently deleted, and the send was never attempted.
+- **`failed >= 2`** — sends that WERE attempted and did not succeed. Their notices
+  are consumed too, because `sendOne` marks a recipient attempted before awaiting
+  and that is what makes the contract at-most-once, so `lost` cannot see them.
+  **Red starts at two, not one:** a single failure is usually one undeliverable
+  address, and a member with a permanently bad address must never be able to hold
+  the alarm red forever. Two or more is the wave shape — `SEND_CONCURRENCY` is 8
+  and Gmail throttles per ACCOUNT, so a throttle arrives as a cluster. One
+  failure emits a warning instead.
+
+Healthy, and not failures: `unserved > 0` with `repended > 0` — the send budget
+stopped early and those recipients wait for the next sweep (declared
+five-minutely; median 41). `deferred > 0` — work left *unclaimed* for the next
+sweep. `skipped > 0` — a recipient with no address or blocked by
+`EMAIL_ALLOWLIST`; a warning, since a deliberately narrowed allowlist makes it the
+expected state.
+
+**All three gates fail OPEN on an absent field**, so rolling the route back to a
+build without `failed`/`skipped` disarms them silently. That is deliberate — it
+survives a deploy skew — but it means the gate is only as live as the deployment.
 
 **Is the mail path healthy, and where is its time going?**
 
@@ -597,16 +615,30 @@ pipeline a received message does, with no SMTP credentials and nothing sent.
 
 ## Still open
 
-- **A throttled wave is destroyed silently, and width 8 made it eight at a time.**
-  `sendOne` records a recipient as ATTEMPTED before awaiting, so a send that fails
-  — including a provider throttle — still discharges the notice: it is consumed,
-  `countLost` reports 0, and `unserved` is 0 too. The only signal is one
-  `notify_sweep_send_failed` line per recipient, and the flush workflow gates on
-  `lost > 0`, so it stays green. This is the documented at-most-once contract and
-  is not new; what IS new is that `SEND_CONCURRENCY = 8` turns one destroyed
-  notification into up to eight, and Gmail's failure mode is per-account
-  throttling rather than the old server's per-message timeout. The pooled
-  transport carries no `rateLimit`/`rateDelta`, so there is no client-side brake.
+- **A throttled wave is still DESTROYED — but it is no longer silent** (fixed
+  2026-08-28). `sendOne` records a recipient as ATTEMPTED before awaiting, so a
+  failed send discharges its notice exactly like a successful one: consumed,
+  `lost` 0, `unserved` 0. That is the at-most-once contract and it is unchanged
+  here — re-pending what was attempted is the "different outbox model" spec §1
+  says must be designed rather than discovered.
+  What changed is visibility. The report now carries **`failed`** (attempted, not
+  delivered) and **`skipped`** (discharged with no attempt at all — no member, no
+  address, or blocked by `EMAIL_ALLOWLIST`, which previously logged nothing
+  whatsoever). The flush workflow goes **red on `failed >= 2`** — the wave shape —
+  **warns at 1**, since a single failure is usually one undeliverable address and
+  a member with a permanently bad address must not hold the alarm red, and
+  **warns on `skipped`**, since a deliberately narrowed allowlist makes that the
+  expected state.
+
+  **What is NOT mitigated, despite an option that looks like it is.** The pooled
+  transport carries `rateDelta`/`rateLimit`, but that is a sustained-rate cap and
+  **not a brake on the burst**: nodemailer opens a connection whenever a message
+  is queued and the pool is under `maxConnections`, with no rate check on that
+  path, and it consults the rate limiter only after a send SUCCEEDS — so the
+  error path a provider throttle takes bypasses it entirely. Verified against the
+  installed library source, not its docs. The levers that would actually brake a
+  wave are `SEND_CONCURRENCY` itself and pacing between waves in stage 7, and
+  neither is in place.
 
 
 - **The send-budget inequality and the recipient cap.** Spec §1 requires

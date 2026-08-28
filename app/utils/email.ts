@@ -142,6 +142,29 @@ function smtpTransport(host: string, port: number, secure: boolean, user: string
   const transport = nodemailer.createTransport({
     host, port, secure, auth: { user, pass },
     pool: true, maxConnections: SEND_CONCURRENCY, maxMessages: 100,
+    // A SUSTAINED-RATE CAP, and READ WHAT IT IS NOT. An earlier version of this
+    // comment called it a burst brake that stops the pool authenticating eight
+    // connections at once. It does not, and nodemailer's own source is where
+    // that was checked rather than its docs:
+    //
+    //   · `rateLimit` does not gate connection creation. `smtp-pool` opens a new
+    //     connection whenever a message is queued and `_connections.length <
+    //     maxConnections`, with no rate check on that path. So the first eight
+    //     messages always spawn eight connections regardless of this option.
+    //   · `_checkRateLimit` runs only AFTER a send succeeds, from
+    //     `pool-resource`. A failing send closes its connection and returns
+    //     early, never reaching it — so on the error path, which is exactly how
+    //     a Gmail per-account throttle arrives (fast 421/450), this option has
+    //     no effect at all.
+    //
+    // It is kept because capping the sustained rate past the first window is
+    // still worth having and costs nothing: the added queue wait is bounded by
+    // `rateDelta` and sits inside `sendWithTimeout`'s race against
+    // `SEND_TIMEOUT_MS`, so it cannot push a wave past stage 7's admission
+    // window. But it is NOT the mitigation for a throttle wave. The levers that
+    // would be are `SEND_CONCURRENCY` itself and pacing between waves in
+    // `outboxSweep`'s stage 7 — neither of which is in place.
+    rateDelta: 1_000, rateLimit: SEND_CONCURRENCY,
     // Every one of these overrides a default that outlives the hosting function.
     // They are the cheap, in-protocol half of the ceiling: they turn a dead peer
     // into a thrown error at a known moment instead of a silent hang.

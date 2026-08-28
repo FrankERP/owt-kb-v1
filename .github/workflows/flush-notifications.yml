@@ -83,7 +83,59 @@ jobs:
           # those are re-pended for the next sweep and are not loss. Going red on
           # `lost` is the only signal that mail was permanently discarded.
           LOST=$(sed -n 's/.*"lost":\([0-9]*\).*/\1/p' "$BODY")
+
+          # `failed` is the OTHER destroyed class, and `lost` cannot see it.
+          # `sendOne` marks a recipient attempted BEFORE awaiting, so the
+          # at-most-once contract holds — which means a send that fails is
+          # discharged exactly like one that succeeds, and its notice is consumed.
+          # At SEND_CONCURRENCY = 8 a single provider throttle destroys up to
+          # eight at once, and Gmail throttles per ACCOUNT, so it arrives as a
+          # wave rather than as one bad address. The mail is gone either way and
+          # nothing else would say so — but the THRESHOLD is what makes it a
+          # usable signal rather than noise; see below.
+          FAILED=$(sed -n 's/.*"failed":\([0-9]*\).*/\1/p' "$BODY")
+
+          # `skipped` first, so a red run still carries the context you want while
+          # triaging it. A WARNING, not an error: EMAIL_ALLOWLIST narrowed on
+          # purpose makes this the expected state.
+          SKIPPED=$(sed -n 's/.*"skipped":\([0-9]*\).*/\1/p' "$BODY")
+          if [ -n "$SKIPPED" ] && [ "$SKIPPED" -gt 0 ]; then
+            echo "::warning::Sweep skipped $SKIPPED recipient(s) with no address or blocked by the allowlist. See notify_sweep_recipient_skipped."
+          fi
+
+          # RED AT TWO, NOT AT ONE, and the threshold is the whole point.
+          # A single failure is usually one undeliverable address — a typo in a
+          # member's email that Gmail rejects at RCPT. Going red on 1 would recur
+          # on every sweep carrying a notice for that member, and this workflow
+          # says above that a spurious red erodes the one signal making a real
+          # failure visible.
+          #
+          # `outboxSweep.ts` states a NEIGHBOURING invariant — "a member with a
+          # permanently-undeliverable address must never be able to hold the
+          # outbox, and therefore the liveness alarm, red forever" — which is
+          # about the outbox backlog rather than about this gate. It is the same
+          # reasoning applied one layer out, not a direct application, and the
+          # threshold stands on its own merits. Two permanently-bad addresses in
+          # one sweep still go red every time.
+          #
+          # TWO OR MORE is the wave shape this gate exists for: SEND_CONCURRENCY
+          # is 8 and Gmail throttles per ACCOUNT, so a throttle arrives as a
+          # cluster rather than as one bad address.
+          if [ -n "$FAILED" ] && [ "$FAILED" -ge 2 ]; then
+            echo "::error::Sweep FAILED $FAILED sends in one run — attempted, not delivered, and the notices were consumed anyway. A cluster is the provider-throttle shape. See notify_sweep_send_failed."
+            exit 1
+          fi
+          if [ -n "$FAILED" ] && [ "$FAILED" -eq 1 ]; then
+            echo "::warning::Sweep failed 1 send — most likely one undeliverable address. See notify_sweep_send_failed. Red starts at 2."
+          fi
+
+          # `lost` LAST, so its exit cannot suppress the annotations above it. It
+          # used to sit first, and a sweep that both exhausted its budget AND hit
+          # a throttle — the correlated case, since both come from slow sends —
+          # annotated only the discarded recipients while eight destroyed sends
+          # produced nothing in the run summary.
           if [ -n "$LOST" ] && [ "$LOST" -gt 0 ]; then
             echo "::error::Sweep discarded $LOST recipient(s) unsent — they were claimed, never sent, and deleted. See notify_sweep_send_budget_exhausted."
             exit 1
           fi
+

@@ -69,7 +69,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.resetModules();
   process.env.CRON_SECRET = SECRET;
-  sweepOutboxMock.mockResolvedValue({ claimed: 0, emailed: 0, consumed: 0, deferred: 0, unserved: 0, repended: 0, lost: 0 });
+  sweepOutboxMock.mockResolvedValue({ claimed: 0, emailed: 0, consumed: 0, deferred: 0, unserved: 0, repended: 0, lost: 0, failed: 0, skipped: 0 });
   sendEmailMock.mockResolvedValue({ ok: true });
   sendPushMock.mockResolvedValue({ sent: 0 });
   operationalFetch.mockResolvedValue([]);
@@ -125,24 +125,24 @@ describe("layer 1 — /api/cron/flush-notifications", () => {
 
   it("drains multiple rounds when a sweep re-pends work", async () => {
     sweepOutboxMock
-      .mockResolvedValueOnce({ claimed: 1, emailed: 2, consumed: 0, deferred: 0, unserved: 8, repended: 1, lost: 0 })
-      .mockResolvedValueOnce({ claimed: 1, emailed: 2, consumed: 0, deferred: 0, unserved: 6, repended: 1, lost: 0 })
-      .mockResolvedValueOnce({ claimed: 1, emailed: 2, consumed: 0, deferred: 0, unserved: 4, repended: 1, lost: 0 })
-      .mockResolvedValueOnce({ claimed: 1, emailed: 2, consumed: 0, deferred: 0, unserved: 2, repended: 1, lost: 0 })
-      .mockResolvedValueOnce({ claimed: 1, emailed: 2, consumed: 1, deferred: 0, unserved: 0, repended: 0, lost: 0 });
+      .mockResolvedValueOnce({ claimed: 1, emailed: 2, consumed: 0, deferred: 0, unserved: 8, repended: 1, lost: 0, failed: 0, skipped: 0 })
+      .mockResolvedValueOnce({ claimed: 1, emailed: 2, consumed: 0, deferred: 0, unserved: 6, repended: 1, lost: 0, failed: 0, skipped: 0 })
+      .mockResolvedValueOnce({ claimed: 1, emailed: 2, consumed: 0, deferred: 0, unserved: 4, repended: 1, lost: 0, failed: 0, skipped: 0 })
+      .mockResolvedValueOnce({ claimed: 1, emailed: 2, consumed: 0, deferred: 0, unserved: 2, repended: 1, lost: 0, failed: 0, skipped: 0 })
+      .mockResolvedValueOnce({ claimed: 1, emailed: 2, consumed: 1, deferred: 0, unserved: 0, repended: 0, lost: 0, failed: 0, skipped: 0 });
 
     const GET = await flushRoute();
     const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
     const body = await res.json();
 
     expect(sweepOutboxMock).toHaveBeenCalledTimes(5);
-    expect(body).toMatchObject({ rounds: 5, emailed: 10, repended: 0, lost: 0 });
+    expect(body).toMatchObject({ rounds: 5, emailed: 10, repended: 0, lost: 0, failed: 0, skipped: 0 });
   });
 
   it("stops draining after loss", async () => {
     sweepOutboxMock
-      .mockResolvedValueOnce({ claimed: 1, emailed: 2, consumed: 0, deferred: 0, unserved: 8, repended: 1, lost: 0 })
-      .mockResolvedValueOnce({ claimed: 1, emailed: 0, consumed: 1, deferred: 0, unserved: 8, repended: 0, lost: 8 });
+      .mockResolvedValueOnce({ claimed: 1, emailed: 2, consumed: 0, deferred: 0, unserved: 8, repended: 1, lost: 0, failed: 0, skipped: 0 })
+      .mockResolvedValueOnce({ claimed: 1, emailed: 0, consumed: 1, deferred: 0, unserved: 8, repended: 0, lost: 8, failed: 0, skipped: 0 });
 
     const GET = await flushRoute();
     const body = await GET(req({ authorization: `Bearer ${SECRET}` })).then((r) => r.json());
@@ -157,7 +157,7 @@ describe("layer 1 — /api/cron/flush-notifications", () => {
     const started = 1_000_000;
     sweepOutboxMock.mockImplementation(async () => {
       tick++;
-      return { claimed: 1, emailed: 2, consumed: 0, deferred: 0, unserved: 8, repended: 1, lost: 0 };
+      return { claimed: 1, emailed: 2, consumed: 0, deferred: 0, unserved: 8, repended: 1, lost: 0, failed: 0, skipped: 0 };
     });
 
     const mod = await import("@/app/api/cron/flush-notifications/route");
@@ -296,7 +296,7 @@ describe("the liveness alarm", () => {
     sweepOutboxMock.mockImplementation(async () => {
       outbox.count = 0;
       outbox.oldest = null;
-      return { claimed: 7, emailed: 7, consumed: 7, deferred: 0, unserved: 0, repended: 0, lost: 0 };
+      return { claimed: 7, emailed: 7, consumed: 7, deferred: 0, unserved: 0, repended: 0, lost: 0, failed: 0, skipped: 0 };
     });
 
     const GET = await remindersRoute();
@@ -392,5 +392,62 @@ describe("the liveness alarm", () => {
     const GET = await remindersRoute();
     const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
     expect(res.status).toBe(200);
+  });
+});
+
+describe("aggregateFlushReports", () => {
+  const round = (over: Record<string, number> = {}) => ({
+    claimed: 0, emailed: 0, consumed: 0, deferred: 0,
+    unserved: 0, repended: 0, lost: 0, failed: 0, skipped: 0,
+    ...over,
+  });
+
+  it("SUMS the loss counters across rounds instead of taking the last", async () => {
+    // The property the code comment defends and nothing tested: a wave throttled
+    // in round 1 and a clean round 2 must not net out to zero. Taking `failed`
+    // from the last round — the way `deferred` and `repended` are taken — would
+    // report 0 here, the flush workflow would stay green, and eight destroyed
+    // notifications would leave no trace anywhere.
+    const { aggregateFlushReports } = await import("@/app/api/cron/flush-notifications/route");
+    const out = aggregateFlushReports([
+      round({ emailed: 2, failed: 3, skipped: 1, lost: 1, unserved: 4 }),
+      round({ emailed: 5, failed: 0, skipped: 2, lost: 0, unserved: 0, deferred: 7, repended: 9 }),
+    ]);
+    expect(out.failed).toBe(3);
+    expect(out.skipped).toBe(3);
+    // The existing split, asserted alongside so a future edit cannot quietly move
+    // a counter from one side to the other.
+    expect(out.emailed).toBe(7);
+    expect(out.lost).toBe(1);
+    expect(out.unserved).toBe(4);
+    expect(out.deferred).toBe(7);
+    expect(out.repended).toBe(9);
+    expect(out.rounds).toBe(2);
+  });
+
+  it("initialises the new counters on an empty drain", async () => {
+    // `undefined` here would serialise as `"failed":null`, which the workflow's
+    // numeric `sed` gate does not match — a silent fail-open on the one signal
+    // this delivery added.
+    const { aggregateFlushReports } = await import("@/app/api/cron/flush-notifications/route");
+    const out = aggregateFlushReports([]);
+    expect(out.failed).toBe(0);
+    expect(out.skipped).toBe(0);
+    expect(JSON.stringify(out)).toContain('"failed":0');
+    expect(JSON.stringify(out)).toContain('"skipped":0');
+  });
+
+  it("never emits null for a counter, whatever the rounds carry", async () => {
+    // A reducer-internal typo, which is what this row actually covers — the
+    // helper below always supplies both fields, so it cannot reproduce a CALLER
+    // passing the old shape. That regression (every mock returning the old
+    // report, making `failed += r.failed` NaN and the route answer
+    // `"failed":null`) is caught by the eleven updated fixtures plus the exact
+    // `failed: 0` assertion on the drain body, where `null !== 0` fails.
+    const { aggregateFlushReports } = await import("@/app/api/cron/flush-notifications/route");
+    const out = aggregateFlushReports([round({ emailed: 1 })]);
+    for (const [k, v] of Object.entries(out)) {
+      expect(Number.isFinite(v), `${k} is ${v}`).toBe(true);
+    }
   });
 });
