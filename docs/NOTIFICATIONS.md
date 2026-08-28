@@ -552,7 +552,7 @@ Things that are counter-intuitive and were each a real defect at some point.
   the next sweep emails **new** people instead of retrying the first two.
   A writer re-queue on the same subject **clears** that list — a later edit is a
   new change. The GitHub workflow fails only on `lost > 0`. Failed sends still
-  count as attempted (no retry for bad addresses).
+  count as attempted (no retry for bad addresses — ADR-0026).
 - **The rehearsal harness distorts the thing it measures.** `EMAIL_REDIRECT_TO`
   points every message at ONE address, so a fan-out that would have gone to 17
   domains becomes 17 messages to one — and the big providers throttle exactly
@@ -618,9 +618,12 @@ pipeline a received message does, with no SMTP credentials and nothing sent.
 - **A throttled wave is still DESTROYED — but it is no longer silent** (fixed
   2026-08-28). `sendOne` records a recipient as ATTEMPTED before awaiting, so a
   failed send discharges its notice exactly like a successful one: consumed,
-  `lost` 0, `unserved` 0. That is the at-most-once contract and it is unchanged
-  here — re-pending what was attempted is the "different outbox model" spec §1
-  says must be designed rather than discovered.
+  `lost` 0, `unserved` 0. That contract is unchanged, and **the question is now
+  closed rather than open**: re-pending what was attempted was designed in three
+  revisions, reviewed adversarially in three rounds, and rejected — see
+  [ADR-0026](adr/0026-failed-sends-are-not-re-pended.md) for the two nodemailer
+  facts and the one Gmail behaviour that killed it, and for what a correct
+  implementation would actually require.
   What changed is visibility. The report now carries **`failed`** (attempted, not
   delivered) and **`skipped`** (discharged with no attempt at all — no member, no
   address, or blocked by `EMAIL_ALLOWLIST`, which previously logged nothing

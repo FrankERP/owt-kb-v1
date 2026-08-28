@@ -1,8 +1,14 @@
 # Outbox re-pend — design
 
+> **REJECTED — not implemented, and not a plan of record.** Three revisions of
+> this design were reviewed adversarially in three rounds and all three were
+> rejected; the decision and the evidence are recorded in
+> [ADR-0026](../../adr/0026-failed-sends-are-not-re-pended.md). This file is kept
+> for the analysis inside it — the nodemailer classification findings in §1 are
+> correct and reusable — not as something to build from.
+
 **Date:** 2026-08-28
-**Status:** simplified after adversarial review rounds 1 and 2 (5 and 2 verified
-blockers). Awaiting two sequential fresh approvals on this text.
+**Status:** rejected 2026-08-28; superseded by ADR-0026
 **Risk tier:** CRITICAL — changes a production writer's delivery behaviour. Per
 `CLAUDE.md`, needs two sequential fresh `APPROVED` verdicts on byte-identical
 text before implementation.
