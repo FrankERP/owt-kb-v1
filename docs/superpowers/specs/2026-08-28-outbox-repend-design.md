@@ -259,7 +259,9 @@ in exactly the case this design fixes.
 Reusing the name would corrupt an existing signal.
 
 - `throttled` — incremented in `sendOne`, once per observed retryable failure.
-  Because the breaker fires on the first one, it is normally 1.
+  The breaker is evaluated after a wave resolves, not mid-wave, so a wave whose
+  sends all get 4xx reports `throttled: 8` (`SEND_CONCURRENCY`), not 1. It is
+  bounded by one wave, never by the whole notice.
 - `failed` — terminal delivery failure, including "email disabled". Red at 2.
 - `skipped` — nothing attempted, nothing lost.
 - `lost` — **unchanged in meaning and in implementation.** No recipient is
