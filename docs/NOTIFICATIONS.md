@@ -50,7 +50,7 @@ hand-writing a fixture that mirrors them).
 | Layer | What | Where |
 |---|---|---|
 | 1 — primary | GitHub Actions, declared every 5 min — see §"Layer 1 does not run every five minutes" | `.github/workflows/flush-notifications.yml` → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
-| 2 — backstop | opportunistic sweep after any queueing write | end of `commitUpserts()` in `serviceMutationSideEffects.ts` |
+| 2 — backstop | opportunistic sweep after any queueing write | end of `commitUpserts()` in `serviceMutationSideEffects.ts` — keeps its report and raises the destroyed-mail alarm |
 | 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (the only layer that MAILS A PERSON about destroyed mail — layer 1 goes red on the same conditions; see §"The destroyed-mail alarm") |
 
 **Layer 1 is load-bearing, not one of three redundant paths.** Layer 2 only
@@ -394,11 +394,26 @@ which have been got backwards here before:
   motivated this alarm is exactly that shape. Only a batch wider than one wave
   leaves a tail behind.
 
-**Layer 2 still has this blindness**, and needs a different shape rather than a
-copy of this alarm: it fires on every mutation, and a derated sweep hitting its
-send budget mid-session is ordinary, so reusing this trigger would mail
-super-admins during normal editing. Tracked in
-[#20](https://github.com/FrankERP/owt-kb-v1/issues/20).
+**Layer 2 raises the same alarm, and the reason it could is worth keeping.**
+`commitUpserts` now keeps its sweep report and passes it to `reportDestroyedMail`
+like the daily cron does — same function, same thresholds, no new state.
+
+Issue #20 had assumed layer 2 needed a *different* shape, because it fires on
+every mutation and a derated sweep hitting its send budget mid-session is
+ordinary. **That premise was false**, and checking it is what made the change one
+line: budget exhaustion moves `unserved` only, and those recipients are
+**re-pended, not consumed** (`partitionClaimed`). It touches neither `failed` nor
+`lost`, so the gate cannot fire on it. Ordinary editing is silent.
+
+What can happen: during a genuine transport refusal, layer 2 fires once per admin
+write action — four call sites, one per action, not per document — so a long
+session could send several alerts. That is correct; it means mail is being
+destroyed repeatedly. And if the transport is dead outright, the alert fails the
+same way the sends did and reports `alerted: false`.
+
+`serviceMutationSideEffects.test.ts` pins the premise directly: a sweep reporting
+`unserved: 9` with `failed: 0` sends nothing. If that test ever fails, the
+reasoning above has broken and #20's original design applies after all.
 
 ## Operating it
 

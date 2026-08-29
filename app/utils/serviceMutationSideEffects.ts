@@ -74,7 +74,9 @@ import {
   SWEEP_DEADLINE_MS,
   sweepOutbox,
   type SweepOptions,
+  type SweepReport,
 } from "./outboxSweep";
+import { reportDestroyedMail } from "./outboxLiveness";
 import { SEND_TIMEOUT_MS } from "./email";
 import { notifyProposalSubmitted } from "./proposalNotify";
 import { canonicalSetlistsForWeeksQuery } from "./serviceReadQueries";
@@ -579,7 +581,27 @@ async function commitUpserts(label: string, upserts: BuiltUpsert[]): Promise<voi
     }
     return tx.commit();
   });
-  await attempt("opportunistic sweep", () => sweepOutbox(opportunisticSweepOptions()));
+  // The report is KEPT, not discarded. Layer 2 used to be the only flush path
+  // with no reporter at all: layer 1's workflow reads its report and goes red,
+  // layer 3 mails a super-admin (`reportDestroyedMail`), and this one threw the
+  // same numbers away — so a sweep here that destroyed every send looked exactly
+  // like one that delivered everything, and consumption is unconditional on send
+  // outcome (ADR-0026), so nothing else would ever have said otherwise.
+  //
+  // Issue #20 assumed this needed a DIFFERENT alarm from layer 3's, because
+  // layer 2 fires on every mutation and a derated sweep hitting its send budget
+  // mid-session is ordinary. That premise was wrong, and checking it is what made
+  // this small: budget exhaustion moves `unserved` ONLY, and those recipients are
+  // RE-PENDED rather than consumed (`outboxSweep.ts` `partitionClaimed`). It
+  // touches neither `failed` nor `lost`, so the alarm's gate cannot fire on it.
+  // Ordinary editing is silent, and the same thresholds work here unchanged.
+  let sweep: SweepReport | undefined;
+  await attempt("opportunistic sweep", async () => {
+    sweep = await sweepOutbox(opportunisticSweepOptions());
+  });
+  // Never throws by contract, so it needs no `attempt` of its own; `undefined`
+  // (the sweep itself threw) reports nothing destroyed rather than guessing.
+  await reportDestroyedMail(sweep);
 }
 
 /**
