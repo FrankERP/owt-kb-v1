@@ -110,8 +110,17 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   never on the stable domain: an alias resolves to the OLD deployment until the new
   one is ready, so `--wait` on it returns instantly with stale success (observed
   2026-08-24). Then still do the alias+SHA check, which `--wait` does not replace.
-- **`preview` writes to the real Sanity dataset and emails the real team.** It is a
-  rehearsal of the UI, never a dry run of data or notifications.
+- **`preview` writes to the real Sanity dataset.** It is a rehearsal of the UI,
+  never a dry run of data. Every write lands in the same documents production
+  reads.
+- **Its email currently does NOT reach the team, and that is a variable, not a
+  property.** `EMAIL_REDIRECT_TO` is set on the Preview environment (since
+  2026-07-24), so notifications are generated and sent for real but every message
+  is rerouted to one address. Two consequences worth holding together: a publish
+  on dev will NOT tell the team, so it is not a way to notify them; and the
+  moment that variable is removed or the value is cleared, preview mails the
+  whole team with no other change. Check `vercel env ls preview` before assuming
+  either. Production has no such redirect.
 
 ## Decision records
 When a choice rejects a real alternative and the reason won't be obvious from

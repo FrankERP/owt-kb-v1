@@ -349,7 +349,11 @@ that meets production's outbox.
 4. Re-run the same pre-check — same query, same `0`, same "wait, never delete" — then
    open the PR, wait for `gates`, merge.
 5. Verify the production alias the same way as step 2.
-6. Walkthrough on `preview`, which writes REAL data and emails the REAL team.
+6. Walkthrough on `preview`, which writes REAL data. **Correction (2026-08-29):
+   it does NOT email the real team** — `EMAIL_REDIRECT_TO` is set on the Preview
+   environment, so every message is rerouted to one address. The data half of
+   this warning still stands; the email half was wrong when written. Do not use a
+   dev walkthrough to notify anyone.
 
 ### Notifications, both directions
 
