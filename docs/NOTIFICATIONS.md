@@ -347,8 +347,18 @@ alarm stops working while continuing to look fine.
 **after** the sweep — the opposite order, for the opposite reason. The liveness
 alarm asks *"is mail still moving?"*; this one asks *"did this sweep just destroy
 mail?"*, so it has nothing to measure until the sweep has run. Past zero on
-`failed + lost + skipped` it logs `notify_sweep_destroyed` and emails the
-super-admins, reusing the same audience resolution. **All three count**, because
+`failed + lost + skipped` it logs `notify_sweep_destroyed`; past `failed >= 2` or
+`lost > 0` it also emails the super-admins, reusing the same audience resolution.
+
+**The log and the email have different thresholds on purpose.** All three classes
+are destroyed mail and all three are logged. Only two of them are worth waking
+someone: layer 1 already reasoned this out and wrote it down — red at `failed >= 2`
+because going red on one recurs on every sweep carrying a notice for that member,
+and `skipped` a warning only because a narrowed `EMAIL_ALLOWLIST`, or a member
+whose `email` is simply empty (the schema permits it), is an expected state.
+Mailing on those would put a chronic data condition on the channel this alarm
+calls its whole mitigation. `skipped` still appears in the body when the mail goes
+out for another reason. **All three count**, because
 all three are consumed and never retried: `failed` was refused by the mail server,
 `skipped` never had a usable address to try — the shape a narrowed
 `EMAIL_ALLOWLIST` takes — and `lost` was discarded by the send budget.
@@ -367,14 +377,18 @@ hour of runtime logs and the API refuses older windows outright. Delivery was
 confirmed by asking a member. Only something that leaves the request counts.
 
 It cannot cover a dead transport — the alert then fails the way the sends did and
-says so through `alerted: false`. **The backlog alarm does not necessarily catch
-that the next day**, and which applies depends on how the transport died. A *slow*
-transport times out, the send stage stops on its admission check, unserved
-recipients are re-pended, a backlog forms and the 6 h alarm fires. A *fast-failing*
-one — bad auth, connection refused — returns immediately, so every recipient is
-counted `failed` and consumed, **no backlog ever forms**, and the liveness alarm
-stays quiet indefinitely. This alarm sees that case and cannot report it, because
-its own send fails too. Nothing covers it today.
+says so through `alerted: false`. Two corrections to the obvious reading, both of
+which have been got backwards here before:
+
+- **Layer 1 does cover a dead transport.** It produces `failed >= 2` on any sweep
+  carrying two recipients, which is layer 1's red gate. The case is unobserved
+  only when layer 1 is down as well — a compound failure, not a plain one.
+- **The backlog alarm may not cover it, and the discriminator is batch size, not
+  how the transport died.** A batch that fits in one send wave
+  (`SEND_CONCURRENCY` = 8) is consumed whole with nothing re-pended, so no
+  backlog forms and the 6 h alarm never fires. The seven-recipient publish that
+  motivated this alarm is exactly that shape. Only a batch wider than one wave
+  leaves a tail behind.
 
 **Layer 2 still has this blindness**, and needs a different shape rather than a
 copy of this alarm: it fires on every mutation, and a derated sweep hitting its

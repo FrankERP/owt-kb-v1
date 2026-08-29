@@ -67,13 +67,38 @@ describe("reportDestroyedMail", () => {
     expect(sendEmailMock.mock.calls[0][0].to).toBe("owner@example.com");
   });
 
-  // `skipped` is the class the first version of this alarm missed. A recipient
-  // with no usable address, or one a narrowed EMAIL_ALLOWLIST excludes, is
-  // discharged WITHOUT AN ATTEMPT and never retried — destroyed just as surely
-  // as a refused send, and the shape a mis-set allowlist takes in production.
+  // `skipped` is the class the first version of this alarm missed entirely. A
+  // recipient with no usable address, or one a narrowed EMAIL_ALLOWLIST excludes,
+  // is discharged WITHOUT AN ATTEMPT and never retried — destroyed just as surely
+  // as a refused send. It COUNTS, so the loss is visible...
   it("counts skipped recipients, which are discharged without any attempt", async () => {
     const r = await reportDestroyedMail(report({ skipped: 4 }));
-    expect(r).toEqual({ destroyed: 4, alerted: true });
+    expect(r.destroyed).toBe(4);
+  });
+
+  // ...but it does NOT wake anyone on its own. A member whose `email` is empty is
+  // a permanent skipped producer, and layer 1 already decided this exact question
+  // in the other direction it could have gone: `skipped` warns, it does not go
+  // red. Mailing here would put a chronic data condition on the one channel that
+  // is the whole mitigation, every single day, until it stopped being read.
+  it("does not email on skipped alone — layer 1's threshold, deliberately", async () => {
+    const r = await reportDestroyedMail(report({ skipped: 4 }));
+    expect(r.alerted).toBe(false);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  // Same reasoning, the other half of layer 1's rule: red starts at two, because
+  // one undeliverable address recurs on every sweep carrying a notice for them.
+  it("does not email on a single failed send", async () => {
+    const r = await reportDestroyedMail(report({ failed: 1 }));
+    expect(r).toEqual({ destroyed: 1, alerted: false });
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  // Not triggering is not the same as not reporting: once the mail goes out for a
+  // reason that DID clear the bar, the skipped recipients ride along in it.
+  it("reports skipped in the body when the mail goes out for another reason", async () => {
+    await reportDestroyedMail(report({ failed: 2, skipped: 3 }));
     expect(htmlOf()).toContain("no tenían dirección utilizable");
   });
 
@@ -101,9 +126,18 @@ describe("reportDestroyedMail", () => {
   // why the 2026-08-28 sweep could not be audited after the fact. The mail has to
   // say that, or it points the reader at evidence that will be gone.
   it("tells the reader the logs expire within the hour", async () => {
-    await reportDestroyedMail(report({ failed: 1 }));
+    await reportDestroyedMail(report({ failed: 2, skipped: 1 }));
     expect(htmlOf()).toContain("dentro de la hora siguiente");
     expect(htmlOf()).toContain("notify_sweep_recipient_skipped");
+  });
+
+  // The `lost` class has NO per-recipient log — the budget records counts, not
+  // ids — so promising ids for it would send the reader hunting a one-hour
+  // window for lines that were never written.
+  it("does not promise member ids for a loss the logs cannot identify", async () => {
+    await reportDestroyedMail(report({ lost: 3 }));
+    expect(htmlOf()).toContain("no se pueden identificar");
+    expect(htmlOf()).not.toContain("notify_sweep_send_failed");
   });
 
   // `alerted` follows the MAILBOX, not the attempt — the same rule the stale

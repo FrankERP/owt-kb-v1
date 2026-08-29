@@ -98,8 +98,10 @@ export interface DestroyedMail {
    */
   destroyed: number;
   /**
-   * Did the alert actually reach a person? False when nothing was destroyed, and
-   * false when something was but no super-admin could be mailed.
+   * Did the alert actually reach a person? False in three different situations,
+   * and only `destroyed` tells them apart: nothing was destroyed; something was
+   * but stayed under the mail threshold (see the thresholds note in
+   * `reportDestroyedMail`); or the mail was sent and reached no super-admin.
    */
   alerted: boolean;
 }
@@ -160,6 +162,17 @@ function buildDestroyedEmail(o: { failed: number; lost: number; skipped: number 
     parts.push(`${strong(o.skipped)} no tenían dirección utilizable o quedaron fuera de la lista permitida`);
   if (o.lost) parts.push(`${strong(o.lost)} se descartaron antes de intentarse`);
   const detail = `${parts.join("; ")}.`;
+  // Only cite evidence that EXISTS for the classes this mail is about. The
+  // events below carry a `memberId`; the `lost` class has none — the budget logs
+  // counts, not recipients — so promising ids for it would send the reader
+  // hunting a one-hour log window for lines that were never written.
+  const idEvents = [
+    o.failed && "<em>notify_sweep_send_failed</em>, <em>notify_sweep_render_failed</em>",
+    o.skipped && "<em>notify_sweep_recipient_skipped</em>",
+  ].filter(Boolean) as string[];
+  const evidence = idEvents.length
+    ? `<p style="margin:0;font:13px system-ui,sans-serif;color:${C.ink}">Para saber a quiénes: ${idEvents.join(" y ")} llevan el id del miembro. Búscalos en los logs de Vercel <strong>dentro de la hora siguiente</strong> a este correo — el plan Hobby no retiene más que eso.${o.lost ? " Los descartados por presupuesto no se pueden identificar: ese camino registra conteos, no destinatarios." : ""}</p>`
+    : `<p style="margin:0;font:13px system-ui,sans-serif;color:${C.ink}">Los destinatarios individuales <strong>no se pueden identificar</strong>: el descarte por presupuesto registra conteos, no ids. Revisa qué servicio se publicó cerca de esta hora.</p>`;
   const body =
     tr(
       td(`<span style="font:700 15px system-ui,sans-serif;color:${C.ink}">Se perdieron avisos en el barrido diario</span>`, {
@@ -178,12 +191,7 @@ function buildDestroyedEmail(o: { failed: number; lost: number; skipped: number 
         { style: "padding:0 24px 12px" },
       ),
     ) +
-    tr(
-      td(
-        `<p style="margin:0;font:13px system-ui,sans-serif;color:${C.ink}">Para saber a quiénes: los eventos <em>notify_sweep_send_failed</em>, <em>notify_sweep_render_failed</em> y <em>notify_sweep_recipient_skipped</em> llevan el id del miembro. Búscalos en los logs de Vercel <strong>dentro de la hora siguiente</strong> a este correo — el plan Hobby no retiene más que eso, y después ya no se pueden recuperar.</p>`,
-        { style: "padding:0 24px 18px" },
-      ),
-    ) +
+    tr(td(evidence, { style: "padding:0 24px 18px" })) +
     tr(
       td(
         `<a href="${link}" style="display:inline-block;background:${C.accent};color:${C.field};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Abrir el panel →</a>`,
@@ -333,15 +341,18 @@ export async function reportOutboxLiveness(now: Date = new Date()): Promise<Outb
  * the request counts, which is why this mails a person like its sibling does.
  *
  * It cannot cover the case where the transport itself is dead — the alert then
- * fails the same way the sends did, and says so via `alerted: false`. Do NOT
- * assume the backlog alarm covers that the next day; it depends on which kind of
- * dead. A SLOW transport times out, the wave-admission check stops the send
- * stage, unserved recipients are re-pended, a backlog forms and the 6 h alarm
- * fires. A FAST-FAILING one — bad auth, connection refused — returns
- * `{ok:false}` immediately, so every recipient is counted `failed` and CONSUMED,
- * no backlog ever forms, and the liveness alarm stays quiet indefinitely. This
- * alarm sees that case and cannot report it, because its own send fails too.
- * Nothing covers it today.
+ * fails the same way the sends did, and says so via `alerted: false`. Two things
+ * are worth being precise about, because both are easy to get backwards:
+ *
+ *   · Layer 1 DOES cover it. A dead transport produces `failed >= 2` on any
+ *     sweep carrying two recipients, which is that workflow's red gate. This
+ *     case is unobserved only when layer 1 is down TOO — which is exactly the
+ *     compound failure layer 3 exists for, but it is a compound one.
+ *   · The backlog alarm may not. Whether a backlog forms turns on BATCH SIZE
+ *     against one send wave, not on how the transport died: a batch that fits in
+ *     `SEND_CONCURRENCY` (8) is consumed whole with nothing re-pended, so the
+ *     seven-recipient publish this alarm was built for leaves no backlog and the
+ *     6 h alarm never fires. Only a batch wider than one wave re-pends a tail.
  *
  * Best-effort like everything else here: it never throws, so the daily cron
  * cannot fail because its alarm could not send.
@@ -359,9 +370,27 @@ export async function reportDestroyedMail(
     if (!sweep || !("failed" in sweep)) return { destroyed: 0, alerted: false };
     const { failed, lost, skipped } = sweep;
     destroyed = failed + lost + skipped;
-    if (destroyed <= 0) return { destroyed: 0, alerted: false };
+    // Guard the arithmetic, not just the types. A hand-built report or a JSON
+    // round-trip with a missing counter would make this NaN, and `NaN <= 0` is
+    // false — so the alarm would mail a super-admin the word "NaN".
+    if (!Number.isFinite(destroyed) || destroyed <= 0) return { destroyed: 0, alerted: false };
 
+    // ALL THREE are logged, because all three are mail nobody will receive.
     console.error(JSON.stringify({ event: "notify_sweep_destroyed", failed, lost, skipped }));
+
+    // The EMAIL is gated more tightly than the log, on the thresholds layer 1
+    // already reasoned about and wrote down (`flush-notifications.yml`): red at
+    // `failed >= 2`, because going red on one recurs on every sweep carrying a
+    // notice for that member; and `skipped` a warning only, because a narrowed
+    // `EMAIL_ALLOWLIST` — or a member whose `teamMembers.email` is simply empty,
+    // which the schema permits — is an expected state, not an incident.
+    //
+    // Mailing on those would put a chronic data condition on the one channel
+    // this file calls the whole mitigation, and an alert that arrives during
+    // ordinary weeks stops being read. Issue #20 reaches the same conclusion for
+    // layer 2 independently. `skipped` still rides along in the body when the
+    // mail goes out for another reason, so it is reported without triggering.
+    if (failed < 2 && lost <= 0) return { destroyed, alerted: false };
     // `alerted` follows the MAILBOX, not the attempt — the same rule the stale
     // alarm uses, and for the same reason: the email is the whole mitigation.
     const reached = await emailSuperAdmins(

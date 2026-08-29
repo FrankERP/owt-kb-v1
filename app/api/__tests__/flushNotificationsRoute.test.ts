@@ -16,6 +16,8 @@ import type { NextRequest } from "next/server";
 // guarded; neutralize the marker so they load under vitest's node environment.
 vi.mock("server-only", () => ({}));
 
+import type { SweepReport } from "@/app/utils/outboxSweep";
+
 const sweepOutboxMock = vi.fn();
 const sendEmailMock = vi.fn();
 const sendPushMock = vi.fn();
@@ -54,9 +56,8 @@ function req(headers: Record<string, string> = {}): NextRequest {
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
 
-/** Route the daily cron's two reads by the query they issue. */
 /** A clean sweep report; each test names only the counters it is about. */
-function sweepReport(over: Record<string, number> = {}) {
+function sweepReport(over: Partial<SweepReport> = {}): SweepReport {
   return {
     claimed: 0, emailed: 0, consumed: 0, deferred: 0,
     unserved: 0, repended: 0, lost: 0, failed: 0, skipped: 0,
@@ -69,6 +70,7 @@ async function bodyField(res: Response, field: string): Promise<unknown> {
   return (await res.json())[field];
 }
 
+/** Route the daily cron's two reads by the query they issue. */
 function serveReminderFetches(stale: { count: number; oldest: string | null }) {
   operationalFetch.mockImplementation(async (query: string) => {
     if (query.includes("notificationOutbox")) return stale;
@@ -231,6 +233,7 @@ describe("layer 3 — the daily cron also sweeps", () => {
   // indistinguishable from one that never fires — which is how a destroyed
   // sweep looked before it existed.
   it("alarms a super-admin on mail the sweep destroyed", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     serveReminderFetches({ count: 0, oldest: null });
     sweepOutboxMock.mockResolvedValue(sweepReport({ failed: 2 }));
     const GET = await remindersRoute();
@@ -254,6 +257,7 @@ describe("layer 3 — the daily cron also sweeps", () => {
   // The sweep's own failure must not be read as a clean run. `{error}` carries
   // no counters, and the alarm narrows on that rather than casting.
   it("reports nothing destroyed when the sweep itself threw", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     serveReminderFetches({ count: 0, oldest: null });
     sweepOutboxMock.mockRejectedValue(new Error("sweep exploded"));
     const GET = await remindersRoute();
