@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { sendPush } from "@/app/utils/push";
 import { tomorrowDateStr, assignedMemberRefsQuery } from "@/app/utils/notifyTargets";
-import { reportOutboxLiveness } from "@/app/utils/outboxLiveness";
+import { reportDestroyedMail, reportOutboxLiveness } from "@/app/utils/outboxLiveness";
 import { sweepOutbox } from "@/app/utils/outboxSweep";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
@@ -85,5 +85,11 @@ async function getHandler(req: NextRequest) {
     sweep = { error: "sweep_failed" };
   }
 
-  return NextResponse.json({ day, ...r, sweep, liveness });
+  // AFTER the sweep, and that order is the opposite of the liveness alarm's on
+  // purpose: this one reports what THIS sweep just destroyed, so it has nothing
+  // to measure until the sweep has run. It is the only reporter layer 3 has —
+  // the JSON below goes to Vercel's scheduler, which reads none of it.
+  const destroyed = await reportDestroyedMail(sweep);
+
+  return NextResponse.json({ day, ...r, sweep, liveness, destroyed });
 }

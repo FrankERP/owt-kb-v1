@@ -51,7 +51,7 @@ hand-writing a fixture that mirrors them).
 |---|---|---|
 | 1 — primary | GitHub Actions, declared every 5 min — see §"Layer 1 does not run every five minutes" | `.github/workflows/flush-notifications.yml` → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
 | 2 — backstop | opportunistic sweep after any queueing write | end of `commitUpserts()` in `serviceMutationSideEffects.ts` |
-| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` |
+| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (also the only layer that alarms on destroyed mail — see §"The destroyed-mail alarm") |
 
 **Layer 1 is load-bearing, not one of three redundant paths.** Layer 2 only
 flushes subjects that have *already* gone quiet, so it can never flush the
@@ -341,6 +341,61 @@ an outbox the sweep had just emptied and report healthy — which is exactly the
 "layer 1 is dead" scenario it exists to catch. If you ever reorder that, the
 alarm stops working while continuing to look fine.
 
+### The destroyed-mail alarm, and why it runs the other way round
+
+`reportDestroyedMail()` is the second alarm in `outboxLiveness.ts`, and it runs
+**after** the sweep — the opposite order, for the opposite reason. The liveness
+alarm asks *"is mail still moving?"*; this one asks *"did this sweep just destroy
+mail?"*, so it has nothing to measure until the sweep has run. Past zero on
+`failed + lost + skipped` it logs `notify_sweep_destroyed`; past `failed >= 2` or
+`lost > 0` it also emails the super-admins, reusing the same audience resolution.
+
+**The log and the email have different thresholds on purpose.** All three classes
+are destroyed mail and all three are logged. Only two of them are worth waking
+someone: layer 1 already reasoned this out and wrote it down — red at `failed >= 2`
+because going red on one recurs on every sweep carrying a notice for that member,
+and `skipped` a warning only because a narrowed `EMAIL_ALLOWLIST`, or a member
+whose `email` is simply empty (the schema permits it), is an expected state.
+Mailing on those would put a chronic data condition on the channel this alarm
+calls its whole mitigation. `skipped` still appears in the body when the mail goes
+out for another reason. **All three count**, because
+all three are consumed and never retried: `failed` was refused by the mail server,
+`skipped` never had a usable address to try — the shape a narrowed
+`EMAIL_ALLOWLIST` takes — and `lost` was discarded by the send budget.
+
+It exists because **layer 3 had no reporter at all.** Layer 1 curls its route
+from a GitHub workflow that reads the report and goes red on `failed >= 2` or
+`lost > 0`. The daily cron calls the same sweep and returns the same report to
+Vercel's scheduler, which reads nothing — so a layer-3 sweep that destroyed every
+send looked exactly like one that delivered everything. Since consumption is
+unconditional on send outcome (ADR-0026), nothing else would ever have said so.
+
+**A log line does not close this, and that is measured rather than assumed.** On
+2026-08-28 a published setlist was swept by layer 3 at 01:00Z and whether its
+seven emails arrived could not be established afterwards: Hobby retains about an
+hour of runtime logs and the API refuses older windows outright. Delivery was
+confirmed by asking a member. Only something that leaves the request counts.
+
+It cannot cover a dead transport — the alert then fails the way the sends did and
+says so through `alerted: false`. Two corrections to the obvious reading, both of
+which have been got backwards here before:
+
+- **Layer 1 does cover a dead transport.** It produces `failed >= 2` on any sweep
+  carrying two recipients, which is layer 1's red gate. The case is unobserved
+  only when layer 1 is down as well — a compound failure, not a plain one.
+- **The backlog alarm may not cover it, and the discriminator is batch size, not
+  how the transport died.** A batch that fits in one send wave
+  (`SEND_CONCURRENCY` = 8) is consumed whole with nothing re-pended, so no
+  backlog forms and the 6 h alarm never fires. The seven-recipient publish that
+  motivated this alarm is exactly that shape. Only a batch wider than one wave
+  leaves a tail behind.
+
+**Layer 2 still has this blindness**, and needs a different shape rather than a
+copy of this alarm: it fires on every mutation, and a derated sweep hitting its
+send budget mid-session is ordinary, so reusing this trigger would mail
+super-admins during normal editing. Tracked in
+[#20](https://github.com/FrankERP/owt-kb-v1/issues/20).
+
 ## Operating it
 
 **Is layer 1 alive?**
@@ -552,7 +607,7 @@ Things that are counter-intuitive and were each a real defect at some point.
   the next sweep emails **new** people instead of retrying the first two.
   A writer re-queue on the same subject **clears** that list — a later edit is a
   new change. The GitHub workflow fails only on `lost > 0`. Failed sends still
-  count as attempted (no retry for bad addresses).
+  count as attempted (no retry for bad addresses — ADR-0026).
 - **The rehearsal harness distorts the thing it measures.** `EMAIL_REDIRECT_TO`
   points every message at ONE address, so a fan-out that would have gone to 17
   domains becomes 17 messages to one — and the big providers throttle exactly
@@ -618,9 +673,12 @@ pipeline a received message does, with no SMTP credentials and nothing sent.
 - **A throttled wave is still DESTROYED — but it is no longer silent** (fixed
   2026-08-28). `sendOne` records a recipient as ATTEMPTED before awaiting, so a
   failed send discharges its notice exactly like a successful one: consumed,
-  `lost` 0, `unserved` 0. That is the at-most-once contract and it is unchanged
-  here — re-pending what was attempted is the "different outbox model" spec §1
-  says must be designed rather than discovered.
+  `lost` 0, `unserved` 0. That contract is unchanged, and **the question is now
+  closed rather than open**: re-pending what was attempted was designed in three
+  revisions, reviewed adversarially in three rounds, and rejected — see
+  [ADR-0026](adr/0026-failed-sends-are-not-re-pended.md) for the two nodemailer
+  facts and the one Gmail behaviour that killed it, and for what a correct
+  implementation would actually require.
   What changed is visibility. The report now carries **`failed`** (attempted, not
   delivered) and **`skipped`** (discharged with no attempt at all — no member, no
   address, or blocked by `EMAIL_ALLOWLIST`, which previously logged nothing
