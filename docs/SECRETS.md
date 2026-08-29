@@ -155,7 +155,11 @@ On Production, setting it is a temporary, reversible act. On Preview it is the r
 
 **Purpose.** When set, *every* outgoing email is redirected to that one address instead of its real recipient, with the intended recipient prefixed into the subject as `[→ real@address] …` (`outboxSweep.ts` stage 7). Nothing else changes: classification, grouping, the send loop, and stage 8's unconditional consume all behave exactly as in a real run. That is what makes it the only honest way to rehearse a fan-out — a completely real batch that reaches nobody.
 
-**Where the value came from.** Whoever is running the rehearsal. On 2026-08-07 it was set to the maintainer's own address to measure `msPerSend` for a 17-recipient batch without mailing the team.
+**Where the value came from — Production.** Whoever is running the rehearsal. On 2026-08-07 it was set to the maintainer's own address to measure `msPerSend` for a 17-recipient batch without mailing the team. Set again on 2026-08-27 for the concurrency-8 verification sweep (14 recipients) and removed after, its absence confirmed by pulling the environment.
+
+**Where the value came from — Preview.** Set once, around 2026-07-24 (dated from the age `vercel env ls preview` reports; no commit records it). Read the current target with `npx vercel env pull` against the preview environment — it is a plain address, not a secret, but it is not written down here on purpose so there is one source of truth.
+
+**How to rotate the Preview value.** `npx vercel env rm EMAIL_REDIRECT_TO preview --yes`, then `printf 'new@address' | npx vercel env add EMAIL_REDIRECT_TO preview`, then **redeploy `preview`** and verify the dev alias moved. Blast radius while rotating: between the `rm` and the redeploy that follows the `add`, a running preview function still holds the OLD value, so mail keeps going to the previous address — it does not leak to the team. But if a deploy happens in the window after `rm` and before `add`, preview mails the real team until the next deploy. Do the two commands back to back, then redeploy once.
 
 **How to set and unset.**
 

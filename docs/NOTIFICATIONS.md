@@ -570,15 +570,17 @@ Things that are counter-intuitive and were each a real defect at some point.
   `scripts/measure-send-budget.mjs`.
 - **That made the grouped monthly email undeliverable by tuning this codebase —
   and the sender move is what changed it.** ~20 recipients × ~14 s is far past the hosting function's 60 s
-  ceiling at any concurrency and any cap. Two things can fix it, and nothing else
-  can: the **~14 s remote accept on the mail server**, or a change so the sweep
-  **re-pends notices it never attempted instead of consuming them** — which would
-  give grouped-and-lossless delivery spread over several sweeps, since a
-  recipient's notices stay together and are either all served or all returned.
-  The second is a change to the consume contract and needs a plan and review; the
-  first is one setting on someone else's box and fixes everything at once.
-- **Remote recipients cost ~14 s to ACCEPT; local ones cost 67 ms. That is the
-  whole problem, and it is server-side.** Measured 2026-08-07 with
+  ceiling at any concurrency and any cap. Two remedies were named at the time —
+  fixing the ~14 s remote accept on the mail server, or re-pending notices the
+  sweep never attempted. **Neither is what happened, and the record of both
+  matters now:** the server was retired for Gmail (ADR-0025), where a wave costs
+  ~2 605 ms and ~20 recipients fit; and re-pending was designed three times,
+  adversarially reviewed three times and **rejected** (ADR-0026). Do not revive
+  the second from this paragraph — it is kept for the reasoning, not the plan.
+- **HISTORICAL (sender retired 2026-08-27).** Remote recipients cost ~14 s to
+  ACCEPT while local ones cost 67 ms — the whole problem, and server-side, which
+  is precisely why the fix was to change senders rather than tune this repo. Kept
+  as the measurement that justified ADR-0025. Measured 2026-08-07 with
   `/api/cron/smtp-probe` (the *Probe the SMTP path* workflow): to a LOCAL
   recipient the entire SMTP conversation — connect, TLS, `EHLO`, `AUTH`,
   `MAIL FROM`, `RCPT TO`, `DATA` and a 20 KB body — completes in **under 600 ms**,

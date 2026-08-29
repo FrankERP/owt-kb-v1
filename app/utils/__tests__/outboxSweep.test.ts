@@ -1435,24 +1435,29 @@ describe("sweepOutbox — recipient scoping and read contract", () => {
 });
 
 /**
- * THE REAL NUMBER IS KNOWN, AND IT IS NOT THIS ONE. Production measured
- * `msPerSend` = **14 413 ms** on 2026-08-07 (two successful sends to external
- * recipients; a local recipient costs ~67 ms, so the cost is the server's remote
- * accept). This constant stays at 500 because the assertions below check the
- * DEFAULT `EMAIL_LIMIT` of 40, and swapping in 14 413 would turn a standing
- * regression guard into a permanently red test asserting a configuration nobody
- * runs — production runs `NOTIFY_FLUSH_EMAIL_LIMIT = 2`, where
- * `14 413 × 2 = 28 826 < 40 000` and §1's inequality genuinely holds.
+ * THE REAL NUMBER IS KNOWN, AND IT IS NOT THIS ONE — but check WHICH WAY before
+ * reasoning from it, because the direction reversed on 2026-08-27 and the old
+ * text here survived the change by two days.
  *
- * So read the guard for what it is: proof that the shipped DEFAULTS are
- * internally consistent, not evidence that sending is fast. The real cost and
- * what it forces live in `docs/NOTIFICATIONS.md` → Still open.
+ * The guard below charges **per WAVE**, not per message:
+ * `(waves - 1) * MEASURED_MS_PER_SEND`. On Gmail at `SEND_CONCURRENCY = 8`, a
+ * wave measured **~2 605 ms** in production (14 recipients, 2 waves, 5 210 ms).
+ * So 500 is now **optimistic by about 5x**, where it used to be conservative.
  *
- * §1's stop condition WAS crossed, deliberately and with the trade recorded:
- * lowering the limit below the largest per-service seat count (12-20 on a
- * Sunday) fragments a monthly publish into several emails per member. That was
- * chosen over destroying most of them. Raising THIS constant to make the test
- * green is still the one forbidden move.
+ * The 14 413 ms this comment used to quote was the RETIRED cPanel sender
+ * (ADR-0025), and the `NOTIFY_FLUSH_EMAIL_LIMIT = 2` it justified was raised to
+ * 40 on the same day the sender changed.
+ *
+ * The good news the old text could not have: at the shipped defaults the
+ * inequality now holds on the REAL number — `(5-1) x 2 605 = 10 420 < 20 000` —
+ * which was never true under the old sender. §1's stop condition is no longer
+ * crossed, so the fragmentation trade that justified a cap of 2 is gone.
+ *
+ * Read the guard for what it is: proof that the shipped DEFAULTS are internally
+ * consistent, not evidence that sending is fast. The measurements live in
+ * `docs/NOTIFICATIONS.md` -> "Send throughput on Gmail".
+ *
+ * Raising THIS constant to make the test green is still the one forbidden move.
  */
 const MEASURED_MS_PER_SEND = 500;
 

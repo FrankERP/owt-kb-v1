@@ -241,12 +241,16 @@ honesty gate (empty runs over churn).
   Client dark-mode transforms assume email is light; there is no reliable hook to
   win from the sending side. Don't "restore the brand colours".
 - `MEASURED_MS_PER_SEND` in `outboxSweep.test.ts` is **500 ms and deliberately
-  not the real number** — 14 413 ms/send was measured on the OLD cPanel sender
-  (2026-08-07), which has since been retired (ADR-0025). The guard asserts the
-  shipped *defaults* are consistent, and production now runs
-  `NOTIFY_FLUSH_EMAIL_LIMIT=40` with `SEND_CONCURRENCY=8` against Gmail, where
-  the measured cost is ~372 ms/send. Raising the constant to keep the guard green
-  is still the one forbidden move — see `docs/NOTIFICATIONS.md`.
+  not the real number**, and **it is now OPTIMISTIC, not conservative** — check
+  which way before reasoning from it. The guard charges **per WAVE**
+  (`(waves - 1) * MEASURED_MS_PER_SEND`), and a wave measured **~2 605 ms** on
+  Gmail at width 8. The often-quoted 372 ms is `sendMs / emailed` — per MESSAGE,
+  not the figure the guard uses. The old 14 413 ms belonged to the retired cPanel
+  sender (ADR-0025). Production runs `NOTIFY_FLUSH_EMAIL_LIMIT=40` with
+  `SEND_CONCURRENCY=8`, and the inequality now holds on the REAL number —
+  `(5-1) × 2 605 = 10 420 < 20 000` — which it never did before. Raising the
+  constant to keep the guard green is still the one forbidden move — see
+  `docs/NOTIFICATIONS.md`.
 
 ## Agent skills
 

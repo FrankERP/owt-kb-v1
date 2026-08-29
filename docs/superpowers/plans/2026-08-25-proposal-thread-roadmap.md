@@ -123,8 +123,10 @@ claimed:**
 - **The queuing OCCASIONS change, and that is Child A's risk, not Child B's.** The
   debounced email moves from "the notes field changed on a save" to "a lead posted a
   chat message", which multiplies entry points into `commitUpserts`' unconditional
-  inline `sweepOutbox` (`serviceMutationSideEffects.ts:513`) — measured at ~14.4 s
-  per send against `NOTIFY_FLUSH_EMAIL_LIMIT=2`. Child B names the volume shift, but
+  inline `sweepOutbox` (`serviceMutationSideEffects.ts:513`). **Stale as of
+  2026-08-27** — this said "~14.4 s per send against `NOTIFY_FLUSH_EMAIL_LIMIT=2`";
+  production now runs a cap of 40 on Gmail at ~2 605 ms per wave, so the volume
+  risk this paragraph sizes is roughly 20x smaller than written. Child B names the volume shift, but
   it lands with Child A. Watch `report.lost` after Child A's release, not Child B's.
   **Conservative rather than currently firing:** `queueLeadNotesNotice` returns
   before `commitUpserts` unless the pre-write status is `pending`/`changes_requested`

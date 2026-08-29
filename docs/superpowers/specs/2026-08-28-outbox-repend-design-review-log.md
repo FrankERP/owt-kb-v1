@@ -36,9 +36,13 @@ edits. Both blockers had one root.
 | 1 | A notice can carry BOTH throttled and budget-tail recipients — the repo already documents this correlated case — while `RependInput` is per notice, so one `notifyAfter` cannot serve both. Backing off stalls pagination; not backing off storms the server | **Accepted, and fatal to the approach.** Not patched — the design was replaced |
 | 2 | `lost` cannot count deadline-abandoned recipients on a re-pended notice (`countLost` iterates `toConsume` only), so the abandonment would read green | **Accepted**, same root |
 
-Churn cap reached here: two rounds with verified substantive blockers.
-`CLAUDE.md` requires Frank's explicit advance go-ahead for a third. He was asked,
-and chose to **simplify** rather than iterate — the remedy the cap points at.
+Churn cap reached here: two rounds with verified substantive blockers, which
+`CLAUDE.md` says requires Frank's explicit advance go-ahead for a third. He was
+asked and chose to **simplify** rather than iterate — the remedy the cap points
+at. Round 3 below is therefore round 1 of a *different* design, not a third round
+on this one, which is how the worklog labels it. Both framings appear in this
+cycle's records; this is the reconciliation. No separate go-ahead for "round 3 of
+the original" was sought, because that round never ran.
 
 ## Round 3 — simplified design (per-sweep circuit breaker)
 

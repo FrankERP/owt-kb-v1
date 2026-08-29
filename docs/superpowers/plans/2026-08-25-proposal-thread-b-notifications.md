@@ -476,9 +476,11 @@ A**, whose messages route already calls `queueLeadNotesNotice` on every lead mes
 the parent assigns that risk there explicitly and says to watch `report.lost` after
 **A's** release (roadmap `:123-128`). **B's own increment is one thing:** dropping
 `afterNotes` removes the trimmed-equal guard, so a repeated identical message now
-queues where today it does not. Production runs `NOTIFY_FLUSH_EMAIL_LIMIT=2` against a
-measured 14 413 ms/send, so watch `report.lost` after both releases — but B is not
-where the occasions multiplied.
+queues where today it does not. **Corrected 2026-08-27:** this said production runs
+`NOTIFY_FLUSH_EMAIL_LIMIT=2` against a measured 14 413 ms/send. It now runs 40 on
+Gmail at ~2 605 ms per wave, so the volume risk is far smaller than written — but
+still watch `report.lost` after both releases, since consumption remains
+unconditional (ADR-0026). B is not where the occasions multiplied.
 
 ## Phases
 

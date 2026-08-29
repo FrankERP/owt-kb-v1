@@ -229,7 +229,7 @@ static panel does not cover them.
 5. Vercel: canonical project `frank-rochas-projects/owt-backstage`. The stable dev domain
    belongs exclusively to the `preview` branch.
 6. Production Sanity writes need explicit user consent; dry-run first.
-7. **`preview` writes to the real Sanity dataset and emails the real team.** Not a dry run.
+7. **`preview` writes to the real Sanity dataset.** Not a dry run. *(Snapshot note, added 2026-08-29: this list records the invariants as they stood on 2026-08-07 and several have since changed — preview no longer emails the real team (`EMAIL_REDIRECT_TO` is set there), and `main` is no longer direct-push. Read it as history; `CLAUDE.md` is authoritative for the present.)*
 
 **On-disk guards that will fail `npm test` if this delivery forgets them** — all three real
 and currently green:
