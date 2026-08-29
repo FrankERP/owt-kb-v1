@@ -51,7 +51,7 @@ hand-writing a fixture that mirrors them).
 |---|---|---|
 | 1 — primary | GitHub Actions, declared every 5 min — see §"Layer 1 does not run every five minutes" | `.github/workflows/flush-notifications.yml` → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
 | 2 — backstop | opportunistic sweep after any queueing write | end of `commitUpserts()` in `serviceMutationSideEffects.ts` |
-| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` |
+| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (also the only layer that alarms on destroyed mail — see §"The destroyed-mail alarm") |
 
 **Layer 1 is load-bearing, not one of three redundant paths.** Layer 2 only
 flushes subjects that have *already* gone quiet, so it can never flush the
@@ -340,6 +340,36 @@ has no consumer.
 an outbox the sweep had just emptied and report healthy — which is exactly the
 "layer 1 is dead" scenario it exists to catch. If you ever reorder that, the
 alarm stops working while continuing to look fine.
+
+### The destroyed-mail alarm, and why it runs the other way round
+
+`reportDestroyedMail()` is the second alarm in `outboxLiveness.ts`, and it runs
+**after** the sweep — the opposite order, for the opposite reason. The liveness
+alarm asks *"is mail still moving?"*; this one asks *"did this sweep just destroy
+mail?"*, so it has nothing to measure until the sweep has run. Past zero on
+`failed + lost` it logs `notify_sweep_destroyed` and emails the super-admins,
+reusing the same audience resolution.
+
+It exists because **layer 3 had no reporter at all.** Layer 1 curls its route
+from a GitHub workflow that reads the report and goes red on `failed >= 2` or
+`lost > 0`. The daily cron calls the same sweep and returns the same report to
+Vercel's scheduler, which reads nothing — so a layer-3 sweep that destroyed every
+send looked exactly like one that delivered everything. Since consumption is
+unconditional on send outcome (ADR-0026), nothing else would ever have said so.
+
+**A log line does not close this, and that is measured rather than assumed.** On
+2026-08-28 a published setlist was swept by layer 3 at 01:00Z and whether its
+seven emails arrived could not be established afterwards: Hobby retains about an
+hour of runtime logs and the API refuses older windows outright. Delivery was
+confirmed by asking a member. Only something that leaves the request counts.
+
+It cannot cover a dead transport — the alert then fails the way the sends did and
+says so through `alerted: false`. That case belongs to the backlog alarm above,
+on the following day.
+
+**Layer 2 still has this blindness.** Its opportunistic sweeps can destroy mail
+with no reporter either; it was left out because it fires on every mutation and
+alerting there risks noise. Tracked separately.
 
 ## Operating it
 

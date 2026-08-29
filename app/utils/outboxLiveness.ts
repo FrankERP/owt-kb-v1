@@ -89,6 +89,16 @@ export interface OutboxLiveness {
   alerted: boolean;
 }
 
+export interface DestroyedMail {
+  /** Recipients this sweep discharged without delivering: `failed` + `lost`. */
+  destroyed: number;
+  /**
+   * Did the alert actually reach a person? False when nothing was destroyed, and
+   * false when something was but no super-admin could be mailed.
+   */
+  alerted: boolean;
+}
+
 interface SuperAdmin {
   _id: string;
   email?: string;
@@ -128,6 +138,48 @@ function buildStaleEmail(o: { count: number; oldestHours: number }): { subject: 
   return { subject, html: shell(body, link) };
 }
 
+function buildDestroyedEmail(o: { failed: number; lost: number }): { subject: string; html: string } {
+  const link = `${appBaseUrl()}/admin`;
+  const failed = escapeHtml(String(o.failed));
+  const lost = escapeHtml(String(o.lost));
+  const total = escapeHtml(String(o.failed + o.lost));
+  const subject = "Alerta: se descartaron correos de notificación sin enviar";
+  // `failed` and `lost` are NOT the same failure and the mail says so, because
+  // they send you to different places: `failed` was attempted and the transport
+  // refused it, `lost` was never attempted at all before its notice was consumed.
+  const detail =
+    o.failed && o.lost
+      ? `<strong style="color:${C.accent}">${failed}</strong> se intentaron y no se entregaron, y <strong style="color:${C.accent}">${lost}</strong> se descartaron sin intentarse.`
+      : o.failed
+        ? `<strong style="color:${C.accent}">${failed}</strong> se intentaron y el servidor de correo no los aceptó.`
+        : `<strong style="color:${C.accent}">${lost}</strong> se descartaron sin haberse intentado siquiera.`;
+  const body =
+    tr(
+      td(`<span style="font:700 15px system-ui,sans-serif;color:${C.ink}">Se perdieron avisos en el barrido diario</span>`, {
+        style: "padding:18px 24px 8px",
+      }),
+    ) +
+    tr(
+      td(
+        `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}">El barrido de anoche descartó <strong style="color:${C.accent}">${total}</strong> destinatario(s) sin entregarles nada. ${detail}</p>`,
+        { style: "padding:0 24px 12px" },
+      ),
+    ) +
+    tr(
+      td(
+        `<p style="margin:0;font:13px system-ui,sans-serif;color:${C.ink}">Esos avisos ya se consumieron y no se reintentan, así que las personas afectadas no se van a enterar por su cuenta. Si era un setlist o un cambio de rol, hay que avisarles a mano. Los eventos <em>notify_sweep_send_failed</em> y <em>notify_sweep_send_budget_exhausted</em> dicen a quiénes.</p>`,
+        { style: "padding:0 24px 18px" },
+      ),
+    ) +
+    tr(
+      td(
+        `<a href="${link}" style="display:inline-block;background:${C.accent};color:${C.field};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Abrir el panel →</a>`,
+        { style: "padding:0 24px 20px" },
+      ),
+    );
+  return { subject, html: shell(body, link) };
+}
+
 /**
  * Mail every reachable super-admin. Answers whether the alarm ACTUALLY landed in
  * a mailbox.
@@ -141,9 +193,12 @@ function buildStaleEmail(o: { count: number; oldestHours: number }): { subject: 
  * reporting success is the worst outcome available, so each case gets its own
  * `notify_outbox_stale_unreachable` reason and a `false` answer.
  */
-async function emailSuperAdmins(o: { count: number; oldestHours: number }): Promise<boolean> {
+async function emailSuperAdmins(
+  message: { subject: string; html: string },
+  event: string,
+): Promise<boolean> {
   const unreachable = (reason: string, extra: Record<string, unknown> = {}) => {
-    console.error(JSON.stringify({ event: "notify_outbox_stale_unreachable", reason, ...extra }));
+    console.error(JSON.stringify({ event: `${event}_unreachable`, reason, ...extra }));
     return false;
   };
 
@@ -152,7 +207,7 @@ async function emailSuperAdmins(o: { count: number; oldestHours: number }): Prom
 
   const allow = getAllowlist();
   const redirectTo = process.env.EMAIL_REDIRECT_TO?.trim();
-  const { subject, html } = buildStaleEmail(o);
+  const { subject, html } = message;
   let noEmail = 0;
   let notAllowlisted = 0;
   let attempted = 0;
@@ -178,7 +233,7 @@ async function emailSuperAdmins(o: { count: number; oldestHours: number }): Prom
       continue;
     }
     console.error(
-      JSON.stringify({ event: "notify_outbox_stale_email_failed", memberId: admin._id, error: res.error }),
+      JSON.stringify({ event: `${event}_email_failed`, memberId: admin._id, error: res.error }),
     );
   }
   if (delivered) return true;
@@ -236,10 +291,58 @@ export async function reportOutboxLiveness(now: Date = new Date()): Promise<Outb
     // `alerted` follows the MAILBOX, not the attempt: §11 designates this email
     // as the mitigation for layer 1's single point of failure, so a run that
     // reached nobody has not alerted, however loudly it logged.
-    const reached = await emailSuperAdmins({ count, oldestHours });
+    const reached = await emailSuperAdmins(buildStaleEmail({ count, oldestHours }), "notify_outbox_stale");
     return { count, oldestHours, alerted: reached };
   } catch (err) {
     console.error(JSON.stringify({ event: "notify_outbox_liveness_failed" }), err);
     return idle;
+  }
+}
+
+/**
+ * The SECOND alarm this file carries, and it answers a different question from
+ * the first. `reportOutboxLiveness` asks "is mail still moving?" — a backlog that
+ * stopped draining. This one asks "did mail just get destroyed?" — a sweep that
+ * ran, worked, and discharged recipients nobody will ever hear from.
+ *
+ * It exists because layer 3 has no other reporter. Layer 1 curls
+ * `/api/cron/flush-notifications` from a GitHub workflow that reads the report
+ * and goes red on `failed >= 2` or `lost > 0`. The daily Vercel cron calls the
+ * same sweep and returns the same report to its scheduler, which reads nothing —
+ * so a layer-3 sweep that destroyed every send has always looked exactly like one
+ * that delivered everything.
+ *
+ * A log line does NOT close that gap, and this is measured rather than assumed:
+ * on 2026-08-28 a published setlist was swept by layer 3 at 01:00Z, and whether
+ * its seven emails were delivered could not be established afterwards — Hobby
+ * retains about an hour of runtime logs and the API refuses older windows
+ * outright. Delivery was confirmed by asking a member. Only something that leaves
+ * the request counts, which is why this mails a person like its sibling does.
+ *
+ * It cannot cover the case where the transport itself is dead — the alert then
+ * fails the same way the sends did, and says so via `alerted: false`. That case
+ * is the backlog alarm's, on the following day.
+ *
+ * Best-effort like everything else here: it never throws, so the daily cron
+ * cannot fail because its alarm could not send.
+ */
+export async function reportDestroyedMail(
+  sweep: { failed?: number; lost?: number } | null | undefined,
+): Promise<DestroyedMail> {
+  const quiet: DestroyedMail = { destroyed: 0, alerted: false };
+  try {
+    const failed = typeof sweep?.failed === "number" ? sweep.failed : 0;
+    const lost = typeof sweep?.lost === "number" ? sweep.lost : 0;
+    const destroyed = failed + lost;
+    if (destroyed <= 0) return quiet;
+
+    console.error(JSON.stringify({ event: "notify_sweep_destroyed", failed, lost }));
+    // `alerted` follows the MAILBOX, not the attempt — the same rule the stale
+    // alarm uses, and for the same reason: the email is the whole mitigation.
+    const reached = await emailSuperAdmins(buildDestroyedEmail({ failed, lost }), "notify_sweep_destroyed");
+    return { destroyed, alerted: reached };
+  } catch (err) {
+    console.error(JSON.stringify({ event: "notify_sweep_destroyed_failed" }), err);
+    return quiet;
   }
 }
