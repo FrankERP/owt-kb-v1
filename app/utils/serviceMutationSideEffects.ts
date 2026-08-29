@@ -599,9 +599,14 @@ async function commitUpserts(label: string, upserts: BuiltUpsert[]): Promise<voi
   await attempt("opportunistic sweep", async () => {
     sweep = await sweepOutbox(opportunisticSweepOptions());
   });
-  // Never throws by contract, so it needs no `attempt` of its own; `undefined`
+  // Guarded even though `reportDestroyedMail` never throws by contract. Three of
+  // the four callers are bare `after(() => commitUpserts(...))` with no outer
+  // guard, so without this the module's "a post-commit throw never escapes"
+  // property would depend on a contract maintained in another file. `undefined`
   // (the sweep itself threw) reports nothing destroyed rather than guessing.
-  await reportDestroyedMail(sweep);
+  await attempt("destroyed-mail alarm", () =>
+    reportDestroyedMail(sweep, "Un barrido tras una edición"),
+  );
 }
 
 /**

@@ -405,15 +405,35 @@ line: budget exhaustion moves `unserved` only, and those recipients are
 **re-pended, not consumed** (`partitionClaimed`). It touches neither `failed` nor
 `lost`, so the gate cannot fire on it. Ordinary editing is silent.
 
-What can happen: during a genuine transport refusal, layer 2 fires once per admin
-write action — four call sites, one per action, not per document — so a long
-session could send several alerts. That is correct; it means mail is being
-destroyed repeatedly. And if the transport is dead outright, the alert fails the
-same way the sends did and reports `alerted: false`.
+What can happen: during a genuine transport refusal, layer 2 fires **once per
+queueing request** — not once per admin action, and not once per document. Most
+call sites are one per request, but `api/admin/roles/swap` loops
+`queueRoleNotices` over each affected destination role, so a two-role swap
+evaluates the alarm twice; and a month generation is one request per service. So a
+long session under a real outage could send several alerts. That is correct — it
+means mail is being destroyed repeatedly. If the transport is dead outright the
+alert fails the same way the sends did and reports `alerted: false`.
 
-`serviceMutationSideEffects.test.ts` pins the premise directly: a sweep reporting
-`unserved: 9` with `failed: 0` sends nothing. If that test ever fails, the
-reasoning above has broken and #20's original design applies after all.
+**Accepted, not solved:** the alarm's sends are serial and bounded only by
+`SEND_TIMEOUT_MS` (20 s each), appended to a sweep that already derated its clock
+because the write route has spent part of its own `maxDuration`. With two
+super-admins and a refusing transport, the function can be killed before the
+alert leaves — the alert is least likely to arrive in exactly the case it exists
+for. Layer 3 carries the same shape and accepted it. Nothing is wedged when it
+happens: stage 8 has already completed, so no claim is orphaned.
+
+**The alert names which sweep sent it** (`El barrido diario` / `Un barrido tras
+una edición`). That is load-bearing, not cosmetic: the body tells the reader to
+search the logs within the hour, and pointing at the wrong sweep spends that hour
+on the wrong window.
+
+Two tests pin this together, and neither is sufficient alone.
+`serviceMutationSideEffects.test.ts` mocks the sweep, so it pins the **gate**:
+given `failed: 0, lost: 0`, layer 2 sends nothing. `outboxSweep.test.ts`'s "stops
+sending at the wall-clock budget and re-pends instead of consuming" runs the real
+sweep and pins the **premise**: at `sendBudgetMs: 0`, both `lost` and `failed` are
+0. If either fails, the reasoning above has broken and #20's original design
+applies after all.
 
 ## Operating it
 

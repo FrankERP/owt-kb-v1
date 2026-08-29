@@ -55,13 +55,13 @@ beforeEach(() => {
 
 describe("reportDestroyedMail", () => {
   it("stays quiet when the sweep destroyed nothing", async () => {
-    const r = await reportDestroyedMail(report({ emailed: 5, consumed: 2 }));
+    const r = await reportDestroyedMail(report({ emailed: 5, consumed: 2 }), "El barrido diario");
     expect(r).toEqual({ destroyed: 0, alerted: false });
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
   it("alerts a super-admin when a send failed", async () => {
-    const r = await reportDestroyedMail(report({ failed: 2 }));
+    const r = await reportDestroyedMail(report({ failed: 2 }), "El barrido diario");
     expect(r).toEqual({ destroyed: 2, alerted: true });
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
     expect(sendEmailMock.mock.calls[0][0].to).toBe("owner@example.com");
@@ -72,7 +72,7 @@ describe("reportDestroyedMail", () => {
   // is discharged WITHOUT AN ATTEMPT and never retried — destroyed just as surely
   // as a refused send. It COUNTS, so the loss is visible...
   it("counts skipped recipients, which are discharged without any attempt", async () => {
-    const r = await reportDestroyedMail(report({ skipped: 4 }));
+    const r = await reportDestroyedMail(report({ skipped: 4 }), "El barrido diario");
     expect(r.destroyed).toBe(4);
   });
 
@@ -82,7 +82,7 @@ describe("reportDestroyedMail", () => {
   // red. Mailing here would put a chronic data condition on the one channel that
   // is the whole mitigation, every single day, until it stopped being read.
   it("does not email on skipped alone — layer 1's threshold, deliberately", async () => {
-    const r = await reportDestroyedMail(report({ skipped: 4 }));
+    const r = await reportDestroyedMail(report({ skipped: 4 }), "El barrido diario");
     expect(r.alerted).toBe(false);
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
@@ -90,7 +90,7 @@ describe("reportDestroyedMail", () => {
   // Same reasoning, the other half of layer 1's rule: red starts at two, because
   // one undeliverable address recurs on every sweep carrying a notice for them.
   it("does not email on a single failed send", async () => {
-    const r = await reportDestroyedMail(report({ failed: 1 }));
+    const r = await reportDestroyedMail(report({ failed: 1 }), "El barrido diario");
     expect(r).toEqual({ destroyed: 1, alerted: false });
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
@@ -98,25 +98,25 @@ describe("reportDestroyedMail", () => {
   // Not triggering is not the same as not reporting: once the mail goes out for a
   // reason that DID clear the bar, the skipped recipients ride along in it.
   it("reports skipped in the body when the mail goes out for another reason", async () => {
-    await reportDestroyedMail(report({ failed: 2, skipped: 3 }));
+    await reportDestroyedMail(report({ failed: 2, skipped: 3 }), "El barrido diario");
     expect(htmlOf()).toContain("no tenían dirección utilizable");
   });
 
   it("sums all three destroyed classes", async () => {
-    const r = await reportDestroyedMail(report({ failed: 1, lost: 3, skipped: 2 }));
+    const r = await reportDestroyedMail(report({ failed: 1, lost: 3, skipped: 2 }), "El barrido diario");
     expect(r.destroyed).toBe(6);
   });
 
   // The three classes send you to different places, so the mail names each one
   // it actually saw and stays silent about the others.
   it("names only the classes it saw", async () => {
-    await reportDestroyedMail(report({ failed: 2 }));
+    await reportDestroyedMail(report({ failed: 2 }), "El barrido diario");
     expect(htmlOf()).toContain("no los aceptó");
     expect(htmlOf()).not.toContain("antes de intentarse");
     expect(htmlOf()).not.toContain("dirección utilizable");
 
     sendEmailMock.mockClear();
-    await reportDestroyedMail(report({ failed: 1, lost: 1, skipped: 1 }));
+    await reportDestroyedMail(report({ failed: 1, lost: 1, skipped: 1 }), "El barrido diario");
     expect(htmlOf()).toContain("no los aceptó");
     expect(htmlOf()).toContain("dirección utilizable");
     expect(htmlOf()).toContain("antes de intentarse");
@@ -126,16 +126,25 @@ describe("reportDestroyedMail", () => {
   // why the 2026-08-28 sweep could not be audited after the fact. The mail has to
   // say that, or it points the reader at evidence that will be gone.
   it("tells the reader the logs expire within the hour", async () => {
-    await reportDestroyedMail(report({ failed: 2, skipped: 1 }));
+    await reportDestroyedMail(report({ failed: 2, skipped: 1 }), "El barrido diario");
     expect(htmlOf()).toContain("dentro de la hora siguiente");
     expect(htmlOf()).toContain("notify_sweep_recipient_skipped");
+  });
+
+  // More than one layer sends this mail now, and the body tells the reader to
+  // search the logs within the hour. Naming the wrong sweep spends that hour on
+  // the wrong window — the exact failure the alarm exists to prevent.
+  it("names the sweep that destroyed the mail, not a fixed one", async () => {
+    await reportDestroyedMail(report({ failed: 2 }), "Un barrido tras una edición");
+    expect(htmlOf()).toContain("Un barrido tras una edición");
+    expect(htmlOf()).not.toContain("barrido diario");
   });
 
   // The `lost` class has NO per-recipient log — the budget records counts, not
   // ids — so promising ids for it would send the reader hunting a one-hour
   // window for lines that were never written.
   it("does not promise member ids for a loss the logs cannot identify", async () => {
-    await reportDestroyedMail(report({ lost: 3 }));
+    await reportDestroyedMail(report({ lost: 3 }), "El barrido diario");
     expect(htmlOf()).toContain("no se pueden identificar");
     expect(htmlOf()).not.toContain("notify_sweep_send_failed");
   });
@@ -144,13 +153,13 @@ describe("reportDestroyedMail", () => {
   // alarm uses. A run that logged loudly and reached nobody has not alerted.
   it("reports alerted:false when every send fails", async () => {
     sendEmailMock.mockResolvedValue({ ok: false, error: "boom" });
-    const r = await reportDestroyedMail(report({ failed: 3 }));
+    const r = await reportDestroyedMail(report({ failed: 3 }), "El barrido diario");
     expect(r).toEqual({ destroyed: 3, alerted: false });
   });
 
   it("reports alerted:false when there is no super-admin to reach", async () => {
     operationalFetch.mockResolvedValue([]);
-    const r = await reportDestroyedMail(report({ failed: 3 }));
+    const r = await reportDestroyedMail(report({ failed: 3 }), "El barrido diario");
     expect(r).toEqual({ destroyed: 3, alerted: false });
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
@@ -160,7 +169,7 @@ describe("reportDestroyedMail", () => {
   // was destroyed" about a run that destroyed mail is worse than the failure.
   it("never throws, and keeps the count it had already measured", async () => {
     operationalFetch.mockRejectedValue(new Error("groq down"));
-    await expect(reportDestroyedMail(report({ failed: 2 }))).resolves.toEqual({
+    await expect(reportDestroyedMail(report({ failed: 2 }), "El barrido diario")).resolves.toEqual({
       destroyed: 2,
       alerted: false,
     });
@@ -169,7 +178,7 @@ describe("reportDestroyedMail", () => {
   // The route passes `{error}` when the sweep threw. That is not destroyed mail,
   // and the `in` narrowing — not a cast — is what keeps it from being read as 0.
   it("treats a sweep that threw as nothing destroyed", async () => {
-    const r = await reportDestroyedMail({ error: "sweep_failed" });
+    const r = await reportDestroyedMail({ error: "sweep_failed" }, "El barrido diario");
     expect(r).toEqual({ destroyed: 0, alerted: false });
     expect(sendEmailMock).not.toHaveBeenCalled();
   });

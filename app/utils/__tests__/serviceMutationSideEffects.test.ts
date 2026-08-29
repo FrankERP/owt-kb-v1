@@ -11,7 +11,7 @@
 // The `writeClient` transaction is recorded rather than executed, so the outbox
 // upsert is asserted as a value.
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // operationalClient is `import "server-only"` guarded; neutralize the marker so
 // the module loads under vitest's node environment.
@@ -657,6 +657,14 @@ describe("layer 2's destroyed-mail alarm", () => {
   const alarmSends = () =>
     sendEmailMock.mock.calls.filter((c) => /descartaron/.test(String(c[0]?.subject)));
 
+  // Restored: no other test in this file mutates env, and leaving it set would
+  // silently pre-empt a future one that needs a narrowed allowlist.
+  const priorAllowlist = process.env.EMAIL_ALLOWLIST;
+  afterEach(() => {
+    if (priorAllowlist === undefined) delete process.env.EMAIL_ALLOWLIST;
+    else process.env.EMAIL_ALLOWLIST = priorAllowlist;
+  });
+
   it("mails a super-admin when the sweep destroyed mail", async () => {
     reachableSuperAdmin();
     process.env.EMAIL_ALLOWLIST = "*";
@@ -670,17 +678,20 @@ describe("layer 2's destroyed-mail alarm", () => {
     expect(alarmSends()[0][0].to).toBe("boss@oasis.mx");
   });
 
-  // THE REGRESSION PIN FOR THIS WHOLE CHANGE. Issue #20 assumed layer 2 needed a
-  // different alarm because a derated sweep hitting its send budget mid-session
-  // would spam super-admins. It cannot: budget exhaustion moves `unserved` only,
-  // and those recipients are re-pended rather than consumed, so neither `failed`
-  // nor `lost` moves and the gate stays shut. If this ever fails, the premise
-  // that made this change one line has broken and the issue's design applies.
+  // Half of the pin for this change, and it is worth being exact about WHICH
+  // half: `sweepOutbox` is mocked in this file, so what follows asserts the GATE
+  // — given `failed: 0, lost: 0`, layer 2 sends nothing. It does NOT prove that
+  // budget exhaustion actually produces those zeroes.
+  //
+  // That other half — the premise issue #20 got wrong — is pinned where the real
+  // sweep runs: `outboxSweep.test.ts`, "stops sending at the wall-clock budget
+  // and re-pends instead of consuming", which asserts `lost` AND `failed` are 0
+  // with `sendBudgetMs: 0`. Both are needed; neither alone is the claim.
   it("stays silent when the sweep merely ran out of budget", async () => {
     reachableSuperAdmin();
     process.env.EMAIL_ALLOWLIST = "*";
     sweepOutboxMock.mockResolvedValue({
-      claimed: 3, emailed: 4, consumed: 1, deferred: 2,
+      claimed: 3, emailed: 2, consumed: 1, deferred: 2,
       unserved: 9, repended: 2, lost: 0, failed: 0, skipped: 0,
     });
     queueRoleNotices(roleInput);
