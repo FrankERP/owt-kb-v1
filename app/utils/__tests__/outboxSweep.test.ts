@@ -867,7 +867,12 @@ describe("sweepOutbox — due-ness, preferences and the send budget", () => {
     expect(writeClientDelete).not.toHaveBeenCalled();
     expect(report.consumed).toBe(0);
     expect(report.repended).toBe(1);
+    // BOTH halves of the destroyed-mail gate, not just `lost`. Layer 2 raises
+    // that alarm on every admin write, and it stays silent during ordinary
+    // editing only because budget exhaustion moves neither of these. Asserting
+    // one and not the other would let the premise half-break unnoticed.
     expect(report.lost).toBe(0);
+    expect(report.failed).toBe(0);
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("unserved"));
     logSpy.mockRestore();
   });

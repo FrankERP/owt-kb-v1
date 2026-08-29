@@ -11,7 +11,7 @@
 // The `writeClient` transaction is recorded rather than executed, so the outbox
 // upsert is asserted as a value.
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // operationalClient is `import "server-only"` guarded; neutralize the marker so
 // the module loads under vitest's node environment.
@@ -25,6 +25,7 @@ const revalidateServiceViewsMock = vi.fn();
 const revalidatePathMock = vi.fn();
 const operationalFetch = vi.fn();
 const sweepOutboxMock = vi.fn();
+const sendEmailMock = vi.fn();
 const afterCallbacks: (() => unknown)[] = [];
 
 vi.mock("@/sanity/lib/operationalClient", () => ({
@@ -91,7 +92,11 @@ vi.mock("@/sanity/lib/serverClient", () => ({
 vi.mock("@/app/utils/push", () => ({ sendPush: (...a: unknown[]) => sendPushMock(...a) }));
 // assignmentEmail.ts also imports ./email, which imports the "server-only"
 // package guard — unresolvable outside a Next.js server build.
-vi.mock("@/app/utils/email", () => ({ sendEmail: vi.fn(), SEND_CONCURRENCY: 8, SEND_TIMEOUT_MS: 20_000 }));
+vi.mock("@/app/utils/email", () => ({
+  sendEmail: (...a: unknown[]) => sendEmailMock(...a),
+  SEND_CONCURRENCY: 8,
+  SEND_TIMEOUT_MS: 20_000,
+}));
 // PARTIAL on purpose: the two send paths are spied, but `rolesForMember` is the
 // REAL seat-label vocabulary. Stubbing it would let the "each member's OWN seat
 // labels" assertion pass against a label set the emails never use.
@@ -171,9 +176,11 @@ beforeEach(() => {
   outboxCommitError = null;
   eventLog.length = 0;
   operationalFetch.mockReset();
+  sendEmailMock.mockReset();
+  sendEmailMock.mockResolvedValue({ ok: true });
   sweepOutboxMock.mockImplementation(async () => {
     eventLog.push("sweep");
-    return { claimed: 0, emailed: 0, consumed: 0, deferred: 0, unserved: 0, repended: 0, lost: 0 };
+    return { claimed: 0, emailed: 0, consumed: 0, deferred: 0, unserved: 0, repended: 0, lost: 0, failed: 0, skipped: 0 };
   });
 });
 
@@ -628,6 +635,80 @@ describe("setlist notice serviceDate guard", () => {
 });
 
 // ── Layer 2: the opportunistic sweep (spec §3) ──────────────────────────────
+
+describe("layer 2's destroyed-mail alarm", () => {
+  const roleInput = {
+    roleId: "role-alarm",
+    roleType: "sunday_role" as const,
+    serviceDate: "2026-08-09",
+    published: true,
+    beforeSeats: seats({ leads: ["m1"] }),
+    afterSeats: seats({ leads: ["m1", "m2"] }),
+  };
+
+  /** A super-admin the alarm can actually reach. */
+  function reachableSuperAdmin() {
+    operationalFetch.mockImplementation(async (query: string) =>
+      typeof query === "string" && query.includes("super-admin")
+        ? [{ _id: "sa-1", email: "boss@oasis.mx" }]
+        : [],
+    );
+  }
+  const alarmSends = () =>
+    sendEmailMock.mock.calls.filter((c) => /descartaron/.test(String(c[0]?.subject)));
+
+  // Restored: no other test in this file mutates env, and leaving it set would
+  // silently pre-empt a future one that needs a narrowed allowlist.
+  const priorAllowlist = process.env.EMAIL_ALLOWLIST;
+  afterEach(() => {
+    if (priorAllowlist === undefined) delete process.env.EMAIL_ALLOWLIST;
+    else process.env.EMAIL_ALLOWLIST = priorAllowlist;
+  });
+
+  it("mails a super-admin when the sweep destroyed mail", async () => {
+    reachableSuperAdmin();
+    process.env.EMAIL_ALLOWLIST = "*";
+    sweepOutboxMock.mockResolvedValue({
+      claimed: 1, emailed: 0, consumed: 1, deferred: 0,
+      unserved: 0, repended: 0, lost: 0, failed: 2, skipped: 0,
+    });
+    queueRoleNotices(roleInput);
+    await flushAfter();
+    expect(alarmSends()).toHaveLength(1);
+    expect(alarmSends()[0][0].to).toBe("boss@oasis.mx");
+  });
+
+  // Half of the pin for this change, and it is worth being exact about WHICH
+  // half: `sweepOutbox` is mocked in this file, so what follows asserts the GATE
+  // — given `failed: 0, lost: 0`, layer 2 sends nothing. It does NOT prove that
+  // budget exhaustion actually produces those zeroes.
+  //
+  // That other half — the premise issue #20 got wrong — is pinned where the real
+  // sweep runs: `outboxSweep.test.ts`, "stops sending at the wall-clock budget
+  // and re-pends instead of consuming", which asserts `lost` AND `failed` are 0
+  // with `sendBudgetMs: 0`. Both are needed; neither alone is the claim.
+  it("stays silent when the sweep merely ran out of budget", async () => {
+    reachableSuperAdmin();
+    process.env.EMAIL_ALLOWLIST = "*";
+    sweepOutboxMock.mockResolvedValue({
+      claimed: 3, emailed: 2, consumed: 1, deferred: 2,
+      unserved: 9, repended: 2, lost: 0, failed: 0, skipped: 0,
+    });
+    queueRoleNotices(roleInput);
+    await flushAfter();
+    expect(alarmSends()).toHaveLength(0);
+  });
+
+  // The commit already succeeded by the time the sweep runs, so nothing here may
+  // turn a committed content write into a 500.
+  it("does not throw when the sweep itself failed", async () => {
+    reachableSuperAdmin();
+    sweepOutboxMock.mockRejectedValue(new Error("sweep exploded"));
+    queueRoleNotices(roleInput);
+    await expect(flushAfter()).resolves.toBeUndefined();
+    expect(alarmSends()).toHaveLength(0);
+  });
+});
 
 describe("the opportunistic sweep", () => {
   const roleInput = {

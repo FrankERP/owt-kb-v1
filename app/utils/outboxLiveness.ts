@@ -90,6 +90,15 @@ export interface OutboxLiveness {
   alerted: boolean;
 }
 
+/**
+ * Which sweep raised the alarm, as the Spanish sentence subject. A UNION, not a
+ * free string: the phrase is load-bearing — the mail gives the reader one hour
+ * to find the sends in the logs, so naming the wrong sweep spends that hour on
+ * the wrong window — and a union makes a third layer's wording a compile-time
+ * decision instead of a convention someone has to notice in a comment.
+ */
+export type DestroyedMailSource = "El barrido diario" | "Un barrido tras una edición";
+
 export interface DestroyedMail {
   /**
    * Recipients this sweep discharged without delivering: `failed` + `lost` +
@@ -147,7 +156,12 @@ function buildStaleEmail(o: { count: number; oldestHours: number }): { subject: 
   return { subject, html: shell(body, link) };
 }
 
-function buildDestroyedEmail(o: { failed: number; lost: number; skipped: number }): {
+function buildDestroyedEmail(o: {
+  failed: number;
+  lost: number;
+  skipped: number;
+  source: DestroyedMailSource;
+}): {
   subject: string;
   html: string;
 } {
@@ -180,13 +194,13 @@ function buildDestroyedEmail(o: { failed: number; lost: number; skipped: number 
     : `<p style="margin:0;font:13px system-ui,sans-serif;color:${C.ink}">Los destinatarios individuales <strong>no se pueden identificar</strong>: el descarte por presupuesto registra conteos, no ids. Revisa qué servicio se publicó cerca de esta hora.</p>`;
   const body =
     tr(
-      td(`<span style="font:700 15px system-ui,sans-serif;color:${C.ink}">Se perdieron avisos en el barrido diario</span>`, {
+      td(`<span style="font:700 15px system-ui,sans-serif;color:${C.ink}">Se perdieron avisos al enviar notificaciones</span>`, {
         style: "padding:18px 24px 8px",
       }),
     ) +
     tr(
       td(
-        `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}">El barrido diario descartó ${strong(o.failed + o.lost + o.skipped)} destinatario(s) sin entregarles nada: ${detail}</p>`,
+        `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}">${escapeHtml(o.source)} descartó ${strong(o.failed + o.lost + o.skipped)} destinatario(s) sin entregarles nada: ${detail}</p>`,
         { style: "padding:0 24px 12px" },
       ),
     ) +
@@ -364,6 +378,8 @@ export async function reportOutboxLiveness(now: Date = new Date()): Promise<Outb
  */
 export async function reportDestroyedMail(
   sweep: SweepReport | { error: string } | null | undefined,
+  /** Which sweep this was — see `DestroyedMailSource`. Required, and typed. */
+  source: DestroyedMailSource,
 ): Promise<DestroyedMail> {
   let destroyed = 0;
   try {
@@ -381,7 +397,7 @@ export async function reportDestroyedMail(
     if (!Number.isFinite(destroyed) || destroyed <= 0) return { destroyed: 0, alerted: false };
 
     // ALL THREE are logged, because all three are mail nobody will receive.
-    console.error(JSON.stringify({ event: "notify_sweep_destroyed", failed, lost, skipped }));
+    console.error(JSON.stringify({ event: "notify_sweep_destroyed", source, failed, lost, skipped }));
 
     // The EMAIL is gated more tightly than the log, on the thresholds layer 1
     // already reasoned about and wrote down (`flush-notifications.yml`): red at
@@ -399,7 +415,7 @@ export async function reportDestroyedMail(
     // `alerted` follows the MAILBOX, not the attempt — the same rule the stale
     // alarm uses, and for the same reason: the email is the whole mitigation.
     const reached = await emailSuperAdmins(
-      buildDestroyedEmail({ failed, lost, skipped }),
+      buildDestroyedEmail({ failed, lost, skipped, source }),
       "notify_sweep_destroyed",
     );
     return { destroyed, alerted: reached };

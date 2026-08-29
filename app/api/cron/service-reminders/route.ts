@@ -89,7 +89,7 @@ async function getHandler(req: NextRequest) {
   // purpose: this one reports what THIS sweep just destroyed, so it has nothing
   // to measure until the sweep has run. It is the only reporter layer 3 has —
   // the JSON below goes to Vercel's scheduler, which reads none of it.
-  const destroyed = await reportDestroyedMail(sweep);
+  const destroyed = await reportDestroyedMail(sweep, "El barrido diario");
 
   return NextResponse.json({ day, ...r, sweep, liveness, destroyed });
 }

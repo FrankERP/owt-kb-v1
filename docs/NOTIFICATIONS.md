@@ -50,7 +50,7 @@ hand-writing a fixture that mirrors them).
 | Layer | What | Where |
 |---|---|---|
 | 1 — primary | GitHub Actions, declared every 5 min — see §"Layer 1 does not run every five minutes" | `.github/workflows/flush-notifications.yml` → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
-| 2 — backstop | opportunistic sweep after any queueing write | end of `commitUpserts()` in `serviceMutationSideEffects.ts` |
+| 2 — backstop | opportunistic sweep after any queueing write | end of `commitUpserts()` in `serviceMutationSideEffects.ts` — keeps its report and raises the destroyed-mail alarm |
 | 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (the only layer that MAILS A PERSON about destroyed mail — layer 1 goes red on the same conditions; see §"The destroyed-mail alarm") |
 
 **Layer 1 is load-bearing, not one of three redundant paths.** Layer 2 only
@@ -394,11 +394,47 @@ which have been got backwards here before:
   motivated this alarm is exactly that shape. Only a batch wider than one wave
   leaves a tail behind.
 
-**Layer 2 still has this blindness**, and needs a different shape rather than a
-copy of this alarm: it fires on every mutation, and a derated sweep hitting its
-send budget mid-session is ordinary, so reusing this trigger would mail
-super-admins during normal editing. Tracked in
-[#20](https://github.com/FrankERP/owt-kb-v1/issues/20).
+**Layer 2 raises the same alarm, and the reason it could is worth keeping.**
+`commitUpserts` now keeps its sweep report and passes it to `reportDestroyedMail`
+like the daily cron does — same function, same thresholds, no new state.
+
+Issue #20 had assumed layer 2 needed a *different* shape, because it fires on
+every mutation and a derated sweep hitting its send budget mid-session is
+ordinary. **That premise was false**, and checking it is what made the change one
+line: budget exhaustion moves `unserved` only, and those recipients are
+**re-pended, not consumed** (`partitionClaimed`). It touches neither `failed` nor
+`lost`, so the gate cannot fire on it. Ordinary editing is silent.
+
+What can happen: during a genuine transport refusal, layer 2 fires **once per
+`commitUpserts`** — not once per admin action, not once per document, and not
+quite once per request either. Most routes call one `queue*` helper once, but
+`api/admin/roles/swap` loops
+`queueRoleNotices` over each affected destination role, so a two-role swap
+evaluates the alarm twice; and a month generation is one request per service. So a
+long session under a real outage could send several alerts. That is correct — it
+means mail is being destroyed repeatedly. If the transport is dead outright the
+alert fails the same way the sends did and reports `alerted: false`.
+
+**Accepted, not solved:** the alarm's sends are serial and bounded only by
+`SEND_TIMEOUT_MS` (20 s each), appended to a sweep that already derated its clock
+because the write route has spent part of its own `maxDuration`. With two
+super-admins and a refusing transport, the function can be killed before the
+alert leaves — the alert is least likely to arrive in exactly the case it exists
+for. Layer 3 carries the same shape and accepted it. Nothing is wedged when it
+happens: stage 8 has already completed, so no claim is orphaned.
+
+**The alert names which sweep sent it** (`El barrido diario` / `Un barrido tras
+una edición`). That is load-bearing, not cosmetic: the body tells the reader to
+search the logs within the hour, and pointing at the wrong sweep spends that hour
+on the wrong window.
+
+Two tests pin this together, and neither is sufficient alone.
+`serviceMutationSideEffects.test.ts` mocks the sweep, so it pins the **gate**:
+given `failed: 0, lost: 0`, layer 2 sends nothing. `outboxSweep.test.ts`'s "stops
+sending at the wall-clock budget and re-pends instead of consuming" runs the real
+sweep and pins the **premise**: at `sendBudgetMs: 0`, both `lost` and `failed` are
+0. If either fails, the reasoning above has broken and #20's original design
+applies after all.
 
 ## Operating it
 
