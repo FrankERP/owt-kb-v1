@@ -10,8 +10,9 @@ The 2026-07-27 design spec §1 names this the "different outbox model" that must
 be **designed rather than discovered**, and `docs/NOTIFICATIONS.md` carried it as
 an open gap.
 
-It was designed, in August 2026: three revisions, three adversarial review rounds,
-seven verified blockers. All three revisions were rejected. This record exists so
+It was designed, in August 2026: three revisions and three adversarial review
+rounds, which reported **5, 2 and 3 blockers** in that order. All three revisions
+were rejected. Per-round dispositions are in the review log beside the spec. This record exists so
 the next person does not spend the same week rediscovering why — the obvious fix
 looks like a one-line change and is not.
 
@@ -64,7 +65,7 @@ breaker).**
 Simpler, and it genuinely dissolved the mixed-population problem — at the cost of
 any bound on retry, which is precisely what the header comment forbids. Gmail
 returns **per-recipient** 4xx at `RCPT TO` (`452 4.2.2` over quota, `450 4.2.1`
-rate), which `smtp-connection/index.js:1853-1866` surfaces as `EENVELOPE` with
+rate), which `smtp-connection/index.js:1848-1850` surfaces as `EENVELOPE` with
 that `responseCode`. One such recipient is enough:
 
 - nothing expires a pending notice — `isDue` stays true forever once `notifyAfter`

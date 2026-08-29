@@ -146,11 +146,20 @@ The set is `SMTP_HOST` (`smtp.gmail.com`), `SMTP_PORT` (465), `SMTP_USER` (`dev.
 
 **Not a secret** — an email address, and a deliberate safety valve. Documented here because it is the single most consequential non-secret in the mail path.
 
-**Needed in: nowhere, normally.** It must be **absent** in Production for the team to receive their own mail. Setting it is a temporary, reversible act.
+**Needed in: Preview, deliberately and permanently. Absent in Production.** The two environments want opposite things and conflating them is the whole hazard:
+
+- **Production must have it absent**, or the team never receives their own mail.
+- **Preview has it SET on purpose** (present since ~2026-07-24, dated from the age `vercel env ls preview` reports — no commit records the change). That is what stops a rehearsal on `dev-owt-backstage` from mailing the whole team. **Do not remove it** to "clean up"; removing it is a decision to let dev mail the team, not a tidy-up.
+
+On Production, setting it is a temporary, reversible act. On Preview it is the resting state.
 
 **Purpose.** When set, *every* outgoing email is redirected to that one address instead of its real recipient, with the intended recipient prefixed into the subject as `[→ real@address] …` (`outboxSweep.ts` stage 7). Nothing else changes: classification, grouping, the send loop, and stage 8's unconditional consume all behave exactly as in a real run. That is what makes it the only honest way to rehearse a fan-out — a completely real batch that reaches nobody.
 
-**Where the value came from.** Whoever is running the rehearsal. On 2026-08-07 it was set to the maintainer's own address to measure `msPerSend` for a 17-recipient batch without mailing the team.
+**Where the value came from — Production.** Whoever is running the rehearsal. On 2026-08-07 it was set to the maintainer's own address to measure `msPerSend` for a 17-recipient batch without mailing the team. Set again on 2026-08-27 for the concurrency-8 verification sweep (14 recipients) and removed after, its absence confirmed by pulling the environment.
+
+**Where the value came from — Preview.** Set once, around 2026-07-24 (dated from the age `vercel env ls preview` reports; no commit records it). Read the current target with `npx vercel env pull` against the preview environment — it is a plain address, not a secret, but it is not written down here on purpose so there is one source of truth.
+
+**How to rotate the Preview value.** `npx vercel env rm EMAIL_REDIRECT_TO preview --yes`, then `printf 'new@address' | npx vercel env add EMAIL_REDIRECT_TO preview`, then **redeploy `preview`** and verify the dev alias moved. Blast radius while rotating: between the `rm` and the redeploy that follows the `add`, a running preview function still holds the OLD value, so mail keeps going to the previous address — it does not leak to the team. But if a deploy happens in the window after `rm` and before `add`, preview mails the real team until the next deploy. Do the two commands back to back, then redeploy once.
 
 **How to set and unset.**
 
@@ -161,9 +170,13 @@ npx vercel env rm EMAIL_REDIRECT_TO production --yes
 
 **A redeploy is required either way** — a running function keeps the value it booted with, so adding it without redeploying rehearses nothing and removing it without redeploying keeps mail redirected. Verify the alias moved before trusting either state.
 
-**Check `preview` too, not just `production`.** Every sender reads this variable in whatever environment it runs, and Preview deploys against the **real Sanity dataset and the real team** — so a rehearsal set on `preview` and forgotten silently swallows mail from that branch. Substitute `preview` for `production` in both commands, or confirm it is absent there.
+**The commands above target `production`. Do not run the `rm` against `preview`** — that is where the variable belongs. Preview deploys against the **real Sanity dataset**, so its writes are real; the redirect is the only thing keeping its *mail* off the team. Substitute `preview` only when you intend to change that deliberately.
 
-**Blast radius.** While it is set, *nobody on the team receives any notification* — and because the outbox consumes unconditionally with no retry, notices flushed during that window are **spent**, not queued. Leaving it set by accident is silent, total notification loss that still reports green. Unset it the moment the rehearsal ends, and confirm with `vercel env ls production`.
+**Corrected 2026-08-29.** This section previously told the reader to "confirm it is absent" on `preview` as well, on the belief that preview emails the real team. It does not, and following that instruction would have caused exactly the fan-out this variable prevents. `CLAUDE.md` and `AGENTS.md` carried the same wrong claim and were corrected in the same delivery.
+
+**Blast radius — on Production.** While it is set there, *nobody on the team receives any notification* — and because the outbox consumes unconditionally with no retry, notices flushed during that window are **spent**, not queued. Leaving it set by accident is silent, total notification loss that still reports green. Unset it the moment the rehearsal ends, and confirm with `vercel env ls production`.
+
+**Blast radius — on Preview.** The reverse, and it is the likelier mistake now: removing it there means the next publish, role edit or setlist change made while testing on `dev-owt-backstage` mails the real team, with no other change and no warning.
 
 ---
 

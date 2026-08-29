@@ -510,6 +510,6 @@ Two notes on `published`, both learned from Task 5's implementation:
 
 1. All three gates on the final tree.
 2. Fresh code review of the merge range (carries docs-audit + worklog checklists per the 2026-08-19 workflow).
-3. Browser pass on preview (spec §9): kids manager sees `/kids/admin`, blocked from `/admin`; worship `admin` blocked from `/kids/admin` and `/api/kids/*`; kids-only member blocked from worship pages by direct URL and lands on `/kids`; worship member sees no kids nav; super-admin reaches both; generate → override → publish → member view round-trip. **Preview writes real data and can email the real team** — keep test docs unpublished and delete them after.
+3. Browser pass on preview (spec §9): kids manager sees `/kids/admin`, blocked from `/admin`; worship `admin` blocked from `/kids/admin` and `/api/kids/*`; kids-only member blocked from worship pages by direct URL and lands on `/kids`; worship member sees no kids nav; super-admin reaches both; generate → override → publish → member view round-trip. **Preview writes real data** — keep test docs unpublished and delete them after. (Correction 2026-08-29: preview does NOT email the real team; `EMAIL_REDIRECT_TO` is set on that environment. The data warning stands and is the load-bearing half.)
 4. Deploy per convention: branch → main (local) → merge into `preview`, push, verify dev alias moved → push `main`, verify prod alias.
 5. Studio schema deploy (Task 1 + P1 Task 2 fields) after release; verify fields visible.

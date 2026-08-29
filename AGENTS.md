@@ -110,8 +110,17 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   never on the stable domain: an alias resolves to the OLD deployment until the new
   one is ready, so `--wait` on it returns instantly with stale success (observed
   2026-08-24). Then still do the alias+SHA check, which `--wait` does not replace.
-- **`preview` writes to the real Sanity dataset and emails the real team.** It is a
-  rehearsal of the UI, never a dry run of data or notifications.
+- **`preview` writes to the real Sanity dataset.** It is a rehearsal of the UI,
+  never a dry run of data. Every write lands in the same documents production
+  reads.
+- **Its email currently does NOT reach the team, and that is a variable, not a
+  property.** `EMAIL_REDIRECT_TO` is set on the Preview environment (since
+  2026-07-24), so notifications are generated and sent for real but every message
+  is rerouted to one address. Two consequences worth holding together: a publish
+  on dev will NOT tell the team, so it is not a way to notify them; and the
+  moment that variable is removed or the value is cleared, preview mails the
+  whole team with no other change. Check `vercel env ls preview` before assuming
+  either. Production has no such redirect.
 
 ## Decision records
 When a choice rejects a real alternative and the reason won't be obvious from
@@ -233,10 +242,16 @@ cadence.
   Client dark-mode transforms assume email is light; there is no reliable hook to
   win from the sending side. Don't "restore the brand colours".
 - `MEASURED_MS_PER_SEND` in `outboxSweep.test.ts` is **500 ms and deliberately
-  not the real number** — production measured 14 413 ms/send (2026-08-07). The
-  guard asserts the shipped *defaults* are consistent; production runs
-  `NOTIFY_FLUSH_EMAIL_LIMIT=2`, where the inequality holds. Raising the constant
-  to keep it green is the one forbidden move — see `docs/NOTIFICATIONS.md`.
+  not the real number**, and **it is now OPTIMISTIC, not conservative** — check
+  which way before reasoning from it. The guard charges **per WAVE**
+  (`(waves - 1) * MEASURED_MS_PER_SEND`), and a wave measured **~2 605 ms** on
+  Gmail at width 8. The often-quoted 372 ms is `sendMs / emailed` — per MESSAGE,
+  not the figure the guard uses. The old 14 413 ms belonged to the retired cPanel
+  sender (ADR-0025). Production runs `NOTIFY_FLUSH_EMAIL_LIMIT=40` with
+  `SEND_CONCURRENCY=8`, and the inequality now holds on the REAL number —
+  `(5-1) × 2 605 = 10 420 < 20 000` — which it never did before. Raising the
+  constant to keep the guard green is still the one forbidden move — see
+  `docs/NOTIFICATIONS.md`.
 
 ## Agent skills
 

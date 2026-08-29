@@ -349,7 +349,11 @@ that meets production's outbox.
 4. Re-run the same pre-check — same query, same `0`, same "wait, never delete" — then
    open the PR, wait for `gates`, merge.
 5. Verify the production alias the same way as step 2.
-6. Walkthrough on `preview`, which writes REAL data and emails the REAL team.
+6. Walkthrough on `preview`, which writes REAL data. **Correction (2026-08-29):
+   it does NOT email the real team** — `EMAIL_REDIRECT_TO` is set on the Preview
+   environment, so every message is rerouted to one address. The data half of
+   this warning still stands; the email half was wrong when written. Do not use a
+   dev walkthrough to notify anyone.
 
 ### Notifications, both directions
 
@@ -472,9 +476,11 @@ A**, whose messages route already calls `queueLeadNotesNotice` on every lead mes
 the parent assigns that risk there explicitly and says to watch `report.lost` after
 **A's** release (roadmap `:123-128`). **B's own increment is one thing:** dropping
 `afterNotes` removes the trimmed-equal guard, so a repeated identical message now
-queues where today it does not. Production runs `NOTIFY_FLUSH_EMAIL_LIMIT=2` against a
-measured 14 413 ms/send, so watch `report.lost` after both releases — but B is not
-where the occasions multiplied.
+queues where today it does not. **Corrected 2026-08-27:** this said production runs
+`NOTIFY_FLUSH_EMAIL_LIMIT=2` against a measured 14 413 ms/send. It now runs 40 on
+Gmail at ~2 605 ms per wave, so the volume risk is far smaller than written — but
+still watch `report.lost` after both releases, since consumption remains
+unconditional (ADR-0026). B is not where the occasions multiplied.
 
 ## Phases
 

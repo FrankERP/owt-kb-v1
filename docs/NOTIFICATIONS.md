@@ -51,7 +51,7 @@ hand-writing a fixture that mirrors them).
 |---|---|---|
 | 1 — primary | GitHub Actions, declared every 5 min — see §"Layer 1 does not run every five minutes" | `.github/workflows/flush-notifications.yml` → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
 | 2 — backstop | opportunistic sweep after any queueing write | end of `commitUpserts()` in `serviceMutationSideEffects.ts` |
-| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (also the only layer that alarms on destroyed mail — see §"The destroyed-mail alarm") |
+| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (the only layer that MAILS A PERSON about destroyed mail — layer 1 goes red on the same conditions; see §"The destroyed-mail alarm") |
 
 **Layer 1 is load-bearing, not one of three redundant paths.** Layer 2 only
 flushes subjects that have *already* gone quiet, so it can never flush the
@@ -115,10 +115,14 @@ is the whole result: **~6.5× the throughput, at a cost the budget can absorb.**
 
 ### Confirmed on the real path, from Vercel
 
+`EMAIL_REDIRECT_TO` was set on **Production** for the duration of this probe and
+removed afterwards, so the fan-out was completely real and reached nobody. That
+is the only reason a 14-recipient rehearsal was safe to run there. Production
+carries no redirect in its resting state — Preview does. See `SECRETS.md`.
+
 The probe above runs from a laptop, and the script's own header warns that the
 sweep's network round trip may differ. It does not. A production sweep at
-concurrency 8 on 2026-08-27, 14 recipients through `EMAIL_REDIRECT_TO` so the
-team received nothing, logged:
+concurrency 8 on 2026-08-27, 14 recipients, logged:
 
 ```
 notify_sweep_done  emailed 14  unserved 0  lost 0
@@ -508,7 +512,7 @@ pending notification.
 | `NOTIFY_MAX_WINDOW_MINUTES` | 60 | Hard ceiling from first queue; defeats starvation |
 | `NOTIFY_CLAIM_TTL_MINUTES` | 5 | Lease on a claimed notice; expiry makes it due again |
 | `NOTIFY_SEND_BUDGET_MS` | 40000 | Wall-clock bound on the send loop |
-| `NOTIFY_FLUSH_EMAIL_LIMIT` | 40 | Max recipients per sweep. **Currently overridden to `2` in Vercel Production — see `SECRETS.md`.** The "must exceed the largest per-service seat count" rule the default encodes is knowingly suspended there; see *Still open* |
+| `NOTIFY_FLUSH_EMAIL_LIMIT` | 40 | Max recipients per sweep. **Production runs the default, 40**, since 2026-08-27 — it sat at `2` for three weeks against the old cPanel sender and was raised with `SEND_CONCURRENCY`. See `SECRETS.md` for the coupling |
 | `NOTIFY_STALE_ALERT_HOURS` | 6 | Oldest age that trips the alarm |
 
 All have code defaults and are validated (empty, non-numeric, zero and negative
@@ -566,15 +570,17 @@ Things that are counter-intuitive and were each a real defect at some point.
   `scripts/measure-send-budget.mjs`.
 - **That made the grouped monthly email undeliverable by tuning this codebase —
   and the sender move is what changed it.** ~20 recipients × ~14 s is far past the hosting function's 60 s
-  ceiling at any concurrency and any cap. Two things can fix it, and nothing else
-  can: the **~14 s remote accept on the mail server**, or a change so the sweep
-  **re-pends notices it never attempted instead of consuming them** — which would
-  give grouped-and-lossless delivery spread over several sweeps, since a
-  recipient's notices stay together and are either all served or all returned.
-  The second is a change to the consume contract and needs a plan and review; the
-  first is one setting on someone else's box and fixes everything at once.
-- **Remote recipients cost ~14 s to ACCEPT; local ones cost 67 ms. That is the
-  whole problem, and it is server-side.** Measured 2026-08-07 with
+  ceiling at any concurrency and any cap. Two remedies were named at the time —
+  fixing the ~14 s remote accept on the mail server, or re-pending notices the
+  sweep never attempted. **Neither is what happened, and the record of both
+  matters now:** the server was retired for Gmail (ADR-0025), where a wave costs
+  ~2 605 ms and ~20 recipients fit; and re-pending was designed three times,
+  adversarially reviewed three times and **rejected** (ADR-0026). Do not revive
+  the second from this paragraph — it is kept for the reasoning, not the plan.
+- **HISTORICAL (sender retired 2026-08-27).** Remote recipients cost ~14 s to
+  ACCEPT while local ones cost 67 ms — the whole problem, and server-side, which
+  is precisely why the fix was to change senders rather than tune this repo. Kept
+  as the measurement that justified ADR-0025. Measured 2026-08-07 with
   `/api/cron/smtp-probe` (the *Probe the SMTP path* workflow): to a LOCAL
   recipient the entire SMTP conversation — connect, TLS, `EHLO`, `AUTH`,
   `MAIL FROM`, `RCPT TO`, `DATA` and a 20 KB body — completes in **under 600 ms**,
@@ -699,16 +705,15 @@ pipeline a received message does, with no SMTP credentials and nothing sent.
   neither is in place.
 
 
-- **The send-budget inequality and the recipient cap.** Spec §1 requires
-  `ms_per_send × NOTIFY_FLUSH_EMAIL_LIMIT < NOTIFY_SEND_BUDGET_MS`. Production
-  measured `ms_per_send` = **14 413 ms** (2026-08-07). Production runs
-  `NOTIFY_FLUSH_EMAIL_LIMIT = 2` so each sweep sends at most two recipients
-  before the budget stops; **setlist notices re-pend** for the next sweep
-  instead of losing the tail. Role notices defer via selection when the union
-  exceeds the cap. Fixing the ~14 s remote accept on the mail server would let
-  the cap return toward 40 and collapse multi-sweep setlist delivery back into
-  one. **Raising `MEASURED_MS_PER_SEND` to make the guard green remains the one
-  forbidden move.**
+- **The send-budget inequality — CLOSED 2026-08-27, kept here for the rule at the
+  end.** Spec §1 requires
+  `ms_per_send × NOTIFY_FLUSH_EMAIL_LIMIT < NOTIFY_SEND_BUDGET_MS`. The 14 413 ms
+  `ms_per_send` that forced `NOTIFY_FLUSH_EMAIL_LIMIT = 2` was the OLD cPanel
+  sender; retiring it for Gmail (ADR-0025) brought the measured cost to ~372 ms,
+  and the cap went back to 40 with `SEND_CONCURRENCY = 8`. A whole fan-out now
+  fits one sweep, so the multi-sweep setlist delivery this bullet described is no
+  longer the normal path. **Raising `MEASURED_MS_PER_SEND` to make the guard green
+  remains the one forbidden move**, and that part is not closed.
 - **Outlook on Windows is untested.** macOS Outlook is WebKit, so the Word-engine
   question spec §6 raises — `border-radius` and `padding` on the key pills — is
   unanswered. Expected degradation is cosmetic: squared chips, tighter padding.

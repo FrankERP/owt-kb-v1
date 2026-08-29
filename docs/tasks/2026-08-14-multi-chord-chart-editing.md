@@ -155,5 +155,7 @@ Then, in your report, state explicitly:
 
 Do not claim done without pasting the real gate output. Do not push the branch,
 do not merge to `main` or `preview`, and do not touch the Sanity dataset —
-`preview` and `main` both write to the **real production dataset** and email the
-real team.
+`preview` and `main` both write to the **real production dataset**. (Correction
+2026-08-29: only `main` emails the real team — `EMAIL_REDIRECT_TO` is set on the
+Preview environment, so dev mail is rerouted to one address. The dataset half of
+this instruction is unchanged and is the one that matters here.)

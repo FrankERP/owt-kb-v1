@@ -87,12 +87,18 @@ export const SEND_CONCURRENCY = 8;
  * consumes regardless. Ten wide turned two successes into two successes and eight
  * losses. Serial is not a compromise here, it is strictly better.
  *
- * The consequence for the product requirement is worth stating plainly rather
- * than leaving in the arithmetic: a monthly role publish owes ~20 people one
- * grouped email each, and 20 × ~14 s is far past the hosting function's 60 s
- * ceiling at ANY concurrency. That requirement cannot be met by tuning this
- * file. It needs the ~14 s remote accept fixed on the mail server, or the sweep
- * changed so that notices it never attempted are re-pended instead of consumed.
+ * RESOLVED 2026-08-27, and the paragraph is kept because its reasoning is what
+ * chose the remedy. It used to read: a monthly role publish owes ~20 people one
+ * grouped email each, 20 × ~14 s is far past the hosting function's 60 s ceiling
+ * at ANY concurrency, so the requirement cannot be met by tuning this file — it
+ * needs either the ~14 s remote accept fixed on the mail server, or the sweep
+ * changed to re-pend what it never attempted.
+ *
+ * Both named remedies were wrong about which door would open. The 14 s belonged
+ * to the cPanel sender, which was retired for Gmail (ADR-0025); a wave now costs
+ * ~2 605 ms and ~20 recipients fit comfortably. The re-pend alternative was
+ * designed three times, reviewed three times and REJECTED (ADR-0026) — do not
+ * revive it from this comment.
  *
  * Kept as a named constant, and the wave machinery in stage 7 kept with it,
  * because both become correct the moment the server does — not because the value
