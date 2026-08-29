@@ -99,9 +99,11 @@ export interface DestroyedMail {
   destroyed: number;
   /**
    * Did the alert actually reach a person? False in three different situations,
-   * and only `destroyed` tells them apart: nothing was destroyed; something was
-   * but stayed under the mail threshold (see the thresholds note in
-   * `reportDestroyedMail`); or the mail was sent and reached no super-admin.
+   * which this pair of fields does NOT fully distinguish — the log line does.
+   * Nothing was destroyed (`destroyed` is 0); something was but stayed under the
+   * mail threshold (see the thresholds note in `reportDestroyedMail`); or the
+   * mail was sent and reached no super-admin. The last two both read
+   * `destroyed > 0, alerted: false`, so do not branch on them here.
    */
   alerted: boolean;
 }
@@ -170,8 +172,11 @@ function buildDestroyedEmail(o: { failed: number; lost: number; skipped: number 
     o.failed && "<em>notify_sweep_send_failed</em>, <em>notify_sweep_render_failed</em>",
     o.skipped && "<em>notify_sweep_recipient_skipped</em>",
   ].filter(Boolean) as string[];
+  // `failed` contributes TWO event names in one entry, so it is plural even
+  // alone; `skipped` alone is a single name and needs the singular verb.
+  const carries = o.failed || idEvents.length > 1 ? "llevan" : "lleva";
   const evidence = idEvents.length
-    ? `<p style="margin:0;font:13px system-ui,sans-serif;color:${C.ink}">Para saber a quiénes: ${idEvents.join(" y ")} llevan el id del miembro. Búscalos en los logs de Vercel <strong>dentro de la hora siguiente</strong> a este correo — el plan Hobby no retiene más que eso.${o.lost ? " Los descartados por presupuesto no se pueden identificar: ese camino registra conteos, no destinatarios." : ""}</p>`
+    ? `<p style="margin:0;font:13px system-ui,sans-serif;color:${C.ink}">Para saber a quiénes: ${idEvents.join(" y ")} ${carries} el id del miembro. Búscalos en los logs de Vercel <strong>dentro de la hora siguiente</strong> a este correo — el plan Hobby no retiene más que eso.${o.lost ? " Los descartados por presupuesto no se pueden identificar: ese camino registra conteos, no destinatarios." : ""}</p>`
     : `<p style="margin:0;font:13px system-ui,sans-serif;color:${C.ink}">Los destinatarios individuales <strong>no se pueden identificar</strong>: el descarte por presupuesto registra conteos, no ids. Revisa qué servicio se publicó cerca de esta hora.</p>`;
   const body =
     tr(
