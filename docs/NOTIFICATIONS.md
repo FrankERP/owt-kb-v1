@@ -406,8 +406,9 @@ line: budget exhaustion moves `unserved` only, and those recipients are
 `lost`, so the gate cannot fire on it. Ordinary editing is silent.
 
 What can happen: during a genuine transport refusal, layer 2 fires **once per
-queueing request** — not once per admin action, and not once per document. Most
-call sites are one per request, but `api/admin/roles/swap` loops
+`commitUpserts`** — not once per admin action, not once per document, and not
+quite once per request either. Most routes call one `queue*` helper once, but
+`api/admin/roles/swap` loops
 `queueRoleNotices` over each affected destination role, so a two-role swap
 evaluates the alarm twice; and a month generation is one request per service. So a
 long session under a real outage could send several alerts. That is correct — it

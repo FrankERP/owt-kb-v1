@@ -90,6 +90,15 @@ export interface OutboxLiveness {
   alerted: boolean;
 }
 
+/**
+ * Which sweep raised the alarm, as the Spanish sentence subject. A UNION, not a
+ * free string: the phrase is load-bearing — the mail gives the reader one hour
+ * to find the sends in the logs, so naming the wrong sweep spends that hour on
+ * the wrong window — and a union makes a third layer's wording a compile-time
+ * decision instead of a convention someone has to notice in a comment.
+ */
+export type DestroyedMailSource = "El barrido diario" | "Un barrido tras una edición";
+
 export interface DestroyedMail {
   /**
    * Recipients this sweep discharged without delivering: `failed` + `lost` +
@@ -147,7 +156,12 @@ function buildStaleEmail(o: { count: number; oldestHours: number }): { subject: 
   return { subject, html: shell(body, link) };
 }
 
-function buildDestroyedEmail(o: { failed: number; lost: number; skipped: number; source: string }): {
+function buildDestroyedEmail(o: {
+  failed: number;
+  lost: number;
+  skipped: number;
+  source: DestroyedMailSource;
+}): {
   subject: string;
   html: string;
 } {
@@ -364,14 +378,8 @@ export async function reportOutboxLiveness(now: Date = new Date()): Promise<Outb
  */
 export async function reportDestroyedMail(
   sweep: SweepReport | { error: string } | null | undefined,
-  /**
-   * Which sweep this was, in Spanish, as the sentence subject — e.g. "El barrido
-   * diario". REQUIRED, and it is not decoration: the mail tells the reader to
-   * search the logs within the hour, and more than one layer sends it now. A
-   * body that names the wrong sweep spends that hour pointing at the wrong
-   * window, which is the failure this alarm exists to prevent.
-   */
-  source: string,
+  /** Which sweep this was — see `DestroyedMailSource`. Required, and typed. */
+  source: DestroyedMailSource,
 ): Promise<DestroyedMail> {
   let destroyed = 0;
   try {
