@@ -45,6 +45,7 @@ import { operationalClient } from "@/sanity/lib/operationalClient";
 
 import { appBaseUrl, escapeHtml, getAllowlist, isEmailAllowed } from "./assignmentEmail";
 import { sendEmail } from "./email";
+import type { SweepReport } from "./outboxSweep";
 import { C, shell, td, tr } from "./emailShell";
 // A generic "positive number, or the fallback" env parser whose name records its
 // first caller; reused here rather than re-implemented (it already rejects `""`,
@@ -90,7 +91,11 @@ export interface OutboxLiveness {
 }
 
 export interface DestroyedMail {
-  /** Recipients this sweep discharged without delivering: `failed` + `lost`. */
+  /**
+   * Recipients this sweep discharged without delivering: `failed` + `lost` +
+   * `skipped`. All three are consumed and never retried, so all three are mail
+   * a person will not receive and will not be told about.
+   */
   destroyed: number;
   /**
    * Did the alert actually reach a person? False when nothing was destroyed, and
@@ -138,21 +143,23 @@ function buildStaleEmail(o: { count: number; oldestHours: number }): { subject: 
   return { subject, html: shell(body, link) };
 }
 
-function buildDestroyedEmail(o: { failed: number; lost: number }): { subject: string; html: string } {
+function buildDestroyedEmail(o: { failed: number; lost: number; skipped: number }): {
+  subject: string;
+  html: string;
+} {
   const link = `${appBaseUrl()}/admin`;
-  const failed = escapeHtml(String(o.failed));
-  const lost = escapeHtml(String(o.lost));
-  const total = escapeHtml(String(o.failed + o.lost));
   const subject = "Alerta: se descartaron correos de notificación sin enviar";
-  // `failed` and `lost` are NOT the same failure and the mail says so, because
-  // they send you to different places: `failed` was attempted and the transport
-  // refused it, `lost` was never attempted at all before its notice was consumed.
-  const detail =
-    o.failed && o.lost
-      ? `<strong style="color:${C.accent}">${failed}</strong> se intentaron y no se entregaron, y <strong style="color:${C.accent}">${lost}</strong> se descartaron sin intentarse.`
-      : o.failed
-        ? `<strong style="color:${C.accent}">${failed}</strong> se intentaron y el servidor de correo no los aceptó.`
-        : `<strong style="color:${C.accent}">${lost}</strong> se descartaron sin haberse intentado siquiera.`;
+  // The three classes are NOT interchangeable and the mail names each one it
+  // saw, because they send you to different places: `failed` was handed to the
+  // mail server and refused, `skipped` never had a usable address to try, and
+  // `lost` was discarded by the send budget before its turn came.
+  const strong = (n: number) => `<strong style="color:${C.accent}">${escapeHtml(String(n))}</strong>`;
+  const parts: string[] = [];
+  if (o.failed) parts.push(`${strong(o.failed)} se intentaron y el servidor de correo no los aceptó`);
+  if (o.skipped)
+    parts.push(`${strong(o.skipped)} no tenían dirección utilizable o quedaron fuera de la lista permitida`);
+  if (o.lost) parts.push(`${strong(o.lost)} se descartaron antes de intentarse`);
+  const detail = `${parts.join("; ")}.`;
   const body =
     tr(
       td(`<span style="font:700 15px system-ui,sans-serif;color:${C.ink}">Se perdieron avisos en el barrido diario</span>`, {
@@ -161,13 +168,19 @@ function buildDestroyedEmail(o: { failed: number; lost: number }): { subject: st
     ) +
     tr(
       td(
-        `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}">El barrido de anoche descartó <strong style="color:${C.accent}">${total}</strong> destinatario(s) sin entregarles nada. ${detail}</p>`,
+        `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}">El barrido diario descartó ${strong(o.failed + o.lost + o.skipped)} destinatario(s) sin entregarles nada: ${detail}</p>`,
         { style: "padding:0 24px 12px" },
       ),
     ) +
     tr(
       td(
-        `<p style="margin:0;font:13px system-ui,sans-serif;color:${C.ink}">Esos avisos ya se consumieron y no se reintentan, así que las personas afectadas no se van a enterar por su cuenta. Si era un setlist o un cambio de rol, hay que avisarles a mano. Los eventos <em>notify_sweep_send_failed</em> y <em>notify_sweep_send_budget_exhausted</em> dicen a quiénes.</p>`,
+        `<p style="margin:0;font:13px system-ui,sans-serif;color:${C.ink}">Esos avisos ya se consumieron y no se reintentan, así que las personas afectadas no se van a enterar por su cuenta. Si era un setlist o un cambio de rol, hay que avisarles a mano.</p>`,
+        { style: "padding:0 24px 12px" },
+      ),
+    ) +
+    tr(
+      td(
+        `<p style="margin:0;font:13px system-ui,sans-serif;color:${C.ink}">Para saber a quiénes: los eventos <em>notify_sweep_send_failed</em>, <em>notify_sweep_render_failed</em> y <em>notify_sweep_recipient_skipped</em> llevan el id del miembro. Búscalos en los logs de Vercel <strong>dentro de la hora siguiente</strong> a este correo — el plan Hobby no retiene más que eso, y después ya no se pueden recuperar.</p>`,
         { style: "padding:0 24px 18px" },
       ),
     ) +
@@ -320,29 +333,47 @@ export async function reportOutboxLiveness(now: Date = new Date()): Promise<Outb
  * the request counts, which is why this mails a person like its sibling does.
  *
  * It cannot cover the case where the transport itself is dead — the alert then
- * fails the same way the sends did, and says so via `alerted: false`. That case
- * is the backlog alarm's, on the following day.
+ * fails the same way the sends did, and says so via `alerted: false`. Do NOT
+ * assume the backlog alarm covers that the next day; it depends on which kind of
+ * dead. A SLOW transport times out, the wave-admission check stops the send
+ * stage, unserved recipients are re-pended, a backlog forms and the 6 h alarm
+ * fires. A FAST-FAILING one — bad auth, connection refused — returns
+ * `{ok:false}` immediately, so every recipient is counted `failed` and CONSUMED,
+ * no backlog ever forms, and the liveness alarm stays quiet indefinitely. This
+ * alarm sees that case and cannot report it, because its own send fails too.
+ * Nothing covers it today.
  *
  * Best-effort like everything else here: it never throws, so the daily cron
  * cannot fail because its alarm could not send.
  */
 export async function reportDestroyedMail(
-  sweep: { failed?: number; lost?: number } | null | undefined,
+  sweep: SweepReport | { error: string } | null | undefined,
 ): Promise<DestroyedMail> {
-  const quiet: DestroyedMail = { destroyed: 0, alerted: false };
+  let destroyed = 0;
   try {
-    const failed = typeof sweep?.failed === "number" ? sweep.failed : 0;
-    const lost = typeof sweep?.lost === "number" ? sweep.lost : 0;
-    const destroyed = failed + lost;
-    if (destroyed <= 0) return quiet;
+    // `in`, not a cast. The route's `sweep` is a union — a real report, or
+    // `{error}` when the sweep threw — and an assertion would keep compiling
+    // after a rename of `SweepReport.failed` while this alarm went permanently
+    // silent. That is the exact silent-failure class this function exists to
+    // remove, so it is not one to reintroduce in the function's own signature.
+    if (!sweep || !("failed" in sweep)) return { destroyed: 0, alerted: false };
+    const { failed, lost, skipped } = sweep;
+    destroyed = failed + lost + skipped;
+    if (destroyed <= 0) return { destroyed: 0, alerted: false };
 
-    console.error(JSON.stringify({ event: "notify_sweep_destroyed", failed, lost }));
+    console.error(JSON.stringify({ event: "notify_sweep_destroyed", failed, lost, skipped }));
     // `alerted` follows the MAILBOX, not the attempt — the same rule the stale
     // alarm uses, and for the same reason: the email is the whole mitigation.
-    const reached = await emailSuperAdmins(buildDestroyedEmail({ failed, lost }), "notify_sweep_destroyed");
+    const reached = await emailSuperAdmins(
+      buildDestroyedEmail({ failed, lost, skipped }),
+      "notify_sweep_destroyed",
+    );
     return { destroyed, alerted: reached };
   } catch (err) {
     console.error(JSON.stringify({ event: "notify_sweep_destroyed_failed" }), err);
-    return quiet;
+    // `destroyed` keeps what was actually counted. Zeroing it here would report
+    // "nothing was destroyed" about a run that destroyed mail and then failed to
+    // say so — the one answer that is worse than the failure itself.
+    return { destroyed, alerted: false };
   }
 }

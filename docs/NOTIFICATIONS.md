@@ -347,8 +347,11 @@ alarm stops working while continuing to look fine.
 **after** the sweep — the opposite order, for the opposite reason. The liveness
 alarm asks *"is mail still moving?"*; this one asks *"did this sweep just destroy
 mail?"*, so it has nothing to measure until the sweep has run. Past zero on
-`failed + lost` it logs `notify_sweep_destroyed` and emails the super-admins,
-reusing the same audience resolution.
+`failed + lost + skipped` it logs `notify_sweep_destroyed` and emails the
+super-admins, reusing the same audience resolution. **All three count**, because
+all three are consumed and never retried: `failed` was refused by the mail server,
+`skipped` never had a usable address to try — the shape a narrowed
+`EMAIL_ALLOWLIST` takes — and `lost` was discarded by the send budget.
 
 It exists because **layer 3 had no reporter at all.** Layer 1 curls its route
 from a GitHub workflow that reads the report and goes red on `failed >= 2` or
@@ -364,12 +367,20 @@ hour of runtime logs and the API refuses older windows outright. Delivery was
 confirmed by asking a member. Only something that leaves the request counts.
 
 It cannot cover a dead transport — the alert then fails the way the sends did and
-says so through `alerted: false`. That case belongs to the backlog alarm above,
-on the following day.
+says so through `alerted: false`. **The backlog alarm does not necessarily catch
+that the next day**, and which applies depends on how the transport died. A *slow*
+transport times out, the send stage stops on its admission check, unserved
+recipients are re-pended, a backlog forms and the 6 h alarm fires. A *fast-failing*
+one — bad auth, connection refused — returns immediately, so every recipient is
+counted `failed` and consumed, **no backlog ever forms**, and the liveness alarm
+stays quiet indefinitely. This alarm sees that case and cannot report it, because
+its own send fails too. Nothing covers it today.
 
-**Layer 2 still has this blindness.** Its opportunistic sweeps can destroy mail
-with no reporter either; it was left out because it fires on every mutation and
-alerting there risks noise. Tracked separately.
+**Layer 2 still has this blindness**, and needs a different shape rather than a
+copy of this alarm: it fires on every mutation, and a derated sweep hitting its
+send budget mid-session is ordinary, so reusing this trigger would mail
+super-admins during normal editing. Tracked in
+[#20](https://github.com/FrankERP/owt-kb-v1/issues/20).
 
 ## Operating it
 
