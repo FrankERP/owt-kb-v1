@@ -88,7 +88,7 @@ layer 2 sweepDeadlineMs  =  SEND_TIMEOUT_MS + (SWEEP_DEADLINE_MS − SEND_TIMEOU
 paragraph said `SWEEP_DEADLINE_MS` was unchanged and that the invocation's worst
 case did not widen; that was wrong, and it is the claim the fix retracts. It does not fire on
 proposal submit or review, which queue nothing; layer 1 is what covers those —
-nominally within five minutes, in practice at a 41-minute median (§"Layer 1 does
+nominally within the declared tick, in practice at a 1.0 h median (§"Layer 1 does
 not run on the schedule it declares"). The proposal-submit **email** (`buildProposalEmail`) is immediate, not
 queued: intro + CTA, the same setlist table as "Setlist listo" (no Mov. column,
 medleys grouped), and the lead's newest `lead_note` message when the thread has one — the same thread source as the debounced email below, moved in the same delivery that stopped writing the legacy field. Empty or unreadable songs still
@@ -192,13 +192,31 @@ shipped defaults, and raising it to keep a test green is the one forbidden move.
 The route's own comment calls layer 1 "the PRIMARY one, and genuinely
 load-bearing". **Its schedule is not honoured, and the gap has widened.**
 
-**An experiment is in flight** (started 2026-08-30, [issue #25](https://github.com/FrankERP/owt-kb-v1/issues/25)).
+**An experiment is in flight** ([issue #25](https://github.com/FrankERP/owt-kb-v1/issues/25)).
 The schedule was `*/5 * * * *` and is now `7,22,37,52 * * * *`. The hypothesis is
 that GitHub deprioritizes aggressive schedules on public repositories, so asking
 for less may *deliver* more; the offset minutes also avoid the most contended
 ticks. That conflates two variables deliberately — both point the same way, and a
-cheap experiment beats a clean one here. **Re-measure before concluding**, using
-the method in #25, and revert to `*/5` if delivery does not improve.
+cheap experiment beats a clean one here.
+
+**It starts when the change reaches `main`, not when it was written.** GitHub runs
+`schedule` only on the default branch, so a push to `preview` changes nothing.
+Measure from the merge timestamp forward.
+
+**Judge it on runs/hour and the median interval — NOT on delivery-%.** Delivery-%
+is only comparable within one cadence: asking for a quarter as many ticks triples
+the percentage arithmetically without one email arriving sooner. Holding the
+observed 40 runs fixed, 3.4% becomes 10.1% for free. `scripts/measure-cron-delivery.mjs`
+prints the comparable pair under a header saying so.
+
+**The baseline to beat**, measured 2026-08-30 over scheduled runs only:
+
+| | baseline (`*/5`) | a fully honoured `7,22,37,52` |
+|---|---|---|
+| runs per hour | **0.40** | 4.0 |
+| median interval | **1.0 h** | 15 min |
+
+Revert to `*/5` if runs/hour does not rise.
 
 Measured 2026-08-30 over the 39 intervals between the 40 runs GitHub delivered
 between `2026-08-25T22:12Z` and `2026-08-30T01:35Z` — a **3.4% delivery rate**
@@ -233,7 +251,7 @@ self-hosted runners help — the trigger is the bottleneck, not the runner.
 
 **The practical consequence:** a notice becomes due 15 minutes after it is queued,
 and layer 2 (the writer's own `after()` sweep) has already run by then, so layer 1
-is what must come back. On the median it comes back at 41 minutes; on a bad day it
+is what must come back. On the median it comes back at an hour; on a bad day it
 does not come back for half a day. Layer 3's liveness alarm is daily, so a stall
 shorter than that is invisible.
 
@@ -361,6 +379,13 @@ emails the super-admins**.
 The email is the whole mitigation, not belt-and-braces: this repo has no log
 drain and Vercel Hobby offers no alerting, so a `console.error` in a daily cron
 has no consumer.
+
+**Its copy is now slightly ahead of the measurement, and worth watching.** It
+tells the reader the workflow is probably stopped, disabled, or missing its
+secret. `STALE_ALERT_HOURS` is 6 and the measured p90 interval is 8.6 h, so the
+alarm can fire on lateness that is merely ordinary. Bounded — the alarm rides the
+daily cron, so at most one mail a day — but if issue #25's experiment makes
+delivery worse, this is the noise that grows.
 
 **It measures before the sweep runs, deliberately.** Measuring after would read
 an outbox the sweep had just emptied and report healthy — which is exactly the

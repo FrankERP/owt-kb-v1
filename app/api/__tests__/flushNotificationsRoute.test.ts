@@ -1,6 +1,6 @@
 // Spec §3 — the three flush triggers and the liveness alarm.
 //
-// Layer 1 (`/api/cron/flush-notifications`, driven by GitHub Actions every five
+// Layer 1 (`/api/cron/flush-notifications`, driven by GitHub Actions on a sub-hourly
 // minutes) and layer 3 (the existing daily Vercel cron) are asserted here; layer
 // 2 — the opportunistic sweep inside a committed write — lives with the writers
 // and is asserted in `app/utils/__tests__/serviceMutationSideEffects.test.ts`.

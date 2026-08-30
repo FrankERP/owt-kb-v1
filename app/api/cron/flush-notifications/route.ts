@@ -3,8 +3,8 @@ import { sweepOutbox, type SweepReport } from "@/app/utils/outboxSweep";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
 // LAYER 1 of the outbox's three flush triggers (spec §3) — the PRIMARY one, and
-// genuinely load-bearing. Vercel Hobby allows one cron per day, so the every-five-
-// minutes schedule lives outside Vercel, in `.github/workflows/flush-notifications.yml`,
+// genuinely load-bearing. Vercel Hobby allows one cron per day, so the sub-hourly
+// schedule lives outside Vercel, in `.github/workflows/flush-notifications.yml`,
 // which curls this route with `CRON_SECRET`. Layer 2 (the opportunistic sweep in
 // a writer's `after()` block) cannot flush the terminal edit of a working session
 // and layer 3 is daily, so when this stops, everything is up to 24 hours late —
@@ -120,8 +120,8 @@ async function getHandler(req: NextRequest) {
 
   // Full budget each round; layer 2 alone is derated. When a setlist notice is
   // re-pended because the send stage ran out of clock, drain again in the same
-  // invocation instead of waiting for the next GitHub tick — nominally five
-  // minutes, measured at a 41-minute median (docs/NOTIFICATIONS.md).
+  // invocation instead of waiting for the next GitHub tick — nominally the
+  // declared tick, measured at a 1.0 h median (docs/NOTIFICATIONS.md).
   const report = await drainOutbox();
   return NextResponse.json(report);
 }

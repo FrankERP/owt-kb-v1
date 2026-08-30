@@ -11,14 +11,17 @@
 #     11.6 h, 22 of 39 over an hour — and only 40 runs delivered against ~1 193
 #     expected, a 3.4% delivery rate. That makes an email later, never wrong.
 #
-#     EXPERIMENT IN FLIGHT (started 2026-08-30, issue #25). The schedule was
+#     EXPERIMENT IN FLIGHT (issue #25) — it starts at the `main` MERGE, because
+#     GitHub runs `schedule` only on the default branch. The schedule was
 #     `*/5 * * * *`; it is now `7,22,37,52`. Hypothesis: GitHub deprioritizes
 #     aggressive schedules on public repos, so asking for less may DELIVER more.
 #     The offset minutes deliberately avoid :00/:15/:30/:45, the most contended
 #     ticks — which conflates two variables on purpose, because both point the
 #     same way and the cheap experiment is worth more than the clean one here.
-#     Re-measure with the method in #25 before concluding anything, and revert to
-#     `*/5` if delivery does not improve.
+#     Re-measure with `scripts/measure-cron-delivery.mjs` before concluding, and
+#     judge it on RUNS/HOUR (baseline 0.40) and the median interval (baseline
+#     1.0 h) — NOT on delivery-%, which asking for fewer ticks inflates by
+#     construction. Revert to `*/5` if runs/hour does not rise.
 #   · GitHub DISABLES scheduled workflows after 60 days of repository inactivity,
 #     and that rule applies to public repositories like this one. The daily
 #     liveness alarm in /api/cron/service-reminders is what makes that state loud
@@ -41,7 +44,7 @@ permissions: {}
 # next tick fires. The sweep claims before it sends, so an overlap is
 # not a double-send — but two concurrent sweeps do split one backlog and pile
 # onto an SMTP transport with `maxConnections: 1`. Newer wins: a skipped tick is
-# nominally five minutes (in practice far more), and there is always another one.
+# nominally the declared tick (in practice far more), and there is always another one.
 concurrency:
   group: flush-notification-outbox
   cancel-in-progress: false

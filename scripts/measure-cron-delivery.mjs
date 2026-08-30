@@ -20,6 +20,10 @@ const arg = (flag, fallback) => {
   return i === -1 ? fallback : process.argv[i + 1];
 };
 const LIMIT = Number(arg("--limit", "60"));
+if (!Number.isFinite(LIMIT) || LIMIT < 2) {
+  console.error("--limit needs a number >= 2");
+  process.exit(1);
+}
 const WORKFLOW = arg("--workflow", "Flush notification outbox");
 const REPO = arg("--repo", "FrankERP/owt-kb-v1");
 
@@ -29,7 +33,7 @@ function declaredMinutes() {
   const yml = execFileSync("gh", ["api", `repos/${REPO}/contents/.github/workflows/flush-notifications.yml`,
     "--jq", ".content"], { encoding: "utf8" });
   const text = Buffer.from(yml, "base64").toString("utf8");
-  const line = text.split("\n").find((l) => l.includes("- cron:"));
+  const line = text.split("\n").find((l) => /^\s*-\s*cron:/.test(l));
   if (!line) return null;
   const expr = line.split('"')[1] ?? line.split("'")[1];
   const minuteField = expr?.trim().split(/\s+/)[0];
@@ -42,6 +46,10 @@ function declaredMinutes() {
 
 const raw = execFileSync("gh", [
   "run", "list", "--workflow", WORKFLOW, "--repo", REPO,
+  // SCHEDULED runs only. `workflow_dispatch` is enabled and the runbook tells
+  // operators to fire it by hand, so counting those would inflate delivery and
+  // shorten the median — biasing the measurement toward "it improved".
+  "--event", "schedule",
   "--limit", String(LIMIT), "--json", "createdAt,conclusion",
 ], { encoding: "utf8" });
 
@@ -65,16 +73,23 @@ console.log(`window      : ${runs[0].at.toISOString()} → ${runs.at(-1).at.toIS
 if (declared) {
   const expected = Math.round(windowH * declared.perHour);
   console.log(`declared    : ${declared.expr}  → ~${expected} runs expected`);
-  console.log(`delivered   : ${runs.length} runs  → ${((runs.length / expected) * 100).toFixed(1)}% DELIVERY`);
+  console.log(`delivered   : ${runs.length} runs  → ${((runs.length / expected) * 100).toFixed(1)}% of what was asked`);
 } else {
   console.log(`declared    : (could not parse the cron expression)`);
 }
+// THE METRIC THAT DECIDES THE EXPERIMENT. Delivery-% is only comparable within
+// one cadence: asking for less raises it arithmetically without a single email
+// arriving sooner. Runs-per-hour and the median interval are what a member
+// actually experiences, so those are the acceptance numbers.
+console.log(`\n>>> COMPARE THESE ACROSS CADENCES, not the % above:`);
+console.log(`    runs per hour  : ${(runs.length / windowH).toFixed(2)}`);
+console.log(`    median interval: ${fmt(q(0.5))}`);
 console.log(`intervals   : n=${gaps.length}`);
 console.log(`  minimum   : ${fmt(gaps[0])}`);
 console.log(`  median    : ${fmt(q(0.5))}`);
 console.log(`  p90       : ${fmt(q(0.9))}`);
 console.log(`  maximum   : ${fmt(gaps.at(-1))}`);
-console.log(`  <= 10 min : ${gaps.filter((g) => g <= 10).length} / ${gaps.length}`);
+console.log(`  <= 20 min : ${gaps.filter((g) => g <= 20).length} / ${gaps.length}`);
 console.log(`  > 60 min  : ${gaps.filter((g) => g > 60).length} / ${gaps.length}`);
 const failed = runs.filter((r) => r.conclusion && r.conclusion !== "success").length;
 console.log(`  non-success runs: ${failed} / ${runs.length}   (lateness is a SCHEDULING problem, not a failing job)`);
