@@ -7,9 +7,10 @@
 # Two operational properties, named rather than discovered:
 #   · GitHub's scheduled runs are routinely far later than the declared schedule,
 #     and it got worse. Over 98 runs: median 41 min, max 11.4 h, never within 10.
-#     Re-measured 2026-08-30 over 39 intervals: median 71 min, p90 7.0 h, max
-#     11.6 h, 22 of 39 over an hour — and only 40 runs delivered against ~1 193
-#     expected, a 3.4% delivery rate. That makes an email later, never wrong.
+#     Re-measured 2026-08-30 over 39 intervals between SCHEDULED runs only:
+#     median 62 min, p90 8.6 h, max 11.6 h, 20 of 39 over an hour — and only 40
+#     runs delivered against ~1 203 expected, a 3.3% delivery rate. That makes an
+#     email later, never wrong.
 #
 #     EXPERIMENT IN FLIGHT (issue #25) — it starts at the `main` MERGE, because
 #     GitHub runs `schedule` only on the default branch. The schedule was

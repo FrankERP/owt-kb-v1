@@ -8,7 +8,8 @@
 // is that any change be re-measured the same way rather than assumed. A method
 // that lives in a shell history is not the same way; this is.
 //
-//   node scripts/measure-cron-delivery.mjs [--limit 60] [--workflow "<name>"]
+//   node scripts/measure-cron-delivery.mjs [--limit 60] [--since YYYY-MM-DD]
+//                                          [--workflow "<name>"] [--repo owner/name]
 //
 // Reads only the GitHub run list through `gh`. Touches no Sanity data, sends
 // nothing, and writes nothing.
@@ -26,6 +27,19 @@ if (!Number.isFinite(LIMIT) || LIMIT < 2) {
 }
 const WORKFLOW = arg("--workflow", "Flush notification outbox");
 const REPO = arg("--repo", "FrankERP/owt-kb-v1");
+// `--since YYYY-MM-DD` bounds the window to one cadence. Issue #25's experiment
+// begins at the `main` MERGE, because GitHub runs `schedule` only on the default
+// branch — so without this, a --limit reaching back past that merge silently
+// averages the old and new cadences into one runs/hour while the declared-cron
+// denominator reads only the new expression. The bound belongs in the tool, not
+// in a sentence someone has to remember.
+const SINCE = arg("--since", null);
+for (const [flag, val] of [["--workflow", WORKFLOW], ["--repo", REPO], ["--since", SINCE]]) {
+  if (val !== null && (val === undefined || String(val).startsWith("--"))) {
+    console.error(`${flag} needs a value`);
+    process.exit(1);
+  }
+}
 
 // The DECLARED cadence, parsed from the workflow rather than assumed, so the
 // expected-run count cannot silently drift from the file it is judging.
@@ -50,6 +64,7 @@ const raw = execFileSync("gh", [
   // operators to fire it by hand, so counting those would inflate delivery and
   // shorten the median — biasing the measurement toward "it improved".
   "--event", "schedule",
+  ...(SINCE ? ["--created", `>=${SINCE}`] : []),
   "--limit", String(LIMIT), "--json", "createdAt,conclusion",
 ], { encoding: "utf8" });
 
@@ -89,6 +104,10 @@ console.log(`  minimum   : ${fmt(gaps[0])}`);
 console.log(`  median    : ${fmt(q(0.5))}`);
 console.log(`  p90       : ${fmt(q(0.9))}`);
 console.log(`  maximum   : ${fmt(gaps.at(-1))}`);
+// BOTH buckets. `<= 10` is unreachable under a 15-minute floor, but the recorded
+// history in docs/NOTIFICATIONS.md has a `<= 10 min` row, and a tool that cannot
+// reproduce the table it is compared against is not the same method.
+console.log(`  <= 10 min : ${gaps.filter((g) => g <= 10).length} / ${gaps.length}   (historical row; unreachable under a 15-min floor)`);
 console.log(`  <= 20 min : ${gaps.filter((g) => g <= 20).length} / ${gaps.length}`);
 console.log(`  > 60 min  : ${gaps.filter((g) => g > 60).length} / ${gaps.length}`);
 const failed = runs.filter((r) => r.conclusion && r.conclusion !== "success").length;

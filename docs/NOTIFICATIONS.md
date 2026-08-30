@@ -218,21 +218,27 @@ prints the comparable pair under a header saying so.
 
 Revert to `*/5` if runs/hour does not rise.
 
-Measured 2026-08-30 over the 39 intervals between the 40 runs GitHub delivered
-between `2026-08-25T22:12Z` and `2026-08-30T01:35Z` — a **3.4% delivery rate**
-against the ~1 193 runs `*/5` asks for:
+Measured 2026-08-30 over the 39 intervals between the 40 **scheduled** runs
+GitHub delivered between `2026-08-25T21:19Z` and `2026-08-30T01:35Z` — a **3.3%
+delivery rate** against the ~1 203 runs `*/5` asks for:
 
 | | declared | 98 runs (2026-08-23/27) | 39 intervals (2026-08-30) |
 |---|---|---|---|
 | interval | 5.0 min | — | — |
-| **median** | | **41.3 min** | **71 min** |
-| p90 | | — | **7.0 h** |
+| **median** | | **41.3 min** | **62 min (1.0 h)** |
+| p90 | | — | **8.6 h** |
 | maximum | | **682 min (11.4 h)** | **699 min (11.6 h)** |
 | ≤ 10 min | | **0 of 98** | **0 of 39** |
-| > 60 min | | 18 of 98 | **22 of 39** |
+| > 60 min | | 18 of 98 | **20 of 39** |
 
-The older 98-run measurement, 2026-08-23 to 2026-08-27, is kept because it is the
-baseline the experiment is measured against:
+**Scheduled runs only.** A first pass at these figures included manual
+`workflow_dispatch` runs — the runbook tells operators to fire them — which
+shortened the median to 71 min and moved p90 to 7.0 h. Those numbers were wrong in
+the direction that flatters the schedule, and the script now passes
+`--event schedule` so the mistake is not repeatable. If you see 71 min / 7.0 h
+quoted anywhere, it is the contaminated pass.
+
+The older 98-run measurement, 2026-08-23 to 2026-08-27, is kept as history:
 
 | | |
 |---|---|
@@ -518,7 +524,7 @@ and they are different failures:
 
 Healthy, and not failures: `unserved > 0` with `repended > 0` — the send budget
 stopped early and those recipients wait for the next sweep (declared
-sub-hourly; measured median 71 min). `deferred > 0` — work left *unclaimed* for the next
+sub-hourly; measured median 1.0 h). `deferred > 0` — work left *unclaimed* for the next
 sweep. `skipped > 0` — a recipient with no address or blocked by
 `EMAIL_ALLOWLIST`; a warning, since a deliberately narrowed allowlist makes it the
 expected state.
