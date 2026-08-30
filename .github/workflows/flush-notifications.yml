@@ -1,14 +1,24 @@
 # Layer 1 of the notification outbox's three flush triggers (design spec §3).
 #
-# Vercel Hobby allows ONE cron per day, so the every-five-minutes trigger lives
+# Vercel Hobby allows ONE cron per day, so the sub-daily trigger lives
 # here instead of in `vercel.json` — do not add a second Vercel cron. This job is
 # a thin caller: it curls the route, and the route calls the one exported sweep.
 #
 # Two operational properties, named rather than discovered:
-#   · GitHub's scheduled runs are routinely far later than the declared schedule —
-#     measured on this repo over 98 runs: median 41 min, max 11.4 h, and not once
-#     within 10 min. That makes an
-#     email later, never wrong.
+#   · GitHub's scheduled runs are routinely far later than the declared schedule,
+#     and it got worse. Over 98 runs: median 41 min, max 11.4 h, never within 10.
+#     Re-measured 2026-08-30 over 39 intervals: median 71 min, p90 7.0 h, max
+#     11.6 h, 22 of 39 over an hour — and only 40 runs delivered against ~1 193
+#     expected, a 3.4% delivery rate. That makes an email later, never wrong.
+#
+#     EXPERIMENT IN FLIGHT (started 2026-08-30, issue #25). The schedule was
+#     `*/5 * * * *`; it is now `7,22,37,52`. Hypothesis: GitHub deprioritizes
+#     aggressive schedules on public repos, so asking for less may DELIVER more.
+#     The offset minutes deliberately avoid :00/:15/:30/:45, the most contended
+#     ticks — which conflates two variables on purpose, because both point the
+#     same way and the cheap experiment is worth more than the clean one here.
+#     Re-measure with the method in #25 before concluding anything, and revert to
+#     `*/5` if delivery does not improve.
 #   · GitHub DISABLES scheduled workflows after 60 days of repository inactivity,
 #     and that rule applies to public repositories like this one. The daily
 #     liveness alarm in /api/cron/service-reminders is what makes that state loud
@@ -20,7 +30,7 @@ name: Flush notification outbox
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "7,22,37,52 * * * *"
   workflow_dispatch:
 
 # This job curls one URL. It touches no repository contents and needs no
@@ -28,7 +38,7 @@ on:
 permissions: {}
 
 # A run that hangs on a slow sweep would otherwise still be in flight when the
-# next five-minute tick fires. The sweep claims before it sends, so an overlap is
+# next tick fires. The sweep claims before it sends, so an overlap is
 # not a double-send — but two concurrent sweeps do split one backlog and pile
 # onto an SMTP transport with `maxConnections: 1`. Newer wins: a skipped tick is
 # nominally five minutes (in practice far more), and there is always another one.

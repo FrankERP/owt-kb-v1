@@ -5,7 +5,7 @@
 // WHY THIS EXISTS
 // ---------------
 // Layer 1 — the GitHub Actions schedule that curls `/api/cron/flush-notifications`
-// every five minutes (declared; see docs/NOTIFICATIONS.md) — is a genuine single point of failure. Layer 2 (the
+// on a sub-hourly schedule (declared; see docs/NOTIFICATIONS.md) — is a genuine single point of failure. Layer 2 (the
 // opportunistic sweep inside a committed write) structurally cannot flush the
 // terminal edit of a working session, and the terminal edit is what every notice
 // eventually is. So every notice that ships depends on that workflow or, failing
@@ -143,7 +143,7 @@ function buildStaleEmail(o: { count: number; oldestHours: number }): { subject: 
     ) +
     tr(
       td(
-        `<p style="margin:0;font:13px system-ui,sans-serif;color:${C.ink}">Nada se envía cada 5 minutos, así que lo más probable es que el workflow <em>Flush notification outbox</em> de GitHub Actions esté detenido, deshabilitado o sin el secreto correcto. Revísalo en GitHub → Actions.</p>`,
+        `<p style="margin:0;font:13px system-ui,sans-serif;color:${C.ink}">Nada se está enviando, así que lo más probable es que el workflow <em>Flush notification outbox</em> de GitHub Actions esté detenido, deshabilitado o sin el secreto correcto. Revísalo en GitHub → Actions.</p>`,
         { style: "padding:0 24px 18px" },
       ),
     ) +

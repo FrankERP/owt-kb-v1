@@ -49,7 +49,7 @@ hand-writing a fixture that mirrors them).
 
 | Layer | What | Where |
 |---|---|---|
-| 1 — primary | GitHub Actions, declared every 5 min — see §"Layer 1 does not run every five minutes" | `.github/workflows/flush-notifications.yml` → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
+| 1 — primary | GitHub Actions, declared `7,22,37,52` — see §"Layer 1 does not run on the schedule it declares" | `.github/workflows/flush-notifications.yml` → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
 | 2 — backstop | opportunistic sweep after any queueing write | end of `commitUpserts()` in `serviceMutationSideEffects.ts` — keeps its report and raises the destroyed-mail alarm |
 | 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm") |
 
@@ -89,7 +89,7 @@ paragraph said `SWEEP_DEADLINE_MS` was unchanged and that the invocation's worst
 case did not widen; that was wrong, and it is the claim the fix retracts. It does not fire on
 proposal submit or review, which queue nothing; layer 1 is what covers those —
 nominally within five minutes, in practice at a 41-minute median (§"Layer 1 does
-not run every five minutes"). The proposal-submit **email** (`buildProposalEmail`) is immediate, not
+not run on the schedule it declares"). The proposal-submit **email** (`buildProposalEmail`) is immediate, not
 queued: intro + CTA, the same setlist table as "Setlist listo" (no Mov. column,
 medleys grouped), and the lead's newest `lead_note` message when the thread has one — the same thread source as the debounced email below, moved in the same delivery that stopped writing the legacy field. Empty or unreadable songs still
 send the intro and CTA. Push stays a one-line alert.
@@ -187,12 +187,34 @@ so the operative value can be read back and checked against this section. `MEASU
 `outboxSweep.test.ts` stays at its placeholder: it guards the consistency of the
 shipped defaults, and raising it to keep a test green is the one forbidden move.
 
-## Layer 1 does not run every five minutes
+## Layer 1 does not run on the schedule it declares
 
-The flush cron is declared `*/5 * * * *` in
-`.github/workflows/flush-notifications.yml`, and the route's own comment calls it
-"the PRIMARY one, and genuinely load-bearing". **The schedule is not honoured.**
-Measured over 98 consecutive scheduled runs, 2026-08-23 to 2026-08-27:
+The route's own comment calls layer 1 "the PRIMARY one, and genuinely
+load-bearing". **Its schedule is not honoured, and the gap has widened.**
+
+**An experiment is in flight** (started 2026-08-30, [issue #25](https://github.com/FrankERP/owt-kb-v1/issues/25)).
+The schedule was `*/5 * * * *` and is now `7,22,37,52 * * * *`. The hypothesis is
+that GitHub deprioritizes aggressive schedules on public repositories, so asking
+for less may *deliver* more; the offset minutes also avoid the most contended
+ticks. That conflates two variables deliberately — both point the same way, and a
+cheap experiment beats a clean one here. **Re-measure before concluding**, using
+the method in #25, and revert to `*/5` if delivery does not improve.
+
+Measured 2026-08-30 over the 39 intervals between the 40 runs GitHub delivered
+between `2026-08-25T22:12Z` and `2026-08-30T01:35Z` — a **3.4% delivery rate**
+against the ~1 193 runs `*/5` asks for:
+
+| | declared | 98 runs (2026-08-23/27) | 39 intervals (2026-08-30) |
+|---|---|---|---|
+| interval | 5.0 min | — | — |
+| **median** | | **41.3 min** | **71 min** |
+| p90 | | — | **7.0 h** |
+| maximum | | **682 min (11.4 h)** | **699 min (11.6 h)** |
+| ≤ 10 min | | **0 of 98** | **0 of 39** |
+| > 60 min | | 18 of 98 | **22 of 39** |
+
+The older 98-run measurement, 2026-08-23 to 2026-08-27, is kept because it is the
+baseline the experiment is measured against:
 
 | | |
 |---|---|
@@ -471,7 +493,7 @@ and they are different failures:
 
 Healthy, and not failures: `unserved > 0` with `repended > 0` — the send budget
 stopped early and those recipients wait for the next sweep (declared
-five-minutely; median 41). `deferred > 0` — work left *unclaimed* for the next
+sub-hourly; measured median 71 min). `deferred > 0` — work left *unclaimed* for the next
 sweep. `skipped > 0` — a recipient with no address or blocked by
 `EMAIL_ALLOWLIST`; a warning, since a deliberately narrowed allowlist makes it the
 expected state.
