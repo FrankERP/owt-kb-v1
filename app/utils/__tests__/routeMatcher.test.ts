@@ -90,7 +90,7 @@ describe("auth middleware route matcher", () => {
     // Regression: both were session-gated, so every machine call got a 307 to
     // /api/auth/signin and the handler never ran. The daily Vercel cron (service
     // reminders + the outbox liveness alarm) and layer 1 of the outbox (GitHub
-    // Actions, every five minutes) were dead — and layer 1's `curl --fail`
+    // Actions, on a sub-hourly schedule) were dead — and layer 1's `curl --fail`
     // ignores 3xx, so it reported green the whole time.
     expect(middlewareRuns("/api/cron/service-reminders")).toBe(false);
     expect(middlewareRuns("/api/cron/flush-notifications")).toBe(false);

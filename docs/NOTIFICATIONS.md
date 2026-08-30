@@ -49,7 +49,7 @@ hand-writing a fixture that mirrors them).
 
 | Layer | What | Where |
 |---|---|---|
-| 1 — primary | GitHub Actions, declared every 5 min — see §"Layer 1 does not run every five minutes" | `.github/workflows/flush-notifications.yml` → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
+| 1 — primary | GitHub Actions, declared `7,22,37,52` — see §"Layer 1 does not run on the schedule it declares" | `.github/workflows/flush-notifications.yml` → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
 | 2 — backstop | opportunistic sweep after any queueing write | end of `commitUpserts()` in `serviceMutationSideEffects.ts` — keeps its report and raises the destroyed-mail alarm |
 | 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm") |
 
@@ -88,8 +88,8 @@ layer 2 sweepDeadlineMs  =  SEND_TIMEOUT_MS + (SWEEP_DEADLINE_MS − SEND_TIMEOU
 paragraph said `SWEEP_DEADLINE_MS` was unchanged and that the invocation's worst
 case did not widen; that was wrong, and it is the claim the fix retracts. It does not fire on
 proposal submit or review, which queue nothing; layer 1 is what covers those —
-nominally within five minutes, in practice at a 41-minute median (§"Layer 1 does
-not run every five minutes"). The proposal-submit **email** (`buildProposalEmail`) is immediate, not
+nominally within the declared tick, in practice at a 1.0 h median (§"Layer 1 does
+not run on the schedule it declares"). The proposal-submit **email** (`buildProposalEmail`) is immediate, not
 queued: intro + CTA, the same setlist table as "Setlist listo" (no Mov. column,
 medleys grouped), and the lead's newest `lead_note` message when the thread has one — the same thread source as the debounced email below, moved in the same delivery that stopped writing the legacy field. Empty or unreadable songs still
 send the intro and CTA. Push stays a one-line alert.
@@ -187,12 +187,58 @@ so the operative value can be read back and checked against this section. `MEASU
 `outboxSweep.test.ts` stays at its placeholder: it guards the consistency of the
 shipped defaults, and raising it to keep a test green is the one forbidden move.
 
-## Layer 1 does not run every five minutes
+## Layer 1 does not run on the schedule it declares
 
-The flush cron is declared `*/5 * * * *` in
-`.github/workflows/flush-notifications.yml`, and the route's own comment calls it
-"the PRIMARY one, and genuinely load-bearing". **The schedule is not honoured.**
-Measured over 98 consecutive scheduled runs, 2026-08-23 to 2026-08-27:
+The route's own comment calls layer 1 "the PRIMARY one, and genuinely
+load-bearing". **Its schedule is not honoured, and the gap has widened.**
+
+**An experiment is in flight** ([issue #25](https://github.com/FrankERP/owt-kb-v1/issues/25)).
+The schedule was `*/5 * * * *` and is now `7,22,37,52 * * * *`. The hypothesis is
+that GitHub deprioritizes aggressive schedules on public repositories, so asking
+for less may *deliver* more; the offset minutes also avoid the most contended
+ticks. That conflates two variables deliberately — both point the same way, and a
+cheap experiment beats a clean one here.
+
+**It starts when the change reaches `main`, not when it was written.** GitHub runs
+`schedule` only on the default branch, so a push to `preview` changes nothing.
+Measure from the merge timestamp forward.
+
+**Judge it on runs/hour and the median interval — NOT on delivery-%.** Delivery-%
+is only comparable within one cadence: asking for a quarter as many ticks triples
+the percentage arithmetically without one email arriving sooner. Holding the
+observed 40 runs fixed, 3.4% becomes 10.1% for free. `scripts/measure-cron-delivery.mjs`
+prints the comparable pair under a header saying so.
+
+**The baseline to beat**, measured 2026-08-30 over scheduled runs only:
+
+| | baseline (`*/5`) | a fully honoured `7,22,37,52` |
+|---|---|---|
+| runs per hour | **0.40** | 4.0 |
+| median interval | **1.0 h** | 15 min |
+
+Revert to `*/5` if runs/hour does not rise.
+
+Measured 2026-08-30 over the 39 intervals between the 40 **scheduled** runs
+GitHub delivered between `2026-08-25T21:19Z` and `2026-08-30T01:35Z` — a **3.3%
+delivery rate** against the ~1 203 runs `*/5` asks for:
+
+| | declared | 98 runs (2026-08-23/27) | 39 intervals (2026-08-30) |
+|---|---|---|---|
+| interval | 5.0 min | — | — |
+| **median** | | **41.3 min** | **62 min (1.0 h)** |
+| p90 | | — | **8.6 h** |
+| maximum | | **682 min (11.4 h)** | **699 min (11.6 h)** |
+| ≤ 10 min | | **0 of 98** | **0 of 39** |
+| > 60 min | | 18 of 98 | **20 of 39** |
+
+**Scheduled runs only.** A first pass at these figures included manual
+`workflow_dispatch` runs — the runbook tells operators to fire them — which
+shortened the median to 71 min and moved p90 to 7.0 h. Those numbers were wrong in
+the direction that flatters the schedule, and the script now passes
+`--event schedule` so the mistake is not repeatable. If you see 71 min / 7.0 h
+quoted anywhere, it is the contaminated pass.
+
+The older 98-run measurement, 2026-08-23 to 2026-08-27, is kept as history:
 
 | | |
 |---|---|
@@ -211,7 +257,7 @@ self-hosted runners help — the trigger is the bottleneck, not the runner.
 
 **The practical consequence:** a notice becomes due 15 minutes after it is queued,
 and layer 2 (the writer's own `after()` sweep) has already run by then, so layer 1
-is what must come back. On the median it comes back at 41 minutes; on a bad day it
+is what must come back. On the median it comes back at an hour; on a bad day it
 does not come back for half a day. Layer 3's liveness alarm is daily, so a stall
 shorter than that is invisible.
 
@@ -339,6 +385,13 @@ emails the super-admins**.
 The email is the whole mitigation, not belt-and-braces: this repo has no log
 drain and Vercel Hobby offers no alerting, so a `console.error` in a daily cron
 has no consumer.
+
+**Its copy is now slightly ahead of the measurement, and worth watching.** It
+tells the reader the workflow is probably stopped, disabled, or missing its
+secret. `STALE_ALERT_HOURS` is 6 and the measured p90 interval is 8.6 h, so the
+alarm can fire on lateness that is merely ordinary. Bounded — the alarm rides the
+daily cron, so at most one mail a day — but if issue #25's experiment makes
+delivery worse, this is the noise that grows.
 
 **It measures before the sweep runs, deliberately.** Measuring after would read
 an outbox the sweep had just emptied and report healthy — which is exactly the
@@ -471,7 +524,7 @@ and they are different failures:
 
 Healthy, and not failures: `unserved > 0` with `repended > 0` — the send budget
 stopped early and those recipients wait for the next sweep (declared
-five-minutely; median 41). `deferred > 0` — work left *unclaimed* for the next
+sub-hourly; measured median 1.0 h). `deferred > 0` — work left *unclaimed* for the next
 sweep. `skipped > 0` — a recipient with no address or blocked by
 `EMAIL_ALLOWLIST`; a warning, since a deliberately narrowed allowlist makes it the
 expected state.
