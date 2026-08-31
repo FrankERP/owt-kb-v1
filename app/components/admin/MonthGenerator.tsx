@@ -2,6 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTransientValue } from "@/app/utils/useTransientValue";
+import {
+  filterMembersForSelection,
+  isRetiredFrom,
+  personNameOptions,
+  retiredInSolverPools,
+  RETIREMENT_UI_COPY,
+} from "@/app/utils/memberRetirement";
 import type { SolveResponse } from "@/app/api/admin/solve/route";
 import { DayCard } from "@/app/components/DayCard";
 import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
@@ -71,7 +78,14 @@ import {
 // alone changes nothing at all.
 type ServiceType = "sunday_role" | "saturday_role" | "special_role";
 
-interface MemberOption { _id: string; member_name: string; alias?: string; memberType?: string[]; unavailableDates?: string[]; }
+interface MemberOption {
+  _id: string;
+  member_name: string;
+  alias?: string;
+  memberType?: string[];
+  unavailableDates?: string[];
+  retiredFrom?: string[];
+}
 
 const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;
 
@@ -529,7 +543,8 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
   onCancel: () => void;
   initialValues?: PersonRestriction;
 }) {
-  const names = members.map(dn);
+  const preserve = initialValues?.person ? [initialValues.person] : [];
+  const names = personNameOptions(members, "worship", preserve);
   const [person,   setPerson]   = useState(initialValues?.person ?? (names[0] ?? ""));
   const [excl,     setExcl]     = useState<string[]>(initialValues?.excludedPatterns ?? []);
   const [fairness, setFairness] = useState<PersonRestriction["fairness"]>(initialValues?.fairness ?? "none");
@@ -745,9 +760,10 @@ function ConflictForm({ members, onAdd, onCancel, initialValues }: {
   onCancel: () => void;
   initialValues?: ConflictRule;
 }) {
-  const names = members.map(dn);
+  const preserve = initialValues ? [initialValues.personA, initialValues.personB] : [];
+  const names = personNameOptions(members, "worship", preserve);
   const [personA,  setPersonA]  = useState(initialValues?.personA ?? (names[0] ?? ""));
-  const [personB,  setPersonB]  = useState(initialValues?.personB ?? (names[1] ?? ""));
+  const [personB,  setPersonB]  = useState(initialValues?.personB ?? (names[1] ?? names[0] ?? ""));
   const [pattern,  setPattern]  = useState(initialValues?.pattern ?? "*.Lead");
 
   const canAdd = personA && personB && personA !== personB;
@@ -797,6 +813,10 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
 }) {
   const [selected, setSelected] = useState<string[]>(initialValues?.persons ?? []);
   const [pattern,  setPattern]  = useState(initialValues?.pattern ?? "Sun.BGV");
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
+  const listMembers = members.filter(
+    (m) => !isRetiredFrom("worship", m.retiredFrom) || selectedSet.has(dn(m)),
+  );
 
   const canAdd = selected.length >= 2;
 
@@ -809,7 +829,7 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
           keyholed all 16 `voz` members. Same fix as `MemberPool` above.
         */}
         <div className="rounded border border-accent/10 divide-y divide-accent/5">
-          {members.map(m => {
+          {listMembers.map(m => {
             const name    = dn(m);
             const checked = selected.includes(name);
             return (
@@ -1333,9 +1353,16 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
 }) {
   const [searches, setSearches] = useState<Record<string, string>>({});
 
-  const sundayPool   = members.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("sunday_lead"));
-  const saturdayPool = members.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("saturday_lead"));
-  const supportPool  = members.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("support"));
+  const poolKeepIds = [
+    ...config.sundayLeads,
+    ...config.saturdayLeads,
+    ...config.support,
+  ];
+  const eligible = filterMembersForSelection(members, "worship", { keepIds: poolKeepIds });
+  const sundayPool   = eligible.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("sunday_lead"));
+  const saturdayPool = eligible.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("saturday_lead"));
+  const supportPool  = eligible.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("support"));
+  const retiredInPools = retiredInSolverPools(config, members);
 
   const toggleMember = (field: "sundayLeads" | "saturdayLeads" | "support", id: string) => {
     const cur = config[field];
@@ -1389,9 +1416,22 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
       <RuleBuilder
         config={config}
         onChange={onChange}
-        members={members.filter(m => m.memberType?.includes("voz"))}
+        members={filterMembersForSelection(members.filter(m => m.memberType?.includes("voz")), "worship")}
         source={rules.source}
       />
+
+      {retiredInPools.length > 0 && (
+        <div className="rounded-lg border border-warning-strong/30 bg-warning-strong/10 px-3 py-2 space-y-1">
+          <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">
+            {RETIREMENT_UI_COPY.poolWarning}
+          </p>
+          <ul className="font-body text-xs text-mono-400 list-disc pl-4">
+            {retiredInPools.map((m) => (
+              <li key={m._id}>{dn(m as MemberOption)}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/*
         Below the pools AND the rules, because it saves the whole document —

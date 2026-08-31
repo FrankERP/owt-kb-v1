@@ -222,6 +222,12 @@ role tier. Gate with `requireMinistryMember(id)` / `requireMinistryManager(id)`
   the only readers). **Explicitly empty** is rejected at every write boundary
   (`validateMinistryWrite`) and never stored — stored `[]` reads back as worship
   and would hand a kids volunteer the whole catalog.
+- **Soft retirement (`retiredFrom`):** absent ⇒ serves in every ministry they
+  belong to. **Selection** excludes retired members at the point of use
+  (`rankCandidates`, Persona select, `MemberPool`); **resolution** (`_id in $ids`,
+  id→name) never filters. `GET /api/admin/members` is deliberately unfiltered
+  by retirement. `disabled` is a separate kill switch — never written by retiro nor
+  by `handleEdit`. Kids rotation ignores `retiredFrom` (register-only in P1).
 
 ## Continuous improvement
 Run `/loop /improve` — the `/improve` command (`.claude/commands/improve.md`)
