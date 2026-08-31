@@ -263,6 +263,8 @@ cubre este caso: habla de ids de pool, no de reglas.
   una corrección que llegó a una sección y no a su gemela — los tres artefactos se consolidaron
   para que cada requisito tenga un solo lugar donde su texto puede cambiar. Esa consolidación
   **no está revisada**: es material nuevo posterior a la ronda 2.
+- **Preguntas bloqueantes:** ninguna. La única que lo era —el orden de operaciones de P2— la
+  decidió Frank el 2026-08-31 y está registrada como decisión suya en P2 § Decisions.
 - **Risk tier:** **P1, P3 y P2 críticos** — dos `APPROVED` consecutivos sobre bytes
   idénticos cada uno.
   - P1 se clasificó primero como estándar. **Eso era un error, y se corrige derivándolo de la

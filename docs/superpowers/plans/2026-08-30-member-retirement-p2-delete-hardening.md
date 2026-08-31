@@ -82,10 +82,12 @@ toda la familia; `R1`–`R7`, `R11`, `R14` y `R16` pertenecen a P1, y `R10`, `R1
   se siguen llamando en el camino exitoso.
 - **Security invariants:** los dos guards de rol se ejecutan antes de cualquier lectura o
   escritura, como hoy.
-- **Failure and recovery:** el modo de falla que importa es el borrado parcial — pools
-  limpiados y documento no borrado, o al revés. El plan de implementación debe elegir un orden
-  que haga el resultado parcial **seguro y detectable**, y justificarlo. Un id sobrante en un
-  pool es recuperable; un miembro borrado cuyo historial queda roto no lo es.
+- **Failure and recovery:** el modo de falla que importa es el borrado parcial. **El orden está
+  decidido y no lo elige el plan de implementación: primero el borrado, después la limpieza de
+  pools.** Eso deja exactamente un estado parcial posible —documento borrado, id todavía en un
+  pool— que es recuperable y es el estado de hoy. El orden inverso produciría el estado que no
+  se acepta: alguien fuera de las rotaciones sin que nadie lo decidiera. Lo que el plan de
+  implementación sí debe definir es **cómo se detecta** ese id colgante cuando la limpieza falla.
 - **Concurrencia:** entre comprobar historial y borrar, alguien puede asignar a esa persona.
   R12 exige que ese caso no produzca un borrado que rompa el historial. La integridad
   referencial de Sanity es la red final y debe seguir siendo la autoridad, no la comprobación
@@ -105,6 +107,7 @@ toda la familia; `R1`–`R7`, `R11`, `R14` y `R16` pertenecen a P1, y `R10`, `R1
 |---|---|---|---|---|
 | Conservar el borrado duro | Sí, endurecido | Sigue siendo correcto para un documento creado por error que nunca sirvió | Mantiene una ruta destructiva en la app | Frank |
 | Autoridad sobre "¿se puede borrar?" | La integridad de Sanity, no la comprobación previa | Una comprobación previa es una foto; entre ella y el borrado el mundo cambia | El mensaje bonito depende de interpretar un error del proveedor | P2 |
+| Orden de operaciones | **La limpieza de pools va DESPUÉS del borrado** | Elección de Frank. Define cuál es el único estado parcial posible, y lo elige a favor del recuperable: si la limpieza falla tras un borrado exitoso queda un id colgante — el estado de hoy, no peor — mientras que limpiar primero y fallar el borrado dejaría a alguien fuera de las rotaciones sin que nadie lo decidiera, o sea un **retiro silencioso**, que es justo lo que P1 existe para volver explícito. | Un id colgante tras un fallo parcial. Detectable y recuperable; el plan de implementación debe decir cómo se detecta. | Frank |
 | Limpieza retroactiva | Fuera de alcance | Es escritura a datos de producción; necesita consentimiento y dry-run propios | Los ids colgantes que ya existan siguen ahí hasta una operación aparte | Frank |
 
 ## Assumptions
@@ -119,7 +122,6 @@ toda la familia; `R1`–`R7`, `R11`, `R14` y `R16` pertenecen a P1, y `R10`, `R1
 
 | Question | Why it matters | Recommendation and why | Tradeoffs | Owner | Blocking? | Resolution point | Bounded default |
 |---|---|---|---|---|---|---|---|
-| ¿La limpieza de pools va antes o después del borrado? | Define cuál es el estado parcial posible | **Después.** Un id sobrante en un pool es recuperable y detectable; limpiar primero y fallar el borrado deja al miembro fuera de las rotaciones sin que nadie lo haya decidido — un retiro silencioso, que es justo lo que P1 existe para hacer explícito | Si la limpieza falla tras un borrado exitoso, queda un id colgante — el estado de hoy, no peor | P2 | **Sí** | Plan de implementación | Después del borrado |
 | ¿Se ofrece "retirar en su lugar" como acción de un clic? | Cambia el alcance de UI | **Sí**, si P1 ya expone la mutación | Más superficie en el modal de borrado | Frank | No | Implementación | Enlace al control de retiro, sin acción directa |
 
 ## Acceptance and verification
@@ -133,6 +135,7 @@ toda la familia; `R1`–`R7`, `R11`, `R14` y `R16` pertenecen a P1, y `R10`, `R1
 
 ## Terminal state
 
-`READY_FOR_ADVERSARIAL_REVIEW` — con una salvedad que el revisor debe pesar: la pregunta del
-orden de operaciones es **bloqueante** y tiene recomendación, no decisión. Riesgo crítico: dos
-`APPROVED` frescos y consecutivos sobre bytes idénticos.
+`READY_FOR_ADVERSARIAL_REVIEW` — sin preguntas bloqueantes. La del orden de operaciones lo era
+y Frank la decidió el 2026-08-31: la limpieza va después del borrado, registrado arriba como
+decisión suya. La pregunta restante es no bloqueante y tiene default acotado. Riesgo **crítico**:
+dos `APPROVED` frescos y consecutivos sobre bytes idénticos.
