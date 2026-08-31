@@ -58,11 +58,15 @@ Dos `APPROVED` consecutivos sobre bytes idénticos.
 
 ### Inventario de las lecturas de `teamMembers` en `app/**`
 
-**Enumeración — DEBEN filtrar** (el ministerio indicado es el del filtro):
+**Enumeración — filtran en la SELECCIÓN** (el ministerio indicado es el del filtro).
+**La primera fila es la excepción y hay que leerla antes que el resto:** su consulta NO lleva el
+filtro de retiro, porque la lista que devuelve alimenta también la resolución. Implementar desde
+el encabezado sin leer la fila rompería la resolución de ids de pool — exactamente el fallo
+contra el que este spec dedica un párrafo.
 
 | Lectura | Ministerio | Por qué |
 |---|---|---|
-| `app/api/admin/members/route.ts:22` | worship | **NO se filtra en la consulta.** Devuelve a todos, con `retiredFrom`; el planner filtra en el punto de selección. Filtrar aquí rompería la resolución id→nombre de los pools (ver R10). |
+| `app/api/admin/members/route.ts:23` | worship | **NO se filtra por retiro en la consulta.** Devuelve lo mismo que hoy — ya acotado por `WORSHIP_MEMBER_GROQ_FILTER` con `$all`, así que "todos" sólo es cierto para un super-admin — más el campo `retiredFrom`. El planner filtra en el punto de selección. Filtrar el retiro aquí rompería la resolución id→nombre de los pools (ver R10). |
 | `app/(client)/kids/admin/page.tsx` | kids | Roster de kids |
 | `app/api/kids/members/route.ts` | kids | Roster de kids |
 | `app/api/kids/generate/route.ts` | kids | Candidatos del generador de kids |
@@ -100,10 +104,11 @@ aquí.
 | R3 | La **resolución** nunca filtra: `_id in $ids`, `_id == $id`, id→nombre de pool, ocupante histórico | Filtrarlas rompería el historial y los correos de gente ya asignada | Un retirado sigue resolviendo con nombre y foto en cada servicio pasado |
 | R10 | Un retirado deja de ser **asignable por el solver** aunque su id siga en un pool, y una regla que lo nombre no lo reinyecta | R2 por sí solo no lo logra: `memberIdToName` cae al id crudo y `resolvedNameOrRaw` reinyecta en `extraSupport`, produciendo un id crudo asignable en silencio | El solve request no contiene ni el id ni el nombre del retirado en ningún pool; y el planner **dice** cuántos retirados hay en los pools, en vez de callarlo |
 | R4 | `disabled` conserva significado, latencia y conjunto de lectores exactos | El usuario pidió explícitamente conservar el revocado rápido | Ninguna ruta nueva lee ni escribe `disabled` junto al retiro; `memberAccess.ts` sin cambios |
-| R5 | Retirar no modifica ningún documento de servicio | Decisión D2: no reescribir lo que el equipo ya vio | Retirar emite exactamente una escritura, sobre el doc del miembro |
+| R5 | Retirar no modifica ningún documento de **servicio** | Decisión D2: no reescribir lo que el equipo ya vio. R15 sí escribe el `solverConfig`, que no es un documento de servicio | Las mutaciones tocan el doc del miembro y, cuando R15 aplica, el `solverConfig`; jamás un role doc |
 | R6 | Un ocupante retirado en un servicio **futuro** se señala en el planner | Contraparte obligada de R5: no tocar exige avisar | La sede muestra el aviso; el servicio no cambia solo |
 | R7 | El kill switch es operable desde la app, en un control visiblemente distinto del retiro | El "rápido" pedido hoy pasa por Studio | Un super-admin revoca acceso sin salir de la app; los dos controles no se confunden |
-| R14 | El control de kill switch **rechaza** deshabilitar la sesión que actúa, y rechaza deshabilitar al último super-admin habilitado | `auth.ts:52` y `:79` rechazan el login de un deshabilitado, y el control nuevo vive tras una pestaña y una ruta super-admin-only. Sin R14, R7 introduce un bloqueo de la superficie de administración que sólo se deshace con credenciales de Sanity, fuera de la app. Hoy no existe porque `disabled` sólo se escribe desde Studio: quien lo apaga ya está del otro lado de la puerta | Los dos intentos se rechazan con mensaje propio, no con el genérico; test de cada uno |
+| R14 | El control de kill switch **rechaza** deshabilitar la sesión que actúa, y rechaza deshabilitar al último super-admin habilitado | `auth.ts:52` y `:79` rechazan el login de un deshabilitado, y el control nuevo vive tras una pestaña y una ruta super-admin-only. Sin R14, R7 introduce un bloqueo de la superficie de administración que sólo se deshace con credenciales de Sanity, fuera de la app. Hoy no existe porque `disabled` sólo se escribe desde Studio: quien lo apaga ya está del otro lado de la puerta | Los dos intentos se rechazan con mensaje propio, no con el genérico. **Y la comprobación no puede ser sólo previa:** dos super-admins deshabilitándose mutuamente en paralelo pasan cada uno la comprobación "¿queda otro habilitado?" y ambas escrituras aterrizan, dejando cero — el resultado exacto que R14 existe para impedir. Es el gemelo de R12 en P2 y necesita la misma clase de respuesta |
+| R15 | Retirar **resuelve las reglas del solver que nombran al retirado**, y no puede borrar en silencio una regla que involucra a alguien más | Sacar a un retirado de los pools mientras `dsl_rules` lo nombra revienta el solve del mes: `known` se arma sólo con los pools y `require_person` lanza `ValueError` (`gcf/owt_solver_v2.py:466-467`, `:279-280`). Y una regla **conjunta** protege también al otro: borrarla le cambia la programación a alguien que no se retiró | Los tres casos se comportan distinto: (a) restricción que nombra **sólo** al retirado → se borra con el retiro; (b) presencia con **3 o más** personas → se le quita al retirado y la regla sobrevive; (c) conflicto, o presencia con **exactamente dos** → la regla no puede sobrevivir: la UI lista qué reglas morirían **y a quién más afectan**, y el retiro no procede sin confirmación explícita |
 | R11 | El boundary de escritura rechaza un retiro incoherente | Mismo estándar que `validateMinistryWrite` | Retirar de un ministerio al que el miembro no pertenece se rechaza con mensaje, no se normaliza en silencio |
 
 ## Scope
@@ -156,6 +161,11 @@ aquí.
 ## Dependencies and constraints
 
 - Despliegue de esquema a Sanity (`sanity:deploy-schema`) antes de que la UI escriba el campo.
+- **R15 y R10 se ordenan entre sí, y el orden es parte del requisito:** primero se resuelven las
+  reglas, después se excluye del request. Invertirlo es exactamente el 422. Y como R15 escribe
+  el `solverConfig` mientras el retiro escribe el doc del miembro, el retiro deja de ser una
+  sola escritura: el plan de implementación debe decir qué pasa si una aterriza y la otra no, y
+  cuál va primero para que el estado parcial sea seguro.
 - R10 toca `buildSolveRequest`, que es el constructor del request del solver. No cambia el
   solver ni el contrato del endpoint: cambia qué nombres se le mandan. Un plan de
   implementación debe pinear que un pool sin retirados produce un request byte-idéntico al de
@@ -175,7 +185,8 @@ aquí.
 | Semántica del filtro | `!defined(retiredFrom) || !("<min>" in retiredFrom)` para las consultas que sí filtran; el predicado equivalente en TypeScript para el punto de uso | Arm de ausencia explícito, por la misma razón que `app/ministries.ts:64` lo escribe: es el contrato, no defensa. | Más verboso que confiar en la semántica de `in` sobre `undefined`. | P1 |
 | Actor del retiro | Super-admin-only | `PATCH` y `DELETE` de miembro ya lo son y la pestaña Miembros también. Cualquier otra cosa es ensanchar la ACL, que tiene su propio precio y nadie lo pidió. | Un super-admin en el camino de cada retiro, incluidos los de kids. | Frank |
 | Enforcement de R10 | Test unitario fijo, **no** un guard de escaneo — y se decide, no se omite | El precedente que este spec invoca (`draftGatingCoverage.test.ts`) es un escaneo de grupos GROQ; R10 vive en un punto de uso de TypeScript en `plannerModel.ts`, estructuralmente invisible a esa forma. Escribirlo aquí evita que quede "N call sites correctos, que es un estado, no un mecanismo" por omisión en vez de por decisión. | R10 queda protegido por tests de un solo sitio; si `buildSolveRequest` se reescribe o se duplica, nada lo fuerza. Aceptado: hay UN constructor de request y el test vive junto a él. | P1 |
-| Ids de pool no resolubles | Se descartan del solve request **y se reportan** | Descartar en silencio repetiría el defecto que `unresolvedRuleNames` existe para evitar. Reportar sin descartar deja al solver asignando un id crudo. | Un aviso más en el planner. | P1 |
+| Ids de pool de un retirado | **Se conservan almacenados** y se excluyen al construir el solve request | Borrarlos del `solverConfig` haría que des-retirar no restaure la pertenencia al pool: el retiro dejaría de ser reversible sin pérdida, que es un invariante de este spec. Excluirlos en el request logra lo mismo sin escribir nada. Es seguro **sólo porque R15 ya eliminó las reglas que lo nombraban**: sin eso, un pool sin él más un `dsl_rules` con él es el 422. | El `solverConfig` conserva ids de gente retirada; es estado recuperable y el planner lo reporta. | P1 |
+| Reglas que nombran a un retirado | Se borran al retirar; **con confirmación** si involucran a alguien más | Elección de Frank. No es normalización silenciosa — lo que este spec prohíbe — porque el borrado es explícito, se enseña antes, y en el caso conjunto se confirma nombrando a quién más afecta. | **El borrado de reglas NO se deshace al des-retirar.** El retiro es reversible; sus reglas no vuelven. La UI debe decirlo antes de confirmar, no después. | Frank |
 | Escritura incoherente | Se rechaza, no se normaliza | Normalizar en silencio es cómo `"Vale Sosa"` sobrevivió invisible. | Un error más que manejar en la UI. | P1 |
 | `disabled` intacto | Sí | Petición explícita del usuario. | Dos controles en pantalla en vez de uno. Es el punto. | Frank |
 
@@ -184,7 +195,7 @@ aquí.
 | Assumption | Impact if false | Validation | Failure response |
 |---|---|---|---|
 | El inventario de 23 lecturas está completo y bien clasificado | Filtrar de más rompe historial; de menos deja el gap | Reejecutar el grep como primer paso de implementación; el guard lo vuelve continuo | Reclasificar y ajustar el guard antes de tocar código |
-| Las tres exenciones son correctas | Un retirado recibiría alertas de operador, o un evento de acceso quedaría oculto | Revisión adversarial de este spec | Convertir la exención en filtro; el guard las lista explícitamente |
+| Las cuatro exenciones son correctas — las tres del inventario más `GET /api/admin/members`, que no filtra en la consulta porque su lista sirve también a la resolución | Un retirado recibiría alertas de operador, o un evento de acceso quedaría oculto | Revisión adversarial de este spec | Convertir la exención en filtro; el guard las lista explícitamente |
 | Nadie depende hoy de que un deshabilitado siga en los pools | El filtro cambiaría comportamiento esperado | Ninguna: `disabled` no se filtra hoy, así que este spec no altera ese caso | — |
 
 ## Open questions
@@ -203,13 +214,14 @@ aquí.
 | R2 | Los puntos de selección excluyen a los retirados | Guard de cobertura sobre `app/**`, invertido; falla al añadir una selección sin filtro |
 | R2b | Las cuatro exenciones están declaradas y una quinta falla el guard | Test del guard con una enumeración exenta no declarada |
 | R3 | Un retirado resuelve con nombre en un servicio pasado, y su id de pool resuelve a su nombre | Test de integración sobre `serviceReadQueries`; test de `memberIdToName` con un miembro retirado presente en la lista |
-| R10 | El solve request no contiene el id crudo ni el nombre del retirado en ningún pool, y el planner reporta cuántos hay | Test de `buildSolveRequest` con un retirado (a) en un pool y (b) nombrado por una regla — hoy ese caso produce `gJgJ2wc44ylNYNyNTYYu5k` como persona y la reinyección en `extraSupport` |
+| R10 | El solve request no contiene el id crudo ni el nombre del retirado en ningún pool. **Alcanzable sólo con R15 cumplido**: sin borrar antes las reglas que lo nombran, este criterio produce el `ValueError` del solver, no un mes bien resuelto | Test de `buildSolveRequest` con un retirado en un pool y sin reglas que lo nombren; más un test de que "retirado con regla viva" es inalcanzable porque R15 lo impide antes |
 | R4 | `memberAccess.ts` sin cambios; ninguna ruta nueva toca `disabled` junto al retiro | Diff vacío en ese archivo + escaneo del guard |
-| R5 | Retirar emite una sola escritura, sobre el doc del miembro | Test que cuenta las mutaciones del handler |
+| R5 | Ningún documento de **servicio** cambia al retirar | Test de que las mutaciones del handler tocan sólo el doc del miembro y, cuando R15 aplica, el `solverConfig` — jamás un role doc |
 | R6 | El aviso aparece; el servicio no cambia | Test de componente del planner con un ocupante retirado |
 | R7 | Un super-admin revoca acceso desde la app | Test de componente + verificación visual |
 | R11 | El retiro incoherente se rechaza con mensaje | Test unitario del validador, junto a los de `validateMinistryWrite` |
-| R14 | Auto-deshabilitarse y deshabilitar al último super-admin habilitado se rechazan | Dos tests de la ruta: sesión actuante como objetivo, y objetivo siendo el único super-admin con `disabled != true` |
+| R15 | Los tres casos se comportan distinto, y el (c) no procede sin confirmación | Un test por caso; y un test de que el retiro con regla conjunta **sin** confirmación no escribe nada, ni al miembro ni al `solverConfig` |
+| R14 | Auto-deshabilitarse y deshabilitar al último super-admin habilitado se rechazan, y dos deshabilitaciones simultáneas no pueden dejar cero | Tres tests de la ruta: sesión actuante como objetivo; objetivo siendo el único super-admin con `disabled != true`; y dos escrituras concurrentes que individualmente pasan la comprobación |
 
 ## Terminal state
 
