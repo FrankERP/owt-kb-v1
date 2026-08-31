@@ -2,7 +2,7 @@
 
 ## Status
 
-`DRAFT` — hijo 3 de 3 de `2026-08-30-member-retirement-roadmap.md`.
+`DRAFT` — hijo 2 de 3 de `2026-08-30-member-retirement-roadmap.md`.
 **Riesgo CRÍTICO.** Escribe un documento compartido de producción con serialización de array
 completo (`solverConfig`), borra reglas de forma irreversible, y cambia el request que alimenta
 al solver. Dos `APPROVED` consecutivos sobre bytes idénticos.

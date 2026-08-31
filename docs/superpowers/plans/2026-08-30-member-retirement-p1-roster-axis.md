@@ -2,7 +2,7 @@
 
 ## Status
 
-`DRAFT` — hijo 1 de 2 de `2026-08-30-member-retirement-roadmap.md`.
+`DRAFT` — hijo 1 de 3 de `2026-08-30-member-retirement-roadmap.md`.
 **Riesgo CRÍTICO.** R7 crea una ruta de escritura nueva sobre `disabled`, el
 campo que `isMemberActive` lee para permitir o negar **toda** petición. La escalera nombra
 "auth/security/ACL boundary" como crítico y una ruta que escribe el gate de acceso está dentro,
@@ -99,13 +99,13 @@ Los ids son únicos en toda la familia; `R8`, `R9`, `R12` y `R13` pertenecen a P
 |---|---|---|---|
 | R1 | El retiro se almacena por ministerio, y la **ausencia del campo significa que sirve** | Decisión D1 del roadmap; contrato libre de migración que este repo ya usa en `published` y `ministries` | Los 57 documentos existentes, sin tocarlos, se leen como "sirve en todos sus ministerios" |
 | R2 | La **selección** — quién puede ser elegido o enumerado — excluye a los retirados del ministerio correspondiente | Es el gap que hace que `disabled` no sirva como retiro | Un guard automatizado falla si una selección nueva omite el filtro |
-| R2b | Las enumeraciones **exentas** llevan razón escrita y el guard las conoce | Sin esto el guard exigiría filtrar `outboxLiveness`, silenciando la alarma de outbox atorado justo para un super-admin retirado | Las exenciones declaradas son CINCO — las tres del inventario más `GET /api/admin/members`, que deliberadamente no filtra en la consulta porque su lista sirve también a la resolución — y el guard falla si aparece una sexta sin declarar |
+| R2b | Las enumeraciones **exentas** llevan razón escrita y el guard las conoce | Sin esto el guard exigiría filtrar `outboxLiveness`, silenciando la alarma de outbox atorado justo para un super-admin retirado | Las exenciones declaradas son CINCO — las cuatro de la tabla de exentas más `GET /api/admin/members`, que deliberadamente no filtra en la consulta porque su lista sirve también a la resolución — y el guard falla si aparece una sexta sin declarar |
 | R3 | La **resolución** nunca filtra: `_id in $ids`, `_id == $id`, id→nombre de pool, ocupante histórico | Filtrarlas rompería el historial y los correos de gente ya asignada | Un retirado sigue resolviendo con nombre y foto en cada servicio pasado |
 | R4 | `disabled` conserva significado, latencia y conjunto de lectores exactos | El usuario pidió explícitamente conservar el revocado rápido | Ninguna ruta nueva lee ni escribe `disabled` junto al retiro; `memberAccess.ts` sin cambios |
 | R5 | Retirar no modifica ningún documento de **servicio** | Decisión D2: no reescribir lo que el equipo ya vio | En P1, retirar toca únicamente el doc del miembro; jamás un role doc |
 | R6 | Un ocupante retirado en un servicio **futuro** se señala en el planner | Contraparte obligada de R5: no tocar exige avisar | La sede muestra el aviso; el servicio no cambia solo |
 | R7 | El kill switch es operable desde la app, en un control visiblemente distinto del retiro | El "rápido" pedido hoy pasa por Studio | Un super-admin revoca acceso sin salir de la app; los dos controles no se confunden |
-| R14 | El control de kill switch **rechaza** deshabilitar la sesión que actúa, y rechaza deshabilitar al último super-admin habilitado | `auth.ts:52` y `:79` rechazan el login de un deshabilitado, y el control nuevo vive tras una pestaña y una ruta super-admin-only. Sin R14, R7 introduce un bloqueo de la superficie de administración que sólo se deshace con credenciales de Sanity, fuera de la app. Hoy no existe porque `disabled` sólo se escribe desde Studio: quien lo apaga ya está del otro lado de la puerta | Los dos intentos se rechazan con mensaje propio, no con el genérico. **Y la comprobación no puede ser sólo previa:** dos super-admins deshabilitándose mutuamente en paralelo pasan cada uno la comprobación "¿queda otro habilitado?" y ambas escrituras aterrizan, dejando cero — el resultado exacto que R14 existe para impedir. Es el gemelo de R12 en P2 y necesita la misma clase de respuesta |
+| R14 | El control de kill switch **rechaza** deshabilitar la sesión que actúa, y rechaza deshabilitar al último super-admin habilitado | `auth.ts:52` y `:79` rechazan el login de un deshabilitado, y el control nuevo vive tras una pestaña y una ruta super-admin-only. Sin R14, R7 introduce un bloqueo de la superficie de administración que sólo se deshace con credenciales de Sanity, fuera de la app. Hoy no existe porque `disabled` sólo se escribe desde Studio: quien lo apaga ya está del otro lado de la puerta | Los dos intentos se rechazan con mensaje propio, no con el genérico. **Y la comprobación no puede ser sólo previa:** dos super-admins deshabilitándose mutuamente en paralelo pasan cada uno la comprobación "¿queda otro habilitado?" y ambas escrituras aterrizan, dejando cero — el resultado exacto que R14 existe para impedir. Es el gemelo de R12 en P2 en su FORMA, pero no en su remedio: R12 puede delegar en la integridad referencial de Sanity como autoridad final, y aquí no hay análogo a nivel de base de datos para "el último super-admin habilitado". Necesita mecanismo propio — escritura guardada sobre un `_rev` observado, o re-verificación dentro de la transacción |
 | R16 | Mientras P3 no esté entregado, ni la UI de retiro ni el planner pueden dar a entender que retirar saca a alguien del solver — y el planner señala a los retirados que siguen en los pools | P1 es desplegable sin P3 y es útil así, pero **incompleto de una forma que un administrador no puede ver**: el retirado desaparece de la selección y sigue siendo asignable por el solver. Sin R16 el estado intermedio no es seguro sino engañoso, que es peor: alguien retira, lo ve desaparecer de las listas, y lo encuentra asignado el mes siguiente | La copia de la UI de retiro dice qué hace y qué no; el planner lista a los retirados presentes en los pools. Un test de que el texto cambia —o el aviso desaparece— cuando P3 entra |
 | R11 | El boundary de escritura rechaza un retiro incoherente | Mismo estándar que `validateMinistryWrite` | Retirar de un ministerio al que el miembro no pertenece se rechaza con mensaje, no se normaliza en silencio |
 
@@ -146,12 +146,19 @@ Los ids son únicos en toda la familia; `R8`, `R9`, `R12` y `R13` pertenecen a P
 ## Behavior and invariants
 
 - **Required behavior:** retirar de un ministerio saca al miembro de la **selección** de ese
-  ministerio y de ninguna otra, y lo saca del solve request aunque su id siga almacenado en un
-  pool. Reversible sin pérdida.
+  ministerio y de ninguna otra. Reversible sin pérdida.
+- **P1 NO toca el solve request. Es una prohibición, no una omisión.** Filtrar al retirado de
+  los pools del request aquí —sin R10/R15/R17, que son de P3— rompe el mes: su id sigue en
+  `config.support`, `availabilityRules` (`plannerModel.ts:666-678`) recorre esos ids crudos, lo
+  encuentra en la lista de miembros y emite `<nombre> !in week N Sun.*` en `dsl_rules`, donde
+  `extraSupport` no lo cubre (`:653-657` sólo mira restrictions/conflicts/presence) y
+  `resolve_person` lanza (`gcf/owt_solver_v2.py:287`, desde `:363`). Con P1 solo el retirado
+  **sigue siendo asignable por el solver**, y eso es correcto para este hijo: lo que P1 debe
+  hacer al respecto es decirlo (R16), no arreglarlo.
 - **Dónde vive el filtro:** en el punto de **uso**, no en la consulta. `GET /api/admin/members`
   sigue devolviendo a todos, ahora con `retiredFrom`; el planner filtra al ofrecer candidatos,
-  al poblar el dropdown de Persona y al construir los pools del solve request, y **no** filtra
-  al resolver un id de pool o un ocupante histórico a un nombre. Poner el filtro en la consulta
+  y al poblar el dropdown de Persona — **nunca** al construir el solve request, que es de P3 — y
+  **no** filtra al resolver un id de pool o un ocupante histórico a un nombre. Poner el filtro en la consulta
   es la variante que parece más limpia y es la que rompe: deja al planner sin la mitad de los
   datos que necesita para resolver.
 - **Preserved behavior:** `disabled` (kill switch, TTL 30 s). El contrato `ministries` ausente

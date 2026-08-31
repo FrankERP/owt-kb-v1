@@ -24,8 +24,9 @@
   en el hijo que los posee; esta sección da la forma del problema y la tabla de cobertura da el
   mapa. En una frase: un eje nuevo de *roster*, por ministerio, aplicado en el punto de
   **selección** y jamás en el de **resolución**, que además alcanza las **referencias de roster
-  ya almacenadas**. Lo normativo es P1 § Requirements R2, R2b, R3 y R10; lo que sigue es la
-  evidencia de por qué, no una segunda redacción de ellos.
+  ya almacenadas**. Lo normativo es **P1 § Requirements R2, R2b y R3** para el corte selección/resolución, y
+  **P3 § Requirements R10** para la ausencia del solve request; lo que sigue es la evidencia de
+  por qué, no una segunda redacción de ellos.
 
   **La distinción no vive en la consulta GROQ, vive en el punto de uso.** La primera versión de
   este roadmap decía "filtrar las lecturas de enumeración", y eso es insuficiente y además
@@ -67,10 +68,10 @@
     indefinido, sin fechas y administrativo.
   - Cualquier cambio al solver (`gcf/owt_solver_v2.py`).
   - Retirar parejas de kids (`kidsPair.active` ya existe y no se toca).
-- **Integration acceptance:** con P1 y P2 entregados, un super-admin puede (a) retirar a un
+- **Integration acceptance:** con P1, P3 y P2 entregados, un super-admin puede (a) retirar a un
   miembro de worship desde la app y verlo desaparecer del dropdown de reglas, del ranking de
   candidatos y de las audiencias de correo de worship, **y —una vez entregado P3— dejar de ser asignable por el solver**,
-  con las reglas que lo nombraban ya resueltas según los tres casos que **P1 § R15** define
+  con las reglas que lo nombraban ya resueltas según los tres casos que **P3 § R15** define
   como normativos — esta frase no los reenumera a propósito: una versión anterior los resumió
   como un binario "borradas o confirmadas", que no tiene lugar para el caso en que la regla se
   **edita y sobrevive**, y quedó contradiciendo al hijo. Conservándolo en kids si aplica; (b) verlo seguir
@@ -143,7 +144,7 @@ tiene que decirlo. Un estado intermedio que engaña es peor que uno que falta.
 
 | ID | Artifact type | Outcome and acceptance contract | Prerequisites | Outputs | Safe ending state | Rollback or recovery | Review order |
 |---|---|---|---|---|---|---|---|
-| P1 | Spec | Eje de retiro por ministerio: esquema, filtro en el punto de selección, guard de cobertura, resolución de reglas al retirar, UI con los dos ejes separados, aviso en el planner. Aceptado cuando un retirado sale de la selección de ese ministerio, sigue resolviendo en el historial, `disabled` conserva su comportamiento medido, y la UI **no afirma** que retirar lo saque del solver — porque sin P3 no lo saca. | Ninguno | Campo persistido; predicado de filtro compartido; test de cobertura; UI con los dos ejes; copia y aviso de R16 | Desplegable solo. Sin ningún miembro retirado, el sistema se comporta idéntico a hoy. | Totalmente reversible: el campo es aditivo, revertir el código deja documentos con un campo que nadie lee, y no se pierde nada. **La parte irreversible se fue a P3**, que es donde vive el borrado de reglas. | 1 |
+| P1 | Spec | Eje de retiro por ministerio: esquema, filtro en el punto de selección, guard de cobertura, UI con los dos ejes separados, aviso en el planner y la copia honesta de R16. Aceptado cuando un retirado sale de la selección de ese ministerio, sigue resolviendo en el historial, `disabled` conserva su comportamiento medido, y la UI **no afirma** que retirar lo saque del solver — porque sin P3 no lo saca. | Ninguno | Campo persistido; predicado de filtro compartido; test de cobertura; UI con los dos ejes; copia y aviso de R16 | Desplegable solo. Sin ningún miembro retirado, el sistema se comporta idéntico a hoy. | Totalmente reversible: el campo es aditivo, revertir el código deja documentos con un campo que nadie lee, y no se pierde nada. **La parte irreversible se fue a P3**, que es donde vive el borrado de reglas. | 1 |
 | P3 | Spec | Sacar al retirado del solve request: ausencia total del request, resolución de reglas con confirmación, guarda de revisión sobre el `solverConfig`. Aceptado cuando el nombre y el id de un retirado no aparecen en ninguna parte del request, un mes sin retirados produce un request byte-idéntico al de hoy, y ninguna regla que nombre a otra persona se tocó sin que el operador la viera. | P1 | Exclusión en `buildSolveRequest`; borrado de reglas revision-guarded; aviso de retirados en pools | Desplegable solo una vez P1 está. | **Borra reglas del `solverConfig` de forma irreversible.** Revertir el código no las devuelve; la recuperación es un export previo del dataset, o ninguna, y el plan de implementación debe elegir cuál. | 2 |
 | P2 | Spec | Borrado duro que falla legible y limpia lo que Sanity no protege. Aceptado cuando borrar a alguien con historial explica por qué y ofrece retirar, y borrar a alguien sin historial no deja ids colgando en `solverConfig`. | P1 | `DELETE` endurecido; limpieza de pools | Desplegable solo una vez P1 está. | Writer destructivo: el plan de implementación debe definir su propia recuperación. | 3 |
 
@@ -184,7 +185,6 @@ documento fija.
 | R5 | Servicios publicados no se tocan | P1 § Requirements | P1 | — | P1 |
 | R6 | Aviso de ocupante retirado | P1 § Requirements | P1 | — | P1 |
 | R7 | Kill switch en la app | P1 § Requirements | P1 | — | P1 |
-| R10 | Referencias de roster almacenadas | P1 § Requirements | P1 | — | P1 |
 | R11 | Boundary de escritura del retiro | P1 § Requirements | P1 | — | P1 |
 | R14 | Anti-bloqueo del kill switch | P1 § Requirements | P1 | — | P1 |
 | R16 | Honestidad del estado intermedio | P1 § Requirements | P1 | — | P1 |
@@ -198,14 +198,15 @@ documento fija.
 | R13 | ACL del borrado preservada | P2 § Requirements | P2 | — | P2 |
 
 Ningún requisito queda sin dueño y ninguno tiene dos. Las relaciones que un lector podría
-confundir se declaran donde viven, no aquí: **R9 no es R10** (P2 § Requirements lo explica —
-gobiernan los mismos tres arrays de `solverConfig` con intención opuesta), y **R14 acota a R7**.
+confundir se declaran donde viven, no aquí: **R9 (P2) no es R10 (P3)** — gobiernan los mismos tres arrays de
+`solverConfig` con intención opuesta: R9 borra el id porque el documento ya no existe, R10 lo
+conserva porque el retiro es reversible, y **R14 acota a R7**.
 
 ## Sequence and safe states
 
 | Transition | Entry criteria | Allowed release state | Exit criteria | Recovery if interrupted |
 |---|---|---|---|---|
-| Start → P1 | Spec P1 aceptado | Desplegable a producción | Un miembro retirado en un ministerio sale de su selección, sigue en el historial, y su nombre no aparece en el solve request; `disabled` sin cambio observable | Revertir el código deja el campo huérfano y sin lectores. **Las reglas que R15 ya haya borrado NO vuelven** — ver la columna de rollback de P1. |
+| Start → P1 | Spec P1 aceptado | Desplegable a producción | Un miembro retirado sale de la selección de ese ministerio, sigue resolviendo en el historial, `disabled` sin cambio observable, y la UI **declara** que el retiro todavía no lo saca del solver (R16) | Revertir el código deja el campo huérfano y sin lectores. Nada se pierde: el borrado irreversible de reglas es de P3, no de aquí. |
 | P1 → P3 | P1 en producción y verificado | Desplegable a producción | El nombre y el id de un retirado no aparecen en el solve request; un mes sin retirados produce un request byte-idéntico | Escritura irreversible de reglas: lo define el plan de implementación de P3. Un `solverConfig` escrito sin el `retiredFrom` es recuperable; el inverso deja el estado de P1-sin-P3, que R16 hace seguro. |
 | P3 → P2 | P3 en producción y verificado | Desplegable a producción | Borrado con historial falla legible; sin historial, limpio | Writer destructivo: lo define el plan de implementación de P2. |
 
@@ -216,7 +217,7 @@ gobiernan los mismos tres arrays de `solverConfig` con intención opuesta), y **
 | D1 Alcance del retiro | **Por ministerio** | Elección del usuario. Cubre "salió de alabanza pero sigue en kids" sin vaciar `ministries`, que el boundary de escritura rechaza. | **Recomendé global y el usuario eligió por ministerio.** El costo es real y queda registrado: un tercer eje que cruzar con `ministries` y `disabled`, el filtro y su guard duplicados en las dos mitades, y más superficie de UI. Se acepta a cambio de no forzar el caso mixto a través de `ministries`. | Frank |
 | D2 Asignaciones futuras al retirar | No se tocan; se señalan | El retiro es un hecho del roster, no una edición del calendario. Vaciar sedes reescribiría servicios que el equipo ya vio y podría disparar correos de cambio de rol. | Queda trabajo manual por servicio. Se mitiga con R6. | Frank |
 | D8 Audiencias seleccionadas por ROL | Exentas del filtro de retiro, todas, sin excepción | Resuelve con UNA regla dos casos que tenían defaults opuestos: `outboxLiveness` (alarma de outbox atorado a super-admins) estaba exento por ser "audiencia de operador", y `ADMIN_RECIPIENTS_QUERY` (propuestas a managers) iba a filtrar — misma forma exacta, `role in [...]`, sin filtro de ministerio. La regla es la que ya rige todo este spec: **el retiro habla de SERVIR, no de gestionar.** Un admin que dejó de servir sigue gestionando, y si además dejó de gestionar, lo que cambia es su rol, no su retiro. | Un admin retirado que además dejó de gestionar sigue recibiendo correos de propuestas hasta que le cambien el rol. Es un paso más, en el eje correcto. | P1 |
-| D7 Reglas que nombran a un retirado | Se **borran** al retirar; con **confirmación** cuando la regla involucra a alguien más | Elección de Frank, tras descubrirse que sacar a un retirado de los pools mientras `dsl_rules` lo nombra lanza un `ValueError` en el solver y rompe el mes entero. Borrar la regla individual es limpio; tocar una **conjunta** le cambia la programación a alguien que no se retiró, y por eso se enseña antes en vez de hacerse solo. **El corte es "¿nombra a alguien más?", no "¿la regla muere?"**: una presencia de tres personas se edita y sobrevive, y aun así aprieta la restricción sobre los que quedan, así que también se confirma. **Los casos exactos son normativos en P1 § R15 y no se reenumeran aquí** — son tres, no dos, porque una regla de presencia con tres o más personas se edita y sobrevive en vez de morir. Rechaza la alternativa de omitir esas reglas del request, que sería normalización silenciosa — la clase de cosa por la que `"Vale Sosa"` sobrevivió invisible. | **El borrado de reglas no se deshace al des-retirar**: el retiro es reversible, sus reglas no. Asimetría deliberada, que la UI debe declarar antes de confirmar. | Frank |
+| D7 Reglas que nombran a un retirado | Se **borran** al retirar; con **confirmación** cuando la regla involucra a alguien más | Elección de Frank, tras descubrirse que sacar a un retirado de los pools mientras `dsl_rules` lo nombra lanza un `ValueError` en el solver y rompe el mes entero. Borrar la regla individual es limpio; tocar una **conjunta** le cambia la programación a alguien que no se retiró, y por eso se enseña antes en vez de hacerse solo. **El corte es "¿nombra a alguien más?", no "¿la regla muere?"**: una presencia de tres personas se edita y sobrevive, y aun así aprieta la restricción sobre los que quedan, así que también se confirma. **Los casos exactos son normativos en P3 § R15 y no se reenumeran aquí** — son tres, no dos, porque una regla de presencia con tres o más personas se edita y sobrevive en vez de morir. Rechaza la alternativa de omitir esas reglas del request, que sería normalización silenciosa — la clase de cosa por la que `"Vale Sosa"` sobrevivió invisible. | **El borrado de reglas no se deshace al des-retirar**: el retiro es reversible, sus reglas no. Asimetría deliberada, que la UI debe declarar antes de confirmar. | Frank |
 | D6 Actor del retiro | Super-admin-only | La primera versión afirmaba que `PATCH` de miembro no era super-admin-only y derivaba de ahí un default de `admin`. **Es falso**: `route.ts:19-22` lo rechaza, el propio archivo lo comenta, y la pestaña Miembros es `roles: ["super-admin"]`. Alinear con la realidad evita un ensanchamiento de ACL que nadie pidió ni valoró. | Un super-admin en el camino de cada retiro. Se abre después si duele, con su propio tier. | Frank |
 | D3 Borrado duro | Se conserva, endurecido | Sigue siendo la salida correcta para un documento creado por error que nunca sirvió. | Mantiene una ruta destructiva en la app. Se acota: super-admin-only, falla legible. | Frank |
 | D4 Reglas del solver por id | **Fuera de alcance, pero este spec fija su diseño** | Si nadie se borra nunca, el argumento de integridad referencial a favor de `reference` se cae: un id en string plano basta y queda simétrico con los pools, que ya son strings. | Un miembro borrado por Studio seguiría sin protección. Aceptable: P2 acota el borrado y el historial ya lo bloquea. | Frank |
