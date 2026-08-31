@@ -69,8 +69,9 @@
   - Retirar parejas de kids (`kidsPair.active` ya existe y no se toca).
 - **Integration acceptance:** con P1 y P2 entregados, un super-admin puede (a) retirar a un
   miembro de worship desde la app y verlo desaparecer del dropdown de reglas, del ranking de
-  candidatos y de las audiencias de correo de worship, **y dejar de ser asignable por el solver
-  aunque su id siga en un pool**, conservándolo en kids si aplica; (b) verlo seguir
+  candidatos y de las audiencias de correo de worship, **y dejar de ser asignable por el solver**,
+  con las reglas que lo nombraban ya resueltas — borradas si eran suyas, confirmadas si
+  involucraban a alguien más — conservándolo en kids si aplica; (b) verlo seguir
   apareciendo, con su nombre, en todo servicio pasado donde sirvió; (c) revocarle el acceso
   desde la misma pantalla con un control visiblemente distinto; y (d) recibir un error legible
   —con la opción de retirar— al intentar borrar a alguien con historial.
@@ -83,13 +84,16 @@
 | `isMemberActive` = doc existe && `disabled !== true`, caché TTL 30 s | `app/utils/memberAccess.ts:56,75` | El "rápido" que pidió el usuario ya está medido: 30 s. El retiro no debe entrar a esta ruta. |
 | De 23 lecturas de `teamMembers` en `app/**`, **1** menciona `disabled` — la de auth | `grep` sobre `app/**` | `disabled` hoy NO saca a nadie de ningún roster. Es la razón por la que "deshabilitar en vez de borrar" no funciona todavía. |
 | Las lecturas se parten en enumeración (`*[_type == "teamMembers" && <filtro>]`) y resolución (`_id in $ids` / `_id == $id`) | Inventario en P1 | Base de la regla, **pero no la regla**: el corte se aplica en el punto de USO, no en la consulta — ver Global requirements. Una misma lista puede servir a los dos roles, y `GET /api/admin/members` es justamente ese caso. |
-| Las cinco sedes de role docs son `reference` a `teamMembers`, sin `weak: true` | `sanity/schemas/sunRole.ts:51,65,93,118,129` | Sanity ya bloquea borrar a quien haya servido. El borrado duro no es una vía de salida real hoy. |
+| Las cinco sedes de role docs son `reference` a `teamMembers`, sin `weak: true` | `sanity/schemas/sunRole.ts:50,65,93,117,128` | Sanity ya bloquea borrar a quien haya servido. El borrado duro no es una vía de salida real hoy. |
 | `DELETE` hace `await writeClient.delete(id)` sin try/catch | `app/api/admin/members/[id]/route.ts:119` | Un borrado rechazado por integridad sale como 500 y la UI dice sólo "Error al eliminar". |
 | Los pools del `solverConfig` (`sundayLeads`/`saturdayLeads`/`support`) guardan ids como strings planos | consulta a producción, 2026-08-30 | Sin integridad referencial: un borrado deja ids colgando ahí. Bug latente preexistente, en P2. |
 | `kidsPair.active`: "Las parejas retiradas conservan su historial pero salen de todas las rotaciones" | `sanity/schemas/kidsPair.ts:43-48` | Precedente del patrón EN ESTE REPO, con la semántica exacta que se busca. |
 | `validateMinistryWrite` rechaza `ministries` vacío | `app/ministries.ts:107` | El campo nuevo debe poder expresar "retirado de todo" sin recurrir a vaciar `ministries`. |
-| `buildSolveRequest` mapea ids de pool con `memberIdToName`, que cae al **id crudo** si el miembro no está en la lista; `resolvedNameOrRaw` reinyecta a todo nombrado-por-regla ausente de los pools en `extraSupport` | `app/components/admin/plannerModel.ts:554-557, 566-568, 641-645, 648-661` | Filtrar la lista de miembros NO saca a un retirado del solve request: lo vuelve un id crudo asignable, o lo reinyecta bajo su nombre. Origen de R10. |
-| `unresolvedRuleNames` sólo inspecciona nombres de reglas, nunca ids de pool | `app/components/admin/ruleEnforcement.ts:225-249` | El fallo anterior sería silencioso: ningún reporte existente lo vería. |
+| `buildSolveRequest` mapea ids de pool con `memberIdToName`, que cae al **id crudo** si el miembro no está en la lista; `resolvedNameOrRaw` reinyecta a todo nombrado-por-regla ausente de los pools en `extraSupport` | `app/components/admin/plannerModel.ts:554-557, 566-568, 641-645, 648-661` | Filtrar la lista de miembros NO saca a un retirado del solve request: su id se vuelve una persona asignable. Origen de R10. **Cuidado: la reinyección en `extraSupport` NO es un defecto, es un guard** — ver la fila siguiente. |
+| `unresolvedRuleNames` sólo inspecciona nombres de reglas, nunca ids de pool | `app/components/admin/ruleEnforcement.ts:225-249` | El fallo del id crudo sería silencioso: ningún reporte existente lo vería. |
+| **El solver RECHAZA cualquier persona nombrada en `dsl_rules` que no esté en los pools**: `known = set(all_people)` (los tres pools) y `require_person` lanza `ValueError` | `gcf/owt_solver_v2.py:466-467`, `:279-280` | La reinyección en `extraSupport` (`plannerModel.ts:653-662`) es el **guard** que evita ese 422, y su comentario lo dice en `:648-651`. Una versión anterior de este roadmap la citó como defecto: era una lectura equivocada del código, y R10 derivado de ella exigía un estado que el solver rechaza. |
+| `dsl_rules` se emite sin filtro de pertenencia a pool: `allRulesToDs` no filtra nada y su salida entra directo al request | `app/components/admin/plannerModel.ts:585-597`, `:686` | Sacar a un retirado de todos los pools mientras una regla lo nombra **rompe el solve del mes entero**, no sólo su asignación. |
+| Ya existe precedente de reglas DSL **autogeneradas** para acotar a un miembro que sí está en un pool: `availabilityRules` emite `<nombre> !in week N Sun.*` desde `unavailableDates` | `app/components/admin/plannerModel.ts:663-677` | Es el mecanismo que hace viable la opción (v) de la decisión pendiente D7. |
 | `PATCH /api/admin/members/[id]` es **super-admin-only**, igual que `DELETE`; la pestaña Miembros es `roles: ["super-admin"]` | `app/api/admin/members/[id]/route.ts:19-22`; `app/components/admin/AdminPanel.tsx:567` | Corrige una afirmación falsa de la primera versión. Retirar con rol `admin` no sería alineación sino ensanchamiento de ACL. |
 | `ADMIN_RECIPIENTS_QUERY` no tiene filtro de ministerio alguno | `app/utils/proposalNotifyQueries.ts:34` | Componerle un filtro de retiro *de worship* exige decidir antes qué significa para un admin sólo-kids. |
 | `draftGatingCoverage.test.ts` es un escaneo invertido de `app/**` que exime por excepción | `app/utils/__tests__/draftGatingCoverage.test.ts` | Mecanismo ya probado para invariantes de filtro. El retiro necesita el suyo, o repite la historia: "una frase en CLAUDE.md y N call sites correctos, que es un estado, no un mecanismo". |
@@ -145,7 +149,13 @@ requisito aquí, reintroduces la clase entera.**
 
 Los identificadores son únicos en toda la familia: no hay dos `R10`.
 
-| ID | Nombre (etiqueta estable) | Texto normativo vive en | Plan dueño | Planes dependientes | Dueño de verificación |
+**Dirección de la columna "Planes que dependen":** lista los planes que **dependen de este
+requisito**, nunca los planes de los que el requisito depende. La dirección se escribe porque
+una versión anterior la usó con los dos sentidos en dos filas distintas, y la fila equivocada
+implicaba retener el despliegue de P1 hasta P2 — al revés de la secuencia que este mismo
+documento fija.
+
+| ID | Nombre (etiqueta estable) | Texto normativo vive en | Plan dueño | Planes que dependen | Dueño de verificación |
 |---|---|---|---|---|---|
 | R1 | Almacenamiento del retiro | P1 § Requirements | P1 | — | P1 |
 | R2 | Filtro de selección | P1 § Requirements | P1 | — | P1 |
@@ -158,7 +168,8 @@ Los identificadores son únicos en toda la familia: no hay dos `R10`.
 | R10 | Referencias de roster almacenadas | P1 § Requirements | P1 | — | P1 |
 | R11 | Boundary de escritura del retiro | P1 § Requirements | P1 | — | P1 |
 | R14 | Anti-bloqueo del kill switch | P1 § Requirements | P1 | — | P1 |
-| R8 | Borrado que falla legible | P2 § Requirements | P2 | P1 | P2 |
+| R15 | Resolución de reglas al retirar | P1 § Requirements | P1 | — | P1 |
+| R8 | Borrado que falla legible | P2 § Requirements | P2 | — | P2 |
 | R9 | Borrado sin ids colgantes | P2 § Requirements | P2 | — | P2 |
 | R12 | Borrado sin divergencia (concurrencia) | P2 § Requirements | P2 | — | P2 |
 | R13 | ACL del borrado preservada | P2 § Requirements | P2 | — | P2 |
@@ -180,6 +191,7 @@ gobiernan los mismos tres arrays de `solverConfig` con intención opuesta), y **
 |---|---|---|---|---|
 | D1 Alcance del retiro | **Por ministerio** | Elección del usuario. Cubre "salió de alabanza pero sigue en kids" sin vaciar `ministries`, que el boundary de escritura rechaza. | **Recomendé global y el usuario eligió por ministerio.** El costo es real y queda registrado: un tercer eje que cruzar con `ministries` y `disabled`, el filtro y su guard duplicados en las dos mitades, y más superficie de UI. Se acepta a cambio de no forzar el caso mixto a través de `ministries`. | Frank |
 | D2 Asignaciones futuras al retirar | No se tocan; se señalan | El retiro es un hecho del roster, no una edición del calendario. Vaciar sedes reescribiría servicios que el equipo ya vio y podría disparar correos de cambio de rol. | Queda trabajo manual por servicio. Se mitiga con R6. | Frank |
+| D7 Reglas que nombran a un retirado | Se **borran** al retirar; con **confirmación** cuando la regla involucra a alguien más | Elección de Frank, tras descubrirse que sacar a un retirado de los pools mientras `dsl_rules` lo nombra lanza un `ValueError` en el solver y rompe el mes entero. Borrar la regla individual es limpio; borrar una **conjunta** le cambia la programación a alguien que no se retiró, y por eso se enseña y se confirma en vez de hacerse solo. Rechaza la alternativa de omitir esas reglas del request, que sería normalización silenciosa — la clase de cosa por la que `"Vale Sosa"` sobrevivió invisible. | **El borrado de reglas no se deshace al des-retirar**: el retiro es reversible, sus reglas no. Asimetría deliberada, que la UI debe declarar antes de confirmar. | Frank |
 | D6 Actor del retiro | Super-admin-only | La primera versión afirmaba que `PATCH` de miembro no era super-admin-only y derivaba de ahí un default de `admin`. **Es falso**: `route.ts:19-22` lo rechaza, el propio archivo lo comenta, y la pestaña Miembros es `roles: ["super-admin"]`. Alinear con la realidad evita un ensanchamiento de ACL que nadie pidió ni valoró. | Un super-admin en el camino de cada retiro. Se abre después si duele, con su propio tier. | Frank |
 | D3 Borrado duro | Se conserva, endurecido | Sigue siendo la salida correcta para un documento creado por error que nunca sirvió. | Mantiene una ruta destructiva en la app. Se acota: super-admin-only, falla legible. | Frank |
 | D4 Reglas del solver por id | **Fuera de alcance, pero este spec fija su diseño** | Si nadie se borra nunca, el argumento de integridad referencial a favor de `reference` se cae: un id en string plano basta y queda simétrico con los pools, que ya son strings. | Un miembro borrado por Studio seguiría sin protección. Aceptable: P2 acota el borrado y el historial ya lo bloquea. | Frank |
@@ -205,7 +217,7 @@ gobiernan los mismos tres arrays de `solverConfig` con intención opuesta), y **
 
 - **Parent review first, then child order:** este roadmap → P1 → P2.
 - **Evidence pointers:** `sanity/schemas/worshipTeam.ts:50`, `sanity/schemas/kidsPair.ts:43`,
-  `sanity/schemas/sunRole.ts:51,65,93,118,129`, `app/utils/memberAccess.ts:53-77`,
+  `sanity/schemas/sunRole.ts:50,65,93,117,128`, `app/utils/memberAccess.ts:53-77`,
   `app/ministries.ts:64-109`, `app/api/admin/members/route.ts:22-31`,
   `app/api/admin/members/[id]/route.ts:105-123`,
   `app/utils/__tests__/draftGatingCoverage.test.ts`, `app/components/admin/AdminPanel.tsx:716-830`.
