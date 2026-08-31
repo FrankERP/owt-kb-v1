@@ -67,10 +67,16 @@ contra el que este spec dedica un párrafo.
 | Lectura | Ministerio | Por qué |
 |---|---|---|
 | `app/api/admin/members/route.ts:23` | worship | **NO se filtra por retiro en la consulta.** Devuelve lo mismo que hoy — ya acotado por `WORSHIP_MEMBER_GROQ_FILTER` con `$all`, así que "todos" sólo es cierto para un super-admin — más el campo `retiredFrom`. El planner filtra en el punto de selección. Filtrar el retiro aquí rompería la resolución id→nombre de los pools (ver R10). |
-| `app/(client)/kids/admin/page.tsx` | kids | Roster de kids |
-| `app/api/kids/members/route.ts` | kids | Roster de kids |
-| `app/api/kids/generate/route.ts` | kids | Candidatos del generador de kids |
 | `app/utils/serviceMutationSideEffects.ts:840` | worship | Audiencia de correo de setlist |
+
+**Kids — las TRES son resolución, y filtrarlas hace daño activo.** Van aparte porque la
+clasificación intuitiva ("son rosters, luego enumeran") es la equivocada y ya costó una ronda:
+
+| Lectura | Qué hace de verdad |
+|---|---|
+| `app/api/kids/generate/route.ts:115-119` | **No es una lista de candidatos.** La candidatura sale de `*[_type == "kidsPair" && coalesce(active, true) == true]` (`:111`). Estas filas sólo construyen `unavailable[member._id]` (`:166`), y `kidsRotation.ts:113` lee `unavailable[memberId]?.includes(date) ?? false` — **ausente significa DISPONIBLE**. Filtrarla le borra al retirado su indisponibilidad declarada y agenda a su pareja los domingos que dijo que no puede. |
+| `app/api/kids/members/route.ts` | Resuelve id→nombre para las parejas existentes (`PairRoster.tsx:48-51`). Filtrarla pinta "—" en su propia pareja. |
+| `app/(client)/kids/admin/page.tsx` | Igual (`KidsPlanner.tsx:183-187`). |
 
 **Resolución — NUNCA filtran** (`_id in $ids` / `_id == $id`): `app/(client)/me/page.tsx`,
 `app/api/me/route.ts`, `app/api/me/availability/route.ts`, `app/api/me/password/route.ts`,
@@ -106,6 +112,7 @@ Los ids son únicos en toda la familia; `R8`, `R9`, `R12` y `R13` pertenecen a P
 | R6 | Un ocupante retirado en un servicio **futuro** se señala en el planner | Contraparte obligada de R5: no tocar exige avisar | La sede muestra el aviso; el servicio no cambia solo |
 | R7 | El kill switch es operable desde la app, en un control visiblemente distinto del retiro | El "rápido" pedido hoy pasa por Studio | Un super-admin revoca acceso sin salir de la app; los dos controles no se confunden |
 | R14 | El control de kill switch **rechaza** deshabilitar la sesión que actúa, y rechaza deshabilitar al último super-admin habilitado | `auth.ts:52` y `:79` rechazan el login de un deshabilitado, y el control nuevo vive tras una pestaña y una ruta super-admin-only. Sin R14, R7 introduce un bloqueo de la superficie de administración que sólo se deshace con credenciales de Sanity, fuera de la app. Hoy no existe porque `disabled` sólo se escribe desde Studio: quien lo apaga ya está del otro lado de la puerta | Los dos intentos se rechazan con mensaje propio, no con el genérico. **Y la comprobación no puede ser sólo previa:** dos super-admins deshabilitándose mutuamente en paralelo pasan cada uno la comprobación "¿queda otro habilitado?" y ambas escrituras aterrizan, dejando cero — el resultado exacto que R14 existe para impedir. Es el gemelo de R12 en P2 en su FORMA, pero no en su remedio: R12 puede delegar en la integridad referencial de Sanity como autoridad final, y aquí no hay análogo a nivel de base de datos para "el último super-admin habilitado". Necesita mecanismo propio — escritura guardada sobre un `_rev` observado, o re-verificación dentro de la transacción |
+| R18 | En kids, retirar es un hecho de registro y **no cambia nada operativo** — y la UI lo dice | El modelo de datos de kids empareja gente: la candidatura es de `kidsPair`, no del miembro, y no hay palanca a nivel de miembro. Las tres lecturas de kids llevan indisponibilidad y resolución de nombre, así que filtrarlas no saca a nadie de la rotación y sí le borra su indisponibilidad y su nombre — estrictamente peor que no hacer nada. `kidsPair.active` no sirve de sustituto: retira la **pareja**, llevándose al compañero que no se retiró | Ninguna lectura de kids filtra por `retiredFrom`; la UI de retiro en kids declara que registra la salida sin aplicarla; test de que la rotación de kids produce el mismo resultado con y sin `retiredFrom` |
 | R16 | Mientras P3 no esté entregado, ni la UI de retiro ni el planner pueden dar a entender que retirar saca a alguien del solver — y el planner señala a los retirados que siguen en los pools | P1 es desplegable sin P3 y es útil así, pero **incompleto de una forma que un administrador no puede ver**: el retirado desaparece de la selección y sigue siendo asignable por el solver. Sin R16 el estado intermedio no es seguro sino engañoso, que es peor: alguien retira, lo ve desaparecer de las listas, y lo encuentra asignado el mes siguiente | La copia de la UI de retiro dice qué hace y qué no; el planner lista a los retirados presentes en los pools. Un test de que el texto cambia —o el aviso desaparece— cuando P3 entra |
 | R11 | El boundary de escritura rechaza un retiro incoherente | Mismo estándar que `validateMinistryWrite` | Retirar de un ministerio al que el miembro no pertenece se rechaza con mensaje, no se normaliza en silencio |
 
@@ -115,13 +122,13 @@ Los ids son únicos en toda la familia; `R8`, `R9`, `R12` y `R13` pertenecen a P
 
 - Campo nuevo en `sanity/schemas/worshipTeam.ts` y su despliegue de esquema.
 - Helper de filtro GROQ compartido, junto a `WORSHIP_AUDIENCE_GROQ_FILTER` en `app/ministries.ts`.
-- Aplicación del filtro a **cuatro de las cinco** filas de la tabla de enumeración. La quinta,
+- Aplicación del filtro a **una de las dos** filas que quedan en la tabla de enumeración. La otra,
   `GET /api/admin/members`, es una excepción declarada: su lista alimenta también la resolución
   y filtrarla rompe el mapeo id→nombre de los pools. El conteo se escribe con los dos números
   —cuántas filas hay y cuántas filtran— y no como "todas las enumeraciones", porque un
   implementador que lea sólo esta sección haría exactamente lo que el inventario prohíbe.
-  Sumando la tabla de exentas, las exenciones declaradas son **cinco** y el guard debe fallar
-  ante una sexta.
+  Sumando la tabla de exentas y las tres de kids, las lecturas que deliberadamente **no** filtran
+  son **ocho**, y el guard debe fallar ante una novena sin declarar.
 - Copia y aviso de R16, que hacen honesto el estado intermedio de P1 sin P3.
 - Guard de cobertura automatizado, al estilo de `draftGatingCoverage.test.ts`.
 - Validación de escritura, junto a `validateMinistryWrite`.
@@ -210,7 +217,7 @@ Los ids son únicos en toda la familia; `R8`, `R9`, `R12` y `R13` pertenecen a P
 | Assumption | Impact if false | Validation | Failure response |
 |---|---|---|---|
 | El inventario de 23 lecturas está completo y bien clasificado | Filtrar de más rompe historial; de menos deja el gap | Reejecutar el grep como primer paso de implementación; el guard lo vuelve continuo | Reclasificar y ajustar el guard antes de tocar código |
-| Las cinco exenciones son correctas — las cuatro de la tabla de exentas más `GET /api/admin/members`, que no filtra en la consulta porque su lista sirve también a la resolución | Un retirado recibiría alertas de operador, o un evento de acceso quedaría oculto | Revisión adversarial de este spec | Convertir la exención en filtro; el guard las lista explícitamente |
+| Las ocho lecturas que no filtran son correctas — las cuatro de la tabla de exentas, las tres de kids, y `GET /api/admin/members`, que no filtra en la consulta porque su lista sirve también a la resolución | Un retirado recibiría alertas de operador, o un evento de acceso quedaría oculto | Revisión adversarial de este spec | Convertir la exención en filtro; el guard las lista explícitamente |
 | Nadie depende hoy de que un deshabilitado siga en los pools | El filtro cambiaría comportamiento esperado | Ninguna: `disabled` no se filtra hoy, así que este spec no altera ese caso | — |
 
 ## Open questions
@@ -226,12 +233,13 @@ Los ids son únicos en toda la familia; `R8`, `R9`, `R12` y `R13` pertenecen a P
 |---|---|---|
 | R1 | Un doc sin el campo se lee como "sirve" en ambos ministerios | Test unitario del normalizador, con un doc sin el campo |
 | R2 | Los puntos de selección excluyen a los retirados | Guard de cobertura sobre `app/**`, invertido; falla al añadir una selección sin filtro |
-| R2b | Las cinco exenciones están declaradas y una sexta falla el guard | Test del guard con una enumeración exenta no declarada |
+| R2b | Las ocho están declaradas y una novena falla el guard | Test del guard con una enumeración exenta no declarada |
 | R3 | Un retirado resuelve con nombre en un servicio pasado, y su id de pool resuelve a su nombre | Test de integración sobre `serviceReadQueries`; test de `memberIdToName` con un miembro retirado presente en la lista |
 | R4 | `memberAccess.ts` sin cambios; ninguna ruta nueva toca `disabled` junto al retiro | Diff vacío en ese archivo + escaneo del guard |
 | R5 | Ningún documento de **servicio** cambia al retirar | Test de que las mutaciones del handler tocan sólo el doc del miembro — jamás un role doc. (Con P3, también el `solverConfig`; ese caso lo verifica P3.) |
 | R6 | El aviso aparece; el servicio no cambia | Test de componente del planner con un ocupante retirado |
 | R7 | Un super-admin revoca acceso desde la app | Test de componente + verificación visual |
+| R18 | La rotación de kids no cambia al retirar, y la UI lo declara | Test de rotación con y sin `retiredFrom`; test de copia |
 | R16 | La UI no afirma lo que P1 solo no hace, y el planner lista a los retirados en pools | Test de copia y test del aviso, con y sin retirados en pools |
 | R11 | El retiro incoherente se rechaza con mensaje | Test unitario del validador, junto a los de `validateMinistryWrite` |
 | R14 | Auto-deshabilitarse y deshabilitar al último super-admin habilitado se rechazan, y dos deshabilitaciones simultáneas no pueden dejar cero | Tres tests de la ruta: sesión actuante como objetivo; objetivo siendo el único super-admin con `disabled != true`; y dos escrituras concurrentes que individualmente pasan la comprobación |
