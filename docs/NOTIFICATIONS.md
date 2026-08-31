@@ -88,7 +88,7 @@ layer 2 sweepDeadlineMs  =  SEND_TIMEOUT_MS + (SWEEP_DEADLINE_MS − SEND_TIMEOU
 paragraph said `SWEEP_DEADLINE_MS` was unchanged and that the invocation's worst
 case did not widen; that was wrong, and it is the claim the fix retracts. It does not fire on
 proposal submit or review, which queue nothing; layer 1 is what covers those —
-nominally within the declared tick, in practice at a 1.0 h median (§"Layer 1 does
+nominally within the declared tick, in practice at a 1.0 h median under the previous `*/5` schedule (§"Layer 1 does
 not run on the schedule it declares"). The proposal-submit **email** (`buildProposalEmail`) is immediate, not
 queued: intro + CTA, the same setlist table as "Setlist listo" (no Mov. column,
 medleys grouped), and the lead's newest `lead_note` message when the thread has one — the same thread source as the debounced email below, moved in the same delivery that stopped writing the legacy field. Empty or unreadable songs still
@@ -213,19 +213,31 @@ prints the comparable pair under a header saying so.
 
 | | baseline (`*/5`) | a fully honoured `7,22,37,52` |
 |---|---|---|
-| runs per hour | **0.40** | 4.0 |
+| **steady rate** | **0.39 runs/h** | 4.0 |
 | median interval | **1.0 h** | 15 min |
 
-**How to decide, including when the answer is ambiguous.** Do not conclude before
-**48 h and n ≥ 20 intervals** — at n=4 this estimator produced three different
-numbers straddling the threshold depending on how it was invoked. Treat anything
-within ±20% of the 0.40 baseline as **not risen**. Revert to `*/5` unless
-runs/hour clears 0.48 with the median interval also improving; a rise in one
-metric alone is not a result.
+The baseline is `(n-1)/(last-first)` = 39/100.267 h. **Compare like with like:**
+`n/T` overstates by `n/(n-1)` — 25% at n=5 — so a rate computed the other way is
+not comparable to this number. The script prints the matching `steady rate` and
+labels it.
 
-Bound the window to the merge timestamp, at second granularity:
-`--since 2026-08-30T07:01:04Z`. A date-only bound includes pre-merge runs from the
-same UTC day and inverts the verdict.
+**How to decide, including when the answer is ambiguous.** Do not conclude before
+**48 h and n ≥ 20 intervals** — at n=4 this estimator produced several different
+numbers straddling the baseline depending on how it was invoked. Treat anything
+within ±20% of the 0.39 baseline as **not risen**. Revert to `*/5` unless the
+**steady rate** clears **0.47** with the median interval also improving; a rise in
+one metric alone is not a result.
+
+Bound the window to the merge timestamp, with an explicit zone:
+`--since 2026-08-30T07:01:04Z`. A date-only bound sweeps in pre-merge runs from
+the same UTC day, and a time without `Z` is read as local by the script and as UTC
+by GitHub — six hours apart here, which moved one reading 43%. The script rejects
+the ambiguous form rather than guessing.
+
+**The `elapsed rate` the script also prints is not the one this threshold refers
+to.** It includes the dead period after the cadence changed — 41% of the window at
+the time of writing — which is honest about what members got but is not comparable
+to a steady-state baseline until that share is small.
 
 Measured 2026-08-30 over the 39 intervals between the 40 **scheduled** runs
 GitHub delivered between `2026-08-25T21:19Z` and `2026-08-30T01:35Z` — a **3.3%

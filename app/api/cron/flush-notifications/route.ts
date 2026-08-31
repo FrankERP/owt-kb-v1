@@ -121,7 +121,8 @@ async function getHandler(req: NextRequest) {
   // Full budget each round; layer 2 alone is derated. When a setlist notice is
   // re-pended because the send stage ran out of clock, drain again in the same
   // invocation instead of waiting for the next GitHub tick — nominally the
-  // declared tick, measured at a 1.0 h median (docs/NOTIFICATIONS.md).
+  // declared tick, measured at a 1.0 h median under the previous `*/5`
+  // schedule; cadence experiment in flight (docs/NOTIFICATIONS.md).
   const report = await drainOutbox();
   return NextResponse.json(report);
 }
