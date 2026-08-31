@@ -204,9 +204,9 @@ cheap experiment beats a clean one here.
 Measure from the merge timestamp forward.
 
 **Judge it on runs/hour and the median interval — NOT on delivery-%.** Delivery-%
-is only comparable within one cadence: asking for a quarter as many ticks triples
+is only comparable within one cadence: asking for a third as many ticks triples
 the percentage arithmetically without one email arriving sooner. Holding the
-observed 40 runs fixed, 3.4% becomes 10.1% for free. `scripts/measure-cron-delivery.mjs`
+observed 40 runs fixed, 3.3% becomes 10.0% for free. `scripts/measure-cron-delivery.mjs`
 prints the comparable pair under a header saying so.
 
 **The baseline to beat**, measured 2026-08-30 over scheduled runs only:
@@ -216,7 +216,16 @@ prints the comparable pair under a header saying so.
 | runs per hour | **0.40** | 4.0 |
 | median interval | **1.0 h** | 15 min |
 
-Revert to `*/5` if runs/hour does not rise.
+**How to decide, including when the answer is ambiguous.** Do not conclude before
+**48 h and n ≥ 20 intervals** — at n=4 this estimator produced three different
+numbers straddling the threshold depending on how it was invoked. Treat anything
+within ±20% of the 0.40 baseline as **not risen**. Revert to `*/5` unless
+runs/hour clears 0.48 with the median interval also improving; a rise in one
+metric alone is not a result.
+
+Bound the window to the merge timestamp, at second granularity:
+`--since 2026-08-30T07:01:04Z`. A date-only bound includes pre-merge runs from the
+same UTC day and inverts the verdict.
 
 Measured 2026-08-30 over the 39 intervals between the 40 **scheduled** runs
 GitHub delivered between `2026-08-25T21:19Z` and `2026-08-30T01:35Z` — a **3.3%
@@ -524,7 +533,7 @@ and they are different failures:
 
 Healthy, and not failures: `unserved > 0` with `repended > 0` — the send budget
 stopped early and those recipients wait for the next sweep (declared
-sub-hourly; measured median 1.0 h). `deferred > 0` — work left *unclaimed* for the next
+sub-hourly; median 1.0 h under the previous `*/5` schedule — experiment in flight, see §"Layer 1 does not run on the schedule it declares"). `deferred > 0` — work left *unclaimed* for the next
 sweep. `skipped > 0` — a recipient with no address or blocked by
 `EMAIL_ALLOWLIST`; a warning, since a deliberately narrowed allowlist makes it the
 expected state.

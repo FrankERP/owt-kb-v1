@@ -3,12 +3,12 @@
 // the workflow declares.
 //
 // This exists because the gap is not a one-off. Layer 1's schedule has been
-// measured twice — 41 min median over 98 runs (2026-08-27), then 71 min median
-// with a 3.4% delivery rate (2026-08-30) — and issue #25's acceptance criterion
+// measured twice — 41 min median over 98 runs (2026-08-27), then 62 min median
+// with a 3.3% delivery rate (2026-08-30, scheduled runs only) — and issue #25's acceptance criterion
 // is that any change be re-measured the same way rather than assumed. A method
 // that lives in a shell history is not the same way; this is.
 //
-//   node scripts/measure-cron-delivery.mjs [--limit 60] [--since YYYY-MM-DD]
+//   node scripts/measure-cron-delivery.mjs [--limit 60] [--since <ISO timestamp>]
 //                                          [--workflow "<name>"] [--repo owner/name]
 //
 // Reads only the GitHub run list through `gh`. Touches no Sanity data, sends
@@ -37,6 +37,18 @@ const SINCE = arg("--since", null);
 for (const [flag, val] of [["--workflow", WORKFLOW], ["--repo", REPO], ["--since", SINCE]]) {
   if (val !== null && (val === undefined || String(val).startsWith("--"))) {
     console.error(`${flag} needs a value`);
+    process.exit(1);
+  }
+}
+// REJECT UNKNOWN FLAGS, loudly. `arg()` matches only the space-separated form,
+// so `--since=2026-08-30` used to parse as nothing at all: the bound silently
+// vanished and the measurement averaged BOTH cadences into one runs/hour —
+// reading as an improvement. A measurement tool that ignores an argument it does
+// not understand is worse than one that refuses to run.
+const KNOWN = new Set(["--limit", "--since", "--workflow", "--repo"]);
+for (const tok of process.argv.slice(2)) {
+  if (tok.startsWith("--") && !KNOWN.has(tok)) {
+    console.error(`unknown argument: ${tok}\n(note: use "--since VALUE", not "--since=VALUE")`);
     process.exit(1);
   }
 }
@@ -79,12 +91,20 @@ if (runs.length < 2) {
 
 const gaps = runs.slice(1).map((r, i) => (r.at - runs[i].at) / 60000).sort((a, b) => a - b);
 const q = (p) => gaps[Math.min(gaps.length - 1, Math.floor(gaps.length * p))];
-const windowH = (runs.at(-1).at - runs[0].at) / 3_600_000;
+// When a bound is given, the window is FROM THE BOUND TO NOW — not first-run to
+// last-run. Anchoring to the first delivered run silently deletes the dead period
+// after a cadence change: 5.75 h elapsed between the 2026-08-30 merge and the
+// first scheduled run, and excluding it printed 0.43 runs/h where the true
+// elapsed rate was 0.29. That gap is the thing being measured, not noise before
+// the measurement starts.
+const windowStart = SINCE ? new Date(SINCE) : runs[0].at;
+const windowEnd = SINCE ? new Date() : runs.at(-1).at;
+const windowH = (windowEnd - windowStart) / 3_600_000;
 const declared = declaredMinutes();
 
 const fmt = (m) => (m >= 60 ? `${(m / 60).toFixed(1)} h` : `${m.toFixed(1)} min`);
 console.log(`workflow    : ${WORKFLOW}`);
-console.log(`window      : ${runs[0].at.toISOString()} → ${runs.at(-1).at.toISOString()}  (${windowH.toFixed(1)} h)`);
+console.log(`window      : ${windowStart.toISOString()} → ${windowEnd.toISOString()}  (${windowH.toFixed(1)} h)${SINCE ? "  [bounded]" : "  [first run → last run]"}`);
 if (declared) {
   const expected = Math.round(windowH * declared.perHour);
   console.log(`declared    : ${declared.expr}  → ~${expected} runs expected`);
@@ -107,7 +127,8 @@ console.log(`  maximum   : ${fmt(gaps.at(-1))}`);
 // BOTH buckets. `<= 10` is unreachable under a 15-minute floor, but the recorded
 // history in docs/NOTIFICATIONS.md has a `<= 10 min` row, and a tool that cannot
 // reproduce the table it is compared against is not the same method.
-console.log(`  <= 10 min : ${gaps.filter((g) => g <= 10).length} / ${gaps.length}   (historical row; unreachable under a 15-min floor)`);
+const floorNote = declared && declared.perHour <= 4 ? "   (historical row; unreachable at this cadence)" : "";
+console.log(`  <= 10 min : ${gaps.filter((g) => g <= 10).length} / ${gaps.length}${floorNote}`);
 console.log(`  <= 20 min : ${gaps.filter((g) => g <= 20).length} / ${gaps.length}`);
 console.log(`  > 60 min  : ${gaps.filter((g) => g > 60).length} / ${gaps.length}`);
 const failed = runs.filter((r) => r.conclusion && r.conclusion !== "success").length;

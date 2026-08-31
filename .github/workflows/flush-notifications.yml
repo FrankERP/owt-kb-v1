@@ -22,7 +22,11 @@
 #     Re-measure with `scripts/measure-cron-delivery.mjs` before concluding, and
 #     judge it on RUNS/HOUR (baseline 0.40) and the median interval (baseline
 #     1.0 h) — NOT on delivery-%, which asking for fewer ticks inflates by
-#     construction. Revert to `*/5` if runs/hour does not rise.
+#     construction. Do not conclude before 48 h and n >= 20 intervals, bound the
+#     window with `--since 2026-08-30T07:01:04Z` (a date-only bound includes
+#     pre-merge runs and inverts the verdict), and treat anything within +/-20%
+#     of 0.40 as NOT risen. Revert to `*/5` unless runs/hour clears 0.48 with the
+#     median interval also improving.
 #   · GitHub DISABLES scheduled workflows after 60 days of repository inactivity,
 #     and that rule applies to public repositories like this one. The daily
 #     liveness alarm in /api/cron/service-reminders is what makes that state loud
