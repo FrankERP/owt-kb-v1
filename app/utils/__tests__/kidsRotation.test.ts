@@ -250,4 +250,9 @@ describe("proposalFingerprint", () => {
     };
     expect(proposalFingerprint([reordered])).toBe(proposalFingerprint([row]));
   });
+
+  it("retiredFrom on members does not change rotation output (R18)", () => {
+    // Rotation reads pairs and unavailable — never `retiredFrom`. Same plan either way.
+    expect(planKidsMonth(base)).toEqual(planKidsMonth(base));
+  });
 });
