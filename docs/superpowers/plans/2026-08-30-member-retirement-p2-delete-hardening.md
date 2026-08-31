@@ -45,8 +45,10 @@ dos `APPROVED` consecutivos y frescos sobre bytes idénticos antes de implementa
 |---|---|---|---|
 | R8 | Borrar a quien tiene historial falla con una razón legible y ofrece retirar | Es el caso común y hoy es indistinguible de un fallo de red | La respuesta identifica la causa; la UI la muestra y enlaza al retiro |
 | R9 | Un borrado que procede no deja ids colgando en los pools del `solverConfig` | Sanity no protege ahí; hoy el rastro queda invisible | Tras borrar, el id no aparece en ninguno de los tres pools |
-| R10 | La comprobación previa y el borrado no pueden divergir | Un chequeo "¿tiene historial?" seguido de un borrado es una carrera | La operación es segura si alguien adquiere historial entre ambos pasos |
-| R11 | El borrado sigue siendo super-admin-only | Comportamiento existente que no hay razón para relajar | Los dos guards de rol se conservan |
+| R12 | La comprobación previa y el borrado no pueden divergir | Un chequeo "¿tiene historial?" seguido de un borrado es una carrera | La operación es segura si alguien adquiere historial entre ambos pasos |
+| R13 | El borrado sigue siendo super-admin-only | Comportamiento existente que no hay razón para relajar | Los dos guards de rol se conservan |
+
+**R9 no es R10.** R10 vive en **P1** y hace que un *retirado* deje de ser asignable aunque su id siga en un pool: el id se conserva, porque el retiro es reversible. R9 aquí trata el *borrado*, donde el id debe irse: el documento ya no existe y conservarlo no reserva nada. Los dos tocan los mismos tres arrays por razones opuestas, y confundirlos produce o un retiro que borra estado recuperable, o un borrado que deja basura. Los identificadores son únicos en toda la familia por esa razón.
 
 ## Scope
 
@@ -81,7 +83,7 @@ dos `APPROVED` consecutivos y frescos sobre bytes idénticos antes de implementa
   que haga el resultado parcial **seguro y detectable**, y justificarlo. Un id sobrante en un
   pool es recuperable; un miembro borrado cuyo historial queda roto no lo es.
 - **Concurrencia:** entre comprobar historial y borrar, alguien puede asignar a esa persona.
-  R10 exige que ese caso no produzca un borrado que rompa el historial. La integridad
+  R12 exige que ese caso no produzca un borrado que rompa el historial. La integridad
   referencial de Sanity es la red final y debe seguir siendo la autoridad, no la comprobación
   previa.
 
@@ -122,8 +124,8 @@ dos `APPROVED` consecutivos y frescos sobre bytes idénticos antes de implementa
 |---|---|---|
 | R8 | Borrar a alguien con historial produce una causa identificable, y la UI la muestra | Test del handler con el error de integridad simulado + test de componente del modal |
 | R9 | Tras borrar, el id no está en ninguno de los tres pools | Test del handler que inspecciona las mutaciones emitidas |
-| R10 | Adquirir historial entre la comprobación y el borrado no rompe nada | Test de la secuencia; la autoridad final es el rechazo de Sanity |
-| R11 | Los dos guards de rol se conservan | Test de que un `admin` recibe 403 |
+| R12 | Adquirir historial entre la comprobación y el borrado no rompe nada | Test de la secuencia; la autoridad final es el rechazo de Sanity |
+| R13 | Los dos guards de rol se conservan | Test de que un `admin` recibe 403 |
 
 ## Terminal state
 
