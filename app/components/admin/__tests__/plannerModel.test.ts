@@ -670,6 +670,143 @@ describe("buildSolveRequest", () => {
       { total_counts: { a: 1 }, role_counts: {} },
     ]);
   });
+
+  // ─── R10 worship retiree exclusion (P3) ───────────────────────────────────
+  const r10BaseInput = {
+    config: {
+      ...emptyConfig,
+      sundayLeads: ["frank"],
+      saturdayLeads: ["gaby"],
+      support: ["mkz"],
+    } as SolverConfig,
+    sundayDates: FEB_SUNDAYS,
+    activeSatDates: FEB_SATURDAYS,
+    historyEntries: [] as SolverHistoryEntry[],
+    year: 2026,
+    month: 2,
+  };
+
+  const requestJson = (input: typeof r10BaseInput & { members: RankMember[] }) => {
+    const result = buildSolveRequest(input);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    return JSON.stringify(result.request);
+  };
+
+  it("(c) month without worship retirees → request byte-identical to pre-P3 baseline", () => {
+    const activeMembers: RankMember[] = [
+      m("frank", "Frank"),
+      m("gaby", "Gaby"),
+      m("mkz", "Mkz"),
+    ];
+    const pin = requestJson({ ...r10BaseInput, members: activeMembers });
+    const again = requestJson({ ...r10BaseInput, members: activeMembers });
+    expect(again).toBe(pin);
+    // Pinned snapshot — must not change unless buildSolveRequest semantics change.
+    expect(pin).toMatchSnapshot();
+  });
+
+  it("(a) worship-retired member in pool, no rules → excluded from entire request", () => {
+    const members: RankMember[] = [
+      m("frank", "Frank"),
+      m("gaby", "Gaby"),
+      { ...m("mkz", "Mkz"), retiredFrom: ["worship"] },
+    ];
+    const result = buildSolveRequest({ ...r10BaseInput, members });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    const body = JSON.stringify(result.request);
+    expect(body).not.toContain("Mkz");
+    expect(body).not.toContain("mkz");
+    expect(result.request.support).not.toContain("Mkz");
+  });
+
+  it("(b) worship-retired with unavailableDates → no dsl_rules clauses name them", () => {
+    const config: SolverConfig = {
+      ...emptyConfig,
+      sundayLeads: ["frank"],
+      support: ["ret"],
+    };
+    const members: RankMember[] = [
+      m("frank", "Frank"),
+      {
+        ...m("ret", "Retired"),
+        retiredFrom: ["worship"],
+        unavailableDates: ["2026-02-08", "2026-02-07"],
+      },
+    ];
+    const result = buildSolveRequest({
+      config,
+      members,
+      sundayDates: FEB_SUNDAYS,
+      activeSatDates: FEB_SATURDAYS,
+      historyEntries: [],
+      year: 2026,
+      month: 2,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.request.dsl_rules.some((r) => r.startsWith("Retired"))).toBe(false);
+    expect(JSON.stringify(result.request)).not.toContain("Retired");
+  });
+
+  it("(d) kids-only retired, active in worship → still in pools and dsl_rules", () => {
+    const members: RankMember[] = [
+      m("frank", "Frank"),
+      { ...m("mkz", "Mkz"), retiredFrom: ["kids"] },
+    ];
+    const config: SolverConfig = {
+      ...emptyConfig,
+      sundayLeads: ["frank"],
+      support: ["mkz"],
+      restrictions: [{
+        id: "r1", person: "Mkz", excludedPatterns: ["Sat.*"],
+        fairness: "none", fairnessSlack: 0, weekExclusions: [], caps: [],
+      }],
+    };
+    const result = buildSolveRequest({ ...r10BaseInput, config, members });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.request.support).toContain("Mkz");
+    expect(result.request.dsl_rules.some((r) => r.startsWith("Mkz"))).toBe(true);
+  });
+
+  it("(e) worship-retired with live rule naming them → deferred (still in request)", () => {
+    const members: RankMember[] = [
+      m("frank", "Frank"),
+      { ...m("mkz", "Mkz"), retiredFrom: ["worship"] },
+    ];
+    const config: SolverConfig = {
+      ...emptyConfig,
+      sundayLeads: ["frank"],
+      support: ["mkz"],
+      restrictions: [{
+        id: "r1", person: "Mkz", excludedPatterns: ["Sat.*"],
+        fairness: "none", fairnessSlack: 0, weekExclusions: [], caps: [],
+      }],
+    };
+    const result = buildSolveRequest({ ...r10BaseInput, config, members });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.request.support).toContain("Mkz");
+    expect(result.request.dsl_rules).toContain("Mkz !in Sat.*");
+  });
+
+  it("(f) after R15 removes naming rule → worship-retired excluded", () => {
+    const members: RankMember[] = [
+      m("frank", "Frank"),
+      { ...m("mkz", "Mkz"), retiredFrom: ["worship"] },
+    ];
+    const config: SolverConfig = {
+      ...emptyConfig,
+      sundayLeads: ["frank"],
+      support: ["mkz"],
+    };
+    const result = buildSolveRequest({ ...r10BaseInput, config, members });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(JSON.stringify(result.request)).not.toContain("Mkz");
+  });
 });
 
 // ─── Week spine over a 5-Sunday month (E21) ──────────────────────────────────

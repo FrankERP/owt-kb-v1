@@ -13,6 +13,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
+vi.mock("server-only", () => ({}));
+
 const h = vi.hoisted(() => ({
   requireActiveSession: vi.fn(),
   requireActiveManager: vi.fn(),
@@ -28,6 +30,10 @@ const h = vi.hoisted(() => ({
 vi.mock("@/app/utils/authGuards", () => ({
   requireActiveSession: () => h.requireActiveSession(),
   requireActiveManager: () => h.requireActiveManager(),
+}));
+
+vi.mock("@/sanity/lib/operationalClient", () => ({
+  operationalClient: { fetch: vi.fn() },
 }));
 
 vi.mock("@/sanity/lib/serverClient", () => {
