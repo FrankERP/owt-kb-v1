@@ -20,9 +20,12 @@
   usan referencias fuertes. El resultado práctico es que un miembro que ya no sirve se queda
   en los pools del planner, en el dropdown de reglas del solver y en las audiencias de correo,
   indefinidamente.
-- **Global requirements:** ver la tabla de cobertura. En una frase: un eje nuevo de *roster*,
-  por ministerio, aplicado en el punto de **selección** y jamás en el de **resolución** — y que
-  además alcanza las **referencias de roster ya almacenadas**, no sólo las consultas.
+- **Global requirements:** los requisitos NO se enuncian aquí. Viven, con su texto normativo,
+  en el hijo que los posee; esta sección da la forma del problema y la tabla de cobertura da el
+  mapa. En una frase: un eje nuevo de *roster*, por ministerio, aplicado en el punto de
+  **selección** y jamás en el de **resolución**, que además alcanza las **referencias de roster
+  ya almacenadas**. Lo normativo es P1 § Requirements R2, R2b, R3 y R10; lo que sigue es la
+  evidencia de por qué, no una segunda redacción de ellos.
 
   **La distinción no vive en la consulta GROQ, vive en el punto de uso.** La primera versión de
   este roadmap decía "filtrar las lecturas de enumeración", y eso es insuficiente y además
@@ -54,7 +57,8 @@
     administración sin forma de deshacerlo desde la app. `proxy.ts:15-19` abre `/studio` mirando
     sólo el rol del token, así que una sesión aún viva podría rescatarlo, pero eso es suerte de
     vigencia de sesión, no una propiedad. La recuperación real es tener credenciales de escritura
-    de Sanity, fuera de la app. Ver R14.
+    de Sanity, fuera de la app. **Lo que se hace al respecto es R14, y su texto normativo está en
+    P1 § Requirements** — aquí queda el peligro, no el remedio.
 - **Non-goals:**
   - Migrar las reglas del solver de nombre a id. Es trabajo aparte; este spec **decide su
     diseño** (ver Decisión D4) pero no lo entrega.
@@ -125,23 +129,43 @@ lo cual requiere que el retiro exista. P1 es desplegable y útil sin P2.
 
 ## Requirement-to-plan coverage
 
-| Requirement ID | Requirement | Primary owner plan | Dependent plans | Verification owner | Coverage note |
+**Regla de fuente única — léela antes de editar cualquiera de los tres artefactos.**
+El **texto normativo de cada requisito vive exactamente una vez, en el hijo que lo posee**.
+Esta tabla es un MAPA, no una copia: la columna "Nombre" es una etiqueta estable que identifica
+al requisito, deliberadamente **no** un resumen de su contenido, para que refinar el texto de un
+requisito no obligue a editar aquí y no pueda quedar desincronizado.
+
+Esta regla existe por evidencia, no por gusto. Las dos primeras rondas de revisión adversarial
+de este roadmap encontraron **la misma clase de defecto**: una corrección que llegó a una
+sección y no a su gemela — el tier arreglado en un lado y la justificación contradiciéndolo en
+otro, `R10` añadido a dos artefactos sin reconciliar con el `R10` que ya existía en el tercero,
+"las tres exenciones" escrito mientras el inventario del mismo spec listaba cuatro. La causa era
+que cada requisito estaba escrito en tres o cuatro lugares. **Si vuelves a pegar texto de
+requisito aquí, reintroduces la clase entera.**
+
+Los identificadores son únicos en toda la familia: no hay dos `R10`.
+
+| ID | Nombre (etiqueta estable) | Texto normativo vive en | Plan dueño | Planes dependientes | Dueño de verificación |
 |---|---|---|---|---|---|
-| R1 | El retiro es por ministerio y ausencia significa "sirve" | P1 | — | P1 | Decisión del usuario, contra la recomendación; ver D1. |
-| R2 | La **selección** (quién puede ser elegido o enumerado) excluye a los retirados de ese ministerio | P1 | — | P1 | Guard de cobertura, no revisión manual. |
-| R2b | Las enumeraciones **exentas** se declaran con razón escrita, no se omiten | P1 | — | P1 | Sin esto el guard exigiría filtrar `outboxLiveness`, silenciando la alarma de outbox atorado para un super-admin retirado. |
-| R3 | La **resolución** (`_id in $ids`, `_id == $id`, id→nombre de pool, ocupante histórico) NUNCA filtra | P1 | P2 | P1 | El guard distingue las formas; la resolución id→nombre contra una lista filtrada es un caso nombrado y manejado, no sin clasificar. |
-| R10 | (P1) El retiro alcanza las **referencias de roster ya almacenadas**: un retirado deja de ser asignable por el solver aunque su id siga en un pool, y no se le reinyecta vía regla | P1 | — | P1 | Sin esto R2 por sí solo produce un id crudo asignable en el solve request. Es lo que hace entregable la aceptación de integración (a). |
-| R4 | `disabled` conserva significado, latencia y lectores exactos | P1 | — | P1 | Verificación negativa: ninguna ruta nueva lo lee ni lo escribe junto al retiro. |
-| R5 | Retirar no modifica ningún servicio ya publicado | P1 | — | P1 | Decisión D2. |
-| R6 | Un ocupante retirado en un servicio futuro se señala en el planner | P1 | — | P1 | Es la contraparte de R5: no tocar exige avisar. |
-| R7 | El kill switch es operable desde la app, visiblemente distinto del retiro | P1 | — | P1 | Es la razón por la que P1 es crítico: ruta de escritura nueva sobre el gate de acceso. |
-| R14 | El control de kill switch **rechaza** deshabilitar la sesión que actúa o al último super-admin habilitado | P1 | — | P1 | Sin esto, R7 introduce un bloqueo de la superficie de administración recuperable sólo con credenciales de Sanity. |
-| R8 | Borrar a quien tiene historial falla con una razón legible y ofrece retirar | P2 | P1 | P2 | Depende de que el retiro exista. |
-| R11 | El boundary de escritura rechaza un retiro incoherente | P1 | — | P1 | Mismo estándar que `validateMinistryWrite`: rechazar, no normalizar en silencio. |
-| R12 | En P2, la comprobación de historial y el borrado no pueden divergir | P2 | — | P2 | Concurrencia: la autoridad final es el rechazo de Sanity, no la comprobación previa. |
-| R13 | El borrado sigue siendo super-admin-only | P2 | — | P2 | Comportamiento existente que se preserva explícitamente. |
-| R9 | **Borrar** no deja ids colgando en los pools del `solverConfig` | P2 | — | P2 | Bug preexistente, independiente del retiro. Distinto de R10: R9 es borrado, R10 es retiro. |
+| R1 | Almacenamiento del retiro | P1 § Requirements | P1 | — | P1 |
+| R2 | Filtro de selección | P1 § Requirements | P1 | — | P1 |
+| R2b | Exenciones declaradas | P1 § Requirements | P1 | — | P1 |
+| R3 | Resolución nunca filtra | P1 § Requirements | P1 | P2 | P1 |
+| R4 | `disabled` intacto | P1 § Requirements | P1 | — | P1 |
+| R5 | Servicios publicados no se tocan | P1 § Requirements | P1 | — | P1 |
+| R6 | Aviso de ocupante retirado | P1 § Requirements | P1 | — | P1 |
+| R7 | Kill switch en la app | P1 § Requirements | P1 | — | P1 |
+| R10 | Referencias de roster almacenadas | P1 § Requirements | P1 | — | P1 |
+| R11 | Boundary de escritura del retiro | P1 § Requirements | P1 | — | P1 |
+| R14 | Anti-bloqueo del kill switch | P1 § Requirements | P1 | — | P1 |
+| R8 | Borrado que falla legible | P2 § Requirements | P2 | P1 | P2 |
+| R9 | Borrado sin ids colgantes | P2 § Requirements | P2 | — | P2 |
+| R12 | Borrado sin divergencia (concurrencia) | P2 § Requirements | P2 | — | P2 |
+| R13 | ACL del borrado preservada | P2 § Requirements | P2 | — | P2 |
+
+Ningún requisito queda sin dueño y ninguno tiene dos. Las relaciones que un lector podría
+confundir se declaran donde viven, no aquí: **R9 no es R10** (P2 § Requirements lo explica —
+gobiernan los mismos tres arrays de `solverConfig` con intención opuesta), y **R14 acota a R7**.
 
 ## Sequence and safe states
 
@@ -186,6 +210,10 @@ lo cual requiere que el retiro exista. P1 es desplegable y útil sin P2.
   `app/api/admin/members/[id]/route.ts:105-123`,
   `app/utils/__tests__/draftGatingCoverage.test.ts`, `app/components/admin/AdminPanel.tsx:716-830`.
 - **Prior reviews, feedback, rebuttals, and planning dialogue excluded:** yes.
+- **Nota de consolidación:** tras dos rondas cuyos hallazgos fueron todos de la misma clase —
+  una corrección que llegó a una sección y no a su gemela — los tres artefactos se consolidaron
+  para que cada requisito tenga un solo lugar donde su texto puede cambiar. Esa consolidación
+  **no está revisada**: es material nuevo posterior a la ronda 2.
 - **Risk tier:** **P1 crítico** y **P2 crítico** — dos `APPROVED` consecutivos sobre bytes
   idénticos cada uno.
   - P1 se clasificó primero como estándar. **Eso era un error, y se corrige derivándolo de la

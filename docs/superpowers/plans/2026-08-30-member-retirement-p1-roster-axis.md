@@ -86,6 +86,12 @@ Dos `APPROVED` consecutivos sobre bytes idénticos.
 
 ## Requirements
 
+**Este spec es la fuente única del texto normativo de los requisitos que posee.** El roadmap
+padre los mapea por id y por una etiqueta estable, y deliberadamente no copia este texto: la
+duplicación entre artefactos es la clase de defecto que dos rondas de revisión encontraron.
+Los ids son únicos en toda la familia; `R8`, `R9`, `R12` y `R13` pertenecen a P2 y no aparecen
+aquí.
+
 | ID | Requirement | Rationale | Acceptance criterion |
 |---|---|---|---|
 | R1 | El retiro se almacena por ministerio, y la **ausencia del campo significa que sirve** | Decisión D1 del roadmap; contrato libre de migración que este repo ya usa en `published` y `ministries` | Los 57 documentos existentes, sin tocarlos, se leen como "sirve en todos sus ministerios" |
@@ -97,6 +103,7 @@ Dos `APPROVED` consecutivos sobre bytes idénticos.
 | R5 | Retirar no modifica ningún documento de servicio | Decisión D2: no reescribir lo que el equipo ya vio | Retirar emite exactamente una escritura, sobre el doc del miembro |
 | R6 | Un ocupante retirado en un servicio **futuro** se señala en el planner | Contraparte obligada de R5: no tocar exige avisar | La sede muestra el aviso; el servicio no cambia solo |
 | R7 | El kill switch es operable desde la app, en un control visiblemente distinto del retiro | El "rápido" pedido hoy pasa por Studio | Un super-admin revoca acceso sin salir de la app; los dos controles no se confunden |
+| R14 | El control de kill switch **rechaza** deshabilitar la sesión que actúa, y rechaza deshabilitar al último super-admin habilitado | `auth.ts:52` y `:79` rechazan el login de un deshabilitado, y el control nuevo vive tras una pestaña y una ruta super-admin-only. Sin R14, R7 introduce un bloqueo de la superficie de administración que sólo se deshace con credenciales de Sanity, fuera de la app. Hoy no existe porque `disabled` sólo se escribe desde Studio: quien lo apaga ya está del otro lado de la puerta | Los dos intentos se rechazan con mensaje propio, no con el genérico; test de cada uno |
 | R11 | El boundary de escritura rechaza un retiro incoherente | Mismo estándar que `validateMinistryWrite` | Retirar de un ministerio al que el miembro no pertenece se rechaza con mensaje, no se normaliza en silencio |
 
 ## Scope
@@ -202,6 +209,7 @@ Dos `APPROVED` consecutivos sobre bytes idénticos.
 | R6 | El aviso aparece; el servicio no cambia | Test de componente del planner con un ocupante retirado |
 | R7 | Un super-admin revoca acceso desde la app | Test de componente + verificación visual |
 | R11 | El retiro incoherente se rechaza con mensaje | Test unitario del validador, junto a los de `validateMinistryWrite` |
+| R14 | Auto-deshabilitarse y deshabilitar al último super-admin habilitado se rechazan | Dos tests de la ruta: sesión actuante como objetivo, y objetivo siendo el único super-admin con `disabled != true` |
 
 ## Terminal state
 
