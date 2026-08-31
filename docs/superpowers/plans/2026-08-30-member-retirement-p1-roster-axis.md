@@ -48,7 +48,7 @@ Dos `APPROVED` consecutivos sobre bytes idénticos.
 | `normalizeMinistries`: ausente ⇒ `["worship"]` | `app/ministries.ts:41-44` | El campo nuevo debe seguir la misma regla libre de migración: ausente ⇒ sirve. |
 | `kidsPair.active`: "Las parejas retiradas conservan su historial pero salen de todas las rotaciones" | `sanity/schemas/kidsPair.ts:43-48` | Precedente del patrón en este repo, con la semántica exacta buscada. |
 | `draftGatingCoverage.test.ts`: escaneo invertido de `app/**`, exime por excepción; su encabezado documenta que "una frase en CLAUDE.md y N call sites correctos es un estado, no un mecanismo", y que la primera versión encontró una violación real preexistente | `app/utils/__tests__/draftGatingCoverage.test.ts:1-45` | Mecanismo probado y su modo de falla conocido: un filtro guardado en string e inyectado en otro lado es invisible a un escaneo de grupo. El guard de R2 debe cubrir esa forma. |
-| Las cinco sedes de role docs son `reference` sin `weak: true` | `sanity/schemas/sunRole.ts:51,65,93,118,129` | El historial resuelve por referencia, no por copia de nombre: retirar no puede romperlo, y borrar ya está bloqueado. |
+| Las cinco sedes de role docs son `reference` sin `weak: true` | `sanity/schemas/sunRole.ts:50,65,93,117,128` | El historial resuelve por referencia, no por copia de nombre: retirar no puede romperlo, y borrar ya está bloqueado. |
 | El planner obtiene miembros de `GET /api/admin/members` | `app/components/admin/serviceSourceState.ts:141`, `AvailabilityPanel.tsx:69`, `AdminPanel.tsx:716` | **UNA sola lista alimenta selección Y resolución.** Por eso el filtro NO puede vivir en la API: ver la fila siguiente. |
 | `buildSolveRequest` mapea los ids de los pools con `memberIdToName`, que **cae al id crudo** si el miembro no está en la lista; y `resolvedNameOrRaw` reinyecta a todo nombrado-por-regla ausente de los pools en `extraSupport` | `app/components/admin/plannerModel.ts:554-557, 566-568, 641-645, 648-661` | Filtrar la lista en la API no saca a un retirado del solve request: su id se vuelve una "persona" llamada `gJgJ2wc44ylNYNyNTYYu5k`, asignable; y si tiene regla, vuelve a `support` bajo su nombre crudo. Origen de R10 y razón de que R2 se aplique en el punto de uso. |
 | `unresolvedRuleNames` sólo inspecciona nombres de reglas, nunca ids de pool | `app/components/admin/ruleEnforcement.ts:225-249` | El fallo anterior sería **silencioso**: ningún reporte existente lo vería. |
@@ -71,7 +71,6 @@ contra el que este spec dedica un párrafo.
 | `app/api/kids/members/route.ts` | kids | Roster de kids |
 | `app/api/kids/generate/route.ts` | kids | Candidatos del generador de kids |
 | `app/utils/serviceMutationSideEffects.ts:840` | worship | Audiencia de correo de setlist |
-| `app/utils/proposalNotifyQueries.ts` (`role in ["super-admin","admin"]`) | worship | Audiencia de propuestas |
 
 **Resolución — NUNCA filtran** (`_id in $ids` / `_id == $id`): `app/(client)/me/page.tsx`,
 `app/api/me/route.ts`, `app/api/me/availability/route.ts`, `app/api/me/password/route.ts`,
@@ -85,7 +84,8 @@ contra el que este spec dedica un párrafo.
 | Lectura | Por qué se exime |
 |---|---|
 | `app/api/admin/login-events/route.ts:20` | Vista de auditoría de accesos. Ocultar a un retirado escondería precisamente el evento que interesa: que alguien fuera del roster entró. |
-| `app/utils/outboxLiveness.ts` | Audiencia de **operador**, no roster: alerta a super-admins de que el outbox está atorado. Depende del rol, no de servir. |
+| `app/utils/outboxLiveness.ts` | Seleccionada por ROL (D8). Alerta a super-admins de que el outbox está atorado: depende de gestionar, no de servir. |
+| `app/utils/proposalNotifyQueries.ts` (`ADMIN_RECIPIENTS_QUERY`) | Seleccionada por ROL (D8), forma idéntica a la anterior. Estuvo a punto de llevar default opuesto por describirse como "enumeración por rol" en vez de reconocerse como el mismo caso. |
 | `app/ministries.ts:50` | Comentario de uso, no consulta ejecutable. |
 
 ## Requirements
@@ -100,9 +100,9 @@ aquí.
 |---|---|---|---|
 | R1 | El retiro se almacena por ministerio, y la **ausencia del campo significa que sirve** | Decisión D1 del roadmap; contrato libre de migración que este repo ya usa en `published` y `ministries` | Los 57 documentos existentes, sin tocarlos, se leen como "sirve en todos sus ministerios" |
 | R2 | La **selección** — quién puede ser elegido o enumerado — excluye a los retirados del ministerio correspondiente | Es el gap que hace que `disabled` no sirva como retiro | Un guard automatizado falla si una selección nueva omite el filtro |
-| R2b | Las enumeraciones **exentas** llevan razón escrita y el guard las conoce | Sin esto el guard exigiría filtrar `outboxLiveness`, silenciando la alarma de outbox atorado justo para un super-admin retirado | Las exenciones declaradas son CUATRO — las tres del inventario más `GET /api/admin/members`, que deliberadamente no filtra en la consulta porque su lista sirve también a la resolución — y el guard falla si aparece una quinta sin declarar |
+| R2b | Las enumeraciones **exentas** llevan razón escrita y el guard las conoce | Sin esto el guard exigiría filtrar `outboxLiveness`, silenciando la alarma de outbox atorado justo para un super-admin retirado | Las exenciones declaradas son CINCO — las tres del inventario más `GET /api/admin/members`, que deliberadamente no filtra en la consulta porque su lista sirve también a la resolución — y el guard falla si aparece una quinta sin declarar |
 | R3 | La **resolución** nunca filtra: `_id in $ids`, `_id == $id`, id→nombre de pool, ocupante histórico | Filtrarlas rompería el historial y los correos de gente ya asignada | Un retirado sigue resolviendo con nombre y foto en cada servicio pasado |
-| R10 | Un retirado deja de ser **asignable por el solver** aunque su id siga en un pool, y una regla que lo nombre no lo reinyecta | R2 por sí solo no lo logra: `memberIdToName` cae al id crudo y `resolvedNameOrRaw` reinyecta en `extraSupport`, produciendo un id crudo asignable en silencio | El solve request no contiene ni el id ni el nombre del retirado en ningún pool; y el planner **dice** cuántos retirados hay en los pools, en vez de callarlo |
+| R10 | El nombre y el id de un retirado **no aparecen en ninguna parte del solve request**: ni en un pool, ni en `dsl_rules`, venga la cláusula de donde venga — incluidas las **autogeneradas** desde `unavailableDates`, que recorren los pools crudos de `config` y no pasan por el guard de `extraSupport` | R2 por sí solo no lo logra: `memberIdToName` cae al id crudo y `resolvedNameOrRaw` reinyecta en `extraSupport`, produciendo un id crudo asignable en silencio | El solve request no contiene ni el id ni el nombre del retirado en ningún pool; y el planner **dice** cuántos retirados hay en los pools, en vez de callarlo |
 | R4 | `disabled` conserva significado, latencia y conjunto de lectores exactos | El usuario pidió explícitamente conservar el revocado rápido | Ninguna ruta nueva lee ni escribe `disabled` junto al retiro; `memberAccess.ts` sin cambios |
 | R5 | Retirar no modifica ningún documento de **servicio** | Decisión D2: no reescribir lo que el equipo ya vio. R15 sí escribe el `solverConfig`, que no es un documento de servicio | Las mutaciones tocan el doc del miembro y, cuando R15 aplica, el `solverConfig`; jamás un role doc |
 | R6 | Un ocupante retirado en un servicio **futuro** se señala en el planner | Contraparte obligada de R5: no tocar exige avisar | La sede muestra el aviso; el servicio no cambia solo |
@@ -117,7 +117,16 @@ aquí.
 
 - Campo nuevo en `sanity/schemas/worshipTeam.ts` y su despliegue de esquema.
 - Helper de filtro GROQ compartido, junto a `WORSHIP_AUDIENCE_GROQ_FILTER` en `app/ministries.ts`.
-- Aplicación del filtro a las seis enumeraciones listadas.
+- Aplicación del filtro a **cuatro de las cinco** filas de la tabla de enumeración. La quinta,
+  `GET /api/admin/members`, es una excepción declarada: su lista alimenta también la resolución
+  y filtrarla rompe el mapeo id→nombre de los pools. El conteo se escribe con los dos números
+  —cuántas filas hay y cuántas filtran— y no como "todas las enumeraciones", porque un
+  implementador que lea sólo esta sección haría exactamente lo que el inventario prohíbe.
+  Sumando la tabla de exentas, las exenciones declaradas son **cinco** y el guard debe fallar
+  ante una sexta.
+- Exclusión del retirado al construir el solve request: de los pools **y** de la generación de
+  reglas de disponibilidad (`availabilityRules`), que es la segunda fuente de nombres en
+  `dsl_rules`.
 - Guard de cobertura automatizado, al estilo de `draftGatingCoverage.test.ts`.
 - Validación de escritura, junto a `validateMinistryWrite`.
 - UI en `AdminPanel`: control de retiro por ministerio y toggle de `disabled`, separados.
@@ -195,7 +204,7 @@ aquí.
 | Assumption | Impact if false | Validation | Failure response |
 |---|---|---|---|
 | El inventario de 23 lecturas está completo y bien clasificado | Filtrar de más rompe historial; de menos deja el gap | Reejecutar el grep como primer paso de implementación; el guard lo vuelve continuo | Reclasificar y ajustar el guard antes de tocar código |
-| Las cuatro exenciones son correctas — las tres del inventario más `GET /api/admin/members`, que no filtra en la consulta porque su lista sirve también a la resolución | Un retirado recibiría alertas de operador, o un evento de acceso quedaría oculto | Revisión adversarial de este spec | Convertir la exención en filtro; el guard las lista explícitamente |
+| Las cinco exenciones son correctas — las cuatro del inventario más `GET /api/admin/members`, que no filtra en la consulta porque su lista sirve también a la resolución | Un retirado recibiría alertas de operador, o un evento de acceso quedaría oculto | Revisión adversarial de este spec | Convertir la exención en filtro; el guard las lista explícitamente |
 | Nadie depende hoy de que un deshabilitado siga en los pools | El filtro cambiaría comportamiento esperado | Ninguna: `disabled` no se filtra hoy, así que este spec no altera ese caso | — |
 
 ## Open questions
@@ -212,9 +221,9 @@ aquí.
 |---|---|---|
 | R1 | Un doc sin el campo se lee como "sirve" en ambos ministerios | Test unitario del normalizador, con un doc sin el campo |
 | R2 | Los puntos de selección excluyen a los retirados | Guard de cobertura sobre `app/**`, invertido; falla al añadir una selección sin filtro |
-| R2b | Las cuatro exenciones están declaradas y una quinta falla el guard | Test del guard con una enumeración exenta no declarada |
+| R2b | Las cinco exenciones están declaradas y una sexta falla el guard | Test del guard con una enumeración exenta no declarada |
 | R3 | Un retirado resuelve con nombre en un servicio pasado, y su id de pool resuelve a su nombre | Test de integración sobre `serviceReadQueries`; test de `memberIdToName` con un miembro retirado presente en la lista |
-| R10 | El solve request no contiene el id crudo ni el nombre del retirado en ningún pool. **Alcanzable sólo con R15 cumplido**: sin borrar antes las reglas que lo nombran, este criterio produce el `ValueError` del solver, no un mes bien resuelto | Test de `buildSolveRequest` con un retirado en un pool y sin reglas que lo nombren; más un test de que "retirado con regla viva" es inalcanzable porque R15 lo impide antes |
+| R10 | **El nombre y el id del retirado no aparecen en NINGUNA parte del solve request** — ni en un pool, ni en `dsl_rules`, venga la cláusula de donde venga. Se enuncia sobre el request completo y no sobre los pools a propósito: `dsl_rules` tiene **dos** fuentes y la segunda no pasa por el guard. `availabilityRules` (`plannerModel.ts:666-678`) recorre los pools CRUDOS de `config` y emite `<nombre> !in week N Sun.*`, mientras que `allDslPersons` (`:653-657`) sólo mira restrictions/conflicts/presence. Hoy eso es seguro por construcción, porque quien está en el pool está en `known`; R10 rompe esa construcción al conservar el id almacenado y sacarlo del request. Un retirado **con `unavailableDates`** quedaría nombrado en `dsl_rules` y ausente de `known`, y `resolve_person` lanza `ValueError` (`gcf/owt_solver_v2.py:282-287`, alcanzado desde `:358-363`) — el mismo 422 del mes entero que R15 evita, por la puerta que R15 no cubre. Un retirado es **más** propenso que el promedio a tener fechas futuras marcadas. **Alcanzable sólo con R15 cumplido**: sin borrar antes las reglas que lo nombran, este criterio produce el `ValueError` del solver, no un mes bien resuelto | Tres tests de `buildSolveRequest`: (a) retirado con id en un pool almacenado y sin reglas → su nombre no aparece en el request; (b) **retirado con `unavailableDates` en un domingo y en el sábado previo** → no se emite ninguna cláusula de semana con su nombre, que es el caso que un criterio enunciado sobre pools no puede atrapar; (c) "retirado con regla viva" es inalcanzable porque R15 lo impide antes |
 | R4 | `memberAccess.ts` sin cambios; ninguna ruta nueva toca `disabled` junto al retiro | Diff vacío en ese archivo + escaneo del guard |
 | R5 | Ningún documento de **servicio** cambia al retirar | Test de que las mutaciones del handler tocan sólo el doc del miembro y, cuando R15 aplica, el `solverConfig` — jamás un role doc |
 | R6 | El aviso aparece; el servicio no cambia | Test de componente del planner con un ocupante retirado |
