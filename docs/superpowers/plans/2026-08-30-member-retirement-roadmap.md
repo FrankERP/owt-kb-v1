@@ -70,8 +70,10 @@
 - **Integration acceptance:** con P1 y P2 entregados, un super-admin puede (a) retirar a un
   miembro de worship desde la app y verlo desaparecer del dropdown de reglas, del ranking de
   candidatos y de las audiencias de correo de worship, **y dejar de ser asignable por el solver**,
-  con las reglas que lo nombraban ya resueltas — borradas si eran suyas, confirmadas si
-  involucraban a alguien más — conservándolo en kids si aplica; (b) verlo seguir
+  con las reglas que lo nombraban ya resueltas según los tres casos que **P1 § R15** define
+  como normativos — esta frase no los reenumera a propósito: una versión anterior los resumió
+  como un binario "borradas o confirmadas", que no tiene lugar para el caso en que la regla se
+  **edita y sobrevive**, y quedó contradiciendo al hijo. Conservándolo en kids si aplica; (b) verlo seguir
   apareciendo, con su nombre, en todo servicio pasado donde sirvió; (c) revocarle el acceso
   desde la misma pantalla con un control visiblemente distinto; y (d) recibir un error legible
   —con la opción de retirar— al intentar borrar a alguien con historial.
@@ -128,7 +130,7 @@ lo cual requiere que el retiro exista. P1 es desplegable y útil sin P2.
 
 | ID | Artifact type | Outcome and acceptance contract | Prerequisites | Outputs | Safe ending state | Rollback or recovery | Review order |
 |---|---|---|---|---|---|---|---|
-| P1 | Spec | Eje de retiro por ministerio: esquema, filtro de enumeración, guard de cobertura, UI de administración con los dos ejes separados, advertencia en el planner. Aceptado cuando un retirado desaparece de las enumeraciones de ese ministerio, sigue resolviendo en el historial, y `disabled` conserva su comportamiento medido. | Ninguno | Campo persistido; filtro GROQ compartido; test de cobertura; UI | Desplegable solo. Sin ningún miembro retirado, el sistema se comporta idéntico a hoy. | El campo es aditivo: revertir el código deja documentos con un campo que nadie lee. Sin pérdida de datos. | 1 |
+| P1 | Spec | Eje de retiro por ministerio: esquema, filtro en el punto de selección, guard de cobertura, resolución de reglas al retirar, UI con los dos ejes separados, aviso en el planner. Aceptado cuando un retirado sale de la selección de ese ministerio, sigue resolviendo en el historial, no aparece en el solve request, y `disabled` conserva su comportamiento medido. | Ninguno | Campo persistido; predicado de filtro compartido; test de cobertura; **borrado de reglas en `solverConfig`**; UI | Desplegable solo. Sin ningún miembro retirado, el sistema se comporta idéntico a hoy. | **PARCIALMENTE reversible, y la parte que no lo es hay que decirla.** El campo es aditivo: revertir el código deja documentos con un campo que nadie lee, sin pérdida. Pero R15 **borra reglas del `solverConfig` de forma permanente** (D7), y revertir el código no las devuelve. La recuperación real es un export del dataset tomado antes del primer retiro, o ninguna — en cuyo caso lo que queda es que el operador confirmó la lista de reglas antes de borrarlas. El plan de implementación debe elegir cuál y escribirlo. | 1 |
 | P2 | Spec | Borrado duro que falla legible y limpia lo que Sanity no protege. Aceptado cuando borrar a alguien con historial explica por qué y ofrece retirar, y borrar a alguien sin historial no deja ids colgando en `solverConfig`. | P1 | `DELETE` endurecido; limpieza de pools | Desplegable solo una vez P1 está. | Writer destructivo: el plan de implementación debe definir su propia recuperación. | 2 |
 
 ## Requirement-to-plan coverage
@@ -150,7 +152,10 @@ requisito aquí, reintroduces la clase entera.**
 Los identificadores son únicos en toda la familia: no hay dos `R10`.
 
 **Dirección de la columna "Planes que dependen":** lista los planes que **dependen de este
-requisito**, nunca los planes de los que el requisito depende. La dirección se escribe porque
+requisito**, nunca los planes de los que el requisito depende. Se llena **sólo** cuando otro plan no puede
+cumplir su propio contrato sin este requisito; una dependencia meramente de secuencia entre
+planes vive en la tabla de planes hijos y en la de secuencia, no aquí, para que la columna no
+duplique lo que esas ya dicen. La dirección se escribe porque
 una versión anterior la usó con los dos sentidos en dos filas distintas, y la fila equivocada
 implicaba retener el despliegue de P1 hasta P2 — al revés de la secuencia que este mismo
 documento fija.
@@ -182,7 +187,7 @@ gobiernan los mismos tres arrays de `solverConfig` con intención opuesta), y **
 
 | Transition | Entry criteria | Allowed release state | Exit criteria | Recovery if interrupted |
 |---|---|---|---|---|
-| Start → P1 | Spec P1 aceptado | Desplegable a producción | Un miembro retirado en un ministerio sale de sus enumeraciones y sigue en el historial; `disabled` sin cambio observable | Revertir el código; el campo queda huérfano y sin lectores. Ningún documento pierde datos. |
+| Start → P1 | Spec P1 aceptado | Desplegable a producción | Un miembro retirado en un ministerio sale de su selección, sigue en el historial, y su nombre no aparece en el solve request; `disabled` sin cambio observable | Revertir el código deja el campo huérfano y sin lectores. **Las reglas que R15 ya haya borrado NO vuelven** — ver la columna de rollback de P1. |
 | P1 → P2 | P1 en producción y verificado | Desplegable a producción | Borrado con historial falla legible; sin historial, limpio | Writer destructivo: lo define el plan de implementación de P2. |
 
 ## Shared decisions
@@ -191,7 +196,8 @@ gobiernan los mismos tres arrays de `solverConfig` con intención opuesta), y **
 |---|---|---|---|---|
 | D1 Alcance del retiro | **Por ministerio** | Elección del usuario. Cubre "salió de alabanza pero sigue en kids" sin vaciar `ministries`, que el boundary de escritura rechaza. | **Recomendé global y el usuario eligió por ministerio.** El costo es real y queda registrado: un tercer eje que cruzar con `ministries` y `disabled`, el filtro y su guard duplicados en las dos mitades, y más superficie de UI. Se acepta a cambio de no forzar el caso mixto a través de `ministries`. | Frank |
 | D2 Asignaciones futuras al retirar | No se tocan; se señalan | El retiro es un hecho del roster, no una edición del calendario. Vaciar sedes reescribiría servicios que el equipo ya vio y podría disparar correos de cambio de rol. | Queda trabajo manual por servicio. Se mitiga con R6. | Frank |
-| D7 Reglas que nombran a un retirado | Se **borran** al retirar; con **confirmación** cuando la regla involucra a alguien más | Elección de Frank, tras descubrirse que sacar a un retirado de los pools mientras `dsl_rules` lo nombra lanza un `ValueError` en el solver y rompe el mes entero. Borrar la regla individual es limpio; borrar una **conjunta** le cambia la programación a alguien que no se retiró, y por eso se enseña y se confirma en vez de hacerse solo. Rechaza la alternativa de omitir esas reglas del request, que sería normalización silenciosa — la clase de cosa por la que `"Vale Sosa"` sobrevivió invisible. | **El borrado de reglas no se deshace al des-retirar**: el retiro es reversible, sus reglas no. Asimetría deliberada, que la UI debe declarar antes de confirmar. | Frank |
+| D8 Audiencias seleccionadas por ROL | Exentas del filtro de retiro, todas, sin excepción | Resuelve con UNA regla dos casos que tenían defaults opuestos: `outboxLiveness` (alarma de outbox atorado a super-admins) estaba exento por ser "audiencia de operador", y `ADMIN_RECIPIENTS_QUERY` (propuestas a managers) iba a filtrar — misma forma exacta, `role in [...]`, sin filtro de ministerio. La regla es la que ya rige todo este spec: **el retiro habla de SERVIR, no de gestionar.** Un admin que dejó de servir sigue gestionando, y si además dejó de gestionar, lo que cambia es su rol, no su retiro. | Un admin retirado que además dejó de gestionar sigue recibiendo correos de propuestas hasta que le cambien el rol. Es un paso más, en el eje correcto. | P1 |
+| D7 Reglas que nombran a un retirado | Se **borran** al retirar; con **confirmación** cuando la regla involucra a alguien más | Elección de Frank, tras descubrirse que sacar a un retirado de los pools mientras `dsl_rules` lo nombra lanza un `ValueError` en el solver y rompe el mes entero. Borrar la regla individual es limpio; tocar una **conjunta** le cambia la programación a alguien que no se retiró, y por eso se enseña antes en vez de hacerse solo. **Los casos exactos son normativos en P1 § R15 y no se reenumeran aquí** — son tres, no dos, porque una regla de presencia con tres o más personas se edita y sobrevive en vez de morir. Rechaza la alternativa de omitir esas reglas del request, que sería normalización silenciosa — la clase de cosa por la que `"Vale Sosa"` sobrevivió invisible. | **El borrado de reglas no se deshace al des-retirar**: el retiro es reversible, sus reglas no. Asimetría deliberada, que la UI debe declarar antes de confirmar. | Frank |
 | D6 Actor del retiro | Super-admin-only | La primera versión afirmaba que `PATCH` de miembro no era super-admin-only y derivaba de ahí un default de `admin`. **Es falso**: `route.ts:19-22` lo rechaza, el propio archivo lo comenta, y la pestaña Miembros es `roles: ["super-admin"]`. Alinear con la realidad evita un ensanchamiento de ACL que nadie pidió ni valoró. | Un super-admin en el camino de cada retiro. Se abre después si duele, con su propio tier. | Frank |
 | D3 Borrado duro | Se conserva, endurecido | Sigue siendo la salida correcta para un documento creado por error que nunca sirvió. | Mantiene una ruta destructiva en la app. Se acota: super-admin-only, falla legible. | Frank |
 | D4 Reglas del solver por id | **Fuera de alcance, pero este spec fija su diseño** | Si nadie se borra nunca, el argumento de integridad referencial a favor de `reference` se cae: un id en string plano basta y queda simétrico con los pools, que ya son strings. | Un miembro borrado por Studio seguiría sin protección. Aceptable: P2 acota el borrado y el historial ya lo bloquea. | Frank |
@@ -211,7 +217,6 @@ gobiernan los mismos tres arrays de `solverConfig` con intención opuesta), y **
 |---|---|---|---|---|---|---|---|
 | ¿Un miembro retirado de **todos** sus ministerios debe perder el acceso automáticamente? | Es el punto exacto donde los dos ejes se tocan, y colapsarlos es lo que este spec evita | **No, pero sugerirlo en la UI.** Automatizarlo reintroduce el acoplamiento que motivó separar los ejes: alguien que se va del equipo puede conservar cuenta para ver su historial | Un paso manual más para el caso más común | Frank | No | Diseño de UI en P1 | No automático; la UI ofrece el segundo paso |
 | ¿Un ministry manager de kids puede retirar de kids? | D1 hizo el retiro por ministerio, pero el eje de actor sigue siendo de ROL. El CLAUDE.md dice que el rol nunca implica ministerio, y `requireMinistryManager` existe (`app/utils/authGuards.ts`) | **No en P1: super-admin-only, como todo lo demás en Miembros.** Abrirlo a ministry managers es un ensanchamiento de ACL con su propio precio de revisión, y no hay evidencia de que la operación sea frecuente | Un super-admin queda en el camino de cada retiro de kids. Si resulta molesto, se abre después como cambio propio y con su tier | Frank | No | Después de P1, si duele | Super-admin-only |
-| ¿La audiencia de propuestas (`ADMIN_RECIPIENTS_QUERY`) debe filtrar retiro de worship? | Esa consulta selecciona por ROL y **no tiene filtro de ministerio alguno** hoy (`proposalNotifyQueries.ts:34`), así que componerle un filtro de worship le impone una semántica de ministerio que nunca tuvo | **Filtrar, y declarar qué pasa con un admin sólo-kids**: hoy recibe correos de propuestas de worship y este cambio se los quitaría — correcto, pero debe ser deliberado y no un efecto secundario | Si un admin gestiona worship sin servir en worship, deja de enterarse | Frank | No | Implementación de P1 | Filtrar, y anotar el cambio |
 
 ## Review handoff
 
