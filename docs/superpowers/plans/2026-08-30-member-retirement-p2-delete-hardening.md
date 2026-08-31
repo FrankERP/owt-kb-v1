@@ -1,0 +1,132 @@
+# Spec: borrado de miembros que falla legible y no deja rastro colgante (P2)
+
+## Status
+
+`DRAFT` — hijo 2 de 2 de `2026-08-30-member-retirement-roadmap.md`.
+**Riesgo CRÍTICO**: modifica un writer destructivo de producción. Según el CLAUDE.md, exige
+dos `APPROVED` consecutivos y frescos sobre bytes idénticos antes de implementar.
+
+## Original request
+
+> Cómo manejaríamos lo del reference si quiero eliminar un miembro?
+> Podríamos "deshabilitar" a los miembros en vez de borrarlos para mantener los datos históricos también?
+
+## Outcome
+
+- **Primary outcome:** borrar un miembro deja de ser una operación que falla sin explicar o
+  que triunfa dejando basura. Con historial: falla diciendo por qué y ofrece retirar. Sin
+  historial: borra limpio, incluyendo las referencias que Sanity no protege.
+- **Intended user or operator:** super-admin (única función que puede borrar hoy).
+- **Problem and current behavior:** el handler es `await writeClient.delete(id)` sin try/catch
+  (`app/api/admin/members/[id]/route.ts:119`). Las cinco sedes de los role docs son referencias
+  fuertes, así que Sanity rechaza borrar a quien haya servido: la excepción sale como 500 y la
+  UI muestra el genérico *"Error al eliminar."* (`AdminPanel.tsx:826`). En sentido contrario,
+  los pools del `solverConfig` (`sundayLeads`/`saturdayLeads`/`support`) guardan ids como
+  **strings planos**, sin integridad referencial — así que un borrado que sí procede deja ids
+  colgando ahí, invisibles.
+- **Success measure:** ningún borrado termina en un mensaje que no explica nada, y ningún
+  borrado exitoso deja un id apuntando a un documento inexistente.
+
+## Evidence
+
+| Fact | Source | Planning implication |
+|---|---|---|
+| `DELETE` es `await writeClient.delete(id)` sin try/catch, tras dos guards de rol | `app/api/admin/members/[id]/route.ts:105-123` | El fallo por integridad no está manejado; sale como excepción no atrapada. |
+| La UI reporta `res.ok ? "Miembro eliminado." : "Error al eliminar."` | `app/components/admin/AdminPanel.tsx:823-826` | El mensaje no distingue "no se puede porque tiene historial" de "se cayó la red". |
+| Las cinco sedes de role docs son `reference` a `teamMembers`, sin `weak: true` | `sanity/schemas/sunRole.ts:51,65,93,118,129` | Sanity bloquea el borrado de quien sirvió. Ese es el caso común, y hoy es el que peor se comunica. |
+| Los pools del `solverConfig` son arrays de string, no de referencia | `sanity/schemas/solverConfig.ts:68-79`; consulta a producción 2026-08-30 (`support` contiene `gJgJ2wc44ylNYNyNTYYu5k`) | Sanity NO protege aquí. Es el rastro colgante que el borrado deja hoy. |
+| Las reglas del `solverConfig` guardan **nombres**, no ids | mismo esquema, `person`/`personA`/`personB`/`persons` son `string` | Una regla que nombra a un borrado no queda colgante sino inerte, y ya la reporta `unresolvedRuleNames`. No es trabajo de este spec. |
+| El retiro por ministerio existe (P1) | `2026-08-30-member-retirement-p1-roster-axis.md` | Es lo que el mensaje de error puede ofrecer como alternativa. Prerrequisito. |
+| Las escrituras a Sanity de producción requieren consentimiento explícito y dry-run previo | CLAUDE.md | Cualquier limpieza retroactiva de ids ya colgantes es una operación aparte y consentida. |
+
+## Requirements
+
+| ID | Requirement | Rationale | Acceptance criterion |
+|---|---|---|---|
+| R8 | Borrar a quien tiene historial falla con una razón legible y ofrece retirar | Es el caso común y hoy es indistinguible de un fallo de red | La respuesta identifica la causa; la UI la muestra y enlaza al retiro |
+| R9 | Un borrado que procede no deja ids colgando en los pools del `solverConfig` | Sanity no protege ahí; hoy el rastro queda invisible | Tras borrar, el id no aparece en ninguno de los tres pools |
+| R10 | La comprobación previa y el borrado no pueden divergir | Un chequeo "¿tiene historial?" seguido de un borrado es una carrera | La operación es segura si alguien adquiere historial entre ambos pasos |
+| R11 | El borrado sigue siendo super-admin-only | Comportamiento existente que no hay razón para relajar | Los dos guards de rol se conservan |
+
+## Scope
+
+### In scope
+
+- Endurecer `DELETE /api/admin/members/[id]`: distinguir el rechazo por integridad
+  referencial de un fallo genérico, y responder con una causa que la UI pueda mostrar.
+- Limpiar el id del miembro de los tres pools del `solverConfig` como parte del borrado.
+- Mensajería en `AdminPanel`: causa legible y salida hacia el retiro.
+- Definir el orden de operaciones y qué pasa si una mitad falla.
+
+### Non-goals
+
+- Cambiar quién puede borrar.
+- Migrar las reglas del solver a ids (D4 del roadmap).
+- Limpiar retroactivamente ids ya colgantes en producción. Es una escritura de datos que
+  requiere consentimiento y dry-run propios; este spec sólo evita crear más.
+- Borrado en cascada de documentos de servicio. Nunca: es el historial que todo esto protege.
+- Tocar `unresolvedRuleNames` o las reglas por nombre.
+
+## Behavior and invariants
+
+- **Required behavior:** el borrado es o completo o nulo desde el punto de vista del operador.
+  Ningún estado intermedio observable donde el miembro exista pero ya no esté en los pools, o
+  al revés.
+- **Preserved behavior:** super-admin-only; `revalidateServiceViews()` y `revalidatePath("/me")`
+  se siguen llamando en el camino exitoso.
+- **Security invariants:** los dos guards de rol se ejecutan antes de cualquier lectura o
+  escritura, como hoy.
+- **Failure and recovery:** el modo de falla que importa es el borrado parcial — pools
+  limpiados y documento no borrado, o al revés. El plan de implementación debe elegir un orden
+  que haga el resultado parcial **seguro y detectable**, y justificarlo. Un id sobrante en un
+  pool es recuperable; un miembro borrado cuyo historial queda roto no lo es.
+- **Concurrencia:** entre comprobar historial y borrar, alguien puede asignar a esa persona.
+  R10 exige que ese caso no produzca un borrado que rompa el historial. La integridad
+  referencial de Sanity es la red final y debe seguir siendo la autoridad, no la comprobación
+  previa.
+
+## Dependencies and constraints
+
+- **Depende de P1** entregado: sin retiro no hay alternativa que ofrecer.
+- El plan de implementación debe verificar empíricamente, en un dataset no productivo, que
+  Sanity efectivamente rechaza el borrado de un miembro referenciado. Toda la utilidad de R8
+  descansa en ese comportamiento, y en este spec es una suposición leída del esquema, no
+  observada.
+
+## Decisions
+
+| Decision | Choice | Why | Tradeoffs | Owner |
+|---|---|---|---|---|
+| Conservar el borrado duro | Sí, endurecido | Sigue siendo correcto para un documento creado por error que nunca sirvió | Mantiene una ruta destructiva en la app | Frank |
+| Autoridad sobre "¿se puede borrar?" | La integridad de Sanity, no la comprobación previa | Una comprobación previa es una foto; entre ella y el borrado el mundo cambia | El mensaje bonito depende de interpretar un error del proveedor | P2 |
+| Limpieza retroactiva | Fuera de alcance | Es escritura a datos de producción; necesita consentimiento y dry-run propios | Los ids colgantes que ya existan siguen ahí hasta una operación aparte | Frank |
+
+## Assumptions
+
+| Assumption | Impact if false | Validation | Failure response |
+|---|---|---|---|
+| Sanity rechaza borrar un doc referenciado por referencias fuertes | R8 se queda sin caso real y P2 pierde su motivo principal | Prueba empírica en dataset no productivo, **antes** de implementar | Si el borrado procede, el historial está en riesgo hoy: P2 sube de prioridad y cambia de forma |
+| El error de integridad es distinguible programáticamente de otros fallos | El mensaje legible no se puede construir | Misma prueba empírica: capturar la forma real del error | Degradar a un mensaje que no afirma la causa, y ofrecer el retiro igual |
+| Los tres pools son el único lugar donde un id de miembro se guarda sin referencia | Quedaría otro rastro colgante sin cubrir | Escaneo de esquemas por arrays de string que contengan ids | Ampliar R9 a lo que aparezca |
+
+## Open questions
+
+| Question | Why it matters | Recommendation and why | Tradeoffs | Owner | Blocking? | Resolution point | Bounded default |
+|---|---|---|---|---|---|---|---|
+| ¿La limpieza de pools va antes o después del borrado? | Define cuál es el estado parcial posible | **Después.** Un id sobrante en un pool es recuperable y detectable; limpiar primero y fallar el borrado deja al miembro fuera de las rotaciones sin que nadie lo haya decidido — un retiro silencioso, que es justo lo que P1 existe para hacer explícito | Si la limpieza falla tras un borrado exitoso, queda un id colgante — el estado de hoy, no peor | P2 | **Sí** | Plan de implementación | Después del borrado |
+| ¿Se ofrece "retirar en su lugar" como acción de un clic? | Cambia el alcance de UI | **Sí**, si P1 ya expone la mutación | Más superficie en el modal de borrado | Frank | No | Implementación | Enlace al control de retiro, sin acción directa |
+
+## Acceptance and verification
+
+| Requirement | Acceptance evidence | Verification method |
+|---|---|---|
+| R8 | Borrar a alguien con historial produce una causa identificable, y la UI la muestra | Test del handler con el error de integridad simulado + test de componente del modal |
+| R9 | Tras borrar, el id no está en ninguno de los tres pools | Test del handler que inspecciona las mutaciones emitidas |
+| R10 | Adquirir historial entre la comprobación y el borrado no rompe nada | Test de la secuencia; la autoridad final es el rechazo de Sanity |
+| R11 | Los dos guards de rol se conservan | Test de que un `admin` recibe 403 |
+
+## Terminal state
+
+`READY_FOR_ADVERSARIAL_REVIEW` — con una salvedad que el revisor debe pesar: la pregunta del
+orden de operaciones es **bloqueante** y tiene recomendación, no decisión. Riesgo crítico: dos
+`APPROVED` frescos y consecutivos sobre bytes idénticos.
