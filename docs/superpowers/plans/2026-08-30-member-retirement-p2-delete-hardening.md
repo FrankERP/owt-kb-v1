@@ -2,7 +2,7 @@
 
 ## Status
 
-`DRAFT` — hijo 2 de 2 de `2026-08-30-member-retirement-roadmap.md`.
+`DRAFT` — hijo 3 de 3 de `2026-08-30-member-retirement-roadmap.md`.
 **Riesgo CRÍTICO**: modifica un writer destructivo de producción. Según el CLAUDE.md, exige
 dos `APPROVED` consecutivos y frescos sobre bytes idénticos antes de implementar.
 
@@ -43,7 +43,7 @@ dos `APPROVED` consecutivos y frescos sobre bytes idénticos antes de implementa
 
 **Este spec es la fuente única del texto normativo de los requisitos que posee.** El roadmap
 padre los mapea por id y por una etiqueta estable, y no copia este texto. Los ids son únicos en
-toda la familia; `R1`–`R7`, `R10`, `R11` y `R14` pertenecen a P1 y no aparecen aquí.
+toda la familia; `R1`–`R7`, `R11`, `R14` y `R16` pertenecen a P1, y `R10`, `R15`, `R15b` y `R17` a P3. No aparecen aquí.
 
 | ID | Requirement | Rationale | Acceptance criterion |
 |---|---|---|---|
@@ -52,7 +52,7 @@ toda la familia; `R1`–`R7`, `R10`, `R11` y `R14` pertenecen a P1 y no aparecen
 | R12 | La comprobación previa y el borrado no pueden divergir | Un chequeo "¿tiene historial?" seguido de un borrado es una carrera | La operación es segura si alguien adquiere historial entre ambos pasos |
 | R13 | El borrado sigue siendo super-admin-only | Comportamiento existente que no hay razón para relajar | Los dos guards de rol se conservan |
 
-**R9 no es R10.** R10 vive en **P1** y hace que un *retirado* deje de ser asignable aunque su id siga en un pool: el id se conserva, porque el retiro es reversible. R9 aquí trata el *borrado*, donde el id debe irse: el documento ya no existe y conservarlo no reserva nada. Los dos tocan los mismos tres arrays por razones opuestas, y confundirlos produce o un retiro que borra estado recuperable, o un borrado que deja basura. Los identificadores son únicos en toda la familia por esa razón.
+**R9 no es R10.** R10 vive en **P3** y hace que un *retirado* deje de ser asignable aunque su id siga en un pool: el id se conserva, porque el retiro es reversible. R9 aquí trata el *borrado*, donde el id debe irse: el documento ya no existe y conservarlo no reserva nada. Los dos tocan los mismos tres arrays por razones opuestas, y confundirlos produce o un retiro que borra estado recuperable, o un borrado que deja basura. Los identificadores son únicos en toda la familia por esa razón.
 
 ## Scope
 
