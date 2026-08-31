@@ -111,8 +111,9 @@ describe("RuleBuilder — editing a rule keeps its id, so the edit survives", ()
   it("edits a presence rule in place", () => {
     const { container } = renderGen(CONFIG);
 
-    // Must CHANGE something: add a third person. `canAdd` needs >= 2 selected,
-    // so adding is the only edit a two-person rule offers.
+    // Must CHANGE something. What `canAdd` (>= 2 selected) forbids is REMOVING
+    // a person from a two-person rule — adding one is not the only edit
+    // available, the pattern select is ungated and would work equally well.
     openEditor(/≥1/);
     // Scoped to the form: `Beto` is also a checkbox in the `Soporte` member
     // pool higher up the panel, and a bare `getByRole` matches both.
@@ -137,12 +138,28 @@ describe("RuleBuilder — adding a rule mints a NEW id, independent of the rest"
     fireEvent.click(screen.getByRole("button", { name: "Agregar restricción" }));
   };
 
-  it("appends a fourth rule", () => {
-    const { container } = renderGen(CONFIG);
+  // `solverConfigWriteRequest` rejects a rule set on BOTH shapes of a bad id —
+  // `id:duplicate` AND `id:missing` (`solverConfigWriteRequest.ts:127,131`).
+  // Card text can only ever catch the first, so this asserts on the save
+  // payload: a fallback of `?? ""` renders identically and would slip through.
+  it("appends a fourth rule under its own non-empty id", async () => {
+    const rules = readyRules(CONFIG);
+    const { container } = renderGen(CONFIG, rules);
     addAnaRule();
 
     expect(container.textContent).toMatch(/Reglas \(4\)/);
     expect(container.textContent).toContain("!Sat.Lead");
+
+    fireEvent.click(screen.getByRole("button", { name: "Guardar reglas" }));
+
+    await waitFor(() => expect(rules.save).toHaveBeenCalledTimes(1));
+    const saved = rules.save.mock.calls[0][0] as SolverConfig;
+    expect(saved.restrictions).toHaveLength(2);
+    // The person too: a silently no-op'd select change would still render
+    // `!Sat.Lead`, just on a second Mkz row.
+    expect(saved.restrictions[1].person).toBe("Ana");
+    expect(saved.restrictions[1].id).toBeTruthy();
+    expect(saved.restrictions[1].id).not.toBe("r-mkz");
   });
 
   it("gives the added rule its own id — editing one card does not touch the other", () => {
