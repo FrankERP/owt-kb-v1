@@ -1,8 +1,8 @@
 # Review log — retiro de miembros (roadmap + P1 + P2)
 
-**Estado: LOOP DETENIDO SIN APROBACIÓN.** Ninguna ronda terminó en `APPROVED`. Este log
-registra cinco rondas sobre el roadmap padre y la razón estructural por la que detenerlo fue
-mejor que seguir. **La aprobación de un plan nunca autoriza implementar, y aquí no hay
+**Estado: EN CURSO, SIN APROBACIÓN.** Ninguna de las siete rondas terminó en `APPROVED`. El
+loop se detuvo en la ronda 5, Frank autorizó consolidar y reanudar, y luego autorizó el split a
+P3; las rondas 6 y 7 corren bajo esa autorización. **La aprobación de un plan nunca autoriza implementar, y aquí no hay
 aprobación de nada.**
 
 ## Tier y por qué
@@ -22,7 +22,10 @@ aprobación de nada.**
 | — | *consolidación* | `94d9b63c` | — | (fuente única de texto normativo) |
 | 3 | `1a3429a094402efa` | `1453c1ce` | CHANGES_REQUIRED | 2 |
 | 4 | `92358b87e85859a5` | *(en el mismo)* | CHANGES_REQUIRED | 3 |
-| 5 | `79a1a79bf6e6fef8` | `(este)` | CHANGES_REQUIRED | 3 |
+| 5 | `79a1a79bf6e6fef8` | `124d94eb` | CHANGES_REQUIRED | 3 |
+| — | *split a P3* | `44c86b17` | — | (autorizado por Frank) |
+| 6 | `1b7071281c4e683d` | `f0d68863` | CHANGES_REQUIRED | 3 |
+| 7 | `d64a43bf610588dc` | `57b09d5c` | CHANGES_REQUIRED | 2 |
 
 Digest final sin revisar: roadmap `03ca9aac8adf6922`, P1 `be05bfab47c1b2a3`.
 
@@ -46,7 +49,13 @@ Digest final sin revisar: roadmap `03ca9aac8adf6922`, P1 `be05bfab47c1b2a3`.
 | 5.2 | D8 y la pregunta abierta 3 de P1 daban instrucciones opuestas | fixed | D8 en el roadmap vs `p1:216` |
 | 5.3 | R15 estrechó la condición del usuario sin declararlo | fixed | `owt_solver_v2.py:732-741` (`sum(terms) >= 1`), `:321` |
 
-No refuté ningún bloqueador: los trece resultaron ciertos.
+| 6.1 | La fila de P1 y Start→P1 asignaban a P1 el trabajo irreversible de P3 | fixed | tabla de hijos vs mapa |
+| 6.2 | El Behavior normativo de P1 exigía filtrar los pools del request — y hacerlo en P1 solo revienta el mes | fixed | `plannerModel.ts:666-678` vs `:653-657`; `owt_solver_v2.py:287,363` |
+| 6.3 | `R10` duplicado en el mapa, uno colgante, y tres referencias cruzadas a P1 por requisitos de P3 | fixed | grep de filas y referencias |
+| 7.1 | Las tres lecturas de kids mal clasificadas: filtrarlas hace **daño activo** | fixed → R18/D9 | `kids/generate/route.ts:111,166`; `kidsRotation.ts:113` |
+| 7.2 | La ventana P1→P3 deja varado a todo el que se retire dentro de ella, y el roadmap llamaba seguro a ese estado | fixed | R15 dispara al retirar; `owt_solver_v2.py:287` |
+
+No refuté ningún bloqueador: los dieciocho resultaron ciertos.
 
 ## No bloqueantes adoptados
 
@@ -66,6 +75,14 @@ borrado falla" afirmado como hecho cuando la tabla de suposiciones lo lista como
 3. **Clasifiqué mal el tier de P1** como estándar, y sólo la revisión lo corrigió.
 4. **Estreché la condición explícita de Frank** ("si involucra alguien más") a "si la regla
    muere", sin declararlo como desviación.
+7. **Mis propios arreglos son ahora la fuente principal de defectos nuevos.** Los tres
+   bloqueadores de la ronda 6 fueron residuo del split que yo acababa de hacer, y el material
+   de kids que revisará la ronda 8 lo escribí en la 7. El diseño de worship, en cambio, lleva
+   tres revisores consecutivos verificándolo como correcto. El loop dejó de encontrar fallos
+   del diseño y encontró fallos de mi edición.
+8. **Mi verificación de integridad comparaba conjuntos**, así que no podía ver una fila `R10`
+   duplicada en el mapa. Lo encontró un revisor. Ahora cuenta filas, busca duplicados y resuelve
+   cada referencia `Pn § Rm` contra el dueño real.
 5. **La misma clase de defecto reapareció cinco rondas seguidas:** una corrección que llega a
    una sección y no a su gemela. La consolidación de la ronda 2/3 la cerró para el *texto de
    requisitos*, y volvió a aparecer en **prosa, decisiones y preguntas abiertas** — secciones
