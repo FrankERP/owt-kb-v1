@@ -544,7 +544,14 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
 
   const handleAdd = () => {
     if (!canAdd) return;
-    onAdd({ id: uid(), person, excludedPatterns: excl, fairness, fairnessSlack: slack, weekExclusions: weekEx, caps });
+    // `initialValues?.id ?? uid()` — NOT a bare `uid()`. This form is both the
+    // add form and the edit form, and `saveRestriction` in `RuleBuilder` commits
+    // an edit with `restrictions.map(x => x.id === r.id ? r : x)`. Minting a
+    // fresh id on save therefore matched no row and the edit was DISCARDED with
+    // no error: the card re-rendered unchanged and a cap added to an existing
+    // person simply never appeared. `ConflictForm` and `PresenceForm` always
+    // preserved the id; this one did not.
+    onAdd({ id: initialValues?.id ?? uid(), person, excludedPatterns: excl, fairness, fairnessSlack: slack, weekExclusions: weekEx, caps });
   };
 
   return (
