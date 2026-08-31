@@ -87,7 +87,7 @@
 | `isMemberActive` = doc existe && `disabled !== true`, caché TTL 30 s | `app/utils/memberAccess.ts:56,75` | El "rápido" que pidió el usuario ya está medido: 30 s. El retiro no debe entrar a esta ruta. |
 | De 23 lecturas de `teamMembers` en `app/**`, **1** menciona `disabled` — la de auth | `grep` sobre `app/**` | `disabled` hoy NO saca a nadie de ningún roster. Es la razón por la que "deshabilitar en vez de borrar" no funciona todavía. |
 | Las lecturas se parten en enumeración (`*[_type == "teamMembers" && <filtro>]`) y resolución (`_id in $ids` / `_id == $id`) | Inventario en P1 | Base de la regla, **pero no la regla**: el corte se aplica en el punto de USO, no en la consulta — ver Global requirements. Una misma lista puede servir a los dos roles, y `GET /api/admin/members` es justamente ese caso. |
-| Las cinco sedes de role docs son `reference` a `teamMembers`, sin `weak: true` | `sanity/schemas/sunRole.ts:50,65,93,117,128` | Sanity ya bloquea borrar a quien haya servido. El borrado duro no es una vía de salida real hoy. |
+| Las cinco sedes de role docs son `reference` a `teamMembers`, sin `weak: true` | `sanity/schemas/sunRole.ts:51,65,93,118,129` | Sanity ya bloquea borrar a quien haya servido. El borrado duro no es una vía de salida real hoy. |
 | `DELETE` hace `await writeClient.delete(id)` sin try/catch | `app/api/admin/members/[id]/route.ts:119` | Un borrado rechazado por integridad sale como 500 y la UI dice sólo "Error al eliminar". |
 | Los pools del `solverConfig` (`sundayLeads`/`saturdayLeads`/`support`) guardan ids como strings planos | consulta a producción, 2026-08-30 | Sin integridad referencial: un borrado deja ids colgando ahí. Bug latente preexistente, en P2. |
 | `kidsPair.active`: "Las parejas retiradas conservan su historial pero salen de todas las rotaciones" | `sanity/schemas/kidsPair.ts:43-48` | Precedente del patrón EN ESTE REPO, con la semántica exacta que se busca. |
@@ -204,10 +204,20 @@ conserva porque el retiro es reversible, y **R14 acota a R7**.
 
 ## Sequence and safe states
 
+**La entrada a P1 → P3 tiene una condición que no es automática, y hay que decirla.** R15 se
+dispara **al retirar**, nunca vuelve a visitar a alguien ya retirado. Así que todo el que se
+retire mientras P1 está solo en producción queda con sus reglas vivas — correctamente, porque
+sin P3 eso es lo seguro. El día que R10 entre, cada uno de ellos se convierte en un `ValueError`
+del mes entero. Esa población no es hipotética: es exactamente la gente que el equipo retiró
+usando la función recién entregada. Antes de desplegar P3 hay que resolverlas —reportadas y
+limpiadas por un operador, o R10 condicionado a saltarse la exclusión mientras una regla siga
+nombrando a la persona— y la pregunta abierta de P3 sobre "retirados ya en los pools" **no**
+cubre este caso: habla de ids de pool, no de reglas.
+
 | Transition | Entry criteria | Allowed release state | Exit criteria | Recovery if interrupted |
 |---|---|---|---|---|
 | Start → P1 | Spec P1 aceptado | Desplegable a producción | Un miembro retirado sale de la selección de ese ministerio, sigue resolviendo en el historial, `disabled` sin cambio observable, y la UI **declara** que el retiro todavía no lo saca del solver (R16) | Revertir el código deja el campo huérfano y sin lectores. Nada se pierde: el borrado irreversible de reglas es de P3, no de aquí. |
-| P1 → P3 | P1 en producción y verificado | Desplegable a producción | El nombre y el id de un retirado no aparecen en el solve request; un mes sin retirados produce un request byte-idéntico | Escritura irreversible de reglas: lo define el plan de implementación de P3. Un `solverConfig` escrito sin el `retiredFrom` es recuperable; el inverso deja el estado de P1-sin-P3, que R16 hace seguro. |
+| P1 → P3 | P1 en producción y verificado **y ningún miembro con `retiredFrom` conserva una regla sin resolver** — ver abajo | Desplegable a producción | El nombre y el id de un retirado no aparecen en el solve request; un mes sin retirados produce un request byte-idéntico | Escritura irreversible de reglas: lo define el plan de implementación de P3. Un `solverConfig` escrito sin el `retiredFrom` es recuperable. **El inverso NO es el estado de P1-sin-P3 y no es seguro:** en P1-sin-P3 el retirado sigue en los pools y toda regla que lo nombre resuelve, que es justo lo que hace suficiente a R16. Con R10 vivo, `retiredFrom` puesto sin resolver las reglas es el `ValueError` del mes entero. |
 | P3 → P2 | P3 en producción y verificado | Desplegable a producción | Borrado con historial falla legible; sin historial, limpio | Writer destructivo: lo define el plan de implementación de P2. |
 
 ## Shared decisions
@@ -242,7 +252,7 @@ conserva porque el retiro es reversible, y **R14 acota a R7**.
 
 - **Parent review first, then child order:** este roadmap → P1 → P3 → P2.
 - **Evidence pointers:** `sanity/schemas/worshipTeam.ts:50`, `sanity/schemas/kidsPair.ts:43`,
-  `sanity/schemas/sunRole.ts:50,65,93,117,128`, `app/utils/memberAccess.ts:53-77`,
+  `sanity/schemas/sunRole.ts:51,65,93,118,129`, `app/utils/memberAccess.ts:53-77`,
   `app/ministries.ts:64-109`, `app/api/admin/members/route.ts:22-31`,
   `app/api/admin/members/[id]/route.ts:105-123`,
   `app/utils/__tests__/draftGatingCoverage.test.ts`, `app/components/admin/AdminPanel.tsx:716-830`.
@@ -264,6 +274,6 @@ conserva porque el retiro es reversible, y **R14 acota a R7**.
 
 ## Terminal state
 
-`READY_FOR_ADVERSARIAL_REVIEW` — las tres preguntas abiertas son no bloqueantes y tienen
+`READY_FOR_ADVERSARIAL_REVIEW` — las dos preguntas abiertas son no bloqueantes y tienen
 default acotado. P1 y P2 existen como artefactos hermanos en este mismo directorio; este
 roadmap define la partición, los invariantes compartidos y la cobertura, no su contenido.
