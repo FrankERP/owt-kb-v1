@@ -69,7 +69,7 @@
   - Retirar parejas de kids (`kidsPair.active` ya existe y no se toca).
 - **Integration acceptance:** con P1 y P2 entregados, un super-admin puede (a) retirar a un
   miembro de worship desde la app y verlo desaparecer del dropdown de reglas, del ranking de
-  candidatos y de las audiencias de correo de worship, **y dejar de ser asignable por el solver**,
+  candidatos y de las audiencias de correo de worship, **y —una vez entregado P3— dejar de ser asignable por el solver**,
   con las reglas que lo nombraban ya resueltas según los tres casos que **P1 § R15** define
   como normativos — esta frase no los reenumera a propósito: una versión anterior los resumió
   como un binario "borradas o confirmadas", que no tiene lugar para el caso en que la regla se
@@ -103,7 +103,17 @@
 
 ## Decomposition rationale
 
-**P1 y P2 se separan por dependencia y despliegue independiente.** P1 es útil y desplegable
+**Son TRES hijos, y el tercero se separó por evidencia, no por diseño previo.** P3 nació dentro
+de P1 y salió tras cinco rondas de revisión adversarial cuyos siete bloqueadores sustantivos
+cayeron **todos** en la misma interacción —el retiro contra el solve request— mientras el eje de
+retiro, el filtro y el kill switch estuvieron limpios tres rondas seguidas. Esa concentración es
+el dato: no era un requisito más de P1, era un segundo proyecto escondido entre diez requisitos
+tranquilos. P3 toca `buildSolveRequest`, el contrato DSL del solver, un documento compartido con
+guarda de revisión multi-admin y un borrado que no se deshace. Separarlo devuelve a P1 su
+naturaleza aditiva y le da a P3 el presupuesto de revisión que su historial demuestra que
+necesita.
+
+**P1, P3 y P2 se separan también por dependencia y despliegue independiente.** P1 es útil y desplegable
 solo; P2 depende de él, porque su mensaje de error ofrece "retirar en su lugar" y eso exige que
 el retiro exista. Cada uno tiene su propio contrato de aceptación, se verifica de forma
 independiente y tiene un estado final seguro por sí mismo.
@@ -123,15 +133,19 @@ estado confuso de hoy, a medio cambiar, y el que hace que alguien retire creyend
 Ese es un estado intermedio inseguro en el sentido del test de alcance, no una preferencia
 estética.
 
-**P2 depende de P1** y no al revés: el mensaje de error del borrado ofrece "retirar en su lugar",
-lo cual requiere que el retiro exista. P1 es desplegable y útil sin P2.
+**P3 y P2 dependen de P1**, y no al revés. P3 necesita que `retiredFrom` exista para tener a
+quién excluir; el mensaje de error de P2 ofrece "retirar en su lugar". P1 es desplegable y útil
+sin ninguno de los dos — **pero incompleto de una forma que un administrador no puede ver**, y
+por eso R16 existe: sin P3, retirar saca a alguien de la selección y **no** del solver, y la UI
+tiene que decirlo. Un estado intermedio que engaña es peor que uno que falta.
 
 ## Child plans
 
 | ID | Artifact type | Outcome and acceptance contract | Prerequisites | Outputs | Safe ending state | Rollback or recovery | Review order |
 |---|---|---|---|---|---|---|---|
-| P1 | Spec | Eje de retiro por ministerio: esquema, filtro en el punto de selección, guard de cobertura, resolución de reglas al retirar, UI con los dos ejes separados, aviso en el planner. Aceptado cuando un retirado sale de la selección de ese ministerio, sigue resolviendo en el historial, no aparece en el solve request, y `disabled` conserva su comportamiento medido. | Ninguno | Campo persistido; predicado de filtro compartido; test de cobertura; **borrado de reglas en `solverConfig`**; UI | Desplegable solo. Sin ningún miembro retirado, el sistema se comporta idéntico a hoy. | **PARCIALMENTE reversible, y la parte que no lo es hay que decirla.** El campo es aditivo: revertir el código deja documentos con un campo que nadie lee, sin pérdida. Pero R15 **borra reglas del `solverConfig` de forma permanente** (D7), y revertir el código no las devuelve. La recuperación real es un export del dataset tomado antes del primer retiro, o ninguna — en cuyo caso lo que queda es que el operador confirmó la lista de reglas antes de borrarlas. El plan de implementación debe elegir cuál y escribirlo. | 1 |
-| P2 | Spec | Borrado duro que falla legible y limpia lo que Sanity no protege. Aceptado cuando borrar a alguien con historial explica por qué y ofrece retirar, y borrar a alguien sin historial no deja ids colgando en `solverConfig`. | P1 | `DELETE` endurecido; limpieza de pools | Desplegable solo una vez P1 está. | Writer destructivo: el plan de implementación debe definir su propia recuperación. | 2 |
+| P1 | Spec | Eje de retiro por ministerio: esquema, filtro en el punto de selección, guard de cobertura, resolución de reglas al retirar, UI con los dos ejes separados, aviso en el planner. Aceptado cuando un retirado sale de la selección de ese ministerio, sigue resolviendo en el historial, `disabled` conserva su comportamiento medido, y la UI **no afirma** que retirar lo saque del solver — porque sin P3 no lo saca. | Ninguno | Campo persistido; predicado de filtro compartido; test de cobertura; UI con los dos ejes; copia y aviso de R16 | Desplegable solo. Sin ningún miembro retirado, el sistema se comporta idéntico a hoy. | Totalmente reversible: el campo es aditivo, revertir el código deja documentos con un campo que nadie lee, y no se pierde nada. **La parte irreversible se fue a P3**, que es donde vive el borrado de reglas. | 1 |
+| P3 | Spec | Sacar al retirado del solve request: ausencia total del request, resolución de reglas con confirmación, guarda de revisión sobre el `solverConfig`. Aceptado cuando el nombre y el id de un retirado no aparecen en ninguna parte del request, un mes sin retirados produce un request byte-idéntico al de hoy, y ninguna regla que nombre a otra persona se tocó sin que el operador la viera. | P1 | Exclusión en `buildSolveRequest`; borrado de reglas revision-guarded; aviso de retirados en pools | Desplegable solo una vez P1 está. | **Borra reglas del `solverConfig` de forma irreversible.** Revertir el código no las devuelve; la recuperación es un export previo del dataset, o ninguna, y el plan de implementación debe elegir cuál. | 2 |
+| P2 | Spec | Borrado duro que falla legible y limpia lo que Sanity no protege. Aceptado cuando borrar a alguien con historial explica por qué y ofrece retirar, y borrar a alguien sin historial no deja ids colgando en `solverConfig`. | P1 | `DELETE` endurecido; limpieza de pools | Desplegable solo una vez P1 está. | Writer destructivo: el plan de implementación debe definir su propia recuperación. | 3 |
 
 ## Requirement-to-plan coverage
 
@@ -173,8 +187,11 @@ documento fija.
 | R10 | Referencias de roster almacenadas | P1 § Requirements | P1 | — | P1 |
 | R11 | Boundary de escritura del retiro | P1 § Requirements | P1 | — | P1 |
 | R14 | Anti-bloqueo del kill switch | P1 § Requirements | P1 | — | P1 |
-| R15 | Resolución de reglas al retirar | P1 § Requirements | P1 | — | P1 |
-| R15b | Guarda de revisión de la escritura de R15 | P1 § Requirements | P1 | — | P1 |
+| R16 | Honestidad del estado intermedio | P1 § Requirements | P1 | — | P1 |
+| R10 | Ausencia total del solve request | P3 § Requirements | P3 | — | P3 |
+| R15 | Resolución de reglas al retirar | P3 § Requirements | P3 | — | P3 |
+| R15b | Guarda de revisión del `solverConfig` | P3 § Requirements | P3 | — | P3 |
+| R17 | Orden entre resolver reglas y excluir | P3 § Requirements | P3 | — | P3 |
 | R8 | Borrado que falla legible | P2 § Requirements | P2 | — | P2 |
 | R9 | Borrado sin ids colgantes | P2 § Requirements | P2 | — | P2 |
 | R12 | Borrado sin divergencia (concurrencia) | P2 § Requirements | P2 | — | P2 |
@@ -189,7 +206,8 @@ gobiernan los mismos tres arrays de `solverConfig` con intención opuesta), y **
 | Transition | Entry criteria | Allowed release state | Exit criteria | Recovery if interrupted |
 |---|---|---|---|---|
 | Start → P1 | Spec P1 aceptado | Desplegable a producción | Un miembro retirado en un ministerio sale de su selección, sigue en el historial, y su nombre no aparece en el solve request; `disabled` sin cambio observable | Revertir el código deja el campo huérfano y sin lectores. **Las reglas que R15 ya haya borrado NO vuelven** — ver la columna de rollback de P1. |
-| P1 → P2 | P1 en producción y verificado | Desplegable a producción | Borrado con historial falla legible; sin historial, limpio | Writer destructivo: lo define el plan de implementación de P2. |
+| P1 → P3 | P1 en producción y verificado | Desplegable a producción | El nombre y el id de un retirado no aparecen en el solve request; un mes sin retirados produce un request byte-idéntico | Escritura irreversible de reglas: lo define el plan de implementación de P3. Un `solverConfig` escrito sin el `retiredFrom` es recuperable; el inverso deja el estado de P1-sin-P3, que R16 hace seguro. |
+| P3 → P2 | P3 en producción y verificado | Desplegable a producción | Borrado con historial falla legible; sin historial, limpio | Writer destructivo: lo define el plan de implementación de P2. |
 
 ## Shared decisions
 
@@ -221,7 +239,7 @@ gobiernan los mismos tres arrays de `solverConfig` con intención opuesta), y **
 
 ## Review handoff
 
-- **Parent review first, then child order:** este roadmap → P1 → P2.
+- **Parent review first, then child order:** este roadmap → P1 → P3 → P2.
 - **Evidence pointers:** `sanity/schemas/worshipTeam.ts:50`, `sanity/schemas/kidsPair.ts:43`,
   `sanity/schemas/sunRole.ts:50,65,93,117,128`, `app/utils/memberAccess.ts:53-77`,
   `app/ministries.ts:64-109`, `app/api/admin/members/route.ts:22-31`,
@@ -232,13 +250,15 @@ gobiernan los mismos tres arrays de `solverConfig` con intención opuesta), y **
   una corrección que llegó a una sección y no a su gemela — los tres artefactos se consolidaron
   para que cada requisito tenga un solo lugar donde su texto puede cambiar. Esa consolidación
   **no está revisada**: es material nuevo posterior a la ronda 2.
-- **Risk tier:** **P1 crítico** y **P2 crítico** — dos `APPROVED` consecutivos sobre bytes
+- **Risk tier:** **P1, P3 y P2 críticos** — dos `APPROVED` consecutivos sobre bytes
   idénticos cada uno.
   - P1 se clasificó primero como estándar. **Eso era un error, y se corrige derivándolo de la
     escalera, no elevándolo por precaución:** R7 crea una ruta de escritura nueva sobre
     `disabled`, el campo que `isMemberActive` lee para permitir o negar **toda** petición. La
     escalera nombra "auth/security/ACL boundary" como crítico; una ruta que escribe el gate de
     acceso está dentro, aunque el campo y su lector ya existan.
+  - P3 es crítico: escribe un documento compartido de producción con serialización de array
+    completo, borra reglas de forma irreversible y cambia el request que alimenta al solver.
   - P2 es crítico por writer destructivo de producción.
 
 ## Terminal state
