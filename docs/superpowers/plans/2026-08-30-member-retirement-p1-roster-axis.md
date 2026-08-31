@@ -2,7 +2,12 @@
 
 ## Status
 
-`DRAFT` — hijo 1 de 2 de `2026-08-30-member-retirement-roadmap.md`. Riesgo **estándar**.
+`DRAFT` — hijo 1 de 2 de `2026-08-30-member-retirement-roadmap.md`.
+**Riesgo CRÍTICO.** No por tamaño: R7 crea una ruta de escritura nueva sobre `disabled`, el
+campo que `isMemberActive` lee para permitir o negar **toda** petición. La escalera nombra
+"auth/security/ACL boundary" como crítico y una ruta que escribe el gate de acceso está dentro,
+aunque el campo y su lector ya existan. Se clasificó primero como estándar; eso era un error.
+Dos `APPROVED` consecutivos sobre bytes idénticos.
 
 ## Original request
 
@@ -44,7 +49,11 @@
 | `kidsPair.active`: "Las parejas retiradas conservan su historial pero salen de todas las rotaciones" | `sanity/schemas/kidsPair.ts:43-48` | Precedente del patrón en este repo, con la semántica exacta buscada. |
 | `draftGatingCoverage.test.ts`: escaneo invertido de `app/**`, exime por excepción; su encabezado documenta que "una frase en CLAUDE.md y N call sites correctos es un estado, no un mecanismo", y que la primera versión encontró una violación real preexistente | `app/utils/__tests__/draftGatingCoverage.test.ts:1-45` | Mecanismo probado y su modo de falla conocido: un filtro guardado en string e inyectado en otro lado es invisible a un escaneo de grupo. El guard de R2 debe cubrir esa forma. |
 | Las cinco sedes de role docs son `reference` sin `weak: true` | `sanity/schemas/sunRole.ts:51,65,93,118,129` | El historial resuelve por referencia, no por copia de nombre: retirar no puede romperlo, y borrar ya está bloqueado. |
-| El planner obtiene miembros de `GET /api/admin/members` | `app/components/admin/serviceSourceState.ts:141`, `AvailabilityPanel.tsx:69`, `AdminPanel.tsx:716` | Un solo punto de entrada alimenta pools, dropdown de reglas y ranking de candidatos. Filtrar ahí cubre las tres. |
+| El planner obtiene miembros de `GET /api/admin/members` | `app/components/admin/serviceSourceState.ts:141`, `AvailabilityPanel.tsx:69`, `AdminPanel.tsx:716` | **UNA sola lista alimenta selección Y resolución.** Por eso el filtro NO puede vivir en la API: ver la fila siguiente. |
+| `buildSolveRequest` mapea los ids de los pools con `memberIdToName`, que **cae al id crudo** si el miembro no está en la lista; y `resolvedNameOrRaw` reinyecta a todo nombrado-por-regla ausente de los pools en `extraSupport` | `app/components/admin/plannerModel.ts:554-557, 566-568, 641-645, 648-661` | Filtrar la lista en la API no saca a un retirado del solve request: su id se vuelve una "persona" llamada `gJgJ2wc44ylNYNyNTYYu5k`, asignable; y si tiene regla, vuelve a `support` bajo su nombre crudo. Origen de R10 y razón de que R2 se aplique en el punto de uso. |
+| `unresolvedRuleNames` sólo inspecciona nombres de reglas, nunca ids de pool | `app/components/admin/ruleEnforcement.ts:225-249` | El fallo anterior sería **silencioso**: ningún reporte existente lo vería. |
+| `PATCH` y `DELETE` de miembro son ambos **super-admin-only**; la pestaña Miembros es `roles: ["super-admin"]` | `app/api/admin/members/[id]/route.ts:19-22`, `:113-116`; `app/components/admin/AdminPanel.tsx:567` | Retirar con rol `admin` sería un ensanchamiento de ACL, no una alineación. Fija el actor en super-admin. |
+| `ADMIN_RECIPIENTS_QUERY` selecciona por rol y **no tiene filtro de ministerio alguno** | `app/utils/proposalNotifyQueries.ts:34` | Componerle un filtro de retiro de worship le impone una semántica de ministerio que nunca tuvo. Ver preguntas abiertas. |
 | `AdminPanel` no tiene ningún control de `disabled` | `grep disabled app/components/admin/AdminPanel.tsx` | R7 es UI nueva sobre campo existente: sin esquema nuevo, sin lector nuevo. |
 
 ### Inventario de las lecturas de `teamMembers` en `app/**`
@@ -53,7 +62,7 @@
 
 | Lectura | Ministerio | Por qué |
 |---|---|---|
-| `app/api/admin/members/route.ts:22` | worship | Alimenta pools del planner, dropdown de reglas y ranking de candidatos |
+| `app/api/admin/members/route.ts:22` | worship | **NO se filtra en la consulta.** Devuelve a todos, con `retiredFrom`; el planner filtra en el punto de selección. Filtrar aquí rompería la resolución id→nombre de los pools (ver R10). |
 | `app/(client)/kids/admin/page.tsx` | kids | Roster de kids |
 | `app/api/kids/members/route.ts` | kids | Roster de kids |
 | `app/api/kids/generate/route.ts` | kids | Candidatos del generador de kids |
@@ -80,13 +89,15 @@
 | ID | Requirement | Rationale | Acceptance criterion |
 |---|---|---|---|
 | R1 | El retiro se almacena por ministerio, y la **ausencia del campo significa que sirve** | Decisión D1 del roadmap; contrato libre de migración que este repo ya usa en `published` y `ministries` | Los 57 documentos existentes, sin tocarlos, se leen como "sirve en todos sus ministerios" |
-| R2 | Toda lectura de **enumeración** de `teamMembers` filtra a los retirados del ministerio que enumera | Es el gap que hace que `disabled` no sirva como retiro | Un guard automatizado falla si una enumeración nueva omite el filtro |
-| R3 | Ninguna lectura de **resolución** filtra por retiro | Filtrarlas rompería el historial y los correos de gente ya asignada | Un retirado sigue resolviendo con nombre y foto en cada servicio pasado; el guard distingue las dos formas y no exige el filtro en resolución |
+| R2 | La **selección** — quién puede ser elegido o enumerado — excluye a los retirados del ministerio correspondiente | Es el gap que hace que `disabled` no sirva como retiro | Un guard automatizado falla si una selección nueva omite el filtro |
+| R2b | Las enumeraciones **exentas** llevan razón escrita y el guard las conoce | Sin esto el guard exigiría filtrar `outboxLiveness`, silenciando la alarma de outbox atorado justo para un super-admin retirado | Las exenciones declaradas son CUATRO — las tres del inventario más `GET /api/admin/members`, que deliberadamente no filtra en la consulta porque su lista sirve también a la resolución — y el guard falla si aparece una quinta sin declarar |
+| R3 | La **resolución** nunca filtra: `_id in $ids`, `_id == $id`, id→nombre de pool, ocupante histórico | Filtrarlas rompería el historial y los correos de gente ya asignada | Un retirado sigue resolviendo con nombre y foto en cada servicio pasado |
+| R10 | Un retirado deja de ser **asignable por el solver** aunque su id siga en un pool, y una regla que lo nombre no lo reinyecta | R2 por sí solo no lo logra: `memberIdToName` cae al id crudo y `resolvedNameOrRaw` reinyecta en `extraSupport`, produciendo un id crudo asignable en silencio | El solve request no contiene ni el id ni el nombre del retirado en ningún pool; y el planner **dice** cuántos retirados hay en los pools, en vez de callarlo |
 | R4 | `disabled` conserva significado, latencia y conjunto de lectores exactos | El usuario pidió explícitamente conservar el revocado rápido | Ninguna ruta nueva lee ni escribe `disabled` junto al retiro; `memberAccess.ts` sin cambios |
 | R5 | Retirar no modifica ningún documento de servicio | Decisión D2: no reescribir lo que el equipo ya vio | Retirar emite exactamente una escritura, sobre el doc del miembro |
 | R6 | Un ocupante retirado en un servicio **futuro** se señala en el planner | Contraparte obligada de R5: no tocar exige avisar | La sede muestra el aviso; el servicio no cambia solo |
 | R7 | El kill switch es operable desde la app, en un control visiblemente distinto del retiro | El "rápido" pedido hoy pasa por Studio | Un super-admin revoca acceso sin salir de la app; los dos controles no se confunden |
-| R8 | El boundary de escritura rechaza un retiro incoherente | Mismo estándar que `validateMinistryWrite` | Retirar de un ministerio al que el miembro no pertenece se rechaza con mensaje, no se normaliza en silencio |
+| R11 | El boundary de escritura rechaza un retiro incoherente | Mismo estándar que `validateMinistryWrite` | Retirar de un ministerio al que el miembro no pertenece se rechaza con mensaje, no se normaliza en silencio |
 
 ## Scope
 
@@ -105,6 +116,8 @@
 
 - Migrar las reglas del solver de nombre a id (decidido en D4 del roadmap, entregado aparte).
 - Arreglar la regla `5cbxwcm` que nombra `"Vale Sosa"` — es un dato, no código.
+- Migrar los pools del `solverConfig` a un almacenamiento con integridad referencial. R10
+  convive con los ids-string tal como están; cambiarlos es el trabajo de D4 del roadmap.
 - Endurecer `DELETE` ni limpiar ids colgantes del `solverConfig` — eso es P2.
 - Tocar `unavailableDates` / `unavailabilityNotes`: la indisponibilidad es temporal, por fechas
   y declarada por el propio miembro; el retiro es indefinido, sin fechas y administrativo.
@@ -113,8 +126,15 @@
 
 ## Behavior and invariants
 
-- **Required behavior:** retirar de un ministerio saca al miembro de las enumeraciones de ese
-  ministerio y de ninguna otra. Reversible sin pérdida.
+- **Required behavior:** retirar de un ministerio saca al miembro de la **selección** de ese
+  ministerio y de ninguna otra, y lo saca del solve request aunque su id siga almacenado en un
+  pool. Reversible sin pérdida.
+- **Dónde vive el filtro:** en el punto de **uso**, no en la consulta. `GET /api/admin/members`
+  sigue devolviendo a todos, ahora con `retiredFrom`; el planner filtra al ofrecer candidatos,
+  al poblar el dropdown de Persona y al construir los pools del solve request, y **no** filtra
+  al resolver un id de pool o un ocupante histórico a un nombre. Poner el filtro en la consulta
+  es la variante que parece más limpia y es la que rompe: deja al planner sin la mitad de los
+  datos que necesita para resolver.
 - **Preserved behavior:** `disabled` (kill switch, TTL 30 s). El contrato `ministries` ausente
   ⇒ worship. El rechazo de `ministries` vacío. El aislamiento de ministerios en dos direcciones.
 - **Data invariants:** ausencia ⇒ sirve. El campo sólo contiene ids de ministerio conocidos.
@@ -129,6 +149,10 @@
 ## Dependencies and constraints
 
 - Despliegue de esquema a Sanity (`sanity:deploy-schema`) antes de que la UI escriba el campo.
+- R10 toca `buildSolveRequest`, que es el constructor del request del solver. No cambia el
+  solver ni el contrato del endpoint: cambia qué nombres se le mandan. Un plan de
+  implementación debe pinear que un pool sin retirados produce un request byte-idéntico al de
+  hoy, o el riesgo deja de estar acotado.
 - El guard de R2 debe cubrir el modo de falla ya documentado en `draftGatingCoverage.test.ts`:
   un filtro guardado en una constante e inyectado en otro archivo es invisible a un escaneo de
   grupo. Ese escaneo encontró una violación real preexistente sólo cuando se le añadió la
@@ -141,7 +165,10 @@
 | Decision | Choice | Why | Tradeoffs | Owner |
 |---|---|---|---|---|
 | Forma del campo | `retiredFrom: MinistryId[]` | Ausente ⇒ sirve. "Retirado de todo" es representable sin vaciar `ministries`, que el boundary rechaza. Un booleano no puede expresar D1. | Un array donde D1-global habría permitido un booleano. Consecuencia directa de la elección del usuario. | P1 |
-| Semántica del filtro | `!defined(retiredFrom) || !("<min>" in retiredFrom)` | Arm de ausencia explícito, por la misma razón que `app/ministries.ts:64` lo escribe: es el contrato, no defensa. | Más verboso que confiar en la semántica de `in` sobre `undefined`. | P1 |
+| Semántica del filtro | `!defined(retiredFrom) || !("<min>" in retiredFrom)` para las consultas que sí filtran; el predicado equivalente en TypeScript para el punto de uso | Arm de ausencia explícito, por la misma razón que `app/ministries.ts:64` lo escribe: es el contrato, no defensa. | Más verboso que confiar en la semántica de `in` sobre `undefined`. | P1 |
+| Actor del retiro | Super-admin-only | `PATCH` y `DELETE` de miembro ya lo son y la pestaña Miembros también. Cualquier otra cosa es ensanchar la ACL, que tiene su propio precio y nadie lo pidió. | Un super-admin en el camino de cada retiro, incluidos los de kids. | Frank |
+| Enforcement de R10 | Test unitario fijo, **no** un guard de escaneo — y se decide, no se omite | El precedente que este spec invoca (`draftGatingCoverage.test.ts`) es un escaneo de grupos GROQ; R10 vive en un punto de uso de TypeScript en `plannerModel.ts`, estructuralmente invisible a esa forma. Escribirlo aquí evita que quede "N call sites correctos, que es un estado, no un mecanismo" por omisión en vez de por decisión. | R10 queda protegido por tests de un solo sitio; si `buildSolveRequest` se reescribe o se duplica, nada lo fuerza. Aceptado: hay UN constructor de request y el test vive junto a él. | P1 |
+| Ids de pool no resolubles | Se descartan del solve request **y se reportan** | Descartar en silencio repetiría el defecto que `unresolvedRuleNames` existe para evitar. Reportar sin descartar deja al solver asignando un id crudo. | Un aviso más en el planner. | P1 |
 | Escritura incoherente | Se rechaza, no se normaliza | Normalizar en silencio es cómo `"Vale Sosa"` sobrevivió invisible. | Un error más que manejar en la UI. | P1 |
 | `disabled` intacto | Sí | Petición explícita del usuario. | Dos controles en pantalla en vez de uno. Es el punto. | Frank |
 
@@ -158,23 +185,25 @@
 | Question | Why it matters | Recommendation and why | Tradeoffs | Owner | Blocking? | Resolution point | Bounded default |
 |---|---|---|---|---|---|---|---|
 | ¿Retirar de todos los ministerios sugiere revocar acceso? | Es el único punto donde los dos ejes se tocan | **Sugerir, nunca automatizar.** Automatizar reintroduce el acoplamiento que motivó separarlos | Un paso manual en el caso más común | Frank | No | Diseño de UI | Sugerencia, no automatismo |
-| ¿Admin o sólo super-admin puede retirar? | `DELETE` es super-admin-only; `PATCH` de miembro no | **Admin.** Es reversible y no destructivo; restringirlo empujaría a usar el borrado en su lugar | Más gente puede sacar a alguien de las rotaciones | Frank | No | Implementación | Admin, alineado con el `PATCH` existente |
-| ¿La audiencia de propuestas debe filtrar retiro? | Es enumeración por rol, no por roster | **Filtrar.** Un admin retirado de worship no debería recibir propuestas de worship | Si un admin gestiona sin servir, dejaría de enterarse | Frank | No | Implementación | Filtrar |
+| ¿Un ministry manager de kids puede retirar de kids? | D1 hizo el retiro por ministerio, pero el actor sigue siendo de rol, y el CLAUDE.md dice que el rol nunca implica ministerio | **No en P1.** Abrirlo es un ensanchamiento de ACL con su propio precio; sin evidencia de que la operación sea frecuente, no se paga por adelantado | Un super-admin en el camino de cada retiro de kids | Frank | No | Después de P1, si duele | Super-admin-only |
+| ¿La audiencia de propuestas debe filtrar retiro de worship? | `ADMIN_RECIPIENTS_QUERY` selecciona por ROL y no tiene filtro de ministerio alguno hoy (`proposalNotifyQueries.ts:34`); componerle uno de worship le impone una semántica que nunca tuvo | **Filtrar, y declarar el efecto sobre un admin sólo-kids**, que hoy recibe estos correos y dejaría de recibirlos — correcto, pero debe ser deliberado y no un efecto colateral | Si un admin gestiona worship sin servir en worship, deja de enterarse | Frank | No | Implementación | Filtrar, y anotar el cambio |
 
 ## Acceptance and verification
 
 | Requirement | Acceptance evidence | Verification method |
 |---|---|---|
 | R1 | Un doc sin el campo se lee como "sirve" en ambos ministerios | Test unitario del normalizador, con un doc sin el campo |
-| R2 | Las seis enumeraciones filtran | Guard de cobertura sobre `app/**`, invertido y con exenciones declaradas; falla al añadir una enumeración sin filtro |
-| R3 | Un retirado resuelve con nombre en un servicio pasado | Test de integración sobre `serviceReadQueries`; el guard NO exige filtro en formas de resolución |
+| R2 | Los puntos de selección excluyen a los retirados | Guard de cobertura sobre `app/**`, invertido; falla al añadir una selección sin filtro |
+| R2b | Las cuatro exenciones están declaradas y una quinta falla el guard | Test del guard con una enumeración exenta no declarada |
+| R3 | Un retirado resuelve con nombre en un servicio pasado, y su id de pool resuelve a su nombre | Test de integración sobre `serviceReadQueries`; test de `memberIdToName` con un miembro retirado presente en la lista |
+| R10 | El solve request no contiene el id crudo ni el nombre del retirado en ningún pool, y el planner reporta cuántos hay | Test de `buildSolveRequest` con un retirado (a) en un pool y (b) nombrado por una regla — hoy ese caso produce `gJgJ2wc44ylNYNyNTYYu5k` como persona y la reinyección en `extraSupport` |
 | R4 | `memberAccess.ts` sin cambios; ninguna ruta nueva toca `disabled` junto al retiro | Diff vacío en ese archivo + escaneo del guard |
 | R5 | Retirar emite una sola escritura, sobre el doc del miembro | Test que cuenta las mutaciones del handler |
 | R6 | El aviso aparece; el servicio no cambia | Test de componente del planner con un ocupante retirado |
 | R7 | Un super-admin revoca acceso desde la app | Test de componente + verificación visual |
-| R8 | El retiro incoherente se rechaza con mensaje | Test unitario del validador, junto a los de `validateMinistryWrite` |
+| R11 | El retiro incoherente se rechaza con mensaje | Test unitario del validador, junto a los de `validateMinistryWrite` |
 
 ## Terminal state
 
 `READY_FOR_ADVERSARIAL_REVIEW` — las tres preguntas abiertas son no bloqueantes y tienen
-default acotado. Riesgo estándar: una ronda fría de aprobación.
+default acotado. Riesgo **crítico**: dos `APPROVED` consecutivos sobre bytes idénticos.
