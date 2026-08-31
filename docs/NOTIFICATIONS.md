@@ -49,7 +49,7 @@ hand-writing a fixture that mirrors them).
 
 | Layer | What | Where |
 |---|---|---|
-| 1 — primary | GitHub Actions, declared `7,22,37,52` — see §"Layer 1 does not run on the schedule it declares" | `.github/workflows/flush-notifications.yml` → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
+| 1 — primary | GitHub Actions, declared `*/5` but starved by this repo's CI volume — see §"Layer 1 does not run on the schedule it declares" | `.github/workflows/flush-notifications.yml` → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
 | 2 — backstop | opportunistic sweep after any queueing write | end of `commitUpserts()` in `serviceMutationSideEffects.ts` — keeps its report and raises the destroyed-mail alarm |
 | 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm") |
 
@@ -88,7 +88,7 @@ layer 2 sweepDeadlineMs  =  SEND_TIMEOUT_MS + (SWEEP_DEADLINE_MS − SEND_TIMEOU
 paragraph said `SWEEP_DEADLINE_MS` was unchanged and that the invocation's worst
 case did not widen; that was wrong, and it is the claim the fix retracts. It does not fire on
 proposal submit or review, which queue nothing; layer 1 is what covers those —
-nominally within the declared tick, in practice at a 1.0 h median under the previous `*/5` schedule (§"Layer 1 does
+nominally within five minutes, in practice ranging 0.09–2.03 runs/h with the repo's CI volume (§"Layer 1 does
 not run on the schedule it declares"). The proposal-submit **email** (`buildProposalEmail`) is immediate, not
 queued: intro + CTA, the same setlist table as "Setlist listo" (no Mov. column,
 medleys grouped), and the lead's newest `lead_note` message when the thread has one — the same thread source as the debounced email below, moved in the same delivery that stopped writing the legacy field. Empty or unreadable songs still
@@ -190,91 +190,56 @@ shipped defaults, and raising it to keep a test green is the one forbidden move.
 ## Layer 1 does not run on the schedule it declares
 
 The route's own comment calls layer 1 "the PRIMARY one, and genuinely
-load-bearing". **Its schedule is not honoured, and the gap has widened.**
+load-bearing". **Its schedule is not honoured, and we now know why.**
 
-**An experiment is in flight** ([issue #25](https://github.com/FrankERP/owt-kb-v1/issues/25)).
-The schedule was `*/5 * * * *` and is now `7,22,37,52 * * * *`. The hypothesis is
-that GitHub deprioritizes aggressive schedules on public repositories, so asking
-for less may *deliver* more; the offset minutes also avoid the most contended
-ticks. That conflates two variables deliberately — both point the same way, and a
-cheap experiment beats a clean one here.
+### The cause is this repo's own CI volume, not the cron expression
 
-**It starts when the change reaches `main`, not when it was written.** GitHub runs
-`schedule` only on the default branch, so a push to `preview` changes nothing.
-Measure from the merge timestamp forward.
+GitHub deprioritizes `schedule` against every other event on the same repository.
+Measured over the workflow's whole life (791 scheduled runs, 2026-07-28 →
+2026-08-31), the flush cadence tracks CI activity almost perfectly:
 
-**Judge it on runs/hour and the median interval — NOT on delivery-%.** Delivery-%
-is only comparable within one cadence: asking for a third as many ticks triples
-the percentage arithmetically without one email arriving sooner. Holding the
-observed 40 runs fixed, 3.3% becomes 10.0% for free. `scripts/measure-cron-delivery.mjs`
-prints the comparable pair under a header saying so.
-
-**The baseline to beat**, measured 2026-08-30 over scheduled runs only:
-
-| | baseline (`*/5`) | a fully honoured `7,22,37,52` |
-|---|---|---|
-| **steady rate** | **0.39 runs/h** | 4.0 |
-| median interval | **1.0 h** | 15 min |
-
-The baseline is `(n-1)/(last-first)` = 39/100.267 h. **Compare like with like:**
-`n/T` overstates by `n/(n-1)` — 25% at n=5 — so a rate computed the other way is
-not comparable to this number. The script prints the matching `steady rate` and
-labels it.
-
-**How to decide, including when the answer is ambiguous.** Do not conclude before
-**48 h and n ≥ 20 intervals** — at n=4 this estimator produced several different
-numbers straddling the baseline depending on how it was invoked. Treat anything
-within ±20% of the 0.39 baseline as **not risen**. Revert to `*/5` unless the
-**steady rate** clears **0.47** with the median interval also improving; a rise in
-one metric alone is not a result.
-
-Bound the window to the merge timestamp, with an explicit zone:
-`--since 2026-08-30T07:01:04Z`. A date-only bound sweeps in pre-merge runs from
-the same UTC day, and a time without `Z` is read as local by the script and as UTC
-by GitHub — six hours apart here, which moved one reading 43%. The script rejects
-the ambiguous form rather than guessing.
-
-**The `elapsed rate` the script also prints is not the one this threshold refers
-to.** It includes the dead period after the cadence changed — 41% of the window at
-the time of writing — which is honest about what members got but is not comparable
-to a steady-state baseline until that share is small.
-
-Measured 2026-08-30 over the 39 intervals between the 40 **scheduled** runs
-GitHub delivered between `2026-08-25T21:19Z` and `2026-08-30T01:35Z` — a **3.3%
-delivery rate** against the ~1 203 runs `*/5` asks for:
-
-| | declared | 98 runs (2026-08-23/27) | 39 intervals (2026-08-30) |
+| period | CI runs/day | flush runs/day | steady rate |
 |---|---|---|---|
-| interval | 5.0 min | — | — |
-| **median** | | **41.3 min** | **62 min (1.0 h)** |
-| p90 | | — | **8.6 h** |
-| maximum | | **682 min (11.4 h)** | **699 min (11.6 h)** |
-| ≤ 10 min | | **0 of 98** | **0 of 39** |
-| > 60 min | | 18 of 98 | **20 of 39** |
+| 28 Jul – 24 Aug — before the `gates` workflow existed | **0** | 8–48 | 0.41 – **2.03**/h |
+| 25–26 Aug — CI arrives | 7 | 34 → 22 | 1.50 → 0.89/h |
+| 27–31 Aug — CI at volume | 6–17 | **4, 3, 6, 5, 1** | **0.09 – 0.26**/h |
 
-**Scheduled runs only.** A first pass at these figures included manual
-`workflow_dispatch` runs — the runbook tells operators to fire them — which
-shortened the median to 71 min and moved p90 to 7.0 h. Those numbers were wrong in
-the direction that flatters the schedule, and the script now passes
-`--event schedule` so the mistake is not repeatable. If you see 71 min / 7.0 h
-quoted anywhere, it is the contaminated pass.
+`main` became PR-protected on 2026-08-24 and every PR fires `gates` twice, so the
+collapse is a direct consequence of this repo's own release discipline. The
+2026-08-28 setlist that waited two hours for layer 3 was published on a day with
+3 flush runs and 13 CI runs.
 
-The older 98-run measurement, 2026-08-23 to 2026-08-27, is kept as history:
+**`*/5` works when the repo is quiet.** Over 33 days its median steady rate was
+0.88 runs/h, reaching 2.03 — nothing like the "never honoured" reading taken
+during the collapse.
 
-| | |
-|---|---|
-| declared interval | 5.0 min |
-| minimum observed | 17.3 min |
-| **median** | **41.3 min** |
-| mean | 56.0 min |
-| maximum | **682 min (11.4 h)** |
-| intervals ≤ 10 min | **0 of 98** |
-| intervals > 60 min | 18 of 98 |
+### The cadence experiment, and why it is closed
 
-GitHub documents `schedule` as best-effort: the five-minute minimum bounds what
-you may REQUEST, not what runs, and high-frequency schedules are delayed under
-load. No GitHub plan changes this, and neither more `schedule` entries nor
-self-hosted runners help — the trigger is the bottleneck, not the runner.
+Between `2026-08-30T07:01Z` and `21:30Z` the schedule ran as `7,22,37,52` to test
+whether GitHub deprioritizes *aggressive* schedules specifically. **Reverted, and
+do not repeat it.** The hypothesis was wrong: the mechanism is repo busyness, not
+the declared frequency, and under it asking for fewer ticks is if anything worse.
+It delivered 0.19–0.34 runs/h, no better than the collapse it was meant to fix.
+
+Two measurement lessons are worth more than the experiment was:
+
+- **The baseline was sampled from the worst four days on record.** 0.39 runs/h
+  looked like "the schedule", and the true range for the same cron was 0.09–2.03.
+  A point estimate from a window chosen because it looked bad is not a baseline.
+- **Delivery-% cannot compare two cadences.** Asking for a third as many ticks
+  triples it arithmetically with no email arriving sooner.
+
+`scripts/measure-cron-delivery.mjs` (pure logic in `scripts/lib/cronDelivery.mjs`,
+tested in `scripts/__tests__/cronDelivery.test.ts`) is what produced the table
+above. Use `--event schedule` semantics it already applies, and read the **steady
+rate**, not delivery-%.
+
+### What would actually fix it
+
+An external scheduler hitting `/api/cron/flush-notifications`, or Vercel Pro
+(which lifts the one-cron-per-day Hobby limit). Both need a planned rotation of
+`CRON_SECRET`, which is `Secret`-classified and unreadable — see `docs/SECRETS.md`.
+Tracked in [issue #25](https://github.com/FrankERP/owt-kb-v1/issues/25).
 
 **The practical consequence:** a notice becomes due 15 minutes after it is queued,
 and layer 2 (the writer's own `after()` sweep) has already run by then, so layer 1
@@ -545,7 +510,7 @@ and they are different failures:
 
 Healthy, and not failures: `unserved > 0` with `repended > 0` — the send budget
 stopped early and those recipients wait for the next sweep (declared
-sub-hourly; median 1.0 h under the previous `*/5` schedule — experiment in flight, see §"Layer 1 does not run on the schedule it declares"). `deferred > 0` — work left *unclaimed* for the next
+declared `*/5`, delivered far less when CI is busy — see §"Layer 1 does not run on the schedule it declares"). `deferred > 0` — work left *unclaimed* for the next
 sweep. `skipped > 0` — a recipient with no address or blocked by
 `EMAIL_ALLOWLIST`; a warning, since a deliberately narrowed allowlist makes it the
 expected state.

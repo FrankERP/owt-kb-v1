@@ -39,7 +39,9 @@ try {
   const b64 = gh(["api", `repos/${REPO}/contents/.github/workflows/flush-notifications.yml`, "--jq", ".content"]);
   declaredExpr = extractCron(Buffer.from(b64, "base64").toString("utf8"));
 } catch {
-  // Non-fatal: the delivery denominator is nice to have, the rates are the point.
+  // Non-fatal — the rates are the point — but SAY SO. A silent skip left output
+  // with no window, no expression and no sign anything was missing.
+  declaredExpr = null;
 }
 
 const runs = JSON.parse(gh([
@@ -67,23 +69,37 @@ const rate = (r) => (r === null ? "n/a" : r.toFixed(2));
 
 console.log(`workflow    : ${WORKFLOW}`);
 console.log(`runs        : ${runs.length} scheduled` + (SINCE ? `  since ${SINCE}` : ""));
+// F2 — ALWAYS print the window. Without it, an unbounded run gives a rate that is
+// a pure function of --limit over a span the reader cannot see, and on this repo
+// that span usually crosses a schedule change.
+const first = new Date(Math.min(...times)).toISOString();
+const last = new Date(Math.max(...times)).toISOString();
+console.log(`window      : ${first} → ${SINCE ? "now" : last}  (${(SINCE ? rates.elapsedH : rates.steadyH).toFixed(1)} h)`);
 if (declaredExpr) {
   const perHour = declaredPerHour(declaredExpr);
   const hours = SINCE ? rates.elapsedH : rates.steadyH;
   console.log(`declared    : ${declaredExpr}` +
     (perHour ? `  → ~${Math.round(hours * perHour)} runs asked for over ${hours.toFixed(1)} h` : ""));
+} else {
+  console.log(`declared    : (unavailable — could not read or parse the workflow)`);
+}
+if (!SINCE) {
+  console.log(`\n!!! UNBOUNDED. This window may span a schedule change, in which case the`);
+  console.log(`    rates below average two cadences. Pass --since <ISO timestamp> to bound it.`);
 }
 
 // `--limit` truncation used to be self-correcting, because the window shrank
 // with the list. Under a bounded window it is not: a truncated list understates
 // the elapsed rate with no visible sign.
 if (SINCE && runs.length >= LIMIT) {
-  console.log(`\n!!! RUN LIST TRUNCATED at --limit ${LIMIT}. The elapsed rate below is a`);
-  console.log(`    LOWER BOUND, not a measurement. Re-run with a larger --limit.`);
+  console.log(`\n!!! RUN LIST TRUNCATED at --limit ${LIMIT}. gh returns the MOST RECENT N,`);
+  console.log(`    so the oldest runs were dropped. Neither rate below is a measurement:`);
+  console.log(`    the elapsed rate reads LOW, and the steady rate reads HIGH because it`);
+  console.log(`    re-anchors to a later first run. Re-run with a larger --limit.`);
 }
 
-console.log(`\n>>> THE TWO NUMBERS THAT DECIDE IT. Never delivery-%, which asking for`);
-console.log(`    fewer ticks inflates by construction.\n`);
+console.log(`\n>>> READ THESE, never delivery-%: asking for fewer ticks inflates it by`);
+console.log(`    construction, without one email arriving sooner.\n`);
 console.log(`    steady rate  : ${rate(rates.steadyRate)} runs/h   (n-1 over first→last run)`);
 console.log(`                   ^ compare THIS against a recorded baseline; it is how`);
 console.log(`                     the baseline was computed.`);

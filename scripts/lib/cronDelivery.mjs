@@ -39,7 +39,9 @@ export function parseArgs(argv, defaults = {}) {
     if (val === undefined || val.startsWith("--")) return { ok: false, error: `${tok} needs a value` };
     if (tok === "--limit") {
       const n = Number(val);
-      if (!Number.isFinite(n) || n < 2) return { ok: false, error: "--limit needs a number >= 2" };
+      // Integer, because `gh --limit 2.5` is a Go parse error thrown out of
+      // execFileSync as an uncaught stack rather than a message.
+      if (!Number.isInteger(n) || n < 2) return { ok: false, error: "--limit needs a whole number >= 2" };
       opts.limit = n;
     } else if (tok === "--since") {
       const err = validateSince(val);
@@ -59,6 +61,13 @@ export function parseArgs(argv, defaults = {}) {
  */
 export function validateSince(val) {
   if (Number.isNaN(new Date(val).getTime())) return `--since is not a date: ${val}`;
+  // Require the ISO shape first. `2026-8-3` and `2026/08/30` parse fine and carry
+  // no `T`, so a `hasTime` check alone waves them past — and JS reads them as
+  // LOCAL midnight while GitHub reads UTC, the same six hours in the same
+  // flattering direction.
+  if (!/^\d{4}-\d{2}-\d{2}(T|$)/.test(val)) {
+    return `--since must be YYYY-MM-DD or YYYY-MM-DDThh:mm:ssZ, got: ${val}`;
+  }
   const hasTime = val.includes("T") || val.includes(" ");
   if (hasTime && !/(Z|[+-]\d{2}:?\d{2})$/.test(val)) {
     return `--since has a time but no timezone: ${val}\nuse an explicit UTC form, e.g. 2026-08-30T07:01:04Z`;

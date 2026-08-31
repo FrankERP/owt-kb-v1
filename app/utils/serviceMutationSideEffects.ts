@@ -566,9 +566,9 @@ export function opportunisticSweepOptions(): Required<
  * no-op save — and also PROPOSAL SUBMIT and PROPOSAL REVIEW, which §3's text
  * names as protected writes but which send immediately via
  * `notifyProposalSubmitted`/`notifyProposalReview` and queue no outbox document
- * at all. Layer 1 sweeps afterwards — nominally the declared tick, measured at a
- * 1.0 h median under the previous five-minute schedule and occasionally many
- * hours (docs/NOTIFICATIONS.md), so this is a delay rather
+ * at all. Layer 1 sweeps afterwards — nominally five-minutely, but GitHub
+ * starves that schedule when the repo is busy with CI, so in practice anywhere
+ * from half an hour to many hours (docs/NOTIFICATIONS.md), a delay rather
  * than the near-immediate follow-up it was written as; noted
  * so the next reader does not read this as complete coverage.
  */

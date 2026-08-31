@@ -418,7 +418,7 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
 - **`GET /api/cron/flush-notifications`** — same secret-based auth (401 otherwise). Runs one
   `sweepOutbox()` at full budget: the notification outbox's primary flush trigger. Driven by
   `.github/workflows/flush-notifications.yml`, never by `vercel.json` — that workflow DECLARES
-  on a sub-hourly schedule and measurably ran at a 1.0 h median under the previous `*/5` schedule (experiment in flight, issue #25). See
+  every five minutes and is measurably starved by this repo's CI volume, ranging 0.09–2.03 runs/h (issue #25). See
   `docs/NOTIFICATIONS.md`.
 
 - **`GET /api/cron/smtp-probe`** — same secret-based auth (401 otherwise). Diagnostic: times each

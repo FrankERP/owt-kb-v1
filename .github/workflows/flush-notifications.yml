@@ -12,21 +12,24 @@
 #     runs delivered against ~1 203 expected, a 3.3% delivery rate. That makes an
 #     email later, never wrong.
 #
-#     EXPERIMENT IN FLIGHT (issue #25) — it starts at the `main` MERGE, because
-#     GitHub runs `schedule` only on the default branch. The schedule was
-#     `*/5 * * * *`; it is now `7,22,37,52`. Hypothesis: GitHub deprioritizes
-#     aggressive schedules on public repos, so asking for less may DELIVER more.
-#     The offset minutes deliberately avoid :00/:15/:30/:45, the most contended
-#     ticks — which conflates two variables on purpose, because both point the
-#     same way and the cheap experiment is worth more than the clean one here.
-#     Re-measure with `scripts/measure-cron-delivery.mjs` before concluding, and
-#     judge it on RUNS/HOUR (baseline 0.40) and the median interval (baseline
-#     1.0 h) — NOT on delivery-%, which asking for fewer ticks inflates by
-#     construction. Do not conclude before 48 h and n >= 20 intervals, bound the
-#     window with `--since 2026-08-30T07:01:04Z` (a date-only bound includes
-#     pre-merge runs and inverts the verdict), and treat anything within +/-20%
-#     of 0.40 as NOT risen. Revert to `*/5` unless runs/hour clears 0.48 with the
-#     median interval also improving.
+#     WHAT ACTUALLY CAUSES THE LATENESS (issue #25, settled 2026-08-30). It is
+#     not the cron expression, and a cadence experiment tested the wrong thing.
+#     GitHub deprioritizes `schedule` against every other event on the same
+#     repository, so this workflow starves whenever the repo is busy with CI:
+#
+#       28 Jul - 24 Aug, before the `gates` CI workflow existed: 0 CI runs/day,
+#                        8-48 flush runs/day, steady rate up to 2.03/h.
+#       25-26 Aug, CI arrives:            7 CI/day  -> 34 then 22 flush/day.
+#       27-31 Aug, CI at volume:      6-17 CI/day  -> 4, 3, 6, 5, 1 flush/day.
+#
+#     `main` became PR-protected on 2026-08-24 and every PR fires `gates` twice,
+#     so the flush schedule collapsed as a direct consequence of this repo's own
+#     release discipline. Lowering the declared cadence was tried between
+#     2026-08-30T07:01Z and 21:30Z and reverted: it addressed nothing, and under
+#     this mechanism asking for FEWER ticks is if anything worse.
+#
+#     The real options are an external scheduler or Vercel Pro. Do not re-run the
+#     cadence experiment.
 #   · GitHub DISABLES scheduled workflows after 60 days of repository inactivity,
 #     and that rule applies to public repositories like this one. The daily
 #     liveness alarm in /api/cron/service-reminders is what makes that state loud
@@ -38,7 +41,7 @@ name: Flush notification outbox
 
 on:
   schedule:
-    - cron: "7,22,37,52 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 # This job curls one URL. It touches no repository contents and needs no

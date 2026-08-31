@@ -19,7 +19,7 @@
 // `api/cron(?:/|$)` is NOT an unauthenticated exclusion — it is a DIFFERENT
 // authentication. Both cron routes check `Authorization: Bearer ${CRON_SECRET}`
 // inside their own handlers; a machine caller (Vercel's daily cron, the GitHub
-// Actions sweep, declared sub-hourly) has no NextAuth session, so a session gate
+// Actions sweep, declared five-minutely) has no NextAuth session, so a session gate
 // in front of them only ever produces a 307 to /api/auth/signin. That is exactly
 // what happened in production: the daily reminders + outbox liveness alarm never
 // ran, and layer 1's `curl --fail` does not treat 3xx as failure, so the sweep

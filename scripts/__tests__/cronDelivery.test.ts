@@ -61,6 +61,14 @@ describe("validateSince", () => {
   it("rejects something that is not a date at all", () => {
     expect(validateSince("yesterday")).toMatch(/not a date/);
   });
+
+  // Both parse, both carry no `T`, and both are LOCAL midnight to JS while
+  // GitHub reads UTC — the same six-hour error the `Z` rule exists to stop.
+  it.each(["2026-8-3", "2026/08/30", "2026-08-30 07:01:04"])(
+    "rejects the non-ISO form %s", (val) => {
+      expect(validateSince(val)).toBeTruthy();
+    },
+  );
 });
 
 describe("computeRates", () => {
@@ -111,6 +119,16 @@ describe("declaredPerHour / declaredFloorMinutes", () => {
     expect(declaredPerHour("0,1,2,3 * * * *")).toBe(4);
     expect(declaredFloorMinutes("0,1,2,3 * * * *")).toBe(1);
     expect(declaredFloorMinutes("7,22,37,52 * * * *")).toBe(15);
+  });
+
+  // The wrap-around gap is load-bearing: for `0,50` the smallest spacing is the
+  // 10 minutes from :50 back to :00, not the 50 minutes between them.
+  it("counts the gap that wraps past the hour", () => {
+    expect(declaredFloorMinutes("0,50 * * * *")).toBe(10);
+  });
+
+  it("treats a single declared minute as hourly", () => {
+    expect(declaredFloorMinutes("7 * * * *")).toBe(60);
   });
 
   it("gives up cleanly on a form it does not understand", () => {
