@@ -1,9 +1,7 @@
-# Review log — retiro de miembros (roadmap + P1 + P2)
+# Review log — retiro de miembros (roadmap + P1 + P3 + P2)
 
-**Estado: EN CURSO, SIN APROBACIÓN.** Ninguna de las siete rondas terminó en `APPROVED`. El
-loop se detuvo en la ronda 5, Frank autorizó consolidar y reanudar, y luego autorizó el split a
-P3; las rondas 6 y 7 corren bajo esa autorización. **La aprobación de un plan nunca autoriza implementar, y aquí no hay
-aprobación de nada.**
+**Estado: ROADMAP + P1 + P3 + P2 APROBADOS (loop cerrado 2026-08-31).** **La aprobación de
+un plan nunca autoriza implementar.**
 
 ## Tier y por qué
 
@@ -11,6 +9,7 @@ aprobación de nada.**
 |---|---|---|
 | Roadmap (padre) | Estándar | La escalera dice que los roadmaps padres son estándar salvo que posean directamente un contrato crítico. No lo posee: lo poseen los hijos. Un `APPROVED` fresco bastaría. |
 | P1 | **Crítico** | R7 crea una ruta de escritura nueva sobre `disabled`, el campo que `isMemberActive` lee para permitir o negar toda petición. "auth/security/ACL boundary" está en la escalera. **Derivado de la escalera, no elevado por precaución** — y la primera versión lo clasificó como estándar, que era un error. |
+| P3 | **Crítico** | Writer de `solverConfig` con serialización de array completo, borrado irreversible de reglas, y el request del solver. |
 | P2 | **Crítico** | Writer destructivo de producción. |
 
 ## Rondas
@@ -26,8 +25,36 @@ aprobación de nada.**
 | — | *split a P3* | `44c86b17` | — | (autorizado por Frank) |
 | 6 | `1b7071281c4e683d` | `f0d68863` | CHANGES_REQUIRED | 3 |
 | 7 | `d64a43bf610588dc` | `57b09d5c` | CHANGES_REQUIRED | 2 |
+| 8 | `d8a1409112247fe85c6fd8a56911ed3cdb3684a5953ffb6821ab3f71e76355c9` | `e78f90a5` (árbol actual; el digest es del roadmap, no del commit de código) | **APPROVED** | none |
+| P1.1 | `6d3ec981e2dfc40c1d889218cba0d771c724f584ae1202f5638e2ba30b70b3cd` | árbol `e78f90a5` + edits de spec no commiteadas | CHANGES_REQUIRED | 1 |
+| P1.2 | `a65ae40cd75ef5dcea22955550b8cb1e887bb6d3e9e0008f6e821155dc80e9f7` | mismos bytes que el snapshot de confirmación | **APPROVED** | none |
+| P1.3 | `a65ae40cd75ef5dcea22955550b8cb1e887bb6d3e9e0008f6e821155dc80e9f7` | mismos bytes (confirmación) | CHANGES_REQUIRED | 1 |
+| P1.4 | `4d3c232b3da9cede86011693d146f2e9aa491befe482b2e7c3dbc7c4b9465b51` | post-fix R11 (Frank go-ahead) | **APPROVED** | none |
+| P1.5 | `4d3c232b3da9cede86011693d146f2e9aa491befe482b2e7c3dbc7c4b9465b51` | mismos bytes (confirmación) | **APPROVED** | none |
+| P3.1 | `01fbf2e52bb8c06923f52c4ca1babb622e6defbeff604a3a1332e235fc61ff5c` | pre-adopción 8.n1 + primera ronda | CHANGES_REQUIRED | 3 |
+| P3.2 | `fff597ef4f42894487f6be33b627b086e2c0b7ed34ff9a19f74f2759c4074fdc` | worship scope + dual-write | CHANGES_REQUIRED | 3 |
+| P3.3 | `cf111b8683f13d101a6c58cbbdb74172253ce527aa16a4d2de88fca5af4902d3` | R10 deferral | CHANGES_REQUIRED | 3 |
+| P3.4 | `8072d1d912906b0e041952ff5b97352fcd59ca8a3fa1c939e0668e803277bdd9` | outcome/deploy align | **APPROVED** | none |
+| P3.5 | `8072d1d912906b0e041952ff5b97352fcd59ca8a3fa1c939e0668e803277bdd9` | mismos bytes | **APPROVED** | none |
+| P2.1 | `9bfcda1e6bc7fbdfb96cc2f75a4ba87730846149aa1656f36979ff4859c4ea81` | 8.n2/8.n4 adoptados | CHANGES_REQUIRED | 2 |
+| P2.2 | `d42ad3e99b93205e3828c49ea14bf64da9199e461e3a785d7ebcbaf3833a7992` | R9 guard + R9b | **APPROVED** | none |
+| P2.3 | `d42ad3e99b93205e3828c49ea14bf64da9199e461e3a785d7ebcbaf3833a7992` | mismos bytes | **APPROVED** | none |
 
-Digest final sin revisar: roadmap `03ca9aac8adf6922`, P1 `be05bfab47c1b2a3`.
+**P1 APROBADO** — digest `4d3c232b3da9cede86011693d146f2e9aa491befe482b2e7c3dbc7c4b9465b51`
+(P1.4 + P1.5 consecutivos). Crítico cumplido.
+
+P3 racha: **2 / 2 APROBADO** — digest `8072d1d912906b0e041952ff5b97352fcd59ca8a3fa1c939e0668e803277bdd9`
+(P3.4 + P3.5).
+
+P2 racha: **2 / 2 APROBADO** — digest `d42ad3e99b93205e3828c49ea14bf64da9199e461e3a785d7ebcbaf3833a7992`
+(P2.2 + P2.3; P2.1 CHANGES_REQUIRED → R9 revision guard + R9b).
+
+**Loop adversarial cerrado** — todos los hijos críticos cumplen dos `APPROVED` consecutivos.
+Padre congelado en `d8a14091…`; nota P3.5: el gate P1→P3 del padre lee más estricto que P3
+(R10 diferido); el padre no se edita — P3 es la fuente normativa del despliegue.
+
+Digest aprobado del padre: `d8a1409112247fe85c6fd8a56911ed3cdb3684a5953ffb6821ab3f71e76355c9`.
+El padre no se edita: cualquier edición lo dejaría fuera de esa aprobación.
 
 ## Bloqueadores, disposición y evidencia comprobada
 
@@ -103,7 +130,86 @@ R10/R15 tocan `buildSolveRequest`, el contrato DSL del solver, un documento comp
 guarda de revisión multi-admin, y un borrado irreversible. La recomendación registrada es
 sacarlos de P1 a un hijo propio antes de volver a revisar.
 
-## Cambios posteriores a la última ronda — SIN REVISAR
+## Ronda 8 — padre APPROVED (2026-08-31)
 
-Todo lo listado como `fixed` en la ronda 5, más los no bloqueantes de esa ronda, es material
-posterior al último veredicto. Ninguna ronda ha visto los digests finales.
+Frank eligió reanudar el loop (opción 1 del handoff). Revisor fresco
+(`[Red Team](32fac888-6526-4986-895c-41a5e41a0466)`), packet frío, digest verificado
+antes y después. Cero bloqueadores. Las cinco notas no bloqueantes se dispusieron
+**sin editar el padre**, para no invalidar el digest aprobado:
+
+| # | Nota | Disposición | Evidencia que comprobé |
+|---|---|---|---|
+| 8.n1 | El criterio de entrada P1→P3 (nadie retirado con regla sin resolver) vive sólo en el padre; la pregunta abierta de P3 habla de ids de pool y su default es "reportar, no escribir" | **adopt → P3** antes de revisar P3, no el padre | P3 open question L136 vs padre Sequence L208-216 |
+| 8.n2 | Hay `reference` fuertes a `teamMembers` también en `loginEvent`, `kidsPair` y `setlistProposal`, no sólo role docs | **adopt → P2** antes de revisar P2 | `loginEvent.ts:28`; `kidsPair.ts:26`; `setlistProposal.ts:48,60,76,83,188` |
+| 8.n3 | El terminal state del padre dice "P1 y P2" y omite P3 | **declined** en el padre (preservar digest); P3 existe como hermano | padre L281-283 |
+| 8.n4 | Las listas "pertenece a P1" de P2 omiten R18 (y R2b) | **adopt → P2** antes de revisar P2 | P2 L46 vs mapa del padre |
+| 8.n5 | `AvailabilityPanel` es otro consumidor dual de `GET /api/admin/members` | **declined** — ya está en P1 | `p1` evidence L52; `AvailabilityPanel.tsx:69` |
+
+Ningún cambio post-aprobación al padre. Los adoptions 8.n1/8.n2/8.n4 aterrizan en los
+hijos **antes** de que esos hijos se revisen, así que no quedan como material
+post-aprobación de P3/P2.
+
+## P1.1 — CHANGES_REQUIRED (2026-08-31)
+
+Revisor fresco (`[Red Team](c93e7e46-266b-4dfd-8c92-ad7257bea364)`), packet frío, digest
+`6d3ec981e2dfc40c1d889218cba0d771c724f584ae1202f5638e2ba30b70b3cd` verificado antes y
+después. El eje de retiro, kids y el gate de `disabled` coincidían con el worktree.
+El bloqueador de R14 se verificó **cierto** y se corrigió en P1 (el padre no se tocó).
+
+| # | Bloqueador | Disposición | Evidencia que comprobé |
+|---|---|---|---|
+| P1.1.1 | R14 nombra mecanismos que no implementan su propio criterio de concurrencia: `ifRevisionId` del objetivo no serializa un predicado sobre un **conjunto** de super-admins; `transaction()` no relee GROQ | **fixed** | `publishReadyTransaction.ts:9-12` (tx = lista de mutaciones); `:26-32` (no-op `ifRevisionId` sobre docs observados es el primitivo del repo); dos writes a `_id` distintos no chocan entre sí. El remedio nombrado ahora es el quorum: la misma tx que pone `disabled: true` en el objetivo incluye no-op `ifRevisionId` sobre cada super-admin habilitado *distinto del objetivo*. El test concurrente enfrenta dos ids; un fake que sólo modele la rev del objetivo debe fallar. |
+
+| # | Nota no bloqueante | Disposición | Evidencia |
+|---|---|---|---|
+| P1.1.n1 | GET members no proyecta `disabled`; `handleEdit` spread re-habilitaría | **adopt** → R4/R7: GET proyecta sin default; mutación dedicada, no el spread | `members/route.ts:23-28`; `AdminPanel.tsx:751-763` |
+| P1.1.n2 | "Sesión que actúa" es el target de impersonación, no el operador real | **adopt** → R14 usa el par de `auth.ts:264-271` | `types/next-auth.d.ts:16-17,61-70`; session callback no copia `__realAdmin.sanityId` |
+| P1.1.n3 | El guard GROQ no ve el filtro TypeScript de punto de uso | **adopt** → R2: test de planner / Persona / `rankCandidates` vs `memberIdToName` | el propio corte de R2 |
+| P1.1.n4 | `retiredFrom` hidden en Studio era un "debería" | **adopt** → R1: `hidden` como `themePref` | `worshipTeam.ts:91-97`; `proxy.ts:15-19` |
+| P1.1.n5 | AvailabilityPanel y Miembros no deben filtrar al fetch | **adopt** → inventario GET y evidencia | ya citados; reforzado |
+| P1.1.n6 | Citas: `:844` y `sunRole.ts:51` | **adopt** | `serviceMutationSideEffects.ts:844`; `sunRole.ts:51` |
+
+## P1.2 — primer APPROVED (2026-08-31)
+
+Revisor fresco (`[Red Team](95114cb1-a6bf-4db9-8f17-11cbe203455f)`), mismo packet frío
+recomputado, digest `a65ae40c…` idéntico antes y después. Cero bloqueadores. Notas no
+bloqueantes verificadas y **aplazadas** para no romper la racha crítica:
+
+| # | Nota | Disposición | Evidencia |
+|---|---|---|---|
+| P1.2.n1 | No doblar el predicado de retiro en `WORSHIP_AUDIENCE_GROQ_FILTER` (el de miembros se recorta de él y alimenta GET + login-events) | **adopt** en el edit post-P1.3 (la racha ya era 0) | `ministries.ts:74-77` |
+| P1.2.n2 | Quorum / último SA: `disabled != true` (ausente = habilitado) | **adopt** → R14 GROQ | `memberAccess.ts:53-56`; POST members no estampa `disabled` (`members/route.ts:72-82`) |
+| P1.2.n3 | R11 debe pasar por `normalizeMinistries` o un worship legacy no se puede retirar | **elevado a bloqueador en P1.3** | `ministries.ts:41-44`; R11 no lo nombraba |
+| P1.2.n4 | El ValueError de Studio+P1-only es de P3; `hidden` sigue siendo correcto | **declined** como corrección de R1 — R16 ya cubre P1-sin-P3 | R16 |
+| P1.2.n5 | Cita `next-auth.d.ts:16-17` es `isImpersonating`; `sanityId` es `:14` | **adopt** | `types/next-auth.d.ts:14` |
+| P1.2.n6 | R6 “futuro” contra hoy en `America/Mexico_City`, no `new Date(iso)` | **adopt** → R6 | invariante CLAUDE.md; `AvailabilityPanel.tsx:77` |
+
+## P1.3 — CHANGES_REQUIRED (2026-08-31)
+
+Revisor fresco (`[Red Team](c19d7dea-6de2-447a-a3d5-9b8c5c3c0685)`), snapshot idéntico al
+de P1.2. Cero sobre el eje de retiro / kids / R14; **R11** no ancla “pertenece” a
+`normalizeMinistries` del documento almacenado. Verificado cierto:
+`validateMinistryWrite` (`ministries.ts:100-109`) valida el body, no la membresía;
+el precedente de membresía almacenada es `validatePairMembers` (`pairMembers.ts:17-25`).
+
+| # | Bloqueador | Disposición | Evidencia |
+|---|---|---|---|
+| P1.3.1 | R11 apunta a `validateMinistryWrite`; dos wirings ingenuos fallan el caso primario (worship ausente y kids-only) | **fixed** | `ministries.ts:41-44,57-59,100-109`; `pairMembers.ts:17-25` |
+
+| # | Nota no bloqueante | Disposición | Evidencia |
+|---|---|---|---|
+| P1.3.n1 | No splice en AUDIENCE | **adopt** (ya P1.2.n1) | `ministries.ts:77` |
+| P1.3.n2 | R2 no nombra `MemberPool` | **adopt** → R2 | `MonthGenerator.tsx:1336-1386` |
+| P1.3.n3 | `<select>` Persona con value fuera de options bajo P1-sin-P3 | **adopt** → R2 conserva valor actual | `MonthGenerator.tsx:561-564` |
+| P1.3.n4 | R2b cuenta el comentario; el guard hace `stripComments` | **adopt** → cuatro exenciones ejecutables | `draftGatingCoverage.test.ts` stripComments |
+| P1.3.n5 | El no-op de R14 debe ser write-back, no `set: {}`; `lastSeen` 409 falla cerrado | **adopt** → R14 | `publishReadyTransaction.ts:26-32` vs `:133-140`; `ActivityPing.tsx:7-8` |
+
+**Cap de churn — P1.** Dos `CHANGES_REQUIRED` sustantivos en este hijo (P1.1 R14, P1.3 R11).
+La clase es la misma: el spec nombra un primitivo vecino que **no implementa** el criterio
+(R14 → `ifRevisionId` del objetivo; R11 → `validateMinistryWrite`). P1.4 no se despacha
+sin go-ahead explícito, obtenido de antemano.
+
+## Cambios posteriores a la última ronda — loop cerrado
+
+El padre no se tocó. Todos los hijos tienen digest aprobado y status `APPROVED` en spec.
+Edits locales sin commit en worktree `elated-chebyshev-1992d3` / branch `claude/mkz-sunday-rule-0c5298`.

@@ -2,12 +2,9 @@
 
 ## Status
 
-`DRAFT` — hijo 1 de 3 de `2026-08-30-member-retirement-roadmap.md`.
-**Riesgo CRÍTICO.** R7 crea una ruta de escritura nueva sobre `disabled`, el
-campo que `isMemberActive` lee para permitir o negar **toda** petición. La escalera nombra
-"auth/security/ACL boundary" como crítico y una ruta que escribe el gate de acceso está dentro,
-aunque el campo y su lector ya existan. Se clasificó primero como estándar; eso era un error.
-Dos `APPROVED` consecutivos sobre bytes idénticos.
+`APPROVED` — hijo 1 de 3 de `2026-08-30-member-retirement-roadmap.md`.
+Digest aprobado: `4d3c232b3da9cede86011693d146f2e9aa491befe482b2e7c3dbc7c4b9465b51`
+(P1.4 + P1.5, 2026-08-31). **La aprobación de un plan nunca autoriza implementar.**
 
 ## Original request
 
@@ -43,13 +40,13 @@ Dos `APPROVED` consecutivos sobre bytes idénticos.
 | `isMemberActive` = doc existe && `disabled !== true`; caché TTL 30 s | `app/utils/memberAccess.ts:53-77` | La latencia del "rápido" ya está medida. El retiro NO debe entrar a esta ruta ni a su caché. |
 | Una sola de 23 lecturas de `teamMembers` menciona `disabled` | `grep '_type == "teamMembers"' app/** ` | Cuantifica el gap: `disabled` no es hoy un mecanismo de roster. |
 | Las lecturas se parten en **enumeración** (`*[_type=="teamMembers" && <filtro>]`) y **resolución** (`_id in $ids`, `_id == $id`) | Inventario abajo | Regla central del spec. Filtrar una resolución rompería el historial y los correos de gente ya asignada. |
-| `WORSHIP_AUDIENCE_GROQ_FILTER` / `WORSHIP_MEMBER_GROQ_FILTER`; el arm `!defined` "no es belt-and-braces: es el contrato de almacenamiento" | `app/ministries.ts:64-77` | El filtro nuevo debe componerse con estos, y escribir su arm de ausencia explícito por la misma razón. |
+| `WORSHIP_AUDIENCE_GROQ_FILTER` / `WORSHIP_MEMBER_GROQ_FILTER`; el arm `!defined` "no es belt-and-braces: es el contrato de almacenamiento" | `app/ministries.ts:64-77` | El filtro nuevo es un helper **hermano**, no se dobla dentro de AUDIENCE (eso filtraría GET members y login-events). Escribe su arm de ausencia explícito por la misma razón. |
 | `validateMinistryWrite` rechaza `ministries` vacío | `app/ministries.ts:100-109` | "Retirado de todo" no puede expresarse vaciando `ministries`. Necesita campo propio. |
 | `normalizeMinistries`: ausente ⇒ `["worship"]` | `app/ministries.ts:41-44` | El campo nuevo debe seguir la misma regla libre de migración: ausente ⇒ sirve. |
 | `kidsPair.active`: "Las parejas retiradas conservan su historial pero salen de todas las rotaciones" | `sanity/schemas/kidsPair.ts:43-48` | Precedente del patrón en este repo, con la semántica exacta buscada. |
 | `draftGatingCoverage.test.ts`: escaneo invertido de `app/**`, exime por excepción; su encabezado documenta que "una frase en CLAUDE.md y N call sites correctos es un estado, no un mecanismo", y que la primera versión encontró una violación real preexistente | `app/utils/__tests__/draftGatingCoverage.test.ts:1-45` | Mecanismo probado y su modo de falla conocido: un filtro guardado en string e inyectado en otro lado es invisible a un escaneo de grupo. El guard de R2 debe cubrir esa forma. |
-| Las cinco sedes de role docs son `reference` sin `weak: true` | `sanity/schemas/sunRole.ts:50,65,93,117,128` | El historial resuelve por referencia, no por copia de nombre: retirar no puede romperlo, y borrar ya está bloqueado. |
-| El planner obtiene miembros de `GET /api/admin/members` | `app/components/admin/serviceSourceState.ts:141`, `AvailabilityPanel.tsx:69`, `AdminPanel.tsx:716` | **UNA sola lista alimenta selección Y resolución.** Por eso el filtro NO puede vivir en la API: ver la fila siguiente. |
+| Las cinco sedes de role docs son `reference` sin `weak: true` | `sanity/schemas/sunRole.ts:51,65,93,117-118,128-129` | El historial resuelve por referencia, no por copia de nombre: retirar no puede romperlo, y borrar ya está bloqueado. |
+| El planner obtiene miembros de `GET /api/admin/members` | `app/components/admin/serviceSourceState.ts:141`, `AvailabilityPanel.tsx:69`, `AdminPanel.tsx:716` | **UNA sola lista alimenta selección Y resolución.** Por eso el filtro NO puede vivir en la API ni aplicarse al array al recibirlo: filtrar al fetch escondería el des-retiro y los conflictos de R6. El corte vive en el punto de uso. |
 | `buildSolveRequest` mapea los ids de los pools con `memberIdToName`, que **cae al id crudo** si el miembro no está en la lista; y `resolvedNameOrRaw` reinyecta a todo nombrado-por-regla ausente de los pools en `extraSupport` | `app/components/admin/plannerModel.ts:554-557, 566-568, 641-645, 648-661` | Filtrar la lista en la API no saca a un retirado del solve request: su id se vuelve una "persona" llamada `gJgJ2wc44ylNYNyNTYYu5k`, asignable; y si tiene regla, vuelve a `support` bajo su nombre crudo. Origen de R10 y razón de que R2 se aplique en el punto de uso. |
 | `unresolvedRuleNames` sólo inspecciona nombres de reglas, nunca ids de pool | `app/components/admin/ruleEnforcement.ts:225-249` | El fallo anterior sería **silencioso**: ningún reporte existente lo vería. |
 | `PATCH` y `DELETE` de miembro son ambos **super-admin-only**; la pestaña Miembros es `roles: ["super-admin"]` | `app/api/admin/members/[id]/route.ts:19-22`, `:113-116`; `app/components/admin/AdminPanel.tsx:567` | Retirar con rol `admin` sería un ensanchamiento de ACL, no una alineación. Fija el actor en super-admin. |
@@ -66,8 +63,8 @@ contra el que este spec dedica un párrafo.
 
 | Lectura | Ministerio | Por qué |
 |---|---|---|
-| `app/api/admin/members/route.ts:23` | worship | **NO se filtra por retiro en la consulta.** Devuelve lo mismo que hoy — ya acotado por `WORSHIP_MEMBER_GROQ_FILTER` con `$all`, así que "todos" sólo es cierto para un super-admin — más el campo `retiredFrom`. El planner filtra en el punto de selección. Filtrar el retiro aquí rompería la resolución id→nombre de los pools (ver R10). |
-| `app/utils/serviceMutationSideEffects.ts:840` | worship | Audiencia de correo de setlist |
+| `app/api/admin/members/route.ts:23` | worship | **NO se filtra por retiro en la consulta.** Devuelve lo mismo que hoy — ya acotado por `WORSHIP_MEMBER_GROQ_FILTER` con `$all`, así que "todos" sólo es cierto para un super-admin — más `retiredFrom` y `disabled` (este último sólo para pintar el toggle de R7; no es filtro de roster). Los consumidores (planner, AvailabilityPanel, pestaña Miembros) **tampoco** filtran el array al recibirlo. El planner filtra en el punto de selección. Filtrar el retiro aquí o al fetch rompería la resolución id→nombre de los pools (ver R10) y escondería des-retiros y conflictos de R6. |
+| `app/utils/serviceMutationSideEffects.ts:844` | worship | Audiencia de correo de setlist |
 
 **Kids — las TRES son resolución, y filtrarlas hace daño activo.** Van aparte porque la
 clasificación intuitiva ("son rosters, luego enumeran") es la equivocada y ya costó una ronda:
@@ -103,36 +100,41 @@ Los ids son únicos en toda la familia; `R8`, `R9`, `R12` y `R13` pertenecen a P
 
 | ID | Requirement | Rationale | Acceptance criterion |
 |---|---|---|---|
-| R1 | El retiro se almacena por ministerio, y la **ausencia del campo significa que sirve** | Decisión D1 del roadmap; contrato libre de migración que este repo ya usa en `published` y `ministries` | Los 57 documentos existentes, sin tocarlos, se leen como "sirve en todos sus ministerios" |
-| R2 | La **selección** — quién puede ser elegido o enumerado — excluye a los retirados del ministerio correspondiente | Es el gap que hace que `disabled` no sirva como retiro | Un guard automatizado falla si una selección nueva omite el filtro |
-| R2b | Las enumeraciones **exentas** llevan razón escrita y el guard las conoce | Sin esto el guard exigiría filtrar `outboxLiveness`, silenciando la alarma de outbox atorado justo para un super-admin retirado | Las exenciones declaradas son CINCO — las cuatro de la tabla de exentas más `GET /api/admin/members`, que deliberadamente no filtra en la consulta porque su lista sirve también a la resolución — y el guard falla si aparece una sexta sin declarar |
+| R1 | El retiro se almacena por ministerio, y la **ausencia del campo significa que sirve**. El campo se declara `hidden` en Studio, como `themePref` | Decisión D1 del roadmap; contrato libre de migración que este repo ya usa en `published` y `ministries`. Studio es el hábito actual de `disabled` (`proxy.ts:15-19`); un `retiredFrom` visible ahí se pondría sin R15 y, con P1 solo, es el `ValueError` del mes que R16 hace honesto en la app | Los 57 documentos existentes, sin tocarlos, se leen como "sirve en todos sus ministerios"; el schema oculta el campo (`worshipTeam.ts:91-97` es el precedente) |
+| R2 | La **selección** — quién puede ser elegido o enumerado — excluye a los retirados del ministerio correspondiente. El corte vive en el **punto de uso**, no en la consulta compartida ni al recibir la lista. Superficies: planner / `rankCandidates`, dropdown de Persona, **y `MemberPool`** (`MonthGenerator.tsx:1336-1386`). Un valor ya seleccionado (regla en edición, id ya en un pool) **sigue en las opciones** | Es el gap que hace que `disabled` no sirva como retiro. Un guard que sólo escanea GROQ no ve esos filtros TypeScript. Filtrar el `<select>` de Persona (`:561-564`) mientras P3 no ha quitado las reglas que nombran al retirado deja un controlled select cuyo `value` no está en `options` — React no reescribe el state | Un guard automatizado falla si una selección nueva omite el filtro; tests de esas UIs: excluyen `retiredFrom` en candidatura nueva, conservan el valor actual al editar, y `memberIdToName` sigue resolviendo un id retirado desde la lista sin filtrar |
+| R2b | Las enumeraciones **ejecutables** exentas llevan razón escrita y el guard las conoce. Son **cuatro**: login-events, outboxLiveness, `ADMIN_RECIPIENTS_QUERY`, y `GET /api/admin/members`. `ministries.ts:50` es un comentario — `draftGatingCoverage` hace `stripComments`, así que un guard calcado no lo ve | Sin esto el guard exigiría filtrar `outboxLiveness`, silenciando la alarma de outbox atorado justo para un super-admin retirado. Las tres de kids son resolución (R3), no exenciones | El guard falla si aparece una quinta enumeración ejecutable sin declarar |
 | R3 | La **resolución** nunca filtra: `_id in $ids`, `_id == $id`, id→nombre de pool, ocupante histórico | Filtrarlas rompería el historial y los correos de gente ya asignada | Un retirado sigue resolviendo con nombre y foto en cada servicio pasado |
-| R4 | `disabled` conserva significado, latencia y conjunto de lectores exactos | El usuario pidió explícitamente conservar el revocado rápido | Ninguna ruta nueva lee ni escribe `disabled` junto al retiro; `memberAccess.ts` sin cambios |
+| R4 | `disabled` conserva significado, latencia y el lector de **acceso** (`isMemberActive` / `memberAccess.ts`). Pintarlo en el GET de miembros para el toggle de R7 no lo convierte en filtro de roster | El usuario pidió explícitamente conservar el revocado rápido. R7 necesita ver el valor actual; `route.ts:23-28` hoy no proyecta `disabled` | `memberAccess.ts` sin cambios. El GET proyecta `disabled` tal cual está almacenado, **sin default a `false`**. Ni el PATCH de retiro ni `handleEdit` (`AdminPanel.tsx:751-763`) escriben `disabled` |
 | R5 | Retirar no modifica ningún documento de **servicio** | Decisión D2: no reescribir lo que el equipo ya vio | En P1, retirar toca únicamente el doc del miembro; jamás un role doc |
-| R6 | Un ocupante retirado en un servicio **futuro** se señala en el planner | Contraparte obligada de R5: no tocar exige avisar | La sede muestra el aviso; el servicio no cambia solo |
-| R7 | El kill switch es operable desde la app, en un control visiblemente distinto del retiro | El "rápido" pedido hoy pasa por Studio | Un super-admin revoca acceso sin salir de la app; los dos controles no se confunden |
-| R14 | El control de kill switch **rechaza** deshabilitar la sesión que actúa, y rechaza deshabilitar al último super-admin habilitado | `auth.ts:52` y `:79` rechazan el login de un deshabilitado, y el control nuevo vive tras una pestaña y una ruta super-admin-only. Sin R14, R7 introduce un bloqueo de la superficie de administración que sólo se deshace con credenciales de Sanity, fuera de la app. Hoy no existe porque `disabled` sólo se escribe desde Studio: quien lo apaga ya está del otro lado de la puerta | Los dos intentos se rechazan con mensaje propio, no con el genérico. **Y la comprobación no puede ser sólo previa:** dos super-admins deshabilitándose mutuamente en paralelo pasan cada uno la comprobación "¿queda otro habilitado?" y ambas escrituras aterrizan, dejando cero — el resultado exacto que R14 existe para impedir. Es el gemelo de R12 en P2 en su FORMA, pero no en su remedio: R12 puede delegar en la integridad referencial de Sanity como autoridad final, y aquí no hay análogo a nivel de base de datos para "el último super-admin habilitado". Necesita mecanismo propio — escritura guardada sobre un `_rev` observado, o re-verificación dentro de la transacción |
+| R6 | Un ocupante retirado en un servicio **futuro** se señala en el planner. “Futuro” es un `YYYY-MM-DD` comparado con el hoy de `America/Mexico_City`, nunca `new Date(iso)` | Contraparte obligada de R5: no tocar exige avisar. Invariante de timezone del repo; el patrón ya está en `AvailabilityPanel.tsx:77` | La sede muestra el aviso; el servicio no cambia solo |
+| R7 | El kill switch es operable desde la app, en un control visiblemente distinto del retiro, vía una **mutación dedicada** — no viaja en el spread de `handleEdit` | El "rápido" pedido hoy pasa por Studio. `handleEdit` hace `{...rest}` del form (`AdminPanel.tsx:751-763`); si `disabled` entra a ese body, un guardado de nombre re-habilita a quien ya estaba apagado en Studio | Un super-admin revoca acceso sin salir de la app; los dos controles no se confunden; un PATCH de nombre/alias/email no toca `disabled` |
+| R14 | El control de kill switch **rechaza** deshabilitar al operador y rechaza deshabilitar al último super-admin habilitado. "Operador" es el par que `auth.ts:264-271` ya usa para tumbar la sesión (`sanityId` efectivo **y** `__realAdmin.sanityId`); `session.user.sanityId` (`types/next-auth.d.ts:14`) es el objetivo de impersonación (`:16-17` son `isImpersonating`/`realAdminName`; el JWT lleva `__realAdmin` en `:61-70`; `auth.ts:316-328` no copia el id real a la sesión) y no basta. El quorum GROQ es `role == "super-admin" && disabled != true` — ausente cuenta como habilitado, igual que `isMemberActive`; `disabled == false` omitiría los docs que el POST de miembros no estampa | `auth.ts:52`, `:79` y `:258-274` rechazan login y refresco de un deshabilitado, y el control nuevo vive tras una pestaña y una ruta super-admin-only. Sin R14, R7 introduce un bloqueo de la superficie de administración que sólo se deshace con credenciales de Sanity, fuera de la app. Hoy no existe porque `disabled` sólo se escribe desde Studio: quien lo apaga ya está del otro lado de la puerta | Los intentos se rechazan con mensaje propio. **La comprobación no puede ser sólo previa, ni un `ifRevisionId` del documento-objetivo.** El no-op sobre los demás habilitados es un **write-back** de un campo observado (`publishReadyTransaction.ts:26-32`, el patrón de `unavailableDates`), no el `set: {}` del lock (`:133-140`). `lastSeen` (`ActivityPing.tsx:7-8`) puede 409; se falla cerrado y se reintenta, como publish-ready. Un fake que sólo modele la revisión del objetivo **falla** el test concurrente de dos ids distintos |
 | R18 | En kids, retirar es un hecho de registro y **no cambia nada operativo** — y la UI lo dice | El modelo de datos de kids empareja gente: la candidatura es de `kidsPair`, no del miembro, y no hay palanca a nivel de miembro. Las tres lecturas de kids llevan indisponibilidad y resolución de nombre, así que filtrarlas no saca a nadie de la rotación y sí le borra su indisponibilidad y su nombre — estrictamente peor que no hacer nada. `kidsPair.active` no sirve de sustituto: retira la **pareja**, llevándose al compañero que no se retiró | Ninguna lectura de kids filtra por `retiredFrom`; la UI de retiro en kids declara que registra la salida sin aplicarla; test de que la rotación de kids produce el mismo resultado con y sin `retiredFrom` |
 | R16 | Mientras P3 no esté entregado, ni la UI de retiro ni el planner pueden dar a entender que retirar saca a alguien del solver — y el planner señala a los retirados que siguen en los pools | P1 es desplegable sin P3 y es útil así, pero **incompleto de una forma que un administrador no puede ver**: el retirado desaparece de la selección y sigue siendo asignable por el solver. Sin R16 el estado intermedio no es seguro sino engañoso, que es peor: alguien retira, lo ve desaparecer de las listas, y lo encuentra asignado el mes siguiente | La copia de la UI de retiro dice qué hace y qué no; el planner lista a los retirados presentes en los pools. Un test de que el texto cambia —o el aviso desaparece— cuando P3 entra |
-| R11 | El boundary de escritura rechaza un retiro incoherente | Mismo estándar que `validateMinistryWrite` | Retirar de un ministerio al que el miembro no pertenece se rechaza con mensaje, no se normaliza en silencio |
+| R11 | El boundary de escritura rechaza un retiro incoherente: **pertenece** se evalúa sobre el documento **almacenado** con `normalizeMinistries(stored.ministries).includes(id)` — nunca el body del PATCH, nunca un `includes` crudo sobre el array almacenado. El precedente es `validatePairMembers` (`pairMembers.ts:17-25`), no `validateMinistryWrite` | `validateMinistryWrite` (`ministries.ts:100-109`) valida el **body que se escribe** en `ministries`/`managesMinistries` y no lee membresía. Un `stored.ministries?.includes("worship")` rechaza a los 57 pre-kids (ausente ⇒ worship, `ministries.ts:41-44,57-59`). Un `normalizeMinistries` del body — `undefined` ⇒ `["worship"]` — rechaza retirar de kids a un kids-only, que es la única escritura de R18 | Retirar de worship con `ministries` ausente **pasa**; retirar de kids con `ministries` ausente **falla**; retirar de kids con `ministries: ["kids"]` **pasa**. Nada se normaliza en silencio |
 
 ## Scope
 
 ### In scope
 
 - Campo nuevo en `sanity/schemas/worshipTeam.ts` y su despliegue de esquema.
-- Helper de filtro GROQ compartido, junto a `WORSHIP_AUDIENCE_GROQ_FILTER` en `app/ministries.ts`.
+- Helper de filtro GROQ **hermano**, no recortado de `WORSHIP_AUDIENCE_GROQ_FILTER`.
+  `WORSHIP_MEMBER_GROQ_FILTER` es `.slice(1,-1)` de AUDIENCE (`ministries.ts:77`) y alimenta
+  GET members y login-events, ambos prohibidos de filtrar por R2b. Se compone sólo en
+  `serviceMutationSideEffects.ts:844`.
 - Aplicación del filtro a **una de las dos** filas que quedan en la tabla de enumeración. La otra,
   `GET /api/admin/members`, es una excepción declarada: su lista alimenta también la resolución
   y filtrarla rompe el mapeo id→nombre de los pools. El conteo se escribe con los dos números
   —cuántas filas hay y cuántas filtran— y no como "todas las enumeraciones", porque un
   implementador que lea sólo esta sección haría exactamente lo que el inventario prohíbe.
-  Sumando la tabla de exentas y las tres de kids, las lecturas que deliberadamente **no** filtran
-  son **ocho**, y el guard debe fallar ante una novena sin declarar.
+  Las lecturas ejecutables que deliberadamente **no** filtran son **siete** (cuatro exenciones
+  + tres kids), y el guard debe fallar ante una octava ejecutable sin declarar.
 - Copia y aviso de R16, que hacen honesto el estado intermedio de P1 sin P3.
 - Guard de cobertura automatizado, al estilo de `draftGatingCoverage.test.ts`.
-- Validación de escritura, junto a `validateMinistryWrite`.
-- UI en `AdminPanel`: control de retiro por ministerio y toggle de `disabled`, separados.
+- Validación de retiro incoherente sobre el doc **almacenado** (`normalizeMinistries`, patrón de
+  `validatePairMembers`). `validateMinistryWrite` sigue siendo sólo el boundary de
+  `ministries` / `managesMinistries`.
+- UI en `AdminPanel`: control de retiro por ministerio y toggle de `disabled` **separados**, este último por mutación dedicada (no el spread de `handleEdit`).
 - Aviso en el planner para ocupante retirado en servicio futuro.
 - Documentación: invariante en `CLAUDE.md`, y ADR si la revisión lo pide.
 
@@ -189,12 +191,7 @@ Los ids son únicos en toda la familia; `R8`, `R9`, `R12` y `R13` pertenecen a P
   en la raíz del repo caería fuera del escaneo. El plan de implementación decide si ampliar el
   alcance del guard o declarar la raíz como zona de sólo-resolución; lo que no puede es heredar
   el `app/**` sin notarlo.
-- **`retiredFrom` será escribible desde Studio, saltándose R15 entero.** `teamMembers` no es
-  read-only ahí y `proxy.ts:15-19` abre `/studio` a `admin` — y Studio es justamente donde se
-  escribe `disabled` hoy, o sea el hábito existente del operador. Un `retiredFrom` puesto así
-  excluye al miembro de los pools mientras `dsl_rules` lo sigue nombrando: el mes se rompe. El
-  fallo es ruidoso y nombra a la persona, así que es recuperable, pero el campo debería ocultarse
-  en Studio como ya se hace con `themePref` (`worshipTeam.ts:91-97`).
+- **`retiredFrom` se oculta en Studio**, como `themePref` (`worshipTeam.ts:91-97`). `teamMembers` no es read-only ahí y `proxy.ts:15-19` abre `/studio` a `admin` — Studio es el hábito actual de `disabled`. Un `retiredFrom` visible se pondría sin R15 y, con P1 solo, rompe el mes. Quitar `hidden` es el mismo bypass que ya existe para `themePref`; no es una segunda vía de escritura del spec.
 - El guard de R2 debe cubrir el modo de falla ya documentado en `draftGatingCoverage.test.ts`:
   un filtro guardado en una constante e inyectado en otro archivo es invisible a un escaneo de
   grupo. Ese escaneo encontró una violación real preexistente sólo cuando se le añadió la
@@ -217,7 +214,7 @@ Los ids son únicos en toda la familia; `R8`, `R9`, `R12` y `R13` pertenecen a P
 | Assumption | Impact if false | Validation | Failure response |
 |---|---|---|---|
 | El inventario de 23 lecturas está completo y bien clasificado | Filtrar de más rompe historial; de menos deja el gap | Reejecutar el grep como primer paso de implementación; el guard lo vuelve continuo | Reclasificar y ajustar el guard antes de tocar código |
-| Las ocho lecturas que no filtran son correctas — las cuatro de la tabla de exentas, las tres de kids, y `GET /api/admin/members`, que no filtra en la consulta porque su lista sirve también a la resolución | Un retirado recibiría alertas de operador, o un evento de acceso quedaría oculto | Revisión adversarial de este spec | Convertir la exención en filtro; el guard las lista explícitamente |
+| Las siete lecturas ejecutables que no filtran son correctas — cuatro exenciones (login-events, outboxLiveness, ADMIN_RECIPIENTS, GET members) y las tres de kids | Un retirado recibiría alertas de operador, o un evento de acceso quedaría oculto | Revisión adversarial de este spec | Convertir la exención en filtro; el guard las lista explícitamente |
 | Nadie depende hoy de que un deshabilitado siga en los pools | El filtro cambiaría comportamiento esperado | Ninguna: `disabled` no se filtra hoy, así que este spec no altera ese caso | — |
 
 ## Open questions
@@ -231,18 +228,18 @@ Los ids son únicos en toda la familia; `R8`, `R9`, `R12` y `R13` pertenecen a P
 
 | Requirement | Acceptance evidence | Verification method |
 |---|---|---|
-| R1 | Un doc sin el campo se lee como "sirve" en ambos ministerios | Test unitario del normalizador, con un doc sin el campo |
-| R2 | Los puntos de selección excluyen a los retirados | Guard de cobertura sobre `app/**`, invertido; falla al añadir una selección sin filtro |
-| R2b | Las ocho están declaradas y una novena falla el guard | Test del guard con una enumeración exenta no declarada |
+| R1 | Un doc sin el campo se lee como "sirve" en ambos ministerios; el schema lo oculta en Studio | Test unitario del normalizador, con un doc sin el campo; aserción de schema `hidden: true` |
+| R2 | Los puntos de selección excluyen a los retirados; un valor ya elegido sigue en las opciones | Guard de cobertura sobre `app/**`; test de planner / Persona / `rankCandidates` / `MemberPool`; test de que editar una regla conserva el nombre actual |
+| R2b | Las cuatro exenciones ejecutables están declaradas y una quinta falla el guard | Test del guard con una enumeración ejecutable no declarada; el comentario `ministries.ts:50` no cuenta |
 | R3 | Un retirado resuelve con nombre en un servicio pasado, y su id de pool resuelve a su nombre | Test de integración sobre `serviceReadQueries`; test de `memberIdToName` con un miembro retirado presente en la lista |
-| R4 | `memberAccess.ts` sin cambios; ninguna ruta nueva toca `disabled` junto al retiro | Diff vacío en ese archivo + escaneo del guard |
+| R4 | `memberAccess.ts` sin cambios; el GET proyecta `disabled` sin default; retiro y `handleEdit` no lo escriben | Diff vacío en `memberAccess.ts`; test de proyección; test de que un PATCH de nombre no incluye `disabled` |
 | R5 | Ningún documento de **servicio** cambia al retirar | Test de que las mutaciones del handler tocan sólo el doc del miembro — jamás un role doc. (Con P3, también el `solverConfig`; ese caso lo verifica P3.) |
-| R6 | El aviso aparece; el servicio no cambia | Test de componente del planner con un ocupante retirado |
-| R7 | Un super-admin revoca acceso desde la app | Test de componente + verificación visual |
+| R6 | El aviso aparece en un servicio cuya fecha es ≥ hoy `America/Mexico_City`; el servicio no cambia | Test de componente con ocupante retirado; test de que un servicio de ayer (timezone) no avisa |
+| R7 | Un super-admin revoca acceso desde la app por mutación dedicada | Test de componente + verificación visual; test de que `handleEdit` no envía `disabled` |
 | R18 | La rotación de kids no cambia al retirar, y la UI lo declara | Test de rotación con y sin `retiredFrom`; test de copia |
 | R16 | La UI no afirma lo que P1 solo no hace, y el planner lista a los retirados en pools | Test de copia y test del aviso, con y sin retirados en pools |
-| R11 | El retiro incoherente se rechaza con mensaje | Test unitario del validador, junto a los de `validateMinistryWrite` |
-| R14 | Auto-deshabilitarse y deshabilitar al último super-admin habilitado se rechazan, y dos deshabilitaciones simultáneas no pueden dejar cero | Tres tests de la ruta: sesión actuante como objetivo; objetivo siendo el único super-admin con `disabled != true`; y dos escrituras concurrentes que individualmente pasan la comprobación |
+| R11 | Pertenencia = `normalizeMinistries` del doc almacenado; los tres casos de worship-ausente / kids-ausente / kids-only | Tests de ruta: `ministries` ausente → worship sí, kids no; `["kids"]` → kids sí. El validador no recibe el body |
+| R14 | Auto-deshabilitarse (effective y real), deshabilitar al último (`disabled != true`), y dos deshabilitaciones concurrentes de **ids distintos** no pueden dejar cero. El no-op es write-back; un 409 de `lastSeen` falla cerrado y reintenta | Cinco tests: objetivo = `sanityId` efectivo; objetivo = `__realAdmin.sanityId`; único SA con `disabled != true` (un doc **sin** el campo cuenta); dos escrituras a ids distintos — un fake que sólo choque el mismo `_id` **no pasa**; un 409 de `lastSeen` no deja el disable a medias |
 
 ## Terminal state
 
