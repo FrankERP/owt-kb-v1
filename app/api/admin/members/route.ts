@@ -22,6 +22,7 @@ export async function GET() {
   const members = await operationalClient.fetch(
     `*[_type == "teamMembers" && ${WORSHIP_MEMBER_GROQ_FILTER}] | order(member_name asc) {
       _id, member_name, alias, email, role, memberType, notifPrefs, ministries, managesMinistries,
+      retiredFrom, disabled,
       unavailableDates, unavailabilityNotes,
       "hasPassword": defined(passwordHash) && passwordHash != "",
       "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl)
