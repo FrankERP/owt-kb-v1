@@ -41,6 +41,10 @@ dos `APPROVED` consecutivos y frescos sobre bytes idénticos antes de implementa
 
 ## Requirements
 
+**Este spec es la fuente única del texto normativo de los requisitos que posee.** El roadmap
+padre los mapea por id y por una etiqueta estable, y no copia este texto. Los ids son únicos en
+toda la familia; `R1`–`R7`, `R10`, `R11` y `R14` pertenecen a P1 y no aparecen aquí.
+
 | ID | Requirement | Rationale | Acceptance criterion |
 |---|---|---|---|
 | R8 | Borrar a quien tiene historial falla con una razón legible y ofrece retirar | Es el caso común y hoy es indistinguible de un fallo de red | La respuesta identifica la causa; la UI la muestra y enlaza al retiro |
