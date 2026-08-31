@@ -238,5 +238,5 @@ Los ids son únicos en toda la familia; `R8`, `R9`, `R12` y `R13` pertenecen a P
 
 ## Terminal state
 
-`READY_FOR_ADVERSARIAL_REVIEW` — las tres preguntas abiertas son no bloqueantes y tienen
+`READY_FOR_ADVERSARIAL_REVIEW` — las dos preguntas abiertas son no bloqueantes y tienen
 default acotado. Riesgo **crítico**: dos `APPROVED` consecutivos sobre bytes idénticos.
