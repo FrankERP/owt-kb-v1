@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
-import { writeClient } from "@/sanity/lib/serverClient";
+import {
+  MEMBER_DELETE_ERROR,
+  MEMBER_HAS_REFERENCES_MESSAGE,
+  MEMBER_POOL_CLEANUP_FAILED_MESSAGE,
+  isSanityReferentialIntegrityError,
+  solverPoolCleanupPatch,
+} from "@/app/utils/memberDelete";
 import { revalidateServiceViews } from "@/app/utils/revalidate";
+import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
+import { SOLVER_CONFIG_DOC_ID } from "@/app/utils/solverConfigWriteRequest";
+import { operationalClient } from "@/sanity/lib/operationalClient";
+import { writeClient } from "@/sanity/lib/serverClient";
 import { revalidatePath } from "next/cache";
 import { NOTIFY_PREF_FIELD, wantsNotification, type NotifyKind } from "@/app/utils/notifyPrefs";
 import { validateMinistryWrite } from "@/app/ministries";
@@ -116,7 +126,62 @@ export async function DELETE(
   }
 
   const { id } = await params;
-  await writeClient.delete(id);
+
+  try {
+    await writeClient.delete(id);
+  } catch (err) {
+    if (isSanityReferentialIntegrityError(err)) {
+      return NextResponse.json(
+        {
+          error: MEMBER_DELETE_ERROR.HAS_REFERENCES,
+          message: MEMBER_HAS_REFERENCES_MESSAGE,
+          offerRetire: true,
+        },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
+
+  const stored = await operationalClient.fetch<{
+    _rev?: string;
+    sundayLeads?: unknown;
+    saturdayLeads?: unknown;
+    support?: unknown;
+  } | null>(
+    `*[_id == $docId][0]{ _rev, sundayLeads, saturdayLeads, support }`,
+    { docId: SOLVER_CONFIG_DOC_ID },
+  );
+
+  if (!stored || typeof stored._rev !== "string") {
+    revalidateServiceViews();
+    revalidatePath("/me");
+    return NextResponse.json({ ok: true });
+  }
+
+  const patch = solverPoolCleanupPatch(stored, id);
+  if (!patch) {
+    revalidateServiceViews();
+    revalidatePath("/me");
+    return NextResponse.json({ ok: true });
+  }
+
+  try {
+    await writeClient
+      .patch(SOLVER_CONFIG_DOC_ID)
+      .ifRevisionId(stored._rev)
+      .set(patch)
+      .commit();
+  } catch (err) {
+    const body = {
+      error: MEMBER_DELETE_ERROR.POOL_CLEANUP_FAILED,
+      message: MEMBER_POOL_CLEANUP_FAILED_MESSAGE,
+      deleted: true as const,
+      ...(sanityConflictKind(err) ? { kind: "stale_revision" as const } : {}),
+    };
+    return NextResponse.json(body, { status: 409 });
+  }
+
   revalidateServiceViews();
   revalidatePath("/me");
   return NextResponse.json({ ok: true });

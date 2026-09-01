@@ -26,6 +26,11 @@
 //
 //   node --env-file=.env.local scripts/fix-vale-sosa-rule.mjs           # dry run
 //   node --env-file=.env.local scripts/fix-vale-sosa-rule.mjs --apply   # writes
+//
+// ALREADY RUN AGAINST PRODUCTION on 2026-08-31: rev CkuN2fn3RgGUiMD3wR7JDY ->
+// UhhkYFXcRA3abUYzFDR9ls, one field changed, all ten rule names verified
+// resolving afterwards. Re-running is harmless — it exits saying there is
+// nothing to do — but there is no reason to.
 import { createClient } from "@sanity/client";
 
 const APPLY = process.argv.includes("--apply");
