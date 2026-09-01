@@ -23,6 +23,7 @@ import { fillColumn } from "./localFill";
 import { ruleContextForTarget } from "./serviceRuleContext";
 import { unresolvedRuleNames } from "./ruleEnforcement";
 import { ParticipationSidebar } from "./ParticipationSidebar";
+import LeadPoolHistoryPanel from "./LeadPoolHistoryPanel";
 import {
   editableConfig,
   sameSolverConfig,
@@ -1343,13 +1344,15 @@ function SolverConfigReloadNotice({ source, onReload }: {
   );
 }
 
-function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory }: {
+function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month }: {
   members: MemberOption[];
   config: SolverConfig;
   onChange: (c: SolverConfig) => void;
   rules: SolverConfigController;
   history: SolverHistoryEntry[];
   onRemoveHistory: (key: string) => void;
+  year: number;
+  month: number;
 }) {
   const [searches, setSearches] = useState<Record<string, string>>({});
 
@@ -1412,6 +1415,14 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
           onSearch={q => setSearches(s => ({ ...s, support: q }))}
         />
       </div>
+
+      <LeadPoolHistoryPanel
+        config={config}
+        members={members}
+        history={history}
+        year={year}
+        month={month}
+      />
 
       <RuleBuilder
         config={config}
@@ -3185,6 +3196,8 @@ export default function MonthGenerator({
           rules={rules}
           history={solverHistory}
           onRemoveHistory={removeHistoryEntry}
+          year={year}
+          month={month}
         />
       ) : (
         <SolverConfigUnavailable source={rules.source} onReload={rules.reload} />
@@ -3364,6 +3377,16 @@ export default function MonthGenerator({
           </button>
         </div>
       </div>}
+
+      {solverConfig && (
+        <LeadPoolHistoryPanel
+          config={solverConfig}
+          members={members}
+          history={solverHistory}
+          year={year}
+          month={month}
+        />
+      )}
 
       {viewMode === "edit" && (
         <div className="flex flex-wrap items-center gap-2">

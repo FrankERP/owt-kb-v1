@@ -842,7 +842,7 @@ def create_model_and_solve(
         model.Add(sv == rmax - rmin)
         role_spread_vars[role_type] = sv
 
-    # Sun.Lead hard fairness guard
+    # Sun.Lead hard fairness guard (current month)
     sun_lead_eligible = [p for p in all_people if is_eligible(p, "Sun.Lead", pools, forbidden)]
     sun_lead_slots_n = sum(1 for s in slots if s.role_type == "Sun.Lead")
     cur_sun_lead_spread = model.NewIntVar(0, sun_lead_slots_n, "cur_sl_spread")
