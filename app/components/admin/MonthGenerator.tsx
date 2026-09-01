@@ -1716,16 +1716,17 @@ export default function MonthGenerator({
   const [clearIncludePublished, setClearIncludePublished] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [clearProgress, setClearProgress] = useState<{ done: number; total: number } | null>(null);
-  // Focus: into the confirmation when it opens, back to the trigger on Cancelar.
+  // Focus: onto CANCELAR when the prompt opens (never the destructive confirm —
+  // Enter on the trigger fires on keydown, and a held or repeated Enter would
+  // otherwise land on «Eliminar»), back to the trigger on Cancelar or Escape.
   // The trigger stays enabled (and idempotent) while the prompt is open so it
   // can receive focus again; disabling it would drop keyboard focus to <body>.
   const clearTriggerRef = useRef<HTMLButtonElement>(null);
   const clearRegionRef = useRef<HTMLDivElement>(null);
+  const clearCancelRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!clearPending) return;
-    const region = clearRegionRef.current;
-    const first = region?.querySelector<HTMLElement>("input:not([disabled]), button:not([disabled])");
-    (first ?? region)?.focus();
+    (clearCancelRef.current ?? clearRegionRef.current)?.focus();
   }, [clearPending]);
   const [saveKnownFailures, setSaveKnownFailures] = useState(0);
   const [pendingSaveAttempts, setPendingSaveAttempts] = useState<Map<string, {
@@ -1942,7 +1943,7 @@ export default function MonthGenerator({
       if (storedTransportActive) return;
       // An open «Limpiar mes» confirmation is the nearest thing to dismiss —
       // Escape must not leap past a destructive prompt to close the editor.
-      if (clearPending) { setClearPending(false); return; }
+      if (clearPending) { setClearPending(false); clearTriggerRef.current?.focus(); return; }
       const wouldDiscard = storedMode
         ? storedHasUnresolvedWork
         : step === "grid" && assignmentCount > 0;
@@ -2295,10 +2296,13 @@ export default function MonthGenerator({
           ? "No hay servicios guardados en este mes."
           : null;
 
-  // A save with an unknown outcome or a swap awaiting verification means the
-  // observed `_rev`s may already be stale — same members `Guardar` waits on.
-  const clearUnresolvedWrite = pendingSaveAttempts.size > 0 || swapVerificationPending
-    ? "Hay un guardado o intercambio sin confirmar. Resuélvelo antes de limpiar el mes."
+  // The three unresolved-write members of `storedMutationLocked` (what `Guardar`
+  // waits on): a save with an unknown outcome or a swap awaiting verification
+  // means the observed `_rev`s may be stale; an unconfirmed create may have
+  // landed a service that `storedSource.roles` does not list yet, which a clear
+  // would then leave behind while reporting a clean sweep.
+  const clearUnresolvedWrite = pendingSaveAttempts.size > 0 || swapVerificationPending || createAttemptStatus !== null
+    ? "Hay un guardado, intercambio o creación sin confirmar. Resuélvelo antes de limpiar el mes."
     : null;
 
   async function handleClearMonth() {
@@ -3772,7 +3776,7 @@ export default function MonthGenerator({
                 ? `Eliminando ${clearProgress.done} de ${clearProgress.total}…`
                 : `Eliminar ${clearSelection.selected.length}`}
             </button>
-            <button type="button" onClick={() => { setClearPending(false); clearTriggerRef.current?.focus(); }} disabled={clearing} className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50">
+            <button ref={clearCancelRef} type="button" onClick={() => { setClearPending(false); clearTriggerRef.current?.focus(); }} disabled={clearing} className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50">
               Cancelar
             </button>
           </div>

@@ -1093,14 +1093,15 @@ describe("MonthGenerator — «Limpiar mes» edge paths", () => {
 
     expect(screen.queryByRole("region", { name: "Confirmar limpiar mes" })).toBeNull();
     expect(onClose).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Limpiar mes" }));
   });
 
-  it("moves focus into the confirmation and back to the trigger on Cancelar", () => {
+  it("moves focus onto Cancelar (never the destructive confirm) and back to the trigger on Cancelar", () => {
     renderStored([role()], { storedCapabilities: clearGate });
     const trigger = screen.getByRole("button", { name: "Limpiar mes" });
     trigger.focus();
     fireEvent.click(trigger);
-    expect(screen.getByRole("region", { name: "Confirmar limpiar mes" }).contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cancelar" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
     expect(document.activeElement).toBe(trigger);
@@ -1128,7 +1129,7 @@ describe("MonthGenerator — «Limpiar mes» edge paths", () => {
     expect(trigger.title).toBe("La lista de servicios no está completa. Reintenta la carga.");
   });
 
-  it("sends the STORED revision, not the grid's unsaved edit, and warns that the edit is discarded", async () => {
+  it("still sends the observed _rev while a grid edit is unsaved, and warns that the edit is discarded", async () => {
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => response());
     vi.stubGlobal("fetch", fetchMock);
     const { onClose } = renderStored([role()], { storedCapabilities: clearGate });

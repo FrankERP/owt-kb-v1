@@ -1,7 +1,7 @@
 /**
  * Spanish wording for a rejected role mutation, shared by the card-level flows
  * in `ServicesPanel` (delete, copy, swap) and the per-service outcome lines of
- * «Limpiar mes» (`clearMonthModel.ts`), so a new server code gets ONE
+ * «Limpiar mes» (`MonthGenerator.tsx`), so a new server code gets ONE
  * translation, not two. Codes are the `error` field of a `serviceError`
  * response (`app/utils/serviceMutation.ts`).
  */

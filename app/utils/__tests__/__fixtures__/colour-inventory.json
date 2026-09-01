@@ -2563,7 +2563,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 1854,
+      "line": 1855,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
