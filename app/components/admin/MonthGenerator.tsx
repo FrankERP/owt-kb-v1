@@ -18,11 +18,19 @@ import { creatableTargets, type TargetPreflight } from "./serviceReadiness";
 import PlannerGrid, { type AutoState, type SolveDiagnostics } from "./PlannerGrid";
 import MonthCalendar from "./MonthCalendar";
 import { SERVICE_LABEL, type ServiceRole } from "./serviceCardModel";
+import {
+  selectClearMonthRoles,
+  summarizeClearMonth,
+  type ClearMonthResult,
+  type ClearMonthSummary,
+} from "./clearMonthModel";
+import { mutationErrorMessage } from "./serviceMutationErrors";
 import type { RoleDomainSummary } from "@/app/utils/serviceReadSummary";
 import { fillColumn } from "./localFill";
 import { ruleContextForTarget } from "./serviceRuleContext";
 import { unresolvedRuleNames } from "./ruleEnforcement";
 import { ParticipationSidebar } from "./ParticipationSidebar";
+import LeadPoolHistoryPanel from "./LeadPoolHistoryPanel";
 import {
   editableConfig,
   sameSolverConfig,
@@ -124,7 +132,20 @@ interface Props {
     create: { enabled: boolean; reason: string | null };
     swap: { enabled: boolean; reason: string | null };
     changeDate: { enabled: boolean; reason: string | null };
+    /**
+     * «Limpiar mes» — the `deleteService` gate, since every delete goes through
+     * the per-role DELETE route. Optional: an absent gate hides the button
+     * rather than offering an ungated bulk delete.
+     */
+    clear?: { enabled: boolean; reason: string | null };
   };
+  /**
+   * Stored mode: called once after «Limpiar mes» finishes, with the per-service
+   * outcome. The editor closes itself right after; the parent owns the reload
+   * and the report, because the grid's local state was built for services that
+   * no longer exist.
+   */
+  onCleared?: (summary: ClearMonthSummary) => void;
   /**
    * Per-target A1/A2 preflight for the `generateMonth` row of Plan B's matrix
    * (plan §"Data loading and validation consumption"). Every previewed target is
@@ -1343,13 +1364,15 @@ function SolverConfigReloadNotice({ source, onReload }: {
   );
 }
 
-function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory }: {
+function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month }: {
   members: MemberOption[];
   config: SolverConfig;
   onChange: (c: SolverConfig) => void;
   rules: SolverConfigController;
   history: SolverHistoryEntry[];
   onRemoveHistory: (key: string) => void;
+  year: number;
+  month: number;
 }) {
   const [searches, setSearches] = useState<Record<string, string>>({});
 
@@ -1413,6 +1436,14 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         />
       </div>
 
+      <LeadPoolHistoryPanel
+        config={config}
+        members={members}
+        history={history}
+        year={year}
+        month={month}
+      />
+
       <RuleBuilder
         config={config}
         onChange={onChange}
@@ -1471,7 +1502,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
 
 export default function MonthGenerator({
   mode = "create", members, existingRoles, onClose, onCreated, rules, capability, preflight, allRoles,
-  initialMonth, focusRoleId, openComposerInitially = false, storedSource, storedCapabilities,
+  initialMonth, focusRoleId, openComposerInitially = false, storedSource, storedCapabilities, onCleared,
 }: Props) {
   const storedMode = mode === "stored";
   const gateBlocked = capability && !capability.enabled ? capability.reason ?? "Datos incompletos." : null;
@@ -1678,6 +1709,25 @@ export default function MonthGenerator({
   const [pushError, setPushError] = useState<string | null>(null);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [savingStored, setSavingStored] = useState(false);
+  // «Limpiar mes» (stored mode): the confirmation is open, published services
+  // are opted in, the sequential deletes are in flight. `clearProgress` is the
+  // running "n de N" the disabled button shows while they run.
+  const [clearPending, setClearPending] = useState(false);
+  const [clearIncludePublished, setClearIncludePublished] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [clearProgress, setClearProgress] = useState<{ done: number; total: number } | null>(null);
+  // Focus: onto CANCELAR when the prompt opens (never the destructive confirm —
+  // Enter on the trigger fires on keydown, and a held or repeated Enter would
+  // otherwise land on «Eliminar»), back to the trigger on Cancelar or Escape.
+  // The trigger stays enabled (and idempotent) while the prompt is open so it
+  // can receive focus again; disabling it would drop keyboard focus to <body>.
+  const clearTriggerRef = useRef<HTMLButtonElement>(null);
+  const clearRegionRef = useRef<HTMLDivElement>(null);
+  const clearCancelRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!clearPending) return;
+    (clearCancelRef.current ?? clearRegionRef.current)?.focus();
+  }, [clearPending]);
   const [saveKnownFailures, setSaveKnownFailures] = useState(0);
   const [pendingSaveAttempts, setPendingSaveAttempts] = useState<Map<string, {
     attempt: FrozenSaveAttempt;
@@ -1861,7 +1911,7 @@ export default function MonthGenerator({
   const storedSaveBlocked = storedEditBlocked ?? (hasStoredDateMove ? storedDateBlocked : null);
   const storedWriteUnresolved = storedRowsDirty || dirtyStoredColumns.length > 0 || invalidStoredColumns.length > 0 || pendingSaveAttempts.size > 0 || swapVerificationPending;
   const storedHasUnresolvedWork = storedWriteUnresolved || createAttemptStatus !== null;
-  const storedTransportActive = storedMode && (savingStored || creatingOne);
+  const storedTransportActive = storedMode && (savingStored || creatingOne || clearing);
   const storedMutationLocked = storedMode && (
     savingStored
     || pendingSaveAttempts.size > 0
@@ -1869,6 +1919,8 @@ export default function MonthGenerator({
     || creatingOne
     || createAttemptStatus !== null
     || pendingDiscard !== null
+    || clearPending
+    || clearing
   );
   const storedGenerationKey = `${storedSource?.rolesGeneration ?? 0}:${storedSource?.integrityGeneration ?? 0}`;
   const storedSectionServiceOptions = storedMode
@@ -1889,6 +1941,9 @@ export default function MonthGenerator({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (storedTransportActive) return;
+      // An open «Limpiar mes» confirmation is the nearest thing to dismiss —
+      // Escape must not leap past a destructive prompt to close the editor.
+      if (clearPending) { setClearPending(false); clearTriggerRef.current?.focus(); return; }
       const wouldDiscard = storedMode
         ? storedHasUnresolvedWork
         : step === "grid" && assignmentCount > 0;
@@ -1900,7 +1955,7 @@ export default function MonthGenerator({
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [assignmentCount, onClose, step, storedHasUnresolvedWork, storedMode, storedTransportActive]);
+  }, [assignmentCount, clearPending, onClose, step, storedHasUnresolvedWork, storedMode, storedTransportActive]);
 
   useEffect(() => {
     if (!storedMode || !focusRoleId) return;
@@ -2219,6 +2274,86 @@ export default function MonthGenerator({
     if (storedTransportActive) return;
     if (!storedMode && pendingDiscard === "back") goBackToConfig();
     else onClose();
+  }
+
+  // ── «Limpiar mes» (stored mode) ────────────────────────────────────────────
+  //
+  // Reads the parent's stored roles, never the grid: a column the admin has
+  // edited but not saved is still the stored document on the server, and that
+  // document (with its observed `_rev`) is what each DELETE must name.
+  const clearSelection = useMemo(
+    () => selectClearMonthRoles(storedSource?.roles ?? [], monthPrefix, clearIncludePublished),
+    [clearIncludePublished, monthPrefix, storedSource?.roles],
+  );
+  const clearCandidates = clearSelection.drafts.length + clearSelection.published.length;
+  const storedClearBlocked = !storedCapabilities?.clear
+    ? null
+    : storedCapabilities.clear.enabled === false
+      ? storedCapabilities.clear.reason ?? "Datos incompletos."
+      : storedSource?.rolesStatus !== "ready"
+        ? "La lista de servicios no está completa. Reintenta la carga."
+        : clearCandidates === 0
+          ? "No hay servicios guardados en este mes."
+          : null;
+
+  // The three unresolved-write members of `storedMutationLocked` (what `Guardar`
+  // waits on): a save with an unknown outcome or a swap awaiting verification
+  // means the observed `_rev`s may be stale; an unconfirmed create may have
+  // landed a service that `storedSource.roles` does not list yet, which a clear
+  // would then leave behind while reporting a clean sweep.
+  const clearUnresolvedWrite = pendingSaveAttempts.size > 0 || swapVerificationPending || createAttemptStatus !== null
+    ? "Hay un guardado, intercambio o creación sin confirmar. Resuélvelo antes de limpiar el mes."
+    : null;
+
+  async function handleClearMonth() {
+    if (clearing || storedTransportActive || storedClearBlocked || clearUnresolvedWrite) return;
+    const targets = clearSelection.selected;
+    if (targets.length === 0) return;
+    setClearing(true);
+    setClearProgress({ done: 0, total: targets.length });
+    const results: ClearMonthResult[] = [];
+    // Sequential on purpose: each delete vacates its own weekend token and the
+    // route answers per service; a refused one must not stop the rest.
+    for (const target of targets) {
+      let result: ClearMonthResult;
+      try {
+        const res = await fetch(`/api/admin/roles/${target._id}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rev: target._rev }),
+        });
+        if (res.ok) {
+          result = { role: target, ok: true };
+        } else {
+          let code: string | undefined;
+          let dependencyCount: number | undefined;
+          try {
+            const body = await res.json();
+            code = typeof body?.error === "string" ? body.error : undefined;
+            dependencyCount = Array.isArray(body?.details?.dependencies) ? body.details.dependencies.length : undefined;
+          } catch {
+            code = undefined;
+          }
+          result = {
+            role: target,
+            ok: false,
+            reason: mutationErrorMessage({ code, status: res.status, dependencyCount, fallback: "Error al eliminar." }),
+          };
+        }
+      } catch {
+        // A lost response is NOT a known failure: the delete may have landed.
+        result = { role: target, ok: false, reason: "Error de conexión; verifica si quedó eliminado." };
+      }
+      results.push(result);
+      setClearProgress({ done: results.length, total: targets.length });
+    }
+    setClearing(false);
+    setClearPending(false);
+    setClearProgress(null);
+    onCleared?.(summarizeClearMonth(results, `${MONTHS[month - 1]} ${year}`));
+    // Always close: the grid's rows/cells were built for services that are now
+    // gone (or partly gone). The parent reloads and shows the report.
+    onClose();
   }
 
   function handlePreview() {
@@ -3185,6 +3320,8 @@ export default function MonthGenerator({
           rules={rules}
           history={solverHistory}
           onRemoveHistory={removeHistoryEntry}
+          year={year}
+          month={month}
         />
       ) : (
         <SolverConfigUnavailable source={rules.source} onReload={rules.reload} />
@@ -3364,6 +3501,16 @@ export default function MonthGenerator({
           </button>
         </div>
       </div>}
+
+      {solverConfig && (
+        <LeadPoolHistoryPanel
+          config={solverConfig}
+          members={members}
+          history={solverHistory}
+          year={year}
+          month={month}
+        />
+      )}
 
       {viewMode === "edit" && (
         <div className="flex flex-wrap items-center gap-2">
@@ -3583,11 +3730,76 @@ export default function MonthGenerator({
         </p>
       )}
 
+      {/*
+        «Limpiar mes» confirmation. Drafts by default; published services are an
+        explicit opt-in because deleting one queues a «ya no participas» notice
+        to every assignee. Unsaved grid work is discarded — the deletes name the
+        STORED documents, and the editor closes when they finish.
+      */}
+      {storedMode && clearPending && (
+        <div ref={clearRegionRef} tabIndex={-1} role="region" aria-label="Confirmar limpiar mes" aria-live="polite" className="rounded-lg border border-negative-border/50 bg-negative-surface/20 px-3 py-2.5 space-y-2">
+          <p className="font-body text-xs text-negative-fg">
+            Eliminar {clearSelection.selected.length} servicio{clearSelection.selected.length !== 1 ? "s" : ""} de {MONTHS[month - 1]} {year}
+            {" "}({clearSelection.drafts.length} borrador{clearSelection.drafts.length !== 1 ? "es" : ""}
+            {clearIncludePublished && clearSelection.published.length > 0 ? ` + ${clearSelection.published.length} publicado${clearSelection.published.length !== 1 ? "s" : ""}` : ""}).
+            {" "}Esta acción no se puede deshacer.
+          </p>
+          {clearSelection.published.length > 0 && (
+            <label className="flex items-start gap-2 font-body text-xs text-mono-300">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={clearIncludePublished}
+                disabled={clearing}
+                onChange={(event) => setClearIncludePublished(event.target.checked)}
+              />
+              <span>
+                Incluir {clearSelection.published.length} servicio{clearSelection.published.length !== 1 ? "s" : ""} publicado{clearSelection.published.length !== 1 ? "s" : ""}.
+                {" "}Los asignados recibirán aviso de que ya no participan.
+              </span>
+            </label>
+          )}
+          {clearSelection.selected.length === 0 && (
+            <p className="font-body text-xs text-mono-400">No hay borradores en este mes; marca «Incluir publicados» para eliminarlos.</p>
+          )}
+          {storedHasUnresolvedWork && (
+            <p className="font-body text-xs text-warning-soft">Los cambios sin guardar en la cuadrícula se descartan.</p>
+          )}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => void handleClearMonth()}
+              disabled={clearing || clearSelection.selected.length === 0}
+              className="min-h-[44px] rounded-lg bg-negative-surface/60 hover:bg-negative-border/60 px-3 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+            >
+              {clearing && clearProgress
+                ? `Eliminando ${clearProgress.done} de ${clearProgress.total}…`
+                : `Eliminar ${clearSelection.selected.length}`}
+            </button>
+            <button ref={clearCancelRef} type="button" onClick={() => { setClearPending(false); clearTriggerRef.current?.focus(); }} disabled={clearing} className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
       {storedMode ? (
         <div className="flex gap-3">
           <button type="button" onClick={requestBack} disabled={storedTransportActive} className="flex-1 min-h-[44px] rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors disabled:opacity-50">
             Cerrar
           </button>
+          {storedCapabilities?.clear && (
+            <button
+              ref={clearTriggerRef}
+              type="button"
+              onClick={() => { if (clearPending) return; setClearIncludePublished(false); setClearPending(true); }}
+              disabled={storedTransportActive || pendingDiscard !== null || !!storedClearBlocked || !!clearUnresolvedWrite}
+              title={storedClearBlocked ?? clearUnresolvedWrite ?? "Elimina los borradores del mes para volver a generarlo"}
+              className="flex-1 min-h-[44px] rounded-lg border border-negative-border/50 font-label text-xs uppercase tracking-widest text-negative-fg hover:bg-negative-surface/30 transition-colors disabled:opacity-50"
+            >
+              Limpiar mes
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void handleStoredSave()}

@@ -500,8 +500,8 @@ describe("MonthGenerator — create path", () => {
     // "what the solver proposed" from "what actually got created" apart.
     const leadCell = container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]');
     fireEvent.click(leadCell!);
-    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana")); // off
-    fireEvent.click(within(container.querySelector("ul")!).getByText("Beto")); // on
+    fireEvent.click(within(container.querySelector('[data-candidate-picker]')!).getByText("Ana")); // off
+    fireEvent.click(within(container.querySelector('[data-candidate-picker]')!).getByText("Beto")); // on
     fireEvent.click(screen.getByText("Cerrar"));
 
     fireEvent.click(createButton());
@@ -526,7 +526,7 @@ describe("MonthGenerator — create path", () => {
 
     const leadCell = container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]');
     fireEvent.click(leadCell!);
-    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+    fireEvent.click(within(container.querySelector('[data-candidate-picker]')!).getByText("Ana"));
     fireEvent.click(screen.getByText("Cerrar"));
 
     fireEvent.click(createButton());
@@ -569,7 +569,7 @@ describe("MonthGenerator — create path", () => {
     for (const [date, name] of [[preExisting, "Beto"], [fresh, "Ana"]] as const) {
       const cell = container.querySelector(`[data-row-id="lead"][data-date="${date}"]`);
       fireEvent.click(cell!);
-      fireEvent.click(within(container.querySelector("ul")!).getByText(name));
+      fireEvent.click(within(container.querySelector('[data-candidate-picker]')!).getByText(name));
       fireEvent.click(screen.getByText("Cerrar"));
     }
 
@@ -601,7 +601,7 @@ describe("MonthGenerator — create path", () => {
     for (const date of FEB_2026_SUNDAYS) {
       const cell = container.querySelector(`[data-row-id="lead"][data-date="${date}"]`);
       fireEvent.click(cell!);
-      fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+      fireEvent.click(within(container.querySelector('[data-candidate-picker]')!).getByText("Ana"));
       fireEvent.click(screen.getByText("Cerrar"));
     }
 
@@ -628,7 +628,7 @@ describe("MonthGenerator — create path", () => {
     goToPreview(container, 2, 2026);
     const firstCell = container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]');
     fireEvent.click(firstCell!);
-    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+    fireEvent.click(within(container.querySelector('[data-candidate-picker]')!).getByText("Ana"));
     fireEvent.click(screen.getByText("Cerrar"));
     fireEvent.click(createButton());
     await waitFor(() => expect(first.fetchMock).toHaveBeenCalled());
@@ -647,7 +647,7 @@ describe("MonthGenerator — create path", () => {
     for (const date of [FEB_2026_SUNDAYS[0], FEB_2026_SUNDAYS[1]]) {
       const cell = container2.querySelector(`[data-row-id="lead"][data-date="${date}"]`);
       fireEvent.click(cell!);
-      fireEvent.click(within(container2.querySelector("ul")!).getByText("Ana"));
+      fireEvent.click(within(container2.querySelector('[data-candidate-picker]')!).getByText("Ana"));
       fireEvent.click(screen.getByText("Cerrar"));
     }
     fireEvent.click(createButton());
@@ -692,7 +692,7 @@ describe("MonthGenerator — create path", () => {
     for (const date of FEB_2026_SUNDAYS) {
       const cell = container.querySelector(`[data-row-id="lead"][data-date="${date}"]`);
       fireEvent.click(cell!);
-      fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+      fireEvent.click(within(container.querySelector('[data-candidate-picker]')!).getByText("Ana"));
       fireEvent.click(screen.getByText("Cerrar"));
     }
 
@@ -752,7 +752,7 @@ describe("MonthGenerator — create path", () => {
     for (const date of FEB_2026_SUNDAYS) {
       const cell = container.querySelector(`[data-row-id="lead"][data-date="${date}"]`);
       fireEvent.click(cell!);
-      fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+      fireEvent.click(within(container.querySelector('[data-candidate-picker]')!).getByText("Ana"));
       fireEvent.click(screen.getByText("Cerrar"));
     }
 
@@ -1030,7 +1030,7 @@ describe("MonthGenerator — create path", () => {
 
     // The candidate picker (the only "Ana" match once she's assigned and the
     // cell chip ALSO reads "Ana") is scoped to its own `<ul>`.
-    const pickAna = () => fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+    const pickAna = () => fireEvent.click(within(container.querySelector('[data-candidate-picker]')!).getByText("Ana"));
 
     // Open the Lead cell on the first Sunday and assign Ana.
     const leadCell = container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]');
@@ -1278,10 +1278,10 @@ describe("MonthGenerator — create path", () => {
     goToPreview(container, 2, 2026);
 
     fireEvent.click(container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]')!);
-    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+    fireEvent.click(within(container.querySelector('[data-candidate-picker]')!).getByText("Ana"));
     fireEvent.click(screen.getByText("Cerrar"));
     fireEvent.click(container.querySelector('[data-row-id="lead"][data-date="2026-02-08"]')!);
-    fireEvent.click(within(container.querySelector("ul")!).getByText("Beto"));
+    fireEvent.click(within(container.querySelector('[data-candidate-picker]')!).getByText("Beto"));
     fireEvent.click(screen.getByText("Cerrar"));
 
     fireEvent.click(createButton());
@@ -1316,7 +1316,7 @@ describe("MonthGenerator — create path", () => {
     // Assign Ana to Coro on the first Sunday (2026-02-01).
     const coroCell = container.querySelector('[data-row-id="coro"][data-date="2026-02-01"]');
     fireEvent.click(coroCell!);
-    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+    fireEvent.click(within(container.querySelector('[data-candidate-picker]')!).getByText("Ana"));
     fireEvent.click(screen.getByText("Cerrar"));
     expect(
       container.querySelector('[data-row-id="coro"][data-date="2026-02-01"]')?.textContent,
@@ -1596,7 +1596,7 @@ describe("MonthGenerator — create path", () => {
     // contributes nothing, and it must not be written at all.
     const leadCell = container.querySelector(`[data-row-id="lead"][data-date="${SPECIAL_DATE}"]`);
     fireEvent.click(leadCell!);
-    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+    fireEvent.click(within(container.querySelector('[data-candidate-picker]')!).getByText("Ana"));
     fireEvent.click(screen.getByText("Cerrar"));
 
     fireEvent.click(createButton());
@@ -1619,7 +1619,7 @@ describe("MonthGenerator — create path", () => {
 
     const leadCell = container.querySelector(`[data-row-id="lead"][data-date="${SPECIAL_DATE}"]`);
     fireEvent.click(leadCell!);
-    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+    fireEvent.click(within(container.querySelector('[data-candidate-picker]')!).getByText("Ana"));
     fireEvent.click(screen.getByText("Cerrar"));
 
     fireEvent.click(container.querySelector(`[data-swap-date="${SPECIAL_DATE}"]`)!);
@@ -2247,7 +2247,7 @@ describe("MonthGenerator — the drag's create-mode drop guard (T4/P3)", () => {
 
   function seatAnaOnFirstSunday(container: HTMLElement) {
     fireEvent.click(container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]')!);
-    fireEvent.click(within(container.querySelector("ul")!).getByText("Ana"));
+    fireEvent.click(within(container.querySelector('[data-candidate-picker]')!).getByText("Ana"));
     fireEvent.click(screen.getByText("Cerrar"));
   }
 
