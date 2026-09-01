@@ -4,7 +4,8 @@ import { useTransientValue } from "@/app/utils/useTransientValue";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import MonthGenerator from "./MonthGenerator";
-import { mutationErrorMessage, type ClearMonthSummary } from "./clearMonthModel";
+import type { ClearMonthSummary } from "./clearMonthModel";
+import { mutationErrorMessage } from "./serviceMutationErrors";
 import { useSolverConfig } from "./useSolverConfig";
 import {
   SERVICE_SOURCE_KEYS,
@@ -98,8 +99,8 @@ const formatDate = (iso: string) => formatServiceDate(iso, "es-MX");
 
 // Spanish message for a rejected mutation. A 409 always means "your view is
 // stale": the modal/mode stays open and the operator is told to reload.
-// The wording lives in `clearMonthModel.ts` (`mutationErrorMessage`), shared with
-// «Limpiar mes» so one server code has one translation.
+// The wording lives in `serviceMutationErrors.ts` (`mutationErrorMessage`), shared
+// with «Limpiar mes» so one server code has one translation.
 async function describeMutationError(res: Response, fallback: string): Promise<string> {
   let code: string | undefined;
   let dependencyCount: number | undefined;

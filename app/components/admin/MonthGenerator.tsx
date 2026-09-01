@@ -19,12 +19,12 @@ import PlannerGrid, { type AutoState, type SolveDiagnostics } from "./PlannerGri
 import MonthCalendar from "./MonthCalendar";
 import { SERVICE_LABEL, type ServiceRole } from "./serviceCardModel";
 import {
-  mutationErrorMessage,
   selectClearMonthRoles,
   summarizeClearMonth,
   type ClearMonthResult,
   type ClearMonthSummary,
 } from "./clearMonthModel";
+import { mutationErrorMessage } from "./serviceMutationErrors";
 import type { RoleDomainSummary } from "@/app/utils/serviceReadSummary";
 import { fillColumn } from "./localFill";
 import { ruleContextForTarget } from "./serviceRuleContext";
@@ -1716,6 +1716,17 @@ export default function MonthGenerator({
   const [clearIncludePublished, setClearIncludePublished] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [clearProgress, setClearProgress] = useState<{ done: number; total: number } | null>(null);
+  // Focus: into the confirmation when it opens, back to the trigger on Cancelar.
+  // The trigger stays enabled (and idempotent) while the prompt is open so it
+  // can receive focus again; disabling it would drop keyboard focus to <body>.
+  const clearTriggerRef = useRef<HTMLButtonElement>(null);
+  const clearRegionRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!clearPending) return;
+    const region = clearRegionRef.current;
+    const first = region?.querySelector<HTMLElement>("input:not([disabled]), button:not([disabled])");
+    (first ?? region)?.focus();
+  }, [clearPending]);
   const [saveKnownFailures, setSaveKnownFailures] = useState(0);
   const [pendingSaveAttempts, setPendingSaveAttempts] = useState<Map<string, {
     attempt: FrozenSaveAttempt;
@@ -2284,8 +2295,14 @@ export default function MonthGenerator({
           ? "No hay servicios guardados en este mes."
           : null;
 
+  // A save with an unknown outcome or a swap awaiting verification means the
+  // observed `_rev`s may already be stale — same members `Guardar` waits on.
+  const clearUnresolvedWrite = pendingSaveAttempts.size > 0 || swapVerificationPending
+    ? "Hay un guardado o intercambio sin confirmar. Resuélvelo antes de limpiar el mes."
+    : null;
+
   async function handleClearMonth() {
-    if (clearing || storedTransportActive || storedClearBlocked) return;
+    if (clearing || storedTransportActive || storedClearBlocked || clearUnresolvedWrite) return;
     const targets = clearSelection.selected;
     if (targets.length === 0) return;
     setClearing(true);
@@ -3716,7 +3733,7 @@ export default function MonthGenerator({
         STORED documents, and the editor closes when they finish.
       */}
       {storedMode && clearPending && (
-        <div role="region" aria-label="Confirmar limpiar mes" className="rounded-lg border border-negative-border/50 bg-negative-surface/20 px-3 py-2.5 space-y-2">
+        <div ref={clearRegionRef} tabIndex={-1} role="region" aria-label="Confirmar limpiar mes" aria-live="polite" className="rounded-lg border border-negative-border/50 bg-negative-surface/20 px-3 py-2.5 space-y-2">
           <p className="font-body text-xs text-negative-fg">
             Eliminar {clearSelection.selected.length} servicio{clearSelection.selected.length !== 1 ? "s" : ""} de {MONTHS[month - 1]} {year}
             {" "}({clearSelection.drafts.length} borrador{clearSelection.drafts.length !== 1 ? "es" : ""}
@@ -3755,7 +3772,7 @@ export default function MonthGenerator({
                 ? `Eliminando ${clearProgress.done} de ${clearProgress.total}…`
                 : `Eliminar ${clearSelection.selected.length}`}
             </button>
-            <button type="button" onClick={() => setClearPending(false)} disabled={clearing} className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50">
+            <button type="button" onClick={() => { setClearPending(false); clearTriggerRef.current?.focus(); }} disabled={clearing} className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50">
               Cancelar
             </button>
           </div>
@@ -3769,10 +3786,11 @@ export default function MonthGenerator({
           </button>
           {storedCapabilities?.clear && (
             <button
+              ref={clearTriggerRef}
               type="button"
-              onClick={() => { setClearIncludePublished(false); setClearPending(true); }}
-              disabled={storedTransportActive || clearPending || pendingDiscard !== null || !!storedClearBlocked}
-              title={storedClearBlocked ?? "Elimina los borradores del mes para volver a generarlo"}
+              onClick={() => { if (clearPending) return; setClearIncludePublished(false); setClearPending(true); }}
+              disabled={storedTransportActive || pendingDiscard !== null || !!storedClearBlocked || !!clearUnresolvedWrite}
+              title={storedClearBlocked ?? clearUnresolvedWrite ?? "Elimina los borradores del mes para volver a generarlo"}
               className="flex-1 min-h-[44px] rounded-lg border border-negative-border/50 font-label text-xs uppercase tracking-widest text-negative-fg hover:bg-negative-surface/30 transition-colors disabled:opacity-50"
             >
               Limpiar mes

@@ -1043,3 +1043,106 @@ describe("MonthGenerator — «Limpiar mes»", () => {
     expect(empty.title).toBe("No hay servicios guardados en este mes.");
   });
 });
+
+describe("MonthGenerator — «Limpiar mes» edge paths", () => {
+  const clearGate = {
+    edit: { enabled: true, reason: null },
+    create: { enabled: true, reason: null },
+    swap: { enabled: true, reason: null },
+    changeDate: { enabled: true, reason: null },
+    clear: { enabled: true, reason: null },
+  };
+
+  it("keeps going past a lost response and a non-JSON error body, wording each honestly", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith("/draft-a")) throw new Error("connection lost");
+      if (url.endsWith("/draft-b")) return { ok: false, status: 502, json: async () => { throw new Error("html"); } };
+      return response();
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const onCleared = vi.fn();
+    const roles = [
+      role({ _id: "draft-a", _rev: "rev-a", date: "2026-02-01" }),
+      role({ _id: "draft-b", _rev: "rev-b", date: "2026-02-08" }),
+      role({ _id: "draft-c", _rev: "rev-c", date: "2026-02-15" }),
+    ];
+    const { onClose } = renderStored(roles, { storedCapabilities: clearGate, onCleared });
+
+    fireEvent.click(screen.getByRole("button", { name: "Limpiar mes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar 3" }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(onCleared).toHaveBeenCalledWith({
+      attempted: 3,
+      deleted: 1,
+      failures: [
+        "01/02 · Domingo: Error de conexión; verifica si quedó eliminado.",
+        "08/02 · Domingo: Error al eliminar.",
+      ],
+      message: "Febrero 2026: eliminados 1 de 3. No se pudieron eliminar 2.",
+    });
+  });
+
+  it("Escape dismisses the confirmation instead of closing the editor", () => {
+    const { onClose } = renderStored([role()], { storedCapabilities: clearGate });
+    fireEvent.click(screen.getByRole("button", { name: "Limpiar mes" }));
+    expect(screen.getByRole("region", { name: "Confirmar limpiar mes" })).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.queryByRole("region", { name: "Confirmar limpiar mes" })).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("moves focus into the confirmation and back to the trigger on Cancelar", () => {
+    renderStored([role()], { storedCapabilities: clearGate });
+    const trigger = screen.getByRole("button", { name: "Limpiar mes" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("region", { name: "Confirmar limpiar mes" }).contains(document.activeElement)).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("is disabled while the roles list is not fully loaded", () => {
+    const roles = [role()];
+    const storedSource = { ...source(roles), rolesStatus: "loading" as const };
+    render(
+      <MonthGenerator
+        mode="stored"
+        members={members}
+        existingRoles={roles}
+        allRoles={roles}
+        initialMonth="2026-02"
+        storedCapabilities={clearGate}
+        storedSource={storedSource}
+        rules={readyRules()}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+      />,
+    );
+    const trigger = screen.getByRole("button", { name: "Limpiar mes" }) as HTMLButtonElement;
+    expect(trigger.disabled).toBe(true);
+    expect(trigger.title).toBe("La lista de servicios no está completa. Reintenta la carga.");
+  });
+
+  it("sends the STORED revision, not the grid's unsaved edit, and warns that the edit is discarded", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => response());
+    vi.stubGlobal("fetch", fetchMock);
+    const { onClose } = renderStored([role()], { storedCapabilities: clearGate });
+
+    fireEvent.click(screen.getByRole("button", { name: "Cambiar una celda" }));
+    fireEvent.click(screen.getByRole("button", { name: "Limpiar mes" }));
+    expect(screen.getByText(/Los cambios sin guardar en la cuadrícula se descartan/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar 1" }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("/api/admin/roles/role-a");
+    expect(init).toMatchObject({ method: "DELETE" });
+    expect(JSON.parse(String(init?.body))).toEqual({ rev: "rev-a" });
+  });
+});

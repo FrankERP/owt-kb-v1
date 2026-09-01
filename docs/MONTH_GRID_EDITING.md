@@ -48,7 +48,10 @@ for stored service rosters:
   refused delete (a setlist or proposal on that date) does not stop the rest.
   The editor always closes afterwards; `ServicesPanel` reloads sources and shows
   a toast on a clean sweep or a persistent per-service failure report otherwise.
-  Gated by `deleteService`. Pure selection/wording: `clearMonthModel.ts`.
+  Gated by `deleteService`, and disabled while a save or swap is still
+  unconfirmed (the observed revisions may be stale). Pure selection and summary
+  wording: `clearMonthModel.ts`; rejection wording shared with the card flows:
+  `serviceMutationErrors.ts`.
 
 Services with integrity defects stay visible as **Solo lectura** instead of
 disappearing or being normalized into apparently valid editable columns.
