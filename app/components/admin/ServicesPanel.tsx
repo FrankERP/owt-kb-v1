@@ -4,6 +4,7 @@ import { useTransientValue } from "@/app/utils/useTransientValue";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import MonthGenerator from "./MonthGenerator";
+import { mutationErrorMessage, type ClearMonthSummary } from "./clearMonthModel";
 import { useSolverConfig } from "./useSolverConfig";
 import {
   SERVICE_SOURCE_KEYS,
@@ -97,40 +98,19 @@ const formatDate = (iso: string) => formatServiceDate(iso, "es-MX");
 
 // Spanish message for a rejected mutation. A 409 always means "your view is
 // stale": the modal/mode stays open and the operator is told to reload.
+// The wording lives in `clearMonthModel.ts` (`mutationErrorMessage`), shared with
+// «Limpiar mes» so one server code has one translation.
 async function describeMutationError(res: Response, fallback: string): Promise<string> {
   let code: string | undefined;
-  let dependencies: { type?: string }[] | undefined;
+  let dependencyCount: number | undefined;
   try {
     const body = await res.json();
     code = typeof body?.error === "string" ? body.error : undefined;
-    dependencies = body?.details?.dependencies;
+    dependencyCount = Array.isArray(body?.details?.dependencies) ? body.details.dependencies.length : undefined;
   } catch {
     code = undefined;
   }
-  switch (code) {
-    case "idempotency_mismatch":
-      return "Este intento ya se envió con otros datos. Cierra y crea el servicio de nuevo.";
-    case "idempotency_key_retired":
-      return "Este servicio fue eliminado. Cierra y créalo de nuevo.";
-    case "bootstrap_completed_reload":
-      return "Se repararon datos internos, pero tu cambio no se aplicó. Recarga e intenta de nuevo.";
-    case "target_has_orphaned_dependencies":
-    case "role_date_has_dependencies":
-    case "role_has_dependencies":
-      return `Hay ${dependencies?.length ?? 0} registro(s) dependientes (setlist o propuestas) en esa fecha. No se modificó nada.`;
-    case "stale_revision":
-      return "Alguien más cambió este servicio. Recarga e intenta de nuevo.";
-    case "ambiguous_target":
-      return "Ya existe un servicio en esa fecha (o hay duplicados). Recarga y revisa.";
-    case "integrity_conflict":
-      return "Los datos guardados no pasaron una revisión de integridad. No se modificó nada.";
-    case "invalid_request":
-      return "La solicitud fue rechazada antes de guardar. Revisa los datos.";
-    case "not_found":
-      return "Este servicio ya no existe. Recarga la lista.";
-    default:
-      return res.status === 409 ? "Alguien más cambió este servicio. Recarga e intenta de nuevo." : fallback;
-  }
+  return mutationErrorMessage({ code, status: res.status, dependencyCount, fallback });
 }
 
 // ─── Modal wrapper ────────────────────────────────────────────────────────────
@@ -175,6 +155,9 @@ export default function ServicesPanel() {
   const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
   const [showPastMonths, setShowPastMonths] = useState(false);
   const [toast, showToast]      = useTransientValue<string | null>(null, 3000);
+  // «Limpiar mes» outcome with at least one refused delete. A toast is too
+  // short for a list of reasons, so it PERSISTS as a banner until dismissed.
+  const [clearReport, setClearReport] = useState<ClearMonthSummary | null>(null);
 
   // Delete modal. Roster create/edit now lives in the stored month editor.
   type EditModal = { type: "delete"; role: ServiceRole } | null;
@@ -911,6 +894,18 @@ export default function ServicesPanel() {
             create: { enabled: createGate.enabled, reason: createGate.reason },
             swap: { enabled: swapGate.enabled, reason: swapGate.reason },
             changeDate: { enabled: changeDateGate.enabled, reason: changeDateGate.reason },
+            clear: { enabled: cardGates.deleteService.enabled, reason: cardGates.deleteService.reason },
+          }}
+          onCleared={async (summary) => {
+            // The editor has already closed. Reload FIRST so the list never shows
+            // the deleted services next to a message saying they are gone.
+            const failed = await loadSources();
+            if (summary.failures.length === 0) {
+              showToast(mutationOutcomeMessage(summary.message, failed, "Eliminados, pero no se pudo actualizar"));
+            } else {
+              setClearReport(summary);
+              if (failed.length > 0) showToast(mutationOutcomeMessage("", failed, "No se pudo actualizar la lista"));
+            }
           }}
           storedSource={{
             roles,
@@ -1044,6 +1039,22 @@ export default function ServicesPanel() {
           <button type="button" onClick={retryLoad}
             className="px-3 py-1.5 rounded-lg border border-warning-fg/40 font-label text-[11px] uppercase tracking-widest text-warning-soft hover:bg-warning-fg/15 transition-colors shrink-0">
             Reintentar carga
+          </button>
+        </div>
+      )}
+
+      {/* «Limpiar mes» report — only when something was refused; a clean sweep is a toast */}
+      {clearReport && (
+        <div role="status" className="rounded-lg border border-negative-border/50 bg-negative-surface/20 px-4 py-3 flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <p className="font-label text-xs uppercase tracking-widest text-negative-fg">{clearReport.message}</p>
+            <ul className="mt-1 space-y-0.5 font-body text-xs text-mono-300">
+              {clearReport.failures.map((line) => <li key={line}>{line}</li>)}
+            </ul>
+          </div>
+          <button type="button" onClick={() => setClearReport(null)}
+            className="px-3 py-1.5 rounded-lg border border-negative-border/50 font-label text-[11px] uppercase tracking-widest text-negative-fg hover:bg-negative-surface/30 transition-colors shrink-0">
+            Cerrar aviso
           </button>
         </div>
       )}

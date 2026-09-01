@@ -9,7 +9,7 @@
   ],
   "summary": {
     "literalRows": 317,
-    "filesScanned": 258,
+    "filesScanned": 259,
     "filesWithColour": 49,
     "byCategory": {
       "2": 2,
@@ -2539,7 +2539,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 436,
+      "line": 456,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2551,7 +2551,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 539,
+      "line": 559,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2563,7 +2563,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 1816,
+      "line": 1843,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2575,7 +2575,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1116,
+      "line": 1136,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2587,7 +2587,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1266,
+      "line": 1286,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },

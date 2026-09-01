@@ -179,6 +179,7 @@ function renderStored(roles: ServiceRole[], options: {
   openComposerInitially?: boolean;
   initialMonth?: string;
   storedCapabilities?: ComponentProps<typeof MonthGenerator>["storedCapabilities"];
+  onCleared?: ComponentProps<typeof MonthGenerator>["onCleared"];
 } = {}) {
   const storedSource = source(roles);
   const onClose = vi.fn();
@@ -195,6 +196,7 @@ function renderStored(roles: ServiceRole[], options: {
       rules={readyRules()}
       onClose={onClose}
       onCreated={vi.fn()}
+      onCleared={options.onCleared}
     />,
   );
   return { ...result, storedSource, onClose };
@@ -934,5 +936,110 @@ describe("MonthGenerator — stored mode", () => {
 
     expect(screen.getByText("Los equipos de sábado solo se intercambian con otro sábado.")).not.toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("MonthGenerator — «Limpiar mes»", () => {
+  const clearGate = {
+    edit: { enabled: true, reason: null },
+    create: { enabled: true, reason: null },
+    swap: { enabled: true, reason: null },
+    changeDate: { enabled: true, reason: null },
+    clear: { enabled: true, reason: null },
+  };
+
+  it("does not offer the button at all without a clear gate", () => {
+    renderStored([role()]);
+    expect(screen.queryByRole("button", { name: "Limpiar mes" })).toBeNull();
+  });
+
+  it("deletes the month's DRAFTS one by one with their observed revisions, then reports and closes", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => response());
+    vi.stubGlobal("fetch", fetchMock);
+    const onCleared = vi.fn();
+    const roles = [
+      role({ _id: "draft-b", _rev: "rev-b", date: "2026-02-08" }),
+      role({ _id: "draft-a", _rev: "rev-a", date: "2026-02-01" }),
+      role({ _id: "pub-c", _rev: "rev-c", date: "2026-02-15", published: true }),
+      role({ _id: "other-month", _rev: "rev-m", date: "2026-03-01" }),
+    ];
+    const { onClose } = renderStored(roles, { storedCapabilities: clearGate, onCleared });
+
+    fireEvent.click(screen.getByRole("button", { name: "Limpiar mes" }));
+    expect(screen.getByText(/Eliminar 2 servicios de Febrero 2026 \(2 borradores\)/)).toBeTruthy();
+    expect(screen.getByLabelText(/Incluir 1 servicio publicado/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar 2" }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(fetchMock.mock.calls.map(([url, init]) => [url, init?.method, JSON.parse(String(init?.body))])).toEqual([
+      ["/api/admin/roles/draft-a", "DELETE", { rev: "rev-a" }],
+      ["/api/admin/roles/draft-b", "DELETE", { rev: "rev-b" }],
+    ]);
+    expect(onCleared).toHaveBeenCalledWith({
+      attempted: 2,
+      deleted: 2,
+      failures: [],
+      message: "Febrero 2026: 2 servicios eliminados.",
+    });
+  });
+
+  it("includes published services only when opted in, and keeps going past a refused delete", async () => {
+    const fetchMock = vi.fn(async (url: string) =>
+      url.endsWith("/draft-a")
+        ? response(409, { error: "role_has_dependencies", details: { dependencies: [{ type: "setlist" }] } })
+        : response(),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const onCleared = vi.fn();
+    const roles = [
+      role({ _id: "draft-a", _rev: "rev-a", date: "2026-02-01" }),
+      role({ _id: "pub-c", _rev: "rev-c", date: "2026-02-15", published: true }),
+    ];
+    const { onClose } = renderStored(roles, { storedCapabilities: clearGate, onCleared });
+
+    fireEvent.click(screen.getByRole("button", { name: "Limpiar mes" }));
+    fireEvent.click(screen.getByLabelText(/Incluir 1 servicio publicado/));
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar 2" }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "/api/admin/roles/draft-a",
+      "/api/admin/roles/pub-c",
+    ]);
+    expect(onCleared).toHaveBeenCalledWith({
+      attempted: 2,
+      deleted: 1,
+      failures: ["01/02 · Domingo: Hay 1 registro(s) dependientes (setlist o propuestas) en esa fecha. No se modificó nada."],
+      message: "Febrero 2026: eliminados 1 de 2. No se pudieron eliminar 1.",
+    });
+  });
+
+  it("offers nothing to delete for a published-only month until published are included, and Cancelar backs out", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    renderStored([role({ published: true })], { storedCapabilities: clearGate });
+
+    fireEvent.click(screen.getByRole("button", { name: "Limpiar mes" }));
+    expect((screen.getByRole("button", { name: "Eliminar 0" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/No hay borradores en este mes/)).toBeTruthy();
+    fireEvent.click(screen.getByLabelText(/Incluir 1 servicio publicado/));
+    expect((screen.getByRole("button", { name: "Eliminar 1" }) as HTMLButtonElement).disabled).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(screen.queryByRole("region", { name: "Confirmar limpiar mes" })).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("disables the button with the gate's reason and for an empty month", () => {
+    renderStored([role()], { storedCapabilities: { ...clearGate, clear: { enabled: false, reason: "Faltan datos." } } });
+    const gated = screen.getByRole("button", { name: "Limpiar mes" }) as HTMLButtonElement;
+    expect(gated.disabled).toBe(true);
+    expect(gated.title).toBe("Faltan datos.");
+    cleanup();
+
+    renderStored([], { storedCapabilities: clearGate });
+    const empty = screen.getByRole("button", { name: "Limpiar mes" }) as HTMLButtonElement;
+    expect(empty.disabled).toBe(true);
+    expect(empty.title).toBe("No hay servicios guardados en este mes.");
   });
 });

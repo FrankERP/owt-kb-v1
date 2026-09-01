@@ -38,6 +38,17 @@ for stored service rosters:
   dated note at the end of `docs/adr/0010-specials-fill-locally-not-in-the-solver.md`.
 - Card-owned delete, copy-instruments, publish/unpublish, setlist, proposal, and
   integrity workflows remain in `ServicesPanel`.
+- **Limpiar mes** (stored editor footer, since 2026-09-01) deletes the month's
+  stored services so the admin can run **Generar mes** again after corrections.
+  Drafts (`published === false`) by default; published services are an explicit
+  checkbox opt-in because each queues a «ya no participas» notice. There is no
+  bulk route: the editor calls the existing `DELETE /api/admin/roles/[id]` once
+  per service, in date order, with the observed `_rev`, so every server guard
+  (revision, weekend token, receipt, dependency refusal) applies unchanged. A
+  refused delete (a setlist or proposal on that date) does not stop the rest.
+  The editor always closes afterwards; `ServicesPanel` reloads sources and shows
+  a toast on a clean sweep or a persistent per-service failure report otherwise.
+  Gated by `deleteService`. Pure selection/wording: `clearMonthModel.ts`.
 
 Services with integrity defects stay visible as **Solo lectura** instead of
 disappearing or being normalized into apparently valid editable columns.
