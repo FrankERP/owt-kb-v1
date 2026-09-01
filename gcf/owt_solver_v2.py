@@ -10,6 +10,7 @@ Usage:
 
 Improvements over CGPT_owt_roles.py:
   - Weighted history decay: weights [10, 6, 3] for [most recent, 2nd, oldest]
+  - Lead seats prefer people with less weighted lead history (Sun.Lead + Sat.Lead)
   - New DSL hard constraint: "<name> !consecutive on <pattern>"
   - JSON stdin/stdout interface (--json-mode flag)
   - Improved infeasibility diagnostics listing all constrained slots
@@ -587,16 +588,41 @@ def _eq(model: cp_model.CpModel, var: cp_model.IntVar, terms: Sequence) -> None:
     model.Add(var == (sum(terms) if terms else 0))
 
 
+def lead_history_penalty_terms(
+    all_people: Sequence[str],
+    pools: Dict[str, Set[str]],
+    forbidden: Dict[str, Set[str]],
+    hist_role: Dict[Tuple[str, str], int],
+    role_vars: Dict[Tuple[str, str], cp_model.IntVar],
+    role_type: str,
+) -> List:
+    """
+    Soft objective: assigning a lead seat costs weighted past lead count for that
+    role. People with no lead history cost 0 and are preferred; frequent leads cost
+    more. Applies to Sun.Lead and Sat.Lead only — BGV/Choir use per-role spread.
+    """
+    terms: List = []
+    for person in all_people:
+        if not is_eligible(person, role_type, pools, forbidden):
+            continue
+        hist = hist_role.get((person, role_type), 0)
+        if hist <= 0:
+            continue
+        terms.append(hist * role_vars[(person, role_type)])
+    return terms
+
+
 def compute_priority_weights(
-    max_spread: int, max_consec_penalty: int, max_rand: int
+    max_spread: int, max_consec_penalty: int, max_rand: int, max_lead_hist: int = 0
 ) -> Dict[str, int]:
     w: Dict[str, int] = {"tie_break": 1}
     w["consecutive"] = max_rand + 1
     remaining = max_consec_penalty * w["consecutive"] + max_rand
-    for name in ["Sun.Choir", "Sat.BGV", "Sun.BGV", "global",
-                 "sun_lead_rotation", "sun_lead_weekly_rotation", "Sat.Lead", "Sun.Lead"]:
+    for name in ["Sun.Choir", "Sat.BGV", "Sun.BGV", "global", "Sat.Lead", "Sun.Lead",
+                 "lead_history"]:
         w[name] = remaining + 1
-        remaining += max_spread * w[name]
+        tier_max = max_lead_hist if name == "lead_history" else max_spread
+        remaining += tier_max * w[name]
     return w
 
 
@@ -842,7 +868,8 @@ def create_model_and_solve(
         model.Add(sv == rmax - rmin)
         role_spread_vars[role_type] = sv
 
-    # Sun.Lead hard fairness guard
+    # Sun.Lead hard fairness guard (current month). Past Sun.Lead history adds slack
+    # so frequent leads may sit below the band while lead-eligible rookies fill in.
     sun_lead_eligible = [p for p in all_people if is_eligible(p, "Sun.Lead", pools, forbidden)]
     sun_lead_slots_n = sum(1 for s in slots if s.role_type == "Sun.Lead")
     cur_sun_lead_spread = model.NewIntVar(0, sun_lead_slots_n, "cur_sl_spread")
@@ -859,6 +886,7 @@ def create_model_and_solve(
                 pv = model.NewIntVar(0, 0, f"cur_sl[{p}]")
                 model.Add(pv == 0)
             rslack = role_fairness_slack.get((p, "Sun.Lead"), 0)
+            rslack += hist_role.get((p, "Sun.Lead"), 0)
             model.Add(pv <= sl_max + rslack)
             model.Add(pv >= sl_min - rslack)
         model.Add(cur_sun_lead_spread == sl_max - sl_min)
@@ -926,33 +954,39 @@ def create_model_and_solve(
                         model.Add(rv >= a + b - 1)
                         consec_penalties.append(rv)
 
-        # Sun lead rotation terms
-        sun_lead_eligible = [p for p in all_people if is_eligible(p, "Sun.Lead", pools, forbidden)]
-        sun_lead_rotation = []
-        sun_lead_weekly_rotation = []
-        if sun_lead_eligible:
-            pw = {p: rng.randint(0, max(1, config.random_tie_break_weight_max)) for p in sun_lead_eligible}
-            sun_lead_rotation = [pw[p] * role_vars[(p, "Sun.Lead")] for p in sun_lead_eligible]
-            for week in range(1, config.weeks + 1):
-                ws = [s for s in slots if s.week == week and s.role_type == "Sun.Lead"]
-                if not ws:
+        # Lead history priority: prefer lead-eligible people with less weighted
+        # Sun.Lead / Sat.Lead history before those who led recently. Replaces the
+        # old random rotation weights, which ignored history entirely.
+        lead_hist_terms: List = []
+        max_lead_hist_penalty = 0
+        for lead_role in LEAD_ROLES:
+            lead_slots_n = sum(1 for s in slots if s.role_type == lead_role)
+            lead_hist_terms.extend(
+                lead_history_penalty_terms(
+                    all_people, pools, forbidden, hist_role, role_vars, lead_role,
+                )
+            )
+            for person in all_people:
+                if not is_eligible(person, lead_role, pools, forbidden):
                     continue
-                wpw = {p: rng.randint(0, max(1, config.random_tie_break_weight_max)) for p in sun_lead_eligible}
-                for p in sun_lead_eligible:
-                    wt = [x[(p, s.key)] for s in ws if (p, s.key) in x]
-                    if wt:
-                        sun_lead_weekly_rotation.append(wpw[p] * sum(wt))
+                hist = hist_role.get((person, lead_role), 0)
+                if hist > 0:
+                    max_lead_hist_penalty += hist * lead_slots_n
 
         rand_w = {k: rng.randint(0, max(1, config.random_tie_break_weight_max)) for k in x}
         max_rand = sum(rand_w.values())
-        weights = compute_priority_weights(overall_limit, len(consec_penalties), max_rand)
+        weights = compute_priority_weights(
+            overall_limit, len(consec_penalties), max_rand, max_lead_hist_penalty,
+        )
 
         obj = [weights["global"] * overall_spread]
-        if sun_lead_rotation:
-            obj.append(weights["sun_lead_rotation"] * sum(sun_lead_rotation))
-        if sun_lead_weekly_rotation:
-            obj.append(weights["sun_lead_weekly_rotation"] * sum(sun_lead_weekly_rotation))
+        if lead_hist_terms:
+            obj.append(weights["lead_history"] * sum(lead_hist_terms))
         for rt in ROLE_ORDER:
+            # When history is loaded, lead roles are balanced by lead_history above;
+            # per-role spread on overall lead counts fought that signal.
+            if lead_hist_terms and rt in LEAD_ROLES:
+                continue
             obj.append(weights[rt] * role_spread_vars[rt])
         if consec_penalties:
             obj.append(weights["consecutive"] * sum(consec_penalties))

@@ -219,6 +219,70 @@ class TestDefaultConfigRegression(unittest.TestCase):
         self.assertEqual(len(result.assignments) > 0, True)
 
 
+class TestLeadHistoryPriority(unittest.TestCase):
+    """Lead seats prefer people with less weighted Sun.Lead / Sat.Lead history."""
+
+    def _three_lead_cfg(self, history, seed=42):
+        return dict(
+            weeks=4,
+            weekends_with_saturday=[],
+            sunday_leads=["Veteran", "Rookie", "Newbie"],
+            saturday_leads=[],
+            support=["Pat"],
+            dsl_rules=[],
+            history=history,
+            seed=seed,
+            solver_max_time_seconds=10,
+        )
+
+    def test_history_favors_unseen_sunday_leads(self):
+        # Veteran led all four Sundays last month; Rookie/Newbie never led.
+        res = solve_from_dict(self._three_lead_cfg([{
+            "total_counts": {"Veteran": 4, "Rookie": 2, "Newbie": 2, "Pat": 4},
+            "role_counts": {
+                "Veteran": {"Sun.Lead": 4, "Sat.Lead": 0, "Sun.BGV": 0, "Sat.BGV": 0, "Sun.Choir": 0},
+                "Rookie":  {"Sun.Lead": 0, "Sat.Lead": 0, "Sun.BGV": 2, "Sat.BGV": 0, "Sun.Choir": 0},
+                "Newbie":  {"Sun.Lead": 0, "Sat.Lead": 0, "Sun.BGV": 2, "Sat.BGV": 0, "Sun.Choir": 0},
+                "Pat": {"Sun.Lead": 0, "Sat.Lead": 0, "Sun.BGV": 4, "Sat.BGV": 0, "Sun.Choir": 0},
+            },
+        }], seed=1))
+        self.assertTrue(res.get("ok"), res.get("error"))
+        rc = res["role_counts"]
+        best_new = max(rc["Rookie"]["Sun.Lead"], rc["Newbie"]["Sun.Lead"])
+        self.assertGreater(
+            best_new,
+            rc["Veteran"]["Sun.Lead"],
+            f"zero-history leads should outrank Veteran on Sun.Lead "
+            f"(V={rc['Veteran']['Sun.Lead']} R={rc['Rookie']['Sun.Lead']} N={rc['Newbie']['Sun.Lead']})",
+        )
+
+    def test_low_history_saturday_lead_preferred(self):
+        history = [{
+            "total_counts": {"Veteran": 2, "Rookie": 0},
+            "role_counts": {
+                "Veteran": {"Sun.Lead": 0, "Sat.Lead": 2, "Sun.BGV": 0, "Sat.BGV": 0, "Sun.Choir": 0},
+                "Rookie":  {"Sun.Lead": 0, "Sat.Lead": 0, "Sun.BGV": 0, "Sat.BGV": 0, "Sun.Choir": 0},
+            },
+        }]
+        res = solve_from_dict(dict(
+            weeks=4,
+            weekends_with_saturday=[1, 3],
+            sunday_leads=["Pat"],
+            saturday_leads=["Veteran", "Rookie"],
+            support=[],
+            dsl_rules=[],
+            history=history,
+            seed=7,
+            solver_max_time_seconds=10,
+        ))
+        self.assertTrue(res.get("ok"), res.get("error"))
+        self.assertGreater(
+            res["role_counts"]["Rookie"]["Sat.Lead"],
+            res["role_counts"]["Veteran"]["Sat.Lead"],
+            "Rookie (no Sat.Lead history) should lead more Saturdays than Veteran",
+        )
+
+
 class TestSolverBudgetClamping(unittest.TestCase):
     """Caller-supplied solver budgets are clamped to safe ceilings (DoS guard)."""
 

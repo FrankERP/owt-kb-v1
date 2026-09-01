@@ -61,8 +61,11 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
   many full services a person is unavailable for, so legitimately-away people aren't flagged as
   under-served. History uses weighted decay (3 recent months weighted `[10, 6, 3]`).
 - **Lexicographic objective:** exponentially-separated weights encode strict priority
-  (fill > lead fairness > lead rotation > per-role spread > consecutive-repeat penalty > random
-  tie-break). Rotation weights are randomized so leads rotate.
+  (fill > lead fairness > per-role spread > **lead history priority** > consecutive-repeat
+  penalty > random tie-break). For **Sun.Lead** and **Sat.Lead** only, the solver penalizes
+  assigning people with higher weighted lead history, so lead-eligible members who haven't
+  led recently are preferred before frequent leads. **Sun.Lead** also adds that weighted history
+  as slack on the current-month lead spread guard. BGV/Choir still use per-role spread only.
 
 ### Invocation from Next.js
 `POST /api/admin/solve` (admin/super-admin, `maxDuration=60`):
