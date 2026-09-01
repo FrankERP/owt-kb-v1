@@ -61,11 +61,12 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
   many full services a person is unavailable for, so legitimately-away people aren't flagged as
   under-served. History uses weighted decay (3 recent months weighted `[10, 6, 3]`).
 - **Lexicographic objective:** exponentially-separated weights encode strict priority
-  (fill > lead fairness > per-role spread > **lead history priority** > consecutive-repeat
-  penalty > random tie-break). For **Sun.Lead** and **Sat.Lead** only, the solver penalizes
-  assigning people with higher weighted lead history, so lead-eligible members who haven't
-  led recently are preferred before frequent leads. **Sun.Lead** also adds that weighted history
-  as slack on the current-month lead spread guard. BGV/Choir still use per-role spread only.
+  (fill > lead fairness > per-role spread > sun-lead rotation > consecutive-repeat
+  penalty > random tie-break). Lead rotation uses seeded random weights on Sun.Lead
+  assignments (monthly and per-week terms). The planner UI surfaces, separately for
+  Sunday and Saturday, which lead-pool members did not hold that lead role in the
+  calendar month before the month being planned (`LeadPoolHistoryPanel`); that is
+  visibility only and does not change the objective.
 
 ### Invocation from Next.js
 `POST /api/admin/solve` (admin/super-admin, `maxDuration=60`):
