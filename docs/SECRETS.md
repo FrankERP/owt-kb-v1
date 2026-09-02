@@ -339,9 +339,11 @@ that order, and the window is zero.
   `bcryptjs` (see `docs/DEV_VERIFY.md`). The email is any address Frank controls; it is never mailed.
   Choose a long random `DEV_VERIFY_PASSWORD`: redaction replaces the literal value wherever it
   appears in the report, so a short or common password would mangle unrelated text.
-- **Rotate:** `scripts/dev-verify-rotate.sh` does the whole sequence in one command — mints a
-  new password, hashes it, rewrites the three keys in `.env.local`, drops the stale storage
-  state, and runs the seed (dry by default, `--apply` to write). The manual equivalent:
+- **Rotate:** `node scripts/dev-verify-rotate.mjs --apply --show` does the whole sequence in
+  one command, with nothing to type — mints a new password, hashes it, patches the member,
+  rewrites the three keys in `.env.local`, drops the stale storage state, and signs in to dev
+  to prove it worked. Dry by default; `--apply` writes. The address defaults to an RFC 2606
+  `.invalid` one, which no Google account can ever claim. The manual equivalent:
   generate a new hash → run the seed with `--apply` → update `DEV_VERIFY_PASSWORD` in
   `.env.local` → delete `playwright/.dev-verify-storageState.json`.
 - **Lives in the PRIMARY checkout's `.env.local` only.** A worktree reaches it through a
