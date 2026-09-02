@@ -108,6 +108,42 @@ describe("AdminPanel — the tab in the URL", () => {
     expect(window.history.length).toBe(before);
   });
 
+  it("follows a soft navigation back to bare /admin instead of desyncing", async () => {
+    // Tapping "Admin" in the nav while already on /admin?tab=activity
+    // re-renders this panel in place with a new initialTab; useReducer's
+    // initial value is read once, so without a render-time adjustment the URL
+    // said /admin while the panel still showed Actividad.
+    const { rerender } = render(<AdminPanel role="super-admin" initialTab="activity" />);
+    expect(currentTab()).toBe("Actividad");
+
+    rerender(<AdminPanel role="super-admin" initialTab="members" />);
+    expect(currentTab()).toBe("Miembros");
+    await waitFor(() => expect(tabParam()).toBe("members"));
+  });
+
+  it("leaves a manually chosen tab alone while the resolved one is unchanged", async () => {
+    const { rerender } = render(<AdminPanel role="super-admin" initialTab="members" />);
+    fireEvent.click(screen.getByRole("button", { name: "Actividad" }));
+    expect(currentTab()).toBe("Actividad");
+
+    // An unrelated re-render must not yank the admin back to the server's tab.
+    rerender(<AdminPanel role="super-admin" initialTab="members" />);
+    expect(currentTab()).toBe("Actividad");
+  });
+
+  it("keeps the router's own history state, so Next does not reload the entry", async () => {
+    // Next's popstate handler reloads the page for any entry without `__NA`,
+    // and `HistoryUpdater` needs `__PRIVATE_NEXTJS_INTERNALS_TREE`. Dropping
+    // the existing state here would strip both. See the comment on the effect:
+    // passing `null` instead would make Next re-sync but at the price of a
+    // server round-trip per tab press.
+    window.history.replaceState({ __NA: true, marker: "router-state" }, "", "/admin");
+    render(<AdminPanel role="super-admin" initialTab="members" />);
+    fireEvent.click(screen.getByRole("button", { name: "Actividad" }));
+    await waitFor(() => expect(tabParam()).toBe("activity"));
+    expect(window.history.state).toMatchObject({ __NA: true, marker: "router-state" });
+  });
+
   it("round-trips: the param it writes is the tab it reopens on", async () => {
     const { unmount } = render(<AdminPanel role="admin" initialTab="services" />);
     fireEvent.click(screen.getByRole("button", { name: "Propuestas" }));

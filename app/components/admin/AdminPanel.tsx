@@ -638,6 +638,19 @@ export default function AdminPanel({
     [],
   );
 
+  // A soft navigation to /admin re-renders this panel in place with a new
+  // `initialTab` rather than remounting it, and `useReducer`'s initial value is
+  // read once. Without this, tapping "Admin" in the nav while already on
+  // `/admin?tab=activity` left the URL saying /admin and the panel still
+  // showing Actividad — and the next reload then landed on Miembros, which is
+  // the bug this feature exists to fix. Adjusted during render, the documented
+  // React pattern for reacting to a changed prop, so no extra commit.
+  const [lastResolvedTab, setLastResolvedTab] = useState(initialTab);
+  if (initialTab !== undefined && initialTab !== lastResolvedTab) {
+    setLastResolvedTab(initialTab);
+    dispatchReview({ type: "select_tab", tab: initialTab });
+  }
+
   /**
    * Keep `?tab=` in step with the visible tab, so a reload or a Back into
    * /admin lands where the admin was instead of on the first tab. Before this
@@ -654,6 +667,24 @@ export default function AdminPanel({
    * without any navigation at all. It also means the tab cannot be driven by
    * the browser's Back button WITHIN /admin — there are no such entries to go
    * back to, which is consistent rather than broken.
+   *
+   * PASSING THE EXISTING `history.state` IS DELIBERATE, and it has a cost worth
+   * knowing before anyone "fixes" it. Next patches `replaceState` and returns
+   * early when the state carries `__NA`, which every app-router entry does — so
+   * `applyUrlFromHistoryPushReplace` is skipped and the router's `canonicalUrl`
+   * keeps saying `/admin`. Two consequences: `useSearchParams()` under /admin
+   * will NOT see this param (read the tab from the `initialTab` prop, which the
+   * server resolved), and if a future router action commits while the admin
+   * stays on this page, `HistoryUpdater` rewrites the URL back to its stale
+   * `canonicalUrl` and the param is lost until the next tab press.
+   *
+   * Passing `null` instead would let Next sync — and would dispatch
+   * ACTION_RESTORE, which in Next 16 runs `startPPRNavigation` and
+   * `spawnDynamicRequests`. That is a server round-trip for this dynamic,
+   * auth-gated route on EVERY tab press: the exact cost this whole approach
+   * exists to avoid, paid every time instead of never. Checked against
+   * `next/dist/client/components/app-router.js` and `restore-reducer.js` in the
+   * vendored copy, not the changelog.
    */
   useEffect(() => {
     const url = new URL(window.location.href);
