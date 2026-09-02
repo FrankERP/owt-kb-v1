@@ -107,7 +107,6 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
       <button
         onClick={() => setOpen((v) => !v)}
         className="relative flex items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base group"
-        aria-haspopup="true"
         aria-expanded={open}
         aria-label={
           notifCount > 0
@@ -138,9 +137,13 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
         )}
       </button>
 
-      {/* Dropdown */}
+      {/* Dropdown. A disclosure of navigation links, not a menu widget: there
+          is no arrow-key navigation, so `role="menu"` — and `aria-haspopup`,
+          whose "true" token is defined as "menu" — would promise behaviour
+          that does not exist. `<nav>` is a real landmark, so unlike a generic
+          div it also exposes the label. */}
       {open && (
-        <div
+        <nav
           aria-label="Menú de cuenta"
           className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-surface-accent-20 bg-surface-raised-alt shadow-2xl overflow-hidden z-50"
           onClick={() => setOpen(false)}
@@ -178,7 +181,7 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
               Cerrar sesión
             </MenuItem>
           </div>
-        </div>
+        </nav>
       )}
     </div>
   );

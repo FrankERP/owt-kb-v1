@@ -439,7 +439,7 @@ export default function AvailabilityCalendar({ initialRev, initialDates, service
       <div className="flex items-center justify-between">
         <button
           type="button"
-          onClick={() => setPage(p => p - 1)}
+          onClick={() => { setPopover(null); setPage(p => p - 1); }}
           disabled={!canPrev}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent-deep/40 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:border-accent/40 hover:text-accent disabled:opacity-20 disabled:cursor-default transition-colors"
         >
@@ -452,7 +452,7 @@ export default function AvailabilityCalendar({ initialRev, initialDates, service
 
         <button
           type="button"
-          onClick={() => setPage(p => p + 1)}
+          onClick={() => { setPopover(null); setPage(p => p + 1); }}
           disabled={!canNext}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent-deep/40 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:border-accent/40 hover:text-accent disabled:opacity-20 disabled:cursor-default transition-colors"
         >
@@ -524,7 +524,7 @@ export default function AvailabilityCalendar({ initialRev, initialDates, service
           <button
             key={i}
             type="button"
-            onClick={() => setPage(i)}
+            onClick={() => { setPopover(null); setPage(i); }}
             className={`w-1.5 h-1.5 rounded-full transition-colors ${
               i === page ? "bg-accent" : "bg-accent-deep/50 hover:bg-accent-deep"
             }`}

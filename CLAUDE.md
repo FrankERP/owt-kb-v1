@@ -178,9 +178,10 @@ several exist precisely to stop a plausible-looking change.
 - **The impersonation banner and the navbar are both `sticky top-0` in
   different containers.** `ImpersonationBanner` publishes an `impersonating`
   class plus its MEASURED height as `--impersonation-h` on `<html>`; `brand.css`
-  offsets `.brand-navbar` by that variable. Neither file names the other in
-  code, so the two must move together — and the height is measured, not a
-  constant, because the banner wraps to two lines on a phone.
+  offsets `.brand-navbar` by that variable. Nothing but a comment connects the
+  two halves, so they must move together — `impersonationOffsetSync.test.ts` is
+  the guard. The height is measured, not a constant, because the banner wraps
+  to two lines on a phone.
 - **NextAuth's `update()` never rejects and returns `null` on every failure**
   (`fetchData` swallows network, non-2xx and parse errors; `update` returns
   `undefined` while loading). A handler that only inspects the returned
