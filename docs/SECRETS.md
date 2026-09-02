@@ -329,6 +329,42 @@ that order, and the window is zero.
 
 **How to rotate the secret.** Add a second secret to the same OAuth client in the Google console, update `GOOGLE_CLIENT_SECRET` in Vercel, redeploy, confirm a web sign-in works, then delete the old secret. **Blast radius:** between updating Vercel and the redeploy completing, web Google sign-in fails; existing sessions survive because they are JWT-backed. The native paths do not use the secret and are unaffected. Rotating a client **ID** is a different and much larger job — it invalidates the mobile builds that hard-code it.
 
+## `DEV_VERIFY_EMAIL`, `DEV_VERIFY_PASSWORD`, `DEV_VERIFY_PASSWORD_HASH`
+
+- **Needed on:** local `.env.local` only. **Not needed on:** Vercel (any environment), CI, the mobile build.
+- **Purpose:** `scripts/dev-verify.ts` signs in to dev as the «Verificador (bot)» member
+  (`member-dev-verify`, role `admin`, retired from worship, kids manager only). Without `EMAIL`/`PASSWORD`
+  the runner refuses (exit 2). `PASSWORD_HASH` is read only by `scripts/dev-verify-seed.mjs`.
+- **Where it came from:** the password is chosen by Frank; the hash is generated locally with
+  `bcryptjs` (see `docs/DEV_VERIFY.md`). The email is any address Frank controls; it is never mailed.
+  Choose a long random `DEV_VERIFY_PASSWORD`: redaction replaces the literal value wherever it
+  appears in the report, so a short or common password would mangle unrelated text.
+- **Rotate:** generate a new hash → run the seed with `--apply` → update `DEV_VERIFY_PASSWORD`
+  in `.env.local` → delete `playwright/.dev-verify-storageState.json`.
+- **Blast radius of rotation:** the runner fails to sign in between the seed and the env update.
+  Nothing else uses the member. **Kill switch:** `disabled: true` on the member in Studio.
+- **Exposure:** this is an `admin` credential on the production dataset. A leaked `.env.local`
+  lets a human sign in to production as an admin; the runner's host check does not bind a human.
+  Use an address with **no Google account**: Google SSO signs in by email lookup too, so a Google
+  identity on `DEV_VERIFY_EMAIL` would be a second door to the same admin.
+- **Writes the sign-in causes:** one `loginEvent` document per credentials sign-in (bounded by
+  the cached session; accepted by Frank 2026-09-01). The `lastSeen` heartbeat is suppressed.
+
+## `SR_VERIFY_BYPASS_SECRET`
+
+- **Needed on:** local `.env.local` (A3 harness and `scripts/dev-verify.ts`). **Not needed on:**
+  Vercel — Vercel holds its own copy as the project's Protection Bypass for Automation.
+- **Purpose:** passes Vercel SSO protection on preview deployments, sent only as the
+  `x-vercel-protection-bypass` header. Without it both tools refuse.
+- **Where it came from:** Vercel → project `owt-backstage` → Settings → Deployment Protection →
+  Protection Bypass for Automation. The A3 harness's use of it is described in
+  `docs/VERIFICATION_HARNESS.md` §2 "Secret hygiene" and §3 "Environment"; this entry is the
+  rotation record for both tools.
+- **Rotate:** regenerate in that Vercel screen (the old value stops working immediately) → update
+  `.env.local`.
+- **Blast radius of rotation:** every local A3 and dev-verify run fails until `.env.local` is
+  updated. Deployments themselves are unaffected.
+
 ## Not yet documented
 
 Other variables in use — `NEXTAUTH_*`, `EMAIL_ALLOWLIST`, FCM push credentials, the solver's Secret Manager key — predate this file. Add each one here as it is next touched or rotated.
