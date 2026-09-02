@@ -9,8 +9,15 @@ describe("unknownFlags", () => {
   it("names a misspelt flag instead of letting it fall through as a role id", () => {
     // `--befor m1=Líder r1` would otherwise leave `before` empty and queue every
     // stored member of r1 with an empty snapshot.
-    const { rest } = parseRequeueArgs(["--befor", "m1=Líder", "r1", "--apply"]);
+    const { before, rest } = parseRequeueArgs(["--befor", "m1=Líder", "r1", "--apply"]);
+    expect(before.size).toBe(0);
     expect(unknownFlags(rest, ["--apply", "--now"])).toEqual(["--befor"]);
+  });
+
+  it("catches the = form of a misspelt flag too", () => {
+    const { before, rest } = parseRequeueArgs(["--befor=m1=Líder", "r1"]);
+    expect(before.size).toBe(0);
+    expect(unknownFlags(rest, ["--apply", "--now"])).toEqual(["--befor=m1=Líder"]);
   });
 });
 
