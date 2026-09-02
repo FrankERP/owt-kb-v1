@@ -1,3 +1,13 @@
+// `"use client"` is DECLARED here rather than inherited from the importers that
+// happen to be client components today. This module calls `withUpdatedCell` out
+// of `PlannerGrid.tsx`, which is a client module — so a server component that
+// imported this one would get a client reference and throw at render. That is
+// exactly how `/` fell over on 2026-09-02 (ADR-0028). The header below advertises
+// this as the primitive "every drag must go through", which invites new callers;
+// the directive makes the boundary a property of the file instead of a fact about
+// who currently imports it.
+"use client";
+
 // T2 of the grid drag-and-drop plan
 // (docs/superpowers/plans/2026-08-06-grid-drag-and-drop.md) — the single move
 // primitive every drag must go through: pointer drag (T4), keyboard/touch
