@@ -133,7 +133,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
               </h3>
               {date && (
                 <p className="mt-2 truncate font-body text-xs capitalize text-ink/60 md:text-sm">
-                  {new Date(date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-ES", {
+                  {new Date(date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", {
                     weekday: "long", year: "numeric", month: "long", day: "numeric",
                   })}
                 </p>

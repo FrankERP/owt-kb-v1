@@ -43,8 +43,8 @@ function useNotifCount(authed: boolean): number {
 function MenuItem({ href, onClick, children }: { href?: string; onClick?: () => void; children: React.ReactNode }) {
   const cls =
     "w-full text-left flex items-center gap-3 px-4 py-2.5 font-label text-xs uppercase tracking-widest text-mono-500 dark:text-mono-400 hover:text-accent hover:bg-accent-deep/10 dark:hover:bg-accent/10 transition-colors";
-  if (href) return <Link href={href} className={cls}>{children}</Link>;
-  return <button onClick={onClick} className={cls}>{children}</button>;
+  if (href) return <Link href={href} role="menuitem" className={cls}>{children}</Link>;
+  return <button type="button" role="menuitem" onClick={onClick} className={cls}>{children}</button>;
 }
 
 export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
@@ -141,6 +141,8 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
       {/* Dropdown */}
       {open && (
         <div
+          role="menu"
+          aria-label="Menú de cuenta"
           className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-surface-accent-20 bg-surface-raised-alt shadow-2xl overflow-hidden z-50"
           onClick={() => setOpen(false)}
         >
