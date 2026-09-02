@@ -21,13 +21,21 @@ export interface OutboxSongRow {
 /**
  * Deterministic AND length-bounded. `${memberId}__${roleId}` composes two ids
  * that `isCanonicalDocumentId` allows at 200 chars each, which would overflow
- * Sanity's id ceiling — so the subject is digested (truncated `base64url`
- * `sha256`) to keep the id deterministic while bounding its length, following
- * this repo's existing precedent of digesting composed ids (e.g.
- * `receiptIdForRequestId`, which digests a different shape in full hex).
+ * Sanity's id ceiling — so the subject is digested (truncated `sha256`) to keep
+ * the id deterministic while bounding its length, following this repo's
+ * existing precedent of digesting composed ids (`receiptIdForRequestId`).
+ *
+ * HEX, NOT base64url. Sanity's id grammar is `a-zA-Z0-9._-`, and a dot-separated
+ * segment may not START with `-`. base64url's alphabet includes `-`, so one
+ * subject in 64 digested to a segment Sanity rejects — and because a role's
+ * notices go out in ONE transaction, that one subject took every notice for
+ * the service with it (2026-09-02: a ten-member Saturday edit queued nothing,
+ * logged as `Invalid document ID "outbox.role.-gAm0…": invalid element`).
+ * Hex cannot produce the character at all. 32 hex chars is 128 bits, the same
+ * collision bound as the 32 base64url chars it replaces.
  */
 export function outboxId(kind: NoticeKind, subjectKey: string): string {
-  const digest = createHash("sha256").update(`${kind}:${subjectKey}`).digest("base64url").slice(0, 32);
+  const digest = createHash("sha256").update(`${kind}:${subjectKey}`).digest("hex").slice(0, 32);
   return `outbox.${kind.toLowerCase()}.${digest}`;
 }
 
