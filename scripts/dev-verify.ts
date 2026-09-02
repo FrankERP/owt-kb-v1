@@ -203,7 +203,23 @@ async function main(): Promise<void> {
 
     if (args.waitFor) await page.getByText(args.waitFor).first().waitFor({ timeout: 30_000 }).catch(() => report.pageErrors.push(`wait:${args.waitFor} not visible`));
     for (const name of args.clicks) {
-      const el = page.getByRole("button", { name }).or(page.getByRole("link", { name })).first();
+      // Match by accessible name across the interactive roles the app actually
+      // uses: plain buttons and links, plus `menuitem` — destructive actions in
+      // the admin panel live behind a kebab whose items carry `role="menuitem"`,
+      // which is NOT a `button` for ARIA purposes. This only widens what can be
+      // *clicked*; the request the click makes is still judged by lock 1.
+      //
+      // Prefer an EXACT name match, falling back to a substring match only when
+      // no exact one exists. Without this, `--click "Eliminar"` (a modal's
+      // confirm) also substring-matches the modal's "Cerrar Eliminar servicio"
+      // close button, and `.first()` clicks the close — dismissing the very
+      // action under test. Exact-first makes an unambiguous name unambiguous.
+      const roleNames = (exact: boolean) =>
+        page.getByRole("button", { name, exact })
+          .or(page.getByRole("link", { name, exact }))
+          .or(page.getByRole("menuitem", { name, exact }));
+      const exactMatches = roleNames(true);
+      const el = (await exactMatches.count()) > 0 ? exactMatches.first() : roleNames(false).first();
       await el.click({ timeout: 10_000 }).catch(() => report.pageErrors.push(`click:${name} not found`));
       await page.waitForLoadState("networkidle").catch(() => undefined);
       assertOnOrigin(page);
