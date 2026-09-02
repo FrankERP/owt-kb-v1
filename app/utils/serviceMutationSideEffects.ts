@@ -856,10 +856,28 @@ export async function notifySetlistSaved(week: string): Promise<void> {
     const assigned = await operationalClient.fetch<string[]>(assignedMemberRefsQuery(roleFilter), {
       week,
     });
+    // Retirement removes a member from the broadcast above, but NOT from a service
+    // they are still rostered on ("Sigue en servicios ya asignados"). Resolve the
+    // assigned ids' preferences directly — resolution by id never filters on
+    // retirement (R3) — and merge, so a worship-retired member who still plays this
+    // week is treated exactly like any other assignee. `setlistRecipientIds` keeps
+    // an assignee whose pref is "off" silent, retired or not.
+    const assignedIds = assigned ?? [];
+    const assignedMembers = assignedIds.length
+      ? await operationalClient.fetch<{ _id: string; setlist?: SetlistPref }[]>(
+          `*[_type == "teamMembers" && _id in $assigned]{ _id, "setlist": notifPrefs.setlist }`,
+          { assigned: assignedIds },
+        )
+      : [];
+    const audience = [
+      ...new Map(
+        [...(members ?? []), ...(assignedMembers ?? [])].map((m) => [m._id, m]),
+      ).values(),
+    ];
     // Fire-and-forget, as before: an editor's save never waits on FCM.
     fireAndForget(
       "setlist push",
-      sendPush(setlistRecipientIds(members ?? [], assigned ?? []), "setlist", {
+      sendPush(setlistRecipientIds(audience, assignedIds), "setlist", {
         title: "Setlist de la semana",
         body: "Ya están las canciones de este servicio.",
         path: "/",
