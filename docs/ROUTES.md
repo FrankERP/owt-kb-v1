@@ -43,9 +43,9 @@ Legend: **S** = server component (async unless noted; e.g. the Studio page is sy
 | `/` | `(client)/page.tsx` | S | Public* | ISR 60s | Home "Esta semana." This weekend's Sat/Sun/special services + full searchable song list. |
 | `/schedule` | `(client)/schedule/page.tsx` | S | Public* | ISR 60s | Upcoming services calendar; `?m=YYYY-MM` month browse. |
 | `/author` | `(client)/author/page.tsx` | S | Public* | ISR 60s | Artist index with per-author counts. |
-| `/author/[slug]` | `(client)/author/[slug]/page.tsx` | S | Public* | ISR 60s | Songs by one author (`generateMetadata` sets title). |
+| `/author/[slug]` | `(client)/author/[slug]/page.tsx` | S | Public* | ISR 60s | Songs by one author (`generateMetadata` sets title). `notFound()` for unknown slugs. |
 | `/tag` | `(client)/tag/page.tsx` | S | Public* | ISR 60s | Tag index with counts. |
-| `/tag/[slug]` | `(client)/tag/[slug]/page.tsx` | S | Public* | ISR 60s | Songs filtered by tag. |
+| `/tag/[slug]` | `(client)/tag/[slug]/page.tsx` | S | Public* | ISR 60s | Songs filtered by tag. `notFound()` for unknown slugs. |
 | `/posts/[slug]` | `(client)/posts/[slug]/page.tsx` | S | Public* | **SSG** 3600s + `generateStaticParams` | Song detail: lyrics/chords, audio, tutorials, references, play history. `notFound()` for unknown slugs. |
 | `/me` | `(client)/me/page.tsx` | S | Member | ISR 60s | "Mi perfil": upcoming assignments, proposal CTAs, availability, profile settings. |
 | `/me/propose/[roleId]` | `(client)/me/propose/[roleId]/page.tsx` | S | **Lead-only** | dynamic (`revalidate=0`) | Setlist proposal editor for a service the user Leads. |
@@ -118,6 +118,8 @@ See [UTILITIES_AND_COMPONENTS.md](UTILITIES_AND_COMPONENTS.md) for the full comp
 - `(client)/me/loading.tsx`, `(client)/schedule/loading.tsx`,
   `(client)/posts/[slug]/loading.tsx` — per-route skeletons.
 - `(client)/posts/not-found.tsx` — "Canción no encontrada."
+- `(client)/not-found.tsx` — "Página no encontrada": the group-level fallback for
+  every other `notFound()` (`/author/[slug]`, `/tag/[slug]`, `/me/propose/[roleId]`).
 - No `error.tsx`/`not-found.tsx` in the `(admin)` group.
 
 ---

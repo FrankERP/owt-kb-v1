@@ -8,19 +8,19 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 318,
-    "filesScanned": 260,
-    "filesWithColour": 50,
+    "literalRows": 319,
+    "filesScanned": 261,
+    "filesWithColour": 51,
     "byCategory": {
       "2": 2,
       "4": 72,
-      "8": 93,
+      "8": 94,
       "9": 10,
       "11": 7,
       "12": 134
     },
     "byDisposition": {
-      "B": 122,
+      "B": 123,
       "exempt": 26,
       "keep": 243,
       "C": 7,
@@ -408,6 +408,18 @@
       "reason": null
     },
     {
+      "file": "app/(client)/not-found.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 10,
+      "disposition": "B",
+      "reason": null
+    },
+    {
       "file": "app/(client)/page.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
@@ -415,7 +427,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 146,
+      "line": 150,
       "disposition": "B",
       "reason": null
     },
@@ -2935,7 +2947,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 498,
+      "line": 497,
       "disposition": "B",
       "reason": null
     },
@@ -2947,7 +2959,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 530,
+      "line": 529,
       "disposition": "B",
       "reason": null
     },
@@ -2959,7 +2971,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 544,
+      "line": 543,
       "disposition": "B",
       "reason": null
     },
@@ -2971,7 +2983,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 552,
+      "line": 551,
       "disposition": "B",
       "reason": null
     },

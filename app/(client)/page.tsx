@@ -114,15 +114,19 @@ export default async function Home() {
   // Saturday (role filtered out) must not appear at all, setlist or otherwise.
   const hasSaturday = !!satRole;
   const hasSpecials = specials.length > 0;
-  const totalCards = (hasSaturday ? 1 : 0) + 1 + specials.length;
 
   // DayCard renders nothing for a service with no published setlist and no
-  // assigned seat, so a quiet week would otherwise show the "Esta semana"
-  // heading over an empty grid. Mirror DayCard's guard for the Sunday card.
-  const hasSunday =
-    !!sunSetlist?.songs?.length ||
-    !!(sunRole && (sunRole.Lead?.length || sunRole.instruments?.length || sunRole.foh_team?.length || sunRole.BGVs?.length || sunRole.Chorus?.length));
-  const hasAnyCard = hasSaturday || hasSpecials || hasSunday;
+  // assigned seat (a role whose seats were all cleared is a normal stored
+  // state), so a quiet week would otherwise show the "Esta semana" heading
+  // over an empty grid. Mirror DayCard's guard per card and count only the
+  // cards that will actually paint — that count also picks the grid layout.
+  const hasSeat = (r: { Lead?: unknown[]; instruments?: unknown[]; foh_team?: unknown[]; BGVs?: unknown[]; Chorus?: unknown[] } | null | undefined) =>
+    !!(r && (r.Lead?.length || r.instruments?.length || r.foh_team?.length || r.BGVs?.length || r.Chorus?.length));
+  const hasSunday = !!sunSetlist?.songs?.length || hasSeat(sunRole);
+  const hasSaturdayCard = hasSaturday && (!!satSetlist?.songs?.length || hasSeat(satRole));
+  const specialCards = specials.filter((sp) => !!sp.songs?.length || hasSeat(sp)).length;
+  const totalCards = (hasSaturdayCard ? 1 : 0) + (hasSunday ? 1 : 0) + specialCards;
+  const hasAnyCard = totalCards > 0;
 
   // Determine the nearest upcoming service date
   const allDates = [
