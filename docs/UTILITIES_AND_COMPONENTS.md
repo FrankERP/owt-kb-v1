@@ -134,9 +134,15 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
 ### Unsaved-work fingerprints
 Two editors warn before discarding work, and each compares a stable fingerprint of the
 state a save actually persists against the last saved one.
+- **`snapshot(dates, notes)`** ([AvailabilityCalendar.tsx](../app/components/AvailabilityCalendar.tsx))
+  — feeds `dirty`, the "Cambios sin guardar" marker and the `beforeunload` guard.
 - **`proposalSnapshot(songs, teamNotes, leadNotes, proposalId)`**
-  ([ProposalEditor.tsx](../app/\(client\)/me/propose/[roleId]/ProposalEditor.tsx)) — takes the
-  proposal id because `lead_notes` is only sent while no proposal document exists.
+  ([ProposalEditor.tsx](../app/\(client\)/me/propose/[roleId]/ProposalEditor.tsx)) — the same
+  job for the setlist proposal editor. Takes the proposal id because `lead_notes` is only
+  sent while no proposal document exists, so it must leave the fingerprint at exactly the
+  moment it leaves the payload.
+
+### Popover placement
 - **`popoverPosition(rect, viewportW, viewportH)`**
   ([AvailabilityCalendar.tsx](../app/components/AvailabilityCalendar.tsx)) — placement for the
   availability note popover, pure so the flip and the clamps are testable (jsdom reports
@@ -348,7 +354,7 @@ Shares `songToForm` / chart helpers with `SongFormModal`. Lyrics and charts are 
 
 ## Tests
 
-**189 test files / 4,293 tests** (164 under `app/` + 16 under `scripts/` + 9 harness unit
+**212 test files / 4,503 tests** (179 under `app/` + 24 under `scripts/` + 9 harness unit
 tests under `e2e/service-readiness/__tests__/`).
 Separately, **11 Playwright specs** under `e2e/service-readiness/` run only against the isolated
 verification deployment and are **not** part of `npm test` — see

@@ -37,7 +37,12 @@ describe("impersonation banner ↔ navbar offset", () => {
     expect(css).toContain(`var(${VAR_NAME})`);
   });
 
-  it("the component actually publishes the property it names", () => {
+  it("the component actually publishes both names it declares", () => {
+    // The class is the half that carries the whole rule: without it
+    // `.impersonating .brand-navbar` never matches and the navbar slides back
+    // under the banner, with every other assertion here still green.
+    expect(component).toContain("classList.add(BANNER_CLASS)");
+    expect(component).toContain("classList.remove(BANNER_CLASS)");
     expect(component).toContain("setProperty(BANNER_H_VAR");
     expect(component).toContain("removeProperty(BANNER_H_VAR");
   });
