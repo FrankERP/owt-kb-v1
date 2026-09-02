@@ -21,7 +21,28 @@ describe("outboxId", () => {
   });
 
   it("produces an id Sanity accepts", () => {
-    expect(outboxId("setlist", "r1")).toMatch(/^outbox\.[a-z]+\.[A-Za-z0-9_-]+$/);
+    expect(outboxId("setlist", "r1")).toMatch(/^outbox\.[a-z]+\.[a-f0-9]{32}$/);
+  });
+
+  // Sanity's id grammar is `a-zA-Z0-9._-` with no dot-separated segment starting
+  // in `-`. The previous base64url digest satisfied the alphabet and violated the
+  // segment rule for one subject in 64; this subject is the production pair that
+  // failed on 2026-09-02 and took a whole ten-member transaction with it. The
+  // sweep over many subjects guards the property, not just the one known case.
+  it("never yields a segment that starts with a dash, for any subject", () => {
+    const failedInProduction =
+      "0a55e44d-4a27-441b-9ec0-bcff438b619b__c71b0a78-7e17-4e18-8397-0271e19ac6e8";
+    const subjects = [failedInProduction, ...Array.from({ length: 2000 }, (_, i) => `m${i}__r${i % 7}`)];
+    for (const subject of subjects) {
+      for (const kind of ["role", "setlist", "leadNotes"] as const) {
+        const id = outboxId(kind, subject);
+        expect(id).toMatch(/^[a-zA-Z0-9._-]+$/);
+        for (const segment of id.split(".")) {
+          expect(segment).not.toMatch(/^-/);
+          expect(segment).not.toBe("");
+        }
+      }
+    }
   });
 });
 
