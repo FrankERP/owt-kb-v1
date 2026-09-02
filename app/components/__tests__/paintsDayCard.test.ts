@@ -72,6 +72,14 @@ describe("paintsDayCard module boundary", () => {
     expect(read("app/utils/paintsDayCard.ts")).not.toMatch(/^\s*["']use client["']/m);
   });
 
+  // The directive check alone pins half the module's own rule: it must also stay
+  // free of any import that pulls a client module in. Today it has none at all,
+  // which is the easiest version of that promise to keep and to check.
+  it("imports nothing, so no import can drag a client module in behind it", () => {
+    expect(read("app/utils/paintsDayCard.ts")).not.toMatch(/^\s*(import|export)\s.*\sfrom\s/m);
+    expect(read("app/utils/paintsDayCard.ts")).not.toMatch(/\brequire\s*\(/);
+  });
+
   it("is imported by the home page from that module, not from DayCard", () => {
     const page = read("app/(client)/page.tsx");
     expect(page).toMatch(/import \{ paintsDayCard \} from "\.\.\/utils\/paintsDayCard"/);
