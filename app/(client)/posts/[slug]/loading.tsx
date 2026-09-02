@@ -2,7 +2,7 @@ export default function PostLoading() {
   return (
     <div>
       {/* Navbar placeholder */}
-      <div className="h-14 border-b border-surface-accent-20" />
+      <div className="h-[calc(5rem+env(safe-area-inset-top))] lg:h-[calc(6rem+env(safe-area-inset-top))] border-b border-surface-accent-20" />
 
       {/* Hero placeholder */}
       <div className="bg-surface-overlay border-b border-surface-accent-l100-d15">

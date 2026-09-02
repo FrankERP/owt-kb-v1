@@ -4,6 +4,7 @@ import SongSearchList from "@/app/components/SongSearchList";
 import { Post } from "@/app/utils/interface";
 import { client } from "@/sanity/lib/client";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
+import { notFound } from "next/navigation";
 
 async function getPostsByAuthor(slug: string) {
   const query = `
@@ -15,15 +16,16 @@ async function getPostsByAuthor(slug: string) {
   return await client.fetch(query, { authorSlug: slug });
 }
 
-async function getAuthorName(slug: string) {
-  return client.fetch(`*[_type=="author" && slug.current==$slug][0].name`, { slug });
+// `null` means no such author; `{ name: null }` means it exists but is unnamed.
+async function getAuthor(slug: string) {
+  return client.fetch<{ name: string | null } | null>(`*[_type=="author" && slug.current==$slug][0]{ name }`, { slug });
 }
 
 export const revalidate = 60;
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const name = (await getAuthorName(slug)) ?? slug;
+  const name = (await getAuthor(slug))?.name ?? slug;
   return {
     title: `${name} — Oasis Worship Team`,
     description: `Canciones de ${name}.`,
@@ -35,10 +37,12 @@ interface Params { params: Promise<{ slug: string }>; }
 const page = async ({ params }: Params) => {
   const { slug } = await params;
   await requireWorshipPage(`/author/${slug}`);
-  const [posts, name]: [Array<Post>, string | null] = await Promise.all([
+  const [posts, author]: [Array<Post>, { name: string | null } | null] = await Promise.all([
     getPostsByAuthor(slug),
-    getAuthorName(slug),
+    getAuthor(slug),
   ]);
+  if (!author) notFound();
+  const name = author.name;
 
   return (
     <div>

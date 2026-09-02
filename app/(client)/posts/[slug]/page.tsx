@@ -238,7 +238,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Audio */}
         {hasAudio && (
-          <section id="audio" className="scroll-mt-28 lg:scroll-mt-36">
+          <section id="audio" className="scroll-mt-[calc(8rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top))]">
             <SectionHeader>Audio</SectionHeader>
             <SongAudioSection
               tracks={post.audioTracks!}
@@ -250,7 +250,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Tutoriales */}
         {hasTutorials && (
-          <section id="tutoriales" className="scroll-mt-28 lg:scroll-mt-36">
+          <section id="tutoriales" className="scroll-mt-[calc(8rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top))]">
             <SectionHeader>Tutoriales</SectionHeader>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {post.tutorials2!.map((tutorial, i) => (
@@ -285,7 +285,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Reference Links */}
         {hasRefLinks && (
-          <section id="referencia" className="scroll-mt-28 lg:scroll-mt-36">
+          <section id="referencia" className="scroll-mt-[calc(8rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top))]">
             <SectionHeader>Versión de referencia</SectionHeader>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
               {(post.musicalReferenceUrl || (post.referenceLinks?.[0]?.url)) && (
@@ -320,7 +320,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Letra / Body */}
         {hasLyrics && (
-          <section id="letra" className="scroll-mt-28 lg:scroll-mt-36">
+          <section id="letra" className="scroll-mt-[calc(8rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top))]">
             <SectionHeader>Letra</SectionHeader>
             <div className="brand-facet-panel">
               {hasInlineChords ? (
@@ -340,7 +340,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Historial */}
         {hasHistory && (
-          <section id="historial" className="scroll-mt-28 lg:scroll-mt-36">
+          <section id="historial" className="scroll-mt-[calc(8rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top))]">
             <SectionHeader>Última vez tocada</SectionHeader>
             <div className="flex flex-col gap-4 max-w-xl mx-auto">
               {history.map((entry, i) => (

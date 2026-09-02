@@ -271,7 +271,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
 
           <div className="space-y-8">
           {/* Identity */}
-          <section className="space-y-4">
+          <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); void handleSaveProfile(); }}>
             <h3 className="font-label text-[11px] uppercase tracking-widest text-mono-500">Identidad</h3>
             <div className="space-y-3">
               <div className="space-y-1">
@@ -297,16 +297,16 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
               </div>
             </div>
             <button
-              onClick={handleSaveProfile}
+              type="submit"
               disabled={savingProfile}
               className="w-full py-2.5 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
             >
               {savingProfile ? "Guardando…" : "Guardar cambios"}
             </button>
-          </section>
+          </form>
 
           {/* Password */}
-          <section className="space-y-4 border-t border-accent/10 pt-6">
+          <form className="space-y-4 border-t border-accent/10 pt-6" onSubmit={(e) => { e.preventDefault(); void handleSavePassword(); }}>
             <div>
               <h3 className="font-label text-[11px] uppercase tracking-widest text-mono-500">Contraseña</h3>
               <p className="font-body text-xs text-mono-500 mt-1">
@@ -316,7 +316,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
               </p>
             </div>
             {pwError && (
-              <p className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-lg px-3 py-2">{pwError}</p>
+              <p role="alert" className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-lg px-3 py-2">{pwError}</p>
             )}
             <div className="space-y-3">
               {member.hasPassword && (
@@ -335,13 +335,13 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
               </div>
             </div>
             <button
-              onClick={handleSavePassword}
+              type="submit"
               disabled={savingPw || !newPw}
               className="w-full py-2.5 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
             >
               {savingPw ? "Guardando…" : member.hasPassword ? "Actualizar contraseña" : "Establecer contraseña"}
             </button>
-          </section>
+          </form>
 
           {/* Notifications */}
           <section className="space-y-4 border-t border-accent/10 pt-6">
@@ -362,7 +362,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
 
       {/* Toast */}
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-xl border font-label text-xs uppercase tracking-widest shadow-xl ${
+        <div role={toast.ok ? "status" : "alert"} className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-xl border font-label text-xs uppercase tracking-widest shadow-xl ${
           toast.ok
             ? "bg-surface-raised-alt border-accent/30"
             : "bg-negative-surface-deep/80 border-negative-border"

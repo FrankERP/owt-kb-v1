@@ -26,7 +26,7 @@ export default function SectionNav({ sections }: { sections: Section[] }) {
   }, [sections]);
 
   return (
-    <div className="sticky top-14 lg:top-20 z-40 bg-surface-base/90 backdrop-blur-sm border-b border-edge-accent-subtle">
+    <div className="sticky top-[calc(5rem+env(safe-area-inset-top))] lg:top-[calc(6rem+env(safe-area-inset-top))] z-40 bg-surface-base/90 backdrop-blur-sm border-b border-edge-accent-subtle">
       <div className="max-w-7xl mx-auto px-6 flex gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {sections.map((s) => (
           <a

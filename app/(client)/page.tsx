@@ -114,7 +114,19 @@ export default async function Home() {
   // Saturday (role filtered out) must not appear at all, setlist or otherwise.
   const hasSaturday = !!satRole;
   const hasSpecials = specials.length > 0;
-  const totalCards = (hasSaturday ? 1 : 0) + 1 + specials.length;
+
+  // DayCard renders nothing for a service with no published setlist and no
+  // assigned seat (a role whose seats were all cleared is a normal stored
+  // state), so a quiet week would otherwise show the "Esta semana" heading
+  // over an empty grid. Mirror DayCard's guard per card and count only the
+  // cards that will actually paint — that count also picks the grid layout.
+  const hasSeat = (r: { Lead?: unknown[]; instruments?: unknown[]; foh_team?: unknown[]; BGVs?: unknown[]; Chorus?: unknown[] } | null | undefined) =>
+    !!(r && (r.Lead?.length || r.instruments?.length || r.foh_team?.length || r.BGVs?.length || r.Chorus?.length));
+  const hasSunday = !!sunSetlist?.songs?.length || hasSeat(sunRole);
+  const hasSaturdayCard = hasSaturday && (!!satSetlist?.songs?.length || hasSeat(satRole));
+  const specialCards = specials.filter((sp) => !!sp.songs?.length || hasSeat(sp)).length;
+  const totalCards = (hasSaturdayCard ? 1 : 0) + (hasSunday ? 1 : 0) + specialCards;
+  const hasAnyCard = totalCards > 0;
 
   // Determine the nearest upcoming service date
   const allDates = [
@@ -133,6 +145,15 @@ export default async function Home() {
           <p className="font-label text-[10px] uppercase tracking-[0.24em] text-accent">Programación</p>
           <h2 className="mt-1 font-display text-3xl font-semibold text-ink md:text-4xl">Esta semana</h2>
         </div>
+        {!hasAnyCard ? (
+          <div className="flex flex-col items-center gap-3 py-16 text-mono-600">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            <p className="font-label text-sm uppercase tracking-widest text-center">Aún no hay servicios publicados esta semana</p>
+          </div>
+        ) : (
         <div className={`grid grid-cols-1 gap-6 ${totalCards > 1 ? "md:grid-cols-2" : "mx-auto max-w-3xl"}`}>
           {hasSpecials && specials.map((sp) => (
             <DayCard
@@ -174,6 +195,7 @@ export default async function Home() {
             isNext={(sunSongs?.week ?? sunRole?.week) === nextDate}
           />
         </div>
+        )}
       </div>
 
       <div className="mx-auto max-w-7xl px-6 pt-8">
