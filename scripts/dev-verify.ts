@@ -27,11 +27,20 @@ const SIGNIN_PATH = "/auth/signin";
 
 let SECRETS: (string | null)[] = [];
 
-/** Every exit goes through redaction and the leak proof, refusals included. */
+/**
+ * Every exit goes through redaction and the leak proof, refusals included.
+ * The storage state file — a live session, written by `signIn` — is scanned here
+ * too, alongside the report, so a refusal that fires AFTER sign-in wrote it (e.g.
+ * `host:landed_off_origin` on a later navigation) still proves the file clean; an
+ * `if (existsSync(...))` further down that only ran on the success path would miss
+ * exactly those refusal exits.
+ */
 function emit(report: RunReport, json: boolean): void {
   const final = redactReport(report, SECRETS);
   final.exitCode = decideExitCode(final);
-  assertNoLeak([{ source: "report", text: JSON.stringify(final) }], SECRETS);
+  const texts = [{ source: "report", text: JSON.stringify(final) }];
+  if (existsSync(STORAGE_STATE)) texts.push({ source: "storageState", text: readFileSync(STORAGE_STATE, "utf8") });
+  assertNoLeak(texts, SECRETS);
   process.stdout.write((json ? JSON.stringify(final, null, 2) : formatHuman(final)) + "\n");
 }
 
@@ -148,69 +157,88 @@ async function main(): Promise<void> {
     return context;
   };
 
-  let context = await newContext(target.origin, args, bypass, true);
-  await attachContext(context);
-  let page = await context.newPage();
-  attach(page);
-  let response = await page.goto(args.route, { waitUntil: "networkidle" });
-  assertOnOrigin(page); // an SSO wall on vercel.com is refused here, before any sign-in attempt
-  // Only a redirect to the sign-in page triggers a sign-in. NOT a 401: a CRON_SECRET-gated
-  // route answers 401 to a browser, and re-signing-in on that would write a loginEvent per
-  // run, exceeding the once-per-session bound Frank accepted.
-  if (page.url().includes(SIGNIN_PATH)) {
-    await context.browser()?.close();
-    context = await signIn();
-    page = await context.newPage();
+  let context: BrowserContext | undefined;
+  try {
+    context = await newContext(target.origin, args, bypass, true);
+    await attachContext(context);
+    let page = await context.newPage();
     attach(page);
-    response = await page.goto(args.route, { waitUntil: "networkidle" });
-    assertOnOrigin(page);
-    if (page.url().includes(SIGNIN_PATH)) refuse(report, "signin:session not accepted", args.json);
-  }
-  report.status = response?.status() ?? null;
-  report.observedDeployment = response?.headers()["x-vercel-id"] ?? null;
+    let response = await page.goto(args.route, { waitUntil: "networkidle" });
+    assertOnOrigin(page); // an SSO wall on vercel.com is refused here, before any sign-in attempt
+    // Only a redirect to the sign-in page triggers a sign-in. NOT a 401: a CRON_SECRET-gated
+    // route answers 401 to a browser, and re-signing-in on that would write a loginEvent per
+    // run, exceeding the once-per-session bound Frank accepted.
+    if (page.url().includes(SIGNIN_PATH)) {
+      await context.browser()?.close();
+      context = await signIn();
+      page = await context.newPage();
+      attach(page);
+      response = await page.goto(args.route, { waitUntil: "networkidle" });
+      assertOnOrigin(page);
+      if (page.url().includes(SIGNIN_PATH)) refuse(report, "signin:session not accepted", args.json);
+    }
+    report.status = response?.status() ?? null;
+    report.observedDeployment = response?.headers()["x-vercel-id"] ?? null;
 
-  if (args.waitFor) await page.getByText(args.waitFor).first().waitFor({ timeout: 30_000 }).catch(() => report.pageErrors.push(`wait:${args.waitFor} not visible`));
-  for (const name of args.clicks) {
-    const el = page.getByRole("button", { name }).or(page.getByRole("link", { name })).first();
-    await el.click({ timeout: 10_000 }).catch(() => report.pageErrors.push(`click:${name} not found`));
-    await page.waitForLoadState("networkidle").catch(() => undefined);
-    assertOnOrigin(page);
+    // An on-origin 401/403 on the OBSERVED route (e.g. a rotated bypass secret
+    // answering in place, never redirecting to /auth/signin) is a refusal, not a
+    // green run with a bad status. Other 4xx (404, …) stay ordinary observations.
+    if (report.status === 401 || report.status === 403) {
+      refuse(report, `auth:HTTP ${report.status} on ${args.route}`, args.json);
+    }
+
+    if (args.waitFor) await page.getByText(args.waitFor).first().waitFor({ timeout: 30_000 }).catch(() => report.pageErrors.push(`wait:${args.waitFor} not visible`));
+    for (const name of args.clicks) {
+      const el = page.getByRole("button", { name }).or(page.getByRole("link", { name })).first();
+      await el.click({ timeout: 10_000 }).catch(() => report.pageErrors.push(`click:${name} not found`));
+      await page.waitForLoadState("networkidle").catch(() => undefined);
+      assertOnOrigin(page);
+    }
+
+    const stem = args.route.replace(/[^a-z0-9]+/gi, "_").replace(/^_|_$/g, "") || "root";
+    if (args.screenshot) {
+      const file = path.isAbsolute(args.screenshot) ? args.screenshot : path.join(OUT_DIR, args.screenshot);
+      await page.screenshot({ path: file, fullPage: args.fullPage });
+      report.artifacts.screenshot = file;
+    }
+    if (args.text) {
+      const text = await page.locator("main").first().innerText().catch(() => page.locator("body").innerText());
+      const file = path.join(OUT_DIR, `${stem}.txt`);
+      writeFileSync(file, text);
+      report.artifacts.text = file;
+    }
+    if (args.a11y) {
+      const tree = await page.locator("body").ariaSnapshot();
+      const file = path.join(OUT_DIR, `${stem}.a11y.yaml`);
+      writeFileSync(file, tree);
+      report.artifacts.a11y = file;
+    }
+    if (!args.console) { report.consoleErrors = []; report.failedRequests = []; }
+  } catch (err) {
+    // A thrown Playwright/Node error (timeout, navigation failure, …) must still go
+    // through `emit`: redaction, the leak scan, and exit-code precedence (a
+    // `blockedMutations` entry recorded before the throw must still win as exit 3
+    // over this becoming exit 4). Record it as a page error and fall through.
+    report.pageErrors.push(err instanceof Error ? err.message : String(err));
+  } finally {
+    await context?.browser()?.close().catch(() => undefined);
   }
 
-  const stem = args.route.replace(/[^a-z0-9]+/gi, "_").replace(/^_|_$/g, "") || "root";
-  if (args.screenshot) {
-    const file = path.isAbsolute(args.screenshot) ? args.screenshot : path.join(OUT_DIR, args.screenshot);
-    await page.screenshot({ path: file, fullPage: args.fullPage });
-    report.artifacts.screenshot = file;
-  }
-  if (args.text) {
-    const text = await page.locator("main").first().innerText().catch(() => page.locator("body").innerText());
-    const file = path.join(OUT_DIR, `${stem}.txt`);
-    writeFileSync(file, text);
-    report.artifacts.text = file;
-  }
-  if (args.a11y) {
-    const tree = await page.locator("body").ariaSnapshot();
-    const file = path.join(OUT_DIR, `${stem}.a11y.yaml`);
-    writeFileSync(file, tree);
-    report.artifacts.a11y = file;
-  }
-  if (!args.console) { report.consoleErrors = []; report.failedRequests = []; }
-
-  await context.browser()?.close();
-
-  // Redaction proof on every file the runner writes — artifacts AND the storage state
-  // (a live session; it must never carry the password or the bypass secret) — then
-  // `emit` covers the report itself.
+  // Redaction proof on the artifact files the runner wrote (screenshots excluded —
+  // binary, and the report/storage-state proof already covers text). The storage
+  // state scan itself now lives in `emit`, which every exit path — this one and
+  // every `refuse()` — routes through.
   const texts = Object.values(report.artifacts).filter((f): f is string => !!f && !f.endsWith(".png"))
     .map((f) => ({ source: path.basename(f), text: readFileSync(f, "utf8") }));
-  if (existsSync(STORAGE_STATE)) texts.push({ source: "storageState", text: readFileSync(STORAGE_STATE, "utf8") });
   assertNoLeak(texts, SECRETS);
   emit(report, args.json);
   process.exit(decideExitCode(report));
 }
 
 main().catch((err) => {
+  // Last resort only: nothing before `report` exists in `main` should throw in
+  // practice (arg parsing is pure), but if it somehow does, there is no report to
+  // redact or scan yet — so plain stderr is the only option here.
   process.stderr.write(`dev-verify: ${err instanceof Error ? err.message : String(err)}\n`);
   process.exit(4);
 });
