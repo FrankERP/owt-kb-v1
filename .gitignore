@@ -85,6 +85,8 @@ __pycache__/
 /blob-report/
 /playwright/.cache/
 *storageState*.json
+# scripts/dev-verify.ts — the Verificador member's live session. Same rule as above.
+/playwright/.dev-verify-storageState.json
 
 
 # Local email template previews (scripts/preview-emails.mts)
