@@ -84,6 +84,28 @@ Kill switch: set `disabled: true` on `member-dev-verify` in Studio; the seed scr
 touches that field, so rotating afterwards keeps it disabled. Rotate: new hash, re-run
 `--apply`, update `DEV_VERIFY_PASSWORD`, delete the storage state.
 
+`--click` matches an element by accessible name across the `button`, `link`, and `menuitem`
+roles — admin destructive actions live behind a kebab whose items are `menuitem` — and
+prefers an exact name match over a substring one, so a modal's confirm (`Eliminar`) is not
+shadowed by its close control (`Cerrar Eliminar servicio`).
+
 ## Verified runs
 
-(Filled in by Task 8.)
+Run 2026-09-01 against `dev-owt-backstage.vercel.app` serving `feat/dev-verify` (preview
+`57203766`), signed in as `member-dev-verify`. The `observedDeployment` values are the
+`x-vercel-id` of each run; pair them with `get_deployment(dev-owt-backstage.vercel.app)` for
+the commit SHA.
+
+- **(a) Signed-in render — exit 0.** `--route /admin --screenshot admin.png --text --console
+  --theme dark`. HTTP 200, `landedUrl` `/admin`, `blockedMutations` empty. The text artifact
+  contains the Control Room / Servicios panel (`ACCESO AUTORIZADO`, `SERVICIOS`, `GENERAR MES`,
+  `EDITAR MES`), with no sign-in markers — proof the session reached a manager-only surface.
+- **(b) Read-only lock, real destructive control — exit 3.** `--route /admin --click "Más
+  acciones" --click "Eliminar servicio" --click "Eliminar"`. One `blocked_mutation`:
+  `DELETE /api/admin/roles/c71b0a78-7e17-4e18-8397-0271e19ac6e8`. A follow-up `--text` run
+  confirmed the 5 September service still exists — the delete was aborted in the browser and
+  never reached the server.
+- **(c) Production refused before any network — exit 2.** `--route /admin --base-url
+  https://owt-backstage.vercel.app --console`. `refusal: host:forbidden_production`, `origin`
+  empty, `status` null, zero requests, zero console output — the refusal precedes
+  `chromium.launch`.
