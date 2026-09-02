@@ -600,6 +600,8 @@ function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) =>
           {visible.map(({ id, label }) => (
             <button
               key={id}
+              type="button"
+              aria-current={active === id ? "page" : undefined}
               onClick={() => onChange(id)}
               className={`font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${
                 active === id
@@ -1170,11 +1172,14 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
           <input
             className="w-full bg-transparent py-2.5 pl-9 pr-8 font-body text-sm placeholder:text-placeholder focus:outline-none"
             placeholder="Buscar por nombre, alias o email…"
+            aria-label="Buscar miembros"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           {query && (
             <button
+              type="button"
+              aria-label="Limpiar búsqueda"
               onClick={() => setQuery("")}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-mono-500 hover:text-accent transition-colors text-lg leading-none"
             >

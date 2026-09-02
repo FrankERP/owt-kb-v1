@@ -50,7 +50,7 @@ export default function AuthorSearchList({ authors, totalSongs }: { authors: Aut
             ))}
           </div>
           <div className="relative">
-            <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar..."
+            <input type="text" aria-label="Buscar artistas" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar..."
               className="font-label pl-3 pr-8 py-1.5 rounded-lg border border-surface-accent-20 bg-transparent focus:outline-none focus:border-accent dark:focus:border-surface-accent-20 text-sm placeholder:text-placeholder transition-colors w-36 sm:w-48" />
             {query && (
               <button

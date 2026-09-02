@@ -706,15 +706,16 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
         {/* Song search */}
         {!isApproved && (
           <div ref={searchRef} className="relative">
-            <div
-              className="flex items-center gap-2 px-4 py-3 rounded-xl border border-dashed border-accent/25 hover:border-accent/50 transition-colors cursor-pointer"
+            <button
+              type="button"
+              className="w-full text-left flex items-center gap-2 px-4 py-3 rounded-xl border border-dashed border-accent/25 hover:border-accent/50 focus-visible:border-accent/50 transition-colors cursor-pointer"
               onClick={() => { setShowSearch(true); setKeyPickerIdx(null); }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0">
                 <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
               </svg>
               <span className="font-label text-xs uppercase tracking-widest text-mono-500">Agregar canción</span>
-            </div>
+            </button>
 
             {showSearch && (
               <div className="absolute top-full left-0 right-0 mt-1 z-20 rounded-xl border border-accent/20 bg-surface-overlay-deepest shadow-2xl overflow-hidden">

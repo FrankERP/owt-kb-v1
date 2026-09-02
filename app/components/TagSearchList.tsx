@@ -124,6 +124,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
           <div className="brand-search-console relative">
             <input
               type="text"
+              aria-label="Buscar etiquetas"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar..."
