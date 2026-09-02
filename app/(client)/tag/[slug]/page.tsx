@@ -4,6 +4,7 @@ import SongSearchList from "@/app/components/SongSearchList";
 import { Post } from "@/app/utils/interface";
 import { client } from "@/sanity/lib/client";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
+import { notFound } from "next/navigation";
 
 async function getPostsByTag(tag: string) {
   const query = `
@@ -28,15 +29,16 @@ async function getPostsByTag(tag: string) {
   return await client.fetch(query, { tagSlug: tag });
 }
 
-async function getTagName(slug: string) {
-  return client.fetch<string | null>(`*[_type=="tag" && slug.current==$slug][0].name`, { slug });
+// `null` means no such tag; `{ name: null }` means it exists but is unnamed.
+async function getTag(slug: string) {
+  return client.fetch<{ name: string | null } | null>(`*[_type=="tag" && slug.current==$slug][0]{ name }`, { slug });
 }
 
 export const revalidate = 60;
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const name = (await getTagName(slug)) ?? slug;
+  const name = (await getTag(slug))?.name ?? slug;
   return {
     title: `#${name} — Oasis Worship Team`,
     description: `Canciones etiquetadas como ${name}.`,
@@ -50,11 +52,12 @@ interface Params {
 const page = async ({ params }: Params) => {
   const { slug } = await params;
   await requireWorshipPage(`/tag/${slug}`);
-  const [posts, name]: [Array<Post>, string | null] = await Promise.all([
+  const [posts, tag]: [Array<Post>, { name: string | null } | null] = await Promise.all([
     getPostsByTag(slug),
-    getTagName(slug),
+    getTag(slug),
   ]);
-  const displayName = name ?? slug;
+  if (!tag) notFound();
+  const displayName = tag.name ?? slug;
 
   return (
     <div>

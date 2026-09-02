@@ -428,6 +428,8 @@ export default function AvailabilityCalendar({ initialRev, initialDates, service
                       type="button"
                       onClick={e => !isPast && handleDateClick(iso, e)}
                       disabled={isPast}
+                      aria-pressed={unavailable}
+                      aria-label={`${fmtDayLabel(iso)}${unavailable ? ", no disponible" : ""}${hasService ? ", hay servicio" : ""}${hasNote ? ", con nota" : ""}`}
                       className={`relative rounded text-center font-body text-xs transition-colors min-h-[44px] sm:min-h-0 sm:py-1 sm:pb-2 ${
                         isPast
                           ? "text-mono-700 cursor-default"

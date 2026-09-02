@@ -146,7 +146,7 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
             type="month"
             value={anchorMonth}
             onChange={(e) => { if (e.target.value) router.push(scheduleHref(e.target.value)); }}
-            className="bg-transparent border border-surface-accent-30 rounded-lg px-3 py-1.5 font-label text-xs text-ink-muted [color-scheme:dark]"
+            className="bg-transparent border border-surface-accent-30 rounded-lg px-3 py-1.5 font-label text-xs text-ink-muted"
           />
         </label>
         {viewMonth && (
@@ -401,8 +401,13 @@ function MonthGrid({
           return (
             <button
               key={i}
+              type="button"
               disabled={!hasActive}
               onClick={() => hasActive && onSelect(dateStr)}
+              aria-current={isToday ? "date" : undefined}
+              aria-label={`${new Date(dateStr + "T12:00:00").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}${
+                hasActive ? `, ${entries.map((e) => e.day).join(", ")}` : ""
+              }`}
               className={cls}
             >
               {day}

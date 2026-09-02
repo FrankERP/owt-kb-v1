@@ -8,19 +8,19 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 317,
+    "literalRows": 318,
     "filesScanned": 260,
-    "filesWithColour": 49,
+    "filesWithColour": 50,
     "byCategory": {
       "2": 2,
       "4": 72,
-      "8": 92,
+      "8": 93,
       "9": 10,
       "11": 7,
       "12": 134
     },
     "byDisposition": {
-      "B": 121,
+      "B": 122,
       "exempt": 26,
       "keep": 243,
       "C": 7,
@@ -43,7 +43,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 80,
+      "line": 84,
       "disposition": "B",
       "reason": null
     },
@@ -55,7 +55,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 90,
+      "line": 94,
       "disposition": "B",
       "reason": null
     },
@@ -67,7 +67,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 114,
+      "line": 118,
       "disposition": "B",
       "reason": null
     },
@@ -79,7 +79,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 124,
+      "line": 128,
       "disposition": "B",
       "reason": null
     },
@@ -91,7 +91,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 129,
+      "line": 133,
       "disposition": "B",
       "reason": null
     },
@@ -103,7 +103,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 72,
+      "line": 76,
       "disposition": "B",
       "reason": null
     },
@@ -115,7 +115,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 163,
+      "line": 167,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },
@@ -127,7 +127,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 162,
+      "line": 166,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },
@@ -139,7 +139,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 165,
+      "line": 169,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },
@@ -151,7 +151,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 164,
+      "line": 168,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },
@@ -343,7 +343,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 713,
+      "line": 714,
       "disposition": "B",
       "reason": null
     },
@@ -355,7 +355,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 819,
+      "line": 820,
       "disposition": "B",
       "reason": null
     },
@@ -367,7 +367,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 922,
+      "line": 923,
       "disposition": "B",
       "reason": null
     },
@@ -379,7 +379,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 931,
+      "line": 932,
       "disposition": "B",
       "reason": null
     },
@@ -391,7 +391,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 939,
+      "line": 940,
       "disposition": "B",
       "reason": null
     },
@@ -403,7 +403,19 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 948,
+      "line": 949,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/(client)/page.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 146,
       "disposition": "B",
       "reason": null
     },
@@ -2335,7 +2347,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 1171,
+      "line": 1173,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2371,7 +2383,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1166,
+      "line": 1168,
       "disposition": "B",
       "reason": null
     },
@@ -2383,7 +2395,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1444,
+      "line": 1449,
       "disposition": "B",
       "reason": null
     },
@@ -2395,7 +2407,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1453,
+      "line": 1458,
       "disposition": "B",
       "reason": null
     },
@@ -2407,7 +2419,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1463,
+      "line": 1468,
       "disposition": "B",
       "reason": null
     },
@@ -2419,7 +2431,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1474,
+      "line": 1479,
       "disposition": "B",
       "reason": null
     },
@@ -2455,7 +2467,7 @@
       "alpha": null,
       "utility": "to",
       "carrier": null,
-      "line": 616,
+      "line": 618,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2923,7 +2935,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 496,
+      "line": 498,
       "disposition": "B",
       "reason": null
     },
@@ -2935,7 +2947,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 528,
+      "line": 530,
       "disposition": "B",
       "reason": null
     },
@@ -2947,7 +2959,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 542,
+      "line": 544,
       "disposition": "B",
       "reason": null
     },
@@ -2959,7 +2971,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 550,
+      "line": 552,
       "disposition": "B",
       "reason": null
     },
@@ -3091,7 +3103,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 410,
+      "line": 415,
       "disposition": "B",
       "reason": null
     },
@@ -3103,7 +3115,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 413,
+      "line": 418,
       "disposition": "B",
       "reason": null
     },
@@ -3595,7 +3607,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 130,
+      "line": 131,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3643,7 +3655,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 135,
+      "line": 136,
       "disposition": "B",
       "reason": null
     },
@@ -3655,7 +3667,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 147,
+      "line": 148,
       "disposition": "B",
       "reason": null
     },
@@ -3667,7 +3679,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 234,
+      "line": 235,
       "disposition": "B",
       "reason": null
     },
@@ -3679,7 +3691,7 @@
       "alpha": null,
       "utility": "to",
       "carrier": null,
-      "line": 168,
+      "line": 169,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },

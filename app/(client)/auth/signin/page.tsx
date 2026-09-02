@@ -24,6 +24,10 @@ function SignInForm() {
         if (!idToken) { setCredError("No se pudo iniciar sesión con Google."); return; }
         const res = await signIn("google-native", { idToken, callbackUrl, redirect: false });
         if (res?.error) setCredError("Acceso denegado."); else window.location.assign(res?.url ?? "/");
+      } catch {
+        // The native sign-in sheet was dismissed or the plugin threw: without
+        // this the spinner just stops and the screen stays silent.
+        setCredError("No se pudo iniciar sesión con Google.");
       } finally {
         setLoading(false);
       }
@@ -77,7 +81,7 @@ function SignInForm() {
 
           {/* Error */}
           {errorMsg && (
-            <p className="mb-4 text-sm text-negative-muted bg-negative-surface-deepest/35 border border-negative-strong/30 rounded-[var(--brand-radius-control)] px-4 py-3">
+            <p role="alert" className="mb-4 text-sm text-negative-muted bg-negative-surface-deepest/35 border border-negative-strong/30 rounded-[var(--brand-radius-control)] px-4 py-3">
               {errorMsg}
             </p>
           )}
