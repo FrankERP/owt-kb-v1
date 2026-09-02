@@ -672,26 +672,37 @@ export default function AdminPanel({
    * knowing before anyone "fixes" it. Next patches `replaceState` and returns
    * early when the state carries `__NA`, which every app-router entry does — so
    * `applyUrlFromHistoryPushReplace` is skipped and the router's `canonicalUrl`
-   * keeps saying `/admin`. Two consequences: `useSearchParams()` under /admin
-   * will NOT see this param (read the tab from the `initialTab` prop, which the
-   * server resolved), and if a future router action commits while the admin
-   * stays on this page, `HistoryUpdater` rewrites the URL back to its stale
-   * `canonicalUrl` and the param is lost until the next tab press.
+   * keeps saying `/admin`. Consequence: `useSearchParams()` under /admin will
+   * NOT see this param. Read the tab from the `initialTab` prop, which the
+   * server resolved, and never from that hook.
    *
-   * Passing `null` instead would let Next sync — and would dispatch
+   * Passing `null` would let Next sync — it would NOT lose the router's own
+   * state, since `copyNextJsInternalHistoryState` copies `__NA` and the
+   * internals tree back off the current entry — but it dispatches
    * ACTION_RESTORE, which in Next 16 runs `startPPRNavigation` and
-   * `spawnDynamicRequests`. That is a server round-trip for this dynamic,
-   * auth-gated route on EVERY tab press: the exact cost this whole approach
-   * exists to avoid, paid every time instead of never. Checked against
+   * `spawnDynamicRequests`, falling back to a full page load when the former
+   * returns null. That is a server round-trip on this dynamic, auth-gated route
+   * for EVERY tab press: the exact cost this approach exists to avoid, paid
+   * every time instead of never. Read out of
    * `next/dist/client/components/app-router.js` and `restore-reducer.js` in the
    * vendored copy, not the changelog.
+   *
+   * NO DEPENDENCY ARRAY, deliberately. Because `canonicalUrl` stays stale, any
+   * router commit while the admin stays on this page makes `HistoryUpdater`
+   * rewrite the address bar back to plain `/admin`. Keyed on `[tab]` this
+   * effect would not re-run and the param would be lost until the next tab
+   * press — including on the plain path where the admin picks a tab by click
+   * and then taps "Admin" in the nav. Re-asserting on every render costs one
+   * URL parse and returns immediately when the param already matches, and it
+   * cannot loop: the write reaches no React state, precisely because of the
+   * `__NA` skip above.
    */
   useEffect(() => {
     const url = new URL(window.location.href);
     if (url.searchParams.get("tab") === tab) return;
     url.searchParams.set("tab", tab);
     window.history.replaceState(window.history.state, "", url);
-  }, [tab]);
+  });
   const onReviewResolved = useCallback(
     (outcome: string) => dispatchReview({ type: "resolved", outcome }),
     [],

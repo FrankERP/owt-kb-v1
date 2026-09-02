@@ -2359,7 +2359,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 1242,
+      "line": 1253,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2395,7 +2395,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1237,
+      "line": 1248,
       "disposition": "B",
       "reason": null
     },
@@ -2407,7 +2407,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1518,
+      "line": 1529,
       "disposition": "B",
       "reason": null
     },
@@ -2419,19 +2419,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1527,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/AdminPanel.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 1537,
+      "line": 1538,
       "disposition": "B",
       "reason": null
     },
@@ -2444,6 +2432,18 @@
       "utility": null,
       "carrier": "stroke",
       "line": 1548,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/admin/AdminPanel.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 1559,
       "disposition": "B",
       "reason": null
     },
