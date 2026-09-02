@@ -182,6 +182,15 @@ several exist precisely to stop a plausible-looking change.
 - **Notification emails: `before` is captured PRE-COMMIT** and threaded into
   `after()`. Reading live state inside `after()` gives post-write state and the
   system silently sends nothing. See `docs/NOTIFICATIONS.md`.
+- **A Server Component may never CALL a value imported from a `"use client"`
+  module.** It receives a client reference, not the function, and calling it
+  throws at render — that is what took `/` down for 56 minutes on 2026-09-02
+  (ADR-0028). Rendering a client component as JSX, or forwarding a client value
+  as a prop to one, stays legal. None of the three gates can see this by
+  themselves: `tsc` types the export identically on both sides, unit tests import
+  the function and never the boundary, and `next build` does not render a dynamic
+  route. `clientBoundary.test.ts` is the guard, and it fails on a NEW violation
+  anywhere under `app/**`.
 - **The impersonation banner and the navbar are both `sticky top-0` in
   different containers.** `ImpersonationBanner` publishes an `impersonating`
   class plus its MEASURED height as `--impersonation-h` on `<html>`; `brand.css`
