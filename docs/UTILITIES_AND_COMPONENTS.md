@@ -125,11 +125,15 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   — `{ toPatch, toNotify }`; only `false → published` notifies.
 - **`draftToDayCardProps`** ([draftToDayCardProps.ts](../app/utils/draftToDayCardProps.ts)) — maps
   a solver-generated draft service into `DayCard` props for preview.
-- **`paintsDayCard(card)`** ([DayCard.tsx](../app/components/DayCard.tsx)) — whether a
+- **`paintsDayCard(card)`** ([paintsDayCard.ts](../app/utils/paintsDayCard.ts)) — whether a
   `DayCard` will render anything or return `null`. `DayCard` guards on it and the home
   page asks it before choosing between the "Esta semana" grid and an empty state, so the
   two can never disagree. Every key is required, so a call site that forgets one fails to
-  compile.
+  compile. **It lives in `utils/`, not in `DayCard.tsx`, and must stay there:**
+  `DayCard.tsx` is `"use client"` and the home page is a Server Component, so importing
+  the predicate from the component hands back a client reference rather than the
+  function. That took `/` down in production on 2026-09-02 — see
+  [ADR-0028](adr/0028-shared-predicates-live-outside-client-modules.md).
 
 ### Unsaved-work fingerprints
 Two editors warn before discarding work, and each compares a stable fingerprint of the
