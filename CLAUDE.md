@@ -90,6 +90,10 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   `main` → **production**, `owt-backstage.vercel.app`. There is no staging branch
   that deploys nowhere. **`preview` goes first** — see the push-order rule under
   Conventions.
+- **Agents can now look at dev.** `scripts/dev-verify.ts` (see `docs/DEV_VERIFY.md`) observes
+  `dev-owt-backstage` read-only as the «Verificador (bot)» member — screenshots, text, a11y
+  tree, console. Use it for the human-eyes step of the push order when the change is visual;
+  it never writes, and it still is not a substitute for Frank's own look at a release.
 - The stable dev domain is owned **exclusively** by the `preview` branch. Never
   point it at or deploy it directly from a feature/development branch. To update
   dev: merge the intended development branch into `preview`, push `preview`,
