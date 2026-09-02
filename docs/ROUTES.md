@@ -118,8 +118,8 @@ See [UTILITIES_AND_COMPONENTS.md](UTILITIES_AND_COMPONENTS.md) for the full comp
 - `(client)/me/loading.tsx`, `(client)/schedule/loading.tsx`,
   `(client)/posts/[slug]/loading.tsx` — per-route skeletons.
 - `(client)/posts/not-found.tsx` — "Canción no encontrada."
-- `(client)/not-found.tsx` — "Página no encontrada": the group-level fallback for
-  every other `notFound()` (`/author/[slug]`, `/tag/[slug]`, `/me/propose/[roleId]`).
+- `(client)/not-found.tsx` — "Página no encontrada": the fallback for every other `notFound()` in the `(client)` group
+  (`/author/[slug]`, `/tag/[slug]`, `/me/propose/[roleId]`); `(gallery)` has none.
 - No `error.tsx`/`not-found.tsx` in the `(admin)` group.
 
 ---
