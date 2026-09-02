@@ -2,15 +2,29 @@ import { requireActiveManager } from "@/app/utils/authGuards";
 import { redirect } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 import AdminPanel from "@/app/components/admin/AdminPanel";
+import { resolveAdminTab } from "@/app/components/admin/adminTabs";
 
 export const metadata = { title: "Admin — Oasis Worship Team" };
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string | string[] }>;
+}) {
   const session = await requireActiveManager();
   if (!session) redirect("/");
   const role = session.user.role as OWTRole;
+  // Resolved here rather than in the panel so the server HTML and the first
+  // client render agree, and so the role filter runs where the role is known
+  // for certain. `resolveAdminTab` lives in a neutral module for the same
+  // reason `paintsDayCard` does (ADR-0028).
+  const tabParam = (await searchParams).tab;
+  const initialTab = resolveAdminTab(tabParam, role);
+  // Whether the URL NAMED this tab or merely fell back to it. The panel follows
+  // the URL only in the first case; see the re-sync in AdminPanel.
+  const tabNamedInUrl = typeof tabParam === "string" && tabParam === initialTab;
 
   return (
     <>
@@ -39,7 +53,7 @@ export default async function AdminPage() {
           </div>
         </header>
         <div className="brand-admin-shell">
-          <AdminPanel role={role} />
+          <AdminPanel role={role} initialTab={initialTab} tabNamedInUrl={tabNamedInUrl} />
         </div>
       </div>
     </>

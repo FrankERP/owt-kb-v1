@@ -18,6 +18,7 @@ import {
   type IntegrityIssueTarget,
   type ProposalReviewTarget,
 } from "./proposalHandoff";
+import { visibleAdminTabs } from "./adminTabs";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
 import EmailPrefToggles, { resolveEmailPrefs, type EmailPrefValues } from "../ui/EmailPrefToggles";
@@ -582,17 +583,8 @@ function PasswordForm({
 // one reducer owns both and a manual tab change cannot leave a stale target.
 type Tab = AdminTabId;
 
-const ALL_TABS: { id: Tab; label: string; roles: OWTRole[] }[] = [
-  { id: "members",      label: "Miembros",       roles: ["super-admin"] },
-  { id: "services",     label: "Servicios",      roles: ["super-admin", "admin"] },
-  { id: "proposals",    label: "Propuestas",     roles: ["super-admin", "admin"] },
-  { id: "availability", label: "Disponibilidad", roles: ["super-admin", "admin"] },
-  { id: "activity",     label: "Actividad",      roles: ["super-admin", "admin"] },
-  { id: "content",      label: "Contenido",      roles: ["super-admin", "admin", "content-editor"] },
-];
-
 function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) => void; role: OWTRole }) {
-  const visible = ALL_TABS.filter((t) => t.roles.includes(role));
+  const visible = visibleAdminTabs(role);
   return (
     <div className="relative">
       <div className="overflow-x-auto -mx-2 px-2 pb-1">
@@ -621,20 +613,114 @@ function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) =>
 }
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
-export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole }) {
+export default function AdminPanel({
+  role = "super-admin",
+  initialTab,
+  tabNamedInUrl = false,
+}: {
+  role?: OWTRole;
+  /** Resolved from `?tab=` on the server; see `adminTabs.resolveAdminTab`. */
+  initialTab?: Tab;
+  /** True only when the URL actually named that tab, rather than falling back. */
+  tabNamedInUrl?: boolean;
+}) {
   const { data: session, update } = useSession();
   const viewerId = session?.user?.sanityId ?? null;
   const router = useRouter();
-  const firstTab = ALL_TABS.filter((t) => t.roles.includes(role))[0]?.id ?? "content";
+  const firstTab = visibleAdminTabs(role)[0]?.id ?? "content";
   // `{ tab, target }` in ONE reducer: a manual tab change always clears the
   // transient handoff target, and a successful focus consumes it, so a remount
   // can never resurrect an obsolete filter/highlight.
-  const [review, dispatchReview] = useReducer(reduceReviewTarget, { tab: firstTab, target: null });
+  const [review, dispatchReview] = useReducer(reduceReviewTarget, {
+    tab: initialTab ?? firstTab,
+    target: null,
+  });
   const tab = review.tab;
   const setTab = useCallback(
     (next: Tab) => dispatchReview({ type: "select_tab", tab: next }),
     [],
   );
+
+  // A soft navigation re-renders this panel in place with a new `initialTab`
+  // rather than remounting it, and `useReducer`'s initial value is read once.
+  //
+  // Gated on `tabNamedInUrl`, which is the difference between "the URL asked
+  // for a tab" and "the server fell back to one". Without that gate the same
+  // gesture had two outcomes: tapping "Admin" in the nav sent the admin back to
+  // Miembros or left them where they were, depending only on how they had
+  // arrived at /admin minutes earlier — invisible to them, and it also cleared
+  // any pending handoff target. Now a link that NAMES a tab moves the panel,
+  // and a link to plain /admin is the no-op it looks like; the effect below
+  // keeps the address bar honest either way.
+  //
+  // Adjusted during render, the documented React pattern for a changed prop, so
+  // it costs no extra commit.
+  //
+  // Seeded from `initialTab` only when the URL NAMED it. Seeding from a
+  // fallback would record a tab no URL ever asked for: open bare /admin, click
+  // Actividad, then follow a colleague's link to `?tab=members` — the value
+  // matches the fallback recorded on arrival, so the link would visibly do
+  // nothing. Remaining edge, accepted: following the same named tab twice after
+  // moving away by hand cannot be told apart by value, and telling it apart
+  // needs a per-navigation nonce that is not worth its weight here.
+  const [lastResolvedTab, setLastResolvedTab] = useState(tabNamedInUrl ? initialTab : undefined);
+  if (tabNamedInUrl && initialTab !== undefined && initialTab !== lastResolvedTab) {
+    setLastResolvedTab(initialTab);
+    dispatchReview({ type: "select_tab", tab: initialTab });
+  }
+
+  /**
+   * Keep `?tab=` in step with the visible tab, so a reload or a Back into
+   * /admin lands where the admin was instead of on the first tab. Before this
+   * the tab lived only in the reducer, and an admin deep in Servicios who
+   * refreshed was dropped to Miembros mid-task.
+   *
+   * `history.replaceState`, deliberately, not the router:
+   *   - `router.push` would make Back walk the tabs one by one, so leaving
+   *     /admin would take as many presses as tabs visited.
+   *   - `router.replace` re-renders the route segment; this panel fetches the
+   *     member list and holds filters, and re-running that on every tab press
+   *     is a real cost for a purely local change.
+   * Rewriting the current entry keeps the URL honest for reload and Back
+   * without any navigation at all. The panel itself creates no history entries;
+   * the router still creates one per nav-menu tap, all carrying this same URL,
+   * so a Back press out of /admin may need repeating after several taps.
+   *
+   * PASSING THE EXISTING `history.state` IS DELIBERATE, and it has a cost worth
+   * knowing before anyone "fixes" it. Next patches `replaceState` and returns
+   * early when the state carries `__NA`, which every app-router entry does — so
+   * `applyUrlFromHistoryPushReplace` is skipped and the router's `canonicalUrl`
+   * keeps saying `/admin`. Consequence: `useSearchParams()` under /admin will
+   * NOT see this param. Read the tab from the `initialTab` prop, which the
+   * server resolved, and never from that hook.
+   *
+   * Passing `null` would let Next sync — it would NOT lose the router's own
+   * state, since `copyNextJsInternalHistoryState` copies `__NA` and the
+   * internals tree back off the current entry — but it dispatches
+   * ACTION_RESTORE, which in Next 16 runs `startPPRNavigation` and
+   * `spawnDynamicRequests`, falling back to a full page load when the former
+   * returns null. That is a server round-trip on this dynamic, auth-gated route
+   * for EVERY tab press: the exact cost this approach exists to avoid, paid
+   * every time instead of never. Read out of
+   * `next/dist/client/components/app-router.js` and `restore-reducer.js` in the
+   * vendored copy, not the changelog.
+   *
+   * NO DEPENDENCY ARRAY, deliberately. Because `canonicalUrl` stays stale, any
+   * router commit while the admin stays on this page makes `HistoryUpdater`
+   * rewrite the address bar back to plain `/admin`. Keyed on `[tab]` this
+   * effect would not re-run and the param would be lost until the next tab
+   * press — including on the plain path where the admin picks a tab by click
+   * and then taps "Admin" in the nav. Re-asserting on every render costs one
+   * URL parse and returns immediately when the param already matches, and it
+   * cannot loop: the write reaches no React state, precisely because of the
+   * `__NA` skip above.
+   */
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("tab") === tab) return;
+    url.searchParams.set("tab", tab);
+    window.history.replaceState(window.history.state, "", url);
+  });
   const onReviewResolved = useCallback(
     (outcome: string) => dispatchReview({ type: "resolved", outcome }),
     [],
