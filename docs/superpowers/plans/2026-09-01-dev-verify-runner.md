@@ -15,7 +15,9 @@
 - **No server change.** Nothing under `app/`, `auth.ts`, or `proxy.ts` is modified. The runner is the only new executable path.
 - **Never a credential in a tracked file, a URL, a report, or stdout.** Secrets come only from `.env.local`; the bypass secret travels only as the header `x-vercel-protection-bypass`.
 - **Production is forbidden before anything is allowed.** `owt-backstage.vercel.app` and `owt-backstage-git-main-frank-rochas-projects.vercel.app` are rejected by name before the allow-list is consulted.
-- **Read-only lock 1 is mechanical:** every `/api/**` request whose method is not `GET`/`HEAD` is aborted in the browser and recorded as `blocked_mutation`; the only exception is `POST /api/auth/callback/credentials` during the sign-in step.
+- **Read-only lock 1 is mechanical:** every request to the target origin whose method is not `GET`/`HEAD` is aborted in the browser and recorded as `blocked_mutation`; the only exception is `POST /api/auth/callback/credentials` during the sign-in step.
+- **Two app-side writes exist and are disclosed, not hidden:** (1) every credentials sign-in creates one `loginEvent` document (`auth.ts` `events.signIn` → `createLoginEvent`, a `client.create` on the production dataset) — bounded to once per cached session (7-day JWT) or per rotation, and accepted by Frank on 2026-09-01; (2) the app's `ActivityPing` component POSTs `/api/activity/ping` (a `lastSeen` patch) on the first authenticated page of every fresh browser, keyed in `sessionStorage`, which `storageState` does not carry — the runner **suppresses** it by seeding that key via `addInitScript`, so the request never fires and lock 1 is never tripped by the app's own heartbeat. It is never allow-listed.
+- **Landed-origin rule:** after every navigation and every click, `new URL(page.url()).origin` must equal the target origin; otherwise the run is refused (`host:landed_off_origin`, exit 2). Dev is SSO-protected and answers `302 https://vercel.com/sso-api?…` without the bypass header; without this rule a rotated or unhonoured secret would report a green run of vercel.com.
 - **Exit codes:** `0` success · `2` refused (host, env, sign-in) · `3` ≥1 `blocked_mutation` · `4` page error (uncaught exception or HTTP ≥ 500 on the route).
 - **Tests** are `*.test.ts` under `scripts/__tests__/` so `npm test` runs them (`vitest.config.ts` includes `scripts/**/*.test.{ts,mjs}`). Runner entry files must NOT be named `*.test.*` or `*.spec.*`.
 - **Gates before "done":** `npx tsc --noEmit`, `npm test`, `npx eslint .` with 0 errors.
@@ -696,16 +698,23 @@ import { assertNoLeak, decideExitCode, formatHuman, redactReport, type RunReport
 const STORAGE_STATE = path.resolve("playwright/.dev-verify-storageState.json");
 const OUT_DIR = path.resolve(process.env.DEV_VERIFY_OUT_DIR ?? "test-results/dev-verify");
 const SIGNIN_PATH = "/auth/signin";
+/** `app/components/ActivityPing.tsx` — its sessionStorage key. Seeded so the heartbeat POST never fires. */
+const PING_KEY = "owt_last_ping";
+
+let SECRETS: (string | null)[] = [];
+
+/** Every exit goes through redaction and the leak proof, refusals included. */
+function emit(report: RunReport, json: boolean): void {
+  const final = redactReport(report, SECRETS);
+  final.exitCode = decideExitCode(final);
+  assertNoLeak([{ source: "report", text: JSON.stringify(final) }], SECRETS);
+  process.stdout.write((json ? JSON.stringify(final, null, 2) : formatHuman(final)) + "\n");
+}
 
 function refuse(report: RunReport, reason: string, json: boolean): never {
   report.refusal = reason;
-  report.exitCode = 2;
   emit(report, json);
   process.exit(2);
-}
-
-function emit(report: RunReport, json: boolean): void {
-  process.stdout.write((json ? JSON.stringify(report, null, 2) : formatHuman(report)) + "\n");
 }
 
 async function newContext(origin: string, args: ParsedArgs, bypass: string | null, useState: boolean): Promise<BrowserContext> {
@@ -716,7 +725,13 @@ async function newContext(origin: string, args: ParsedArgs, bypass: string | nul
     colorScheme: args.theme,
     extraHTTPHeaders: bypassHeaders(bypass),
     storageState: useState && existsSync(STORAGE_STATE) ? STORAGE_STATE : undefined,
+    serviceWorkers: "block",
   });
+  // Suppress the app's own heartbeat (a production `lastSeen` patch) without a policy
+  // exception: with a fresh timestamp in sessionStorage, ActivityPing returns early.
+  await context.addInitScript((key: string) => {
+    try { sessionStorage.setItem(key, String(Date.now())); } catch { /* no storage: the request would be blocked by lock 1 */ }
+  }, PING_KEY);
   return context;
 }
 
@@ -738,16 +753,24 @@ async function main(): Promise<void> {
 
   const email = process.env.DEV_VERIFY_EMAIL;
   const password = process.env.DEV_VERIFY_PASSWORD;
-  if (!email || !password) refuse(report, "env:DEV_VERIFY_EMAIL/DEV_VERIFY_PASSWORD missing", args.json);
   const { secret: bypass, reason } = resolveBypassSecret(process.env);
+  SECRETS = [password ?? null, bypass];
+  if (!email || !password) refuse(report, "env:DEV_VERIFY_EMAIL/DEV_VERIFY_PASSWORD missing", args.json);
   if (!bypass) refuse(report, `env:SR_VERIFY_BYPASS_SECRET ${reason}`, args.json);
-  const secrets = [password, bypass];
+
+  /** Landed-origin rule: an SSO redirect lands on vercel.com; that is a refusal, never a green run. */
+  const assertOnOrigin = (page: Page): void => {
+    let origin = "";
+    try { origin = new URL(page.url()).origin; } catch { origin = ""; }
+    if (origin !== target.origin) refuse(report, `host:landed_off_origin:${origin || "unparseable"}`, args.json);
+  };
 
   mkdirSync(OUT_DIR, { recursive: true });
   let phase: Phase = "observe";
 
-  const attach = (page: Page): void => {
-    void page.route("**/*", async (route) => {
+  const attachContext = async (context: BrowserContext): Promise<void> => {
+    // Context-wide, awaited: covers popups and any page the context opens later.
+    await context.route("**/*", async (route) => {
       const req = route.request();
       if (!req.url().startsWith(target.origin)) return route.continue();
       const decision = decideRequest({ method: req.method(), url: req.url(), phase });
@@ -755,6 +778,8 @@ async function main(): Promise<void> {
       report.blockedMutations.push({ method: req.method(), url: req.url(), phase });
       return route.abort("blockedbyclient");
     });
+  };
+  const attach = (page: Page): void => {
     page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") report.consoleErrors.push(`${m.type()}: ${m.text()}`); });
     page.on("pageerror", (e) => report.pageErrors.push(String(e)));
     page.on("requestfailed", (r) => {
@@ -767,18 +792,19 @@ async function main(): Promise<void> {
   const signIn = async (): Promise<BrowserContext> => {
     if (existsSync(STORAGE_STATE)) rmSync(STORAGE_STATE);
     const context = await newContext(target.origin, args, bypass, false);
+    await attachContext(context);
     const page = await context.newPage();
     attach(page);
     phase = "signin";
-    const first = await page.goto(SIGNIN_PATH, { waitUntil: "networkidle" }, );
-    // The bypass cookie is set by the initial navigation's response; extraHTTPHeaders
-    // carries the header on every later request as well.
-    void first;
+    await page.setExtraHTTPHeaders(initialNavigationHeaders(bypass)); // asks Vercel for the bypass cookie, as A3 does
+    await page.goto(SIGNIN_PATH, { waitUntil: "networkidle" });
+    assertOnOrigin(page);
     await page.getByLabel("Correo electrónico").fill(email!);
     await page.getByLabel("Contraseña").fill(password!);
     await page.getByRole("button", { name: "Iniciar sesión" }).click();
     await page.waitForURL((u) => !u.pathname.startsWith(SIGNIN_PATH), { timeout: 30_000 })
       .catch(() => refuse(report, "signin:still on /auth/signin after submit", args.json));
+    assertOnOrigin(page);
     phase = "observe";
     await context.storageState({ path: STORAGE_STATE });
     await page.close();
@@ -786,15 +812,19 @@ async function main(): Promise<void> {
   };
 
   let context = await newContext(target.origin, args, bypass, true);
+  await attachContext(context);
   let page = await context.newPage();
   attach(page);
-  let response = await page.goto(args.route, { waitUntil: "networkidle", ...( { headers: initialNavigationHeaders(bypass) } as object) });
+  await page.setExtraHTTPHeaders(initialNavigationHeaders(bypass));
+  let response = await page.goto(args.route, { waitUntil: "networkidle" });
+  assertOnOrigin(page); // an SSO wall on vercel.com is refused here, before any sign-in attempt
   if (page.url().includes(SIGNIN_PATH) || response?.status() === 401) {
     await context.browser()?.close();
     context = await signIn();
     page = await context.newPage();
     attach(page);
     response = await page.goto(args.route, { waitUntil: "networkidle" });
+    assertOnOrigin(page);
     if (page.url().includes(SIGNIN_PATH)) refuse(report, "signin:session not accepted", args.json);
   }
   report.status = response?.status() ?? null;
@@ -805,6 +835,7 @@ async function main(): Promise<void> {
     const target = page.getByRole("button", { name }).or(page.getByRole("link", { name })).first();
     await target.click({ timeout: 10_000 }).catch(() => report.pageErrors.push(`click:${name} not found`));
     await page.waitForLoadState("networkidle").catch(() => undefined);
+    assertOnOrigin(page);
   }
 
   const stem = args.route.replace(/[^a-z0-9]+/gi, "_").replace(/^_|_$/g, "") || "root";
@@ -829,14 +860,12 @@ async function main(): Promise<void> {
 
   await context.browser()?.close();
 
-  // Redaction proof before anything is reported: every written artifact and the report itself.
+  // Redaction proof on every written artifact; `emit` covers the report itself.
   const texts = Object.values(report.artifacts).filter((f): f is string => !!f && !f.endsWith(".png"))
     .map((f) => ({ source: path.basename(f), text: readFileSync(f, "utf8") }));
-  const final = redactReport(report, secrets);
-  final.exitCode = decideExitCode(final);
-  assertNoLeak([...texts, { source: "report", text: JSON.stringify(final) }], secrets);
-  emit(final, args.json);
-  process.exit(final.exitCode);
+  assertNoLeak(texts, SECRETS);
+  emit(report, args.json);
+  process.exit(decideExitCode(report));
 }
 
 main().catch((err) => {
@@ -846,8 +875,9 @@ main().catch((err) => {
 ```
 
 Implementation notes the executor must honour:
-- `page.route("**/*")` with an origin check is used instead of `"**/api/**"` because of the server-action widening in Task 2. Third-party origins (fonts, Sanity CDN images) are continued untouched.
-- Playwright's `goto` does not accept per-navigation headers on all versions; if the `headers` option is rejected by the type checker, drop it: `extraHTTPHeaders` already carries `x-vercel-protection-bypass` on every request, and the `x-vercel-set-bypass-cookie` header is an optimisation, not a requirement.
+- `owt_last_ping` must be replaced with the literal value of `PING_KEY` in `app/components/ActivityPing.tsx` (read it; do not import the component). Add a one-line vitest in `scripts/__tests__/devVerifyPingKey.test.ts` that reads that file with `readFileSync` and asserts the runner's constant equals it, so a rename there fails the gate instead of silently re-enabling the heartbeat.
+- `context.route("**/*")` with an origin check is used instead of `"**/api/**"` because of the server-action widening in Task 2. Third-party origins (fonts, Sanity CDN images) are continued untouched — which means lock 1 is origin-scoped: `/studio` talks to `api.sanity.io` unpoliced. That is safe only because the runner holds no Sanity login; `DEV_VERIFY.md` says so.
+- `page.setExtraHTTPHeaders(initialNavigationHeaders(bypass))` before the first navigation mirrors `e2e/service-readiness/fixtures.ts`; page-level headers merge over the context's `extraHTTPHeaders`.
 - The `.catch(() => refuse(...))` inside `signIn` calls `process.exit`; that is intentional — a failed sign-in must not fall through to observation.
 - If `tsc` complains that `scripts/dev-verify.ts` is outside the project's `include`, check `tsconfig.json`; `scripts/set-password.ts` already compiles, so the pattern exists. Do not add `// @ts-nocheck`.
 
@@ -892,7 +922,7 @@ git commit -m "feat(dev-verify): read-only Playwright runner for the dev deploym
 - Test: `scripts/__tests__/devVerifySeedDoc.test.ts`
 
 **Interfaces:**
-- Produces: `buildVerifierDoc(input: { email: string; passwordHash: string; existingId?: string }): VerifierDoc` — the exact `teamMembers` document from spec §3.1. `VERIFIER_ID = "member.dev-verify"` (deterministic `_id`, so `createOrReplace` is idempotent and a second run cannot mint a twin).
+- Produces: `buildVerifierDoc(input: { email: string; passwordHash: string }): VerifierDoc` — the exact `teamMembers` document from spec §3.1, **never carrying `disabled`**. `VERIFIER_ID = "member-dev-verify"` (deterministic `_id` with a hyphen, not a dot: a dotted id is a Sanity "path" hidden from untokened reads, i.e. the hidden-member mechanism §3.1 rejects). The seed **patches** an existing document and **creates** only when absent, so a Studio-set `disabled: true` survives a rotation.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -911,9 +941,9 @@ describe("dev-verify seed doc", () => {
       slug: { _type: "slug", current: "verificador-bot" },
       email: "v@example.com",
       role: "admin",
-      ministries: ["worship", "kids"],
-      managesMinistries: ["worship", "kids"],
-      retiredFrom: ["worship", "kids"],
+      ministries: ["worship"],
+      managesMinistries: ["kids"],
+      retiredFrom: ["worship"],
       notifPrefs: {
         assignments: false,
         email: false,
@@ -937,8 +967,15 @@ describe("dev-verify seed doc", () => {
     expect(doc.role).toBe("admin");
   });
 
-  it("uses the deterministic id so re-seeding replaces rather than duplicates", () => {
-    expect(VERIFIER_ID).toBe("member.dev-verify");
+  it("uses a deterministic, non-dotted id so re-seeding patches rather than duplicates", () => {
+    expect(VERIFIER_ID).toBe("member-dev-verify");
+    expect(VERIFIER_ID).not.toContain(".");
+  });
+
+  it("is a worship member only: kids reads ignore retiredFrom, so kids membership would seat the bot", () => {
+    const doc = buildVerifierDoc({ email: "v@example.com", passwordHash: "h" });
+    expect(doc.ministries).toEqual(["worship"]);
+    expect(doc.managesMinistries).toEqual(["kids"]);
   });
 });
 ```
@@ -959,7 +996,7 @@ Expected: FAIL — module not found.
  * `retiredFrom` is the load-bearing field: it is hidden in Studio, so this script
  * is the only way to set it, and it is what keeps the member out of every pool.
  */
-export const VERIFIER_ID = "member.dev-verify";
+export const VERIFIER_ID = "member-dev-verify";
 
 export interface VerifierDoc {
   _id: string;
@@ -985,9 +1022,14 @@ export function buildVerifierDoc(input: { email: string; passwordHash: string })
     slug: { _type: "slug", current: "verificador-bot" },
     email: input.email,
     role: "admin",
-    ministries: ["worship", "kids"],
-    managesMinistries: ["worship", "kids"],
-    retiredFrom: ["worship", "kids"],
+    // Worship member, retired from it: every worship selection point honours
+    // retiredFrom. NOT a kids member — kids reads are resolution-only and never
+    // filter on retiredFrom (retirementGatingCoverage.test.ts pins that), so kids
+    // membership would make the bot a seatable pair member. Kids MANAGEMENT alone
+    // is enough for /kids/admin (requireMinistryManager needs no membership).
+    ministries: ["worship"],
+    managesMinistries: ["kids"],
+    retiredFrom: ["worship"],
     notifPrefs: {
       assignments: false,
       email: false,
@@ -1005,7 +1047,7 @@ export function buildVerifierDoc(input: { email: string; passwordHash: string })
 }
 ```
 
-Before committing, confirm the `notifPrefs` keys against `sanity/schemas/worshipTeam.ts` lines 123–170 (`assignments`, `email`, `emailAssigned`, `emailRemoved`, `emailRoleChanged`, `emailSetlist`, `emailProposals`, `setlist`, `proposals`, `reminders`). If the schema has a key this list lacks, add it as `false`; if `slug` is not a `slug`-typed field there, match its actual type.
+Expected test count after this step: 4. Before committing, confirm the `notifPrefs` keys against `sanity/schemas/worshipTeam.ts` lines 123–170 (`assignments`, `email`, `emailAssigned`, `emailRemoved`, `emailRoleChanged`, `emailSetlist`, `emailProposals`, `setlist`, `proposals`, `reminders`). If the schema has a key this list lacks, add it as `false`; if `slug` is not a `slug`-typed field there, match its actual type.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -1026,8 +1068,9 @@ Expected: PASS (3 tests).
 //   and NEVER paste the hash anywhere tracked), NEXT_PUBLIC_SANITY_PROJECT_ID,
 //   NEXT_PUBLIC_SANITY_DATASET, SANITY_WRITE_TOKEN.
 //
-// Idempotent: deterministic _id, createOrReplace. Re-running with a new hash rotates
-// the password. To disable the member instead, patch `disabled: true` in Studio.
+// Idempotent: deterministic _id. An EXISTING document is PATCHED (so a Studio-set
+// `disabled: true` — the kill switch — survives a password rotation); the document
+// is CREATED only when absent. Re-running with a new hash rotates the password.
 //
 // Spec: docs/superpowers/specs/2026-09-01-dev-verify-runner-design.md §3.1
 
@@ -1066,13 +1109,24 @@ if (!process.env.SANITY_WRITE_TOKEN) {
   console.error("Missing SANITY_WRITE_TOKEN in env.");
   process.exit(2);
 }
-const existing = await client.fetch(`*[_type == "teamMembers" && email == $email && _id != $id][0]._id`, { email, id: VERIFIER_ID });
-if (existing) {
-  console.error(`Another member already uses ${email} (${existing}). Refusing to create a twin.`);
+const twin = await client.fetch(
+  `*[_type == "teamMembers" && lower(email) == lower($email) && _id != $id][0]._id`,
+  { email, id: VERIFIER_ID },
+);
+if (twin) {
+  console.error(`Another member already uses ${email} (${twin}). Refusing to create a twin.`);
   process.exit(2);
 }
-const written = await client.createOrReplace(doc);
-console.log(`Wrote ${written._id} (rev ${written._rev}).`);
+const current = await client.fetch(`*[_id == $id][0]{ _id, _rev, disabled }`, { id: VERIFIER_ID });
+if (current) {
+  const { _id, _type, ...fields } = doc; // never touches `disabled`
+  void _id; void _type;
+  const patched = await client.patch(VERIFIER_ID).set(fields).commit();
+  console.log(`Patched ${patched._id} (rev ${current._rev} → ${patched._rev}); disabled stays ${current.disabled === true}.`);
+} else {
+  const created = await client.create(doc);
+  console.log(`Created ${created._id} (rev ${created._rev}).`);
+}
 ```
 
 Note on `import ... from "./lib/dev-verify/seedDoc.ts"`: Node 22 cannot import TypeScript from an `.mjs` without a loader. If `node --env-file=.env.local scripts/dev-verify-seed.mjs` fails on that import, rename the seed to `scripts/dev-verify-seed.ts` and document the invocation as `npx tsx --env-file=.env.local scripts/dev-verify-seed.ts [--apply]` — the same runtime the runner uses. Do NOT duplicate the document literal into the `.mjs`.
@@ -1138,9 +1192,22 @@ of the response, not a commit. `get_deployment(dev-owt-backstage.vercel.app)` gi
    /api/auth/callback/credentials` during sign-in. This is wider than `/api/**` on purpose:
    Next.js server actions POST to the page URL.
 2. Production hosts are refused before the allow-list is consulted (`hostPolicy.ts`).
-3. The member is retired from every ministry and opted out of every notification.
+3. The member is a worship member retired from worship, a kids *manager* but not a kids
+   *member* (kids reads never filter on retirement, so membership would seat it), and opted
+   out of every notification.
 
-The runner imports no Sanity client and reads no write token.
+Lock 1 is origin-scoped: Studio's calls to `api.sanity.io` are not policed. That is safe
+only because the runner holds no Sanity login and imports no Sanity client.
+
+## Writes that DO happen, and why they are accepted
+
+- **One `loginEvent` document per sign-in** (`auth.ts` `events.signIn`). Unavoidable without
+  changing `auth.ts`, which is out of scope. Bounded: once per cached session (7 days) or per
+  rotation. The bot appears in the admin login-activity view. Accepted by Frank, 2026-09-01.
+- **`lastSeen` heartbeat — suppressed.** `ActivityPing` would POST `/api/activity/ping` on the
+  first authenticated page of every fresh browser; the runner seeds its `sessionStorage` key so
+  the request never fires. It is not allow-listed: if the seed ever stops working, the POST is
+  blocked and the run exits 3, which is the correct failure.
 
 ## Session and secrets
 
@@ -1155,9 +1222,10 @@ every artifact and the report are scanned with the A3 leak scanner before anythi
     node -e "console.log(require('bcryptjs').hashSync(process.argv[1], 10))" '<password>'
     # put the hash in .env.local as DEV_VERIFY_PASSWORD_HASH, the password as DEV_VERIFY_PASSWORD
     node --env-file=.env.local scripts/dev-verify-seed.mjs            # dry run
-    node --env-file=.env.local scripts/dev-verify-seed.mjs --apply    # writes member.dev-verify
+    node --env-file=.env.local scripts/dev-verify-seed.mjs --apply    # creates or patches member-dev-verify
 
-Kill switch: set `disabled: true` on `member.dev-verify` in Studio. Rotate: new hash, re-run
+Kill switch: set `disabled: true` on `member-dev-verify` in Studio; the seed script never
+touches that field, so rotating afterwards keeps it disabled. Rotate: new hash, re-run
 `--apply`, update `DEV_VERIFY_PASSWORD`, delete the storage state.
 
 ## Verified runs
@@ -1174,7 +1242,7 @@ Append, following the file's existing entry shape (Name / platforms / purpose / 
 
 - **Needed on:** local `.env.local` only. **Not needed on:** Vercel (any environment), CI, the mobile build.
 - **Purpose:** `scripts/dev-verify.ts` signs in to dev as the «Verificador (bot)» member
-  (`member.dev-verify`, role `admin`, retired from every ministry). Without `EMAIL`/`PASSWORD`
+  (`member-dev-verify`, role `admin`, retired from worship, kids manager only). Without `EMAIL`/`PASSWORD`
   the runner refuses (exit 2). `PASSWORD_HASH` is read only by `scripts/dev-verify-seed.mjs`.
 - **Where it came from:** the password is chosen by Frank; the hash is generated locally with
   `bcryptjs` (see `docs/DEV_VERIFY.md`). The email is any address Frank controls; it is never mailed.
@@ -1184,6 +1252,10 @@ Append, following the file's existing entry shape (Name / platforms / purpose / 
   Nothing else uses the member. **Kill switch:** `disabled: true` on the member in Studio.
 - **Exposure:** this is an `admin` credential on the production dataset. A leaked `.env.local`
   lets a human sign in to production as an admin; the runner's host check does not bind a human.
+  Use an address with **no Google account**: Google SSO signs in by email lookup too, so a Google
+  identity on `DEV_VERIFY_EMAIL` would be a second door to the same admin.
+- **Writes the sign-in causes:** one `loginEvent` document per credentials sign-in (bounded by
+  the cached session; accepted by Frank 2026-09-01). The `lastSeen` heartbeat is suppressed.
 
 ## `SR_VERIFY_BYPASS_SECRET`
 
@@ -1229,7 +1301,9 @@ storage state, and aborts every non-GET request in the browser. No server code c
 ## Consequences
 
 An `admin` credential lives in a local env file (see `docs/SECRETS.md`, kill switch
-`disabled: true`). `visual-verifier` may consume the runner's artifacts for gated routes but
+`disabled: true`, which the seed script preserves across rotations). Each sign-in writes one
+`loginEvent`; the `lastSeen` heartbeat is suppressed client-side. The member is a worship
+member (retired) and a kids manager only, because kids reads ignore `retiredFrom`. `visual-verifier` may consume the runner's artifacts for gated routes but
 still never enters a credential. The block is wider than the spec's `/api/**` — every
 non-GET to the target — because server actions POST to page URLs.
 ```
@@ -1310,7 +1384,9 @@ git commit -m "docs(dev-verify): record the three verification runs"
 - §3.2 secrets: Task 7 Step 2 (four entries, `SR_VERIFY_BYPASS_SECRET` newly documented).
 - §3.3 cached session + leak scan: Task 5 (storage state path, `assertNoLeak` before emit), Task 4 (redaction), `.gitignore` line.
 - §3.4 threat model: Task 7 (SECRETS "Exposure" line, ADR consequences).
-- §4 locks 1–3: Task 2 + Task 5 route handler (lock 1, widened to all non-GET — documented in Task 2 note, `DEV_VERIFY.md`, ADR); Task 1 (lock 2); Task 6 (lock 3).
+- §4 locks 1–3: Task 2 + Task 5 context-wide route handler (lock 1, widened to all non-GET; heartbeat suppressed via `addInitScript`; landed-origin refusal after every navigation and click); Task 1 (lock 2); Task 6 (lock 3, worship-only membership because kids reads ignore `retiredFrom`).
+- Disclosed writes: `loginEvent` per sign-in (accepted by Frank) and the suppressed `lastSeen` heartbeat — Global Constraints, Task 7 (`DEV_VERIFY.md`, SECRETS, ADR).
+- Kill switch survives rotation: Task 6 patches an existing document and never carries `disabled`.
 - §5 interface and exit codes: Task 3 (flags), Task 4 (`decideExitCode`), Task 5 (`observedDeployment` from `x-vercel-id`).
 - §6 shape: Tasks 1–6 match the module list; `.ts` runner via `tsx`.
 - §7 verification: unit tests in Tasks 1–4 and 6; manual (a)(b)(c) in Task 8.

@@ -54,9 +54,9 @@ dev reads):
 | `alias` | `Verificador` | |
 | `email` | the value of `DEV_VERIFY_EMAIL` | Credentials provider looks members up by email. |
 | `role` | `admin` | Reaches `/admin` (services, members, songs). Not `super-admin`: no impersonation, no super-admin-only actions. |
-| `ministries` | `["worship", "kids"]` | Membership gates every member-facing page (`requireMinistryMember`). |
-| `managesMinistries` | `["worship", "kids"]` | Manager gates (`requireMinistryManager`) do not follow from `role`; without this, kids planner pages are unreachable. |
-| `retiredFrom` | `["worship", "kids"]` | Excluded from every selection point (`rankCandidates`, Persona select, `MemberPool`). Hidden in Studio, so **only the seed script can set it** — this is why a Studio-only creation is not enough. |
+| `ministries` | `["worship"]` | Membership gates member-facing worship pages (`requireMinistryMember`). **Not kids:** kids reads are resolution-only and never filter on `retiredFrom` (pinned by `retirementGatingCoverage.test.ts`), so kids membership would make the bot a seatable pair member. Member-facing `/kids` is therefore out of reach; `/kids/admin` is not (next row). |
+| `managesMinistries` | `["kids"]` | `requireMinistryManager` needs management, not membership, so kids planner pages stay reachable without seating the bot. No guard reads a `worship` entry here. |
+| `retiredFrom` | `["worship"]` | Excluded from every worship selection point (`rankCandidates`, Persona select, `MemberPool`). Hidden in Studio, so **only the seed script can set it** — this is why a Studio-only creation is not enough. |
 | `memberType` | absent | Never a candidate for any section. |
 | `notifPrefs` | every boolean `false`, `setlist: "off"` | Never emailed, never pushed. |
 | `passwordHash` | bcrypt of `DEV_VERIFY_PASSWORD`, computed by the seed script from `DEV_VERIFY_PASSWORD_HASH` | Same mechanism as the A3 admin fixture (`SR_VERIFY_ADMIN_PASSWORD_HASH`): the script injects a hash, never a password. |
@@ -69,8 +69,12 @@ hides a member is exactly the kind of read rule that later masks a real bug).
 
 **Seed script** `scripts/dev-verify-seed.mjs`: dry-run by default, `--apply` is the only
 token that writes, run as `node --env-file=.env.local scripts/dev-verify-seed.mjs`.
-Idempotent on `email`: a second `--apply` patches the same document rather than creating a
-twin. Prints the document it would write with `passwordHash` redacted. Frank runs
+Idempotent on the deterministic `_id` `member-dev-verify` (hyphenated: a dotted id is a
+Sanity path hidden from untokened reads, the hidden-member mechanism rejected above). An
+existing document is **patched** and `disabled` is never touched, so the kill switch
+survives a password rotation; the document is created only when absent. Refuses if another
+member already uses the email (case-insensitive, matching `auth.ts`). Prints the document it
+would write with `passwordHash` redacted. Frank runs
 `--apply`; the agent never does (production write ⇒ explicit consent, per CLAUDE.md).
 
 ### 3.2 Secrets and where they live
@@ -96,7 +100,24 @@ live session). Reused across runs; on a 401/redirect-to-signin the runner delete
 signs in again once. Never copied into the scratchpad, the report, or stdout. The bypass
 secret is sent as a header only and never appears in a URL, the storage state, or any
 artifact; the A3 leak scanner (`scanForSecretLeak` in `e2e/service-readiness/lib/bypass.ts`)
-runs over every file the runner writes before it reports success.
+runs over every file the runner writes and over the report itself, on every exit path,
+refusals included.
+
+### 3.5 Writes the app itself performs on sign-in — disclosed
+
+"Read-only" is a property of the runner, not of the app it drives. Two app-side writes exist:
+
+- **`loginEvent`:** `auth.ts`'s `events.signIn` creates one `loginEvent` document on every
+  credentials sign-in. Lock 4.1 cannot stop it (it is server-side, behind the one allow-listed
+  POST), and avoiding it would mean changing `auth.ts`, which is out of scope. It is bounded to
+  once per cached session (7-day JWT) or per rotation, and the bot shows up in the admin
+  login-activity view under its own name. **Accepted by Frank, 2026-09-01.**
+- **`lastSeen` heartbeat — suppressed, never allow-listed:** `ActivityPing` POSTs
+  `/api/activity/ping` on the first authenticated page of every fresh browser, keyed in
+  `sessionStorage`, which a Playwright storage state does not carry. The runner seeds that key
+  through `addInitScript`, so the request never fires. If the seed ever stops matching the
+  component's key, the POST is blocked by lock 4.1 and the run exits 3 — the correct failure. A
+  vitest pins the key to the component's source.
 
 ### 3.4 Threat model, stated plainly
 
@@ -105,32 +126,41 @@ sign in to production as an admin — the runner's host allow-list does not bind
 Mitigations, in order of strength: `disabled: true` on the member is an immediate kill
 switch; the password is rotated by re-seeding; the member has no super-admin powers. This
 is the same exposure the A3 admin fixture already carries, and it is why this section gets
-an adversarial review round.
+an adversarial review round. Use an email with **no Google account**: Google SSO also signs
+in by email lookup, so a Google identity on `DEV_VERIFY_EMAIL` would be a second door.
 
 ## 4. Read-only guarantee
 
 Three independent locks. Each is sufficient on its own; they fail in different ways.
 
-1. **Request interception.** `page.route("**/api/**")` aborts every request whose method
-   is not `GET` or `HEAD`, and records `{ method, url, initiator }` as a
-   `blocked_mutation` event in the run report. `proxy.ts`-excluded `/api/cron/*` is also
-   matched — a GET there is harmless without `CRON_SECRET`, and anything else is aborted
-   like the rest. NextAuth's own `POST /api/auth/callback/credentials` is the **one
-   allow-listed exception**, matched by exact path, and only while the runner is in its
-   sign-in step. Any `blocked_mutation` makes the run exit non-zero: a read-only check that
-   tried to write is a finding in itself.
+1. **Request interception.** A context-wide `route("**/*")` aborts every request to the
+   target origin whose method is not `GET` or `HEAD` — wider than `/api/**`, because a
+   Next.js server action POSTs to the page URL — and records `{ method, url, phase }` as a
+   `blocked_mutation` event in the run report. Third-party origins are continued untouched,
+   which makes the lock origin-scoped: Studio's calls to `api.sanity.io` are not policed, and
+   that is safe only because the runner holds no Sanity login. Service workers are blocked at
+   the context. NextAuth's own `POST /api/auth/callback/credentials` is the **one allow-listed
+   exception**, matched by exact path, and only while the runner is in its sign-in step. Any
+   `blocked_mutation` makes the run exit non-zero: a read-only check that tried to write is a
+   finding in itself.
+   **Landed-origin rule, part of the same lock:** dev answers `302 https://vercel.com/sso-api`
+   without a valid bypass. After every navigation and every click the runner asserts
+   `new URL(page.url()).origin` equals the target origin and refuses otherwise (exit 2). Without
+   it a rotated or unhonoured secret would produce a green run whose screenshot is the SSO wall.
 2. **Host allow-list.** Before opening a browser, the target origin must be exactly
    `https://dev-owt-backstage.vercel.app` or match
    `https://owt-backstage-*-frank-rochas-projects.vercel.app`. `owt-backstage.vercel.app`
    and its `-git-main-` alias are named explicitly as forbidden, checked before the
    allow-list, so a future loosening of the pattern cannot silently admit production
    (the same "two axes" shape as A3's `harnessGuards`).
-3. **Member posture.** Even if 1 and 2 both failed, the member is retired from every
-   ministry and opted out of every notification, so a stray write could not assign it,
-   email through it, or place it in a pool.
+3. **Member posture.** Even if 1 and 2 both failed, the member is retired from worship,
+   is not a kids member (kids reads ignore retirement, so membership is the one thing that
+   would seat it), and is opted out of every notification, so a stray write could not assign
+   it, email through it, or place it in a pool.
 
 Not a lock, but relevant: the runner never runs Sanity client code and imports no write
-token. `SR_VERIFY_SANITY_TOKEN` is not read.
+token. `SR_VERIFY_SANITY_TOKEN` is not read. The two app-side writes that sign-in itself
+causes are in §3.5.
 
 ## 5. Interface
 
