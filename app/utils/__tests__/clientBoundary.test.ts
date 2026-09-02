@@ -61,29 +61,48 @@ describe("the analyser's own rules", () => {
   });
 });
 
-describe("proof against the outage commit", () => {
-  it("flags the exact call that took / down at 103c935b", () => {
+describe("proof against the outage", () => {
+  // The enforced proof. It reads a fixture rather than the commit because CI
+  // clones shallow — `git archive 103c935b` is simply unavailable there, which
+  // is how the first version of this test failed in CI while passing locally.
+  // A proof that only runs on a full clone does not run where it matters.
+  it("flags the call that took / down, from the code as it was deployed", () => {
+    const fixture = path.join(import.meta.dirname, "__fixtures__", "client-boundary");
+    const violations = findViolations(fixture, ["app"]);
+
+    expect(
+      violations.map((v) => `${v.file}:${v.symbol}`),
+      "The analyser did not flag the call that caused the 2026-09-02 outage. " +
+        "Whatever it is checking, it is not this bug class.",
+    ).toEqual(["app/(client)/page.tsx:paintsDayCard"]);
+    expect(violations[0].from).toBe("app/components/DayCard.tsx");
+  });
+
+  // Stronger when it can run: the ACTUAL deployed tree, where the analyser also
+  // finds moveOccupant.ts unaided — the latent second instance a human reviewer
+  // found by hand. Skipped rather than failed where the commit is unreachable,
+  // because clone depth is not a property of the code under test.
+  it("finds both instances in the real 103c935b tree (full clones only)", (ctx) => {
+    const reachable = (() => {
+      try {
+        execFileSync("git", ["cat-file", "-e", "103c935b^{commit}"], { cwd: REPO_ROOT, stdio: "ignore" });
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+    if (!reachable) return ctx.skip();
+
     const dir = mkdtempSync(path.join(tmpdir(), "owt-boundary-"));
     try {
       // `git archive | tar -x` gives the tree as it was deployed, with no
       // checkout and no effect on the working directory.
-      const archive = execFileSync("git", ["archive", "103c935b"], {
-        cwd: REPO_ROOT,
-        maxBuffer: 256 * 1024 * 1024,
-      });
+      const archive = execFileSync("git", ["archive", "103c935b"], { cwd: REPO_ROOT, maxBuffer: 256 * 1024 * 1024 });
       execFileSync("tar", ["-x", "-C", dir], { input: archive, maxBuffer: 256 * 1024 * 1024 });
 
-      const violations = findViolations(dir, ROOTS);
-      const outage = violations.find(
-        (v) => v.file === "app/(client)/page.tsx" && v.symbol === "paintsDayCard",
-      );
-
-      expect(
-        outage,
-        "The analyser did not flag the call that caused the 2026-09-02 outage. " +
-          "Whatever it is checking, it is not this bug class.",
-      ).toBeDefined();
-      expect(outage!.from).toBe("app/components/DayCard.tsx");
+      const found = findViolations(dir, ROOTS).map((v) => `${v.file}:${v.symbol}`);
+      expect(found).toContain("app/(client)/page.tsx:paintsDayCard");
+      expect(found).toContain("app/components/admin/moveOccupant.ts:withUpdatedCell");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
