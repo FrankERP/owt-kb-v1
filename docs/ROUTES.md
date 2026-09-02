@@ -49,7 +49,7 @@ Legend: **S** = server component (async unless noted; e.g. the Studio page is sy
 | `/posts/[slug]` | `(client)/posts/[slug]/page.tsx` | S | Public* | **SSG** 3600s + `generateStaticParams` | Song detail: lyrics/chords, audio, tutorials, references, play history. `notFound()` for unknown slugs. |
 | `/me` | `(client)/me/page.tsx` | S | Member | ISR 60s | "Mi perfil": upcoming assignments, proposal CTAs, availability, profile settings. |
 | `/me/propose/[roleId]` | `(client)/me/propose/[roleId]/page.tsx` | S | **Lead-only** | dynamic (`revalidate=0`) | Setlist proposal editor for a service the user Leads. |
-| `/admin` | `(client)/admin/page.tsx` | S | **Manager** | dynamic | Admin dashboard shell; data fetched client-side from `/api/admin/*`. |
+| `/admin` | `(client)/admin/page.tsx` | S | **Manager** | dynamic | Admin dashboard shell; data fetched client-side from `/api/admin/*`. `?tab=` opens a specific tab, filtered by role. |
 | `/auth/signin` | `(client)/auth/signin/page.tsx` | C | Public | — | Google SSO (web + native) + email/password. |
 | `/auth/not-a-member` | `(client)/auth/not-a-member/page.tsx` | C | Public | — | For authenticated Google users not in `teamMembers`. |
 | `/studio`, `/studio/*` | `(admin)/studio/[[...tool]]/page.tsx` | S | **admin+** | `force-static` | Embedded Sanity Studio (`NextStudio`). |
