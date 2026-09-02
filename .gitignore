@@ -27,6 +27,13 @@ yarn-error.log*
 
 # local env files
 .env*.local
+# Backups and derivatives of them. `.env*.local` requires the name to END in
+# `.local`, so `.env.local.bak-<timestamp>` — written by
+# scripts/dev-verify-rotate.mjs — did NOT match it and showed up as untracked in
+# a PUBLIC repo holding a full copy of every secret. Anything that starts with
+# `.env` is ignored now, whatever follows.
+.env*
+!.env.example
 
 # vercel
 .vercel
