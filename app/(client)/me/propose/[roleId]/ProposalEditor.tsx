@@ -103,22 +103,50 @@ function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/** The editor's songs as they come off a stored proposal. */
+function songsFromProposal(proposal: SharedProposal | null | undefined): ProposalSong[] {
+  if (!proposal?.songs?.length) return [];
+  return proposal.songs.map(s => ({
+    songId: s.song_id,
+    title: s.title,
+    author: s.author,
+    key: s.key,
+    play_key: s.play_key || s.key,
+    medley_tag: s.medley_tag,
+  }));
+}
+
+/**
+ * Stable fingerprint of the state a save actually persists, for detecting
+ * unsaved work. Order is part of it — a setlist IS its order.
+ *
+ * `proposalId` is an input rather than a nicety: `leadNotes` is sent ONLY while
+ * no proposal document exists (see the payload in `save`), and the field stops
+ * being rendered at the same moment. So it has to leave the fingerprint exactly
+ * when it leaves the payload — otherwise the first save, which mints the id,
+ * would leave the editor reading as permanently dirty the instant it succeeded.
+ *
+ * Notes are trimmed on both sides, so a stray trailing space is not "work".
+ */
+export function proposalSnapshot(
+  songs: Array<Pick<ProposalSong, "songId" | "play_key" | "medley_tag">>,
+  teamNotes: string,
+  leadNotes: string,
+  proposalId: string | null,
+): string {
+  return JSON.stringify({
+    songs: songs.map(s => [s.songId, s.play_key ?? "", s.medley_tag ?? ""]),
+    teamNotes: teamNotes.trim(),
+    leadNotes: proposalId ? "" : leadNotes.trim(),
+  });
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Props) {
   const router = useRouter();
 
-  const [songs, setSongs] = useState<ProposalSong[]>(() => {
-    if (!proposal?.songs?.length) return [];
-    return proposal.songs.map(s => ({
-      songId: s.song_id,
-      title: s.title,
-      author: s.author,
-      key: s.key,
-      play_key: s.play_key || s.key,
-      medley_tag: s.medley_tag,
-    }));
-  });
+  const [songs, setSongs] = useState<ProposalSong[]>(() => songsFromProposal(proposal));
 
   const [messages, setMessages] = useState<ThreadMessage[]>(proposal?.messages ?? []);
   const [leadNotes, setLeadNotes] = useState(proposal?.lead_notes ?? "");
@@ -128,6 +156,19 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
   const [toast, setToastValue]    = useTransientValue<{ msg: string; ok: boolean } | null>(null, 3000);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [staleReload, setStaleReload] = useState(false);
+
+  // Saved-state snapshot `dirty` compares against; re-seeded after each
+  // successful save. Same shape as AvailabilityCalendar's, and for the same
+  // reason: this editor holds a whole setlist and had no guard at all, so
+  // "Volver" discarded a reordered, retuned, medley-linked list in silence.
+  const [initialSnap, setInitialSnap] = useState(() =>
+    proposalSnapshot(
+      songsFromProposal(proposal),
+      proposal?.team_notes ?? "",
+      proposal?.lead_notes ?? "",
+      proposal?._id ?? null,
+    ),
+  );
 
   /**
    * The submit-confirmation modal is a real overlay: the editor stays mounted
@@ -145,6 +186,8 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
    */
   const confirmRef = useFocusTrap<HTMLDivElement>(confirmSubmit);
   const confirmTitleId = useId();
+  const teamNotesId = useId();
+  const leadNotesId = useId();
 
   // Escape closes the confirmation, matching every other dialog in the app.
   // Safe to close unconditionally: this modal holds no user input of its own,
@@ -382,6 +425,11 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
       } = await res.json();
       setStatus(data.status);
       if (data._id) setProposalId(data._id);
+      // The save landed, so what is on screen IS the saved state. Seeded with
+      // the id the server just minted, not the one this closure captured: on a
+      // FIRST save those differ, and the old `null` would keep `leadNotes` in
+      // the fingerprint that the next render no longer puts there.
+      setInitialSnap(proposalSnapshot(songs, teamNotes, leadNotes, data._id ?? proposalId));
       // No fresh revision means the next save cannot be guarded: force a reload
       // rather than let it fall back to an unguarded observation.
       if (data._rev) setRev(data._rev);
@@ -444,6 +492,29 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
   }, [proposalId, rev]);
 
   const isApproved  = status === "approved";
+
+  // Unsaved work. Not tracked once approved: the editor is read-only there, so a
+  // warning the member cannot act on is noise, and the action bar that would
+  // show it is not rendered.
+  const dirty =
+    !isApproved &&
+    proposalSnapshot(songs, teamNotes, leadNotes, proposalId) !== initialSnap;
+
+  // Tab close / refresh / navigation out of the app. Client-side navigation
+  // inside the app does not fire this — "Volver" is guarded below, and the
+  // navbar links are a known gap the App Router gives no clean hook for.
+  useEffect(() => {
+    if (!dirty) return;
+    const h = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [dirty]);
+
+  const leaveEditor = () => {
+    if (dirty && !window.confirm("Tienes cambios sin guardar en esta propuesta. ¿Salir y descartarlos?")) return;
+    router.push("/me");
+  };
+
   const serviceLabel =
     roleDoc.service_type === "sunday"   ? "Domingo" :
     roleDoc.service_type === "saturday" ? "Sábado"  :
@@ -457,7 +528,8 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
       {/* Header */}
       <div>
         <button
-          onClick={() => router.push("/me")}
+          type="button"
+          onClick={leaveEditor}
           className="flex items-center gap-1.5 font-label text-xs uppercase tracking-widest text-mono-500 hover:text-accent transition-colors mb-5"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-mono-600">
@@ -770,10 +842,11 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
       {/* Team message */}
       {!isApproved && (
         <div className="space-y-2">
-          <label className="font-label text-xs uppercase tracking-widest text-mono-500">
+          <label htmlFor={teamNotesId} className="font-label text-xs uppercase tracking-widest text-mono-500">
             Mensaje para el equipo <span className="normal-case tracking-normal text-mono-600">(opcional)</span>
           </label>
           <textarea
+            id={teamNotesId}
             className={`${inputCls} resize-none`}
             rows={3}
             placeholder="Comparte un versículo, una reflexión o algo que quieras decirle al equipo…"
@@ -791,10 +864,11 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
           moves to <ProposalThread> below. */}
       {!proposalId && (
         <div className="space-y-2">
-          <label className="font-label text-xs uppercase tracking-widest text-mono-500">
+          <label htmlFor={leadNotesId} className="font-label text-xs uppercase tracking-widest text-mono-500">
             Notas privadas para revisión <span className="normal-case tracking-normal text-mono-600">(opcional)</span>
           </label>
           <textarea
+            id={leadNotesId}
             className={`${inputCls} resize-none`}
             rows={3}
             placeholder="Contexto o peticiones especiales solo para los admins…"
@@ -830,6 +904,11 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
       {/* Sticky action bar */}
       {!isApproved && (
         <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-surface-base/95 backdrop-blur-sm border-t border-surface-accent-faint z-10">
+          {dirty && !saving && (
+            <p className="mb-2 font-label text-[11px] uppercase tracking-widest text-warning-strong">
+              Cambios sin guardar
+            </p>
+          )}
           <div className="flex gap-3">
             <button
               onClick={() => save("draft")}
